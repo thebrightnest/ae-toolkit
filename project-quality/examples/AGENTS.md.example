@@ -1,0 +1,48 @@
+# {Project Name} — Agent Context
+
+## Overview
+
+{One-paragraph description of what this project does.}
+
+**Stack:** {e.g., Language X + Framework Y + Database Z}
+**Architecture:** {e.g., Clean Architecture, MVC, Component-based}
+
+## Project Structure
+
+```
+{tree or description of key directories}
+```
+
+## Layer Rules
+
+{Describe architectural layers, dependency direction, and what belongs where.}
+
+## Tooling Reference
+
+| Task | Command |
+|------|---------|
+| Run dev server | {command} |
+| Run tests | {command} |
+| Lint | {command} |
+| Format | {command} |
+| Type check | {command} |
+| Security audit | {command} |
+| Pre-commit hooks | {install command} then automatic on commit |
+
+## AI Assistant Guardrails
+
+### Forbidden
+- Never add a new dependency without explicit justification and version pinning
+- Never disable linter, formatter, or type-checker rules to make code pass — fix the root cause
+- Never write code without corresponding tests (unless explicitly asked to prototype)
+- Never modify generated files (lock files, migration files) by hand
+- Never commit secrets, API keys, or `.env` files
+- Never introduce new patterns/abstractions without checking existing ones first
+
+### Mandatory
+- Always run the full test suite before claiming a task is complete
+- Always update this file if you change architectural patterns or tooling
+- Always use factories/fixtures for test data, never hardcode domain values
+- Always type-annotate public functions; dynamic typing is banned except at explicit boundaries
+- Always prefer composition over inheritance
+- Always keep functions small and focused; extract helpers rather than nesting logic
