@@ -10,7 +10,7 @@ help: ## Show this help
 
 install-skills: ## Symlink all skills from this repo to ~/.claude/skills/
 	@for skill in $(SKILLS); do \
-		if [ -d "$$skill" ]; then \
+		if [ -d "$$skill" ] && [ -f "$$skill/SKILL.md" ]; then \
 			if [ -L "$(SKILLS_DIR)/$$skill" ]; then \
 				echo "✓ $$skill already linked"; \
 			elif [ -e "$(SKILLS_DIR)/$$skill" ]; then \
