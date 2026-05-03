@@ -1,0 +1,34 @@
+# Retro — {Date / Sprint / Feature}
+
+## What We Built
+
+-{Brief summary of the feature/ticket completed}
+
+## What Went Wrong
+
+-{Issue 1}: {Description of the problem}
+-{Issue 2}: {Description of the problem}
+
+## Root Cause Analysis
+
+| Issue | Root Cause | Layer That Allowed It |
+|-------|------------|----------------------|
+| {Issue 1} | {Why it happened} | {AGENTS.md / command / template / reference doc} |
+| {Issue 2} | {Why it happened} | {AGENTS.md / command / template / reference doc} |
+
+## System Evolution Actions
+
+| Issue | Proposed Fix | Target Layer |
+|-------|-------------|--------------|
+| {Issue 1} | {Specific change to make} | {File to update} |
+| {Issue 2} | {Specific change to make} | {File to update} |
+
+## Learnings
+
+-{Learning 1}: {What to remember for next time}
+-{Learning 2}: {What to remember for next time}
+
+---
+
+*Retro date: {date}*
+*Next action: {what to implement before next ticket}*

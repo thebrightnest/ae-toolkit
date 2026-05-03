@@ -46,3 +46,26 @@
 - Always type-annotate public functions; dynamic typing is banned except at explicit boundaries
 - Always prefer composition over inheritance
 - Always keep functions small and focused; extract helpers rather than nesting logic
+
+### Agentic Workflow Guardrails
+- Always produce a PRD before writing code for any feature >1 day of work
+- Always review the plan.md before implementation; never skip human validation
+- Always run self-validation (lint, type-check, tests) before declaring a task complete
+- Always update `.agents/learnings.jsonl` after a bug or misalignment
+- Never plan and implement in the same session; clear context between phases
+- Use `docs/plans/` for plan.md files and `docs/prds/` for PRDs
+- Use sub-agents for research; keep main context clean
+- Load `.agents/reference/` docs only when working on the relevant task type
+
+## Context Budget
+- Keep AGENTS.md under 200 lines; detailed rules live in `.agents/reference/`
+- Prime command: load only core files + recent commits, not the full codebase
+- Planning session: free-form conversation OK, but clear before implementing
+- Sub-agents: use for any research consuming >50k tokens
+- If context feels "full" (agent repeating itself, missing obvious things), clear and restart
+
+## Detailed Reference Docs
+Task-specific rules live in `.agents/reference/` and are loaded on demand:
+- `.agents/reference/api-conventions.md` — API patterns, error handling, auth
+- `.agents/reference/testing-strategy.md` — Test patterns, factory usage, coverage
+- `.agents/reference/security-guidelines.md` — Secrets handling, input validation, trust boundaries

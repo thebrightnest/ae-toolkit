@@ -1,0 +1,56 @@
+# Plan — {Feature/Ticket Name}
+
+## Summary
+
+{One-paragraph description of what to build.}
+
+**User Story:** {As a ... I want ... so that ...}
+**PRD Reference:** {Link to PRD if applicable}
+
+## Locked-In Decisions
+
+-{Decision 1}: {Rationale — cannot change without re-planning}
+-{Decision 2}: {Rationale}
+
+## Files to Create
+
+-{path/to/new/file1} — {purpose}
+-{path/to/new/file2} — {purpose}
+
+## Files to Modify
+
+-{path/to/existing/file1} — {what to change}
+-{path/to/existing/file2} — {what to change}
+
+## Ordered Task List
+
+### Task 1: {Title}
+-{Specific, actionable step}
+-{Specific, actionable step}
+
+### Task 2: {Title}
+-{Specific, actionable step}
+-{Specific, actionable step}
+
+### Task 3: {Title}
+...
+
+## Self-Validation Strategy
+
+Before declaring complete, verify:
+
+- [ ] **Linting** passes: `{lint command}`
+- [ ] **Type checking** passes: `{type-check command}`
+- [ ] **Unit tests** pass: `{test command}`
+- [ ] **Integration tests** pass (if applicable): `{integration test command}`
+- [ ] **Manual verification** steps: {what to check manually}
+
+## Out of Scope for This Plan
+
+-{What is explicitly NOT included in this implementation}
+-{What will be handled in a follow-up ticket}
+
+---
+
+*Created: {date}*
+*Status: Draft / Review / Approved / Complete*

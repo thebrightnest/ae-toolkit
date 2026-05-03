@@ -1,0 +1,76 @@
+# PRD — {Feature Name}
+
+## Executive Summary
+
+{One-paragraph description of what this feature does and why it matters.}
+
+## Mission
+
+{The single-sentence goal. What does success look like?}
+
+## Target Users
+
+{Who is this for? What are they doing right now instead?}
+
+## Scope
+
+### In Scope
+
+-{Feature area 1}
+-{Feature area 2}
+-{Feature area 3}
+
+### Out of Scope (Explicitly)
+
+-{What is NOT included — crucial for defining "done"}
+-{What will come in a later phase}
+
+## User Stories
+
+### Story 1: {Title}
+**As a** {role}
+**I want** {goal}
+**So that** {benefit}
+
+**Acceptance Criteria:**
+- [ ] {Criterion 1}
+- [ ] {Criterion 2}
+
+### Story 2: {Title}
+...
+
+## Technical Notes
+
+### Architecture Decisions
+
+-{Decision 1: what was chosen and why}
+-{Decision 2: what was chosen and why}
+
+### Components Involved
+
+-{Component 1}: {responsibility}
+-{Component 2}: {responsibility}
+
+### API Changes
+
+-{Endpoint/Method}: {change description}
+
+### Data Model Changes
+
+-{Entity}: {field additions/modifications}
+
+## Open Questions
+
+-{Question 1}
+-{Question 2}
+
+## Risks & Mitigations
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| {Risk 1} | High/Med/Low | High/Med/Low | {How to address} |
+
+---
+
+*Created: {date}*
+*Status: Draft / Review / Approved*
