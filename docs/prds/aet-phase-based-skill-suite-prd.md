@@ -130,7 +130,7 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 - **Templates:** PRD, plan, retro templates in `aet-setup/examples/`
 - **Work queue:** `.agents/work-queue.json` with DAG structure for task orchestration
 - **Packaging:** `Makefile` produces `.skill` zip archives for distribution
-- **Distribution:** `npx skills add pedrorocha-net/aetoolkit@<skill-name>`
+- **Distribution:** `npx skills add getatelier/ae-toolkit.git@<skill-name>`
 
 ### Artifact Locations
 

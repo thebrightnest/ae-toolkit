@@ -8,16 +8,16 @@ A collection of agent skills for the open skills ecosystem. Each skill is a self
 
 | Skill | Description | Install |
 |-------|-------------|---------|
-| [aet-setup](./aet-setup) | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. | `npx skills add pedrorocha-net/aetoolkit@aet-setup` |
-| [aet-plan](./aet-plan) | PRD creation, "grill me" mode, story breakdown, and plan.md generation. Prevents misalignment before any code is written. | `npx skills add pedrorocha-net/aetoolkit@aet-plan` |
-| [aet-evolve](./aet-evolve) | System evolution through retrospectives and rule/command/template updates. The highest-leverage long-term skill. | `npx skills add pedrorocha-net/aetoolkit@aet-evolve` |
-| [aet-prime](./aet-prime) | Session context loading with git-as-memory and context discipline. | `npx skills add pedrorocha-net/aetoolkit@aet-prime` |
-| [aet-implement](./aet-implement) | Fresh-session implementation from plan.md with self-validation. | `npx skills add pedrorocha-net/aetoolkit@aet-implement` |
-| [aet-review](./aet-review) | Staff-level code review with multi-lens checks and cross-model adversarial challenge. | `npx skills add pedrorocha-net/aetoolkit@aet-review` |
-| [aet-cso](./aet-cso) | Diff-focused security audit: secrets, injection risks, auth bypass, CVEs, LLM trust boundaries. | `npx skills add pedrorocha-net/aetoolkit@aet-cso` |
-| [aet-qa](./aet-qa) | Automated QA with tiered validation (Quick/Standard/Exhaustive) and regression test generation. | `npx skills add pedrorocha-net/aetoolkit@aet-qa` |
-| [aet-ship](./aet-ship) | Pre-merge validation gate with bisectable commits, changelog generation, and PR creation. | `npx skills add pedrorocha-net/aetoolkit@aet-ship` |
-| [aet-work](./aet-work) | Work queue management and AFK task orchestration. Enables sequential "night shift" loops across multiple plan.md files. | `npx skills add pedrorocha-net/aetoolkit@aet-work` |
+| [aet-setup](./aet-setup) | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. | `npx skills add getatelier/ae-toolkit.git@aet-setup` |
+| [aet-plan](./aet-plan) | PRD creation, "grill me" mode, story breakdown, and plan.md generation. Prevents misalignment before any code is written. | `npx skills add getatelier/ae-toolkit.git@aet-plan` |
+| [aet-evolve](./aet-evolve) | System evolution through retrospectives and rule/command/template updates. The highest-leverage long-term skill. | `npx skills add getatelier/ae-toolkit.git@aet-evolve` |
+| [aet-prime](./aet-prime) | Session context loading with git-as-memory and context discipline. | `npx skills add getatelier/ae-toolkit.git@aet-prime` |
+| [aet-implement](./aet-implement) | Fresh-session implementation from plan.md with self-validation. | `npx skills add getatelier/ae-toolkit.git@aet-implement` |
+| [aet-review](./aet-review) | Staff-level code review with multi-lens checks and cross-model adversarial challenge. | `npx skills add getatelier/ae-toolkit.git@aet-review` |
+| [aet-cso](./aet-cso) | Diff-focused security audit: secrets, injection risks, auth bypass, CVEs, LLM trust boundaries. | `npx skills add getatelier/ae-toolkit.git@aet-cso` |
+| [aet-qa](./aet-qa) | Automated QA with tiered validation (Quick/Standard/Exhaustive) and regression test generation. | `npx skills add getatelier/ae-toolkit.git@aet-qa` |
+| [aet-ship](./aet-ship) | Pre-merge validation gate with bisectable commits, changelog generation, and PR creation. | `npx skills add getatelier/ae-toolkit.git@aet-ship` |
+| [aet-work](./aet-work) | Work queue management and AFK task orchestration. Enables sequential "night shift" loops across multiple plan.md files. | `npx skills add getatelier/ae-toolkit.git@aet-work` |
 
 ---
 
@@ -248,7 +248,7 @@ You're adding OAuth and payment processing. Security is non-negotiable.
 ## Install a Skill
 
 ```bash
-npx skills add pedrorocha-net/aetoolkit@<skill-name>
+npx skills add getatelier/ae-toolkit.git@<skill-name>
 ```
 
 Or browse for skills:
@@ -258,16 +258,16 @@ npx skills find <query>
 
 **Install all at once:**
 ```bash
-npx skills add pedrorocha-net/aetoolkit@aet-setup
-npx skills add pedrorocha-net/aetoolkit@aet-plan
-npx skills add pedrorocha-net/aetoolkit@aet-evolve
-npx skills add pedrorocha-net/aetoolkit@aet-prime
-npx skills add pedrorocha-net/aetoolkit@aet-implement
-npx skills add pedrorocha-net/aetoolkit@aet-review
-npx skills add pedrorocha-net/aetoolkit@aet-cso
-npx skills add pedrorocha-net/aetoolkit@aet-qa
-npx skills add pedrorocha-net/aetoolkit@aet-ship
-npx skills add pedrorocha-net/aetoolkit@aet-work
+npx skills add getatelier/ae-toolkit.git@aet-setup
+npx skills add getatelier/ae-toolkit.git@aet-plan
+npx skills add getatelier/ae-toolkit.git@aet-evolve
+npx skills add getatelier/ae-toolkit.git@aet-prime
+npx skills add getatelier/ae-toolkit.git@aet-implement
+npx skills add getatelier/ae-toolkit.git@aet-review
+npx skills add getatelier/ae-toolkit.git@aet-cso
+npx skills add getatelier/ae-toolkit.git@aet-qa
+npx skills add getatelier/ae-toolkit.git@aet-ship
+npx skills add getatelier/ae-toolkit.git@aet-work
 ```
 
 ---
