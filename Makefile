@@ -1,6 +1,7 @@
 .PHONY: help install-skills package add-skill clean
 
-SKILLS_DIR := $(HOME)/.claude/skills
+# Development symlink target. Override if your skills ecosystem uses a different path.
+SKILLS_DIR ?= $(HOME)/.claude/skills
 REPO_DIR := $(shell pwd)
 SKILLS := $(filter-out README.md Makefile scripts .git .gitignore, $(wildcard *))
 
