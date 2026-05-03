@@ -1,0 +1,225 @@
+# AE Toolkit Use Cases
+
+Six real-world scenarios showing how the skills compose into complete workflows.
+
+---
+
+## Scenario 1: Starting a New Project
+
+You have an idea. You want solid foundations from day one.
+
+```
+/aet-setup
+  → Scaffolds .agents/, docs/prds/, docs/plans/, AGENTS.md,
+    linting, testing, git hooks, and agentic workflow infrastructure
+
+/aet-plan grill-me
+  → "I want to build a task management app with team collaboration"
+  → Agent interviews you with 40–100 questions until shared understanding
+
+/aet-plan create-prd
+  → Produces docs/prds/task-app-prd.md
+  → You review and approve
+
+/aet-plan create-stories
+  → Breaks PRD into vertical-slice tickets in docs/plans/
+  → Generates .agents/work-queue.json with DAG structure
+
+/aet-work run --dry-run
+  → Previews what the AFK loop would pick first
+
+/aet-work run
+  → Picks first unblocked task, implements, validates, commits
+  → Clears context between tasks
+  → Repeats until all tasks done
+
+/aet-ship
+  → Pre-merge gate: tests, coverage, review, security audit
+  → Bisectable commits, CHANGELOG, VERSION bump, PR opened
+```
+
+**Skills used:** `aet-setup`, `aet-plan`, `aet-work`, `aet-ship`
+
+---
+
+## Scenario 2: Adopting on an Existing Project
+
+You inherited a codebase with no standards. You want to add guardrails and start using agentic workflows.
+
+```
+/aet-setup
+  → Detects existing stack
+  → Audits against master checklist
+  → Adds missing: linting, testing, pre-commit hooks, AGENTS.md
+  → Creates .agents/ with templates and reference docs
+  → Documents deviations from best practice in AGENTS.md
+
+/aet-plan plan
+  → Pick your first feature ticket
+  → Produces docs/plans/{ticket}-plan.md
+
+/aet-prime
+  → Loads AGENTS.md, plan.md, recent commits
+  → "Based on the PRD, what should we build next?"
+
+/aet-implement docs/plans/{ticket}-plan.md
+  → Fresh session, reads plan as sole input
+  → Writes code, runs validation, commits
+
+/aet-review
+  → Multi-lens diff review before merging
+```
+
+**Skills used:** `aet-setup`, `aet-plan`, `aet-prime`, `aet-implement`, `aet-review`
+
+---
+
+## Scenario 3: Single Task / PIV Loop
+
+You have one well-defined ticket. You want to run the full Plan → Implement → Validate cycle.
+
+```
+# Planning (human-in-the-loop)
+/aet-plan grill-me
+  → Quick alignment on what the ticket should do
+
+/aet-plan plan
+  → Produces docs/plans/TICKET-123-plan.md
+  → Locked decisions, file list, ordered tasks, validation strategy
+  → You review and approve
+
+# Clear context. Start fresh session.
+
+# Execution
+/aet-prime
+  → Load context: AGENTS.md, plan.md, recent commits
+
+/aet-implement docs/plans/TICKET-123-plan.md
+  → Read plan → branch → code → validate → commit
+
+# Validation
+/aet-review
+  → Staff-level code review
+
+/aet-cso
+  → Security audit (if auth/data touched)
+
+/aet-qa
+  → Automated QA with tiered validation
+
+/aet-ship
+  → Pre-merge gate → PR
+```
+
+**Skills used:** `aet-plan`, `aet-prime`, `aet-implement`, `aet-review`, `aet-cso`, `aet-qa`, `aet-ship`
+
+---
+
+## Scenario 4: Big Feature / Epic with Multiple Tasks (AFK Loop)
+
+You have a multi-week epic. You want to plan it once, then let the agent work through tasks sequentially while you focus on other things.
+
+```
+# Day shift: Human plans
+/aet-plan grill-me
+  → Deep alignment session on the full epic
+
+/aet-plan create-prd
+  → docs/prds/epic-prd.md approved
+
+/aet-plan create-stories
+  → 8 vertical-slice tickets in docs/plans/
+  → .agents/work-queue.json with DAG created
+
+# Night shift: Agent implements (AFK)
+/aet-work run
+  → Task 1: unblocked → implement → validate → done
+  → CLEAR CONTEXT
+  → Task 2: now unblocked → implement → validate → done
+  → CLEAR CONTEXT
+  → Task 3: implement → FAIL (test broken)
+  → LOOP STOPS for human review
+
+# Morning: Human reviews
+# Fix the issue, update .agents/learnings.jsonl
+
+# Resume night shift
+/aet-work run
+  → Picks up where it left off
+  → Task 3: retry → done
+  → Tasks 4–8: continue sequentially
+
+# When all tasks done
+/aet-ship
+  → Merges the epic branch
+```
+
+**Skills used:** `aet-plan`, `aet-work`, `aet-ship`
+
+**Key feature:** Context is explicitly cleared between tasks. The loop can run 20+ tasks without degradation because each task starts with a clean 5–15k token context window.
+
+---
+
+## Scenario 5: System Evolution After a Bug
+
+The agent made the same mistake twice. You want to fix the system, not just the code.
+
+```
+# Bug occurs during aet-implement
+# Agent forgot to handle the error case again
+
+/aet-evolve retro
+  → Analyzes what went wrong
+  → Root cause: plan.md template lacks an "error handling" section
+  → Layer identified: .agents/templates/plan-template.md
+
+/aet-evolve system-evolve
+  → Updates plan-template.md with explicit error handling checklist
+  → Documents the learning in .agents/learnings.jsonl
+  → Commits the change to source control
+
+# Next ticket uses the updated template
+# The bug category never happens again
+```
+
+**Skills used:** `aet-evolve`
+
+**Why this matters:** One improved template saves dozens of engineer-hours across future sessions. The system gets smarter over time.
+
+---
+
+## Scenario 6: Security-First PR
+
+You're adding OAuth and payment processing. Security is non-negotiable.
+
+```
+/aet-plan plan
+  → docs/plans/auth-payment-plan.md
+
+/aet-implement docs/plans/auth-payment-plan.md
+  → Implements OAuth + payment flow
+
+/aet-cso
+  → Scans diff for: secrets, SQL injection, auth bypass,
+    LLM trust boundaries, dependency CVEs
+  → Produces security report with severity
+  → FAIL: found hardcoded API key in config
+
+# Fix the issue, remove the key
+
+/aet-cso
+  → Re-scan
+  → PASS
+
+/aet-review
+  → Architecture review of auth flow
+
+/aet-qa --tier=exhaustive
+  → All states tested: login, logout, expired token,
+    payment success, payment failure, refund
+
+/aet-ship
+  → Pre-merge gate with security audit included
+```
+
+**Skills used:** `aet-plan`, `aet-implement`, `aet-cso`, `aet-review`, `aet-qa`, `aet-ship`
