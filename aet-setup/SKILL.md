@@ -339,7 +339,7 @@ Every `AGENTS.md` must include a section like this, adapted to the project:
 - Always run self-validation (lint, type-check, tests) before declaring a task complete
 - Always update `.agents/learnings.jsonl` after a bug or misalignment
 - Never plan and implement in the same session; clear context between phases
-- Use `docs/plans/` for plan.md files and `docs/prds/` for PRDs
+- Use `docs/product-briefs/` for product briefs, `docs/plans/` for plan.md files, and `docs/prds/` for PRDs
 - Use sub-agents for research; keep main context clean
 - Load `.agents/reference/` docs only when working on the relevant task type
 

@@ -6,12 +6,13 @@ Most AI coding sessions start strong and end in drift. The agent builds what it 
 
 AE Toolkit fixes this by encoding the best agentic engineering patterns from YC, Garry Tan (GStack), Matt Pocock, and the AI Transformation Workshop into a modular skill suite that runs in order:
 
-**Plan → Prime → Implement → Review → QA → Ship → Evolve**
+**Discover → Plan → Prime → Implement → Review → QA → Ship → Evolve**
 
-Each skill feeds into the next. `/aet-plan` writes a PRD that `/aet-implement` reads. `/aet-review` catches what `/aet-implement` missed. `/aet-qa` verifies the fix. `/aet-ship` gates the merge. `/aet-evolve` updates the rules so the bug never repeats. Nothing falls through the cracks because every step knows what came before it.
+Each skill feeds into the next. `/aet-discover` validates demand before any planning begins. `/aet-plan` writes a PRD that `/aet-implement` reads. `/aet-review` catches what `/aet-implement` missed. `/aet-qa` verifies the fix. `/aet-ship` gates the merge. `/aet-evolve` updates the rules so the bug never repeats. Nothing falls through the cracks because every step knows what came before it.
 
 ### What you get
 
+- **Validate before you plan** — `aet-discover` stress-tests ideas with YC-style forcing questions so you don't build something no one needs
 - **Shared understanding before code** — `grill-me` interviews you with 20–100 questions until the agent actually gets it
 - **Fresh-session implementation** — plans and code never share a context window; bias can't leak
 - **Night-shift productivity** — `aet-work run` grinds through your task queue while you sleep, clearing context between each ticket so quality doesn't degrade
@@ -84,6 +85,7 @@ npx skills add getatelier/ae-toolkit.git@<skill-name>
 | Skill | Description |
 | --- | --- |
 | [aet-setup](./aet-setup) | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. |
+| [aet-discover](./aet-discover) | Product-definition diagnostic with YC-style forcing questions. Validates demand, narrows the wedge, and produces a product brief — not a PRD. Hard gate: no code. |
 | [aet-plan](./aet-plan) | PRD creation, "grill me" mode, story breakdown, and plan.md generation. Prevents misalignment before any code is written. |
 | [aet-evolve](./aet-evolve) | System evolution through retrospectives and rule/command/template updates. The highest-leverage long-term skill. |
 | [aet-prime](./aet-prime) | Session context loading with git-as-memory and context discipline. |

@@ -18,7 +18,7 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 
 ### In Scope
 
-- **10 skills total:** `aet-setup`, `aet-plan`, `aet-evolve`, `aet-prime`, `aet-implement`, `aet-review`, `aet-cso`, `aet-qa`, `aet-ship`, `aet-work`
+- **11 skills total:** `aet-setup`, `aet-discover`, `aet-plan`, `aet-evolve`, `aet-prime`, `aet-implement`, `aet-review`, `aet-cso`, `aet-qa`, `aet-ship`, `aet-work`
 - Update `aet-setup` to scaffold agentic workflow infrastructure (`.agents/`, templates, `docs/prds/`, `docs/plans/`)
 - Agent-agnostic design using open standards (`AGENTS.md`, `.agents/`, `docs/`)
 - Modular rules architecture (tiny global rules + task-specific refs loaded on demand)
@@ -113,6 +113,7 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 | Skill | Phase | Commands | Key Patterns |
 |-------|-------|----------|--------------|
 | `aet-setup` | Foundation | `/aet-setup` | Stack detection, quality scaffolding, `.agents/` infrastructure |
+| `aet-discover` | Discovery | `discover` | YC-style diagnostic, demand validation, product brief |
 | `aet-plan` | Planning | `grill-me`, `create-prd`, `create-stories`, `plan` | Shared design concept, vertical slices, work-queue generation |
 | `aet-evolve` | Evolution | `retro`, `system-evolve` | Outer loop, learning persistence, rule updates |
 | `aet-prime` | Execution | `prime` | Git-as-memory, context discipline, on-demand refs |
@@ -125,7 +126,7 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 
 ### Components Involved
 
-- **Skill definitions:** 10 `SKILL.md` files across `aet-*` directories
+- **Skill definitions:** 11 `SKILL.md` files across `aet-*` directories
 - **Reference docs:** Deep-dive markdown files per skill (context budgets, sub-agent patterns, security checklists, context isolation, etc.)
 - **Templates:** PRD, plan, retro templates in `aet-setup/examples/`
 - **Work queue:** `.agents/work-queue.json` with DAG structure for task orchestration
@@ -138,6 +139,7 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 |----------|----------|
 | Skills source | `aet-*/SKILL.md` |
 | Skill reference docs | `aet-*/references/*.md` |
+| Product briefs | `docs/product-briefs/*.md` |
 | Project PRDs | `docs/prds/*.md` |
 | Project plans | `docs/plans/*.md` |
 | Work queue (DAG) | `.agents/work-queue.json` |
@@ -210,7 +212,7 @@ Each task starts with 5–15k tokens. The loop can run 20+ tasks without degrada
 ## Use Cases
 
 ### UC1: Starting a New Project
-Bootstrap → PRD → stories → AFK loop → ship. Full agentic workflow from day one.
+Bootstrap → discover → PRD → stories → AFK loop → ship. Full agentic workflow from day one. Discovery is optional if the idea is already validated.
 
 ### UC2: Adopting on an Existing Project
 Audit → add guardrails → run first PIV loop. Gradual adoption without rewriting the project.
@@ -219,7 +221,7 @@ Audit → add guardrails → run first PIV loop. Gradual adoption without rewrit
 Plan → clear context → implement → review → ship. The classic one-ticket cycle.
 
 ### UC4: Big Feature / Epic (AFK Loop)
-Day shift: human plans the PRD and breaks it into stories. Night shift: `aet-work run` implements tasks sequentially with context isolation.
+Day shift: human runs discovery (if needed), then plans the PRD and breaks it into stories. Night shift: `aet-work run` implements tasks sequentially with context isolation.
 
 ### UC5: System Evolution After a Bug
 Retro → identify root cause layer → update rule/template → persist learning. The outer loop that compounds quality.
@@ -259,4 +261,4 @@ All source highlights are preserved in `content/agentic-engineering-study/` for 
 
 *Created: 2026-05-03*
 *Status: Approved / Implemented*
-*Implemented by: AET Phase-Based Skill Suite (10 skills packaged)*
+*Implemented by: AET Phase-Based Skill Suite (11 skills packaged)*
