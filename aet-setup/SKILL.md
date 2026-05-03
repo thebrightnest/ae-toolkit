@@ -176,7 +176,7 @@ Create `.agents/` at project root as the agent-neutral home for workflows, templ
 └── .gitkeep
 ```
 
-`docs/prds/` and `docs/plans/` must also be created (with `.gitkeep`) for project documents.
+Each skill creates its own `docs/` subdirectory on first use (e.g., `aet-plan` creates `docs/prds/` and `docs/plans/`, `aet-discover` creates `docs/product-briefs/`). `aet-setup` only scaffolds foundational infrastructure — not empty folders for skills that may never be invoked.
 
 Generate the reference docs as stubs with headers and brief descriptions. The team fills them in as the project grows. Document in `AGENTS.md` that `.agents/reference/` exists and should be loaded on demand.
 
@@ -264,7 +264,7 @@ If a frontend is detected:
 Humans need conventions docs; AI needs guardrails:
 - Generate `docs/CONVENTIONS.md` with: structure, naming, error handling, state management patterns
 - Create `docs/adr/` with template and README explaining ADRs
-- Create `docs/prds/` and `docs/plans/` with `.gitkeep` for agentic workflow artifacts
+- Do **not** create `docs/product-briefs/`, `docs/prds/`, or `docs/plans/` here — each skill creates its own folder on first use
 - Explain what an ADR is: a short document capturing a significant architectural decision, its context, and its consequences
 
 ## Generated Artifacts
@@ -298,8 +298,13 @@ Agent-neutral home for workflows, templates, and state:
 - `.agents/learnings.jsonl` — persistent learning log
 - `.agents/.gitkeep`
 
-### 4. `docs/prds/` and `docs/plans/`
-Empty directories with `.gitkeep` for PRDs and plan.md files.
+### 4. `docs/` subdirectories (created by individual skills)
+Each skill creates its own folder under `docs/` when it first produces an artifact:
+- `aet-discover` → `docs/product-briefs/`
+- `aet-plan` → `docs/prds/` and `docs/plans/`
+- `aet-evolve` → `docs/retros/`
+
+`aet-setup` does **not** pre-create these. Skills own their own directories.
 
 ### 5. Tool configs
 Linter, formatter, type checker, security scanner configs tailored to the detected stack.

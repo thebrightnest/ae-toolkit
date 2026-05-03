@@ -43,7 +43,7 @@ Analyze what went wrong in the last loop and identify the systemic root cause.
    - **Templates** (`.agents/templates/*.md`) — gaps in PRD/plan/retro structure
    - **On-demand context** (`docs/CONVENTIONS.md`, architecture notes) — outdated or AI-unreadable docs
 4. Use `.agents/templates/retro-template.md` to produce a retro document.
-5. Save to `docs/retros/{date}-retro.md` or append to `.agents/learnings.jsonl`.
+5. Create `docs/retros/` if it doesn't exist. Save to `docs/retros/{date}-retro.md` or append to `.agents/learnings.jsonl`.
 
 ### `system-evolve`
 

@@ -55,7 +55,7 @@ Transform the grilled conversation into a structured Product Requirements Docume
 **Procedure:**
 1. Read the grill-me conversation history as input.
 2. Use `.agents/templates/prd-template.md` as the structure guide.
-3. Produce a PRD saved to `docs/prds/{feature-name}-prd.md`.
+3. Create `docs/prds/` if it doesn't exist. Produce a PRD saved to `docs/prds/{feature-name}-prd.md`.
 4. Include: executive summary, mission, target users, scope (in/out), user stories with acceptance criteria, technical notes, architecture decisions, open questions, risks.
 5. **Explicitly list out-of-scope items** — crucial for defining "done."
 6. Ask the user to review before proceeding. Do not auto-generate stories from an unreviewed PRD.
@@ -66,7 +66,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 
 **Procedure:**
 1. Read the approved PRD from `docs/prds/`.
-2. Create tickets as markdown files in `docs/plans/` or push via MCP if configured.
+2. Create `docs/plans/` if it doesn't exist. Create tickets as markdown files in `docs/plans/` or push via MCP if configured.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
 4. Define blocking relationships between tickets (directed acyclic graph).
 5. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort.
@@ -91,7 +91,7 @@ From a ticket/story, produce a structured `plan.md` for implementation.
 **Procedure:**
 1. Read the ticket and relevant PRD section.
 2. Use `.agents/templates/plan-template.md` as the structure guide.
-3. Produce `docs/plans/{ticket-id}-plan.md` containing:
+3. Create `docs/plans/` if it doesn't exist. Produce `docs/plans/{ticket-id}-plan.md` containing:
    - Summary and user story
    - Locked-in architecture decisions (cannot change without re-planning)
    - Files to create and modify
