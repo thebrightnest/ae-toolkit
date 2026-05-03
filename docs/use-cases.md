@@ -1,6 +1,6 @@
 # AE Toolkit Use Cases
 
-Six real-world scenarios showing how the skills compose into complete workflows.
+Real-world scenarios showing how the skills compose into complete workflows.
 
 ---
 
@@ -13,9 +13,9 @@ You have an idea. You want solid foundations from day one.
   → Scaffolds .agents/, docs/prds/, docs/plans/, AGENTS.md,
     linting, testing, git hooks, and agentic workflow infrastructure
 
-/aet-plan grill-me
+/aet-plan clarify-goal
   → "I want to build a task management app with team collaboration"
-  → Agent interviews you with 40–100 questions until shared understanding
+  → Agent interviews you with targeted questions until shared understanding
 
 /aet-plan create-prd
   → Produces docs/prds/task-app-prd.md
@@ -58,6 +58,12 @@ You inherited a codebase with no standards. You want to add guardrails and start
   → Pick your first feature ticket
   → Produces docs/plans/{ticket}-plan.md
 
+/aet-validate-scope validate
+  → Checks the plan against existing code and CONTEXT.md
+  → "Your glossary defines 'User' as an admin, but this plan uses
+     it for end customers — which is it?"
+  → Resolves terminology before implementation starts
+
 /aet-prime
   → Loads AGENTS.md, plan.md, recent commits
   → "Based on the PRD, what should we build next?"
@@ -70,7 +76,7 @@ You inherited a codebase with no standards. You want to add guardrails and start
   → Multi-lens diff review before merging
 ```
 
-**Skills used:** `aet-setup`, `aet-plan`, `aet-prime`, `aet-implement`, `aet-review`
+**Skills used:** `aet-setup`, `aet-plan`, `aet-validate-scope`, `aet-prime`, `aet-implement`, `aet-review`
 
 ---
 
@@ -80,7 +86,7 @@ You have one well-defined ticket. You want to run the full Plan → Implement �
 
 ```
 # Planning (human-in-the-loop)
-/aet-plan grill-me
+/aet-plan clarify-goal
   → Quick alignment on what the ticket should do
 
 /aet-plan plan
@@ -94,8 +100,23 @@ You have one well-defined ticket. You want to run the full Plan → Implement �
 /aet-prime
   → Load context: AGENTS.md, plan.md, recent commits
 
-/aet-implement docs/plans/TICKET-123-plan.md
-  → Read plan → branch → code → validate → commit
+/aet-tdd plan-tests
+  → "What should the public interface look like?"
+  → "Which behaviors are most important to test?"
+  → Identifies deep modules and designs testable interfaces
+
+/aet-tdd tracer
+  → Writes one test for the first behavior
+  → Test fails (RED)
+  → Minimal code to make it pass (GREEN)
+
+/aet-tdd cycle
+  → Repeats RED→GREEN for each remaining behavior
+  → One vertical slice at a time
+
+/aet-tdd refactor
+  → All tests pass — now clean up duplication, deepen modules
+  → Run tests after each refactor step
 
 # Validation
 /aet-review
@@ -111,7 +132,7 @@ You have one well-defined ticket. You want to run the full Plan → Implement �
   → Pre-merge gate → PR
 ```
 
-**Skills used:** `aet-plan`, `aet-prime`, `aet-implement`, `aet-review`, `aet-cso`, `aet-qa`, `aet-ship`
+**Skills used:** `aet-plan`, `aet-prime`, `aet-tdd`, `aet-review`, `aet-cso`, `aet-qa`, `aet-ship`
 
 ---
 
@@ -121,15 +142,25 @@ You have a multi-week epic. You want to plan it once, then let the agent work th
 
 ```
 # Day shift: Human plans
-/aet-plan grill-me
+/aet-plan clarify-goal
   → Deep alignment session on the full epic
 
 /aet-plan create-prd
   → docs/prds/epic-prd.md approved
 
+/aet-validate-scope validate
+  → Cross-checks epic against existing domain model and ADRs
+  → Surfaces contradictions while they're still cheap to fix
+  → Updates CONTEXT.md with any new terms
+
 /aet-plan create-stories
   → 8 vertical-slice tickets in docs/plans/
   → .agents/work-queue.json with DAG created
+
+/aet-plan publish-issues --tracker=github
+  → Pushes tickets to GitHub Issues with HITL/AFK labels
+  → Your team can view and triage in the tracker
+  → Local work queue remains the source of truth for aet-work
 
 # Night shift: Agent implements (AFK)
 /aet-work run
@@ -154,7 +185,7 @@ You have a multi-week epic. You want to plan it once, then let the agent work th
   → Merges the epic branch
 ```
 
-**Skills used:** `aet-plan`, `aet-work`, `aet-ship`
+**Skills used:** `aet-plan`, `aet-validate-scope`, `aet-work`, `aet-ship`
 
 **Key feature:** Context is explicitly cleared between tasks. The loop can run 20+ tasks without degradation because each task starts with a clean 5–15k token context window.
 
@@ -223,3 +254,76 @@ You're adding OAuth and payment processing. Security is non-negotiable.
 ```
 
 **Skills used:** `aet-plan`, `aet-implement`, `aet-cso`, `aet-review`, `aet-qa`, `aet-ship`
+
+---
+
+## Scenario 7: Refactoring with TDD Safety Rails
+
+You need to refactor a messy module. You want tests as safety rails, written the right way.
+
+```
+/aet-tdd plan-tests
+  → "What behaviors must survive this refactor?"
+  → Identifies public interfaces to test through
+  → Rejects implementation-detail tests
+
+/aet-tdd tracer
+  → Writes one behavior test through the public API
+  → Confirms the test passes against current (messy) code
+
+/aet-tdd cycle
+  → Backfills tests for each behavior the refactor must preserve
+  → Each test verifies WHAT, not HOW
+  → Tests will survive the internal rewrite
+
+# Refactor with confidence
+# Rename classes, extract modules, change data structures
+# Tests stay green — behavior is preserved
+
+/aet-tdd refactor
+  → Deepens modules: small interfaces, complex implementations hidden
+  → Removes duplication revealed by the refactor
+  → All tests pass
+
+/aet-review
+  → Verifies the new structure is cleaner and tests are meaningful
+```
+
+**Skills used:** `aet-tdd`, `aet-review`
+
+**Key principle:** Tests written through public interfaces survive any internal restructuring. Tests coupled to implementation break during refactors and provide false confidence.
+
+---
+
+## Scenario 8: Validating a Plan Against Existing Architecture
+
+Your team has a mature codebase with documented domain language and ADRs. A new feature plan seems to contradict established patterns.
+
+```
+/aet-validate-scope validate
+  → Reads docs/prds/new-feature-prd.md
+  → Reads CONTEXT.md — glossary defines "Order" as immutable after placement
+  → Reads docs/adr/0003-immutable-orders.md
+  → Cross-checks with code: Order class has no setters
+  → SURFACES: "This PRD says 'edit order after placement' but your
+     glossary and ADR-0003 define Orders as immutable. Which is right?"
+
+# Discussion resolves the conflict
+# PRD is updated: "cancel and replace" instead of "edit"
+
+/aet-validate-scope update-context
+  → Adds "Order Replacement" to CONTEXT.md
+  → Defines the new term and its relationship to Orders
+
+/aet-validate-scope propose-adr
+  → "This changes the immutable-orders policy. Should we record why?"
+  → Creates docs/adr/0012-order-replacement.md
+  → Explains the trade-off: immutability preserved, replacement is a new Order
+
+/aet-plan create-stories
+  → Now the stories are aligned with the domain model
+```
+
+**Skills used:** `aet-validate-scope`, `aet-plan`
+
+**Key principle:** Catching domain misalignment at planning time is 100x cheaper than catching it in code review or production.

@@ -46,7 +46,7 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 **So that** the AI agent builds exactly what I imagined, not what it assumed
 
 **Acceptance Criteria:**
-- [ ] `/grill-me` interviews me until shared understanding exists
+- [ ] `/clarify-goal` interviews me until shared understanding exists
 - [ ] `/create-prd` produces a structured PRD saved to `docs/prds/`
 - [ ] `/create-stories` breaks the PRD into vertically-sliced tickets with a DAG queue
 - [ ] `/plan` produces a self-contained `plan.md` for implementation handoff
@@ -114,7 +114,7 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 |-------|-------|----------|--------------|
 | `aet-setup` | Foundation | `/aet-setup` | Stack detection, quality scaffolding, `.agents/` infrastructure |
 | `aet-discover` | Discovery | `discover` | YC-style diagnostic, demand validation, product brief |
-| `aet-plan` | Planning | `grill-me`, `create-prd`, `create-stories`, `plan` | Shared design concept, vertical slices, work-queue generation |
+| `aet-plan` | Planning | `clarify-goal`, `create-prd`, `create-stories`, `publish-issues`, `plan` | Shared design concept, vertical slices, work-queue generation |
 | `aet-evolve` | Evolution | `retro`, `system-evolve` | Outer loop, learning persistence, rule updates |
 | `aet-prime` | Execution | `prime` | Git-as-memory, context discipline, on-demand refs |
 | `aet-implement` | Execution | `implement` | Single-task, plan.md as sole input, self-validation |

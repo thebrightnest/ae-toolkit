@@ -1,6 +1,6 @@
 ---
 name: aet-plan
-description: PRD creation, "grill me" mode, story breakdown, and plan.md generation. Use when starting a new feature, sprint, or project. Prevents misalignment by building shared understanding before any code is written. Triggers on requests like "plan this feature," "create a PRD," "break this into tickets," or "help me design."
+description: PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Use when starting a new feature, sprint, or project. Prevents misalignment by building shared understanding before any code is written. Triggers on requests like "plan this feature," "create a PRD," "break this into tickets," "help me design," or "publish these to GitHub issues."
 ---
 
 # aet-plan
@@ -11,7 +11,7 @@ Planning and alignment for agentic engineering. The #1 failure mode is starting 
 
 - Starting a new feature, sprint, or project
 - You have an idea but no structured plan yet
-- The agent built something different from what you imagined (go back to grill-me)
+- The agent built something different from what you imagined (go back to clarify-goal)
 - Breaking a PRD into implementable tickets
 
 ## Before You Start
@@ -32,20 +32,21 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 ## Commands
 
-### `grill-me`
+### `clarify-goal`
 
-The agent interviews the human relentlessly until a shared design concept exists. This is the single highest-leverage step in the entire workflow.
+The agent interviews the human until a shared design concept exists. This is the single highest-leverage step in the entire workflow.
 
 **Procedure:**
 1. Ask the user to describe what they want to build (brain dump — no structure required)
-2. Ask clarifying questions one at a time. Be relentless — walk down each branch of the design tree.
+2. Ask clarifying questions one at a time. Walk down each branch of the design tree.
 3. Use multiple-choice options when possible to speed up answers.
-4. Continue until the agent is satisfied that a shared understanding exists (typically 20–100 questions).
+4. Continue until the agent is satisfied that a shared understanding exists. Focus on what matters — stop when the core concept is clear, not after an arbitrary number of questions.
 5. Summarize the shared design concept for confirmation.
 
 **Rules:**
 - This is NOT plan mode. Do not produce artifacts yet. Build shared context first.
 - Anti-sycophancy: never say "that's an interesting approach." Always take a position.
+- Be efficient — ask about gaps and ambiguities, not every possible detail.
 - The conversation history becomes a valuable asset — save it for reference.
 
 ### `create-prd`
@@ -53,7 +54,7 @@ The agent interviews the human relentlessly until a shared design concept exists
 Transform the grilled conversation into a structured Product Requirements Document.
 
 **Procedure:**
-1. Read the grill-me conversation history as input.
+1. Read the clarify-goal conversation history as input.
 2. Use `.agents/templates/prd-template.md` as the structure guide.
 3. Create `docs/prds/` if it doesn't exist. Produce a PRD saved to `docs/prds/{feature-name}-prd.md`.
 4. Include: executive summary, mission, target users, scope (in/out), user stories with acceptance criteria, technical notes, architecture decisions, open questions, risks.
@@ -84,6 +85,53 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 - Save to `.agents/work-queue.json`
 - The queue enables `aet-work` to pick the next task automatically
 
+### `publish-issues`
+
+Push locally-created stories to an external issue tracker (GitHub, GitLab, etc.). This is optional — local markdown tickets and `.agents/work-queue.json` remain the source of truth.
+
+**Procedure:**
+1. Read `docs/plans/*.md` and the approved PRD from `docs/prds/`.
+2. Determine the target tracker from user input, environment config, or AGENTS.md.
+3. For each story, create an issue with:
+   - **Title**: short descriptive name
+   - **Type**: HITL (requires human interaction) or AFK (can be implemented without human input)
+   - **Blocked by**: references to blocking issues (publish blockers first so real IDs exist)
+   - **Parent**: reference to the parent issue/PRD if applicable
+   - **What to build**: concise description of the vertical slice
+   - **Acceptance criteria**: checklist of verifiable behaviors
+4. Apply a triage label (e.g., `needs-triage`) so each issue enters the normal triage flow.
+5. Do NOT close or modify any parent issue.
+6. Update the local plan files with tracker issue IDs for reference.
+
+**Issue template:**
+
+```markdown
+## Parent
+
+Reference to the parent issue or PRD (omit if none).
+
+## What to build
+
+A concise description of this vertical slice. Describe the end-to-end behavior, not layer-by-layer implementation.
+
+## Acceptance criteria
+
+- [ ] Criterion 1
+- [ ] Criterion 2
+- [ ] Criterion 3
+
+## Blocked by
+
+- Reference to the blocking ticket (if any)
+
+Or "None — can start immediately" if no blockers.
+```
+
+**Rules:**
+- Publish in dependency order (blockers first) so real issue IDs can be referenced
+- External issues are a mirror; the local work queue remains the source of truth for `aet-work`
+- If the tracker is not configured, skip this step and document the gap in AGENTS.md
+
 ### `plan`
 
 From a ticket/story, produce a structured `plan.md` for implementation.
@@ -106,7 +154,7 @@ From a ticket/story, produce a structured `plan.md` for implementation.
 
 ## Key Principles
 
-- **Shared design concept first** — never skip grill-me. Misalignment is the #1 cause of wasted work.
+- **Shared design concept first** — never skip clarify-goal. Misalignment is the #1 cause of wasted work.
 - **PRD is the north star** — every session starts by checking "what does the PRD say?"
 - **Vertical slices** — AI naturally codes horizontal layers; force vertical slices for immediate feedback.
 - **Human reviews every artifact** — PRD, stories, plan. Never chain automatically.

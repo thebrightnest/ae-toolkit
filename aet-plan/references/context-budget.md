@@ -1,13 +1,13 @@
 # Context Budget for aet-plan
 
-## grill-me
+## clarify-goal
 - **Expected consumption:** 20–60k tokens
-- **Strategy:** Free-form conversation is OK. This is the one phase where context accumulation is expected.
+- **Strategy:** Free-form conversation is OK. This is the one phase where context accumulation is expected. Stop when shared understanding is clear, not after an arbitrary question count.
 - **Clear before:** create-prd if the conversation is >80k tokens
 
 ## create-prd
-- **Expected consumption:** 10–20k tokens (reads grill-me history + template)
-- **Strategy:** Summarize grill-me conversation before reading if >50k tokens
+- **Expected consumption:** 10–20k tokens (reads clarify-goal history + template)
+- **Strategy:** Summarize clarify-goal conversation before reading if >50k tokens
 - **Clear after:** Yes, before create-stories
 
 ## create-stories

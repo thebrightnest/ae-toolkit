@@ -60,6 +60,6 @@ If this session still contains planning context, strongly recommend clearing it 
 
 - **Plan.md is the sole input** — no additional context should be needed
 - **Self-validate continuously** — don't write hundreds of lines before checking anything
-- **TDD preferred** — write failing tests first, then make them pass, then refactor
+- **TDD preferred** — write failing tests first, then make them pass, then refactor. Use `/tdd` for dedicated TDD guidance.
 - **Agent handles admin** — branching, committing, PR creation
 - **Human handles review** — code review and manual testing are not optional
