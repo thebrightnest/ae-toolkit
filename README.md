@@ -1,12 +1,12 @@
-# AI Skills
+# Agentic Engineering Toolkit (AE Toolkit)
 
-A collection of agent skills for the open skills ecosystem. Each skill is a self-contained package that extends AI assistant capabilities with specialized knowledge, workflows, and tools.
+A collection of agent skills for the open skills ecosystem. Each skill is a self-contained package that extends AI assistant capabilities with specialized knowledge, workflows, and tools. This is the AE Toolkit — skills for agentic engineering.
 
 ## Skills
 
 | Skill | Description | Install |
 |-------|-------------|---------|
-| [project-quality](./project-quality) | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. | `npx skills add pedrorocha-net/aiskills@project-quality` |
+| [aet-setup](./aet-setup) | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Part of AE Toolkit. | `npx skills add pedrorocha-net/aiskills@aet-setup` |
 
 ## Install a Skill
 
@@ -63,7 +63,7 @@ Skills are distributed as `.skill` files (zip archives):
 make package
 ```
 
-This produces `project-quality.skill` (and any other skill `.skill` files) in the repo root.
+This produces `aet-setup.skill` (and any other skill `.skill` files) in the repo root.
 
 ## License
 

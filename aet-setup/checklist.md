@@ -1,6 +1,6 @@
-# Project Quality Master Checklist
+# AE Toolkit Setup Master Checklist
 
-Use this checklist during every `/project-quality` invocation. Every topic must be explicitly addressed — either implemented, documented as intentionally skipped, or flagged for future work.
+Use this checklist during every `/aet-setup` invocation. Every topic must be explicitly addressed — either implemented, documented as intentionally skipped, or flagged for future work.
 
 ---
 

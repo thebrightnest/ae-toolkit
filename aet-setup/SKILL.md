@@ -1,9 +1,9 @@
 ---
-name: project-quality
-description: Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Use when starting a new project, inheriting a codebase without standards, or wanting to prevent AI-generated "fast slop." Adapts to any stack through research-driven detection. Triggers on requests like "set up project quality," "enforce code standards," "bootstrap best practices," or "prevent AI slop."
+name: aet-setup
+description: Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Part of the Agentic Engineering Toolkit (AE Toolkit). Use when starting a new project, inheriting a codebase without standards, or wanting to prevent AI-generated "fast slop." Adapts to any stack through research-driven detection. Triggers on requests like "set up project quality," "enforce code standards," "bootstrap best practices," or "prevent AI slop."
 ---
 
-# project-quality
+# aet-setup
 
 Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails — without hardcoded templates or paid CI services.
 
@@ -17,19 +17,19 @@ Bootstrap or upgrade any software project with best-practice documentation, code
 ## Invocation
 
 ```
-/project-quality
+/aet-setup
 ```
 
 Auto-detects stack, infers sensible defaults, suggests key decisions, and implements everything.
 
 ```
-/project-quality stack="backend-lang + frontend-lang + sqlite"
+/aet-setup stack="backend-lang + frontend-lang + sqlite"
 ```
 
 Explicit stack declaration. Skips detection. Useful for new/empty repos.
 
 ```
-/project-quality stack="backend-lang + frontend-lang + postgres" enforce-security=true containerize=true
+/aet-setup stack="backend-lang + frontend-lang + postgres" enforce-security=true containerize=true
 ```
 
 With optional flags to override sensible defaults.

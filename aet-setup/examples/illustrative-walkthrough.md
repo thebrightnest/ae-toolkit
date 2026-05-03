@@ -1,4 +1,4 @@
-# Illustrative Walkthrough: How `/project-quality` Works
+# Illustrative Walkthrough: How `/aet-setup` Works
 
 **This is an illustration, not a template.** It shows how the skill's methodology applies to a hypothetical project. The actual skill does not contain any of these specifics — it researches them on demand.
 
@@ -6,7 +6,7 @@
 
 ## Scenario
 
-User invokes `/project-quality` on a repo containing:
+User invokes `/aet-setup` on a repo containing:
 - `pyproject.toml` with FastAPI and Pydantic dependencies
 - `package.json` with React and TypeScript
 - `web/src/` and `api/app/` directories

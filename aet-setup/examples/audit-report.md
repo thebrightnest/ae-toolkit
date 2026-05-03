@@ -1,4 +1,4 @@
-# Project Quality Audit Report
+# AE Toolkit Setup Audit Report
 
 **Project:** {name}
 **Detected Stack:** {stack}
