@@ -16,6 +16,7 @@ Implementation execution for agentic engineering. Read the plan, write the code,
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -32,6 +33,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 Execute a plan.md from start to finish with self-validation.
 
 **Procedure:**
+
 1. Read the plan.md file specified by the user
 2. Create a feature branch if not already on one
 3. Execute tasks in the order specified in the plan
@@ -42,9 +44,11 @@ Execute a plan.md from start to finish with self-validation.
 
 **Fresh session reminder:**
 If this session still contains planning context, strongly recommend clearing it first:
+
 > "⚠️ This appears to be the same session where planning occurred. For best results, open a fresh session and run `/implement docs/plans/{file}.md` with only the plan as context."
 
 **Validation strategy (from plan.md):**
+
 - Linting must pass
 - Type checking must pass
 - Unit tests must pass
@@ -52,6 +56,7 @@ If this session still contains planning context, strongly recommend clearing it 
 - Manual verification steps must be checked
 
 **Deviation handling:**
+
 - If implementation diverges from the plan, stop and explain why
 - Do not silently change the plan — either follow it or flag the need to replan
 - Minor deviations (naming, organization) are OK if they improve consistency with existing code

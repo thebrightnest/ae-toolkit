@@ -16,6 +16,7 @@ Pre-merge validation for agentic engineering. The final gate before code lands.
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -32,6 +33,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 Run the pre-merge validation gate.
 
 **Procedure:**
+
 1. **Sync with main** — pull latest main, attempt trivial merge conflict resolution
 2. **Run test suite** — unit, integration, type-check, lint. Must all pass.
 3. **Coverage audit** — check coverage didn't drop below threshold. Flag if it did.
@@ -44,6 +46,7 @@ Run the pre-merge validation gate.
 10. **Push and open PR** — push branch, create PR with description linking plan.md and PRD
 
 **Stop conditions** (requires human intervention):
+
 - Merge conflicts that can't be auto-resolved
 - Test failures
 - Coverage drop below threshold
@@ -51,6 +54,7 @@ Run the pre-merge validation gate.
 - MINOR or MAJOR version bump needed
 
 **Output:**
+
 - Clean branch with bisectable commits
 - PR with linked plan.md and PRD
 - CHANGELOG entry

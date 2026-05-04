@@ -1,9 +1,10 @@
-.PHONY: help install-skills package add-skill clean
+.PHONY: help install-skills package add-skill clean lint format format-check validate install-hooks
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
 SKILLS_DIR ?= $(HOME)/.claude/skills
 REPO_DIR := $(shell pwd)
-SKILLS := $(filter-out README.md Makefile scripts .git .gitignore, $(wildcard *))
+SKILLS := $(filter-out README.md Makefile scripts .git .gitignore docs .agents content .claude, $(wildcard *))
+MARKDOWN_FILES := $(shell find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -56,3 +57,25 @@ add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 clean: ## Remove all .skill packages
 	@rm -f *.skill
 	@echo "✓ Cleaned .skill files"
+
+lint: ## Run markdownlint on all markdown files
+	@npx markdownlint-cli2 --config .markdownlint.yaml $(MARKDOWN_FILES)
+	@echo "✓ Lint passed"
+
+format: ## Format all markdown files with prettier
+	@npx prettier --write "**/*.md"
+	@echo "✓ Format complete"
+
+format-check: ## Check markdown formatting (CI mode)
+	@npx prettier --check "**/*.md"
+	@echo "✓ Format check passed"
+
+validate: ## Run all quality checks (lint + format-check + skill-structure)
+	@$(MAKE) lint
+	@$(MAKE) format-check
+	@./scripts/validate-skills.sh
+	@echo "✓ All validation checks passed"
+
+install-hooks: ## Install pre-commit hooks
+	@pre-commit install
+	@echo "✓ Pre-commit hooks installed"

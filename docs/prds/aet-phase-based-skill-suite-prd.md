@@ -41,11 +41,13 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 ## User Stories
 
 ### Story 1: Developer Plans a New Feature
+
 **As a** developer
 **I want** to go from a rough idea to a reviewed implementation plan
 **So that** the AI agent builds exactly what I imagined, not what it assumed
 
 **Acceptance Criteria:**
+
 - [ ] `/clarify-goal` interviews me until shared understanding exists
 - [ ] `/create-prd` produces a structured PRD saved to `docs/prds/`
 - [ ] `/create-stories` breaks the PRD into vertically-sliced tickets with a DAG queue
@@ -53,22 +55,26 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 - [ ] Each artifact is human-reviewed before the next phase begins
 
 ### Story 2: Developer Implements from Plan (Single Task PIV Loop)
+
 **As a** developer
 **I want** the agent to execute a reviewed plan in a fresh session
 **So that** planning bias doesn't corrupt implementation
 
 **Acceptance Criteria:**
+
 - [ ] `/prime` loads minimal, relevant context at session start
 - [ ] `/implement` reads `plan.md` as the sole input
 - [ ] Agent self-validates (lint, type-check, tests) before declaring done
 - [ ] Implementation is compared against the plan; deviations are flagged
 
 ### Story 3: Team Runs an Epic AFK (Multi-Task Loop)
+
 **As a** developer
 **I want** the agent to work through multiple tasks sequentially while I focus on other things
 **So that** I get the "night shift" productivity boost without micromanaging each task
 
 **Acceptance Criteria:**
+
 - [ ] `create-stories` generates `.agents/work-queue.json` with blocking relationships
 - [ ] `aet-work run` picks the next unblocked task automatically
 - [ ] Context is cleared between tasks to prevent degradation
@@ -76,22 +82,26 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 - [ ] Completed tasks unlock their dependents in the DAG
 
 ### Story 4: Team Improves AI Layer Over Time
+
 **As a** team lead
 **I want** every bug to improve our rules/commands, not just fix the code
 **So that** our agents get more reliable with every sprint
 
 **Acceptance Criteria:**
+
 - [ ] `/retro` analyzes what went wrong and identifies the systemic layer
 - [ ] `/system-evolve` updates the specific rule/command/template that allowed the bug
 - [ ] Learnings persist in `.agents/learnings.jsonl` across sessions
 - [ ] AI layer changes are committed to source control and reviewed in PRs
 
 ### Story 5: Developer Ships with Confidence
+
 **As a** developer
 **I want** automated pre-merge validation that catches issues before human review
 **So that** PRs are clean and review time is spent on judgment, not bugs
 
 **Acceptance Criteria:**
+
 - [ ] `/ship` runs tests, coverage audit, code review, and security audit automatically
 - [ ] Bisectable commits are enforced (one logical change per commit)
 - [ ] CHANGELOG and VERSION are auto-generated
@@ -110,19 +120,19 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 
 ### Skill Suite
 
-| Skill | Phase | Commands | Key Patterns |
-|-------|-------|----------|--------------|
-| `aet-setup` | Foundation | `/aet-setup` | Stack detection, quality scaffolding, `.agents/` infrastructure |
-| `aet-discover` | Discovery | `discover` | YC-style diagnostic, demand validation, product brief |
-| `aet-plan` | Planning | `clarify-goal`, `create-prd`, `create-stories`, `publish-issues`, `plan` | Shared design concept, vertical slices, work-queue generation |
-| `aet-evolve` | Evolution | `retro`, `system-evolve` | Outer loop, learning persistence, rule updates |
-| `aet-prime` | Execution | `prime` | Git-as-memory, context discipline, on-demand refs |
-| `aet-implement` | Execution | `implement` | Single-task, plan.md as sole input, self-validation |
-| `aet-review` | Quality | `review`, `codex-review` | Multi-lens review, adversarial challenge |
-| `aet-cso` | Quality | `cso` | Diff-focused security audit, pass/fail gate |
-| `aet-qa` | Quality | `qa` | Tiered validation, regression test generation |
-| `aet-ship` | Shipping | `ship` | Pre-merge gate, bisectable commits, auto-artifacts |
-| `aet-work` | Orchestration | `init-queue`, `next`, `run`, `status` | DAG queue, AFK loop, context isolation |
+| Skill           | Phase         | Commands                                                                 | Key Patterns                                                    |
+| --------------- | ------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `aet-setup`     | Foundation    | `/aet-setup`                                                             | Stack detection, quality scaffolding, `.agents/` infrastructure |
+| `aet-discover`  | Discovery     | `discover`                                                               | YC-style diagnostic, demand validation, product brief           |
+| `aet-plan`      | Planning      | `clarify-goal`, `create-prd`, `create-stories`, `publish-issues`, `plan` | Shared design concept, vertical slices, work-queue generation   |
+| `aet-evolve`    | Evolution     | `retro`, `system-evolve`                                                 | Outer loop, learning persistence, rule updates                  |
+| `aet-prime`     | Execution     | `prime`                                                                  | Git-as-memory, context discipline, on-demand refs               |
+| `aet-implement` | Execution     | `implement`                                                              | Single-task, plan.md as sole input, self-validation             |
+| `aet-review`    | Quality       | `review`, `codex-review`                                                 | Multi-lens review, adversarial challenge                        |
+| `aet-cso`       | Quality       | `cso`                                                                    | Diff-focused security audit, pass/fail gate                     |
+| `aet-qa`        | Quality       | `qa`                                                                     | Tiered validation, regression test generation                   |
+| `aet-ship`      | Shipping      | `ship`                                                                   | Pre-merge gate, bisectable commits, auto-artifacts              |
+| `aet-work`      | Orchestration | `init-queue`, `next`, `run`, `status`                                    | DAG queue, AFK loop, context isolation                          |
 
 ### Components Involved
 
@@ -135,19 +145,19 @@ Make agentic engineering workflows reproducible, teachable, and composable by en
 
 ### Artifact Locations
 
-| Artifact | Location |
-|----------|----------|
-| Skills source | `aet-*/SKILL.md` |
-| Skill reference docs | `aet-*/references/*.md` |
-| Product briefs | `docs/product-briefs/*.md` |
-| Project PRDs | `docs/prds/*.md` |
-| Project plans | `docs/plans/*.md` |
-| Work queue (DAG) | `.agents/work-queue.json` |
-| Agent config | `.agents/` |
-| AI context | `AGENTS.md` (project root) |
-| Learning log | `.agents/learnings.jsonl` |
-| Command workflows | `.agents/commands/*.md` |
-| Task-specific refs | `.agents/reference/*.md` |
+| Artifact             | Location                   |
+| -------------------- | -------------------------- |
+| Skills source        | `aet-*/SKILL.md`           |
+| Skill reference docs | `aet-*/references/*.md`    |
+| Product briefs       | `docs/product-briefs/*.md` |
+| Project PRDs         | `docs/prds/*.md`           |
+| Project plans        | `docs/plans/*.md`          |
+| Work queue (DAG)     | `.agents/work-queue.json`  |
+| Agent config         | `.agents/`                 |
+| AI context           | `AGENTS.md` (project root) |
+| Learning log         | `.agents/learnings.jsonl`  |
+| Command workflows    | `.agents/commands/*.md`    |
+| Task-specific refs   | `.agents/reference/*.md`   |
 
 ### Skill Structure Standard
 
@@ -166,6 +176,7 @@ aet-<name>/
 ```
 
 **Shared preamble** (copied into every SKILL.md):
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -202,6 +213,7 @@ aet-<name>/
 **The problem:** Running 5–10 tasks in one session accumulates context until the agent degrades.
 
 **The solution:** After each task:
+
 1. Mark task done in queue
 2. **CLEAR CONTEXT** (mandatory)
 3. **RE-PRIME** (reload minimal context: AGENTS.md + last 5 commits + next plan.md)
@@ -212,21 +224,27 @@ Each task starts with 5–15k tokens. The loop can run 20+ tasks without degrada
 ## Use Cases
 
 ### UC1: Starting a New Project
+
 Bootstrap → discover → PRD → stories → AFK loop → ship. Full agentic workflow from day one. Discovery is optional if the idea is already validated.
 
 ### UC2: Adopting on an Existing Project
+
 Audit → add guardrails → run first PIV loop. Gradual adoption without rewriting the project.
 
 ### UC3: Single Task / PIV Loop
+
 Plan → clear context → implement → review → ship. The classic one-ticket cycle.
 
 ### UC4: Big Feature / Epic (AFK Loop)
+
 Day shift: human runs discovery (if needed), then plans the PRD and breaks it into stories. Night shift: `aet-work run` implements tasks sequentially with context isolation.
 
 ### UC5: System Evolution After a Bug
+
 Retro → identify root cause layer → update rule/template → persist learning. The outer loop that compounds quality.
 
 ### UC6: Security-First PR
+
 Plan → implement → `aet-cso` security audit → `aet-qa` exhaustive testing → `aet-ship`. Security is non-optional.
 
 ## References & Sources
@@ -249,16 +267,16 @@ All source highlights are preserved in `content/agentic-engineering-study/` for 
 
 ## Risks & Mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Skills are too verbose for small context windows | Medium | High | Keep SKILL.md under 150 lines; references loaded on demand only |
-| Agent ignores fresh-session recommendation | High | Medium | Document strongly; context clearing in `aet-work run` is mandatory, not optional |
-| Teams don't adopt system evolution (outer loop) | High | High | Make `retro` lightweight; tie to `learnings.jsonl`; show ROI |
-| AFK loop degrades silently without context isolation | High | High | `aet-work run` mandates clearing; reference doc explains why |
-| `.agents/` directory conflicts with existing conventions | Low | Medium | Semantically tied to `AGENTS.md`; follows dot-directory convention |
+| Risk                                                     | Likelihood | Impact | Mitigation                                                                       |
+| -------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------- |
+| Skills are too verbose for small context windows         | Medium     | High   | Keep SKILL.md under 150 lines; references loaded on demand only                  |
+| Agent ignores fresh-session recommendation               | High       | Medium | Document strongly; context clearing in `aet-work run` is mandatory, not optional |
+| Teams don't adopt system evolution (outer loop)          | High       | High   | Make `retro` lightweight; tie to `learnings.jsonl`; show ROI                     |
+| AFK loop degrades silently without context isolation     | High       | High   | `aet-work run` mandates clearing; reference doc explains why                     |
+| `.agents/` directory conflicts with existing conventions | Low        | Medium | Semantically tied to `AGENTS.md`; follows dot-directory convention               |
 
 ---
 
-*Created: 2026-05-03*
-*Status: Approved / Implemented*
-*Implemented by: AET Phase-Based Skill Suite (11 skills packaged)*
+_Created: 2026-05-03_
+_Status: Approved / Implemented_
+_Implemented by: AET Phase-Based Skill Suite (11 skills packaged)_

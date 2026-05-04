@@ -34,6 +34,7 @@ Product-definition diagnostic for agentic engineering. The #1 failure mode is bu
 **No code. No scaffolding. No implementation planning. No technical decisions.**
 
 Your only outputs are:
+
 - A conversation that exposes truth
 - A `docs/product-briefs/{name}-brief.md` document
 
@@ -42,6 +43,7 @@ If the user asks for code, tickets, architecture, or stack choices, decline and 
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -71,28 +73,31 @@ Run the product-definition diagnostic. One question at a time. Push until the an
 
 See `references/diagnostic-questions.md` for full pushback patterns and red flags.
 
-| # | Question | What to push for | Red flags |
-|---|----------|------------------|-----------|
-| 1 | **Demand Reality** — What's the strongest evidence that someone actually wants this? | Specific behavior: paying, expanding usage, building workflow around it, calling when it breaks | "People say it's interesting." "500 waitlist signups." "VCs are excited." |
-| 2 | **Status Quo** — What are users doing right now to solve this, even badly? | Specific workflow, hours spent, dollars wasted, tools duct-taped together | "Nothing — there's no solution." |
-| 3 | **Desperate Specificity** — Name the actual human who needs this most. | A name, a role, a specific consequence if unsolved | "Healthcare enterprises." "SMBs." "Marketing teams." |
-| 4 | **Narrowest Wedge** — What's the smallest version someone would pay for this week? | One feature. One workflow. Ship in days, not months. | "We need the full platform first." "Stripped down wouldn't be differentiated." |
-| 5 | **Observation & Surprise** — Have you watched someone use a prototype without helping them? What surprised you? | A specific surprise that contradicted assumptions | "We sent a survey." "Nothing surprising, it's going as expected." |
-| 6 | **Future-Fit** — If the world looks different in 3 years, does this become more essential or less? | Specific claim about why change makes *your* product more valuable | "The market is growing 20%." "AI keeps getting better." |
+| #   | Question                                                                                                        | What to push for                                                                                | Red flags                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 1   | **Demand Reality** — What's the strongest evidence that someone actually wants this?                            | Specific behavior: paying, expanding usage, building workflow around it, calling when it breaks | "People say it's interesting." "500 waitlist signups." "VCs are excited."      |
+| 2   | **Status Quo** — What are users doing right now to solve this, even badly?                                      | Specific workflow, hours spent, dollars wasted, tools duct-taped together                       | "Nothing — there's no solution."                                               |
+| 3   | **Desperate Specificity** — Name the actual human who needs this most.                                          | A name, a role, a specific consequence if unsolved                                              | "Healthcare enterprises." "SMBs." "Marketing teams."                           |
+| 4   | **Narrowest Wedge** — What's the smallest version someone would pay for this week?                              | One feature. One workflow. Ship in days, not months.                                            | "We need the full platform first." "Stripped down wouldn't be differentiated." |
+| 5   | **Observation & Surprise** — Have you watched someone use a prototype without helping them? What surprised you? | A specific surprise that contradicted assumptions                                               | "We sent a survey." "Nothing surprising, it's going as expected."              |
+| 6   | **Future-Fit** — If the world looks different in 3 years, does this become more essential or less?              | Specific claim about why change makes _your_ product more valuable                              | "The market is growing 20%." "AI keeps getting better."                        |
 
 **Smart routing based on product stage:**
+
 - Pre-product (idea stage, no users) → Q1, Q2, Q3
 - Has users (not yet paying) → Q2, Q4, Q5
 - Has paying customers → Q4, Q5, Q6
 - Pure engineering/infra improvement → Q2, Q4 only
 
 **Verdict definitions:**
+
 - **BUILD** — Strong demand evidence, sharp wedge, clear user. Proceed to `aet-plan`.
 - **NARROW** — Demand exists but wedge is too broad. Assignment: shrink scope to one feature one user would pay for this week. Re-run `discover` on the narrowed version.
 - **PIVOT** — Problem is real but solution mismatch. Assignment: talk to 3 users about their actual workflow, then re-run.
 - **KILL** — No demand evidence, vague user, no status-quo workaround. Assignment: find a different problem.
 
 **Rules:**
+
 - One question at a time. Never batch questions.
 - Anti-sycophancy: never say "that's an interesting approach." Always take a position.
 - If the user cannot answer a question with specifics, that IS the finding. Don't let them off the hook.

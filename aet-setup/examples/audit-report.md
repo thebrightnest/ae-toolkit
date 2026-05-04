@@ -13,14 +13,17 @@
 ## Findings
 
 ### ✅ Present & Healthy
+
 - {item}
 - {item}
 
 ### ⚠️ Present but Weak
+
 - {item} — {why}
 - {item} — {why}
 
 ### ❌ Missing
+
 - {item} — {recommendation}
 - {item} — {recommendation}
 

@@ -2,7 +2,7 @@
 
 ## Parent
 
-[PRD: aet-design-system-creation Skill](../prds/aet-design-system-creation-prd.md)
+[PRD: aet-design-system-creation Skill](../prds/aet-design-system-prd.md)
 
 ## What to Build
 

@@ -18,6 +18,7 @@ Test-driven development for agentic engineering. Write behavior-driven tests thr
 ## Before You Start
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -68,6 +69,7 @@ RIGHT (vertical):
 Before writing any code, plan what to test and how.
 
 **Procedure:**
+
 1. Confirm with the user what interface changes are needed
 2. Confirm which behaviors to test (prioritize — you can't test everything)
 3. Identify opportunities for [deep modules](references/deep-modules.md) (small interface, deep implementation)
@@ -91,6 +93,7 @@ GREEN: Write minimal code to pass → test passes
 This is your tracer bullet — proves the path works end-to-end through all layers.
 
 **Rules:**
+
 - The test must describe behavior, not implementation
 - The test must use the public interface only
 - The test must survive an internal refactor
@@ -106,6 +109,7 @@ GREEN: Minimal code to pass → passes
 ```
 
 **Rules:**
+
 - One test at a time
 - Only enough code to pass the current test
 - Don't anticipate future tests
@@ -118,6 +122,7 @@ After each cycle, run the full test suite to catch regressions early.
 After all tests pass, improve the code without changing behavior.
 
 **Procedure:**
+
 1. Look for [refactor candidates](references/refactoring.md)
 2. Extract duplication
 3. Deepen modules (move complexity behind simple interfaces)

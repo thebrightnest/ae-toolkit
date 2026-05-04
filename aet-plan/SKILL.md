@@ -21,6 +21,7 @@ If you have an **unvalidated idea** — no paying users, no observed behavior, n
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -37,6 +38,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 The agent interviews the human until a shared design concept exists. This is the single highest-leverage step in the entire workflow.
 
 **Procedure:**
+
 1. Ask the user to describe what they want to build (brain dump — no structure required)
 2. Ask clarifying questions one at a time. Walk down each branch of the design tree.
 3. Use multiple-choice options when possible to speed up answers.
@@ -44,6 +46,7 @@ The agent interviews the human until a shared design concept exists. This is the
 5. Summarize the shared design concept for confirmation.
 
 **Rules:**
+
 - This is NOT plan mode. Do not produce artifacts yet. Build shared context first.
 - Anti-sycophancy: never say "that's an interesting approach." Always take a position.
 - Be efficient — ask about gaps and ambiguities, not every possible detail.
@@ -54,6 +57,7 @@ The agent interviews the human until a shared design concept exists. This is the
 Transform the grilled conversation into a structured Product Requirements Document.
 
 **Procedure:**
+
 1. Read the clarify-goal conversation history as input.
 2. Use `.agents/templates/prd-template.md` as the structure guide.
 3. Create `docs/prds/` if it doesn't exist. Produce a PRD saved to `docs/prds/{feature-name}-prd.md`.
@@ -66,6 +70,7 @@ Transform the grilled conversation into a structured Product Requirements Docume
 Break the PRD into vertically-sliced, independently implementable tickets.
 
 **Procedure:**
+
 1. Read the approved PRD from `docs/prds/`.
 2. Create `docs/plans/` if it doesn't exist. Create tickets as markdown files in `docs/plans/` or push via MCP if configured.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
@@ -74,10 +79,12 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 6. **Generate `.agents/work-queue.json`** from the tickets. This is the machine-readable queue that enables AFK loops.
 
 **Vertical slice rule:**
+
 - Bad (horizontal): "Create user table" → "Add user API" → "Build user profile page"
 - Good (vertical): "User can register" (schema + endpoint + form) → "User can view profile" (query + page)
 
 **Work queue generation:**
+
 - The queue is built from `docs/plans/*.md` only (PRDs are metadata, not queue entries)
 - Each task gets: `id`, `title`, `plan_file`, `status` (unblocked/blocked/done/failed), `blocks` (array of IDs), `blocked_by` (array of IDs)
 - Tasks with no `blocked_by` entries start as `unblocked`
@@ -90,6 +97,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 Push locally-created stories to an external issue tracker (GitHub, GitLab, etc.). This is optional — local markdown tickets and `.agents/work-queue.json` remain the source of truth.
 
 **Procedure:**
+
 1. Read `docs/plans/*.md` and the approved PRD from `docs/prds/`.
 2. Determine the target tracker from user input, environment config, or AGENTS.md.
 3. For each story, create an issue with:
@@ -128,6 +136,7 @@ Or "None — can start immediately" if no blockers.
 ```
 
 **Rules:**
+
 - Publish in dependency order (blockers first) so real issue IDs can be referenced
 - External issues are a mirror; the local work queue remains the source of truth for `aet-work`
 - If the tracker is not configured, skip this step and document the gap in AGENTS.md
@@ -137,6 +146,7 @@ Or "None — can start immediately" if no blockers.
 From a ticket/story, produce a structured `plan.md` for implementation.
 
 **Procedure:**
+
 1. Read the ticket and relevant PRD section.
 2. Use `.agents/templates/plan-template.md` as the structure guide.
 3. Create `docs/plans/` if it doesn't exist. Produce `docs/plans/{ticket-id}-plan.md` containing:
@@ -148,6 +158,7 @@ From a ticket/story, produce a structured `plan.md` for implementation.
 4. Ask the user to review and iterate. This is the last chance to steer before implementation.
 
 **Context discipline:**
+
 - During exploration (before plan is locked), sub-agents may research the codebase or web.
 - Sub-agents consume 100k+ tokens but return only concise summaries.
 - Once plan.md is produced, the planning conversation context should be cleared.

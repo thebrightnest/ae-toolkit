@@ -22,11 +22,13 @@ A commit is bisectable when it contains exactly one logical change that can be i
 ### Example
 
 **Before (bad):**
+
 ```
 commit: "Add user auth and fix linting and update README"
 ```
 
 **After (good):**
+
 ```
 commit 1: "feat(auth): add login endpoint with JWT"
 commit 2: "style: fix linting errors in auth module"
@@ -36,6 +38,7 @@ commit 3: "docs: update README with auth setup instructions"
 ## Auto-Splitting in aet-ship
 
 If `ship` detects non-bisectable commits:
+
 1. Analyze the diff for logical boundaries
 2. Use `git reset --soft HEAD~1` + `git add -p` to re-stage
 3. Create separate commits with auto-generated messages

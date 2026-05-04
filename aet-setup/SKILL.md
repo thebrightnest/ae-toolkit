@@ -50,29 +50,31 @@ The skill **suggests** important topics but never blocks waiting for user input.
 
 For every project, ensure these topics are addressed. Use auto-detection; fall back to sensible defaults.
 
-| # | Topic | How to Detect | Sensible Default |
-|---|-------|---------------|-----------------|
-| 1 | **Stack** | Look for build/config files (e.g., package manifests, build configs) | Ask user if ambiguous; default to detected |
-| 2 | **Architecture pattern** | Framework used, directory structure conventions | Clean/hexagonal for backends; component-based for frontends |
-| 3 | **Type safety** | Presence of type checker config, strict flags | Strict mode enabled everywhere |
-| 4 | **Linting & formatting** | Presence of linter/formatter configs | Dominant tools for the language, configured and runnable |
-| 5 | **Security scanning** | Presence of static analysis, dependency audit, secret scanning | **Enable by default** — never optional |
-| 6 | **Testing** | Presence of test runner config | Unit + integration for backend; unit + component for frontend |
-| 7 | **Git hooks** | Presence of pre-commit config or git hooks | pre-commit with format/lint/type-check/test/security gates |
-| 8 | **AI guardrails** | Presence of `AGENTS.md` | Generate with explicit forbidden/mandatory rules |
-| 9 | **Documentation** | Presence of docs, README quality | `AGENTS.md` + `docs/CONVENTIONS.md` + ADR process |
-| 10 | **Observability** | Presence of structured logging, metrics, tracing | Structured logging + health checks at minimum |
-| 11 | **DB migrations** | Presence of ORM + migration tool | Migration tool if ORM detected; document if intentionally skipped |
-| 12 | **Dependency locking** | Presence of lockfiles | Enforce lockfile; add runtime version constraints |
-| 13 | **API contracts** | Presence of schema generation, type sync | Schema auto-gen for backend; frontend type sync if applicable |
-| 14 | **Git workflow** | Presence of commit message template, branch conventions | Conventional commits; branch naming conventions |
+| #   | Topic                    | How to Detect                                                        | Sensible Default                                                  |
+| --- | ------------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 1   | **Stack**                | Look for build/config files (e.g., package manifests, build configs) | Ask user if ambiguous; default to detected                        |
+| 2   | **Architecture pattern** | Framework used, directory structure conventions                      | Clean/hexagonal for backends; component-based for frontends       |
+| 3   | **Type safety**          | Presence of type checker config, strict flags                        | Strict mode enabled everywhere                                    |
+| 4   | **Linting & formatting** | Presence of linter/formatter configs                                 | Dominant tools for the language, configured and runnable          |
+| 5   | **Security scanning**    | Presence of static analysis, dependency audit, secret scanning       | **Enable by default** — never optional                            |
+| 6   | **Testing**              | Presence of test runner config                                       | Unit + integration for backend; unit + component for frontend     |
+| 7   | **Git hooks**            | Presence of pre-commit config or git hooks                           | pre-commit with format/lint/type-check/test/security gates        |
+| 8   | **AI guardrails**        | Presence of `AGENTS.md`                                              | Generate with explicit forbidden/mandatory rules                  |
+| 9   | **Documentation**        | Presence of docs, README quality                                     | `AGENTS.md` + `docs/CONVENTIONS.md` + ADR process                 |
+| 10  | **Observability**        | Presence of structured logging, metrics, tracing                     | Structured logging + health checks at minimum                     |
+| 11  | **DB migrations**        | Presence of ORM + migration tool                                     | Migration tool if ORM detected; document if intentionally skipped |
+| 12  | **Dependency locking**   | Presence of lockfiles                                                | Enforce lockfile; add runtime version constraints                 |
+| 13  | **API contracts**        | Presence of schema generation, type sync                             | Schema auto-gen for backend; frontend type sync if applicable     |
+| 14  | **Git workflow**         | Presence of commit message template, branch conventions              | Conventional commits; branch naming conventions                   |
 
 ## Execution Steps
 
 When invoked, follow this sequence:
 
 ### Step 1: Discovery
+
 Scan the project root for stack indicators. Look for:
+
 - Build/config files (package manifests, build tool configs, lockfiles)
 - Source file extensions
 - Framework-specific files
@@ -80,18 +82,23 @@ Scan the project root for stack indicators. Look for:
 If multiple stacks detected, treat as monorepo.
 
 ### Step 2: Research (if needed)
+
 If the stack is novel or you're unsure about current best practices, search the web:
+
 - "{detected framework/language} best practices {current year}"
 - "{detected framework/language} code quality tools {current year}"
 - "{detected framework/language} security scanning setup"
 
 Focus on tooling that is:
+
 - **Maintained** (active repository, recent releases)
 - **Widely adopted** (used by major projects)
 - **Compatible** with the existing dependency versions
 
 ### Step 3: Audit
+
 Compare the current project against the Master Checklist. For each item:
+
 - **Present & good** → note it
 - **Present but weak** → flag for upgrade
 - **Missing** → flag for creation
@@ -99,12 +106,15 @@ Compare the current project against the Master Checklist. For each item:
 Produce a concise audit report (bullet list, max 1 page).
 
 ### Step 4: Propose
+
 Show the user:
+
 1. Detected stack
 2. Top 5 gaps found
 3. What will be created/modified
 
 Example:
+
 ```
 Detected: Backend API + Frontend SPA + SQLite (monorepo)
 
@@ -125,14 +135,18 @@ Will create/modify:
 ```
 
 ### Step 5: Implement
+
 Create/modify files. Always:
+
 - **Prefer editing existing files** over creating new ones
 - **Preserve existing conventions** when they conflict with "best practice" — document the deviation in `AGENTS.md`
 - **Make minimal changes** — don't rewrite the project
 - **Ensure all hooks/tools are local** — no paid CI services
 
 ### Step 6: Validate
+
 Before finishing:
+
 1. Run the newly added linters/formatters — they should pass (or have zero false positives)
 2. Run the test suite — it should pass
 3. Verify pre-commit hooks can install
@@ -143,6 +157,7 @@ Before finishing:
 ### AI Context Files (`AGENTS.md`)
 
 Always generate `AGENTS.md` at project root and per-subproject. It must contain:
+
 - Project overview and detected stack
 - Architecture pattern and layer rules
 - Directory structure
@@ -183,6 +198,7 @@ Generate the reference docs as stubs with headers and brief descriptions. The te
 ### Type Safety
 
 For every typed language in the project:
+
 - Enable the strictest available compiler/interpreter settings
 - Document the specific flags in `AGENTS.md`
 - Ban implicit dynamic typing (`any`, `interface{}`, `void*`, etc.) except at explicit boundaries
@@ -190,6 +206,7 @@ For every typed language in the project:
 ### Linting & Formatting
 
 Every code directory must have automated format and lint checks:
+
 - Use the dominant tools for the detected language/framework
 - Ensure formatter and linter configs don't conflict
 - Line length: pick a standard (80, 100, or 120) and enforce it everywhere
@@ -197,6 +214,7 @@ Every code directory must have automated format and lint checks:
 ### Security Scanning
 
 Security is non-optional. For every stack:
+
 - **Static analysis:** scan source code for vulnerabilities (e.g., unsafe deserialization, injection risks)
 - **Dependency audit:** scan installed packages for known CVEs
 - **Secret scanning:** detect accidentally committed credentials, API keys, tokens
@@ -206,6 +224,7 @@ Security is non-optional. For every stack:
 ### Testing
 
 Define the testing pyramid:
+
 - **Unit tests:** Fast, deterministic, no I/O. Mock external dependencies.
 - **Integration tests:** Test boundaries (API endpoints, DB queries, external calls).
 - **Coverage target:** Default 80%, but adjust to reality if the project is far below.
@@ -214,6 +233,7 @@ Define the testing pyramid:
 ### Git Hooks & Local Automation
 
 All quality gates must run locally:
+
 - Create `.pre-commit-config.yaml` or git hooks running: format check, lint, type check, security scan, tests
 - Create root orchestration (`Makefile` or `justfile`) with: install, dev, test, lint, format, type-check, security-audit
 - Ensure every target actually works
@@ -221,6 +241,7 @@ All quality gates must run locally:
 ### Git Workflow
 
 Enforce commit conventions and branch naming:
+
 - Add `.gitmessage` template for conventional commits
 - Add branch naming conventions to `AGENTS.md`
 - Optional: add commitlint if easily supported by the stack
@@ -228,6 +249,7 @@ Enforce commit conventions and branch naming:
 ### Dependency Locking
 
 Reproducible builds are mandatory:
+
 - Ensure lockfiles exist and are committed
 - Add runtime version constraints (e.g., minimum language/runtime version in package config)
 - Add a `lock` or equivalent target to the orchestration file
@@ -235,12 +257,14 @@ Reproducible builds are mandatory:
 ### Database Migrations
 
 If an ORM or database abstraction is detected:
+
 - Research the standard migration tool for that ORM
 - Set it up OR document why migrations aren't needed (e.g., SQLite in dev only, schema-less DB)
 
 ### API Contracts
 
 If backend and frontend are separate stacks in the same repo:
+
 - Generate a machine-readable schema from the backend (OpenAPI, tRPC, GraphQL)
 - Generate or sync frontend types from the schema
 - Document the sync command in `AGENTS.md`
@@ -248,6 +272,7 @@ If backend and frontend are separate stacks in the same repo:
 ### Observability
 
 Structured logging is the minimum:
+
 - Replace basic logging with structured format (timestamp, level, name, message)
 - Add a health check endpoint that verifies critical dependencies
 - Reduce third-party log noise to warning level by default
@@ -255,6 +280,7 @@ Structured logging is the minimum:
 ### Accessibility (Frontend)
 
 If a frontend is detected:
+
 - Add a11y linting rules to the frontend linter config
 - Document a11y requirements in `AGENTS.md`
 - Enforce: keyboard accessibility, image alt text, form labels, semantic HTML
@@ -262,6 +288,7 @@ If a frontend is detected:
 ### Documentation
 
 Humans need conventions docs; AI needs guardrails:
+
 - Generate `docs/CONVENTIONS.md` with: structure, naming, error handling, state management patterns
 - Create `docs/adr/` with template and README explaining ADRs
 - Do **not** create `docs/product-briefs/`, `docs/prds/`, or `docs/plans/` here — each skill creates its own folder on first use
@@ -270,7 +297,9 @@ Humans need conventions docs; AI needs guardrails:
 ## Generated Artifacts
 
 ### 1. AGENTS.md (root)
+
 The most important file. Keep it under 200 lines. Contains:
+
 - Project overview and stack
 - Architecture pattern and layer rules
 - Directory structure
@@ -282,7 +311,9 @@ The most important file. Keep it under 200 lines. Contains:
 - Decision log (brief, high-level)
 
 ### 2. docs/CONVENTIONS.md
+
 Human-readable patterns:
+
 - Project structure and naming conventions
 - Code style rules
 - Testing conventions
@@ -290,7 +321,9 @@ Human-readable patterns:
 - API conventions (if applicable)
 
 ### 3. `.agents/` directory
+
 Agent-neutral home for workflows, templates, and state:
+
 - `.agents/commands/README.md` — how command workflows work
 - `.agents/reference/*.md` — task-specific rules (loaded on demand)
 - `.agents/templates/*.md` — PRD, plan, retro templates
@@ -299,7 +332,9 @@ Agent-neutral home for workflows, templates, and state:
 - `.agents/.gitkeep`
 
 ### 4. `docs/` subdirectories (created by individual skills)
+
 Each skill creates its own folder under `docs/` when it first produces an artifact:
+
 - `aet-discover` → `docs/product-briefs/`
 - `aet-plan` → `docs/prds/` and `docs/plans/`
 - `aet-evolve` → `docs/retros/`
@@ -307,12 +342,15 @@ Each skill creates its own folder under `docs/` when it first produces an artifa
 `aet-setup` does **not** pre-create these. Skills own their own directories.
 
 ### 5. Tool configs
+
 Linter, formatter, type checker, security scanner configs tailored to the detected stack.
 
 ### 6. Root orchestration
+
 `Makefile` or `justfile` with targets: install, dev, test, lint, format, type-check, security-audit, clean
 
 ### 7. ADR template
+
 `docs/adr/000-template.md` and `docs/adr/README.md`
 
 ## AI Guardrails Template
@@ -323,6 +361,7 @@ Every `AGENTS.md` must include a section like this, adapted to the project:
 ## AI Assistant Guardrails
 
 ### Forbidden
+
 - Never add a new dependency without explicit justification and version pinning
 - Never disable linter, formatter, or type-checker rules to make code pass — fix the root cause
 - Never write code without corresponding tests (unless explicitly asked to prototype)
@@ -331,6 +370,7 @@ Every `AGENTS.md` must include a section like this, adapted to the project:
 - Never introduce new patterns/abstractions without checking existing ones first
 
 ### Mandatory
+
 - Always run the full test suite before claiming a task is complete
 - Always update this file if you change architectural patterns or tooling
 - Always use factories/fixtures for test data, never hardcode domain values
@@ -339,6 +379,7 @@ Every `AGENTS.md` must include a section like this, adapted to the project:
 - Always keep functions small and focused; extract helpers rather than nesting logic
 
 ### Agentic Workflow Guardrails
+
 - Always produce a PRD before writing code for any feature >1 day of work
 - Always review the plan.md before implementation; never skip human validation
 - Always run self-validation (lint, type-check, tests) before declaring a task complete
@@ -349,6 +390,7 @@ Every `AGENTS.md` must include a section like this, adapted to the project:
 - Load `.agents/reference/` docs only when working on the relevant task type
 
 ## Context Budget
+
 - Keep AGENTS.md under 200 lines; detailed rules live in `.agents/reference/`
 - Prime command: load only core files + recent commits, not the full codebase
 - Planning session: free-form conversation OK, but clear before implementing

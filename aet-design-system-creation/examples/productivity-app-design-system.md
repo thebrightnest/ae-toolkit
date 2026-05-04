@@ -16,44 +16,44 @@ Clinical precision with warmth. Like a well-designed hospital, not a spaceship. 
 
 ### Scale
 
-| Token | Size | Line Height | Weight | Usage |
-|-------|------|-------------|--------|-------|
-| text-xs | 12px | 1.4 | 400 | Captions, metadata, timestamps |
-| text-sm | 14px | 1.5 | 400 | Secondary text, labels |
-| text-base | 16px | 1.6 | 400 | Body text, descriptions |
-| text-lg | 20px | 1.4 | 500 | Lead paragraphs, subheadings |
-| text-xl | 25px | 1.2 | 600 | Section headings |
-| text-2xl | 31px | 1.1 | 600 | Page headings |
-| text-3xl | 39px | 1.1 | 700 | Hero headings |
+| Token     | Size | Line Height | Weight | Usage                          |
+| --------- | ---- | ----------- | ------ | ------------------------------ |
+| text-xs   | 12px | 1.4         | 400    | Captions, metadata, timestamps |
+| text-sm   | 14px | 1.5         | 400    | Secondary text, labels         |
+| text-base | 16px | 1.6         | 400    | Body text, descriptions        |
+| text-lg   | 20px | 1.4         | 500    | Lead paragraphs, subheadings   |
+| text-xl   | 25px | 1.2         | 600    | Section headings               |
+| text-2xl  | 31px | 1.1         | 600    | Page headings                  |
+| text-3xl  | 39px | 1.1         | 700    | Hero headings                  |
 
 ## Color System
 
 ### Base
 
-| Token | Hex | Usage | Contrast Ratio |
-|-------|-----|-------|----------------|
-| bg | #FFFFFF | Page background | - |
-| surface | #F8F9FA | Cards, panels, inputs | - |
-| surface-hover | #F1F3F5 | Hover states | - |
-| text | #1A1D21 | Primary text | 15.8:1 |
-| text-muted | #6B7280 | Secondary text, placeholders | 5.2:1 |
-| border | #E5E7EB | Dividers, outlines | - |
+| Token         | Hex     | Usage                        | Contrast Ratio |
+| ------------- | ------- | ---------------------------- | -------------- |
+| bg            | #FFFFFF | Page background              | -              |
+| surface       | #F8F9FA | Cards, panels, inputs        | -              |
+| surface-hover | #F1F3F5 | Hover states                 | -              |
+| text          | #1A1D21 | Primary text                 | 15.8:1         |
+| text-muted    | #6B7280 | Secondary text, placeholders | 5.2:1          |
+| border        | #E5E7EB | Dividers, outlines           | -              |
 
 ### Accent
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| accent | #0F172A | Primary CTA, active states, links |
-| accent-hover | #1E293B | CTA hover |
-| accent-secondary | #3B82F6 | Secondary emphasis, highlights |
+| Token            | Hex     | Usage                             |
+| ---------------- | ------- | --------------------------------- |
+| accent           | #0F172A | Primary CTA, active states, links |
+| accent-hover     | #1E293B | CTA hover                         |
+| accent-secondary | #3B82F6 | Secondary emphasis, highlights    |
 
 ### Semantic
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| error | #DC2626 | Validation errors, destructive actions |
-| warning | #F59E0B | Caution states, pending |
-| success | #059669 | Confirmation, completion |
+| Token   | Hex     | Usage                                  |
+| ------- | ------- | -------------------------------------- |
+| error   | #DC2626 | Validation errors, destructive actions |
+| warning | #F59E0B | Caution states, pending                |
+| success | #059669 | Confirmation, completion               |
 
 ## Layout & Spacing
 
@@ -63,34 +63,34 @@ Clinical precision with warmth. Like a well-designed hospital, not a spaceship. 
 
 ### Spacing Scale
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| space-1 | 4px | Tight padding, icon gaps |
-| space-2 | 8px | Inline elements, tight groups |
-| space-3 | 12px | Button padding, form fields |
-| space-4 | 16px | Card padding, section gaps |
-| space-5 | 24px | Component separation |
-| space-6 | 32px | Section separation |
-| space-7 | 48px | Major section breaks |
-| space-8 | 64px | Page-level spacing |
+| Token   | Value | Usage                         |
+| ------- | ----- | ----------------------------- |
+| space-1 | 4px   | Tight padding, icon gaps      |
+| space-2 | 8px   | Inline elements, tight groups |
+| space-3 | 12px  | Button padding, form fields   |
+| space-4 | 16px  | Card padding, section gaps    |
+| space-5 | 24px  | Component separation          |
+| space-6 | 32px  | Section separation            |
+| space-7 | 48px  | Major section breaks          |
+| space-8 | 64px  | Page-level spacing            |
 
 ## Motion & Animation
 
 ### Easing
 
-| Name | Curve | Usage |
-|------|-------|-------|
+| Name    | Curve                        | Usage                |
+| ------- | ---------------------------- | -------------------- |
 | default | cubic-bezier(0.4, 0, 0.2, 1) | Standard transitions |
-| enter | cubic-bezier(0, 0, 0.2, 1) | Elements appearing |
-| exit | cubic-bezier(0.4, 0, 1, 1) | Elements leaving |
+| enter   | cubic-bezier(0, 0, 0.2, 1)   | Elements appearing   |
+| exit    | cubic-bezier(0.4, 0, 1, 1)   | Elements leaving     |
 
 ### Durations
 
-| Context | Duration |
-|---------|----------|
-| Micro-interaction | 150ms |
-| Transition | 200ms |
-| Page transition | 300ms |
+| Context           | Duration |
+| ----------------- | -------- |
+| Micro-interaction | 150ms    |
+| Transition        | 200ms    |
+| Page transition   | 300ms    |
 
 ### Principles
 
@@ -104,6 +104,7 @@ Clinical precision with warmth. Like a well-designed hospital, not a spaceship. 
 ### Button
 
 **Primary:**
+
 - Background: accent (#0F172A)
 - Text: #FFFFFF
 - Padding: space-3 (12px) vertical, space-4 (16px) horizontal
@@ -113,6 +114,7 @@ Clinical precision with warmth. Like a well-designed hospital, not a spaceship. 
 - Active: scale(0.98), 150ms
 
 **Secondary:**
+
 - Background: transparent
 - Border: 1px solid border (#E5E7EB)
 - Text: text (#1A1D21)

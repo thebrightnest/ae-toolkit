@@ -7,6 +7,7 @@
 ## Scenario
 
 User invokes `/aet-setup` on a repo containing:
+
 - `pyproject.toml` with FastAPI and Pydantic dependencies
 - `package.json` with React and TypeScript
 - `web/src/` and `api/app/` directories
@@ -16,6 +17,7 @@ User invokes `/aet-setup` on a repo containing:
 ## Step 1: Discovery
 
 The skill scans and finds:
+
 - **Backend:** Python (pyproject.toml), FastAPI framework, Pydantic v2
 - **Frontend:** Node (package.json), React, TypeScript, Vite
 - **Database:** None explicitly declared, but SQLite mentioned in README
@@ -24,6 +26,7 @@ The skill scans and finds:
 ## Step 2: Research
 
 The skill searches:
+
 - "FastAPI best practices 2025 code quality"
 - "React TypeScript strict ESLint best practices 2025"
 - "Python security scanning tools 2025"
@@ -32,22 +35,22 @@ Finds: ruff + mypy dominate Python linting; ESLint flat config is standard for R
 
 ## Step 3: Audit against Master Checklist
 
-| Topic | Status | Notes |
-|-------|--------|-------|
-| Stack | ✅ | Detected correctly |
-| Architecture | ✅ | Clean Architecture identified |
-| Type safety | ⚠️ | MyPy strict enabled, but TS strict needs verification |
-| Linting | ⚠️ | Ruff present, but ESLint v9 has no config file (broken) |
-| Security | ❌ | No bandit, pip-audit, or secret scanning |
-| Testing | ⚠️ | pytest present but coverage threshold inconsistent |
-| Git hooks | ⚠️ | Present but missing security and type checks |
-| AI guardrails | ❌ | No AGENTS.md |
-| Documentation | ⚠️ | Has docs/ but no CONVENTIONS.md or ADRs |
-| Observability | ❌ | Basic logging only |
-| DB migrations | ❌ | SQLite without Alembic |
-| Dependency locking | ⚠️ | No lockfile committed |
-| API contracts | ⚠️ | OpenAPI auto-generated but no frontend sync |
-| Git workflow | ❌ | No conventional commits or branch naming |
+| Topic              | Status | Notes                                                   |
+| ------------------ | ------ | ------------------------------------------------------- |
+| Stack              | ✅     | Detected correctly                                      |
+| Architecture       | ✅     | Clean Architecture identified                           |
+| Type safety        | ⚠️     | MyPy strict enabled, but TS strict needs verification   |
+| Linting            | ⚠️     | Ruff present, but ESLint v9 has no config file (broken) |
+| Security           | ❌     | No bandit, pip-audit, or secret scanning                |
+| Testing            | ⚠️     | pytest present but coverage threshold inconsistent      |
+| Git hooks          | ⚠️     | Present but missing security and type checks            |
+| AI guardrails      | ❌     | No AGENTS.md                                            |
+| Documentation      | ⚠️     | Has docs/ but no CONVENTIONS.md or ADRs                 |
+| Observability      | ❌     | Basic logging only                                      |
+| DB migrations      | ❌     | SQLite without Alembic                                  |
+| Dependency locking | ⚠️     | No lockfile committed                                   |
+| API contracts      | ⚠️     | OpenAPI auto-generated but no frontend sync             |
+| Git workflow       | ❌     | No conventional commits or branch naming                |
 
 ## Step 4: Propose
 
@@ -75,6 +78,7 @@ Will create/modify:
 ## Step 5: Implement (Illustrative)
 
 The skill would:
+
 1. Generate `AGENTS.md` with the project's actual Clean Architecture layers
 2. Add `bandit`, `pip-audit`, `detect-secrets` to Python dev dependencies
 3. Create a modern ESLint flat config with JSX a11y rules
@@ -86,6 +90,7 @@ The skill would:
 ## Step 6: Validate
 
 Run:
+
 - `make lint` → passes
 - `make type-check` → passes
 - `make format-check` → passes

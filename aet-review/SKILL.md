@@ -17,6 +17,7 @@ Code review for agentic engineering. Multi-lens diff review before anything land
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -33,6 +34,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 Staff-level diff review with multiple lenses.
 
 **Procedure:**
+
 1. Read the git diff for the current branch (or files specified by user)
 2. Read the corresponding `docs/plans/{ticket}-plan.md` to compare implementation against plan
 3. Run through review lenses:
@@ -51,12 +53,14 @@ Staff-level diff review with multiple lenses.
 Cross-model adversarial review. If another AI model is available, run an independent review and compare findings.
 
 **Procedure:**
+
 1. Summarize the diff and plan in a format suitable for another model
 2. Ask the other model to review with an adversarial stance: "Actively try to find bugs, security issues, and design flaws."
 3. Compare findings with the primary review
 4. Highlight discrepancies — areas where one model found something the other missed
 
 **Model personality heuristic:**
+
 - Claude-style models: great at architecture, patterns, and broad reasoning
 - Codex-style models: great at precision, edge cases, and challenging assumptions
 - Cross-model analysis catches failure modes that either model alone would miss

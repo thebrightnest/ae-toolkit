@@ -18,6 +18,7 @@ Security audit for agentic engineering. Lightweight, diff-focused review — not
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -34,6 +35,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 Scan the current branch diff for security issues.
 
 **Procedure:**
+
 1. Read the git diff for the current branch
 2. Check for secrets/credentials:
    - API keys, tokens, passwords in code or config files
@@ -66,6 +68,7 @@ Scan the current branch diff for security issues.
    - Pass/fail gate recommendation
 
 **Pass/fail gate:**
+
 - **Pass** — no Critical or High findings; Medium findings have documented mitigations
 - **Fail** — any Critical or High finding must be fixed before merge
 

@@ -3,6 +3,7 @@
 ## When to Use Sub-Agents
 
 Delegate to a sub-agent when the main agent would need to:
+
 - Explore more than 10 files to understand codebase structure
 - Research external libraries, APIs, or documentation
 - Consume more than 50k tokens on research

@@ -2,7 +2,7 @@
 
 **AE Toolkit is a process, not a collection of prompts.**
 
-Most AI coding sessions start strong and end in drift. The agent builds what it *assumed*, not what you *meant*. Context degrades after a few tasks. The same bug shows up next week because the system never learned. There is no workflow — just vibes and hope.
+Most AI coding sessions start strong and end in drift. The agent builds what it _assumed_, not what you _meant_. Context degrades after a few tasks. The same bug shows up next week because the system never learned. There is no workflow — just vibes and hope.
 
 AE Toolkit fixes this by encoding the best agentic engineering patterns from YC, Garry Tan (GStack), Matt Pocock, and the AI Transformation Workshop into a modular skill suite that runs in order:
 
@@ -10,7 +10,7 @@ AE Toolkit fixes this by encoding the best agentic engineering patterns from YC,
 
 Each skill feeds into the next. `/aet-discover` validates demand before any planning begins. `/aet-plan` writes a PRD. `/aet-design-system-creation` produces DESIGN.md — your design source of truth. `/aet-validate-scope` checks the plan and design against your existing domain model and documented decisions before a single line of code is written. `/aet-implement` reads the plan — with `/aet-tdd` optionally guiding test-first development. `/aet-review` catches what `/aet-implement` missed. `/aet-qa` verifies the fix. `/aet-ship` gates the merge. `/aet-evolve` updates the rules so the bug never repeats. Nothing falls through the cracks because every step knows what came before it.
 
-### What you get
+## What you get
 
 - **Validate before you plan** — `aet-discover` stress-tests ideas with YC-style forcing questions so you don't build something no one needs
 - **Shared understanding before code** — `clarify-goal` builds shared understanding through targeted questions until the agent actually gets it
@@ -65,12 +65,12 @@ cp -r aet-setup ~/.claude/skills/
 
 ### Run it
 
-| Tool | How to invoke | Example |
-| --- | --- | --- |
-| **Claude Code** | Slash command | `/aet-setup` |
-| **Kimi Code CLI** | Natural language | "Run aet-setup on this project" |
-| **Cursor** | Natural language or rules | "Set up this project with aet-setup" |
-| **Codex / Copilot / Generic** | Paste into prompt | Copy `SKILL.md` content into the chat |
+| Tool                          | How to invoke             | Example                               |
+| ----------------------------- | ------------------------- | ------------------------------------- |
+| **Claude Code**               | Slash command             | `/aet-setup`                          |
+| **Kimi Code CLI**             | Natural language          | "Run aet-setup on this project"       |
+| **Cursor**                    | Natural language or rules | "Set up this project with aet-setup"  |
+| **Codex / Copilot / Generic** | Paste into prompt         | Copy `SKILL.md` content into the chat |
 
 All skills follow the same markdown-based format. The agent reads the YAML frontmatter (`name`, `description`) to decide when to trigger, then loads the full instructions on demand.
 
@@ -84,22 +84,22 @@ Install any skill with:
 npx skills add getatelier/ae-toolkit.git@<skill-name>
 ```
 
-| Skill | Description |
-| --- | --- |
-| [aet-setup](./aet-setup) | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. |
-| [aet-discover](./aet-discover) | Product-definition diagnostic with YC-style forcing questions. Validates demand, narrows the wedge, and produces a product brief — not a PRD. Hard gate: no code. |
-| [aet-plan](./aet-plan) | PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Prevents misalignment before any code is written. |
-| [aet-design-system-creation](./aet-design-system-creation) | Complete design system creation: aesthetic direction, typography, color, layout, motion. Produces DESIGN.md as the project's design source of truth. Opinionated and research-driven. |
-| [aet-validate-scope](./aet-validate-scope) | Validate a plan against the existing domain model, terminology, and documented decisions. Post-PRD alignment gate before implementation. |
-| [aet-evolve](./aet-evolve) | System evolution through retrospectives and rule/command/template updates. The highest-leverage long-term skill. |
-| [aet-prime](./aet-prime) | Session context loading with git-as-memory and context discipline. |
-| [aet-tdd](./aet-tdd) | Test-driven development with red-green-refactor loop and vertical tracer bullets. Integration-style tests through public interfaces. |
-| [aet-implement](./aet-implement) | Fresh-session implementation from plan.md with self-validation. |
-| [aet-review](./aet-review) | Staff-level code review with multi-lens checks and cross-model adversarial challenge. |
-| [aet-cso](./aet-cso) | Diff-focused security audit: secrets, injection risks, auth bypass, CVEs, LLM trust boundaries. |
-| [aet-qa](./aet-qa) | Automated QA with tiered validation (Quick/Standard/Exhaustive) and regression test generation. |
-| [aet-ship](./aet-ship) | Pre-merge validation gate with bisectable commits, changelog generation, and PR creation. |
-| [aet-work](./aet-work) | Work queue management and AFK task orchestration. Enables sequential "night shift" loops across multiple plan.md files. |
+| Skill                                                      | Description                                                                                                                                                                               |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [aet-setup](./aet-setup)                                   | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. |
+| [aet-discover](./aet-discover)                             | Product-definition diagnostic with YC-style forcing questions. Validates demand, narrows the wedge, and produces a product brief — not a PRD. Hard gate: no code.                         |
+| [aet-plan](./aet-plan)                                     | PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Prevents misalignment before any code is written.                           |
+| [aet-design-system-creation](./aet-design-system-creation) | Complete design system creation: aesthetic direction, typography, color, layout, motion. Produces DESIGN.md as the project's design source of truth. Opinionated and research-driven.     |
+| [aet-validate-scope](./aet-validate-scope)                 | Validate a plan against the existing domain model, terminology, and documented decisions. Post-PRD alignment gate before implementation.                                                  |
+| [aet-evolve](./aet-evolve)                                 | System evolution through retrospectives and rule/command/template updates. The highest-leverage long-term skill.                                                                          |
+| [aet-prime](./aet-prime)                                   | Session context loading with git-as-memory and context discipline.                                                                                                                        |
+| [aet-tdd](./aet-tdd)                                       | Test-driven development with red-green-refactor loop and vertical tracer bullets. Integration-style tests through public interfaces.                                                      |
+| [aet-implement](./aet-implement)                           | Fresh-session implementation from plan.md with self-validation.                                                                                                                           |
+| [aet-review](./aet-review)                                 | Staff-level code review with multi-lens checks and cross-model adversarial challenge.                                                                                                     |
+| [aet-cso](./aet-cso)                                       | Diff-focused security audit: secrets, injection risks, auth bypass, CVEs, LLM trust boundaries.                                                                                           |
+| [aet-qa](./aet-qa)                                         | Automated QA with tiered validation (Quick/Standard/Exhaustive) and regression test generation.                                                                                           |
+| [aet-ship](./aet-ship)                                     | Pre-merge validation gate with bisectable commits, changelog generation, and PR creation.                                                                                                 |
+| [aet-work](./aet-work)                                     | Work queue management and AFK task orchestration. Enables sequential "night shift" loops across multiple plan.md files.                                                                   |
 
 ---
 

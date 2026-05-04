@@ -33,6 +33,7 @@ The agent follows this instruction. No special runtime needed.
 ## What Re-Prime Loads
 
 After clearing, run aet-prime to load:
+
 - AGENTS.md (1–3k tokens)
 - Last 5–10 git commits (1–3k tokens)
 - Current branch name (<1k tokens)
@@ -42,21 +43,21 @@ After clearing, run aet-prime to load:
 
 ## Without Context Isolation
 
-| Task # | Cumulative Context | Agent Quality |
-|--------|-------------------|---------------|
-| 1 | 20k | ✅ Sharp |
-| 2 | 40k | ✅ Good |
-| 3 | 60k | ⚠️ Slight decline |
-| 4 | 80k | ⚠️ Missing details |
-| 5 | 100k | ❌ Repetitive, confused |
-| 6+ | 120k+ | ❌ Unreliable |
+| Task # | Cumulative Context | Agent Quality           |
+| ------ | ------------------ | ----------------------- |
+| 1      | 20k                | ✅ Sharp                |
+| 2      | 40k                | ✅ Good                 |
+| 3      | 60k                | ⚠️ Slight decline       |
+| 4      | 80k                | ⚠️ Missing details      |
+| 5      | 100k               | ❌ Repetitive, confused |
+| 6+     | 120k+              | ❌ Unreliable           |
 
 ## With Context Isolation
 
 | Task # | Context Per Task | Agent Quality |
-|--------|-----------------|---------------|
-| 1 | 15k | ✅ Sharp |
-| 2 | 15k | ✅ Sharp |
-| 3 | 15k | ✅ Sharp |
-| ... | 15k | ✅ Sharp |
-| 20 | 15k | ✅ Sharp |
+| ------ | ---------------- | ------------- |
+| 1      | 15k              | ✅ Sharp      |
+| 2      | 15k              | ✅ Sharp      |
+| 3      | 15k              | ✅ Sharp      |
+| ...    | 15k              | ✅ Sharp      |
+| 20     | 15k              | ✅ Sharp      |

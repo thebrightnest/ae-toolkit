@@ -6,11 +6,11 @@ This is what a completed `aet-discover` diagnostic produces. It is evidence, not
 
 ## Meta
 
-| Field | Value |
-|-------|-------|
-| **Product** | ReconcileBot |
-| **Date** | 2026-05-03 |
-| **Verdict** | NARROW |
+| Field             | Value        |
+| ----------------- | ------------ |
+| **Product**       | ReconcileBot |
+| **Date**          | 2026-05-03   |
+| **Verdict**       | NARROW       |
 | **Diagnostician** | aet-discover |
 
 ---
@@ -77,7 +77,7 @@ This is what a completed `aet-discover` diagnostic produces. It is evidence, not
 
 **Final answer:** "She sorts by payout date, then manually checks each order ID against the Shopify export. She color-codes rows in the sheet. The surprise: she doesn't care about the discrepancy amount — she cares about whether the order was refunded or if the payout was split across two deposits."
 
-**Finding:** Real behavior observed. User cares about *reason* for discrepancy, not magnitude. Product should surface "why" before "how much."
+**Finding:** Real behavior observed. User cares about _reason_ for discrepancy, not magnitude. Product should surface "why" before "how much."
 
 ---
 
@@ -96,6 +96,7 @@ This is what a completed `aet-discover` diagnostic produces. It is evidence, not
 ## Synthesis
 
 ### What we know
+
 - One paying customer (Sarah) with real pain and measurable workaround
 - Status quo is a 47-tab Google Sheet + 6 hrs/week VA labor
 - Incumbent (QuickBooks) has a known gap (payout timing)
@@ -104,17 +105,19 @@ This is what a completed `aet-discover` diagnostic produces. It is evidence, not
 - Moat is relationship/context, not AI
 
 ### What we don't know
+
 - Will other founders besides Sarah pay?
 - Is $200/month the right price?
 - Can we automate the CSV processing reliably?
 - Will Sarah stay if we don't add the full platform?
 
 ### Risks
-| Risk | Level | Mitigation |
-|------|-------|------------|
-| Single-customer dependency | High | Find 2 more Sarahs before building |
-| Feature creep (AI suggestions) | Medium | Ship CSV email first; no AI layer until 5 customers |
-| Incumbent response (QuickBooks) | Low | Gap is known; they move slowly |
+
+| Risk                            | Level  | Mitigation                                          |
+| ------------------------------- | ------ | --------------------------------------------------- |
+| Single-customer dependency      | High   | Find 2 more Sarahs before building                  |
+| Feature creep (AI suggestions)  | Medium | Ship CSV email first; no AI layer until 5 customers |
+| Incumbent response (QuickBooks) | Low    | Gap is known; they move slowly                      |
 
 ---
 

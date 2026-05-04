@@ -36,6 +36,7 @@ If you have an **unvalidated idea** — no PRD, no product context — run `aet-
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -98,6 +99,7 @@ cat docs/designs/taste-profile.json 2>/dev/null || echo "NO_TASTE_PROFILE"
 Ask one AskUserQuestion that covers everything needed. Pre-fill what you inferred from the codebase.
 
 Question format:
+
 - Confirm what the product is, who it's for, what space/industry
 - What project type: web app, dashboard, marketing site, editorial, internal tool, etc.
 - "Want me to research what top products in your space are doing for design, or should I work from my design knowledge?"
@@ -118,6 +120,7 @@ Only run if the user said yes to research in Phase 1.
 **Step 2.1 — Identify competitors via WebSearch:**
 
 Search for:
+
 - "[product category] website design"
 - "[product category] best websites 2025"
 - "best [industry] web apps"
@@ -137,6 +140,7 @@ Present a three-layer synthesis:
 **Eureka check:** If Layer 3 reveals a genuine design insight, name it: "EUREKA: Every [category] product does X because they assume [assumption]. But this product's users [evidence] — so we should do Y instead."
 
 Present conversationally:
+
 > "I looked at what's out there. Here's the landscape: they converge on [patterns]. Most of them feel [observation]. The opportunity to stand out is [gap]. Here's where I'd play it safe and where I'd take a risk..."
 
 ### Phase 3: The Complete Proposal
@@ -144,6 +148,7 @@ Present conversationally:
 This is the soul of the skill. Propose EVERYTHING as one coherent package. Do not present a menu of options — propose a specific system and defend it.
 
 **Before proposing, factor in:**
+
 - The memorable thing from Phase 1
 - Research findings from Phase 2 (if done)
 - Taste profile signals (if present)
@@ -161,6 +166,7 @@ How much visual noise? Options: minimal (form follows function), balanced (subtl
 
 **Layout Approach**
 Composition-first, not component-first. Describe:
+
 - Grid system (e.g., 12-column, 8pt baseline)
 - First viewport treatment (poster vs. document)
 - Density (airy vs. information-dense)
@@ -168,6 +174,7 @@ Composition-first, not component-first. Describe:
 
 **Typography Stack**
 Specific font names, not generics. Reference `references/typography-guide.md` for pairing patterns. Propose:
+
 - Display/heading font
 - Body font
 - Mono font (if applicable)
@@ -178,6 +185,7 @@ Example: "Space Grotesk for headings (geometric, confident), Inter for body (leg
 
 **Color System**
 Specific hex values. Propose:
+
 - Background (primary surface)
 - Surface (cards, panels)
 - Primary text
@@ -190,6 +198,7 @@ Use a tool or your knowledge to ensure WCAG AA contrast ratios. State the contra
 
 **Motion & Animation**
 Purposeful motion, not decoration. Propose:
+
 - Easing curves (e.g., cubic-bezier(0.4, 0, 0.2, 1))
 - Durations (e.g., 150ms for micro-interactions, 300ms for transitions)
 - Principles (e.g., "motion implies hierarchy. Parent elements move slower than children.")
@@ -197,6 +206,7 @@ Purposeful motion, not decoration. Propose:
 **Step 3.2 — SAFE/RISK breakdown:**
 
 Label each major choice:
+
 - **SAFE**: Conventional, expected, low risk if wrong. Category standard.
 - **RISK**: Bold, differentiated, high reward if right. Deliberate departure from norms.
 
@@ -237,103 +247,122 @@ Write DESIGN.md to project root with this exact structure:
 > Memorable thing: [the one thing from Phase 1]
 
 ## Aesthetic Direction
+
 [One-sentence direction plus 2-3 sentences of rationale tied to the memorable thing]
 
 ## Typography
 
 ### Font Stack
+
 - **Display/Headings**: [font name], [fallbacks]
 - **Body**: [font name], [fallbacks]
 - **Mono**: [font name], [fallbacks]
 
 ### Scale
-| Token | Size | Line Height | Weight | Usage |
-|-------|------|-------------|--------|-------|
-| text-xs | 12px | 1.4 | 400 | Captions, metadata |
-| ... | ... | ... | ... | ... |
+
+| Token   | Size | Line Height | Weight | Usage              |
+| ------- | ---- | ----------- | ------ | ------------------ |
+| text-xs | 12px | 1.4         | 400    | Captions, metadata |
+| ...     | ...  | ...         | ...    | ...                |
 
 ## Color System
 
 ### Base
-| Token | Hex | Usage | Contrast Ratio |
-|-------|-----|-------|----------------|
-| bg | #... | Page background | - |
-| surface | #... | Cards, panels | - |
-| text | #... | Primary text | [ratio]:1 |
-| text-muted | #... | Secondary text | [ratio]:1 |
-| border | #... | Dividers, outlines | - |
+
+| Token      | Hex  | Usage              | Contrast Ratio |
+| ---------- | ---- | ------------------ | -------------- |
+| bg         | #... | Page background    | -              |
+| surface    | #... | Cards, panels      | -              |
+| text       | #... | Primary text       | [ratio]:1      |
+| text-muted | #... | Secondary text     | [ratio]:1      |
+| border     | #... | Dividers, outlines | -              |
 
 ### Accent
-| Token | Hex | Usage |
-|-------|-----|-------|
-| accent | #... | Primary CTA, links |
+
+| Token            | Hex  | Usage              |
+| ---------------- | ---- | ------------------ |
+| accent           | #... | Primary CTA, links |
 | accent-secondary | #... | Secondary emphasis |
 
 ### Semantic
-| Token | Hex | Usage |
-|-------|-----|-------|
-| error | #... | Validation errors |
-| warning | #... | Caution states |
+
+| Token   | Hex  | Usage               |
+| ------- | ---- | ------------------- |
+| error   | #... | Validation errors   |
+| warning | #... | Caution states      |
 | success | #... | Confirmation states |
 
 ## Layout & Spacing
 
 ### Grid
+
 [Grid system description]
 
 ### Spacing Scale
-| Token | Value | Usage |
-|-------|-------|-------|
-| space-1 | 4px | Tight padding |
-| ... | ... | ... |
+
+| Token   | Value | Usage         |
+| ------- | ----- | ------------- |
+| space-1 | 4px   | Tight padding |
+| ...     | ...   | ...           |
 
 ## Motion & Animation
 
 ### Easing
-| Name | Curve | Usage |
-|------|-------|-------|
+
+| Name    | Curve             | Usage                |
+| ------- | ----------------- | -------------------- |
 | default | cubic-bezier(...) | Standard transitions |
-| enter | cubic-bezier(...) | Elements appearing |
-| exit | cubic-bezier(...) | Elements leaving |
+| enter   | cubic-bezier(...) | Elements appearing   |
+| exit    | cubic-bezier(...) | Elements leaving     |
 
 ### Durations
-| Context | Duration |
-|---------|----------|
-| Micro-interaction | 150ms |
-| Transition | 300ms |
-| Page transition | 500ms |
+
+| Context           | Duration |
+| ----------------- | -------- |
+| Micro-interaction | 150ms    |
+| Transition        | 300ms    |
+| Page transition   | 500ms    |
 
 ### Principles
+
 [3-5 motion principles, each one sentence]
 
 ## Component Patterns
 
 ### Button
+
 [Specific guidance: padding, border-radius, typography, states]
 
 ### Card
+
 [Specific guidance: shadow, border, padding, hover state]
 
 ### Input
+
 [Specific guidance: height, border, focus state, error state]
 
 ## Asset Guidelines
 
 ### Icons
+
 [Icon style, size, stroke width, source recommendations]
 
 ### Imagery
+
 [Photo style, illustration style, or abstract — be specific]
 
 ## Accessibility
 
 ### Color Contrast
+
 [Minimum contrast ratios enforced]
 
 ### Motion
+
 [Respect prefers-reduced-motion]
 
 ### Focus
+
 [Focus ring style and behavior]
 ```
 
@@ -351,39 +380,40 @@ Generate a self-contained HTML preview page so the user can see the design syste
 4. Include these sections in the preview:
 
 **HTML Structure:**
+
 ```html
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>[Project Name] — Design System Preview</title>
-  <style>
-    /* Inline all CSS. Use the exact values from the design system. */
-  </style>
-</head>
-<body>
-  <h1>Design System: [Project Name]</h1>
-  <p class="memorable-thing">"[The memorable thing]"</p>
+  <head>
+    <title>[Project Name] — Design System Preview</title>
+    <style>
+      /* Inline all CSS. Use the exact values from the design system. */
+    </style>
+  </head>
+  <body>
+    <h1>Design System: [Project Name]</h1>
+    <p class="memorable-thing">"[The memorable thing]"</p>
 
-  <section>
-    <h2>Typography</h2>
-    <!-- Show each scale step with sample text -->
-  </section>
+    <section>
+      <h2>Typography</h2>
+      <!-- Show each scale step with sample text -->
+    </section>
 
-  <section>
-    <h2>Color Palette</h2>
-    <!-- Show each color as a swatch with hex value -->
-  </section>
+    <section>
+      <h2>Color Palette</h2>
+      <!-- Show each color as a swatch with hex value -->
+    </section>
 
-  <section>
-    <h2>Spacing Scale</h2>
-    <!-- Show each spacing step as a visual bar -->
-  </section>
+    <section>
+      <h2>Spacing Scale</h2>
+      <!-- Show each spacing step as a visual bar -->
+    </section>
 
-  <section>
-    <h2>Components</h2>
-    <!-- Button, Card, Input styled with the design system -->
-  </section>
-</body>
+    <section>
+      <h2>Components</h2>
+      <!-- Button, Card, Input styled with the design system -->
+    </section>
+  </body>
 </html>
 ```
 
@@ -399,12 +429,13 @@ Generate a self-contained HTML preview page so the user can see the design syste
   - Heading + paragraph combination
 
 **CSS Rules:**
+
 - Use the exact font names, hex values, spacing values, and easing curves from the design system
 - Apply the actual easing curve to button hover transitions so the user feels the motion
 - Make the page responsive (max-width container, padding on mobile)
 - Keep it clean and minimal — the design system itself is the star, not the preview chrome
 
-5. After writing the file, tell the user: "Preview generated at `docs/designs/DESIGN-preview.html`. Open it in your browser to see the design system applied."
+1. After writing the file, tell the user: "Preview generated at `docs/designs/DESIGN-preview.html`. Open it in your browser to see the design system applied."
 
 If the user has a browse/screenshot tool available, offer to open it for them. Otherwise, they open it manually.
 
@@ -413,6 +444,7 @@ If the user has a browse/screenshot tool available, offer to open it for them. O
 Update `docs/designs/taste-profile.json` with approvals and rejections from this session.
 
 **Schema:**
+
 ```json
 {
   "version": 1,
@@ -429,6 +461,7 @@ Update `docs/designs/taste-profile.json` with approvals and rejections from this
 Each entry: `{ "value": "...", "confidence": 0.8, "approved_count": 3, "rejected_count": 0, "last_seen": "2026-05-03" }`
 
 **Procedure:**
+
 1. Read existing taste profile if present
 2. For each design dimension, record what the user approved and rejected
 3. Update counts and confidence scores
@@ -445,16 +478,19 @@ aet-discover → aet-plan → aet-design-system-creation → aet-validate-scope 
 ```
 
 **aet-plan (input):**
+
 - Read `docs/prds/*.md` for product context, target users, and scope
 - Use the PRD's user stories to ground design decisions in real behavior
 - If no PRD exists, soft gate: recommend `/aet-plan` but proceed if user declines
 
 **aet-validate-scope (output):**
+
 - DESIGN.md becomes an input for scope validation
 - `aet-validate-scope` checks whether the design system contradicts existing code or domain model
 - If DESIGN.md proposes a color system but the codebase already has a conflicting theme, the validator flags it
 
 **aet-implement (output):**
+
 - The implementer references DESIGN.md for all visual decisions
 - Fonts, colors, spacing, and component patterns come from DESIGN.md, not the agent's defaults
 - If DESIGN.md and the implementer's assumptions conflict, the implementer follows DESIGN.md and flags the discrepancy

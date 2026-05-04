@@ -17,6 +17,7 @@ Queue management for agentic engineering. The single job of this skill is to man
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -33,6 +34,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 Read all `docs/plans/*.md` and produce `.agents/work-queue.json`.
 
 **Procedure:**
+
 1. Scan `docs/plans/` for all `*.md` files
 2. For each plan.md, extract: title, task ID (from filename or frontmatter), blocking relationships
 3. Build the DAG using `blocks` and `blocked_by` arrays
@@ -45,6 +47,7 @@ Read all `docs/plans/*.md` and produce `.agents/work-queue.json`.
 Show the current state of the work queue.
 
 **Procedure:**
+
 1. Read `.agents/work-queue.json`
 2. Report counts: unblocked, blocked, in-progress, done, failed
 3. List the next 3 unblocked tasks (topological order)
@@ -55,6 +58,7 @@ Show the current state of the work queue.
 Identify and output the next unblocked task.
 
 **Procedure:**
+
 1. Read `.agents/work-queue.json`
 2. Find tasks with `status: "unblocked"`
 3. Pick the first in topological order (respecting the DAG)
@@ -93,6 +97,7 @@ while true:
 ```
 
 **Human-in-the-loop gates:**
+
 - Loop stops on validation failure
 - Loop stops on review failure
 - Loop stops on merge conflicts
@@ -100,6 +105,7 @@ while true:
 - Loop never auto-ships; aet-ship is a separate human-triggered step
 
 **Context isolation details:**
+
 - Each task starts with a clean context (like a fresh session)
 - aet-prime reloads only minimal context (5–15k tokens)
 - The queue file itself is tiny (<5k tokens)

@@ -1,2 +1,4 @@
 .claude
 content/
+node_modules/
+.lycheecache

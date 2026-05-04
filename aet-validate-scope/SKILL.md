@@ -18,6 +18,7 @@ Post-PRD validation for agentic engineering. Before implementation begins, ensur
 ## Before You Start
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -35,6 +36,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 Check the current plan/PRD against existing documentation and code. Surface contradictions, fuzzy language, and terminology conflicts.
 
 **Procedure:**
+
 1. Read the plan/PRD the user wants to validate
 2. Read CONTEXT.md (or CONTEXT-MAP.md + relevant context files)
 3. Read ADRs in docs/adr/ that relate to the plan's scope
@@ -48,12 +50,14 @@ Check the current plan/PRD against existing documentation and code. Surface cont
 7. Ask **targeted questions** about the gaps found — one at a time
 
 **Rules:**
+
 - Focus on conflicts and gaps, not generic discovery
 - One question at a time, but only about real problems found
 - Anti-sycophancy: never say "that's an interesting approach." Always take a position.
 - If a question can be answered by exploring the codebase, explore the codebase instead
 
 **Example questions:**
+
 - "Your glossary defines 'cancellation' as X, but this plan seems to mean Y — which is it?"
 - "You say 'account' here — do you mean Customer or User? Those are different things per CONTEXT.md."
 - "Your code cancels entire Orders, but this plan says partial cancellation is possible — which is right?"
@@ -63,6 +67,7 @@ Check the current plan/PRD against existing documentation and code. Surface cont
 Update CONTEXT.md with resolved terms and relationships.
 
 **Procedure:**
+
 1. After terms are resolved during validation, update CONTEXT.md immediately
 2. Don't batch these — capture them as they happen
 3. Use the format in [references/CONTEXT-FORMAT.md](references/CONTEXT-FORMAT.md)
@@ -70,6 +75,7 @@ Update CONTEXT.md with resolved terms and relationships.
 5. Don't couple CONTEXT.md to implementation details
 
 **Lazy creation:**
+
 - If no CONTEXT.md exists, create one at the repo root when the first term is resolved
 - If no docs/adr/ exists, create it when the first ADR is needed
 
@@ -78,6 +84,7 @@ Update CONTEXT.md with resolved terms and relationships.
 Offer to create an ADR when a decision meets all three criteria.
 
 **Procedure:**
+
 1. When a significant decision emerges during validation, check the three criteria:
    - **Hard to reverse** — the cost of changing your mind later is meaningful
    - **Surprising without context** — a future reader will wonder "why did they do it this way?"
@@ -121,6 +128,7 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 ```
 
 Infer which structure applies:
+
 - If `CONTEXT-MAP.md` exists, read it to find contexts
 - If only a root `CONTEXT.md` exists, single context
 - If neither exists, create a root `CONTEXT.md` lazily when the first term is resolved

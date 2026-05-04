@@ -18,6 +18,7 @@ System evolution for agentic engineering. When the agent makes a mistake, don't 
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -34,6 +35,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 Analyze what went wrong in the last loop and identify the systemic root cause.
 
 **Procedure:**
+
 1. Read the completed `docs/plans/{ticket}-plan.md` and the actual implementation (git diff).
 2. Identify deviations: what did the agent do differently from the plan? What did you have to correct?
 3. Ask: which layer allowed this? Options:
@@ -50,6 +52,7 @@ Analyze what went wrong in the last loop and identify the systemic root cause.
 Update the layer that allowed the issue so it doesn't happen again.
 
 **Procedure:**
+
 1. Review the retro output to identify the target layer.
 2. Propose a specific, minimal change to that layer:
    - If `AGENTS.md` — add/modify one rule or guardrail
@@ -66,8 +69,15 @@ Update the layer that allowed the issue so it doesn't happen again.
    - Expected prevention
 
 **Learning persistence format (`.agents/learnings.jsonl`):**
+
 ```json
-{"date":"2026-05-03","problem":"Agent forgot to run tests before committing","layer":"commands/implement.md","fix":"Added explicit 'run tests' step to validation strategy in plan template","prevents":"Untested code being committed"}
+{
+  "date": "2026-05-03",
+  "problem": "Agent forgot to run tests before committing",
+  "layer": "commands/implement.md",
+  "fix": "Added explicit 'run tests' step to validation strategy in plan template",
+  "prevents": "Untested code being committed"
+}
 ```
 
 ## Key Principles

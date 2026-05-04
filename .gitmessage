@@ -1,0 +1,16 @@
+# <type>(<scope>): <subject>
+#
+# Type can be:
+#   feat     - new feature
+#   fix      - bug fix
+#   docs     - documentation only
+#   style    - formatting, missing semi colons, etc
+#   refactor - code change that neither fixes a bug nor adds a feature
+#   test     - adding or updating tests
+#   chore    - build process or auxiliary tool changes
+#
+# Scope is the skill name or "repo" for general changes.
+# Subject line should be 50 chars or less.
+#
+# Body (optional): explain what and why, not how.
+# Wrap at 72 characters.

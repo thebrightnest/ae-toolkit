@@ -17,6 +17,7 @@ Automated QA for agentic engineering. Replaces manual QA with agent-driven valid
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
+
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
@@ -33,6 +34,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 Run tiered automated validation.
 
 **Procedure:**
+
 1. Determine tier (default: Standard if not specified):
    - **Quick** — critical paths only: core user flows, auth, payment (if applicable)
    - **Standard** — + medium priority flows: error handling, edge cases, data validation
@@ -59,6 +61,7 @@ Run tiered automated validation.
    - Coverage delta
 
 **Browser tooling preference:**
+
 - Prefer a compiled CLI browser tool (e.g., Playwright CLI) over MCP-based browser automation
 - MCP browsers are often slower (2–3 seconds per action) and cause context bloat
 - A compiled binary keeps browser automation fast, reliable, and out of the agent's context window

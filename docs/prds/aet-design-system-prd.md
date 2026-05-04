@@ -17,6 +17,7 @@ Close the design gap in the AET workflow. AET covers the full engineering lifecy
 ## Scope
 
 ### In Scope
+
 - Complete design system creation: aesthetic, typography, color, layout, spacing, motion
 - Competitive landscape research via WebSearch
 - `DESIGN.md` generation as project-local source of truth
@@ -27,6 +28,7 @@ Close the design gap in the AET workflow. AET covers the full engineering lifecy
 - Three commands: `design-system` (full), `design-review` (update), `design-check` (audit)
 
 ### Out of Scope
+
 - Visual mockup generation requiring external binaries (progressive enhancement only, not critical path)
 - Codex integration for "outside design voices"
 - Cross-project taste profile sync (v2 consideration)
@@ -37,9 +39,11 @@ Close the design gap in the AET workflow. AET covers the full engineering lifecy
 ## User Stories
 
 ### Story 1: Design System from Scratch
+
 > As a developer with a PRD, I want to run `/aet-design-system-creation` so that I get a complete DESIGN.md with specific font names, hex colors, and layout principles before I write any UI code.
 
 **Acceptance Criteria:**
+
 - Skill checks for existing DESIGN.md and offers update/start-fresh/cancel
 - Skill reads PRD from `docs/prds/*.md` for product context (soft gate)
 - Skill asks one product context question + memorable-thing forcing question
@@ -49,26 +53,32 @@ Close the design gap in the AET workflow. AET covers the full engineering lifecy
 - Skill generates `DESIGN-preview.html` in `docs/designs/`
 
 ### Story 2: Design System Refresh
+
 > As a developer with an existing DESIGN.md, I want the skill to detect this and enter review mode, suggesting updates based on product evolution.
 
 **Acceptance Criteria:**
+
 - Skill reads existing DESIGN.md
 - Skill detects stale elements (e.g., references to removed features)
 - Skill suggests specific additions, removals, or modifications
 - Skill asks before overwriting existing DESIGN.md
 
 ### Story 3: Design Compliance Check
+
 > As a developer mid-implementation, I want the skill to audit whether my current codebase follows the DESIGN.md system.
 
 **Acceptance Criteria:**
+
 - Skill reads DESIGN.md and scans codebase for compliance
 - Skill reports deviations with specific file/line references
 - Skill suggests fixes for each deviation
 
 ### Story 4: Taste Memory
+
 > As a returning user, I want the skill to remember that I rejected purple gradients and prefer monospace fonts so that I don't have to re-explain my taste every session.
 
 **Acceptance Criteria:**
+
 - Skill reads `docs/designs/taste-profile.json` at start
 - Skill factors taste profile into proposal
 - Skill updates taste profile with user approvals/rejections at end
@@ -77,6 +87,7 @@ Close the design gap in the AET workflow. AET covers the full engineering lifecy
 ## Technical Notes
 
 ### Skill Structure
+
 ```
 aet-design-system-creation/
 ├── SKILL.md              # Main skill instructions (~300-400 lines target)
@@ -89,37 +100,46 @@ aet-design-system-creation/
 
 ### AET Adaptations Required
 
-| gstack Element | AET Replacement |
-|----------------|-----------------|
-| `~/.claude/skills/gstack/bin/*` | Remove entirely; use native WebSearch + agent knowledge |
-| gstack telemetry | Remove |
-| gstack brain sync | Remove |
-| gstack learnings | Replace with `.agents/learnings.jsonl` reads |
-| gstack timeline logging | Remove |
-| gstack repo mode / slug | Replace with standard git commands |
-| gstack config | Remove or hardcode defaults |
-| gstack upgrade checks | Remove |
-| gstack proactive/telemetry/routing prompts | Remove entirely |
-| `CLAUDE.md` routing injection | Remove |
-| `~/gstack/projects/$SLUG/` | Use `docs/designs/` |
-| Codex outside voice | Omit entirely |
-| AI mockup binary | Omit from critical path; keep as optional enhancement |
+| gstack Element                             | AET Replacement                                         |
+| ------------------------------------------ | ------------------------------------------------------- |
+| `~/.claude/skills/gstack/bin/*`            | Remove entirely; use native WebSearch + agent knowledge |
+| gstack telemetry                           | Remove                                                  |
+| gstack brain sync                          | Remove                                                  |
+| gstack learnings                           | Replace with `.agents/learnings.jsonl` reads            |
+| gstack timeline logging                    | Remove                                                  |
+| gstack repo mode / slug                    | Replace with standard git commands                      |
+| gstack config                              | Remove or hardcode defaults                             |
+| gstack upgrade checks                      | Remove                                                  |
+| gstack proactive/telemetry/routing prompts | Remove entirely                                         |
+| `CLAUDE.md` routing injection              | Remove                                                  |
+| `~/gstack/projects/$SLUG/`                 | Use `docs/designs/`                                     |
+| Codex outside voice                        | Omit entirely                                           |
+| AI mockup binary                           | Omit from critical path; keep as optional enhancement   |
 
 ### DESIGN.md Output Format
+
 ```markdown
 # Design System: [Project Name]
 
 ## Aesthetic Direction
+
 ## Typography
+
 ## Color System
+
 ## Layout & Spacing
+
 ## Motion & Animation
+
 ## Component Patterns
+
 ## Asset Guidelines
+
 ## Accessibility
 ```
 
 ### Integration Points
+
 - **aet-plan**: Read `docs/prds/*.md` for product context; soft gate if missing
 - **aet-validate-scope**: DESIGN.md is an input for alignment checking
 - **aet-implement**: Implementer references DESIGN.md for visual decisions
@@ -129,24 +149,31 @@ aet-design-system-creation/
 The skill flows through phases. The agent progresses through them naturally based on context and user input.
 
 ### Phase 0: Pre-checks
+
 Check for existing DESIGN.md; gather product context from README/package.json; soft gate for PRD existence.
 
 ### Phase 1: Product Context
+
 Single question covering product, audience, space; "memorable thing" forcing question.
 
 ### Phase 2: Research (optional)
+
 Competitive landscape analysis via WebSearch. User can decline.
 
 ### Phase 3: The Complete Proposal
+
 Present aesthetic, decoration, layout, typography, color, motion as one coherent package with SAFE/RISK breakdown.
 
 ### Phase 4: DESIGN.md Generation
+
 Generate the structured DESIGN.md file.
 
 ### Phase 5: Preview
+
 Generate HTML preview page for visual validation.
 
 ### Phase 6: Taste Profile Update
+
 Update `docs/designs/taste-profile.json` with approvals/rejections.
 
 ## Architecture Decisions
@@ -163,21 +190,21 @@ Update `docs/designs/taste-profile.json` with approvals/rejections.
 
 ## Open Questions (Resolved)
 
-| # | Question | Decision |
-|---|----------|----------|
-| 1 | PRD requirement? | Soft gate — recommend `/aet-plan` if no PRD exists, but proceed if user says so |
-| 2 | Artifact location? | `docs/designs/` — project-local, versioned with git, human-discoverable |
-| 3 | Taste profile scope? | Project-scoped only (`docs/designs/taste-profile.json`) |
-| 4 | Outside design voices? | Omit entirely — keep the skill lean |
+| #   | Question               | Decision                                                                        |
+| --- | ---------------------- | ------------------------------------------------------------------------------- |
+| 1   | PRD requirement?       | Soft gate — recommend `/aet-plan` if no PRD exists, but proceed if user says so |
+| 2   | Artifact location?     | `docs/designs/` — project-local, versioned with git, human-discoverable         |
+| 3   | Taste profile scope?   | Project-scoped only (`docs/designs/taste-profile.json`)                         |
+| 4   | Outside design voices? | Omit entirely — keep the skill lean                                             |
 
 ## Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Skill becomes too large | Medium | Medium | Keep focused: design system definition only |
-| gstack voice clashes with AET | Medium | Medium | Explicitly rewrite all prose to AET tone |
-| User skips design entirely | High | Low | Soft gate + clear value proposition |
-| DESIGN.md goes stale | High | Medium | Phase 0 pre-check detects staleness; skill can re-run full workflow for refresh |
+| Risk                          | Likelihood | Impact | Mitigation                                                                      |
+| ----------------------------- | ---------- | ------ | ------------------------------------------------------------------------------- |
+| Skill becomes too large       | Medium     | Medium | Keep focused: design system definition only                                     |
+| gstack voice clashes with AET | Medium     | Medium | Explicitly rewrite all prose to AET tone                                        |
+| User skips design entirely    | High       | Low    | Soft gate + clear value proposition                                             |
+| DESIGN.md goes stale          | High       | Medium | Phase 0 pre-check detects staleness; skill can re-run full workflow for refresh |
 
 ## Completion Criteria
 

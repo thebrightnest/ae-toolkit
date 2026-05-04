@@ -24,16 +24,16 @@
 
 ## Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `source_prd` | string | Path to the PRD that generated this queue (metadata only) |
-| `tasks` | array | List of all tasks in the queue |
-| `tasks[].id` | string | Unique task identifier (e.g., T1, T2, auth-01) |
-| `tasks[].title` | string | Human-readable task title |
-| `tasks[].plan_file` | string | Path to the plan.md for this task |
-| `tasks[].status` | enum | One of: `unblocked`, `blocked`, `in-progress`, `done`, `failed` |
-| `tasks[].blocks` | string[] | IDs of tasks that depend on this task |
-| `tasks[].blocked_by` | string[] | IDs of tasks that must complete before this task |
+| Field                | Type     | Description                                                     |
+| -------------------- | -------- | --------------------------------------------------------------- |
+| `source_prd`         | string   | Path to the PRD that generated this queue (metadata only)       |
+| `tasks`              | array    | List of all tasks in the queue                                  |
+| `tasks[].id`         | string   | Unique task identifier (e.g., T1, T2, auth-01)                  |
+| `tasks[].title`      | string   | Human-readable task title                                       |
+| `tasks[].plan_file`  | string   | Path to the plan.md for this task                               |
+| `tasks[].status`     | enum     | One of: `unblocked`, `blocked`, `in-progress`, `done`, `failed` |
+| `tasks[].blocks`     | string[] | IDs of tasks that depend on this task                           |
+| `tasks[].blocked_by` | string[] | IDs of tasks that must complete before this task                |
 
 ## Status Rules
 
