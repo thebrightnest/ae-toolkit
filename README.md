@@ -6,9 +6,9 @@ Most AI coding sessions start strong and end in drift. The agent builds what it 
 
 AE Toolkit fixes this by encoding the best agentic engineering patterns from YC, Garry Tan (GStack), Matt Pocock, and the AI Transformation Workshop into a modular skill suite that runs in order:
 
-**Discover → Plan → Validate → Prime → Implement → Review → QA → Ship → Evolve**
+**Discover → Plan → Design → Validate → Prime → Implement → Review → QA → Ship → Evolve**
 
-Each skill feeds into the next. `/aet-discover` validates demand before any planning begins. `/aet-plan` writes a PRD. `/aet-validate-scope` checks the plan against your existing domain model and documented decisions before a single line of code is written. `/aet-implement` reads the plan — with `/aet-tdd` optionally guiding test-first development. `/aet-review` catches what `/aet-implement` missed. `/aet-qa` verifies the fix. `/aet-ship` gates the merge. `/aet-evolve` updates the rules so the bug never repeats. Nothing falls through the cracks because every step knows what came before it.
+Each skill feeds into the next. `/aet-discover` validates demand before any planning begins. `/aet-plan` writes a PRD. `/aet-design-system-creation` produces DESIGN.md — your design source of truth. `/aet-validate-scope` checks the plan and design against your existing domain model and documented decisions before a single line of code is written. `/aet-implement` reads the plan — with `/aet-tdd` optionally guiding test-first development. `/aet-review` catches what `/aet-implement` missed. `/aet-qa` verifies the fix. `/aet-ship` gates the merge. `/aet-evolve` updates the rules so the bug never repeats. Nothing falls through the cracks because every step knows what came before it.
 
 ### What you get
 
@@ -89,6 +89,7 @@ npx skills add getatelier/ae-toolkit.git@<skill-name>
 | [aet-setup](./aet-setup) | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. |
 | [aet-discover](./aet-discover) | Product-definition diagnostic with YC-style forcing questions. Validates demand, narrows the wedge, and produces a product brief — not a PRD. Hard gate: no code. |
 | [aet-plan](./aet-plan) | PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Prevents misalignment before any code is written. |
+| [aet-design-system-creation](./aet-design-system-creation) | Complete design system creation: aesthetic direction, typography, color, layout, motion. Produces DESIGN.md as the project's design source of truth. Opinionated and research-driven. |
 | [aet-validate-scope](./aet-validate-scope) | Validate a plan against the existing domain model, terminology, and documented decisions. Post-PRD alignment gate before implementation. |
 | [aet-evolve](./aet-evolve) | System evolution through retrospectives and rule/command/template updates. The highest-leverage long-term skill. |
 | [aet-prime](./aet-prime) | Session context loading with git-as-memory and context discipline. |

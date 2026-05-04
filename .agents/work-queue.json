@@ -1,0 +1,47 @@
+[
+  {
+    "id": "aet-design-system-creation-01",
+    "title": "Scaffold the aet-design-system-creation skill structure",
+    "plan_file": "docs/plans/01-scaffold-skill-structure.md",
+    "status": "done",
+    "blocks": ["aet-design-system-creation-02"],
+    "blocked_by": [],
+    "effort": "small"
+  },
+  {
+    "id": "aet-design-system-creation-02",
+    "title": "Port Phases 0-2 (Pre-checks, Context, Research)",
+    "plan_file": "docs/plans/02-port-phases-0-2.md",
+    "status": "done",
+    "blocks": ["aet-design-system-creation-03"],
+    "blocked_by": ["aet-design-system-creation-01"],
+    "effort": "medium"
+  },
+  {
+    "id": "aet-design-system-creation-03",
+    "title": "Port Phases 3-4 (Proposal + DESIGN.md)",
+    "plan_file": "docs/plans/03-port-phases-3-4.md",
+    "status": "done",
+    "blocks": ["aet-design-system-creation-04"],
+    "blocked_by": ["aet-design-system-creation-02"],
+    "effort": "large"
+  },
+  {
+    "id": "aet-design-system-creation-04",
+    "title": "Port Phase 5 (Preview)",
+    "plan_file": "docs/plans/04-port-phase-5-preview.md",
+    "status": "done",
+    "blocks": ["aet-design-system-creation-05"],
+    "blocked_by": ["aet-design-system-creation-03"],
+    "effort": "medium"
+  },
+  {
+    "id": "aet-design-system-creation-05",
+    "title": "AET Integration & Polish",
+    "plan_file": "docs/plans/05-integration-polish.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": ["aet-design-system-creation-04"],
+    "effort": "medium"
+  }
+]
