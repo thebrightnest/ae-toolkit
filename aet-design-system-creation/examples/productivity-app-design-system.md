@@ -1,174 +1,138 @@
-# Design System: TaskFlow
+---
+version: alpha
+name: TaskFlow
+description: Design system for a productivity SaaS focused on serious work without distractions.
+colors:
+  primary: "#1A1D21"
+  secondary: "#6B7280"
+  tertiary: "#0F172A"
+  neutral: "#F8F9FA"
+  on-primary: "#FFFFFF"
+  on-secondary: "#FFFFFF"
+  on-tertiary: "#FFFFFF"
+  error: "#DC2626"
+  warning: "#F59E0B"
+  success: "#059669"
+typography:
+  display:
+    fontFamily: "Space Grotesk"
+    fontSize: "2.5rem"
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: "-0.02em"
+  heading:
+    fontFamily: "Space Grotesk"
+    fontSize: "1.5rem"
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: "-0.01em"
+  body:
+    fontFamily: "Inter"
+    fontSize: "1rem"
+    fontWeight: 400
+    lineHeight: 1.6
+  label:
+    fontFamily: "Inter"
+    fontSize: "0.75rem"
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: "0.02em"
+rounded:
+  sm: 4px
+  md: 8px
+  lg: 12px
+spacing:
+  xs: 4px
+  sm: 8px
+  md: 16px
+  lg: 24px
+  xl: 32px
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.md}"
+  button-primary-hover:
+    backgroundColor: "{colors.tertiary}"
+    textColor: "{colors.on-tertiary}"
+  button-primary-active:
+    backgroundColor: "{colors.secondary}"
+    textColor: "{colors.on-secondary}"
+  button-secondary:
+    backgroundColor: "{colors.neutral}"
+    textColor: "{colors.primary}"
+    rounded: "{rounded.md}"
+    padding: "{spacing.md}"
+  card:
+    backgroundColor: "{colors.neutral}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.lg}"
+  input:
+    backgroundColor: "{colors.neutral}"
+    textColor: "{colors.primary}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.md}"
+  input-focus:
+    backgroundColor: "{colors.neutral}"
+    textColor: "{colors.primary}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.md}"
+  input-error:
+    backgroundColor: "{colors.neutral}"
+    textColor: "{colors.error}"
+    rounded: "{rounded.sm}"
+    padding: "{spacing.md}"
+---
+
+## Overview
 
 > Memorable thing: "This is serious software for serious work. No fluff, no distractions."
 
-## Aesthetic Direction
-
 Clinical precision with warmth. Like a well-designed hospital, not a spaceship. Every element has a job. Nothing decorative exists without purpose. The UI recedes so the user's work takes center stage.
+
+## Colors
+
+The palette is rooted in high-contrast neutrals and a single dark accent.
+
+- **Primary (#1A1D21)** is deep ink for headlines, buttons, and core UI chrome. It anchors the "serious work" feeling.
+- **Secondary (#6B7280)** is a sophisticated slate for borders, captions, and metadata. It creates hierarchy without competing for attention.
+- **Tertiary (#0F172A)** is an even deeper ink reserved for hover states and emphasis. It adds depth to the primary layer.
+- **Neutral (#F8F9FA)** is a warm off-white foundation. Softer than pure white, it reduces eye strain during long sessions.
+- **Error, Warning, Success** follow conventional semantic meanings so users intuit meaning without learning a new language.
 
 ## Typography
 
-### Font Stack
+Space Grotesk provides geometric confidence for headings. Its slightly quirky letterforms prevent the UI from feeling generic or corporate. Inter handles body text with neutral legibility at small sizes. The combination feels engineered but not cold.
 
-- **Display/Headings**: Space Grotesk, -apple-system, BlinkMacSystemFont, sans-serif
-- **Body**: Inter, -apple-system, BlinkMacSystemFont, sans-serif
-- **Mono**: JetBrains Mono, SF Mono, monospace
+The scale uses a Major Third ratio (1.25x), which produces compact but readable steps ideal for dense dashboards. Line heights are generous for body (1.6) and tight for display (1.1) to maximize information density without sacrificing readability.
 
-### Scale
+## Layout
 
-| Token     | Size | Line Height | Weight | Usage                          |
-| --------- | ---- | ----------- | ------ | ------------------------------ |
-| text-xs   | 12px | 1.4         | 400    | Captions, metadata, timestamps |
-| text-sm   | 14px | 1.5         | 400    | Secondary text, labels         |
-| text-base | 16px | 1.6         | 400    | Body text, descriptions        |
-| text-lg   | 20px | 1.4         | 500    | Lead paragraphs, subheadings   |
-| text-xl   | 25px | 1.2         | 600    | Section headings               |
-| text-2xl  | 31px | 1.1         | 600    | Page headings                  |
-| text-3xl  | 39px | 1.1         | 700    | Hero headings                  |
+12-column grid with 24px gutters. Max content width: 1200px. Breakpoints: 640px, 768px, 1024px, 1280px. Density is high — this is a tool people use for hours, not a billboard they glance at.
 
-## Color System
+## Elevation & Depth
 
-### Base
+Flat by default. Depth is earned, not given. Cards sit on the neutral surface with a 1px border (not a shadow) to define boundaries. Shadows appear only on hover for interactive cards, and they are subtle (0 1px 3px rgba(0,0,0,0.08)). No floating panels, no glassmorphism.
 
-| Token         | Hex     | Usage                        | Contrast Ratio |
-| ------------- | ------- | ---------------------------- | -------------- |
-| bg            | #FFFFFF | Page background              | -              |
-| surface       | #F8F9FA | Cards, panels, inputs        | -              |
-| surface-hover | #F1F3F5 | Hover states                 | -              |
-| text          | #1A1D21 | Primary text                 | 15.8:1         |
-| text-muted    | #6B7280 | Secondary text, placeholders | 5.2:1          |
-| border        | #E5E7EB | Dividers, outlines           | -              |
+## Shapes
 
-### Accent
+Corners are intentionally restrained. Small radius (4px) for inputs and buttons keeps them precise. Large radius (12px) for cards softens the grid without feeling playful. The rule: interactive elements are sharper; containers are softer.
 
-| Token            | Hex     | Usage                             |
-| ---------------- | ------- | --------------------------------- |
-| accent           | #0F172A | Primary CTA, active states, links |
-| accent-hover     | #1E293B | CTA hover                         |
-| accent-secondary | #3B82F6 | Secondary emphasis, highlights    |
+## Components
 
-### Semantic
+**Button Primary** — `{colors.primary}` background with `{colors.on-primary}` text. Used for the single most important action on any screen. Hover shifts to `{colors.tertiary}` for depth. Active shifts to `{colors.secondary}` as a pressed state.
 
-| Token   | Hex     | Usage                                  |
-| ------- | ------- | -------------------------------------- |
-| error   | #DC2626 | Validation errors, destructive actions |
-| warning | #F59E0B | Caution states, pending                |
-| success | #059669 | Confirmation, completion               |
+**Button Secondary** — `{colors.neutral}` background with `{colors.primary}` text. For secondary actions that still need emphasis. No hover state token is defined; rely on a subtle background darkening.
 
-## Layout & Spacing
+**Card** — `{colors.neutral}` background, `{rounded.lg}` corners, `{spacing.lg}` padding. The workhorse container. No shadow at rest; border-only.
 
-### Grid
+**Input** — `{colors.neutral}` background with `{rounded.sm}` corners. Focus state is identical in structure but should receive a 2px outline in `{colors.primary}` via the consuming framework. Error state swaps text color to `{colors.error}`.
 
-12-column grid with 24px gutters. Max content width: 1200px. Breakpoints: 640px, 768px, 1024px, 1280px.
+## Do's and Don'ts
 
-### Spacing Scale
-
-| Token   | Value | Usage                         |
-| ------- | ----- | ----------------------------- |
-| space-1 | 4px   | Tight padding, icon gaps      |
-| space-2 | 8px   | Inline elements, tight groups |
-| space-3 | 12px  | Button padding, form fields   |
-| space-4 | 16px  | Card padding, section gaps    |
-| space-5 | 24px  | Component separation          |
-| space-6 | 32px  | Section separation            |
-| space-7 | 48px  | Major section breaks          |
-| space-8 | 64px  | Page-level spacing            |
-
-## Motion & Animation
-
-### Easing
-
-| Name    | Curve                        | Usage                |
-| ------- | ---------------------------- | -------------------- |
-| default | cubic-bezier(0.4, 0, 0.2, 1) | Standard transitions |
-| enter   | cubic-bezier(0, 0, 0.2, 1)   | Elements appearing   |
-| exit    | cubic-bezier(0.4, 0, 1, 1)   | Elements leaving     |
-
-### Durations
-
-| Context           | Duration |
-| ----------------- | -------- |
-| Micro-interaction | 150ms    |
-| Transition        | 200ms    |
-| Page transition   | 300ms    |
-
-### Principles
-
-1. Motion implies hierarchy. Parent elements move slower than children.
-2. Every animation answers a question: what changed and why?
-3. No decorative motion. If it doesn't guide attention or confirm action, remove it.
-4. Respect `prefers-reduced-motion`. All animations degrade to instant state changes.
-
-## Component Patterns
-
-### Button
-
-**Primary:**
-
-- Background: accent (#0F172A)
-- Text: #FFFFFF
-- Padding: space-3 (12px) vertical, space-4 (16px) horizontal
-- Border radius: 6px
-- Font weight: 500
-- Hover: background shifts to accent-hover (#1E293B), 200ms default easing
-- Active: scale(0.98), 150ms
-
-**Secondary:**
-
-- Background: transparent
-- Border: 1px solid border (#E5E7EB)
-- Text: text (#1A1D21)
-- Hover: background surface-hover (#F1F3F5)
-
-### Card
-
-- Background: surface (#F8F9FA)
-- Border radius: 8px
-- Padding: space-4 (16px)
-- Shadow: none (flat design)
-- Hover: border color darkens to #D1D5DB, 200ms transition
-
-### Input
-
-- Height: 40px
-- Background: surface (#F8F9FA)
-- Border: 1px solid border (#E5E7EB)
-- Border radius: 6px
-- Padding: 0 space-3 (12px)
-- Font: text-base (16px) Inter
-- Focus: border accent-secondary (#3B82F6), ring 2px rgba(59, 130, 246, 0.2)
-- Error: border error (#DC2626), ring 2px rgba(220, 38, 38, 0.2)
-
-## Asset Guidelines
-
-### Icons
-
-- Style: Outlined, 1.5px stroke, 24px default size
-- Source: Heroicons or Lucide
-- Rules: No filled icons. No decorative icons. Every icon must have a functional purpose.
-
-### Imagery
-
-- No stock photos. No illustrations. This is a tool, not a brand story.
-- If avatars are needed: initials in a circle with accent background.
-- If empty states need visuals: simple geometric shapes, monochrome.
-
-## Accessibility
-
-### Color Contrast
-
-- All text meets WCAG AA (4.5:1 minimum)
-- Large text (18px+ bold, 24px+ normal) meets WCAG AA (3:1 minimum)
-- Interactive elements have visible focus states
-
-### Motion
-
-- Respect `prefers-reduced-motion: reduce` — disable all transitions
-- No auto-playing animations
-- No parallax
-
-### Focus
-
-- Focus ring: 2px solid accent-secondary (#3B82F6)
-- Focus ring offset: 2px
-- All interactive elements must have visible focus states
+- **Do** use generous whitespace between sections. Dense does not mean cramped.
+- **Don't** introduce additional accent colors. The palette is intentionally limited.
+- **Do** prefer border over shadow for elevation. Shadows are reserved for hover feedback.
+- **Don't** use display typography for body text. The tight line height will break readability.
+- **Do** respect `prefers-reduced-motion`. All transitions should be instant for users who request it.

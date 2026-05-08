@@ -1,6 +1,5 @@
 ---
 name: aet-design-system-creation
-version: 1.0.0
 description: |
   Create a complete design system for your project: aesthetic direction, typography,
   color palette, layout principles, spacing, and motion. Produces DESIGN.md as your
@@ -237,136 +236,30 @@ If taste profile contradicts the proposal (e.g., taste profile strongly prefers 
 
 Generate the structured DESIGN.md file only after the user has accepted the proposal.
 
+DESIGN.md follows the Google `design.md` specification: YAML frontmatter with machine-readable design tokens, plus a markdown body with human-readable rationale. See `references/design-md-spec.md` for full spec details.
+
 **Procedure:**
 
-Write DESIGN.md to project root with this exact structure:
+Write DESIGN.md to project root using the template in `references/design-md-template.md`. The template provides the exact dual-layer structure (YAML frontmatter + markdown body) and formatting rules.
 
-```markdown
-# Design System: [Project Name]
+Key constraints:
 
-> Memorable thing: [the one thing from Phase 1]
-
-## Aesthetic Direction
-
-[One-sentence direction plus 2-3 sentences of rationale tied to the memorable thing]
-
-## Typography
-
-### Font Stack
-
-- **Display/Headings**: [font name], [fallbacks]
-- **Body**: [font name], [fallbacks]
-- **Mono**: [font name], [fallbacks]
-
-### Scale
-
-| Token   | Size | Line Height | Weight | Usage              |
-| ------- | ---- | ----------- | ------ | ------------------ |
-| text-xs | 12px | 1.4         | 400    | Captions, metadata |
-| ...     | ...  | ...         | ...    | ...                |
-
-## Color System
-
-### Base
-
-| Token      | Hex  | Usage              | Contrast Ratio |
-| ---------- | ---- | ------------------ | -------------- |
-| bg         | #... | Page background    | -              |
-| surface    | #... | Cards, panels      | -              |
-| text       | #... | Primary text       | [ratio]:1      |
-| text-muted | #... | Secondary text     | [ratio]:1      |
-| border     | #... | Dividers, outlines | -              |
-
-### Accent
-
-| Token            | Hex  | Usage              |
-| ---------------- | ---- | ------------------ |
-| accent           | #... | Primary CTA, links |
-| accent-secondary | #... | Secondary emphasis |
-
-### Semantic
-
-| Token   | Hex  | Usage               |
-| ------- | ---- | ------------------- |
-| error   | #... | Validation errors   |
-| warning | #... | Caution states      |
-| success | #... | Confirmation states |
-
-## Layout & Spacing
-
-### Grid
-
-[Grid system description]
-
-### Spacing Scale
-
-| Token   | Value | Usage         |
-| ------- | ----- | ------------- |
-| space-1 | 4px   | Tight padding |
-| ...     | ...   | ...           |
-
-## Motion & Animation
-
-### Easing
-
-| Name    | Curve             | Usage                |
-| ------- | ----------------- | -------------------- |
-| default | cubic-bezier(...) | Standard transitions |
-| enter   | cubic-bezier(...) | Elements appearing   |
-| exit    | cubic-bezier(...) | Elements leaving     |
-
-### Durations
-
-| Context           | Duration |
-| ----------------- | -------- |
-| Micro-interaction | 150ms    |
-| Transition        | 300ms    |
-| Page transition   | 500ms    |
-
-### Principles
-
-[3-5 motion principles, each one sentence]
-
-## Component Patterns
-
-### Button
-
-[Specific guidance: padding, border-radius, typography, states]
-
-### Card
-
-[Specific guidance: shadow, border, padding, hover state]
-
-### Input
-
-[Specific guidance: height, border, focus state, error state]
-
-## Asset Guidelines
-
-### Icons
-
-[Icon style, size, stroke width, source recommendations]
-
-### Imagery
-
-[Photo style, illustration style, or abstract — be specific]
-
-## Accessibility
-
-### Color Contrast
-
-[Minimum contrast ratios enforced]
-
-### Motion
-
-[Respect prefers-reduced-motion]
-
-### Focus
-
-[Focus ring style and behavior]
-```
+- Always quote hex colors in YAML: `"#1A1C1E"`.
+- Use token references in components: `"{colors.primary}"`, `"{rounded.md}"`.
+- Never hardcode hex values inside component tokens.
+- Sections must follow canonical order: Overview → Colors → Typography → Layout → Elevation & Depth → Shapes → Components → Do's and Don'ts.
 
 Write DESIGN.md using WriteFile. Do not present it in chat as a code block — write the actual file.
+
+### Phase 4.5: Tooling Integration (optional)
+
+After generating DESIGN.md, inform the user about optional CLI tooling:
+
+- `npx @google/design.md lint DESIGN.md` — validates token references, WCAG contrast ratios, section order, and structural correctness.
+- `npx @google/design.md export --format css-tailwind DESIGN.md` — generates a Tailwind v4 `@theme { ... }` CSS block.
+- `npx @google/design.md export --format dtcg DESIGN.md` — exports W3C Design Tokens Format Module JSON.
+
+If the user has Node.js available, offer to run the linter for them.
 
 ### Phase 5: Preview
 
@@ -377,65 +270,11 @@ Generate a self-contained HTML preview page so the user can see the design syste
 1. Create `docs/designs/` if it doesn't exist
 2. Generate `docs/designs/DESIGN-preview.html` using WriteFile
 3. The HTML must be self-contained (inline CSS, no external dependencies except web font CDN links)
-4. Include these sections in the preview:
+4. Parse the YAML frontmatter from DESIGN.md to extract tokens. Use those exact values in the preview CSS.
 
-**HTML Structure:**
+Use the template in `references/preview-template.md` for HTML structure, required content, and CSS rules. Parse the YAML frontmatter from DESIGN.md to extract exact token values for the preview CSS.
 
-```html
-<!doctype html>
-<html>
-  <head>
-    <title>[Project Name] — Design System Preview</title>
-    <style>
-      /* Inline all CSS. Use the exact values from the design system. */
-    </style>
-  </head>
-  <body>
-    <h1>Design System: [Project Name]</h1>
-    <p class="memorable-thing">"[The memorable thing]"</p>
-
-    <section>
-      <h2>Typography</h2>
-      <!-- Show each scale step with sample text -->
-    </section>
-
-    <section>
-      <h2>Color Palette</h2>
-      <!-- Show each color as a swatch with hex value -->
-    </section>
-
-    <section>
-      <h2>Spacing Scale</h2>
-      <!-- Show each spacing step as a visual bar -->
-    </section>
-
-    <section>
-      <h2>Components</h2>
-      <!-- Button, Card, Input styled with the design system -->
-    </section>
-  </body>
-</html>
-```
-
-**Required Content:**
-
-- **Typography section**: Show every size in the scale (xs through display) with real text. Label each with token name, size, line-height, weight.
-- **Color section**: Show each color as a rectangle swatch (80px × 80px minimum). Label with token name and hex value. Show text on both light and dark backgrounds to demonstrate contrast.
-- **Spacing section**: Show each spacing step as a horizontal bar with width = spacing value. Label with token name and pixel value.
-- **Components section**: At minimum show:
-  - Primary button (default, hover, active states)
-  - Card with sample content
-  - Text input (default, focus, error states)
-  - Heading + paragraph combination
-
-**CSS Rules:**
-
-- Use the exact font names, hex values, spacing values, and easing curves from the design system
-- Apply the actual easing curve to button hover transitions so the user feels the motion
-- Make the page responsive (max-width container, padding on mobile)
-- Keep it clean and minimal — the design system itself is the star, not the preview chrome
-
-1. After writing the file, tell the user: "Preview generated at `docs/designs/DESIGN-preview.html`. Open it in your browser to see the design system applied."
+After writing the file, tell the user: "Preview generated at `docs/designs/DESIGN-preview.html`. Open it in your browser to see the design system applied."
 
 If the user has a browse/screenshot tool available, offer to open it for them. Otherwise, they open it manually.
 
@@ -452,7 +291,8 @@ Update `docs/designs/taste-profile.json` with approvals and rejections from this
     "fonts": { "approved": [], "rejected": [] },
     "colors": { "approved": [], "rejected": [] },
     "layouts": { "approved": [], "rejected": [] },
-    "aesthetics": { "approved": [], "rejected": [] }
+    "aesthetics": { "approved": [], "rejected": [] },
+    "components": { "approved": [], "rejected": [] }
   },
   "sessions": []
 }
@@ -501,4 +341,4 @@ aet-discover → aet-plan → aet-design-system-creation → aet-validate-scope 
 - **Opinionated proposals** — Propose specific fonts, colors, layouts. Do not hedge. Users can push back
 - **Research optional** — The skill works with or without competitive research
 - **Project-local artifacts** — DESIGN.md, preview, and taste profile live in the repo, versioned with git
-- **No external binaries** — Works with native agent capabilities only
+- **Machine-readable tokens** — DESIGN.md uses YAML frontmatter so tools can lint, diff, and export it
