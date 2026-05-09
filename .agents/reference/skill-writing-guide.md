@@ -2,6 +2,19 @@
 
 Reference material for authoring AE Toolkit skills. Load this file only when creating or editing skills.
 
+## Pre-Plan Checklist
+
+Run this before designing any solution that touches a `SKILL.md`:
+
+- [ ] **Agent-agnostic** — does the proposed approach use any Claude Code-specific
+      tooling (`EnterWorktree`, `ExitWorktree`, `Agent` tool, `/clear`, MCP tools)?
+      If yes, replace with git/shell equivalents before proceeding.
+- [ ] **AGENTS.md guardrails read** — open AGENTS.md and read the "AI Assistant
+      Guardrails" section. Not just presence-checked — actually read.
+- [ ] **`skill-writing-guide.md` loaded** — you are reading this file (check).
+- [ ] **No new patterns** — if introducing a new convention, check
+      `docs/CONVENTIONS.md` first and update it after.
+
 ## Frontmatter Schema
 
 ```yaml

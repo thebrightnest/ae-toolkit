@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "date": "2026-05-09",
+    "problem": "Agent planned Claude Code-specific worktree tooling (EnterWorktree, ExitWorktree) for skill instructions, violating the existing agent-agnostic rule in AGENTS.md",
+    "layer": ".agents/reference/skill-writing-guide.md",
+    "fix": "Added Pre-Plan Checklist to skill-writing-guide.md with agent-agnostic check as item #1, requiring AGENTS.md guardrails to be actually read before any skill design begins",
+    "prevents": "Claude Code-specific tooling being designed into skills that should work on any coding agent"
+  }
+]
