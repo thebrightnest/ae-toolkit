@@ -1,6 +1,6 @@
 ---
 name: aet-work
-description: Work queue management and AFK task orchestration. Use when you have multiple plan.md files and want to run them sequentially or check queue status. Enables the "night shift" mode: pick next unblocked task, implement, validate, mark done, repeat. Triggers on requests like "run the queue," "pick next task," "what's unblocked," or "AFK mode."
+description: Work queue management and sequential task execution. Use when you have plan.md files to run in order, want hands-free task execution, or need to check what's ready. Triggers on: "run the queue", "pick next task", "what's next", "what's unblocked", "run all tasks", "keep working", "run tasks", "execute plans", "night shift", "AFK mode", "queue status", "init queue", "what can I work on", "run unblocked tasks".
 ---
 
 # aet-work
@@ -69,8 +69,6 @@ Identify and output the next unblocked task.
 
 AFK loop: implement tasks until none remain or a failure occurs.
 
-**Critical constraint:** Context must be cleared between tasks. An AFK loop running 5–10 tasks in one session will accumulate context until the agent degrades. The loop will work for 3 tasks and silently degrade on the 4th.
-
 **Procedure:**
 
 ```
@@ -78,22 +76,30 @@ while true:
   1. Read .agents/work-queue.json
   2. Find next unblocked task
   3. If no unblocked tasks remain:
-     - Report completion
+     - Report completion; list all task branches created
      - Break loop
   4. Mark task as in-progress in queue
-  5. **CLEAR CONTEXT** — mandatory. Use /clear, restart agent, or start new session.
-  6. **RE-PRIME** — load minimal fresh context (AGENTS.md, last 5 commits, current branch)
-  7. Read the task's plan.md
-  8. Implement the task (follow aet-implement procedure)
-  9. Run validation (lint, type-check, tests from plan.md)
-  10. Run aet-review on the diff
-  11. If validation or review fails:
+  5. Create a worktree for the task (ensure .worktrees/ is in .gitignore):
+       git worktree add .worktrees/<task-id> -b <task-id>
+     Resume case: if the task is already in-progress and .worktrees/<task-id> exists,
+     skip this step — the worktree from the interrupted session is still valid.
+  6. CLEAR CONTEXT — start a new session or use your agent's context reset.
+     The queue file persists state; resume by running aet-work run again.
+  7. Load minimal context: AGENTS.md + last 5 commits + current branch
+  8. cd into .worktrees/<task-id>; read the task's plan.md
+  9. Implement the task (follow aet-implement procedure; skip worktree setup —
+     worktree is already created)
+  10. Run validation (lint, type-check, tests from plan.md)
+  11. Run aet-review on the diff
+  12. If validation or review fails:
+      - cd back to repo root
       - Mark task as failed in queue
-      - Stop loop, report failure to human
-  12. Commit the work
-  13. Mark task as done in queue
-  14. Update dependent tasks: if all blocked_by are done, set to unblocked
-  15. **CLEAR CONTEXT** again before next iteration
+      - Stop loop, report failure (branch preserved at .worktrees/<task-id>)
+  13. Commit the work
+  14. cd back to repo root
+  15. Mark task as done; record branch name (<task-id>) in queue entry
+  16. Update dependent tasks: if all blocked_by are done, set to unblocked
+  17. CLEAR CONTEXT again (start a new session) before the next iteration
 ```
 
 **Human-in-the-loop gates:**
@@ -106,14 +112,36 @@ while true:
 
 **Context isolation details:**
 
-- Each task starts with a clean context (like a fresh session)
-- aet-prime reloads only minimal context (5–15k tokens)
-- The queue file itself is tiny (<5k tokens)
-- Context growth is bounded per task, not cumulative across the loop
+- Context window: cleared between tasks by starting a new session (works in every agent)
+- Branch isolation: each task gets its own branch at `.worktrees/<task-id>/`
+- State persistence: `.agents/work-queue.json` survives context resets — it is the
+  handoff between sessions, not memory
+- After the loop: N branches ready for independent review; `git worktree list` shows all
+
+### `cleanup`
+
+Remove worktrees whose branches have been merged.
+
+**Procedure:**
+
+1. Run `git worktree list` to see all active worktrees
+2. For each `.worktrees/<task-id>` whose branch is merged into the default branch:
+
+   ```bash
+   git worktree remove .worktrees/<task-id>
+   # If it refuses due to uncommitted changes, inspect first:
+   # git -C .worktrees/<task-id> status
+   # Then force-remove if safe: git worktree remove --force .worktrees/<task-id>
+   ```
+
+3. Report removed and remaining worktrees
 
 ## Key Principles
 
 - **Queue-unaware implement** — aet-implement knows nothing about the queue. aet-work checks results and updates the queue.
-- **Context isolation is mandatory** — without it, the loop degrades silently after 3–4 tasks
-- **Sequential v1, parallel v2** — this skill runs one task at a time. Parallel worktrees are deferred to a future iteration.
-- **Fail fast, stop clean** — one failure halts the loop for human review
+- **Context isolation via new sessions** — every agent supports starting fresh; the queue file bridges sessions so no state is lost.
+- **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
+- **Queue file is the memory** — `.agents/work-queue.json` persists state across context resets by design.
+- **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.
+- **Fail fast, stop clean** — one failure halts the loop for human review; the failed branch is preserved.
+- **v3: parallel execution** — run independent tasks in simultaneous worktrees (future iteration).

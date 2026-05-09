@@ -46,6 +46,42 @@ Execute a plan.md from start to finish with self-validation.
 If this session still contains planning context, strongly recommend clearing it first:
 
 > "⚠️ This appears to be the same session where planning occurred. For best results, open a fresh session and run `/implement docs/plans/{file}.md` with only the plan as context."
+>
+> Note: entering a worktree does **not** clear the context window. If context is stale, start a new session first, then set up the worktree.
+
+**Worktree mode** (use with `--worktree` flag, "in a worktree", or when invoked by aet-work):
+
+Worktree mode puts each implementation on its own branch using standard git commands — no agent-specific tooling required.
+
+1. Extract the ticket ID from the plan filename:
+   - `docs/plans/FEAT-001-plan.md` → `feat-001`
+   - Fall back to a lowercase-slugified version of the plan title
+2. Ensure `.worktrees/` is in `.gitignore`; add the line if missing.
+3. Note the absolute repo root path (you'll need it to return):
+
+   ```bash
+   REPO_ROOT=$(git rev-parse --show-toplevel)
+   ```
+
+4. Create and enter the worktree:
+
+   ```bash
+   git worktree add .worktrees/<ticket-id> -b <ticket-id>
+   cd .worktrees/<ticket-id>
+   ```
+
+5. Execute the normal implement steps (above) from inside the worktree directory,
+   **skipping step 2** (branch already created by the worktree setup).
+6. Commit the work.
+7. Return to the repo root:
+
+   ```bash
+   cd $REPO_ROOT
+   ```
+
+   The worktree and its branch persist automatically — no special teardown needed.
+
+8. Report: worktree path (`.worktrees/<ticket-id>`), branch name, commit SHA. Suggest: `git worktree list` to see all active worktrees.
 
 **Validation strategy (from plan.md):**
 
