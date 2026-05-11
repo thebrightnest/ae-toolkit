@@ -24,8 +24,12 @@ Before executing any command in this skill, collect the following context:
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
 - `TEST_SETUP` — test runner, coverage tool, existing test patterns
 - `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
+
+If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Philosophy
 
@@ -141,6 +145,19 @@ After all tests pass, improve the code without changing behavior.
 [ ] Code is minimal for this test
 [ ] No speculative features added
 ```
+
+## Completion Protocol
+
+After `refactor` completes and all tests pass:
+
+1. Update the plan.md footer to:
+
+   ```
+   *Stage: tdd-complete*
+   *Next step: run `aet-implement`*
+   ```
+
+2. Print: `"✓ Stage: tdd-complete → Next step: run \`aet-implement\` to write code that satisfies these tests"`
 
 ## Key Principles
 

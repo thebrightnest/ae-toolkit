@@ -24,8 +24,12 @@ Before executing any command in this skill, collect the following context:
 - `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
 - `LAST_PIV` — date of last completed plan-implement-validate cycle (from git log if available)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
+
+If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 
@@ -87,19 +91,19 @@ while true:
      The queue file persists state; resume by running aet-work run again.
   7. Load minimal context: AGENTS.md + last 5 commits + current branch
   8. cd into .worktrees/<task-id>; read the task's plan.md
-  9. Implement the task (follow aet-implement procedure; skip worktree setup —
-     worktree is already created)
-  10. Run validation (lint, type-check, tests from plan.md)
-  11. Run aet-review on the diff
-  12. If validation or review fails:
+  9. Run `aet-pipeline-implement` on the task's plan.md (this handles the full quality
+     pipeline: tdd → implement → qa → review → cso → sync-docs; worktree is already
+     created, so skip the worktree setup step inside the pipeline)
+  10. If `aet-pipeline-implement` stops at any gate (validation failure, architecture
+      issue, security finding, or any hard-stop condition):
       - cd back to repo root
-      - Mark task as failed in queue
+      - Mark task as failed in queue; record which stage it stopped at
       - Stop loop, report failure (branch preserved at .worktrees/<task-id>)
-  13. Commit the work
-  14. cd back to repo root
-  15. Mark task as done; record branch name (<task-id>) in queue entry
-  16. Update dependent tasks: if all blocked_by are done, set to unblocked
-  17. CLEAR CONTEXT again (start a new session) before the next iteration
+  11. cd back to repo root (aet-pipeline-implement commits atomically per step;
+      all changes are already committed by the time the pipeline finishes)
+  12. Mark task as done; record branch name (<task-id>) in queue entry
+  13. Update dependent tasks: if all blocked_by are done, set to unblocked
+  14. CLEAR CONTEXT again (start a new session) before the next iteration
 ```
 
 **Human-in-the-loop gates:**
@@ -138,7 +142,7 @@ Remove worktrees whose branches have been merged.
 
 ## Key Principles
 
-- **Queue-unaware implement** — aet-implement knows nothing about the queue. aet-work checks results and updates the queue.
+- **Queue-unaware pipeline** — aet-pipeline-implement knows nothing about the queue. aet-work checks results and updates the queue.
 - **Context isolation via new sessions** — every agent supports starting fresh; the queue file bridges sessions so no state is lost.
 - **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
 - **Queue file is the memory** — `.agents/work-queue.json` persists state across context resets by design.

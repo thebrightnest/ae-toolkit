@@ -14,6 +14,12 @@ Run this before designing any solution that touches a `SKILL.md`:
 - [ ] **`skill-writing-guide.md` loaded** — you are reading this file (check).
 - [ ] **No new patterns** — if introducing a new convention, check
       `docs/CONVENTIONS.md` first and update it after.
+- [ ] **New-file location verified** — if creating NEW skill directories, run
+      `ls -la <skills-parent-dir>` BEFORE `mkdir`. Check whether existing skills are
+      real directories or symlinks. If symlinks, create the new skill in the symlink
+      target (the real repo), then add a symlink from the skills directory.
+      Never `mkdir` a new skill directly into `~/.claude/skills/` — it will be outside
+      the git repo and silently untracked.
 
 ## Frontmatter Schema
 

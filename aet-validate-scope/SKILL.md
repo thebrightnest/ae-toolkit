@@ -26,8 +26,12 @@ Before executing any command in this skill, collect the following context:
 - `DOCS_ADR` — presence of docs/adr/ and count of ADRs
 - `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `ACTIVE_PLAN` — any `docs/plans/*.md` or `docs/prds/*.md` modified in last 7 days
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
+
+If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 
@@ -134,6 +138,26 @@ Infer which structure applies:
 - If neither exists, create a root `CONTEXT.md` lazily when the first term is resolved
 
 When multiple contexts exist, infer which one the current topic relates to. If unclear, ask.
+
+## Completion Protocol
+
+After `validate` completes and conflicts are resolved:
+
+1. Update the PRD file footer to:
+
+   ```
+   *Stage: scope-validated*
+   *Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)*
+   ```
+
+2. Update the plan.md footer to:
+
+   ```
+   *Stage: plan-approved*
+   *Next step: run `aet-pipeline-implement` or `aet-work`*
+   ```
+
+3. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-pipeline-implement\` (single task) or \`aet-work\` (multi-task queue)"`
 
 ## Key Principles
 

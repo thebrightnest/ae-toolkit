@@ -24,8 +24,12 @@ Before executing any command in this skill, collect the following context:
 - `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
 - `LAST_PIV` — date of last completed plan-implement-validate cycle (from git log if available)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
+
+If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 
@@ -38,6 +42,7 @@ Staff-level diff review with multiple lenses.
 1. Read the git diff for the current branch (or files specified by user)
 2. Read the corresponding `docs/plans/{ticket}-plan.md` to compare implementation against plan
 3. Run through review lenses:
+   - **Project Structure** — do new files/directories follow the same pattern as existing ones? If the project uses symlinks, are new entries created in the real location (symlink target) and linked correctly? Run `ls -la` on the parent directory for any path where new files were created.
    - **Architecture** — does the change fit the existing structure? Are modules deep or shallow?
    - **SQL Safety** — are queries parameterized? Any injection risks?
    - **Conditional Side Effects** — are there hidden side effects in conditional branches?
@@ -64,6 +69,22 @@ Cross-model adversarial review. If another AI model is available, run an indepen
 - Claude-style models: great at architecture, patterns, and broad reasoning
 - Codex-style models: great at precision, edge cases, and challenging assumptions
 - Cross-model analysis catches failure modes that either model alone would miss
+
+## Completion Protocol
+
+After `review` completes with pass status:
+
+1. Determine next step:
+   - Diff touches auth, data models, API endpoints, or dependencies → `aet-cso`
+   - Diff does not touch those → `aet-sync-docs`
+2. Update the plan.md footer:
+
+   ```
+   *Stage: reviewed*
+   *Next step: run `{determined skill from step 1}`*
+   ```
+
+3. Print: `"✓ Stage: reviewed → Next step: run \`{aet-cso or aet-sync-docs}\`"`
 
 ## Key Principles
 

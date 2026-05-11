@@ -25,8 +25,12 @@ Before executing any command in this skill, collect the following context:
 - `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
 - `LAST_PIV` — date of last completed plan-implement-validate cycle (from git log if available)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
+
+If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 
@@ -71,6 +75,20 @@ Scan the current branch diff for security issues.
 
 - **Pass** — no Critical or High findings; Medium findings have documented mitigations
 - **Fail** — any Critical or High finding must be fixed before merge
+
+## Completion Protocol
+
+After `cso` completes with pass status (no Critical or High findings):
+
+1. Update the plan.md footer to:
+
+   ```
+   *Stage: secure*
+   *Next step: run `aet-sync-docs`, then `aet-ship`*
+   ```
+
+2. Print: `"✓ Stage: secure → Next step: run \`aet-sync-docs\` (if plan diverged), then \`aet-ship\`"`
+3. If `cso` FAILS (Critical or High finding): do NOT update stage. Print: `"⛔ Stage unchanged — fix Critical/High findings before advancing."`
 
 ## Key Principles
 

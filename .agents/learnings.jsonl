@@ -5,5 +5,12 @@
     "layer": ".agents/reference/skill-writing-guide.md",
     "fix": "Added Pre-Plan Checklist to skill-writing-guide.md with agent-agnostic check as item #1, requiring AGENTS.md guardrails to be actually read before any skill design begins",
     "prevents": "Claude Code-specific tooling being designed into skills that should work on any coding agent"
+  },
+  {
+    "date": "2026-05-11",
+    "problem": "Created 3 new skill directories directly in ~/.claude/skills/ (wrong location) instead of in the git repo at ~/Sites/aiskills/ and symlinking. Files worked for Claude Code but were outside git and silently untracked. aet-review passed without catching it because no lens checked file location.",
+    "layer": ".agents/reference/skill-writing-guide.md + aet-review/SKILL.md",
+    "fix": "Added 'New-file location verified' item to skill-writing-guide.md Pre-Plan Checklist requiring ls -la before mkdir to detect symlink structure. Added 'Project Structure' as the first review lens in aet-review, requiring ls -la on any parent directory where new files were created.",
+    "prevents": "New files created outside the git repo in projects that use symlink indirection between the tool-read directory and the tracked source directory."
   }
 ]

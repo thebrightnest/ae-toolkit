@@ -23,8 +23,12 @@ Before executing any command in this skill, collect the following context:
 - `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
 - `LAST_PIV` — date of last completed plan-implement-validate cycle (from git log if available)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
+
+If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 
@@ -96,6 +100,19 @@ Worktree mode puts each implementation on its own branch using standard git comm
 - If implementation diverges from the plan, stop and explain why
 - Do not silently change the plan — either follow it or flag the need to replan
 - Minor deviations (naming, organization) are OK if they improve consistency with existing code
+
+## Completion Protocol
+
+After `implement` completes and all validation passes:
+
+1. Update the plan.md footer to:
+
+   ```
+   *Stage: implemented*
+   *Next step: run `aet-qa`*
+   ```
+
+2. Print: `"✓ Stage: implemented → Next step: run \`aet-qa\`"`
 
 ## Key Principles
 

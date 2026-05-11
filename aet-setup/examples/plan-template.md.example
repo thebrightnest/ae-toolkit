@@ -53,4 +53,5 @@ Before declaring complete, verify:
 ---
 
 *Created: {date}*
-*Status: Draft / Review / Approved / Complete*
+*Stage: plan-draft*
+*Next step: run `aet-validate-scope`*

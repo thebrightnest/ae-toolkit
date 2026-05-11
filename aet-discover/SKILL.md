@@ -50,8 +50,12 @@ Before executing any command in this skill, collect the following context:
 - `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `EXISTING_BRIEFS` — any `docs/product-briefs/*.md` files (list titles + dates)
 - `EXISTING_PRDS` — any `docs/prds/*.md` files (list titles + dates)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
+
+If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 
@@ -102,6 +106,21 @@ See `references/diagnostic-questions.md` for full pushback patterns and red flag
 - Anti-sycophancy: never say "that's an interesting approach." Always take a position.
 - If the user cannot answer a question with specifics, that IS the finding. Don't let them off the hook.
 - The brief is a document of evidence, not a sales pitch. Include the uncomfortable truths.
+
+## Completion Protocol
+
+After `discover` completes and the brief is saved:
+
+1. Append to `docs/product-briefs/{name}-brief.md`:
+
+   ```
+   ---
+   *Stage: brief-validated*
+   *Next step: run `aet-plan`*
+   ```
+
+2. Print: `"✓ Stage: brief-validated → Next step: run \`aet-plan\`"`
+3. If verdict is not BUILD, explain why the pipeline stops here and what the user should do next (NARROW/PIVOT/KILL instructions).
 
 ## Key Principles
 

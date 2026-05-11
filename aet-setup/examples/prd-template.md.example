@@ -73,4 +73,5 @@
 ---
 
 *Created: {date}*
-*Status: Draft / Review / Approved*
+*Stage: prd-draft*
+*Next step: run `aet-validate-scope`*

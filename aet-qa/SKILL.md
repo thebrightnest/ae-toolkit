@@ -24,8 +24,12 @@ Before executing any command in this skill, collect the following context:
 - `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
 - `LAST_PIV` — date of last completed plan-implement-validate cycle (from git log if available)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
+
+If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 
@@ -65,6 +69,19 @@ Run tiered automated validation.
 - Prefer a compiled CLI browser tool (e.g., Playwright CLI) over MCP-based browser automation
 - MCP browsers are often slower (2–3 seconds per action) and cause context bloat
 - A compiled binary keeps browser automation fast, reliable, and out of the agent's context window
+
+## Completion Protocol
+
+After `qa` completes and all tiers pass:
+
+1. Update the plan.md footer to:
+
+   ```
+   *Stage: qa-complete*
+   *Next step: run `aet-review`*
+   ```
+
+2. Print: `"✓ Stage: qa-complete → Next step: run \`aet-review\`"`
 
 ## Key Principles
 
