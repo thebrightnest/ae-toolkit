@@ -35,15 +35,37 @@ Run the pre-merge validation gate.
 **Procedure:**
 
 1. **Sync with main** — pull latest main, attempt trivial merge conflict resolution
-2. **Run test suite** — unit, integration, type-check, lint. Must all pass.
-3. **Coverage audit** — check coverage didn't drop below threshold. Flag if it did.
-4. **Plan completion check** — verify all tasks in `docs/plans/{ticket}-plan.md` are addressed
-5. **Run `aet-review`** — staff-level code review on the diff
-6. **Run `aet-cso`** — security audit if the diff touches auth, data, API, or dependencies
-7. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
-8. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
-9. **Bump VERSION** — auto-bump patch. Stop for human decision on MINOR/MAJOR.
-10. **Push and open PR** — push branch, create PR with description linking plan.md and PRD
+2. **Stacked branch detection** — run `git merge-base HEAD main` and compare to `git rev-parse main`. If they differ, the branch was not branched directly from main's current tip — treat as stacked.
+
+   - Identify the parent branch by scanning `git log --oneline --decorate main..HEAD` for the nearest named ancestor (the last commit decorated with a non-HEAD, non-remote ref).
+   - Still create the PR against the parent branch — that is correct at creation time.
+   - Prepend a `⚠️ STACKED PR` section to the PR body:
+
+     ```
+     ⚠️ STACKED PR — base is `[parent-branch]`, not main.
+     After `[parent-branch]` merges to main, run:
+       git rebase main && git push --force-with-lease && gh pr edit --base main
+     before merging this PR.
+     ```
+
+   - Print a terminal stop-note after PR creation:
+
+     ```
+     ⚠️  STACKED PR: this PR targets [parent-branch], not main.
+         After [parent-branch] merges, rebase onto main and update the base before merging.
+     ```
+
+   - **Do not auto-rebase. Do not auto-update the base.** Both are irreversible and can silently misresolve conflicts.
+
+3. **Run test suite** — unit, integration, type-check, lint. Must all pass.
+4. **Coverage audit** — check coverage didn't drop below threshold. Flag if it did.
+5. **Plan completion check** — verify all tasks in `docs/plans/{ticket}-plan.md` are addressed
+6. **Run `aet-review`** — staff-level code review on the diff
+7. **Run `aet-cso`** — security audit if the diff touches auth, data, API, or dependencies
+8. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
+9. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
+10. **Bump VERSION** — auto-bump patch. Stop for human decision on MINOR/MAJOR.
+11. **Push and open PR** — push branch, create PR with description linking plan.md and PRD
 
 **Stop conditions** (requires human intervention):
 
