@@ -12,5 +12,12 @@
     "layer": ".agents/reference/skill-writing-guide.md + aet-review/SKILL.md",
     "fix": "Added 'New-file location verified' item to skill-writing-guide.md Pre-Plan Checklist requiring ls -la before mkdir to detect symlink structure. Added 'Project Structure' as the first review lens in aet-review, requiring ls -la on any parent directory where new files were created.",
     "prevents": "New files created outside the git repo in projects that use symlink indirection between the tool-read directory and the tracked source directory."
+  },
+  {
+    "date": "2026-05-12",
+    "problem": "Stacked PR base not updated after parent merged. S2-T2 was stacked on S2-T1. After S2-T1's PR merged to main, S2-T2's PR still targeted the feature branch. No signal surfaced. S2-T2 landed in the wrong branch and required a manual recovery merge.",
+    "layer": "~/.claude/skills/aet-ship/SKILL.md",
+    "fix": "Added stacked branch detection step to aet-ship ship procedure (between Sync with main and Run test suite). Detection: compare git merge-base HEAD main vs git rev-parse main. If different, branch is stacked. Warning injected into PR body and printed as terminal stop-note. No auto-rebase — human acts at PR review time.",
+    "prevents": "Stacked PRs silently merged against a stale base after the parent branch lands in main."
   }
 ]
