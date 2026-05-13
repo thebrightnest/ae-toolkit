@@ -122,6 +122,63 @@ while true:
   handoff between sessions, not memory
 - After the loop: N branches ready for independent review; `git worktree list` shows all
 
+### `run-scripted`
+
+AFK loop with OS-level process isolation. Generates a bash orchestrator script tailored to the detected agent CLI, spawns it as a background OS process, and waits for completion. Each task executes in a fresh agent process with its own git worktree, eliminating context leakage and branch overlap entirely.
+
+**When to use instead of `run`:**
+
+- Context-window limits make the standard loop unreliable
+- True process isolation between tasks is required
+- Running the "night shift" on a machine that can keep a terminal session open
+
+**Procedure:**
+
+1. **Runtime detection:**
+
+   - Check `kimi` in `PATH` or `KIMI_CLI_VERSION` → `kimi`
+   - Check `claude` in `PATH` or `CLAUDE_CODE` → `claude`
+   - Check `AGENT_CLI` env var → user override
+   - If none matched: emit warning and ask user to set `AGENT_CLI`
+
+2. **Generate orchestrator script:**
+
+   - Read `aet-work/references/orchestrator-template.sh` from this skill directory
+   - Substitute template variables based on detected CLI:
+
+     | CLI      | CLI_BIN      | CLI_ARGS (suggested) | CLI_PROMPT_FLAG | CLI_WORKDIR_FLAG |
+     | -------- | ------------ | -------------------- | --------------- | ---------------- |
+     | `kimi`   | `kimi`       | `--print` `--yolo`   | `-p`            | `--work-dir`     |
+     | `claude` | `claude`     | `--print`            | (empty)         | `--add-dir`      |
+     | custom   | `$AGENT_CLI` | (user-provided)      | (as needed)     | (as needed)      |
+
+   - Write to `scripts/.aet-work-orchestrator.sh`
+   - `chmod +x scripts/.aet-work-orchestrator.sh`
+
+3. **Spawn and wait:**
+
+   - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
+   - `TaskOutput(block=true)` to wait for completion
+   - If the script fails: report which task failed and preserve the branch for inspection
+
+4. **Resume behavior:**
+   - Re-running `run-scripted` regenerates the script and resumes from the current queue state
+   - Already-done or in-progress tasks with existing worktrees are skipped automatically
+
+**Context isolation mechanism:**
+
+```
+Parent agent session (clean)
+  → generates script
+  → Shell(run_in_background=true) to spawn script
+    → Script spawns Agent CLI process #1 (clean context)
+      → Task 1 completes, commits, exits
+    → Script spawns Agent CLI process #2 (clean context)
+      → Task 2 completes, commits, exits
+  → TaskOutput(block=true) returns
+  → Parent session remains clean
+```
+
 ### `cleanup`
 
 Remove worktrees whose branches have been merged.
