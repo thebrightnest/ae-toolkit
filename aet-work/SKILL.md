@@ -87,7 +87,10 @@ while true:
        git worktree add .worktrees/<task-id> -b <task-id>
      Resume case: if the task is already in-progress and .worktrees/<task-id> exists,
      skip this step — the worktree from the interrupted session is still valid.
-  6. CLEAR CONTEXT — start a new session or use your agent's context reset.
+  6. CLEAR CONTEXT — request a new session or context reset.
+     This is cooperative isolation: it works when the agent supports `/clear`,
+     session restart, or equivalent. If the runtime does not support mid-session
+     resets, use `run-scripted` instead for guaranteed OS-process isolation.
      The queue file persists state; resume by running aet-work run again.
   7. Load minimal context: AGENTS.md + last 5 commits + current branch
   8. cd into .worktrees/<task-id>; read the task's plan.md
@@ -103,7 +106,9 @@ while true:
       all changes are already committed by the time the pipeline finishes)
   12. Mark task as done; record branch name (<task-id>) in queue entry
   13. Update dependent tasks: if all blocked_by are done, set to unblocked
-  14. CLEAR CONTEXT again (start a new session) before the next iteration
+  14. CLEAR CONTEXT again before the next iteration.
+      If context clearing is not reliable in this runtime, switch to
+      `run-scripted` for guaranteed isolation.
 ```
 
 **Human-in-the-loop gates:**
@@ -200,7 +205,8 @@ Remove worktrees whose branches have been merged.
 ## Key Principles
 
 - **Queue-unaware pipeline** — aet-pipeline-implement knows nothing about the queue. aet-work checks results and updates the queue.
-- **Context isolation via new sessions** — every agent supports starting fresh; the queue file bridges sessions so no state is lost.
+- **Two isolation levels** — `run` uses cooperative context clearing (fastest when the agent supports it). `run-scripted` uses OS-process isolation (guaranteed on any runtime with a CLI). See `references/context-isolation.md` for the decision matrix.
+- **Context isolation via new sessions** — most agents support starting fresh; the queue file bridges sessions so no state is lost. When mid-session resets are unreliable, use `run-scripted` instead.
 - **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
 - **Queue file is the memory** — `.agents/work-queue.json` persists state across context resets by design.
 - **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.
