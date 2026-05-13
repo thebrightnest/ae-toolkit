@@ -11,7 +11,11 @@ An AFK loop running multiple tasks in one session accumulates context:
 
 This is not hypothetical. The "smart zone" for LLMs is ~100k tokens. After that, quality degrades progressively.
 
-## The Solution
+## The Solution: Hybrid Orchestration
+
+`aet-work` provides two isolation mechanisms. Use the stronger one when the standard loop shows degradation.
+
+### Level 1 — Skill-Only Isolation (the `run` command)
 
 Explicit context clearing between every task:
 
@@ -22,15 +26,13 @@ Task N completes
   → Task N+1 starts with clean slate
 ```
 
-## How to Clear Context (Agent-Agnostic)
-
 The skill emits a mandatory instruction:
 
 > "🔄 CONTEXT CLEAR REQUIRED. Stop here and clear your context window. Use /clear, restart your agent, or start a new session. Then say 'Context cleared, continuing loop' and I will re-prime before the next task."
 
 The agent follows this instruction. No special runtime needed.
 
-## What Re-Prime Loads
+**What Re-Prime Loads:**
 
 After clearing, run aet-prime to load:
 
@@ -40,6 +42,38 @@ After clearing, run aet-prime to load:
 - The next task's plan.md (2–5k tokens)
 
 **Total: 5–15k tokens per task.** The loop can run 20+ tasks without degradation.
+
+**Limitation:** This relies on the agent's compliance with the context-clear instruction. Some runtimes or user workflows do not support session resets mid-conversation. In those cases, context still leaks.
+
+### Level 2 — OS Process Isolation (the `run-scripted` command)
+
+When skill-only isolation is insufficient, `run-scripted` generates a bash orchestrator that spawns a fresh OS process for every task:
+
+```
+Parent agent session (clean)
+  → detects runtime
+  → generates scripts/.aet-work-orchestrator.sh
+  → Shell(run_in_background=true) to spawn script
+    → Script spawns Agent CLI process #1 (clean context, fresh process)
+      → Task 1 completes, commits, exits
+    → Script spawns Agent CLI process #2 (clean context, fresh process)
+      → Task 2 completes, commits, exits
+  → TaskOutput(block=true) returns
+  → Parent session remains clean
+```
+
+**Why this works when skill-only fails:**
+
+- **No agent compliance required** — the OS spawns a new process; the old context is physically unreachable.
+- **Works on every runtime** — as long as the agent exposes a CLI, the script can invoke it.
+- **Branch isolation guaranteed** — each task runs in its own git worktree on its own branch.
+- **Queue state is the memory** — `.agents/work-queue.json` persists across process boundaries.
+
+**Trade-offs:**
+
+- Requires the agent CLI to support non-interactive/print mode
+- Each task incurs CLI startup overhead
+- The parent session must remain open to wait for the background script
 
 ## Without Context Isolation
 
@@ -61,3 +95,13 @@ After clearing, run aet-prime to load:
 | 3      | 15k              | ✅ Sharp      |
 | ...    | 15k              | ✅ Sharp      |
 | 20     | 15k              | ✅ Sharp      |
+
+## When to Use Which
+
+| Situation                                     | Command to use |
+| --------------------------------------------- | -------------- |
+| Agent supports `/clear` or session restart    | `run`          |
+| Context degradation observed mid-loop         | `run-scripted` |
+| Night shift / unattended execution            | `run-scripted` |
+| Agent CLI unknown or unavailable              | `run`          |
+| Need fastest possible loop (minimal overhead) | `run`          |
