@@ -43,5 +43,25 @@
     "blocks": [],
     "blocked_by": ["aet-design-system-creation-04"],
     "effort": "medium"
+  },
+  {
+    "id": "aet-work-hybrid-orchestrator-core",
+    "title": "Core hybrid orchestrator implementation",
+    "plan_file": "docs/plans/aet-work-hybrid-orchestrator-core-plan.md",
+    "status": "done",
+    "blocks": ["aet-work-hybrid-orchestrator-docs"],
+    "blocked_by": [],
+    "effort": "medium",
+    "branch": "aet-work-hybrid-orchestrator-core"
+  },
+  {
+    "id": "aet-work-hybrid-orchestrator-docs",
+    "title": "Documentation and validation",
+    "plan_file": "docs/plans/aet-work-hybrid-orchestrator-docs-plan.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": ["aet-work-hybrid-orchestrator-core"],
+    "effort": "medium",
+    "branch": "aet-work-hybrid-orchestrator-docs"
   }
 ]
