@@ -58,7 +58,6 @@ After the PR is created and the user indicates it has been merged:
 1. Run `git fetch origin`
 2. Verify: `git merge-base --is-ancestor HEAD origin/main`
 3. If the check fails:
-
    - **STOP** and print:
 
      ```
@@ -118,7 +117,6 @@ git merge-base --is-ancestor HEAD origin/main && git branch -d $(git branch --sh
 ### Before Starting Next Task
 
 1. Check the previous task's `merge_verified` field:
-
    - If `null` or missing: **STOP** and run `aet-ship` merge verification on the previous task's branch
    - If set to `"origin/main"`: proceed
 
