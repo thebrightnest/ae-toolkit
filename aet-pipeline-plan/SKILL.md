@@ -13,6 +13,17 @@ Planning pipeline for agentic engineering. One entry point — from raw idea to 
 - You want to ensure no planning step is skipped
 - When you want to go from idea → validated PRD → approved plans in a single session
 
+## What This Skill Does NOT Do
+
+This skill produces **plans and PRDs only**. It never writes, modifies, or deletes application source code.
+
+- Do not create, edit, or delete application source files
+- Do not run application tests, linting, or type-checking
+- Do not create branches or commits for implementation work
+- Do not generate "quick proofs of concept" or spike code
+
+If the user describes a change imperatively ("remove X", "adapt Y", "change Z to W"), treat it as a **planning target**, not a command to execute immediately.
+
 ## Before You Start
 
 Before executing, collect the following context:
@@ -59,12 +70,24 @@ Step 3: aet-validate-scope
 
 **Procedure:**
 
+**Step 0 — Planning Lockout:**
+
+Print the planning lockout banner:
+
+```
+🔒 PLANNING MODE ACTIVE
+This session produces PRDs and plans only. No code changes.
+```
+
+If the user's request contains implementation directives (e.g., "make", "change", "adapt", "remove", "refactor", "fix", "update", "implement", "build"), explicitly restate the goal in planning terms before proceeding.
+
 **Step 1 — aet-discover:**
 
 1. Follow the full `aet-discover` → `discover` command procedure
 2. Save the product brief to `docs/product-briefs/{name}-brief.md`
 3. Render verdict: **BUILD / NARROW / PIVOT / KILL**
 4. **HARD GATE:**
+
    - If BUILD → continue to Step 2
    - If NARROW / PIVOT / KILL → stop the pipeline. Print:
 
@@ -129,3 +152,5 @@ After the pipeline completes all three steps:
 - **Resumable** — if a stage is found in the footer, skip completed steps
 - **Same quality as individual skills** — the pipeline chains skills, it does not shortcut them
 - **AFK-safe** — the only human touchpoints are the two defined gates; everything else runs unattended
+- **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to `aet-pipeline-implement`
+- **Imperative requests are planning targets** — "Do X" means "Plan how to do X"

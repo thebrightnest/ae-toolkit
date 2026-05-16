@@ -15,6 +15,16 @@ Post-PRD validation for agentic engineering. Before implementation begins, ensur
 - The agent notices a contradiction between the plan and existing code or docs
 - Before `aet-implement` starts — as a final alignment gate
 
+## Planning Lockout
+
+This skill is **validation-only**. No application source code is written, modified, or deleted.
+
+- Do not create, edit, or delete application source files
+- Do not run application tests, linting, or type-checking
+- Do not implement "quick fixes" found during validation
+
+If validation reveals that code changes are needed, stop and redirect to `aet-plan` or `aet-pipeline-implement`.
+
 ## Before You Start
 
 Before executing any command in this skill, collect the following context:
