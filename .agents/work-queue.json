@@ -135,5 +135,14 @@
     "blocks": [],
     "blocked_by": ["ui-01", "ui-02", "ui-03"],
     "effort": "small"
+  },
+  {
+    "id": "queue-append-fix",
+    "title": "Fix work-queue.json overwrite in aet-plan",
+    "plan_file": "docs/plans/queue-append-fix-plan.md",
+    "status": "unblocked",
+    "blocks": [],
+    "blocked_by": [],
+    "effort": "small"
   }
 ]
