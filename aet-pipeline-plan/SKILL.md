@@ -87,7 +87,6 @@ If the user's request contains implementation directives (e.g., "make", "change"
 2. Save the product brief to `docs/product-briefs/{name}-brief.md`
 3. Render verdict: **BUILD / NARROW / PIVOT / KILL**
 4. **HARD GATE:**
-
    - If BUILD → continue to Step 2
    - If NARROW / PIVOT / KILL → stop the pipeline. Print:
 

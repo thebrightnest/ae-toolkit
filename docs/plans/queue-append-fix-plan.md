@@ -9,12 +9,10 @@
 ## Tasks
 
 1. **Edit `aet-plan/SKILL.md`**
-
    - Line ~95: Replace "Generate `.agents/work-queue.json`" with "Merge into `.agents/work-queue.json`"
    - Lines ~102–108: Add "Read first → Merge → Validate" steps to the Work queue generation subsection
 
 2. **Edit `aet-pipeline-plan/SKILL.md`**
-
    - In the `plan` command, Step 2 (`aet-plan`): Add guardrail note about queue preservation
 
 3. **Validate and package**
