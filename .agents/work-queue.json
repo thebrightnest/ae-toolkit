@@ -4,9 +4,7 @@
     "title": "Scaffold the aet-design-system-creation skill structure",
     "plan_file": "docs/plans/01-scaffold-skill-structure.md",
     "status": "done",
-    "blocks": [
-      "aet-design-system-creation-02"
-    ],
+    "blocks": ["aet-design-system-creation-02"],
     "blocked_by": [],
     "effort": "small"
   },
@@ -15,12 +13,8 @@
     "title": "Port Phases 0-2 (Pre-checks, Context, Research)",
     "plan_file": "docs/plans/02-port-phases-0-2.md",
     "status": "done",
-    "blocks": [
-      "aet-design-system-creation-03"
-    ],
-    "blocked_by": [
-      "aet-design-system-creation-01"
-    ],
+    "blocks": ["aet-design-system-creation-03"],
+    "blocked_by": ["aet-design-system-creation-01"],
     "effort": "medium"
   },
   {
@@ -28,12 +22,8 @@
     "title": "Port Phases 3-4 (Proposal + DESIGN.md)",
     "plan_file": "docs/plans/03-port-phases-3-4.md",
     "status": "done",
-    "blocks": [
-      "aet-design-system-creation-04"
-    ],
-    "blocked_by": [
-      "aet-design-system-creation-02"
-    ],
+    "blocks": ["aet-design-system-creation-04"],
+    "blocked_by": ["aet-design-system-creation-02"],
     "effort": "large"
   },
   {
@@ -41,12 +31,8 @@
     "title": "Port Phase 5 (Preview)",
     "plan_file": "docs/plans/04-port-phase-5-preview.md",
     "status": "done",
-    "blocks": [
-      "aet-design-system-creation-05"
-    ],
-    "blocked_by": [
-      "aet-design-system-creation-03"
-    ],
+    "blocks": ["aet-design-system-creation-05"],
+    "blocked_by": ["aet-design-system-creation-03"],
     "effort": "medium"
   },
   {
@@ -55,9 +41,7 @@
     "plan_file": "docs/plans/05-integration-polish.md",
     "status": "done",
     "blocks": [],
-    "blocked_by": [
-      "aet-design-system-creation-04"
-    ],
+    "blocked_by": ["aet-design-system-creation-04"],
     "effort": "medium"
   },
   {
@@ -65,9 +49,7 @@
     "title": "Core hybrid orchestrator implementation",
     "plan_file": "docs/plans/aet-work-hybrid-orchestrator-core-plan.md",
     "status": "done",
-    "blocks": [
-      "aet-work-hybrid-orchestrator-docs"
-    ],
+    "blocks": ["aet-work-hybrid-orchestrator-docs"],
     "blocked_by": [],
     "effort": "medium",
     "branch": "aet-work-hybrid-orchestrator-core"
@@ -78,9 +60,7 @@
     "plan_file": "docs/plans/aet-work-hybrid-orchestrator-docs-plan.md",
     "status": "done",
     "blocks": [],
-    "blocked_by": [
-      "aet-work-hybrid-orchestrator-core"
-    ],
+    "blocked_by": ["aet-work-hybrid-orchestrator-core"],
     "effort": "medium",
     "branch": "aet-work-hybrid-orchestrator-docs"
   },
@@ -98,9 +78,7 @@
     "title": "Add merge verification gate to aet-ship",
     "plan_file": "docs/plans/bs-01-aet-ship-merge-verification.md",
     "status": "done",
-    "blocks": [
-      "bs-02"
-    ],
+    "blocks": ["bs-02"],
     "blocked_by": [],
     "effort": "small"
   },
@@ -109,12 +87,8 @@
     "title": "Add merged stage to aet-pipeline-implement",
     "plan_file": "docs/plans/bs-02-pipeline-implement-merged-stage.md",
     "status": "done",
-    "blocks": [
-      "bs-03"
-    ],
-    "blocked_by": [
-      "bs-01"
-    ],
+    "blocks": ["bs-03"],
+    "blocked_by": ["bs-01"],
     "effort": "small"
   },
   {
@@ -123,9 +97,7 @@
     "plan_file": "docs/plans/bs-03-aet-work-queue-tracking.md",
     "status": "done",
     "blocks": [],
-    "blocked_by": [
-      "bs-02"
-    ],
+    "blocked_by": ["bs-02"],
     "effort": "small"
   },
   {
@@ -133,9 +105,7 @@
     "title": "Scaffold aet-validate-ui skill structure",
     "plan_file": "docs/plans/ui-01-scaffold-skill.md",
     "status": "done",
-    "blocks": [
-      "ui-02"
-    ],
+    "blocks": ["ui-02"],
     "blocked_by": [],
     "effort": "small"
   },
@@ -144,12 +114,8 @@
     "title": "Write aet-validate-ui SKILL.md core",
     "plan_file": "docs/plans/ui-02-write-skill-core.md",
     "status": "done",
-    "blocks": [
-      "ui-03"
-    ],
-    "blocked_by": [
-      "ui-01"
-    ],
+    "blocks": ["ui-03"],
+    "blocked_by": ["ui-01"],
     "effort": "medium"
   },
   {
@@ -157,12 +123,8 @@
     "title": "Write examples and references for aet-validate-ui",
     "plan_file": "docs/plans/ui-03-write-examples-references.md",
     "status": "done",
-    "blocks": [
-      "ui-04"
-    ],
-    "blocked_by": [
-      "ui-02"
-    ],
+    "blocks": ["ui-04"],
+    "blocked_by": ["ui-02"],
     "effort": "medium"
   },
   {
@@ -171,11 +133,7 @@
     "plan_file": "docs/plans/ui-04-integrate-validate.md",
     "status": "done",
     "blocks": [],
-    "blocked_by": [
-      "ui-01",
-      "ui-02",
-      "ui-03"
-    ],
+    "blocked_by": ["ui-01", "ui-02", "ui-03"],
     "effort": "small"
   }
 ]
