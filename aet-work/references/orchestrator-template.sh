@@ -72,6 +72,27 @@ with open('$QUEUE_FILE', 'w') as f:
 "
 }
 
+check_merge_verified() {
+  local task_id="$1"
+  python3 -c "
+import json, sys
+with open('$QUEUE_FILE', 'r') as f:
+    queue = json.load(f)
+task = next((t for t in queue if t['id'] == '$task_id'), None)
+if not task:
+    sys.exit(0)
+for dep_id in task.get('blocked_by', []):
+    dep = next((t for t in queue if t['id'] == dep_id), None)
+    if not dep:
+        continue
+    mv = dep.get('merge_verified')
+    if mv is not True:
+        print(f'⚠️  Warning: dependency {dep_id} is not merge-verified. '
+              f'This task may build on a stale base. Continuing anyway.')
+        sys.stdout.flush()
+"
+}
+
 # ---------------------------------------------------------------------------
 # Task invocation
 # ---------------------------------------------------------------------------
@@ -122,6 +143,9 @@ while true; do
 
   echo "▶️  Task: $TASK_TITLE ($TASK_ID)"
   echo "   Plan: $PLAN_FILE"
+
+  # Merge verification
+  check_merge_verified "$TASK_ID"
 
   # Mark in-progress
   mark_status "$TASK_ID" "in-progress"
