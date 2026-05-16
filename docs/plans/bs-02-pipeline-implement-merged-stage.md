@@ -33,5 +33,6 @@ Blocked by: `bs-01-aet-ship-merge-verification`
 Revert `aet-pipeline-implement/SKILL.md` to pre-change state and re-run `make package`.
 
 ---
-*Stage: synced*
-*Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`*
+
+_Stage: synced_
+_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_

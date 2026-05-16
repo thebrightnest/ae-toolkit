@@ -42,7 +42,8 @@ The pipeline reads the plan's current stage and skips completed steps:
 | `qa-complete`                        | Step 4 (aet-review)                                       |
 | `reviewed`                           | Step 5 (aet-cso, if applicable) or Step 6 (aet-sync-docs) |
 | `secure`                             | Step 6 (aet-sync-docs)                                    |
-| `synced`                             | Pipeline complete → suggest `aet-ship`                    |
+| `synced`                             | Pipeline complete → `aet-ship` then `post-ship-verify`    |
+| `merged`                             | Pipeline complete → branch verified on `origin/main`      |
 
 ## Commands
 
@@ -132,6 +133,53 @@ Branch ready for aet-ship
 3. If no meaningful divergences: update stage only, skip docs commit
 4. Stage advances to `synced`
 
+### `post-ship-verify`
+
+Verify the branch has been merged to `origin/main` and advance the plan to `merged`.
+
+**When to Use**
+
+- After `aet-ship` confirms the PR is merged
+- When resuming at stage `synced` and the PR has already merged
+
+**Procedure:**
+
+1. Run `git fetch origin`
+2. Verify: `git merge-base --is-ancestor HEAD origin/main`
+3. If the check fails:
+
+   - **STOP** and print:
+
+     ```
+     ⚠️  POST-SHIP VERIFICATION FAILED
+         This branch's commits are NOT ancestors of origin/main.
+         The PR may not have merged yet, or it targeted a different base branch.
+         Re-run this step after the PR is confirmed merged.
+     ```
+
+   - Do not advance the stage
+
+4. If the check passes:
+
+   - Print: `✓ Post-ship verification passed. Branch is on origin/main.`
+   - Update the plan.md footer to:
+
+     ```
+     *Stage: merged*
+     *Next step: none — pipeline complete*
+     ```
+
+   - If `.agents/work-queue.json` exists, find the task matching the current branch and set `status` to `merge_verified`
+   - Print:
+
+     ```
+     ✓ Implementation pipeline complete.
+
+     Branch: {branch}
+     Stage: merged
+     Work queue: merge_verified
+     ```
+
 ## Auto-retry Rules
 
 - Steps 1–3 (tdd, implement, qa): auto-retry up to 3× on validation/test failure, then stop for human review
@@ -145,7 +193,7 @@ After all steps complete:
 
    ```
    *Stage: synced*
-   *Next step: run `aet-ship`*
+   *Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`*
    ```
 
 2. Print:
@@ -159,7 +207,7 @@ After all steps complete:
    - .security-audit.md  (if aet-cso ran)
    - .qa-report.md
 
-   Next step: run `aet-ship` to open a PR.
+   Next step: run `aet-ship` to open a PR, then `post-ship-verify` to reach `merged`.
    ```
 
 ## Key Principles
