@@ -1,9 +1,9 @@
 # AET Toolkit Enhancement Report: Branch Safety in Agentic Pipelines
 
-**Date:** 2026-05-16  
-**Author:** aet-evolve (auto-generated retro → system-evolve)  
-**Severity:** High — silent data loss  
-**Scope:** `aet-ship`, `aet-pipeline-implement`, `aet-work`  
+**Date:** 2026-05-16
+**Author:** aet-evolve (auto-generated retro → system-evolve)
+**Severity:** High — silent data loss
+**Scope:** `aet-ship`, `aet-pipeline-implement`, `aet-work`
 
 ---
 
@@ -12,6 +12,7 @@
 Two completed feature branches (`feat/p3-t1-http-server-modernization` and `feat/UI-1`) were deleted after being "merged," but their commits never reached `origin/main`. The code was later discovered as dangling commits with no branch pointing to them.
 
 **Impact:**
+
 - ~20 hours of work temporarily "lost" (recovered via `git fsck` + merge)
 - Downstream tasks (P3-T3 through P3-T6) were incorrectly blocked for days
 - Work-queue reconstruction required manual git archaeology
@@ -49,7 +50,7 @@ Instead of requiring every project to add a "Branch Cleanup Safety" rule to `AGE
 
 **Proposed addition:** After PR creation, add a **merge verification step** that runs before any branch deletion:
 
-```markdown
+````markdown
 ### `ship` — Step 12: Merge Verification (NEW)
 
 After the PR is created and the user indicates it has been merged:
@@ -57,7 +58,9 @@ After the PR is created and the user indicates it has been merged:
 1. Run `git fetch origin`
 2. Verify: `git merge-base --is-ancestor HEAD origin/main`
 3. If the check fails:
+
    - **STOP** and print:
+
      ```
      ⚠️  MERGE VERIFICATION FAILED
          This branch's commits are NOT ancestors of origin/main.
@@ -65,9 +68,10 @@ After the PR is created and the user indicates it has been merged:
          - PR was merged locally but not pushed
          - PR targeted a different base branch
          - A git reset --hard origin/main discarded the merge
-     
+
          DO NOT DELETE THIS BRANCH until the merge is confirmed on origin/main.
      ```
+
    - Offer to open the PR in the browser for manual verification
    - Exit with non-zero status
 
@@ -82,9 +86,11 @@ Only run if Step 12 passed:
 ```bash
 git merge-base --is-ancestor HEAD origin/main && git branch -d $(git branch --show-current)
 ```
+````
 
 **Rationale:** This is the exact moment where the pipeline transitions from "code is ready" to "code is on main." The toolkit should own this verification, not the human's memory or a project-specific AGENTS.md rule.
-```
+
+````
 
 **Files to change:** `/Users/{user}/.claude/skills/aet-ship/SKILL.md`
 
@@ -104,7 +110,7 @@ git merge-base --is-ancestor HEAD origin/main && git branch -d $(git branch --sh
   "merge_verified": "origin/main",
   "merge_commit": "c0f5677"
 }
-```
+````
 
 **Procedure addition for `aet-work`:**
 
@@ -112,6 +118,7 @@ git merge-base --is-ancestor HEAD origin/main && git branch -d $(git branch --sh
 ### Before Starting Next Task
 
 1. Check the previous task's `merge_verified` field:
+
    - If `null` or missing: **STOP** and run `aet-ship` merge verification on the previous task's branch
    - If set to `"origin/main"`: proceed
 
@@ -133,11 +140,11 @@ git merge-base --is-ancestor HEAD origin/main && git branch -d $(git branch --sh
 **Proposed addition:** Add a stage `merged` after `synced`:
 
 ```markdown
-| Stage found                          | Start from                                                |
-| ------------------------------------ | --------------------------------------------------------- |
-| ...                                  | ...                                                       |
-| `synced`                             | Pipeline complete → suggest `aet-ship` → wait for merge   |
-| `merged`                             | Fully complete → safe to delete branch                    |
+| Stage found | Start from                                              |
+| ----------- | ------------------------------------------------------- |
+| ...         | ...                                                     |
+| `synced`    | Pipeline complete → suggest `aet-ship` → wait for merge |
+| `merged`    | Fully complete → safe to delete branch                  |
 ```
 
 **Procedure addition:**
@@ -167,13 +174,13 @@ After `aet-ship` completes and the user confirms the PR is merged:
 
 ## 5. Why This Belongs in the Toolkit, Not AGENTS.md
 
-| Concern | AGENTS.md Rule | Toolkit Skill |
-|---------|---------------|---------------|
-| **Enforcement** | Human must remember to run a command | Automatic gate — pipeline stops if check fails |
-| **Consistency** | Every project writes its own version | One correct behavior across all AET projects |
-| **Discoverability** | Buried in a file agents may not load | Active step in the skill the user is already running |
-| **Error handling** | "Oops, I forgot" | Pipeline halts with actionable message |
-| **Cross-project learning** | Per-project rules don't compound | One fix improves every AET project simultaneously |
+| Concern                    | AGENTS.md Rule                       | Toolkit Skill                                        |
+| -------------------------- | ------------------------------------ | ---------------------------------------------------- |
+| **Enforcement**            | Human must remember to run a command | Automatic gate — pipeline stops if check fails       |
+| **Consistency**            | Every project writes its own version | One correct behavior across all AET projects         |
+| **Discoverability**        | Buried in a file agents may not load | Active step in the skill the user is already running |
+| **Error handling**         | "Oops, I forgot"                     | Pipeline halts with actionable message               |
+| **Cross-project learning** | Per-project rules don't compound     | One fix improves every AET project simultaneously    |
 
 The AGENTS.md rule we added today (`.agents/commands/branch-cleanup.md`) is a **project-level workaround**. It helps this specific project, but the next AET user on a different repo will hit the same bug. The fix belongs in `aet-ship`, `aet-work`, and `aet-pipeline-implement`.
 
@@ -181,11 +188,11 @@ The AGENTS.md rule we added today (`.agents/commands/branch-cleanup.md`) is a **
 
 ## 6. Implementation Complexity
 
-| Skill | Change | Lines | Risk |
-|-------|--------|-------|------|
-| `aet-ship` | Add Steps 12–13 | ~25 | Low — only adds verification, doesn't change existing flow |
-| `aet-work` | Add `merge_verified` field + pre-task check | ~15 | Low — additive, backward-compatible with old queues |
-| `aet-pipeline-implement` | Add `merged` stage + post-ship verification | ~20 | Low — new stage, doesn't affect existing stages |
+| Skill                    | Change                                      | Lines | Risk                                                       |
+| ------------------------ | ------------------------------------------- | ----- | ---------------------------------------------------------- |
+| `aet-ship`               | Add Steps 12–13                             | ~25   | Low — only adds verification, doesn't change existing flow |
+| `aet-work`               | Add `merge_verified` field + pre-task check | ~15   | Low — additive, backward-compatible with old queues        |
+| `aet-pipeline-implement` | Add `merged` stage + post-ship verification | ~20   | Low — new stage, doesn't affect existing stages            |
 
 **Total:** ~60 lines across 3 skills. No breaking changes.
 
@@ -194,16 +201,19 @@ The AGENTS.md rule we added today (`.agents/commands/branch-cleanup.md`) is a **
 ## 7. Alternative Approaches Considered
 
 ### Option A: Git Hook (rejected)
+
 Add a `post-checkout` or `post-merge` hook that warns on `git reset --hard`.
 
 - **Why rejected:** Hooks are project-local, invisible to agents, and can be bypassed. The toolkit should enforce behavior at the skill level.
 
 ### Option B: Wrapper Script (rejected)
+
 Create a `git-safe-delete` alias.
 
 - **Why rejected:** Aliases are user-local. AET is designed to be agent-driven, not alias-dependent.
 
 ### Option C: Enhanced `aet-evolve` (rejected)
+
 Add "check for dangling commits" to the retro process.
 
 - **Why rejected:** Retroactive detection is too late. The fix must be preventive, not detective.
@@ -241,4 +251,4 @@ Add "check for dangling commits" to the retro process.
 
 ---
 
-*Generated by aet-evolve retro + system-evolve cycle.*
+_Generated by aet-evolve retro + system-evolve cycle._

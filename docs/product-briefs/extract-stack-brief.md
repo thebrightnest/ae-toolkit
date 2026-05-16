@@ -15,7 +15,7 @@ A skill that scans an existing project's infrastructure, DevOps, and automation 
 
 **Assessment:** Real, repeated behavioral evidence. Not interest or waitlists — actual hours spent on tedious config archaeology.
 
-**Uncomfortable truth:** N=1 primary source. No observed lead behavior. The other dev asked for help but we don't know if they would use a *skill* or just ask for a template repo.
+**Uncomfortable truth:** N=1 primary source. No observed lead behavior. The other dev asked for help but we don't know if they would use a _skill_ or just ask for a template repo.
 
 ## Status Quo
 
@@ -35,16 +35,19 @@ A skill that scans an existing project's infrastructure, DevOps, and automation 
 **Primary user:** Engineering leads standardizing setup across multiple team projects.
 
 **Why leads:**
+
 - They have the authority to enforce "every new repo must match our standard."
 - They feel pain at scale (5, 10, 20 repos).
 - They already use `aet-setup` for greenfield projects; this fills the gap for "clone our golden repo."
 
 **Consequence if unsolved:**
+
 - New projects drift from team standards.
 - Security scanning, linting, or type-checking gets silently omitted.
 - Onboarding new developers to "yet another project setup" creates friction.
 
 **Secondary personas (out of scope for primary wedge):**
+
 - Solo developers spinning up PoCs (would use it, but don't drive toolkit adoption).
 - Agencies cloning client stacks (too many edge cases, not the right fit for a standardized skill).
 
@@ -60,6 +63,7 @@ A skill that scans a single repo, detects CI/CD + container + tooling configs, a
 **Scope boundary:** Must be a companion to `aet-setup`, not a replacement. If `aet-setup` bootstraps from zero, `extract-stack` bootstraps from an existing proven project.
 
 **What is NOT in the wedge:**
+
 - Source code extraction (this is infrastructure only).
 - Secret management or migration.
 - Automatic application to the new project (human review required).
@@ -74,5 +78,6 @@ Strong demand evidence (10+ repetitions, 1+ hour each), clear primary user (engi
 **Condition for planning:** Scope must be tightly bounded to "extract what aet-setup would create" to avoid overlap and bloat.
 
 ---
-*Stage: brief-validated*
-*Next step: run `aet-plan`*
+
+_Stage: brief-validated_
+_Next step: run `aet-plan`_

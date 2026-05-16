@@ -11,13 +11,14 @@ When agents run `aet-plan` today, there is no dedicated step or skill that evalu
 1. **Skip it entirely** — UI/UX is treated as an implementation detail that will "sort itself out."
 2. **Leave it vague** — Plans mention "responsive design" or "accessible" without specific breakpoints, WCAG targets, component library choices, form validation patterns, motion guidelines, or error-state handling.
 
-The existing `aet-design-system-creation` skill can backfill design direction, but it runs *after* planning. By that point, architectural decisions (API shape, data fetching patterns, state management) are already locked, making UI/UX retrofit expensive or impossible.
+The existing `aet-design-system-creation` skill can backfill design direction, but it runs _after_ planning. By that point, architectural decisions (API shape, data fetching patterns, state management) are already locked, making UI/UX retrofit expensive or impossible.
 
 ## Wedge
 
 A **checklist validator** skill that scans a PRD or plan.md for UI/UX coverage gaps and outputs a structured gap report. The first version focuses on presence/absence checks — not generating the missing content, but surfacing what's missing so the planner can address it before implementation begins.
 
 **Categories checked (v1):**
+
 - Accessibility (WCAG level, ARIA patterns, keyboard navigation, color contrast)
 - Responsive design (breakpoint strategy, mobile-first vs desktop-first)
 - Component library / design system alignment
@@ -37,5 +38,6 @@ A **checklist validator** skill that scans a PRD or plan.md for UI/UX coverage g
 - This is an evaluation skill, not a generative one. It reads; it does not write application code.
 
 ---
-*Stage: brief-validated*
-*Next step: run `aet-plan`*
+
+_Stage: brief-validated_
+_Next step: run `aet-plan`_

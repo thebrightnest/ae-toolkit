@@ -36,5 +36,6 @@
 Delete `examples/README.md` and `references/README.md`, re-create from SKILL.md.
 
 ---
-*Stage: synced*
-*Next step: run `aet-ship`*
+
+_Stage: synced_
+_Next step: run `aet-ship`_

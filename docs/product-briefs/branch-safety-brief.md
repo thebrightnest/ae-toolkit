@@ -32,5 +32,6 @@ Add automatic merge verification to three skills (~60 lines total):
 **BUILD** — Strong demand evidence (real data loss), sharp wedge (three targeted skill changes), clear user (AET toolkit users), zero breaking changes, and high leverage (one fix improves every AET project simultaneously).
 
 ---
-*Stage: brief-validated*
-*Next step: run `aet-plan`*
+
+_Stage: brief-validated_
+_Next step: run `aet-plan`_
