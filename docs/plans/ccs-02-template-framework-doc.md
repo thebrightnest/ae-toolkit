@@ -10,7 +10,6 @@ documentation (ADR), plus the aet-implement validation reminder.
 ## Tasks
 
 1. **Update `.agents/templates/plan-template.md`** — Add Renderer/UI Tasks (S)
-
    - Insert a new subsection under Tasks:
 
      ```markdown
@@ -22,7 +21,6 @@ documentation (ADR), plus the aet-implement validation reminder.
      ```
 
 2. **Create `docs/adr/001-cross-cutting-completeness.md`** — Framework ADR (M)
-
    - Follow `docs/adr/000-template.md`
    - Define Cross-Cutting Completeness: what it is, why it matters
    - Document the pattern template: "When a diff touches [domain], verify
@@ -32,7 +30,6 @@ documentation (ADR), plus the aet-implement validation reminder.
    - Reference `aet-review/references/css-completeness-check.md`
 
 3. **Update `aet-implement/SKILL.md`** — Add visual/CSS verification (S)
-
    - In the Validation strategy section, add:
      > - **Visual / CSS verification** — if the plan includes renderer/UI work,
      >   verify that all custom `className` values have corresponding CSS
