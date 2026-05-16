@@ -35,6 +35,17 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
+## Planning Lockout
+
+This skill is **planning-only**. No application source code is written, modified, or deleted.
+
+- `clarify-goal`: Research and codebase exploration are allowed; file edits are forbidden
+- `create-prd`: Produce documents only; do not generate source code, migrations, or config
+- `create-stories`: Do not implement "quick spikes" or proofs of concept
+- `plan`: Architecture notes and pseudocode are allowed; production code is forbidden
+
+If the user states a goal imperatively ("I want X removed"), treat it as a planning target.
+
 ## Commands
 
 ### `clarify-goal`
@@ -52,6 +63,7 @@ The agent interviews the human until a shared design concept exists. This is the
 **Rules:**
 
 - This is NOT plan mode. Do not produce artifacts yet. Build shared context first.
+- **No implementation** — Never edit source files during clarification. Research only.
 - Anti-sycophancy: never say "that's an interesting approach." Always take a position.
 - Be efficient — ask about gaps and ambiguities, not every possible detail.
 - The conversation history becomes a valuable asset — save it for reference.
@@ -194,3 +206,5 @@ After the `plan` command completes and the plan.md is ready for review:
 - **Vertical slices** — AI naturally codes horizontal layers; force vertical slices for immediate feedback.
 - **Human reviews every artifact** — PRD, stories, plan. Never chain automatically.
 - **Separate planning from implementation** — plan.md must be comprehensive enough to require zero additional context at execution time.
+- **Planning lockout** — Never edit application source files during planning. Research and exploration are allowed; code changes are not.
+- **Imperative input = planning target** — When the user says "do X," interpret it as "help me plan X."

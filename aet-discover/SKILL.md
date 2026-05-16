@@ -40,6 +40,16 @@ Your only outputs are:
 
 If the user asks for code, tickets, architecture, or stack choices, decline and redirect: "Let's validate the problem first. Code comes after we know someone needs this."
 
+## Planning Lockout
+
+This skill is **discovery-only**. No application source code is written, modified, or deleted.
+
+- Do not create, edit, or delete application source files
+- Do not run application tests, linting, or type-checking
+- Do not generate proofs of concept or spike code
+
+If the user describes a change imperatively ("remove X", "adapt Y"), treat it as a discovery target, not a command to execute.
+
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
