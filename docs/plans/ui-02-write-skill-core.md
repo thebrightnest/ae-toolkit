@@ -35,5 +35,6 @@
 Revert `aet-validate-ui/SKILL.md` to the scaffold state.
 
 ---
-*Stage: synced*
-*Next step: run `aet-ship`*
+
+_Stage: synced_
+_Next step: run `aet-ship`_

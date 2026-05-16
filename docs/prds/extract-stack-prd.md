@@ -40,31 +40,31 @@
 
 The skill scans these categories and paths:
 
-| Category | Paths |
-| --- | --- |
-| CI/CD | `.github/workflows/`, `.gitlab-ci.yml`, `.circleci/`, `azure-pipelines.yml`, `Jenkinsfile`, `bitbucket-pipelines.yml`, `.buildkite/`, `appveyor.yml` |
-| Containers | `Dockerfile`, `docker-compose.yml`, `docker-compose.*.yml`, `.dockerignore`, `Containerfile`, `kubernetes/`, `k8s/`, `helm/`, `skaffold.yaml` |
-| Infra-as-Code | `terraform/`, `*.tf`, `pulumi/`, `serverless.yml`, `sam.yaml`, `cloudformation/`, `ansible/`, `packer/`, `vagrant/` |
-| Environment / Config | `.env*`, `config/`, `*.config.*`, `secrets.*`, `.aws/`, `.kube/`, `infrastructure/` |
-| Dependencies | Lockfiles and manifest files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `poetry.lock`, `Cargo.lock`, `go.sum`, `Gemfile.lock`, `uv.lock`, `requirements*.txt`) |
-| Scripts | `Makefile`, `justfile`, `Taskfile.yml`, `package.json` scripts, `scripts/`, `bin/`, `*.sh`, `*.py` |
-| Tooling | `.pre-commit-config.yaml`, linter configs, formatter configs, type-checker configs, security configs |
-| Documentation | `README.md` setup sections, `docs/deployment.md`, `docs/ops.md`, `runbooks/`, `ARCHITECTURE.md` |
+| Category             | Paths                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CI/CD                | `.github/workflows/`, `.gitlab-ci.yml`, `.circleci/`, `azure-pipelines.yml`, `Jenkinsfile`, `bitbucket-pipelines.yml`, `.buildkite/`, `appveyor.yml`                     |
+| Containers           | `Dockerfile`, `docker-compose.yml`, `docker-compose.*.yml`, `.dockerignore`, `Containerfile`, `kubernetes/`, `k8s/`, `helm/`, `skaffold.yaml`                            |
+| Infra-as-Code        | `terraform/`, `*.tf`, `pulumi/`, `serverless.yml`, `sam.yaml`, `cloudformation/`, `ansible/`, `packer/`, `vagrant/`                                                      |
+| Environment / Config | `.env*`, `config/`, `*.config.*`, `secrets.*`, `.aws/`, `.kube/`, `infrastructure/`                                                                                      |
+| Dependencies         | Lockfiles and manifest files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `poetry.lock`, `Cargo.lock`, `go.sum`, `Gemfile.lock`, `uv.lock`, `requirements*.txt`) |
+| Scripts              | `Makefile`, `justfile`, `Taskfile.yml`, `package.json` scripts, `scripts/`, `bin/`, `*.sh`, `*.py`                                                                       |
+| Tooling              | `.pre-commit-config.yaml`, linter configs, formatter configs, type-checker configs, security configs                                                                     |
+| Documentation        | `README.md` setup sections, `docs/deployment.md`, `docs/ops.md`, `runbooks/`, `ARCHITECTURE.md`                                                                          |
 
 ### Placeholder Convention
 
 Standard tokens to replace project-specific values:
 
-| Token | Replaces |
-| --- | --- |
-| `{{PROJECT_NAME}}` | App name, service name, repo name |
-| `{{ORG_NAME}}` | GitHub org, DockerHub namespace |
-| `{{DOMAIN}}` | Production domain, API host |
-| `{{APP_PORT}}` | Primary application port |
-| `{{DB_NAME}}` | Database name |
-| `{{AWS_REGION}}` | AWS region |
-| `{{CONTAINER_REGISTRY}}` | Docker image registry host |
-| `{{SECRET}}` | Generic secret placeholder |
+| Token                    | Replaces                          |
+| ------------------------ | --------------------------------- |
+| `{{PROJECT_NAME}}`       | App name, service name, repo name |
+| `{{ORG_NAME}}`           | GitHub org, DockerHub namespace   |
+| `{{DOMAIN}}`             | Production domain, API host       |
+| `{{APP_PORT}}`           | Primary application port          |
+| `{{DB_NAME}}`            | Database name                     |
+| `{{AWS_REGION}}`         | AWS region                        |
+| `{{CONTAINER_REGISTRY}}` | Docker image registry host        |
+| `{{SECRET}}`             | Generic secret placeholder        |
 
 Custom descriptive placeholders are permitted for values that don't fit the standard set (e.g., `{{REDIS_CLUSTER_URL}}`).
 
@@ -95,6 +95,7 @@ scaffold/
 ```
 
 `INFRA.md` must include:
+
 - Stack overview
 - What's included (file list + purpose)
 - Placeholder table (token, meaning, where to set)
@@ -109,5 +110,6 @@ scaffold/
 3. Should the skill include a "dry-run" mode that previews what would be extracted without writing files?
 
 ---
-*Stage: scope-validated*
-*Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)*
+
+_Stage: scope-validated_
+_Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)_

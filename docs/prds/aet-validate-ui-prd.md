@@ -15,9 +15,9 @@
 
 - **Does not generate UI/UX content.** It identifies gaps; it does not write accessibility guidelines, pick component libraries, or design wireframes.
 - **Does not replace `aet-design-system-creation`.** Design systems are still the source of truth for visual direction; this skill validates that the plan acknowledges the need for one.
-- **Does not enforce a specific design system or framework.** It checks for *presence* of alignment decisions, not *which* design system is chosen.
+- **Does not enforce a specific design system or framework.** It checks for _presence_ of alignment decisions, not _which_ design system is chosen.
 - **Does not run against application source code.** It evaluates plans and PRDs only.
-- **Does not perform automated accessibility audits.** It checks whether the plan *mentions* accessibility targets; axe/Wave/etc. audits happen during implementation/QA.
+- **Does not perform automated accessibility audits.** It checks whether the plan _mentions_ accessibility targets; axe/Wave/etc. audits happen during implementation/QA.
 
 ## User Stories
 
@@ -56,5 +56,6 @@
 - **Pipeline friction:** Adding a mandatory gate to `aet-pipeline-plan` could slow down planning for backend-only features. Mitigation: allow the pipeline to skip UI validation when the PRD explicitly marks the feature as "no UI" (API-only, CLI-only, etc.).
 
 ---
-*Stage: scope-validated*
-*Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)*
+
+_Stage: scope-validated_
+_Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)_

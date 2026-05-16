@@ -50,12 +50,12 @@ Add automatic merge verification to `aet-ship`, `aet-pipeline-implement`, and `a
 
 ## Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| SKILL.md line count exceeds 400 | Medium | Low | Move deep detail to `references/`; the changes are ~20-25 lines per skill |
-| `git merge-base` behavior differs across git versions | Low | Low | Use standard plumbing command available since git 1.5+ |
-| Users on non-`main` default branches | Medium | Medium | Use `origin/main` explicitly as documented convention; if projects use `master`, they can override in AGENTS.md |
-| Old work queues break on new field | Low | High | Treat missing `merge_verified` as `null` (unverified), not an error |
+| Risk                                                  | Likelihood | Impact | Mitigation                                                                                                      |
+| ----------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------- |
+| SKILL.md line count exceeds 400                       | Medium     | Low    | Move deep detail to `references/`; the changes are ~20-25 lines per skill                                       |
+| `git merge-base` behavior differs across git versions | Low        | Low    | Use standard plumbing command available since git 1.5+                                                          |
+| Users on non-`main` default branches                  | Medium     | Medium | Use `origin/main` explicitly as documented convention; if projects use `master`, they can override in AGENTS.md |
+| Old work queues break on new field                    | Low        | High   | Treat missing `merge_verified` as `null` (unverified), not an error                                             |
 
 ## Open Questions
 
@@ -64,5 +64,6 @@ Add automatic merge verification to `aet-ship`, `aet-pipeline-implement`, and `a
 3. Should `aet-work` automatically run merge verification on a stale task, or just halt and prompt the user?
 
 ---
-*Stage: scope-validated*
-*Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)*
+
+_Stage: scope-validated_
+_Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)_

@@ -31,5 +31,6 @@ None — this is the first task.
 Delete `aet-validate-ui/` directory and re-run `make validate`.
 
 ---
-*Stage: synced*
-*Next step: run `aet-ship`*
+
+_Stage: synced_
+_Next step: run `aet-ship`_
