@@ -140,14 +140,12 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
 **Procedure:**
 
 1. **Runtime detection:**
-
    - Check `kimi` in `PATH` or `KIMI_CLI_VERSION` → `kimi`
    - Check `claude` in `PATH` or `CLAUDE_CODE` → `claude`
    - Check `AGENT_CLI` env var → user override
    - If none matched: emit warning and ask user to set `AGENT_CLI`
 
 2. **Generate orchestrator script:**
-
    - Read `aet-work/references/orchestrator-template.sh` from this skill directory
    - Substitute template variables based on detected CLI:
 
@@ -161,7 +159,6 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
    - `chmod +x scripts/.aet-work-orchestrator.sh`
 
 3. **Spawn and wait:**
-
    - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
    - `TaskOutput(block=true)` to wait for completion
    - If the script fails: report which task failed and preserve the branch for inspection

@@ -9,26 +9,22 @@ This plan covers the runtime detection, script generation, background execution,
 ## Tasks
 
 1. **Runtime detection heuristics** — S
-
    - Inspect env vars (`KIMI_CLI_VERSION`, `CLAUDE_CODE`, `CODEX_*`, `AGENT_CLI`)
    - Return detected CLI string or emit warning with fallback instructions
    - Document detection order in skill reference
 
 2. **Script template and generator** — M
-
    - Create a bash template that embeds the detected CLI
    - Template reads `.agents/work-queue.json`, manages worktrees, invokes CLI per task
    - Use inline `python3` for JSON manipulation (no `jq` dependency)
    - Output path: `scripts/.aet-work-orchestrator.sh`
 
 3. **Background spawn and wait mechanics** — S
-
    - Skill procedure: `Shell(run_in_background=true)` to spawn generated script
    - Skill procedure: `TaskOutput(block=true)` to wait for completion
    - Handle the case where the script fails or is interrupted
 
 4. **Queue processing loop in generated script** — M
-
    - Find next `unblocked` task
    - Mark `in-progress`, create worktree if needed
    - Invoke detected CLI with prompt to run `aet-pipeline-implement` on the task's plan
@@ -36,7 +32,6 @@ This plan covers the runtime detection, script generation, background execution,
    - On failure: mark `failed`, record stage, stop loop
 
 5. **Resume support** — S
-
    - Skip tasks already `done` or `in-progress` with existing worktree
    - Idempotent worktree creation (`git worktree add` only if missing)
 
