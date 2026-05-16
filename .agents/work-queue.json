@@ -63,5 +63,45 @@
     "blocked_by": ["aet-work-hybrid-orchestrator-core"],
     "effort": "medium",
     "branch": "aet-work-hybrid-orchestrator-docs"
+  },
+  {
+    "id": "ui-01-scaffold-skill",
+    "title": "Scaffold aet-validate-ui skill structure",
+    "plan_file": "docs/plans/ui-01-scaffold-skill.md",
+    "status": "done",
+    "blocks": ["ui-02-write-skill-core"],
+    "blocked_by": [],
+    "effort": "small",
+    "branch": "ui-01"
+  },
+  {
+    "id": "ui-02-write-skill-core",
+    "title": "Write aet-validate-ui SKILL.md core and keyword maps",
+    "plan_file": "docs/plans/ui-02-write-skill-core.md",
+    "status": "done",
+    "blocks": ["ui-03-write-examples-references"],
+    "blocked_by": ["ui-01-scaffold-skill"],
+    "effort": "medium",
+    "branch": "ui-02"
+  },
+  {
+    "id": "ui-03-write-examples-references",
+    "title": "Write aet-validate-ui examples and references",
+    "plan_file": "docs/plans/ui-03-write-examples-references.md",
+    "status": "done",
+    "blocks": ["ui-04-integrate-validate"],
+    "blocked_by": ["ui-02-write-skill-core"],
+    "effort": "medium",
+    "branch": "ui-03"
+  },
+  {
+    "id": "ui-04-integrate-validate",
+    "title": "Integrate aet-validate-ui into Toolkit + Validate & Package",
+    "plan_file": "docs/plans/ui-04-integrate-validate.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": ["ui-03-write-examples-references"],
+    "effort": "small",
+    "branch": "ui-04"
   }
 ]
