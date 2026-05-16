@@ -43,8 +43,9 @@ Read all `docs/plans/*.md` and produce `.agents/work-queue.json`.
 2. For each plan.md, extract: title, task ID (from filename or frontmatter), blocking relationships
 3. Build the DAG using `blocks` and `blocked_by` arrays
 4. Set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
-5. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
-6. Write `.agents/work-queue.json`
+5. Set `merge_verified: false` and `merge_commit: null` on each entry
+6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
+7. Write `.agents/work-queue.json`
 
 ### `status`
 
@@ -83,30 +84,37 @@ while true:
      - Report completion; list all task branches created
      - Break loop
   4. Mark task as in-progress in queue
-  5. Create a worktree for the task (ensure .worktrees/ is in .gitignore):
+  5. Merge verification: for each task in this task's `blocked_by` list,
+     read its entry from `.agents/work-queue.json`.
+     - If `merge_verified` is `true`: continue silently
+     - If `merge_verified` is `false` or missing: print
+       "⚠️  Warning: dependency {task-id} is not merge-verified.
+        This task may build on a stale base. Continuing anyway."
+     Missing `merge_verified` is treated as unverified, not broken.
+  6. Create a worktree for the task (ensure .worktrees/ is in .gitignore):
        git worktree add .worktrees/<task-id> -b <task-id>
      Resume case: if the task is already in-progress and .worktrees/<task-id> exists,
      skip this step — the worktree from the interrupted session is still valid.
-  6. CLEAR CONTEXT — request a new session or context reset.
+  7. CLEAR CONTEXT — request a new session or context reset.
      This is cooperative isolation: it works when the agent supports `/clear`,
      session restart, or equivalent. If the runtime does not support mid-session
      resets, use `run-scripted` instead for guaranteed OS-process isolation.
      The queue file persists state; resume by running aet-work run again.
-  7. Load minimal context: AGENTS.md + last 5 commits + current branch
-  8. cd into .worktrees/<task-id>; read the task's plan.md
-  9. Run `aet-pipeline-implement` on the task's plan.md (this handles the full quality
+  8. Load minimal context: AGENTS.md + last 5 commits + current branch
+  9. cd into .worktrees/<task-id>; read the task's plan.md
+  10. Run `aet-pipeline-implement` on the task's plan.md (this handles the full quality
      pipeline: tdd → implement → qa → review → cso → sync-docs; worktree is already
      created, so skip the worktree setup step inside the pipeline)
-  10. If `aet-pipeline-implement` stops at any gate (validation failure, architecture
+  11. If `aet-pipeline-implement` stops at any gate (validation failure, architecture
       issue, security finding, or any hard-stop condition):
       - cd back to repo root
       - Mark task as failed in queue; record which stage it stopped at
       - Stop loop, report failure (branch preserved at .worktrees/<task-id>)
-  11. cd back to repo root (aet-pipeline-implement commits atomically per step;
+  12. cd back to repo root (aet-pipeline-implement commits atomically per step;
       all changes are already committed by the time the pipeline finishes)
-  12. Mark task as done; record branch name (<task-id>) in queue entry
-  13. Update dependent tasks: if all blocked_by are done, set to unblocked
-  14. CLEAR CONTEXT again before the next iteration.
+  13. Mark task as done; record branch name (<task-id>) in queue entry
+  14. Update dependent tasks: if all blocked_by are done, set to unblocked
+  15. CLEAR CONTEXT again before the next iteration.
       If context clearing is not reliable in this runtime, switch to
       `run-scripted` for guaranteed isolation.
 ```
@@ -140,13 +148,17 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
 **Procedure:**
 
 1. **Runtime detection:**
+
    - Check `kimi` in `PATH` or `KIMI_CLI_VERSION` → `kimi`
    - Check `claude` in `PATH` or `CLAUDE_CODE` → `claude`
    - Check `AGENT_CLI` env var → user override
    - If none matched: emit warning and ask user to set `AGENT_CLI`
 
 2. **Generate orchestrator script:**
+
    - Read `aet-work/references/orchestrator-template.sh` from this skill directory
+   - Ensure the script includes merge verification: before each task, check
+     `merge_verified` on all `blocked_by` entries. Warn if unverified, but continue.
    - Substitute template variables based on detected CLI:
 
      | CLI      | CLI_BIN      | CLI_ARGS (suggested) | CLI_PROMPT_FLAG | CLI_WORKDIR_FLAG |
@@ -159,6 +171,7 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
    - `chmod +x scripts/.aet-work-orchestrator.sh`
 
 3. **Spawn and wait:**
+
    - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
    - `TaskOutput(block=true)` to wait for completion
    - If the script fails: report which task failed and preserve the branch for inspection
@@ -183,12 +196,12 @@ Parent agent session (clean)
 
 ### `cleanup`
 
-Remove worktrees whose branches have been merged.
+Remove worktrees for tasks that are merge-verified.
 
 **Procedure:**
 
-1. Run `git worktree list` to see all active worktrees
-2. For each `.worktrees/<task-id>` whose branch is merged into the default branch:
+1. Read `.agents/work-queue.json`
+2. For each task where `merge_verified` is `true`:
 
    ```bash
    git worktree remove .worktrees/<task-id>
