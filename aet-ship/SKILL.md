@@ -36,6 +36,7 @@ Run the pre-merge validation gate.
 
 1. **Sync with main** — pull latest main, attempt trivial merge conflict resolution
 2. **Stacked branch detection** — run `git merge-base HEAD main` and compare to `git rev-parse main`. If they differ, the branch was not branched directly from main's current tip — treat as stacked.
+
    - Identify the parent branch by scanning `git log --oneline --decorate main..HEAD` for the nearest named ancestor (the last commit decorated with a non-HEAD, non-remote ref).
    - Still create the PR against the parent branch — that is correct at creation time.
    - Prepend a `⚠️ STACKED PR` section to the PR body:
@@ -66,6 +67,36 @@ Run the pre-merge validation gate.
 10. **Bump VERSION** — auto-bump patch. Stop for human decision on MINOR/MAJOR.
 11. **Push and open PR** — push branch, create PR with description linking plan.md and PRD
 
+12. **Merge Verification** — after the PR is created and the user indicates it has been merged:
+
+    1. Run `git fetch origin`
+    2. Verify: `git merge-base --is-ancestor HEAD origin/main`
+    3. If the check fails:
+
+       - **STOP** and print:
+
+         ```
+         ⚠️  MERGE VERIFICATION FAILED
+             This branch's commits are NOT ancestors of origin/main.
+             Possible causes:
+             - PR was merged locally but not pushed
+             - PR targeted a different base branch
+             - A git reset --hard origin/main discarded the merge
+
+             DO NOT DELETE THIS BRANCH until the merge is confirmed on origin/main.
+         ```
+
+       - Offer to open the PR in the browser for manual verification
+       - Exit with non-zero status
+
+    4. If the check passes:
+       - Print: `✅ Merge verified on origin/main`
+       - Proceed to branch deletion (Step 13)
+
+13. **Safe Branch Deletion** — only run if Step 12 passed:
+    - Run: `git merge-base --is-ancestor HEAD origin/main && git branch -d $(git branch --show-current)`
+    - Print: `✓ Branch <branch> safely deleted. Commits are on origin/main.`
+
 **Stop conditions** (requires human intervention):
 
 - Merge conflicts that can't be auto-resolved
@@ -73,6 +104,7 @@ Run the pre-merge validation gate.
 - Coverage drop below threshold
 - `aet-cso` fail (Critical/High findings)
 - MINOR or MAJOR version bump needed
+- Merge verification failure (commits not on origin/main)
 
 **Output:**
 
@@ -80,6 +112,8 @@ Run the pre-merge validation gate.
 - PR with linked plan.md and PRD
 - CHANGELOG entry
 - Version bump
+- Merge verification status
+- Safe branch deletion confirmation (if applicable)
 
 ## Key Principles
 
@@ -87,4 +121,5 @@ Run the pre-merge validation gate.
 - **Composable** — invokes `aet-review` and `aet-cso` rather than duplicating their logic
 - **Bisectable commits** — one logical change per commit, enforced at process level
 - **Auto-generated artifacts** — CHANGELOG and VERSION bump are mechanical, not human work
+- **Merge verification is a hard gate** — commits must be ancestors of `origin/main` before any branch deletion
 - **Shipping is not the end** — post-deploy monitoring (`canary`) closes the loop
