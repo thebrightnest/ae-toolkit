@@ -34,5 +34,6 @@ Blocked by: `bs-02-pipeline-implement-merged-stage`
 Revert `aet-work/SKILL.md` to pre-change state and re-run `make package`.
 
 ---
-*Stage: synced*
-*Next step: run `aet-ship`*
+
+_Stage: synced_
+_Next step: run `aet-ship`_
