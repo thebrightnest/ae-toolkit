@@ -94,6 +94,7 @@ Worktree mode puts each implementation on its own branch using standard git comm
 - Unit tests must pass
 - Integration tests must pass (if applicable)
 - Manual verification steps must be checked
+- **Visual / CSS verification** — if the plan includes renderer/UI work, verify that all custom `className` values have corresponding CSS definitions before declaring implementation complete
 
 **Deviation handling:**
 

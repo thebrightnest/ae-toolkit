@@ -36,7 +36,6 @@ Run the pre-merge validation gate.
 
 1. **Sync with main** — pull latest main, attempt trivial merge conflict resolution
 2. **Stacked branch detection** — run `git merge-base HEAD main` and compare to `git rev-parse main`. If they differ, the branch was not branched directly from main's current tip — treat as stacked.
-
    - Identify the parent branch by scanning `git log --oneline --decorate main..HEAD` for the nearest named ancestor (the last commit decorated with a non-HEAD, non-remote ref).
    - Still create the PR against the parent branch — that is correct at creation time.
    - Prepend a `⚠️ STACKED PR` section to the PR body:
