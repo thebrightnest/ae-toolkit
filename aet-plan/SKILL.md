@@ -92,7 +92,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
 4. Define blocking relationships between tickets (directed acyclic graph).
 5. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort.
-6. **Generate `.agents/work-queue.json`** from the tickets. This is the machine-readable queue that enables AFK loops.
+6. **Merge into `.agents/work-queue.json`**. Read the existing queue file if it exists. Append new tickets to the existing array, preserving all current entries and their statuses. Do not remove or modify any existing task. This is the machine-readable queue that enables AFK loops.
 
 **Vertical slice rule:**
 
@@ -101,10 +101,13 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 
 **Work queue generation:**
 
+- **Read first** — If `.agents/work-queue.json` exists, load it. Existing tasks must remain intact.
+- **Merge** — Add new tasks from `docs/plans/*.md` to the existing array. Avoid duplicate IDs.
 - The queue is built from `docs/plans/*.md` only (PRDs are metadata, not queue entries)
 - Each task gets: `id`, `title`, `plan_file`, `status` (unblocked/blocked/done/failed), `blocks` (array of IDs), `blocked_by` (array of IDs)
 - Tasks with no `blocked_by` entries start as `unblocked`
 - Tasks with `blocked_by` entries start as `blocked`
+- **Validate** — After writing, confirm no previously existing task IDs were removed. If any are missing, restore them from the read copy.
 - Save to `.agents/work-queue.json`
 - The queue enables `aet-work` to pick the next task automatically
 

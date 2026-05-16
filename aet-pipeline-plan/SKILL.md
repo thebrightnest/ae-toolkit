@@ -87,6 +87,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 2. Save the product brief to `docs/product-briefs/{name}-brief.md`
 3. Render verdict: **BUILD / NARROW / PIVOT / KILL**
 4. **HARD GATE:**
+
    - If BUILD → continue to Step 2
    - If NARROW / PIVOT / KILL → stop the pipeline. Print:
 
@@ -102,7 +103,8 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
 1. Follow the `aet-plan` → `clarify-goal` + `create-prd` + `create-stories` + `plan` procedures
 2. Produce: `docs/prds/{feature}-prd.md`, `docs/plans/*.md` files, `.agents/work-queue.json`
-3. **HARD GATE:** Present PRD to user for review. Ask:
+3. **Queue preservation guardrail:** When `aet-plan` produces `.agents/work-queue.json`, it must merge new tickets into the existing queue rather than replacing it. Existing tasks must survive the planning session unchanged.
+4. **HARD GATE:** Present PRD to user for review. Ask:
 
    ```
    "The PRD is ready. Please review docs/prds/{feature}-prd.md.
