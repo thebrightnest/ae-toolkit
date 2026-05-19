@@ -72,88 +72,19 @@ Identify and output the next unblocked task.
 
 ### `run`
 
-AFK loop: implement tasks until none remain or a failure occurs.
-
-**Procedure:**
-
-```
-while true:
-  1. Read .agents/work-queue.json
-  2. Find next unblocked task
-  3. If no unblocked tasks remain:
-     - Report completion; list all task branches created
-     - Break loop
-  4. Mark task as in-progress in queue
-  5. Merge verification: for each task in this task's `blocked_by` list,
-     read its entry from `.agents/work-queue.json`.
-     - If `merge_verified` is `true`: continue silently
-     - If `merge_verified` is `false` or missing: print
-       "⚠️  Warning: dependency {task-id} is not merge-verified.
-        This task may build on a stale base. Continuing anyway."
-     Missing `merge_verified` is treated as unverified, not broken.
-  6. Create a worktree for the task (ensure .worktrees/ is in .gitignore):
-       git worktree add .worktrees/<task-id> -b <task-id>
-     Resume case: if the task is already in-progress and .worktrees/<task-id> exists,
-     skip this step — the worktree from the interrupted session is still valid.
-  7. CLEAR CONTEXT — request a new session or context reset.
-     This is cooperative isolation: it works when the agent supports `/clear`,
-     session restart, or equivalent. If the runtime does not support mid-session
-     resets, use `run-scripted` instead for guaranteed OS-process isolation.
-     The queue file persists state; resume by running aet-work run again.
-  8. Load minimal context: AGENTS.md + last 5 commits + current branch
-  9. cd into .worktrees/<task-id>; read the task's plan.md
-  10. Run `aet-pipeline-implement` on the task's plan.md (this handles the full quality
-     pipeline: tdd → implement → qa → review → cso → sync-docs; worktree is already
-     created, so skip the worktree setup step inside the pipeline)
-  11. If `aet-pipeline-implement` stops at any gate (validation failure, architecture
-      issue, security finding, or any hard-stop condition):
-      - cd back to repo root
-      - Mark task as failed in queue; record which stage it stopped at
-      - Stop loop, report failure (branch preserved at .worktrees/<task-id>)
-  12. cd back to repo root (aet-pipeline-implement commits atomically per step;
-      all changes are already committed by the time the pipeline finishes)
-  13. Mark task as done; record branch name (<task-id>) in queue entry
-  14. Update dependent tasks: if all blocked_by are done, set to unblocked
-  15. CLEAR CONTEXT again before the next iteration.
-      If context clearing is not reliable in this runtime, switch to
-      `run-scripted` for guaranteed isolation.
-```
-
-**Human-in-the-loop gates:**
-
-- Loop stops on validation failure
-- Loop stops on review failure
-- Loop stops on merge conflicts
-- Loop can be run with `--dry-run` to preview only (no implementation)
-- Loop never auto-ships; aet-ship is a separate human-triggered step
-
-**Context isolation details:**
-
-- Context window: cleared between tasks by starting a new session (works in every agent)
-- Branch isolation: each task gets its own branch at `.worktrees/<task-id>/`
-- State persistence: `.agents/work-queue.json` survives context resets — it is the
-  handoff between sessions, not memory
-- After the loop: N branches ready for independent review; `git worktree list` shows all
-
-### `run-scripted`
-
 AFK loop with OS-level process isolation. Generates a bash orchestrator script tailored to the detected agent CLI, spawns it as a background OS process, and waits for completion. Each task executes in a fresh agent process with its own git worktree, eliminating context leakage and branch overlap entirely.
-
-**When to use instead of `run`:**
-
-- Context-window limits make the standard loop unreliable
-- True process isolation between tasks is required
-- Running the "night shift" on a machine that can keep a terminal session open
 
 **Procedure:**
 
 1. **Runtime detection:**
+
    - Check `kimi` in `PATH` or `KIMI_CLI_VERSION` → `kimi`
    - Check `claude` in `PATH` or `CLAUDE_CODE` → `claude`
    - Check `AGENT_CLI` env var → user override
    - If none matched: emit warning and ask user to set `AGENT_CLI`
 
 2. **Generate orchestrator script:**
+
    - Read `aet-work/references/orchestrator-template.sh` from this skill directory
    - Ensure the script includes merge verification: before each task, check
      `merge_verified` on all `blocked_by` entries. Warn if unverified, but continue.
@@ -169,23 +100,25 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
    - `chmod +x scripts/.aet-work-orchestrator.sh`
 
 3. **Spawn and wait:**
+
    - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
    - `TaskOutput(block=true)` to wait for completion
    - If the script fails: report which task failed and preserve the branch for inspection
 
 4. **Resume behavior:**
-   - Re-running `run-scripted` regenerates the script and resumes from the current queue state
+   - Re-running `run` regenerates the script and resumes from the current queue state
    - Already-done or in-progress tasks with existing worktrees are skipped automatically
 
 **Context isolation mechanism:**
 
 ```
 Parent agent session (clean)
-  → generates script
+  → detects runtime
+  → generates scripts/.aet-work-orchestrator.sh
   → Shell(run_in_background=true) to spawn script
-    → Script spawns Agent CLI process #1 (clean context)
+    → Script spawns Agent CLI process #1 (clean context, fresh process)
       → Task 1 completes, commits, exits
-    → Script spawns Agent CLI process #2 (clean context)
+    → Script spawns Agent CLI process #2 (clean context, fresh process)
       → Task 2 completes, commits, exits
   → TaskOutput(block=true) returns
   → Parent session remains clean
@@ -212,10 +145,9 @@ Remove worktrees for tasks that are merge-verified.
 ## Key Principles
 
 - **Queue-unaware pipeline** — aet-pipeline-implement knows nothing about the queue. aet-work checks results and updates the queue.
-- **Two isolation levels** — `run` uses cooperative context clearing (fastest when the agent supports it). `run-scripted` uses OS-process isolation (guaranteed on any runtime with a CLI). See `references/context-isolation.md` for the decision matrix.
-- **Context isolation via new sessions** — most agents support starting fresh; the queue file bridges sessions so no state is lost. When mid-session resets are unreliable, use `run-scripted` instead.
+- **OS-process isolation** — `run` generates a bash orchestrator that spawns a fresh OS process for every task. See `references/context-isolation.md` for details.
 - **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
-- **Queue file is the memory** — `.agents/work-queue.json` persists state across context resets by design.
+- **Queue file is the memory** — `.agents/work-queue.json` persists state across process boundaries by design.
 - **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.
 - **Fail fast, stop clean** — one failure halts the loop for human review; the failed branch is preserved.
 - **v3: parallel execution** — run independent tasks in simultaneous worktrees (future iteration).
