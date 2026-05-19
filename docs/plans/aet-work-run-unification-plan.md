@@ -76,5 +76,5 @@ Replace the broken cooperative `run` command and the `run-scripted` command with
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
+_Stage: merged_
+_Next step: none — pipeline complete_
