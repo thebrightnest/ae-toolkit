@@ -13,7 +13,7 @@
 # Copy this script, customize agent_invoke(), and run it directly:
 #   ./afk-loop-orchestrator.sh
 #
-# Or use aet-work run-scripted to generate a fully configured version.
+# Or use aet-work run to generate a fully configured version.
 # =============================================================================
 
 set -euo pipefail
