@@ -9,6 +9,7 @@ Link to the PRD and any relevant prior decisions.
 1. Task description — estimated size (S/M/L)
 2. Task description — estimated size (S/M/L)
 3. Task description — estimated size (S/M/L)
+4. Merge branch to main and verify integration — S
 
 ### Renderer / UI Tasks (if applicable)
 
@@ -25,6 +26,7 @@ Link to the PRD and any relevant prior decisions.
 - [ ] Lint passes
 - [ ] Tests pass
 - [ ] Manual verification step
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
