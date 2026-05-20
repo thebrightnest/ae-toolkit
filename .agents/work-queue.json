@@ -140,9 +140,50 @@
     "id": "queue-append-fix",
     "title": "Fix work-queue.json overwrite in aet-plan",
     "plan_file": "docs/plans/queue-append-fix-plan.md",
-    "status": "unblocked",
+    "status": "done",
     "blocks": [],
     "blocked_by": [],
-    "effort": "small"
+    "effort": "small",
+    "branch": "queue-append-fix"
+  },
+  {
+    "id": "ph-01",
+    "title": "Add merge-to-main step to plan template",
+    "plan_file": "docs/plans/ph-01-plan-template-merge-step.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": [],
+    "effort": "small",
+    "branch": "ph-01"
+  },
+  {
+    "id": "ph-02",
+    "title": "Add branch drift detection and timestamps to aet-work",
+    "plan_file": "docs/plans/ph-02-work-queue-drift-detection.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": [],
+    "effort": "medium",
+    "branch": "ph-02"
+  },
+  {
+    "id": "ph-03",
+    "title": "Add removal safety lens to aet-review",
+    "plan_file": "docs/plans/ph-03-aet-review-removal-safety.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": [],
+    "effort": "medium",
+    "branch": "ph-03"
+  },
+  {
+    "id": "ph-04",
+    "title": "Add orphaned API call check to aet-qa",
+    "plan_file": "docs/plans/ph-04-aet-qa-orphaned-api-check.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": [],
+    "effort": "medium",
+    "branch": "ph-04"
   }
 ]
