@@ -147,7 +147,6 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
 1. Run `git fetch origin`
 2. Verify: `git merge-base --is-ancestor HEAD origin/main`
 3. If the check fails:
-
    - **STOP** and print:
 
      ```
@@ -160,7 +159,6 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
    - Do not advance the stage
 
 4. If the check passes:
-
    - Print: `✓ Post-ship verification passed. Branch is on origin/main.`
    - Update the plan.md footer to:
 
