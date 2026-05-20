@@ -48,16 +48,21 @@ Run tiered automated validation.
    - Integration tests
    - Type checking
    - Linting
-3. If browser testing is available (Playwright configured):
+3. **Call completeness check** (if diff touches API, bridge, preload, or handler files):
+   - Grep renderer/client code for API call patterns using project conventions or heuristics (`*Api`, `*Bridge`, `invoke`, `fetch`, `rpc`, etc.)
+   - List all unique external calls found in new or modified renderer code
+   - Cross-reference each call with backend handlers, preload definitions, or API route files
+   - Flag any orphaned call (no backend match) as a QA failure
+4. If browser testing is available (Playwright configured):
    - Launch headless browser
    - Navigate through critical user flows
    - Fill forms, click buttons, verify state changes
    - Capture screenshots for visual regression
-4. For any bug found:
+5. For any bug found:
    - Fix the bug in source
    - Generate a regression test that would have caught it
    - Commit the fix and test atomically
-5. Produce a QA report:
+6. Produce a QA report:
    - Pass/fail status per tier
    - Bugs found and fixed
    - Regression tests added
