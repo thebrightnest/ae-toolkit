@@ -49,6 +49,7 @@ Staff-level diff review with multiple lenses.
    - **Error Handling** — are all error paths handled? Are failures observable?
    - **Completeness** — does the diff fulfill the plan? Any acceptance criteria missed?
    - **Tests** — are there tests for new behavior? Are edge cases covered?
+   - **Removal Safety** — if the diff deletes symbols from bridge, API, registry, preload, or handler files, extract the deleted names and grep the codebase for remaining references. Flag any matches.
 4. For each issue found: classify as fix-now or flag-for-human
 5. Auto-fix obvious issues (typos, style, missing imports)
 6. Produce a review report with: pass/fail status, issues found, auto-fixes applied, human flags
