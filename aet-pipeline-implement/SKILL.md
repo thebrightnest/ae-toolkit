@@ -147,6 +147,7 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
 1. Run `git fetch origin`
 2. Verify: `git merge-base --is-ancestor HEAD origin/main`
 3. If the check fails:
+
    - **STOP** and print:
 
      ```
@@ -159,6 +160,7 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
    - Do not advance the stage
 
 4. If the check passes:
+
    - Print: `✓ Post-ship verification passed. Branch is on origin/main.`
    - Update the plan.md footer to:
 
@@ -167,7 +169,7 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
      *Next step: none — pipeline complete*
      ```
 
-   - If `.agents/work-queue.json` exists, find the task matching the current branch and set `status` to `merge_verified`
+   - If `.agents/work-queue.json` exists, find the task matching the current branch and set `merge_verified: true`, `merged_at` to current ISO-8601 timestamp, and `completed_at` to current ISO-8601 timestamp if not already set
    - Print:
 
      ```
