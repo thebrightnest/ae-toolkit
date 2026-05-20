@@ -43,7 +43,7 @@ Read all `docs/plans/*.md` and produce `.agents/work-queue.json`.
 2. For each plan.md, extract: title, task ID (from filename or frontmatter), blocking relationships
 3. Build the DAG using `blocks` and `blocked_by` arrays
 4. Set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
-5. Set `merge_verified: false` and `merge_commit: null` on each entry
+5. Set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, and `merged_at: null` on each entry
 6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
 7. Write `.agents/work-queue.json`
 
@@ -123,6 +123,23 @@ Parent agent session (clean)
   → TaskOutput(block=true) returns
   → Parent session remains clean
 ```
+
+### `drift-check`
+
+Detect tasks marked `done` or `merged` whose commits are not on `origin/main`.
+
+**Procedure:**
+
+1. Read `.agents/work-queue.json`
+2. Run `git fetch origin`
+3. For each task with status `done` or `merged`:
+   a. If `merge_commit` is set and `git merge-base --is-ancestor <merge_commit> origin/main` passes, skip (verified)
+   b. If `branch` is set, run `git merge-base --is-ancestor <branch> origin/main`. If it fails, record as drifted
+   c. If neither `merge_commit` nor `branch` is available, record as unverifiable
+4. Report findings:
+   - Drifted tasks: print task ID, title, and branch name
+   - Unverifiable tasks: print task ID and note missing metadata
+   - If none: print `✅ No drift detected. All done/merged tasks are on origin/main.`
 
 ### `cleanup`
 
