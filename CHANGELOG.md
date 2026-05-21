@@ -4,6 +4,8 @@
 
 ### Changed
 
+- **aet-pipeline-plan**: Integrated `aet-validate-ui` as Step 3 in the planning pipeline. The pipeline now runs `aet-discover → aet-plan → aet-validate-ui → aet-validate-scope`. Added skip logic for no-UI features, a hard gate for blocking UI/UX findings, and `ui-validated` as a resumable stage.
+
 - **aet-work**: Unified `run` command with OS-process isolation. Removed the broken cooperative `run` loop and the `run-scripted` command. The new `run` generates a bash orchestrator that spawns fresh OS processes per task — the proven mechanism formerly known as `run-scripted`. Updated `references/context-isolation.md` to explain why cooperative clearing failed. Added ADR-004 documenting the decision.
 
 ### Added
