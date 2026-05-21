@@ -254,6 +254,8 @@
     "blocks": [],
     "blocked_by": [],
     "effort": "small",
-    "completed_at": "2026-05-21T09:48:13.613304+01:00"
+    "completed_at": "2026-05-21T09:48:13.613304+01:00",
+    "merge_verified": true,
+    "merged_at": "2026-05-21T10:32:57.457253+00:00"
   }
 ]
