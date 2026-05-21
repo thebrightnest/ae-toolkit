@@ -47,7 +47,17 @@ Parent agent session (clean)
 - Each task incurs CLI startup overhead (2–10s depending on runtime)
 - The parent session must remain open to wait for the background script
 
-## Runtime Capability Reference
+## Runtime Self-Detection
+
+`aet-work run` does not scan `PATH` or maintain a hard-coded priority list. The agent executing the skill **self-reports** its own CLI command and flags. This means:
+
+- Kimi Code running `aet-work run` generates a script that calls `kimi`
+- Claude Code running `aet-work run` generates a script that calls `claude`
+- A new agent CLI works immediately without any changes to the skill
+
+The skill asks the currently running agent: "What CLI command and flags should the orchestrator use to spawn a fresh process of you?" The agent answers based on its own identity.
+
+### Known Runtime Capabilities
 
 | Runtime             | Non-interactive CLI | `aet-work run` support |
 | ------------------- | ------------------- | ---------------------- |

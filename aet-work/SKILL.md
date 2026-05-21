@@ -76,28 +76,28 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
 
 **Procedure:**
 
-1. **Runtime detection:**
-   - Check `kimi` in `PATH` or `KIMI_CLI_VERSION` → `kimi`
-   - Check `claude` in `PATH` or `CLAUDE_CODE` → `claude`
-   - Check `AGENT_CLI` env var → user override
-   - If none matched: emit warning and ask user to set `AGENT_CLI`
+1. **Runtime self-identification:**
+
+   - You are the AI coding agent currently executing this skill. Determine the CLI
+     command that should be used to spawn a fresh process of yourself (e.g. `kimi`,
+     `claude`, `cursor`).
+   - Determine the flags your CLI accepts for: (a) passing a prompt/message,
+     (b) setting the working directory, and (c) any recommended non-interactive flags.
+   - Use these self-reported values for the template variables `CLI_BIN`, `CLI_ARGS`,
+     `CLI_PROMPT_FLAG`, and `CLI_WORKDIR_FLAG`.
 
 2. **Generate orchestrator script:**
+
    - Read `aet-work/references/orchestrator-template.sh` from this skill directory
    - Ensure the script includes merge verification: before each task, check
      `merge_verified` on all `blocked_by` entries. Warn if unverified, but continue.
-   - Substitute template variables based on detected CLI:
-
-     | CLI      | CLI_BIN      | CLI_ARGS (suggested) | CLI_PROMPT_FLAG | CLI_WORKDIR_FLAG |
-     | -------- | ------------ | -------------------- | --------------- | ---------------- |
-     | `kimi`   | `kimi`       | `--print` `--yolo`   | `-p`            | `--work-dir`     |
-     | `claude` | `claude`     | `--print`            | (empty)         | `--add-dir`      |
-     | custom   | `$AGENT_CLI` | (user-provided)      | (as needed)     | (as needed)      |
-
+   - Substitute template variables using the self-reported CLI configuration from
+     Step 1.
    - Write to `scripts/.aet-work-orchestrator.sh`
    - `chmod +x scripts/.aet-work-orchestrator.sh`
 
 3. **Spawn and wait:**
+
    - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
    - `TaskOutput(block=true)` to wait for completion
    - If the script fails: report which task failed and preserve the branch for inspection
@@ -110,7 +110,7 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
 
 ```
 Parent agent session (clean)
-  → detects runtime
+  → self-reports runtime
   → generates scripts/.aet-work-orchestrator.sh
   → Shell(run_in_background=true) to spawn script
     → Script spawns Agent CLI process #1 (clean context, fresh process)
