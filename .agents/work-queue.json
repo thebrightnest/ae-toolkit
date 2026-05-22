@@ -286,9 +286,10 @@
     "id": "abr-03",
     "title": "Validate and package",
     "plan_file": "docs/plans/abr-03-validate-package.md",
-    "status": "unblocked",
+    "status": "done",
     "blocks": [],
     "blocked_by": [],
-    "effort": "small"
+    "effort": "small",
+    "completed_at": "2026-05-22T09:06:14.496909+00:00"
   }
 ]
