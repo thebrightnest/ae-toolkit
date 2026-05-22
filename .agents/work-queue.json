@@ -266,24 +266,27 @@
     "blocks": ["abr-02"],
     "blocked_by": [],
     "effort": "small",
-    "completed_at": "2026-05-21T22:09:47.489310+00:00"
+    "completed_at": "2026-05-21T22:09:47.489310+00:00",
+    "merge_verified": true,
+    "merged_at": "2026-05-22T08:44:03.569549+00:00"
   },
   {
     "id": "abr-02",
     "title": "Write references and examples",
     "plan_file": "docs/plans/abr-02-references-examples.md",
-    "status": "blocked",
+    "status": "done",
     "blocks": ["abr-03"],
     "blocked_by": ["abr-01"],
-    "effort": "medium"
+    "effort": "medium",
+    "completed_at": "2026-05-22T08:50:15.639417+00:00"
   },
   {
     "id": "abr-03",
     "title": "Validate and package",
     "plan_file": "docs/plans/abr-03-validate-package.md",
-    "status": "blocked",
+    "status": "unblocked",
     "blocks": [],
-    "blocked_by": ["abr-02"],
+    "blocked_by": [],
     "effort": "small"
   }
 ]
