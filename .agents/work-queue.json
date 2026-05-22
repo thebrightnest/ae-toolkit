@@ -290,6 +290,8 @@
     "blocks": [],
     "blocked_by": [],
     "effort": "small",
-    "completed_at": "2026-05-22T09:06:14.496909+00:00"
+    "completed_at": "2026-05-22T09:06:14.496909+00:00",
+    "merge_verified": true,
+    "merged_at": "2026-05-22T09:08:10.335184+00:00"
   }
 ]
