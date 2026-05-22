@@ -278,7 +278,9 @@
     "blocks": ["abr-03"],
     "blocked_by": ["abr-01"],
     "effort": "medium",
-    "completed_at": "2026-05-22T08:50:15.639417+00:00"
+    "completed_at": "2026-05-22T08:50:15.639417+00:00",
+    "merge_verified": true,
+    "merged_at": "2026-05-22T08:51:59.676637+00:00"
   },
   {
     "id": "abr-03",
