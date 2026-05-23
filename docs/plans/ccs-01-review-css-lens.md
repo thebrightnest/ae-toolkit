@@ -10,6 +10,7 @@ prevents undefined CSS classes from reaching `main`.
 ## Tasks
 
 1. **Update `aet-review/SKILL.md`** — Add the UI/CSS Completeness lens (M)
+
    - Insert after the existing "Tests" lens in the `review` command procedure
    - Document the mechanical procedure: extract `className` values from
      new/modified renderer components, filter known global classes, verify each
@@ -20,6 +21,7 @@ prevents undefined CSS classes from reaching `main`.
 
 2. **Create `aet-review/references/css-completeness-check.md`** — Reference doc
    with the detailed procedure (S)
+
    - Step-by-step shell commands for extracting classNames
    - Example filter list of known global classes
    - Guidance on adapting to different CSS flavors (CSS modules, SCSS, Less)
