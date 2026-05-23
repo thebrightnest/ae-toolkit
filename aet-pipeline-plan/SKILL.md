@@ -143,13 +143,19 @@ If the user's request contains implementation directives (e.g., "make", "change"
 3. Update CONTEXT.md and propose ADRs as needed
 4. Update plan footers to `scope-validated` / `plan-approved`
 
+**Step 5 — aet-work sync:**
+
+1. Run `aet-work sync` to incrementally add the newly created `docs/plans/*.md` files to `.agents/work-queue.json`
+2. Preserve all existing queue entries and their statuses
+3. If drift or orphaned entries are surfaced, resolve them before declaring the pipeline complete
+
 **Output:**
 
 - `docs/product-briefs/{name}-brief.md` — stage: `brief-validated`
 - `docs/prds/{feature}-prd.md` — stage: `scope-validated`
 - `docs/ui-reports/{feature}-ui-report.md` — gap report (if UI validation ran)
 - `docs/plans/*.md` — stage: `plan-approved`
-- `.agents/work-queue.json` — ready for `aet-work`
+- `.agents/work-queue.json` — synced via `aet-work sync`, ready for `aet-work`
 
 ## Completion Protocol
 

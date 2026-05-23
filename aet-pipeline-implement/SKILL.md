@@ -73,6 +73,15 @@ Branch ready for aet-ship
 
 **Procedure:**
 
+**Step 0 — Approval checkpoint:**
+
+Before starting the pipeline, confirm the implementation scope with the user:
+
+1. List every file you intend to modify or create
+2. State the approximate magnitude: "~N files, ~M lines changed"
+3. Ask: _"This will modify the files listed above. Approve to proceed?"_
+4. **Hard gate:** Do not begin the pipeline until the user explicitly confirms
+
 **Step 1 — aet-tdd:**
 
 1. Follow the `aet-tdd` → `plan-tests`, `tracer`, `cycle`, `refactor` command procedures
@@ -147,6 +156,7 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
 1. Run `git fetch origin`
 2. Verify: `git merge-base --is-ancestor HEAD origin/main`
 3. If the check fails:
+
    - **STOP** and print:
 
      ```
@@ -159,6 +169,7 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
    - Do not advance the stage
 
 4. If the check passes:
+
    - Print: `✓ Post-ship verification passed. Branch is on origin/main.`
    - Update the plan.md footer to:
 
