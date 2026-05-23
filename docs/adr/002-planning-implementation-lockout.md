@@ -17,6 +17,7 @@ Introduce an **Implementation Lockout** pattern across all planning skills. The 
 1. **Declarative lockout banner** — The first output of any planning skill must be a visible "Planning Mode Active / No code changes" banner. This acts as a self-anchor for the model.
 
 2. **Explicit negative constraints** — Each planning skill now contains a "What This Skill Does NOT Do" (or "Planning Lockout") section that forbids:
+
    - Creating, editing, or deleting application source files
    - Running application tests, linting, or type-checking
    - Creating branches or commits for implementation work
