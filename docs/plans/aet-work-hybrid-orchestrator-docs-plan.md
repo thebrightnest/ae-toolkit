@@ -10,23 +10,27 @@ This plan covers the honest documentation updates, skill instruction changes, an
 ## Tasks
 
 1. **Update `aet-work/SKILL.md`** — M
+
    - Add `run-scripted` command with full procedure
    - Update the existing `run` command steps 6 and 14 to acknowledge the context-clearing limitation
    - Update key principles to reference the hybrid pattern
    - Add cross-reference to `references/afk-loop-orchestrator.sh`
 
 2. **Rewrite `references/context-isolation.md`** — S
+
    - Remove false claim that "the agent follows this instruction"
    - Add runtime capability table (Claude, Kimi, Cursor, etc.)
    - Document cooperative vs. guaranteed isolation
    - Reference the new orchestrator script
 
 3. **Create `references/afk-loop-orchestrator.sh`** — M
+
    - Standalone reference script demonstrating the ralph-loop pattern
    - Heavily commented, with `agent_invoke()` stub for adaptation
    - Uses `python3` for JSON, `git worktree` for isolation
 
 4. **Run quality gates** — S
+
    - `make lint`
    - `make format-check`
    - `make validate` (skill structure checks)

@@ -54,6 +54,7 @@ On 2026-05-19, five feature branches were created as part of the `p3-remaining-c
 1. **Detected** (2026-05-19 afternoon): Running `git branch -a` showed `P3-REM-1..5` as unmerged. Renderer on `main` still had `window.claudeApi` calls in the affected domains.
 
 2. **Merged individually** (commit `5a1f7e9`):
+
    - Merged P3-REM-1 → temp integration branch
    - Merged P3-REM-2 → resolved `nativeBridge.ts` conflicts (both removed `getProjectImages`)
    - Merged P3-REM-3 → resolved `index.ts` conflicts (handler registration)
@@ -62,6 +63,7 @@ On 2026-05-19, five feature branches were created as part of the `p3-remaining-c
    - Fast-forwarded `main` to the integration result
 
 3. **Fixed broken no-backend calls** (commit `6b79a12`):
+
    - `registryGet` → `projectsApi.registryGet`
    - `getTrackedSessionBySessionId` → `sessionsApi.getTrackedBySessionId`
    - `listKnowledgeFiles` → `knowledgeApi.list`
@@ -69,6 +71,7 @@ On 2026-05-19, five feature branches were created as part of the `p3-remaining-c
    - `upsertProjectConfig` → `projectsApi.updateProjectConfig`
 
 4. **Restored dropped preload method** (commit `5b9a689`):
+
    - P3-REM-5 had removed `selectSavePath` during cleanup, but `FlowsExportTab.tsx` still needed it for the native save dialog. Restored to `nativeBridge.dialog`.
 
 5. **Deleted legacy artifacts**:
