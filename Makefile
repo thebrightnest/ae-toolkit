@@ -63,11 +63,11 @@ lint: ## Run markdownlint on all markdown files
 	@echo "✓ Lint passed"
 
 format: ## Format all markdown files with prettier
-	@npx prettier --write "**/*.md"
+	@npx prettier@3.1.0 --write "**/*.md"
 	@echo "✓ Format complete"
 
 format-check: ## Check markdown formatting (CI mode)
-	@npx prettier --check "**/*.md"
+	@npx prettier@3.1.0 --check "**/*.md"
 	@echo "✓ Format check passed"
 
 validate: ## Run all quality checks (lint + format-check + skill-structure)
