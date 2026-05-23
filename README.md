@@ -18,6 +18,7 @@ Each skill feeds into the next. `/aet-discover` validates demand before any plan
 - **Test-first development** — `aet-tdd` guides red-green-refactor with vertical tracer bullets and integration-style tests that survive refactors
 - **Fresh-session implementation** — plans and code never share a context window; bias can't leak
 - **Night-shift productivity** — `aet-work run` grinds through your task queue while you sleep, clearing context between each ticket so quality doesn't degrade
+- **One-command full flows** — `aet-pipeline-plan` runs the entire planning sequence; `aet-pipeline-implement` runs the full implementation sequence without manual skill switching
 - **Compounding quality** — every bug updates a rule, template, or guardrail in `.agents/`. The system gets smarter across sessions, not just within them.
 - **Agent-agnostic** — works with Claude Code, Kimi, Cursor, Codex, Copilot, or paste-into-chat. Your workflow is portable.
 
@@ -72,6 +73,8 @@ cp -r aet-setup ~/.claude/skills/
 | **Cursor**                    | Natural language or rules | "Set up this project with aet-setup"  |
 | **Codex / Copilot / Generic** | Paste into prompt         | Copy `SKILL.md` content into the chat |
 
+Pipelines work the same way — just invoke `aet-pipeline-plan` or `aet-pipeline-implement` instead of an individual skill.
+
 All skills follow the same markdown-based format. The agent reads the YAML frontmatter (`name`, `description`) to decide when to trigger, then loads the full instructions on demand.
 
 ---
@@ -100,8 +103,19 @@ npx skills add getatelier/ae-toolkit.git@<skill-name>
 | [aet-review](./aet-review)                                 | Staff-level code review with multi-lens checks and cross-model adversarial challenge.                                                                                                     |
 | [aet-cso](./aet-cso)                                       | Diff-focused security audit: secrets, injection risks, auth bypass, CVEs, LLM trust boundaries.                                                                                           |
 | [aet-qa](./aet-qa)                                         | Automated QA with tiered validation (Quick/Standard/Exhaustive) and regression test generation.                                                                                           |
+| [aet-bug-report](./aet-bug-report)                         | Structured bug investigation and fixing. Reproduce, diagnose, fix, and validate without the overhead of full PRD planning.                                                                |
 | [aet-ship](./aet-ship)                                     | Pre-merge validation gate with bisectable commits, changelog generation, and PR creation.                                                                                                 |
+| [aet-sync-docs](./aet-sync-docs)                           | Sync PRD and plan.md to reflect what was actually built. Appends a divergence summary when implementation drifts from the plan.                                                           |
 | [aet-work](./aet-work)                                     | Work queue management and AFK task orchestration. Enables sequential "night shift" loops across multiple plan.md files.                                                                   |
+
+### Pipelines
+
+These skills chain multiple individual skills into complete end-to-end flows:
+
+| Skill                                              | Description                                                                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [aet-pipeline-plan](./aet-pipeline-plan)           | End-to-end planning pipeline. Runs discover → plan → validate-ui → validate-scope with hard human gates.            |
+| [aet-pipeline-implement](./aet-pipeline-implement) | End-to-end implementation pipeline. Runs tdd → implement → qa → review → cso → sync-docs, resumable from any stage. |
 
 ---
 

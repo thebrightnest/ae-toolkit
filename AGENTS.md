@@ -81,6 +81,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 - Always produce a PRD before writing code for any feature >1 day of work
 - Always review the plan.md before implementation; never skip human validation
+- **Design-to-implementation hard gate** — Free-form design conversations are not implementation approval. After the user approves a design proposal ("yes", "sounds good", "go ahead", or similar), STOP and confirm scope before writing files: _"This will modify [N files]: [list]. Approve to proceed?"_ Do not begin editing until the user explicitly confirms.
 - Always run self-validation (`make validate`) before declaring a task complete
 - Always update `.agents/learnings.jsonl` after a bug or misalignment
 - Never plan and implement in the same session; clear context between phases

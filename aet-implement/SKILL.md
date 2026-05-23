@@ -38,6 +38,13 @@ Execute a plan.md from start to finish with self-validation.
 
 **Procedure:**
 
+0. **Approval checkpoint:** Before writing any code, confirm the implementation scope with the user:
+
+   - List every file you intend to modify or create
+   - State the approximate magnitude: "~N files, ~M lines changed"
+   - Ask: _"This will modify the files listed above. Approve to proceed?"_
+   - **Hard gate:** Do not begin editing until the user explicitly confirms
+
 1. Read the plan.md file specified by the user
 2. Create a feature branch if not already on one
 3. Execute tasks in the order specified in the plan

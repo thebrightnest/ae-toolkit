@@ -35,17 +35,43 @@ If a stage is found, print at the start of execution: `"📍 Current stage: {sta
 
 ### `init-queue`
 
-Read all `docs/plans/*.md` and produce `.agents/work-queue.json`.
+Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
 
 **Procedure:**
 
 1. Scan `docs/plans/` for all `*.md` files
-2. For each plan.md, extract: title, task ID (from filename or frontmatter), blocking relationships
-3. Build the DAG using `blocks` and `blocked_by` arrays
-4. Set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
-5. Set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, and `merged_at: null` on each entry
+2. If `.agents/work-queue.json` exists, load it as `existing_queue`
+3. For each plan.md, extract: title, task ID (from filename or frontmatter), blocking relationships
+4. Build the DAG using `blocks` and `blocked_by` arrays
+5. For each plan:
+   - If its `plan_file` already exists in `existing_queue`, preserve its `status`, `merge_verified`, `merge_commit`, `completed_at`, `merged_at`, and `branch`
+   - If new, set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise; set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`
 6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
-7. Write `.agents/work-queue.json`
+7. Set `queue_updated_at` to the current ISO-8601 timestamp
+8. Write `.agents/work-queue.json`
+9. Report: `N existing tasks preserved, M new tasks added`
+
+### `sync`
+
+Incrementally sync `docs/plans/*.md` into the existing work queue without losing statuses.
+
+**Procedure:**
+
+1. Read `.agents/work-queue.json` if it exists; otherwise treat as empty array
+2. Scan `docs/plans/` for all `*.md` files
+3. For each plan whose `plan_file` is not already in the queue:
+   - Extract title, task ID, blocking relationships
+   - Determine `blocked_by` and `blocks` from the DAG
+   - Set status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
+   - Set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`
+   - Append to queue array
+4. For any queue entry whose `plan_file` no longer exists on disk:
+   - Set `status: "orphaned"` and print a warning
+5. Update `queue_updated_at` to current ISO-8601 timestamp
+6. Write `.agents/work-queue.json`
+7. Report: `N new tasks added, M existing tasks preserved, K orphaned tasks flagged`
+
+**When to use:** After any session that creates or modifies plan files (e.g., after `aet-plan` or `aet-pipeline-plan`). This is the standard maintenance command; `init-queue` is for first-time setup.
 
 ### `status`
 
@@ -53,10 +79,15 @@ Show the current state of the work queue.
 
 **Procedure:**
 
-1. Read `.agents/work-queue.json`
-2. Report counts: unblocked, blocked, in-progress, done, failed
-3. List the next 3 unblocked tasks (topological order)
-4. List any failed tasks (require human attention)
+1. Run the `plan-drift` check (see below). If drift is detected:
+   - Print `⚠️ Plan drift detected: N plan file(s) not in queue`
+   - List the orphaned plan filenames
+   - Print `Run init-queue to sync, or acknowledge each plan manually.`
+   - **Do not report "all clear" even if all tracked tasks are done**
+2. Read `.agents/work-queue.json`
+3. Report counts: unblocked, blocked, in-progress, done, failed
+4. List the next 3 unblocked tasks (topological order)
+5. List any failed tasks (require human attention)
 
 ### `next`
 
@@ -64,11 +95,12 @@ Identify and output the next unblocked task.
 
 **Procedure:**
 
-1. Read `.agents/work-queue.json`
-2. Find tasks with `status: "unblocked"`
-3. Pick the first in topological order (respecting the DAG)
-4. Output: task ID, title, plan_file path
-5. Update status to `in-progress` in the queue file
+1. Run the `plan-drift` check. If drift is detected, refuse to pick a task and instruct the user to run `init-queue` first
+2. Read `.agents/work-queue.json`
+3. Find tasks with `status: "unblocked"`
+4. Pick the first in topological order (respecting the DAG)
+5. Output: task ID, title, plan_file path
+6. Update status to `in-progress` in the queue file
 
 ### `run`
 
@@ -76,7 +108,9 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
 
 **Procedure:**
 
-1. **Runtime self-identification:**
+1. **Plan-drift guard:** Run the `plan-drift` check. If drift is detected, refuse to start the AFK loop and instruct the user to run `init-queue` first
+
+2. **Runtime self-identification:**
 
    - You are the AI coding agent currently executing this skill. Determine the CLI
      command that should be used to spawn a fresh process of yourself (e.g. `kimi`,
@@ -86,23 +120,23 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
    - Use these self-reported values for the template variables `CLI_BIN`, `CLI_ARGS`,
      `CLI_PROMPT_FLAG`, and `CLI_WORKDIR_FLAG`.
 
-2. **Generate orchestrator script:**
+3. **Generate orchestrator script:**
 
    - Read `aet-work/references/orchestrator-template.sh` from this skill directory
    - Ensure the script includes merge verification: before each task, check
      `merge_verified` on all `blocked_by` entries. Warn if unverified, but continue.
    - Substitute template variables using the self-reported CLI configuration from
-     Step 1.
+     Step 2.
    - Write to `scripts/.aet-work-orchestrator.sh`
    - `chmod +x scripts/.aet-work-orchestrator.sh`
 
-3. **Spawn and wait:**
+4. **Spawn and wait:**
 
    - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
    - `TaskOutput(block=true)` to wait for completion
    - If the script fails: report which task failed and preserve the branch for inspection
 
-4. **Resume behavior:**
+5. **Resume behavior:**
    - Re-running `run` regenerates the script and resumes from the current queue state
    - Already-done or in-progress tasks with existing worktrees are skipped automatically
 
@@ -120,6 +154,21 @@ Parent agent session (clean)
   → TaskOutput(block=true) returns
   → Parent session remains clean
 ```
+
+### `plan-drift`
+
+Detect plan files that exist on disk but are not represented in the work queue.
+
+**Procedure:**
+
+1. Read `.agents/work-queue.json` and collect all `plan_file` paths
+2. List all `docs/plans/*.md` files
+3. Identify any plan files whose path is not found in the queue's `plan_file` set
+4. Compare the most recent modification time of any `docs/plans/*.md` against the `queue_updated_at` field (or the queue file's mtime as fallback)
+5. Report findings:
+   - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Run init-queue to sync.`
+   - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last init-queue). Run init-queue to sync.`
+   - If none: print `✅ No plan drift detected. All plans are tracked in the queue.`
 
 ### `drift-check`
 

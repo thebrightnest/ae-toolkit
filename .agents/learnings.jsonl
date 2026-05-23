@@ -21,3 +21,19 @@
     "prevents": "Stacked PRs silently merged against a stale base after the parent branch lands in main."
   }
 ]
+,
+  {
+    "date": "2026-05-23",
+    "problem": "aet-work queue drift: new plan files added to docs/plans/ were invisible to the queue because status/next/run never compared the queue against disk. 7 orphaned plans created a false all-clear signal.",
+    "layer": "aet-work/SKILL.md",
+    "fix": "Added plan-drift command to detect orphaned plans and stale queues. Updated init-queue to merge instead of overwrite. Made status/next/run refuse to proceed when drift is detected.",
+    "prevents": "Untracked follow-up plans, recovery work, or cleanup tasks being silently ignored because the queue reports 100% completion."
+  }
+,
+  {
+    "date": "2026-05-23",
+    "problem": "Agent interpreted user's 'yes' to a planning question as carte blanche to implement 3 skill file changes immediately. No plan.md was written. No explicit scope confirmation was sought.",
+    "layer": "AGENTS.md + .agents/commands/approval-checkpoint.md",
+    "fix": "Added 'Design-to-implementation hard gate' to AGENTS.md Agentic Workflow Guardrails. Created .agents/commands/approval-checkpoint.md as a reusable procedure requiring explicit file enumeration and approval before any implementation.",
+    "prevents": "Implied approval escalation where free-form design conversations ('yes', 'sounds good') are treated as implementation approval."
+  }
