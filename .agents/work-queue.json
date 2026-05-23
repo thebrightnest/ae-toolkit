@@ -302,5 +302,17 @@
     "blocks": [],
     "blocked_by": [],
     "effort": "small"
+  },
+  {
+    "id": "pipeline-plan-optional-ui",
+    "title": "Make UI validation optional in aet-pipeline-plan",
+    "plan_file": "docs/plans/pipeline-plan-optional-ui-plan.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": [],
+    "effort": "small",
+    "merge_verified": true,
+    "merged_at": "2026-05-23T15:09:39.652485",
+    "completed_at": "2026-05-23T15:09:39.652485"
   }
 ]
