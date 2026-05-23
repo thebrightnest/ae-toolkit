@@ -314,5 +314,107 @@
     "merge_verified": true,
     "merged_at": "2026-05-23T15:09:39.652485",
     "completed_at": "2026-05-23T15:09:39.652485"
+  },
+  {
+    "id": "ts-01-aet-plan-guardrail",
+    "title": "Add Task Size Guardrail to aet-plan",
+    "plan_file": "docs/plans/ts-01-aet-plan-guardrail.md",
+    "status": "unblocked",
+    "blocks": [
+      "ts-02-aet-pipeline-plan-guardrail",
+      "ts-03-aet-work-queue-validation",
+      "ts-04-aet-implement-runtime-enforcement",
+      "ts-05-conventions-docs",
+      "ts-06-package-validate"
+    ],
+    "blocked_by": [],
+    "effort": "small",
+    "merge_verified": false,
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null
+  },
+  {
+    "id": "ts-02-aet-pipeline-plan-guardrail",
+    "title": "Add Task Size Guardrail Reference to aet-pipeline-plan",
+    "plan_file": "docs/plans/ts-02-aet-pipeline-plan-guardrail.md",
+    "status": "blocked",
+    "blocks": ["ts-06-package-validate"],
+    "blocked_by": ["ts-01-aet-plan-guardrail"],
+    "effort": "small",
+    "merge_verified": false,
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null
+  },
+  {
+    "id": "ts-03-aet-work-queue-validation",
+    "title": "Add Queue Size Validation to aet-work",
+    "plan_file": "docs/plans/ts-03-aet-work-queue-validation.md",
+    "status": "blocked",
+    "blocks": ["ts-06-package-validate"],
+    "blocked_by": ["ts-01-aet-plan-guardrail"],
+    "effort": "small",
+    "merge_verified": false,
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null
+  },
+  {
+    "id": "ts-04-aet-implement-runtime-enforcement",
+    "title": "Add Runtime Size Enforcement to aet-implement",
+    "plan_file": "docs/plans/ts-04-aet-implement-runtime-enforcement.md",
+    "status": "blocked",
+    "blocks": ["ts-06-package-validate"],
+    "blocked_by": ["ts-01-aet-plan-guardrail"],
+    "effort": "small",
+    "merge_verified": false,
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null
+  },
+  {
+    "id": "ts-05-conventions-docs",
+    "title": "Document Task Size Conventions",
+    "plan_file": "docs/plans/ts-05-conventions-docs.md",
+    "status": "blocked",
+    "blocks": ["ts-06-package-validate"],
+    "blocked_by": ["ts-01-aet-plan-guardrail"],
+    "effort": "small",
+    "merge_verified": false,
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null
+  },
+  {
+    "id": "ts-06-package-validate",
+    "title": "Package and Validate All Updated Skills",
+    "plan_file": "docs/plans/ts-06-package-validate.md",
+    "status": "blocked",
+    "blocks": [],
+    "blocked_by": [
+      "ts-01-aet-plan-guardrail",
+      "ts-02-aet-pipeline-plan-guardrail",
+      "ts-03-aet-work-queue-validation",
+      "ts-04-aet-implement-runtime-enforcement",
+      "ts-05-conventions-docs"
+    ],
+    "effort": "small",
+    "merge_verified": false,
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null
+  },
+  {
+    "id": "pipeline-plan-remove-discover",
+    "title": "Remove aet-discover from aet-pipeline-plan",
+    "plan_file": "docs/plans/pipeline-plan-remove-discover-plan.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": [],
+    "effort": "small",
+    "merge_verified": true,
+    "merged_at": "2026-05-23T15:04:18.073191+00:00",
+    "completed_at": "2026-05-23T15:04:18.073191+00:00"
   }
 ]
