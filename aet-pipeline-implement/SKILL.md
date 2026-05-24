@@ -75,12 +75,13 @@ Branch ready for aet-ship
 
 **Step 0 — Approval checkpoint:**
 
-Before starting the pipeline, confirm the implementation scope with the user:
+Before starting the pipeline, confirm the implementation scope:
 
 1. List every file you intend to modify or create
 2. State the approximate magnitude: "~N files, ~M lines changed"
-3. Ask: _"This will modify the files listed above. Approve to proceed?"_
-4. **Hard gate:** Do not begin the pipeline until the user explicitly confirms
+3. Check for unattended execution (environment variable `AET_EXECUTION_MODE`):
+   - If `AET_EXECUTION_MODE=unattended`: print `🤖 Unattended mode (AET_EXECUTION_MODE=unattended) — skipping interactive approval. Proceeding with: ~N files, ~M lines changed.` and continue directly to Step 1
+   - Otherwise: ask _"This will modify the files listed above. Approve to proceed?"_ and **hard gate** — do not begin the pipeline until the user explicitly confirms
 
 **Step 1 — aet-tdd:**
 
