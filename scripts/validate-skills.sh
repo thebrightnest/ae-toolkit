@@ -60,6 +60,14 @@ for skill_dir in "${SKILL_DIRS[@]}"; do
     echo "⚠️  $name: SKILL.md has $line_count lines (recommended max 400; refactor into references/ when editing)"
     ((WARNINGS++)) || true
   fi
+
+  # 5. Execution-mode handling: skills with interactive approval gates must mention AET_EXECUTION_MODE
+  if grep -q 'Approve to proceed?' "$skill_file"; then
+    if ! grep -q 'AET_EXECUTION_MODE' "$skill_file"; then
+      echo "❌ $name: contains interactive approval gate ('Approve to proceed?') but does not mention AET_EXECUTION_MODE"
+      ((ERRORS++)) || true
+    fi
+  fi
 done
 
 echo

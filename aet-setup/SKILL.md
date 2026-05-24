@@ -384,7 +384,7 @@ Every `AGENTS.md` must include a section like this, adapted to the project:
 
 - Always produce a PRD before writing code for any feature >1 day of work
 - Always review the plan.md before implementation; never skip human validation
-- **Design-to-implementation hard gate** — After the user approves a design proposal ("yes", "sounds good", "go ahead", or similar), STOP and confirm scope before writing files: _"This will modify [N files]: [list]. Approve to proceed?"_ Do not begin editing until the user explicitly confirms.
+- **Design-to-implementation hard gate** — After the user approves a design proposal ("yes", "sounds good", "go ahead", or similar), STOP and confirm scope before writing files: _"This will modify [N files]: [list]. Approve to proceed?"_ Do not begin editing until the user explicitly confirms. In unattended mode (`AET_EXECUTION_MODE=unattended`), log the bypass and proceed.
 - Always run self-validation (lint, type-check, tests) before declaring a task complete
 - Always update `.agents/learnings.jsonl` after a bug or misalignment
 - Never plan and implement in the same session; clear context between phases

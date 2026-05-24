@@ -54,6 +54,38 @@ Use numbered steps for procedural skills:
 
 Use bullet lists for rules and constraints.
 
+## Execution Mode in Skills
+
+If your skill contains an interactive approval gate ("Approve to proceed?", "Hard gate", or similar), you must handle both interactive and unattended execution contexts.
+
+### Contract
+
+```
+AET_EXECUTION_MODE
+  - unset or "interactive"  → Default. Hard gates enforced.
+  - "unattended"            → Orchestrator/background mode. Gates bypassed with logging.
+```
+
+### Implementation Pattern
+
+At every approval checkpoint:
+
+1. Check the environment variable.
+2. If `unattended`: list the scope, print the bypass log, and continue.
+3. If interactive (or unset): present the gate as normal.
+
+**Exact bypass log wording:**
+
+```
+🤖 Unattended mode (AET_EXECUTION_MODE=unattended) — skipping interactive approval. Proceeding with: ~N files, ~M lines changed.
+```
+
+**Gates that must still stop in unattended mode:**
+
+- ATOMIC OVERSIZED scope override
+- Critical/High security findings
+- Merge verification failures
+
 ## Quality Checklist Before Publishing
 
 - [ ] `description` explicitly states trigger conditions
@@ -63,3 +95,4 @@ Use bullet lists for rules and constraints.
 - [ ] Examples are realistic, not toy cases
 - [ ] No agent-specific syntax unless unavoidable
 - [ ] All external links are valid
+- [ ] If the skill has approval gates, `AET_EXECUTION_MODE` is handled

@@ -100,6 +100,42 @@ When a task exceeds limits:
 3. **Max split depth = 3.** If a child still fails, mark it `⚠️ ATOMIC OVERSIZED` and surface for explicit user approval.
 4. Document splits with `Split from: {parent-id}` and suffix IDs (`01a`, `01b`).
 
+## Execution Mode
+
+Skills with interactive approval gates must respect the execution-mode contract so they work correctly in both interactive sessions and unattended orchestration.
+
+### Contract
+
+```
+Environment variable: AET_EXECUTION_MODE
+  - unset or "interactive"  → Default. Hard gates enforced.
+  - "unattended"            → Orchestrator/background mode. Gates bypassed with logging.
+```
+
+### Gate Bypass Protocol (Unattended Mode)
+
+When `AET_EXECUTION_MODE=unattended` is detected at an approval checkpoint:
+
+1. **List scope.** Still enumerate intended files and magnitude (audit trail).
+2. **Log bypass.** Print exactly: `🤖 Unattended mode (AET_EXECUTION_MODE=unattended) — skipping interactive approval. Proceeding with: ~N files, ~M lines changed.`
+3. **Continue.** Proceed to the next step; do not ask the user.
+
+### Gates That Must Still Stop in Unattended Mode
+
+Not all gates are bypassed. The following categories **must** halt execution even in unattended mode:
+
+- **ATOMIC OVERSIZED tasks** — No human available to approve scope override. Hard stop with non-zero exit code.
+- **Critical security findings** (`aet-cso` Critical/High) — Unattended mode must not auto-approve security risks.
+- **Merge verification failures** (`aet-ship`, `post-ship-verify`) — Mechanical check; failure is a hard stop.
+
+### Author Checklist
+
+When adding a new approval gate to a skill:
+
+- [ ] Gate checks `AET_EXECUTION_MODE` before prompting
+- [ ] Unattended path logs the bypass with the exact emoji + wording above
+- [ ] Gate is categorized as "bypassable" or "hard stop even in unattended mode"
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. The `.skill` package is a snapshot. No separate version field in frontmatter.
