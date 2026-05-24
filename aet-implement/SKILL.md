@@ -41,14 +41,23 @@ Execute a plan.md from start to finish with self-validation.
 0. **Pre-flight size check:** Before the approval checkpoint, read the target `plan.md` and scan its task list. If any task contains `⚠️ ATOMIC OVERSIZED`:
 
    - **Refuse to start.** Print the oversized task(s).
-   - Ask for explicit user confirmation (`--force` or interactive approval) to proceed despite the warning.
+   - If `AET_EXECUTION_MODE=unattended` (check via `env` or equivalent): **hard stop.** Print `⛔ Unattended mode cannot override ATOMIC OVERSIZED. Replan with smaller tasks.` and exit with a non-zero status so the orchestrator marks this task as failed.
+   - Otherwise (interactive session): ask for explicit user confirmation (`--force` or interactive approval) to proceed despite the warning.
    - If confirmed, log the override to `.agents/learnings.jsonl` and continue.
    - If not confirmed, stop and instruct the user to replan with smaller tasks.
 
-1. **Approval checkpoint:** Before writing any code, confirm the implementation scope with the user:
+1. **Approval checkpoint:** Before writing any code, confirm the implementation scope:
 
    - List every file you intend to modify or create
    - State the approximate magnitude: "~N files, ~M lines changed"
+
+   If `AET_EXECUTION_MODE=unattended` (check via `env` or equivalent):
+
+   - Print: `🤖 Unattended mode (AET_EXECUTION_MODE=unattended) — skipping interactive approval. Proceeding with: ~N files, ~M lines changed.`
+   - Continue directly to step 2
+
+   Otherwise (interactive session):
+
    - Ask: _"This will modify the files listed above. Approve to proceed?"_
    - **Hard gate:** Do not begin editing until the user explicitly confirms
 

@@ -119,7 +119,10 @@ run_task() {
 
   echo "   Invoking: ${cmd[*]}"
   cd "$worktree_dir"
-  "${cmd[@]}"
+  # Signal to skills that they are running unattended under the orchestrator.
+  # Skills with interactive approval gates (aet-implement, aet-pipeline-implement)
+  # must detect this and skip hard gates that require human input.
+  AET_EXECUTION_MODE=unattended "${cmd[@]}"
 }
 
 # ---------------------------------------------------------------------------

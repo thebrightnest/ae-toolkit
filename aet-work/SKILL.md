@@ -156,6 +156,8 @@ Parent agent session (clean)
   → Parent session remains clean
 ```
 
+**Unattended mode:** The generated script sets `AET_EXECUTION_MODE=unattended` in the environment of every spawned subagent. Skills that have interactive approval gates (e.g., `aet-implement`, `aet-pipeline-implement`) detect this variable and skip gates that require human input, logging the bypass for auditability. See `references/context-isolation.md` for details.
+
 ### `plan-drift`
 
 Detect plan files that exist on disk but are not represented in the work queue.
