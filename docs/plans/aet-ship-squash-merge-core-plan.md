@@ -84,5 +84,5 @@ Revert `aet-ship/SKILL.md` and delete the new `references/` and `examples/` file
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: synced_
+_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
