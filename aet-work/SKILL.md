@@ -62,6 +62,7 @@ Incrementally sync `docs/plans/*.md` into the existing work queue without losing
 3. For each plan whose `plan_file` is not already in the queue:
    - Extract title, task ID, blocking relationships
    - Determine `blocked_by` and `blocks` from the DAG
+   - **Validate task sizes:** Scan the plan's task list. If any task exceeds the AI-complexity limit (> 8 files OR > 300 diff lines), refuse to add the plan and emit a split suggestion. If the plan contains `⚠️ ATOMIC OVERSIZED`, add it but set `oversized: true` on the queue entry.
    - Set status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
    - Set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`
    - Append to queue array

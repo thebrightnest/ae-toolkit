@@ -84,6 +84,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 **Step 1 — aet-plan:**
 
 1. Follow the `aet-plan` → `clarify-goal` + `create-prd` + `create-stories` + `plan` procedures
+   - `create-stories` and `plan` enforce task size guardrails automatically (dual-limit model, auto-split, `⚠️ ATOMIC OVERSIZED` marking)
 2. Produce: `docs/prds/{feature}-prd.md`, `docs/plans/*.md` files, `.agents/work-queue.json`
 3. **Queue preservation guardrail:** When `aet-plan` produces `.agents/work-queue.json`, it must merge new tickets into the existing queue rather than replacing it. Existing tasks must survive the planning session unchanged.
 4. **HARD GATE:** Present PRD to user for review. Ask:
@@ -176,3 +177,4 @@ After the pipeline completes all steps:
 - **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to `aet-pipeline-implement`
 - **UI validation is optional** — Run UI validation only when the user explicitly requests it or opts in at the PRD gate. The "no UI" marker still auto-skips.
 - **Imperative requests are planning targets** — "Do X" means "Plan how to do X"
+- **Session-sized output** — The pipeline delegates to `aet-plan`, which enforces the dual-limit guardrail. Plans that enter the queue are guaranteed to be implementable in a single agent session.

@@ -66,6 +66,40 @@ Length: Keep `SKILL.md` under 400 lines. Move deep detail to `references/`.
 - If a skill cannot complete its task, it must explain why and what the user should do next.
 - Never silently skip a step because a file is missing; document the skip in output.
 
+## Task Size Guardrails
+
+All planning output must be implementable in a single agent coding session. Use the dual-limit model to enforce this.
+
+### Dual-Limit Model
+
+| Layer                   | Human-Time Limit | AI-Complexity Limit            |
+| ----------------------- | ---------------- | ------------------------------ |
+| Story (PRD → ticket)    | ≤ 2 days         | ≤ 10 files OR ≤ 500 diff lines |
+| Task (ticket → plan.md) | ≤ 4 agent-hours  | ≤ 8 files OR ≤ 300 diff lines  |
+
+A task **fails** if **either** limit is exceeded. AI-complexity is the operative limit.
+
+### Size Labels
+
+Every task must carry an S/M/L label:
+
+| Label | Human Time                          | Files | Diff Lines |
+| ----- | ----------------------------------- | ----- | ---------- |
+| S     | ≤ 2 hr                              | ≤ 3   | ≤ 100      |
+| M     | ≤ 1 day                             | ≤ 5   | ≤ 200      |
+| L     | > 1 day OR > 5 files OR > 200 lines | —     | —          |
+
+**L is a mandatory split trigger.** No L task may enter the work queue without being broken down.
+
+### Auto-Split Rule
+
+When a task exceeds limits:
+
+1. Split along vertical-slice boundaries (behavior, entity, or layer).
+2. Re-evaluate each child. Repeat recursively.
+3. **Max split depth = 3.** If a child still fails, mark it `⚠️ ATOMIC OVERSIZED` and surface for explicit user approval.
+4. Document splits with `Split from: {parent-id}` and suffix IDs (`01a`, `01b`).
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. The `.skill` package is a snapshot. No separate version field in frontmatter.
