@@ -46,6 +46,42 @@ This skill is **planning-only**. No application source code is written, modified
 
 If the user states a goal imperatively ("I want X removed"), treat it as a planning target.
 
+## Task Size Guardrails
+
+Every task produced by this skill must fit within a single agent coding session. Oversized tasks cause context bloat, quality degradation, and abandoned sessions. Enforce the dual-limit model at both the story and task level.
+
+### Dual-Limit Model
+
+| Layer                   | Human-Time Limit | AI-Complexity Limit            |
+| ----------------------- | ---------------- | ------------------------------ |
+| Story (PRD → ticket)    | ≤ 2 days         | ≤ 10 files OR ≤ 500 diff lines |
+| Task (ticket → plan.md) | ≤ 4 agent-hours  | ≤ 8 files OR ≤ 300 diff lines  |
+
+A task **fails** if **either** limit is exceeded. AI-complexity is the operative limit; human-time is a sanity check against human-scale estimates (weeks, sprints) leaking into agent plans.
+
+### Auto-Split Procedure
+
+When a task exceeds either limit:
+
+1. Identify natural vertical-slice boundaries:
+   - By user-visible behavior (e.g., "user can register" vs "user can reset password")
+   - By data entity (e.g., "user schema" vs "order schema")
+   - By layer dependency (e.g., "backend API" before "frontend form")
+2. Split the task into independently implementable children.
+3. Re-evaluate each child against both limits. Repeat recursively.
+4. **Max split depth = 3.** If a child still fails after 3 splits, mark it `⚠️ ATOMIC OVERSIZED` and surface it for explicit user approval.
+5. Document parent/child relationships with `Split from: {parent-id}` and suffix IDs (`01a`, `01b`).
+
+### Size Labels
+
+Use S/M/L labels on every task. L is a mandatory split trigger.
+
+| Label | Human Time                          | Files | Diff Lines |
+| ----- | ----------------------------------- | ----- | ---------- |
+| S     | ≤ 2 hr                              | ≤ 3   | ≤ 100      |
+| M     | ≤ 1 day                             | ≤ 5   | ≤ 200      |
+| L     | > 1 day OR > 5 files OR > 200 lines | —     | —          |
+
 ## Commands
 
 ### `clarify-goal`
@@ -90,9 +126,10 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 1. Read the approved PRD from `docs/prds/`.
 2. Create `docs/plans/` if it doesn't exist. Create tickets as markdown files in `docs/plans/` or push via MCP if configured.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
-4. Define blocking relationships between tickets (directed acyclic graph).
-5. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort.
-6. **Queue handoff.** After all plan files are written, the queue is updated by `aet-work sync`. Do not write `.agents/work-queue.json` directly from this skill.
+4. **Apply task size guardrails**. Evaluate each story against the dual-limit model (≤ 2 days human time; ≤ 10 files / 500 diff lines AI-complexity). Auto-split oversized stories recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
+5. Define blocking relationships between tickets (directed acyclic graph).
+6. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort, size label (S/M/L).
+7. **Queue handoff.** After all plan files are written, the queue is updated by `aet-work sync`. Do not write `.agents/work-queue.json` directly from this skill.
 
 **Vertical slice rule:**
 
@@ -166,9 +203,10 @@ From a ticket/story, produce a structured `plan.md` for implementation.
    - Summary and user story
    - Locked-in architecture decisions (cannot change without re-planning)
    - Files to create and modify
-   - Ordered, granular task list
+   - Ordered, granular task list with size labels (S/M/L)
    - Self-validation strategy (lint, type-check, unit tests, e2e)
-4. Ask the user to review and iterate. This is the last chance to steer before implementation.
+4. **Apply task size guardrails** to the task list. Evaluate each task against the dual-limit model (≤ 4 agent-hours; ≤ 8 files / 300 diff lines). Auto-split oversized tasks into subtasks with explicit dependencies. Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
+5. Ask the user to review and iterate. This is the last chance to steer before implementation.
 
 **Context discipline:**
 
@@ -205,3 +243,4 @@ After the `plan` command completes and the plan.md is ready for review:
 - **Separate planning from implementation** — plan.md must be comprehensive enough to require zero additional context at execution time.
 - **Planning lockout** — Never edit application source files during planning. Research and exploration are allowed; code changes are not.
 - **Imperative input = planning target** — When the user says "do X," interpret it as "help me plan X."
+- **Session-sized tasks only** — No task larger than a single agent session. Split early, split often.

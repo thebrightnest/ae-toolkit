@@ -11,6 +11,14 @@ Link to the PRD and any relevant prior decisions.
 3. Task description — estimated size (S/M/L)
 4. Merge branch to main and verify integration — S
 
+**Size definitions:**
+
+- **S**: ≤ 2 hr human time / ≤ 3 files / ≤ 100 diff lines
+- **M**: ≤ 1 day human time / ≤ 5 files / ≤ 200 diff lines
+- **L**: > 1 day OR > 5 files OR > 200 lines — **must be split before implementation**
+
+If a task exceeds the agent session limit (≤ 4 hr / ≤ 8 files / ≤ 300 lines), split it into subtasks and document the relationship with `Split from: {parent-task-id}`.
+
 ### Renderer / UI Tasks (if applicable)
 
 - [ ] Create/update renderer component(s)
