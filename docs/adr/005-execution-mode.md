@@ -61,6 +61,20 @@ The `scripts/validate-skills.sh` linter enforces this: skills with approval gate
 - **Harder:** Skill authors must remember to check `AET_EXECUTION_MODE` when adding new approval gates. The validator mitigates this.
 - **Harder:** Any process that spawns an agent CLI must forward `AET_EXECUTION_MODE` to sub-sub-agents.
 
+## Interactive-Only Exemption
+
+Some skills are **never invoked in unattended mode** by design. For example,
+`aet-bug-report` is an interactive debugging skill; there is no `aet-work` or CI
+pipeline that runs it headlessly.
+
+Skills documented as interactive-only may omit `AET_EXECUTION_MODE` handling. To
+avoid the `validate-skills.sh` linter flagging these skills, authors should use
+`"Hard gate"` or `"Approval gate"` phrasing instead of the literal string
+`"Approve to proceed?"` (which the validator specifically checks for).
+
+When adding an interactive-only gate, update this ADR and the Skill Writing Guide
+to document the exemption.
+
 ## Alternatives Considered
 
 1. **Keep `AET_ORCHESTRATOR=1`** — Rejected. Too specific to `aet-work`; does not generalize to CI or other orchestrators. Poor semantic clarity.

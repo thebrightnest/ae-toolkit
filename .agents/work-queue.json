@@ -419,5 +419,15 @@
     "merge_verified": true,
     "merged_at": "2026-05-23T15:04:18.073191+00:00",
     "completed_at": "2026-05-23T15:04:18.073191+00:00"
+  },
+  {
+    "id": "abr-gate-01",
+    "title": "Add Fix Approval Gate to aet-bug-report",
+    "plan_file": "docs/plans/abr-gate-01-fix-approval-gate.md",
+    "status": "done",
+    "blocks": [],
+    "blocked_by": [],
+    "effort": "small",
+    "completed_at": "2026-05-25T20:45:58.291475+00:00"
   }
 ]
