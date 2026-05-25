@@ -131,6 +131,45 @@ for dep_id in task.get('blocked_by', []):
 }
 
 # ---------------------------------------------------------------------------
+# Pre-branch hygiene check
+# ---------------------------------------------------------------------------
+
+check_main_hygiene() {
+  local repo_root="$1"
+  cd "$repo_root"
+
+  # Ensure origin refs are current
+  git fetch origin 2>/dev/null || true
+
+  # Check working tree
+  if [ -n "$(git status --short)" ]; then
+    echo "⚠️  Working tree is dirty. Stash or commit changes before branching."
+    return 1
+  fi
+
+  # Check unpushed commits
+  local ahead
+  ahead=$(git rev-list --count origin/main..main 2>/dev/null || echo 0)
+  if [ "$ahead" -gt 0 ]; then
+    echo "⚠️  Local main is ahead of origin/main by $ahead commit(s)."
+    echo "   Push first: git push origin main"
+    echo "   Or branch from origin/main explicitly."
+    return 1
+  fi
+
+  # Check unpulled commits
+  local behind
+  behind=$(git rev-list --count main..origin/main 2>/dev/null || echo 0)
+  if [ "$behind" -gt 0 ]; then
+    echo "⚠️  Local main is behind origin/main by $behind commit(s)."
+    echo "   Pull first: git pull origin main"
+    return 1
+  fi
+
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # Worktree helper (idempotent — safe to re-run on resume)
 # ---------------------------------------------------------------------------
 
@@ -155,6 +194,23 @@ ensure_worktree() {
 echo "🚀 AFK loop orchestrator starting..."
 echo "   Queue file: $QUEUE_FILE"
 echo "   Repo root:  $REPO_ROOT"
+echo ""
+
+CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+  echo "⚠️  Currently on '$CURRENT_BRANCH', not 'main'. Skipping pre-branch hygiene check."
+  echo "   Run 'git checkout main' first if you want worktrees based on a clean, synced main."
+else
+  if ! check_main_hygiene "$REPO_ROOT"; then
+    if [ "${AET_EXECUTION_MODE:-}" = "unattended" ]; then
+      echo "   Unattended mode — continuing despite hygiene warnings."
+    else
+      echo "⛔ Pre-branch hygiene check failed. Halting."
+      exit 1
+    fi
+  fi
+fi
+
 echo ""
 
 while true; do

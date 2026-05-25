@@ -111,7 +111,11 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
 
 1. **Plan-drift guard:** Run the `plan-drift` check. If drift is detected, refuse to start the AFK loop and instruct the user to run `init-queue` first
 
-2. **Runtime self-identification:**
+2. **Pre-branch git hygiene:**
+
+   Before spawning the first task, the orchestrator ensures `main` is clean and synchronized with `origin/main`. If `main` is dirty, ahead, or behind, the orchestrator prints actionable warnings and halts before creating any worktrees. In unattended mode, warnings are logged but the loop continues.
+
+3. **Runtime self-identification:**
 
    - You are the AI coding agent currently executing this skill. Determine the CLI
      command that should be used to spawn a fresh process of yourself (e.g. `kimi`,
@@ -121,23 +125,23 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
    - Use these self-reported values for the template variables `CLI_BIN`, `CLI_ARGS`,
      `CLI_PROMPT_FLAG`, and `CLI_WORKDIR_FLAG`.
 
-3. **Generate orchestrator script:**
+4. **Generate orchestrator script:**
 
    - Read `aet-work/references/orchestrator-template.sh` from this skill directory
    - Ensure the script includes merge verification: before each task, check
      `merge_verified` on all `blocked_by` entries. Warn if unverified, but continue.
    - Substitute template variables using the self-reported CLI configuration from
-     Step 2.
+     Step 3.
    - Write to `scripts/.aet-work-orchestrator.sh`
    - `chmod +x scripts/.aet-work-orchestrator.sh`
 
-4. **Spawn and wait:**
+5. **Spawn and wait:**
 
    - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
    - `TaskOutput(block=true)` to wait for completion
    - If the script fails: report which task failed and preserve the branch for inspection
 
-5. **Resume behavior:**
+6. **Resume behavior:**
    - Re-running `run` regenerates the script and resumes from the current queue state
    - Already-done or in-progress tasks with existing worktrees are skipped automatically
 
