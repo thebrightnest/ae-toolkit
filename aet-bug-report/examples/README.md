@@ -11,10 +11,17 @@
 2. **Root-Cause:** Trace the error to `normalizeEmail(user.email)` where
    `user.email` is undefined because the frontend sends `emailAddress` but the
    backend expects `email`.
-3. **Fix:** Update the backend controller to read `req.body.emailAddress ||
-req.body.email`. Low-risk change — apply directly.
-4. **Validate:** Re-run registration — 201 Created. Run existing auth tests —
-   all pass.
+3. **Fix Approval Gate:** Present the diagnosis and proposed fix to the user:
+
+   - **Root cause:** Backend expects `email` but frontend sends `emailAddress`
+   - **Proposed fix:** Update controller to read `req.body.emailAddress || req.body.email`
+   - **Files:** `src/controllers/auth.js`
+   - **Risk:** Low
+
+   **User:** "Yes, go ahead."
+
+4. **Fix:** Apply the one-line change. Run reproduction — 201 Created. Run
+   existing auth tests — all pass.
 
 **Output:** `docs/bugs/2026-05-21-registration-500-bug-report.md`
 
@@ -34,12 +41,20 @@ run twice."
    worker heartbeat timeout (30s) is shorter than the average job duration
    (45s). When a worker is processing a long job, the orchestrator marks it as
    dead and reassigns the job to another worker.
-3. **Fix:** Increase heartbeat timeout to 60s, or switch to an
-   in-progress acknowledgment pattern. This touches orchestrator config — pause
-   for human confirmation before applying.
-4. **Validate:** Re-run load test — 0 duplicates across 10 runs. Run existing
-   queue tests — all pass. Invoke `aet-cso` because the fix touches job
-   scheduling logic.
+3. **Fix Approval Gate:** Present the diagnosis and proposed fix to the user:
+
+   - **Root cause:** Worker heartbeat timeout (30s) is shorter than average job
+     duration (45s), causing the orchestrator to mark alive workers as dead and
+     reassign their jobs
+   - **Proposed fix:** Increase heartbeat timeout to 60s
+   - **Files:** `config/orchestrator.yml`
+   - **Risk:** Medium — touches job scheduling logic
+
+   **User:** "Yes, but also invoke `aet-cso` during validation."
+
+4. **Fix:** Increase heartbeat timeout to 60s. Run reproduction — 0 duplicates
+   across 10 runs. Run existing queue tests — all pass. Invoke `aet-cso` because
+   the fix touches job scheduling logic.
 
 **Output:** `docs/bugs/2026-05-21-job-queue-race-bug-report.md`
 

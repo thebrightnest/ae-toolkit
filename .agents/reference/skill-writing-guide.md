@@ -86,6 +86,18 @@ At every approval checkpoint:
 - Critical/High security findings
 - Merge verification failures
 
+### Interactive-Only Exemption
+
+Skills that are **never invoked in unattended mode** (e.g., `aet-bug-report`, which
+is always run interactively) may omit `AET_EXECUTION_MODE` handling.
+
+To avoid the validator flagging these skills, use `"Hard gate"` or `"Approval gate"`
+phrasing instead of the literal string `"Approve to proceed?"`. The validator
+only checks for the exact phrase.
+
+If adding an interactive-only gate to an existing skill, update this guide and
+ADR 005 to document the exemption.
+
 ## Quality Checklist Before Publishing
 
 - [ ] `description` explicitly states trigger conditions
@@ -95,4 +107,4 @@ At every approval checkpoint:
 - [ ] Examples are realistic, not toy cases
 - [ ] No agent-specific syntax unless unavoidable
 - [ ] All external links are valid
-- [ ] If the skill has approval gates, `AET_EXECUTION_MODE` is handled
+- [ ] If the skill has approval gates, `AET_EXECUTION_MODE` is handled (unless the skill is documented as interactive-only)

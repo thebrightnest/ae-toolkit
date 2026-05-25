@@ -68,22 +68,32 @@ Diagnose the underlying cause, not the symptom.
 
 **Output:** Root cause documented in the bug report.
 
+### Step 2.5: Fix Approval Gate (Mandatory)
+
+Before writing any code, present your diagnosis and proposed fix to the user.
+
+**Required presentation:**
+
+- **Root cause:** One-sentence evidence-based diagnosis
+- **Proposed fix:** What will change and why
+- **Files to modify:** List of files that will be edited
+- **Risk level:** Low / medium / high (agent's assessment)
+
+**Wait for explicit user approval.** Acceptable approvals: "yes", "go ahead",
+"apply it", "proceed", or similar. If the user requests changes to the approach,
+revise the proposal and present again.
+
+**Do not write, modify, or delete any source code until explicit approval is given.**
+
 ### Step 3: Fix
 
 Apply the smallest change that resolves the root cause.
 
+**Only proceed here after explicit user approval from Step 2.5.**
+
 1. Identify all locations that need change
 2. Write the fix
-3. **Hard gate for high-risk changes:** Before applying fixes that delete data,
-   modify auth logic, change database schemas, or alter API contracts, pause and
-   ask for explicit human confirmation:
-
-   ```
-   ⚠️ High-risk change detected: {description}
-   Approve to apply, or reject and suggest a safer approach.
-   ```
-
-4. Run the reproduction steps to confirm the bug is resolved
+3. Run the reproduction steps to confirm the bug is resolved
 
 **Output:** Fix summary documented in the bug report.
 
