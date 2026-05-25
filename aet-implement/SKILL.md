@@ -61,13 +61,25 @@ Execute a plan.md from start to finish with self-validation.
    - Ask: _"This will modify the files listed above. Approve to proceed?"_
    - **Hard gate:** Do not begin editing until the user explicitly confirms
 
-2. Read the plan.md file specified by the user
-3. Create a feature branch if not already on one
-4. Execute tasks in the order specified in the plan
-5. After each task, run the relevant validation from the plan's self-validation strategy
-6. Compare implementation against the plan — flag any deviation
-7. Commit with a message that references the ticket/plan
-8. Summarize what was built, what validation passed, and any deviations
+2. **Pre-branch git hygiene check:**
+
+   Before creating a feature branch, verify `main` is in a safe state:
+
+   1. `git fetch origin`
+   2. Check working tree: `git -C $(git rev-parse --show-toplevel) status --short`
+      - If dirty: print warning with stash/commit options; **hard stop** unless user confirms
+   3. Check unpushed commits: `git rev-list --count origin/main..main`
+      - If > 0: print `"Local main is ahead of origin/main. Push first: git push origin main, or branch from origin/main: git checkout -b <branch> origin/main"`; **hard stop** unless user confirms
+   4. Check unpulled commits: `git rev-list --count main..origin/main`
+      - If > 0: print `"Local main is behind origin/main. Pull first: git pull origin main"`; **hard stop** unless user confirms
+
+3. Read the plan.md file specified by the user
+4. Create a feature branch if not already on one
+5. Execute tasks in the order specified in the plan
+6. After each task, run the relevant validation from the plan's self-validation strategy
+7. Compare implementation against the plan — flag any deviation
+8. Commit with a message that references the ticket/plan
+9. Summarize what was built, what validation passed, and any deviations
 
 **Fresh session reminder:**
 If this session still contains planning context, strongly recommend clearing it first:
@@ -98,7 +110,7 @@ Worktree mode puts each implementation on its own branch using standard git comm
    ```
 
 5. Execute the normal implement steps (above) from inside the worktree directory,
-   **skipping step 2** (branch already created by the worktree setup).
+   **skipping step 4** (branch already created by the worktree setup).
 6. Commit the work.
 7. Return to the repo root:
 
