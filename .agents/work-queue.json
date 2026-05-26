@@ -428,6 +428,8 @@
     "blocks": [],
     "blocked_by": [],
     "effort": "small",
-    "completed_at": "2026-05-25T20:45:58.291475+00:00"
+    "completed_at": "2026-05-25T23:00:36.028904+00:00",
+    "merge_verified": true,
+    "merged_at": "2026-05-25T23:00:36.028904+00:00"
   }
 ]
