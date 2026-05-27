@@ -137,7 +137,7 @@ If this step was skipped, proceed directly to Step 3.
 
 **Step 4 — aet-work sync:**
 
-1. Run `aet-work sync` to incrementally add the newly created `docs/plans/*.md` files to `.agents/work-queue.json`
+1. Run `aet-work sync` to incrementally add the newly created `docs/plans/*.md` files to `.agents/work-queue.json`. Only atomic plans from `docs/plans/` are synced; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
 2. Preserve all existing queue entries and their statuses
 3. If drift or orphaned entries are surfaced, resolve them before declaring the pipeline complete
 

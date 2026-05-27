@@ -39,7 +39,7 @@ Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
 
 **Procedure:**
 
-1. Scan `docs/plans/` for all `*.md` files
+1. Scan `docs/plans/` for all `*.md` files. This directory is for atomic, implementable task plans only. Roadmaps, audits, and meta-plans must be stored in `docs/roadmaps/` or `docs/audits/` and will not be added to the queue.
 2. If `.agents/work-queue.json` exists, load it as `existing_queue`
 3. For each plan.md, extract: title, task ID (from filename or frontmatter), blocking relationships
 4. Build the DAG using `blocks` and `blocked_by` arrays
@@ -63,6 +63,7 @@ Incrementally sync `docs/plans/*.md` into the existing work queue without losing
    - Extract title, task ID, blocking relationships
    - Determine `blocked_by` and `blocks` from the DAG
    - **Validate task sizes:** Scan the plan's task list. If any task exceeds the AI-complexity limit (> 8 files OR > 300 diff lines), refuse to add the plan and emit a split suggestion. If the plan contains `⚠️ ATOMIC OVERSIZED`, add it but set `oversized: true` on the queue entry.
+   - **Validate atomicity:** If the plan references other plan files or contains multiple "Phase" sections, emit a warning and skip it. Non-atomic documents belong in `docs/roadmaps/` or `docs/audits/`.
    - Set status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
    - Set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`
    - Append to queue array
@@ -169,7 +170,7 @@ Detect plan files that exist on disk but are not represented in the work queue.
 **Procedure:**
 
 1. Read `.agents/work-queue.json` and collect all `plan_file` paths
-2. List all `docs/plans/*.md` files
+2. List all `docs/plans/*.md` files. Only atomic plans in this directory are considered; roadmaps and audits stored elsewhere are ignored.
 3. Identify any plan files whose path is not found in the queue's `plan_file` set
 4. Compare the most recent modification time of any `docs/plans/*.md` against the `queue_updated_at` field (or the queue file's mtime as fallback)
 5. Report findings:
