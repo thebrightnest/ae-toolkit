@@ -449,13 +449,14 @@
     "id": "wq-02",
     "title": "Conventions Update and ADR",
     "plan_file": "docs/plans/wq-02-conventions-adr.md",
-    "status": "blocked",
+    "status": "done",
     "blocks": [],
     "blocked_by": ["wq-01"],
     "effort": "small",
     "merge_verified": false,
     "merge_commit": null,
-    "completed_at": null,
-    "merged_at": null
+    "completed_at": "2026-05-27T18:43:43.708387+0000",
+    "merged_at": null,
+    "branch": "wq-02"
   }
 ]

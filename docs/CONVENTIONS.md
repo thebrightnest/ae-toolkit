@@ -19,6 +19,23 @@ Each skill lives in its own directory at the repository root:
 
 Skill directories are packaged into `.skill` files (zip archives) via `make package`.
 
+## Planning Artifact Directories
+
+The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/`; all other planning artifacts belong in their designated directories.
+
+| Directory        | Purpose                                                                        | Queue Ingestion                                            |
+| ---------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `docs/plans/`    | Atomic, implementable task plans (single session, ≤ 8 files, ≤ 300 diff lines) | Yes — `aet-work init-queue` and `sync` scan this directory |
+| `docs/prds/`     | Product Requirements Documents                                                 | No                                                         |
+| `docs/roadmaps/` | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                         |
+| `docs/audits/`   | Testing audits, strategy reviews, gap analyses                                 | No                                                         |
+
+Rules:
+
+- A document in `docs/plans/` that references other plan files or contains multiple "Phase" sections is non-atomic and must be moved to `docs/roadmaps/` or `docs/audits/`.
+- The dual-limit model (Task Size Guardrails) is the operative filter: if a plan exceeds AI-complexity limits, it does not belong in `docs/plans/`.
+- Directory creation is the user's responsibility; skills document the convention but do not auto-create directories.
+
 ## SKILL.md Format
 
 ### YAML Frontmatter
