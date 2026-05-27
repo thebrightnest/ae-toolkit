@@ -124,7 +124,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 **Procedure:**
 
 1. Read the approved PRD from `docs/prds/`.
-2. Create `docs/plans/` if it doesn't exist. Create tickets as markdown files in `docs/plans/` or push via MCP if configured.
+2. Create `docs/plans/` if it doesn't exist. Create tickets as markdown files in `docs/plans/` or push via MCP if configured. Atomic task plans MUST be saved to `docs/plans/{ticket-id}-plan.md`. Roadmaps, audits, and meta-plans MUST be saved to `docs/roadmaps/` or `docs/audits/` and will NOT be added to the work queue.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
 4. **Apply task size guardrails**. Evaluate each story against the dual-limit model (≤ 2 days human time; ≤ 10 files / 500 diff lines AI-complexity). Auto-split oversized stories recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 5. Define blocking relationships between tickets (directed acyclic graph).
@@ -199,7 +199,7 @@ From a ticket/story, produce a structured `plan.md` for implementation.
 
 1. Read the ticket and relevant PRD section.
 2. Use `.agents/templates/plan-template.md` as the structure guide.
-3. Create `docs/plans/` if it doesn't exist. Produce `docs/plans/{ticket-id}-plan.md` containing:
+3. Create `docs/plans/` if it doesn't exist. Produce `docs/plans/{ticket-id}-plan.md` containing: (atomic task plans only; save roadmaps, audits, and meta-plans to `docs/roadmaps/` or `docs/audits/`)
    - Summary and user story
    - Locked-in architecture decisions (cannot change without re-planning)
    - Files to create and modify
