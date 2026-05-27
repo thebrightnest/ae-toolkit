@@ -41,5 +41,5 @@ Revert the modified `SKILL.md` files and the `AGENTS.md.example` template. Re-ru
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
+_Stage: merged_
+_Next step: none — pipeline complete_
