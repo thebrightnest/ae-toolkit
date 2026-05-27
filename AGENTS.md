@@ -85,7 +85,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - Always run self-validation (`make validate`) before declaring a task complete
 - Always update `.agents/learnings.jsonl` after a bug or misalignment
 - Never plan and implement in the same session; clear context between phases
-- Use `docs/product-briefs/` for product briefs, `docs/plans/` for plan.md files, and `docs/prds/` for PRDs
+- Use `docs/product-briefs/` for product briefs, `docs/plans/` for atomic plan.md files, `docs/roadmaps/` for roadmaps, `docs/audits/` for audits, and `docs/prds/` for PRDs
 - Use sub-agents for research; keep main context clean
 - Load `.agents/reference/` docs only when working on the relevant task type
 
