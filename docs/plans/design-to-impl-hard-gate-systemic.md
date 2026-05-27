@@ -23,12 +23,17 @@ The agent interpreted "yes" to a planning question as carte blanche to implement
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] `make package` regenerates all `.skill` files
-- [ ] AET example AGENTS.md includes the hard gate
-- [ ] aet-implement and aet-pipeline-implement SKILL.md files include approval checkpoint steps
-- [ ] No skill exceeds 400 lines
+- [x] `make validate` passes
+- [x] `make package` regenerates all `.skill` files
+- [x] AET example AGENTS.md includes the hard gate
+- [x] aet-implement and aet-pipeline-implement SKILL.md files include approval checkpoint steps
+- [x] No skill exceeds 400 lines
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+
+## Divergence Summary
+
+- Tasks 1–4 (audit, aet-setup template, skill-level gates, approval-checkpoint command) were already completed in earlier commits (`170cbc2`, `311b34a`) on main. This pipeline run addressed the remaining line-count violation in `aet-setup/SKILL.md` (412 → 370 lines) and regenerated `.skill` packages.
+- Task 6 (merge to main) is deferred to `aet-ship` + `post-ship-verify` per pipeline protocol.
 
 ## Rollback Plan
 
@@ -36,5 +41,5 @@ Revert the modified `SKILL.md` files and the `AGENTS.md.example` template. Re-ru
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-pipeline-implement` or `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_

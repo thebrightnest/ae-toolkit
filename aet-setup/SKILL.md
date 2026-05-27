@@ -357,49 +357,7 @@ Linter, formatter, type checker, security scanner configs tailored to the detect
 
 ## AI Guardrails Template
 
-Every `AGENTS.md` must include a section like this, adapted to the project:
-
-```markdown
-## AI Assistant Guardrails
-
-### Forbidden
-
-- Never add a new dependency without explicit justification and version pinning
-- Never disable linter, formatter, or type-checker rules to make code pass — fix the root cause
-- Never write code without corresponding tests (unless explicitly asked to prototype)
-- Never modify generated files (lock files, migration files) by hand
-- Never commit secrets, API keys, or `.env` files
-- Never introduce new patterns/abstractions without checking existing ones first
-
-### Mandatory
-
-- Always run the full test suite before claiming a task is complete
-- Always update this file if you change architectural patterns or tooling
-- Always use factories/fixtures for test data, never hardcode domain values
-- Always type-annotate public functions; dynamic typing is banned except at explicit boundaries
-- Always prefer composition over inheritance
-- Always keep functions small and focused; extract helpers rather than nesting logic
-
-### Agentic Workflow Guardrails
-
-- Always produce a PRD before writing code for any feature >1 day of work
-- Always review the plan.md before implementation; never skip human validation
-- **Design-to-implementation hard gate** — After the user approves a design proposal ("yes", "sounds good", "go ahead", or similar), STOP and confirm scope before writing files: _"This will modify [N files]: [list]. Approve to proceed?"_ Do not begin editing until the user explicitly confirms. In unattended mode (`AET_EXECUTION_MODE=unattended`), log the bypass and proceed.
-- Always run self-validation (lint, type-check, tests) before declaring a task complete
-- Always update `.agents/learnings.jsonl` after a bug or misalignment
-- Never plan and implement in the same session; clear context between phases
-- Use `docs/product-briefs/` for product briefs, `docs/plans/` for plan.md files, and `docs/prds/` for PRDs
-- Use sub-agents for research; keep main context clean
-- Load `.agents/reference/` docs only when working on the relevant task type
-
-## Context Budget
-
-- Keep AGENTS.md under 200 lines; detailed rules live in `.agents/reference/`
-- Prime command: load only core files + recent commits, not the full codebase
-- Planning session: free-form conversation OK, but clear before implementing
-- Sub-agents: use for any research consuming >50k tokens
-- If context feels "full" (agent repeating itself, missing obvious things), clear and restart
-```
+Every `AGENTS.md` must include guardrails with **Forbidden**, **Mandatory**, **Agentic Workflow**, and **Context Budget** sections. See `examples/AGENTS.md.example` for the full template.
 
 ## Rules
 
