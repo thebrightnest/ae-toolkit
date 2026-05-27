@@ -431,5 +431,31 @@
     "completed_at": "2026-05-25T23:00:36.028904+00:00",
     "merge_verified": true,
     "merged_at": "2026-05-25T23:00:36.028904+00:00"
+  },
+  {
+    "id": "wq-01",
+    "title": "Skill Atomicity Updates",
+    "plan_file": "docs/plans/wq-01-skill-atomicity-updates.md",
+    "status": "merged",
+    "blocks": ["wq-02"],
+    "blocked_by": [],
+    "effort": "small",
+    "merge_verified": true,
+    "merge_commit": "00d1817",
+    "completed_at": "2026-05-27T17:47:40.857356+00:00",
+    "merged_at": "2026-05-27T17:47:40.857356+00:00"
+  },
+  {
+    "id": "wq-02",
+    "title": "Conventions Update and ADR",
+    "plan_file": "docs/plans/wq-02-conventions-adr.md",
+    "status": "blocked",
+    "blocks": [],
+    "blocked_by": ["wq-01"],
+    "effort": "small",
+    "merge_verified": false,
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null
   }
 ]
