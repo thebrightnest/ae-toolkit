@@ -38,5 +38,5 @@ Revert `docs/CONVENTIONS.md` and delete the new ADR file.
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
+_Stage: merged_
+_Next step: none — pipeline complete_
