@@ -33,3 +33,8 @@ The agent interpreted "yes" to a planning question as carte blanche to implement
 ## Rollback Plan
 
 Revert the modified `SKILL.md` files and the `AGENTS.md.example` template. Re-run `make package`.
+
+---
+
+_Stage: plan-approved_
+_Next step: run `aet-pipeline-implement` or `aet-work`_
