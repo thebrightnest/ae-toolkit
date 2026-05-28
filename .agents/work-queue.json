@@ -156,14 +156,14 @@
     "id": "aet-ship-squash-merge-core-plan",
     "title": "Plan: aet-ship Squash-Merge Core Support",
     "plan_file": "docs/plans/aet-ship-squash-merge-core-plan.md",
-    "status": "unblocked",
+    "status": "done",
     "blocks": [],
     "blocked_by": [],
     "effort": "small",
-    "merge_verified": false,
-    "merge_commit": null,
-    "completed_at": null,
-    "merged_at": null
+    "merge_verified": true,
+    "merge_commit": "af88d7a",
+    "completed_at": "2026-05-28T17:34:08.981904+00:00",
+    "merged_at": "2026-05-28T17:34:08.981904+00:00"
   },
   {
     "id": "aet-work-hybrid-orchestrator-core",
