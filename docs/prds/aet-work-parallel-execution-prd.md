@@ -12,7 +12,7 @@ Upgrade `aet-work run` from sequential task execution to parallel execution of i
 ## Goals
 
 1. Independent tasks execute simultaneously instead of sequentially
-2. Concurrency is capped by default (fallback to number of CPU cores) with user override
+2. Concurrency is capped by default (fixed at 4 jobs) with user override
 3. Queue file updates remain race-condition-free under parallel execution
 4. Failure behavior is predictable: drain running tasks, preserve failed branch, halt
 5. Resume behavior works correctly after interruption or partial failure
@@ -37,8 +37,8 @@ Upgrade `aet-work run` from sequential task execution to parallel execution of i
 ## Acceptance Criteria
 
 - [ ] `aet-work run` generates an orchestrator script that processes tasks in parallel
-- [ ] Default concurrency cap is derived from `$(sysctl -n hw.ncpu)` (macOS) / `$(nproc)` (Linux)
-- [ ] User can override via `AET_WORK_JOBS` env var or `--jobs` flag if the agent CLI supports it
+- [x] Default concurrency cap is fixed at `4` jobs
+- [x] User can override via `AET_WORK_JOBS` env var
 - [ ] Queue file is updated only by the main orchestrator loop; child processes do not write to it
 - [ ] On task failure: running tasks continue, new tasks are not started, orchestrator exits with failure after drain
 - [ ] On task success: dependents are promoted to `unblocked` and become eligible for spawning immediately
@@ -82,8 +82,8 @@ Key invariants:
 Detection order:
 
 1. `AET_WORK_JOBS` environment variable
-2. `$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)`
-3. Minimum of detected value and `8` (hard upper bound to prevent accidental fork bombs)
+2. Fixed fallback of `4`
+3. Hard ceiling at `8` (to prevent accidental fork bombs)
 
 ### Queue State Machine Under Parallelism
 
@@ -118,6 +118,12 @@ The existing resume semantics are preserved:
 - `done` tasks are skipped
 - `in-progress` tasks with existing worktrees are treated as already running (the orchestrator does not respawn them; instead it marks them `failed` on startup if they are orphaned, or waits for the user to handle them)
 - To keep this simple: on startup, any `in-progress` task without a detectable running PID is treated as unknown state. The orchestrator prints a warning and marks it `failed` so the user can inspect.
+
+## Divergence Summary
+
+The implementation diverged from the original PRD in one respect:
+
+- **Default concurrency cap changed from CPU auto-detection to fixed `4`.** The original PRD specified `nproc` / `sysctl hw.ncpu` as the fallback. After shipping, the default was simplified to a constant `4` to provide predictable, machine-independent behavior. Users with more cores can still raise the cap via `AET_WORK_JOBS`.
 
 ## Open Questions
 

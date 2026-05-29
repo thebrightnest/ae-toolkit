@@ -21,7 +21,7 @@ Upgrades the generated bash orchestrator from sequential to parallel execution. 
 2. **Add concurrency cap detection** — S ✓
 
    - Read `AET_WORK_JOBS` env var
-   - Fallback to `nproc` / `sysctl hw.ncpu` / `4`
+   - Fixed fallback of `4`
    - Hard ceiling at `8` to prevent fork bombs
    - Echo detected cap at orchestrator startup
 
