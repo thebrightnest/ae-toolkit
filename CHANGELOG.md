@@ -25,6 +25,8 @@
 - **Cross-Cutting Completeness Framework**: Introduced ADR-001 documenting the framework for catching implicit obligations across domains (CSS, i18n, assets, icons, feature flags). CSS completeness is the first proven example.
 - **plan-template**: Added a "Renderer / UI Tasks" subsection to the plan template, reminding authors to verify CSS styles for all custom `className` values.
 
+- **aet-work parallel execution**: `aet-work run` now executes independent tasks in parallel using bash job control. Default concurrency cap is 4 jobs (override via `AET_WORK_JOBS`), with a hard ceiling of 8. Features drain-on-failure (running tasks finish, new spawns halt), orphaned in-progress detection on resume, and end-of-run summary. Added 16 integration tests in `scripts/test-orchestrator.sh`. ([PRD](docs/prds/aet-work-parallel-execution-prd.md))
+
 ### Fixed
 
 - **aet-work**: Runtime detection in `run` now uses agent self-identification instead of a hard-coded PATH/env-var priority list. The agent executing `aet-work run` reports its own CLI command and flags, eliminating mis-detection when multiple agents are installed. ([PRD](docs/prds/aet-work-runtime-self-detection-prd.md))
