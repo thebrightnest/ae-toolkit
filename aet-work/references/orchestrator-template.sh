@@ -6,10 +6,34 @@ set -euo pipefail
 #
 # This script is self-contained and uses only bash, git, and python3.
 # It reads .agents/work-queue.json, creates worktrees, and invokes the
-# detected agent CLI for each unblocked task sequentially.
+# detected agent CLI for each unblocked task. Independent tasks execute
+# in parallel up to a configurable concurrency cap.
 
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 QUEUE_FILE="$REPO_ROOT/.agents/work-queue.json"
+
+# ---------------------------------------------------------------------------
+# Concurrency cap
+# ---------------------------------------------------------------------------
+
+detect_max_jobs() {
+  local env_cap
+  env_cap="${AET_WORK_JOBS:-}"
+  if [ -n "$env_cap" ]; then
+    echo "$env_cap"
+    return
+  fi
+
+  local detected
+  detected=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+  echo "$detected"
+}
+
+MAX_JOBS=$(detect_max_jobs)
+if [ "$MAX_JOBS" -gt 8 ]; then
+  MAX_JOBS=8
+fi
+echo "   Concurrency cap: $MAX_JOBS (set AET_WORK_JOBS to override)"
 
 # ---------------------------------------------------------------------------
 # Detected CLI configuration — filled in by aet-work run
@@ -31,6 +55,19 @@ with open('$QUEUE_FILE', 'r') as f:
 for task in queue:
     if task.get('status') == 'unblocked':
         print(json.dumps(task))
+        sys.exit(0)
+sys.exit(1)
+"
+}
+
+has_pending_tasks() {
+  python3 -c "
+import json, sys
+with open('$QUEUE_FILE', 'r') as f:
+    queue = json.load(f)
+for task in queue:
+    s = task.get('status')
+    if s in ('unblocked', 'blocked', 'in-progress'):
         sys.exit(0)
 sys.exit(1)
 "
@@ -133,6 +170,34 @@ check_main_hygiene() {
 }
 
 # ---------------------------------------------------------------------------
+# Orphaned in-progress detection
+# ---------------------------------------------------------------------------
+
+handle_orphaned_in_progress() {
+  python3 -c "
+import json, os, sys
+with open('$QUEUE_FILE', 'r') as f:
+    queue = json.load(f)
+changed = False
+for task in queue:
+    if task.get('status') != 'in-progress':
+        continue
+    worktree_dir = os.path.join('$REPO_ROOT', '.worktrees', task['id'])
+    if os.path.isdir(worktree_dir):
+        # Treat as orphaned — no reliable PID tracking across restarts
+        print(f\"⚠️  Task {task['id']} is in-progress but worktree exists without a tracked PID.\")
+        print(f\"   Marking failed so you can inspect: {worktree_dir}\")
+        task['status'] = 'failed'
+        task['failed_stage'] = 'orphaned'
+        changed = True
+if changed:
+    with open('$QUEUE_FILE', 'w') as f:
+        json.dump(queue, f, indent=2)
+        f.write('\n')
+"
+}
+
+# ---------------------------------------------------------------------------
 # Task invocation
 # ---------------------------------------------------------------------------
 
@@ -165,6 +230,44 @@ run_task() {
 }
 
 # ---------------------------------------------------------------------------
+# Spawn a single task in the background
+# ---------------------------------------------------------------------------
+
+spawn_task() {
+  local task_json="$1"
+  local task_id task_title plan_file worktree_dir
+
+  task_id=$(echo "$task_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+  task_title=$(echo "$task_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['title'])")
+  plan_file=$(echo "$task_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['plan_file'])")
+
+  echo "▶️  Task: $task_title ($task_id)"
+  echo "   Plan: $plan_file"
+
+  # Merge verification
+  check_merge_verified "$task_id"
+
+  # Mark in-progress
+  mark_status "$task_id" "in-progress"
+
+  # Worktree setup (idempotent)
+  WORKTREE_DIR="$REPO_ROOT/.worktrees/$task_id"
+  if [ ! -d "$WORKTREE_DIR" ]; then
+    echo "   Creating worktree: $WORKTREE_DIR"
+    git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" -b "$task_id"
+  else
+    echo "   Reusing existing worktree: $WORKTREE_DIR"
+  fi
+
+  # Run task in subshell so directory changes don't affect the main loop
+  (
+    set +e
+    run_task "$plan_file" "$WORKTREE_DIR"
+    exit $?
+  ) &
+}
+
+# ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 
@@ -190,58 +293,128 @@ fi
 
 echo ""
 
+# Handle orphaned in-progress tasks from a previous run
+handle_orphaned_in_progress
+
+# Running job tracking (parallel arrays for bash 3.2 compat)
+RUNNING_PIDS=()
+RUNNING_TASK_IDS=()
+RUNNING_TASK_TITLES=()
+SLOTS=0
+STOP_SPAWN=0
+SUCCESSES=0
+FAILURES=0
+SKIPPED=0
+START_TIME=$(date +%s)
+
 while true; do
-  TASK_JSON=$(get_next_unblocked) || {
-    echo "✅ No more unblocked tasks. Queue complete."
+  # -----------------------------------------------------------------------
+  # Spawn phase: fill available slots with unblocked tasks
+  # -----------------------------------------------------------------------
+  while [ "$SLOTS" -lt "$MAX_JOBS" ] && [ "$STOP_SPAWN" -eq 0 ]; do
+    TASK_JSON=$(get_next_unblocked) || break
+
+    spawn_task "$TASK_JSON"
+    PID=$!
+
+    TASK_ID=$(echo "$TASK_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+    TASK_TITLE=$(echo "$TASK_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['title'])")
+
+    RUNNING_PIDS+=("$PID")
+    RUNNING_TASK_IDS+=("$TASK_ID")
+    RUNNING_TASK_TITLES+=("$TASK_TITLE")
+    SLOTS=$((SLOTS + 1))
+  done
+
+  # -----------------------------------------------------------------------
+  # Completion detection: poll for finished background jobs
+  # -----------------------------------------------------------------------
+  if [ "$SLOTS" -eq 0 ]; then
+    # No running jobs
+    if [ "$STOP_SPAWN" -eq 1 ]; then
+      break
+    fi
+    if ! has_pending_tasks; then
+      break
+    fi
+    # Tasks are blocked waiting for dependencies; loop will promote them
+    # when their blockers finish. Sleep briefly to avoid busy-wait.
+    sleep 0.2
+    continue
+  fi
+
+  FOUND_DONE=0
+  for i in "${!RUNNING_PIDS[@]}"; do
+    PID="${RUNNING_PIDS[$i]}"
+    [ -n "$PID" ] || continue
+    if ! kill -0 "$PID" 2>/dev/null; then
+      # Job finished — collect exit code
+      set +e
+      wait "$PID"
+      EXIT_CODE=$?
+      set -e
+
+      TASK_ID="${RUNNING_TASK_IDS[$i]}"
+      TASK_TITLE="${RUNNING_TASK_TITLES[$i]}"
+
+      # Mark slot as empty instead of reindexing (bash 3.2 + set -u safe)
+      RUNNING_PIDS[$i]=""
+      RUNNING_TASK_IDS[$i]=""
+      RUNNING_TASK_TITLES[$i]=""
+
+      SLOTS=$((SLOTS - 1))
+      FOUND_DONE=1
+
+      cd "$REPO_ROOT"
+
+      if [ "$EXIT_CODE" -eq 0 ]; then
+        echo "   ✅ Task completed successfully"
+        mark_status "$TASK_ID" "done"
+        promote_dependents
+        SUCCESSES=$((SUCCESSES + 1))
+      else
+        echo "   ❌ Task failed with exit code $EXIT_CODE"
+        mark_status "$TASK_ID" "failed" "pipeline"
+        STOP_SPAWN=1
+        FAILURES=$((FAILURES + 1))
+      fi
+
+      break  # Handle one completion per outer iteration
+    fi
+  done
+
+  if [ "$FOUND_DONE" -eq 0 ]; then
+    sleep 0.2
+  fi
+
+  # If failure stopped spawning and no jobs remain, we're done draining
+  if [ "$STOP_SPAWN" -eq 1 ] && [ "$SLOTS" -eq 0 ]; then
     break
-  }
-
-  TASK_ID=$(echo "$TASK_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-  TASK_TITLE=$(echo "$TASK_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['title'])")
-  PLAN_FILE=$(echo "$TASK_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['plan_file'])")
-
-  echo "▶️  Task: $TASK_TITLE ($TASK_ID)"
-  echo "   Plan: $PLAN_FILE"
-
-  # Merge verification
-  check_merge_verified "$TASK_ID"
-
-  # Mark in-progress
-  mark_status "$TASK_ID" "in-progress"
-
-  # Worktree setup (idempotent)
-  WORKTREE_DIR="$REPO_ROOT/.worktrees/$TASK_ID"
-  if [ ! -d "$WORKTREE_DIR" ]; then
-    echo "   Creating worktree: $WORKTREE_DIR"
-    git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" -b "$TASK_ID"
-  else
-    echo "   Reusing existing worktree: $WORKTREE_DIR"
   fi
-
-  # Run task
-  set +e
-  run_task "$PLAN_FILE" "$WORKTREE_DIR"
-  EXIT_CODE=$?
-  set -e
-  cd "$REPO_ROOT"
-
-  if [ $EXIT_CODE -eq 0 ]; then
-    echo "   ✅ Task completed successfully"
-    mark_status "$TASK_ID" "done"
-    promote_dependents
-  else
-    echo "   ❌ Task failed with exit code $EXIT_CODE"
-    mark_status "$TASK_ID" "failed" "pipeline"
-    echo ""
-    echo "⛔ Orchestrator stopped. Failed task: $TASK_ID"
-    echo "   Branch preserved at: $WORKTREE_DIR"
-    exit 1
-  fi
-
-  echo ""
 done
 
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
 echo ""
-echo "🏁 All tasks complete."
-echo "   Run 'git worktree list' to see active worktrees."
-echo "   Run 'aet-work cleanup' to remove merged worktrees."
+echo "🏁 Orchestrator finished."
+echo "   Succeeded: $SUCCESSES"
+echo "   Failed:    $FAILURES"
+echo "   Skipped:   $SKIPPED"
+echo "   Elapsed:   ${ELAPSED}s"
+echo ""
+
+if [ "$FAILURES" -gt 0 ]; then
+  echo "⛔ One or more tasks failed."
+  echo "   Run 'aet-work status' to inspect the queue."
+  echo "   Run 'aet-work cleanup' to remove merged worktrees."
+  exit 1
+else
+  echo "✅ All tasks complete."
+  echo "   Run 'git worktree list' to see active worktrees."
+  echo "   Run 'aet-work cleanup' to remove merged worktrees."
+  exit 0
+fi
