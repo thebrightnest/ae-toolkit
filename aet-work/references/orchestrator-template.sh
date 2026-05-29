@@ -24,9 +24,8 @@ detect_max_jobs() {
     return
   fi
 
-  local detected
-  detected=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-  echo "$detected"
+  # Fixed default of 4 parallel jobs. Override with AET_WORK_JOBS env var.
+  echo "4"
 }
 
 MAX_JOBS=$(detect_max_jobs)
