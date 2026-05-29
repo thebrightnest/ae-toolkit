@@ -106,7 +106,7 @@ Identify and output the next unblocked task.
 
 ### `run`
 
-AFK loop with OS-level process isolation. Generates a bash orchestrator script tailored to the detected agent CLI, spawns it as a background OS process, and waits for completion. Each task executes in a fresh agent process with its own git worktree, eliminating context leakage and branch overlap entirely.
+AFK loop with OS-level process isolation and parallel execution. Generates a bash orchestrator script tailored to the detected agent CLI, spawns it as a background OS process, and waits for completion. Independent tasks execute simultaneously—each in its own git worktree and agent process—up to a configurable concurrency cap. Context leakage and branch overlap are eliminated entirely.
 
 **Procedure:**
 
@@ -136,13 +136,31 @@ AFK loop with OS-level process isolation. Generates a bash orchestrator script t
    - Write to `scripts/.aet-work-orchestrator.sh`
    - `chmod +x scripts/.aet-work-orchestrator.sh`
 
-5. **Spawn and wait:**
+5. **Spawn and wait (parallel):**
 
+   - The orchestrator maintains a slot pool up to the concurrency cap
+   - While slots are available and unblocked tasks exist:
+     - Spawn the next unblocked task as a background job in its worktree
+     - Increment active slot counter
+   - When a job finishes:
+     - Collect exit code
+     - Update queue status (`done` or `failed`)
+     - Promote dependents to `unblocked`
+     - Decrement slot counter
+   - On task failure:
+     - Allow currently running tasks to finish (drain)
+     - Do not start new tasks
+     - Exit with failure after drain completes
    - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
    - `TaskOutput(block=true)` to wait for completion
-   - If the script fails: report which task failed and preserve the branch for inspection
 
-6. **Resume behavior:**
+6. **Concurrency cap:**
+
+   - Default: detected from `$(nproc)` (Linux) or `$(sysctl -n hw.ncpu)` (macOS), capped at 8
+   - Override: set `AET_WORK_JOBS` environment variable
+   - The orchestrator never exceeds the cap to prevent resource exhaustion
+
+7. **Resume behavior:**
    - Re-running `run` regenerates the script and resumes from the current queue state
    - Already-done or in-progress tasks with existing worktrees are skipped automatically
 
@@ -153,10 +171,11 @@ Parent agent session (clean)
   → self-reports runtime
   → generates scripts/.aet-work-orchestrator.sh
   → Shell(run_in_background=true) to spawn script
-    → Script spawns Agent CLI process #1 (clean context, fresh process)
-      → Task 1 completes, commits, exits
-    → Script spawns Agent CLI process #2 (clean context, fresh process)
-      → Task 2 completes, commits, exits
+    → Script spawns Agent CLI process #1 (clean context, worktree A)
+    → Script spawns Agent CLI process #2 (clean context, worktree B)
+    → Script spawns Agent CLI process #3 (clean context, worktree C)
+    → … up to concurrency cap
+    → As each process exits, queue updates, new tasks spawn
   → TaskOutput(block=true) returns
   → Parent session remains clean
 ```
@@ -216,9 +235,8 @@ Remove worktrees for tasks that are merge-verified.
 ## Key Principles
 
 - **Queue-unaware pipeline** — aet-pipeline-implement knows nothing about the queue. aet-work checks results and updates the queue.
-- **OS-process isolation** — `run` generates a bash orchestrator that spawns a fresh OS process for every task. See `references/context-isolation.md` for details.
+- **OS-process isolation** — `run` generates a bash orchestrator that spawns fresh OS processes for tasks. See `references/context-isolation.md` for details.
 - **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
 - **Queue file is the memory** — `.agents/work-queue.json` persists state across process boundaries by design.
 - **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.
-- **Fail fast, stop clean** — one failure halts the loop for human review; the failed branch is preserved.
-- **v3: parallel execution** — run independent tasks in simultaneous worktrees (future iteration).
+- **Drain on failure** — running tasks finish, new spawns halt. Preserves in-progress work while stopping the pipeline.

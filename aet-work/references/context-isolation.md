@@ -91,7 +91,39 @@ The skill asks the currently running agent: "What CLI command and flags should t
 | ...    | 15k              | ✅ Sharp      |
 | 20     | 15k              | ✅ Sharp      |
 
+## Parallel Execution Is Safe
+
+Parallel execution of independent tasks is safe because isolation is enforced at two independent layers:
+
+1. **Git worktree isolation** — each task runs in a separate git worktree on its own branch. Files, git state, and branch history are physically separate. Two tasks cannot collide on the same working tree because each has its own `.git/worktrees/<id>` directory.
+
+2. **OS process isolation** — each task runs in its own agent CLI process. There is no shared memory, no shared context, and no way for one agent to read another's state. The only shared resource is the queue file, and access to that is serialized.
+
+Because these layers are independent, doubling the number of concurrent tasks does not weaken isolation. Task #1 and Task #10 are as isolated from each other as Task #1 and Task #2 were in sequential mode.
+
+## Drain-on-Failure Behavior
+
+When a task fails under parallel execution, the orchestrator does not kill the other running tasks. Instead it:
+
+1. Records the failed task's status
+2. Stops spawning new tasks
+3. Waits for all currently running tasks to finish
+4. Exits with a non-zero status
+
+This preserves work already in progress. If Task #3 fails while Tasks #4 and #5 are running, Tasks #4 and #5 complete normally and their results are saved. Only new spawns are halted. The user can inspect the failed branch, fix the issue, and re-run `aet-work run` to resume.
+
+## Queue-Update Invariant
+
+Under parallel execution, only the main orchestrator loop reads and writes `.agents/work-queue.json`. Child processes (the agent CLI invocations) do not touch the queue file. This eliminates race conditions without requiring file locking:
+
+- The orchestrator spawns a child
+- The child runs to completion and exits
+- The orchestrator's `wait` returns, and only then does it update the queue
+
+Because bash job control guarantees only one `wait` returns at a time, queue mutations are naturally serialized. No lock file, no `flock`, no database is required.
+
 ## Further Reading
 
 - `references/orchestrator-template.sh` — the template used by `run` to generate the orchestrator
 - `references/afk-loop-orchestrator.sh` — a standalone, heavily commented example script you can adapt for custom orchestration
+- `references/parallel-execution.md` — deep dive on concurrency caps, bash job control, and resume behavior
