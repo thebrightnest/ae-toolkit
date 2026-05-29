@@ -8,7 +8,7 @@ Upgrades the generated bash orchestrator from sequential to parallel execution. 
 
 ## Tasks
 
-1. **Rewrite orchestrator template for parallel job control** — M
+1. **Rewrite orchestrator template for parallel job control** — M ✓
 
    - Replace the single `while true` sequential loop with a main loop that tracks running jobs via bash job control
    - Maintain a `SLOTS` counter (current running jobs) and `MAX_JOBS` cap
@@ -18,19 +18,19 @@ Upgrades the generated bash orchestrator from sequential to parallel execution. 
    - On failure: set `STOP_SPAWN=1`, mark `failed`, drain remaining jobs, exit 1
    - On startup: scan `in-progress` tasks, warn if worktree exists but no PID detectable, mark `failed` to unblock resume
 
-2. **Add concurrency cap detection** — S
+2. **Add concurrency cap detection** — S ✓
 
    - Read `AET_WORK_JOBS` env var
    - Fallback to `nproc` / `sysctl hw.ncpu` / `4`
    - Hard ceiling at `8` to prevent fork bombs
    - Echo detected cap at orchestrator startup
 
-3. **Add end-of-run summary** — S
+3. **Add end-of-run summary** — S ✓
 
    - Print counts: succeeded, failed, skipped (already done), wall-clock elapsed time
    - Print next-step hint: `aet-work cleanup` or `aet-work status`
 
-4. **Merge branch to main and verify integration** — S
+4. **Merge branch to main and verify integration** — S ⏳ (deferred to aet-ship)
 
 **Size definitions:**
 
@@ -59,5 +59,5 @@ Upgrades the generated bash orchestrator from sequential to parallel execution. 
 
 ---
 
-_Stage: plan-approved_
-\_Next step: run `aet-pipeline-implement` or `aet-work`
+_Stage: synced_
+\_Next step: run `aet-ship`
