@@ -60,5 +60,5 @@ Updates `aet-work` skill documentation to reflect the new parallel execution beh
 
 ---
 
-_Stage: plan-approved_
-\_Next step: run `aet-pipeline-implement` or `aet-work`
+_Stage: synced_
+_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
