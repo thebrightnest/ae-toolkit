@@ -156,7 +156,7 @@ AFK loop with OS-level process isolation and parallel execution. Generates a bas
 
 6. **Concurrency cap:**
 
-   - Default: detected from `$(nproc)` (Linux) or `$(sysctl -n hw.ncpu)` (macOS), capped at 8
+   - Default: `4` jobs (override with `AET_WORK_JOBS` env var), hard cap at 8
    - Override: set `AET_WORK_JOBS` environment variable
    - The orchestrator never exceeds the cap to prevent resource exhaustion
 
