@@ -127,5 +127,5 @@ The existing resume semantics are preserved:
 
 ---
 
-_Stage: scope-validated_
-\_Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)
+_Stage: synced_
+\_Next step: run `aet-ship`
