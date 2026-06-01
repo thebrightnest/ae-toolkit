@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **aet-work**: Fixed orchestrator timeout on long-running `aet-pipeline-implement` tasks. The skill now explicitly specifies `timeout=7200` (2 hours) when spawning the orchestrator, and instructs agents to use `--afk` (or equivalent headless mode) instead of `--yolo` so approval gates auto-dismiss in unattended background jobs. Updated reference orchestrator template and generated script accordingly. ([Bug Report](docs/bugs/2026-06-01-orchestrator-timeout-bug-report.md))
+
 ## 0.2.0
 
 ### Changed

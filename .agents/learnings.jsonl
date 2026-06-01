@@ -37,3 +37,4 @@
     "fix": "Added 'Design-to-implementation hard gate' to AGENTS.md Agentic Workflow Guardrails. Created .agents/commands/approval-checkpoint.md as a reusable procedure requiring explicit file enumeration and approval before any implementation.",
     "prevents": "Implied approval escalation where free-form design conversations ('yes', 'sounds good') are treated as implementation approval."
   }
+{"timestamp":"2026-06-01T18:00:30+01:00","context":"aet-work orchestrator","lesson":"Unattended orchestrators must use the most headless CLI mode (e.g. --afk, not --yolo) so approval gates auto-dismiss in background jobs with no terminal. Default Shell timeouts (60s foreground, 15min background) are too short for aet-pipeline-implement tasks that run 30-60 min each. Always specify an explicit timeout (e.g. 7200s) when spawning the orchestrator.","source":"docs/bugs/2026-06-01-orchestrator-timeout-bug-report.md"}
