@@ -32,7 +32,7 @@ QUEUE_FILE="$REPO_ROOT/.agents/work-queue.json"
 # plan.md and the path to its dedicated worktree directory.
 #
 # Examples:
-#   Kimi:    kimi --print --yolo -p "Run aet-pipeline-implement on $plan_file" --work-dir "$worktree_dir"
+#   Kimi:    kimi --afk -p "Run aet-pipeline-implement on $plan_file" -w "$worktree_dir"
 #   Claude:  claude --print --dangerously-skip-permissions "Run aet-pipeline-implement on $plan_file" --add-dir "$worktree_dir"
 #   Aider:   aider --message "Implement the plan in $plan_file" --file "$worktree_dir"
 #

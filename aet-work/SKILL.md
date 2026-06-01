@@ -123,6 +123,9 @@ AFK loop with OS-level process isolation and parallel execution. Generates a bas
      `claude`, `cursor`).
    - Determine the flags your CLI accepts for: (a) passing a prompt/message,
      (b) setting the working directory, and (c) any recommended non-interactive flags.
+     For unattended execution use the most headless mode available (e.g. Kimi: `--afk`,
+     Claude: `--dangerously-skip-permissions`, Cursor: non-interactive flags) so that
+     approval gates are auto-dismissed and the agent never blocks for human input.
    - Use these self-reported values for the template variables `CLI_BIN`, `CLI_ARGS`,
      `CLI_PROMPT_FLAG`, and `CLI_WORKDIR_FLAG`.
 
@@ -151,7 +154,9 @@ AFK loop with OS-level process isolation and parallel execution. Generates a bas
      - Allow currently running tasks to finish (drain)
      - Do not start new tasks
      - Exit with failure after drain completes
-   - `Shell(run_in_background=true)` to execute `scripts/.aet-work-orchestrator.sh`
+   - `Shell(run_in_background=true, timeout=7200)` to execute `scripts/.aet-work-orchestrator.sh`
+     (2-hour ceiling; aet-pipeline-implement tasks can run 30–60 min each, and 4 parallel
+     slots may need >1 hour for the first batch to finish)
    - `TaskOutput(block=true)` to wait for completion
 
 6. **Concurrency cap:**
