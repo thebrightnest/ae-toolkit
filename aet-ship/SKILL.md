@@ -64,17 +64,18 @@ Run the pre-merge validation gate.
 7. **Run `aet-cso`** — security audit if the diff touches auth, data, API, or dependencies
 8. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
 9. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
-10. **Bump VERSION** — auto-bump patch. Stop for human decision on MINOR/MAJOR.
-11. **Push and open PR** — push branch, create PR with description linking plan.md and PRD
+10. **Push and open PR** — push branch, create PR with description linking plan.md and PRD
 
-12. **Merge Verification** — after the PR is created and the user indicates it has been merged:
+    > **Version bump is not handled here.** Release versioning is the responsibility of a future `aet-release` skill. Do not commit `chore(release)` or VERSION changes on feature branches.
+
+11. **Merge Verification** — after the PR is created and the user indicates it has been merged:
 
     1. Run `git fetch origin`
 
-    2. **Merge Strategy Detection** (Step 12a):
+    2. **Merge Strategy Detection** (Step 11a):
 
        - Run: `git merge-base --is-ancestor HEAD origin/main`
-       - If exit 0: regular merge detected. Record `merge_strategy: regular` and continue to Step 13.
+       - If exit 0: regular merge detected. Record `merge_strategy: regular` and continue to Step 12.
        - If exit 1: possible squash merge. Run secondary verification:
 
          ```bash
@@ -83,7 +84,7 @@ Run the pre-merge validation gate.
          git merge-base --is-ancestor $MERGE_COMMIT origin/main
          ```
 
-         - If exit 0: squash merge verified. Record `merge_commit: $MERGE_COMMIT` and `merge_strategy: squash`. Continue to Step 13 with force-delete.
+         - If exit 0: squash merge verified. Record `merge_commit: $MERGE_COMMIT` and `merge_strategy: squash`. Continue to Step 12 with force-delete.
          - If exit 1: verification failed. STOP.
 
        - If `gh` is unavailable or the PR has no mergeCommit data, fall back to diff-based verification (see [references/squash-merge-handling.md](references/squash-merge-handling.md)).
@@ -120,12 +121,13 @@ Run the pre-merge validation gate.
          }
          ```
 
-       - Proceed to branch deletion (Step 13)
+       - Proceed to branch deletion (Step 12)
 
-13. **Safe Branch Deletion** — only run if merge verification passed:
+12. **Safe Branch Deletion** — only run if merge verification passed:
     - Regular merge: `git branch -d <branch>`
     - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)
-    - Print: `✓ Branch <branch> safely deleted.`
+    - Delete the remote branch: `git push origin --delete <branch>`
+    - Print: `✓ Branch <branch> safely deleted (local and remote).`
 
 **Stop conditions** (requires human intervention):
 
@@ -133,7 +135,6 @@ Run the pre-merge validation gate.
 - Test failures
 - Coverage drop below threshold
 - `aet-cso` fail (Critical/High findings)
-- MINOR or MAJOR version bump needed
 - Merge verification failure (commits not on origin/main)
 
 **Output:**
@@ -141,7 +142,6 @@ Run the pre-merge validation gate.
 - Clean branch with bisectable commits
 - PR with linked plan.md and PRD
 - CHANGELOG entry
-- Version bump
 - Merge verification status
 - Safe branch deletion confirmation (if applicable)
 
@@ -150,6 +150,6 @@ Run the pre-merge validation gate.
 - **Non-interactive by default** — the gate runs without human input until something is wrong
 - **Composable** — invokes `aet-review` and `aet-cso` rather than duplicating their logic
 - **Bisectable commits** — one logical change per commit, enforced at process level
-- **Auto-generated artifacts** — CHANGELOG and VERSION bump are mechanical, not human work
+- **Auto-generated artifacts** — CHANGELOG entry is mechanical, not human work
 - **Merge verification is a hard gate** — commits must be ancestors of `origin/main` before any branch deletion
 - **Shipping is not the end** — post-deploy monitoring (`canary`) closes the loop
