@@ -71,6 +71,11 @@ Step 6: aet-sync-docs   (sync PRD + plan to reality — only if divergences foun
 Branch ready for aet-ship
 ```
 
+**Guardrails:**
+
+- **Never create `docs/plans/plans/` or any nested duplicate directory.** If updating a plan, write to the existing `docs/plans/{ticket}-plan.md` path only.
+- **Never copy the entire `docs/plans/` directory.** The git worktree already contains tracked plans; only untracked files may be copied read-only by the orchestrator.
+
 **Procedure:**
 
 **Step 1 — aet-tdd:**
