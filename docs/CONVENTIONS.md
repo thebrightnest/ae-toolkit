@@ -153,6 +153,21 @@ When adding a new approval gate to a skill:
 - [ ] Unattended path logs the bypass with the exact emoji + wording above
 - [ ] Gate is categorized as "bypassable" or "hard stop even in unattended mode"
 
+## Branch Lifecycle
+
+### Feature Branches
+
+- Branch naming: `<task-id>` or `<type>/<task-id>-<slug>` (e.g., `waf-03-aet-ship-branch-lifecycle`).
+- The actual branch name is stored in the work queue `branch` field.
+- Feature branches are deleted locally **and remotely** after successful merge verification.
+- Do **not** append post-merge commits (plan stage updates, review reports, release bumps) to a branch that has already been merged.
+
+### Release Commits
+
+- `chore(release)` commits and `VERSION` file bumps are **only allowed on `main`**.
+- The pre-commit hook rejects release commits on non-main branches.
+- `aet-ship` does not bump versions; release versioning is a future skill responsibility.
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. The `.skill` package is a snapshot. No separate version field in frontmatter.
