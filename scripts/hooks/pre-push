@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# AE Toolkit pre-push hook
+# Short-circuits when all pushed refs are branch deletions.
+
+remote="${1:-}"
+url="${2:-}"
+
+all_deletions=true
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+    all_deletions=false
+    break
+  fi
+done
+
+if [ "$all_deletions" = true ]; then
+  echo "Pre-push: all refs are deletions — skipping coverage gate."
+  exit 0
+fi
+
+echo "Pre-push: running coverage gate..."
+make validate
+echo "Pre-push: coverage gate passed."
