@@ -108,8 +108,8 @@ with open('$QUEUE_FILE', 'w') as f:
 "
 }
 
-# Check merge_verified on all blocked_by entries for a task.
-check_merge_verified() {
+# Check that all blocked_by dependencies are merged before starting a task.
+check_dependency_merged() {
   local task_id="$1"
   python3 -c "
 import json, sys
@@ -122,9 +122,8 @@ for dep_id in task.get('blocked_by', []):
     dep = next((t for t in queue if t['id'] == dep_id), None)
     if not dep:
         continue
-    mv = dep.get('merge_verified')
-    if mv is not True:
-        print(f'⚠️  Warning: dependency {dep_id} is not merge-verified. '
+    if dep.get('status') != 'merged':
+        print(f'⚠️  Warning: dependency {dep_id} is not merged. '
               f'This task may build on a stale base. Continuing anyway.')
         sys.stdout.flush()
 "
@@ -229,7 +228,7 @@ while true; do
   echo "   Plan: $PLAN_FILE"
 
   # Merge verification
-  check_merge_verified "$TASK_ID"
+  check_dependency_merged "$TASK_ID"
 
   # Update queue state to in-progress
   mark_status "$TASK_ID" "in-progress"
