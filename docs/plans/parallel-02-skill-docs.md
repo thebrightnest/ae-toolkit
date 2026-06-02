@@ -60,5 +60,5 @@ Updates `aet-work` skill documentation to reflect the new parallel execution beh
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
+\_Stage: merged
+\_Next step: none — pipeline complete

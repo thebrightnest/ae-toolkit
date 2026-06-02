@@ -40,5 +40,5 @@ Revert `aet-ship/SKILL.md`, pre-commit hook, and `docs/CONVENTIONS.md` to previo
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-pipeline-implement` or `aet-work`_
+\_Stage: merged
+\_Next step: none — pipeline complete

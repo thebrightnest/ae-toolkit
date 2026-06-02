@@ -41,5 +41,5 @@ As a toolkit user, when I invoke a planning skill with an imperative request, th
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
+\_Stage: merged
+\_Next step: none — pipeline complete

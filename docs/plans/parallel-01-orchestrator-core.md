@@ -59,5 +59,5 @@ Upgrades the generated bash orchestrator from sequential to parallel execution. 
 
 ---
 
-_Stage: synced_
-\_Next step: run `aet-ship`
+\_Stage: merged
+\_Next step: none — pipeline complete
