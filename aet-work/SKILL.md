@@ -33,6 +33,19 @@ If a stage is found, print at the start of execution: `"📍 Current stage: {sta
 
 ## Commands
 
+### Queue Terminal Statuses
+
+The work queue uses the following terminal statuses:
+
+| Status      | Meaning                                                                                                   | Set by                                |
+| ----------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `merged`    | Code is verified on `origin/main` (`merge_verified: true`)                                                | `post-ship-verify` or `mark-terminal` |
+| `done`      | **Deprecated.** Pipeline completed but not yet verified on main. Treated as `merged` for promotion logic. | Orchestrator (legacy)                 |
+| `abandoned` | Task explicitly cancelled with a documented reason                                                        | `mark-terminal`                       |
+| `failed`    | Pipeline failed; requires human inspection                                                                | Orchestrator                          |
+
+New tasks should reach `merged` or `abandoned`. `done` is retained for backwards compatibility.
+
 ### `init-queue`
 
 Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
@@ -45,7 +58,8 @@ Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
 4. Build the DAG using `blocks` and `blocked_by` arrays
 5. For each plan:
    - If its `plan_file` already exists in `existing_queue`, preserve its `status`, `merge_verified`, `merge_commit`, `completed_at`, `merged_at`, and `branch`
-   - If new, set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise; set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`
+   - If new, set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise; set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
+   - **Branch naming:** the orchestrator uses the task ID as the branch name. If a task requires a prefixed branch (e.g., `feat/`), store the actual branch name in the `branch` field during `init-queue` or via `mark-terminal`.
 6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
 7. Set `queue_updated_at` to the current ISO-8601 timestamp
 8. Write `.agents/work-queue.json`
@@ -65,7 +79,7 @@ Incrementally sync `docs/plans/*.md` into the existing work queue without losing
    - **Validate task sizes:** Scan the plan's task list. If any task exceeds the AI-complexity limit (> 8 files OR > 300 diff lines), refuse to add the plan and emit a split suggestion. If the plan contains `⚠️ ATOMIC OVERSIZED`, add it but set `oversized: true` on the queue entry.
    - **Validate atomicity:** If the plan references other plan files or contains multiple "Phase" sections, emit a warning and skip it. Non-atomic documents belong in `docs/roadmaps/` or `docs/audits/`.
    - Set status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
-   - Set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`
+   - Set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
    - Append to queue array
 4. For any queue entry whose `plan_file` no longer exists on disk:
    - Set `status: "orphaned"` and print a warning
@@ -87,9 +101,10 @@ Show the current state of the work queue.
    - Print `Run init-queue to sync, or acknowledge each plan manually.`
    - **Do not report "all clear" even if all tracked tasks are done**
 2. Read `.agents/work-queue.json`
-3. Report counts: unblocked, blocked, in-progress, done, failed
+3. Report counts: unblocked, blocked, in-progress, done, merged, abandoned, failed
 4. List the next 3 unblocked tasks (topological order)
 5. List any failed tasks (require human attention)
+6. **Worktree validation:** For each task with a `worktree` field, check if the directory exists. If missing, print `⚠️ Stale worktree: {task_id} → {path} does not exist. Run cleanup to repair.`
 
 ### `next`
 
@@ -219,9 +234,31 @@ Detect tasks marked `done` or `merged` whose commits are not on `origin/main`.
    - Unverifiable tasks: print task ID and note missing metadata
    - If none: print `✅ No drift detected. All done/merged tasks are on origin/main.`
 
+### `mark-terminal`
+
+Mark a task as `merged` or `abandoned`. This is the only supported way to set a terminal status manually.
+
+**Procedure:**
+
+1. Read `.agents/work-queue.json`
+2. Find the task by ID
+3. If setting to `merged`:
+   - Verify `merge_verified: true` and `merge_commit` is set
+   - If not verified, STOP and print: `⛔ Cannot mark as merged: merge_verified is false. Run aet-ship and post-ship-verify first.`
+4. If setting to `abandoned`:
+   - Require a `reason` argument (non-empty string)
+   - Set `abandoned_at` to current ISO-8601 timestamp
+   - Print: `⚠️ Task {id} marked abandoned. Reason: {reason}`
+5. Write `.agents/work-queue.json`
+
+**Rules:**
+
+- Never mark a task `merged` without `merge_verified: true`
+- Never mark a task `done` manually; use `merged` (if on main) or `abandoned` (if cancelled)
+
 ### `cleanup`
 
-Remove worktrees for tasks that are merge-verified.
+Remove worktrees for tasks that are merge-verified, and repair stale queue entries.
 
 **Procedure:**
 
@@ -235,7 +272,10 @@ Remove worktrees for tasks that are merge-verified.
    # Then force-remove if safe: git worktree remove --force .worktrees/<task-id>
    ```
 
-3. Report removed and remaining worktrees
+3. **Stale worktree repair:** For each task with a `worktree` field:
+   - If the directory does not exist, clear `worktree: null` and print `Repaired stale worktree field for {task_id}`
+   - If the directory exists but has 0 commits ahead of main (`git rev-list --count main..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
+4. Report removed, repaired, and remaining worktrees
 
 ## Key Principles
 

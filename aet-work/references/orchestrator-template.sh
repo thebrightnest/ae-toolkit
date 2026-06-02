@@ -96,7 +96,7 @@ promote_dependents() {
 import json
 with open('$QUEUE_FILE', 'r') as f:
     queue = json.load(f)
-done_ids = {t['id'] for t in queue if t.get('status') == 'done'}
+done_ids = {t['id'] for t in queue if t.get('status') in ('done', 'merged')}
 for task in queue:
     if task.get('status') == 'blocked':
         blockers = task.get('blocked_by', [])
@@ -126,6 +126,24 @@ for dep_id in task.get('blocked_by', []):
         print(f'⚠️  Warning: dependency {dep_id} is not merge-verified. '
               f'This task may build on a stale base. Continuing anyway.')
         sys.stdout.flush()
+"
+}
+
+record_task_meta() {
+  local task_id="$1"
+  local worktree_dir="$2"
+  local branch="$3"
+  python3 -c "
+import json
+with open('$QUEUE_FILE', 'r') as f:
+    queue = json.load(f)
+for task in queue:
+    if task['id'] == '$task_id':
+        task['worktree'] = '$worktree_dir'
+        task['branch'] = '$branch'
+with open('$QUEUE_FILE', 'w') as f:
+    json.dump(queue, f, indent=2)
+    f.write('\n')
 "
 }
 
@@ -251,12 +269,14 @@ spawn_task() {
 
   # Worktree setup (idempotent)
   WORKTREE_DIR="$REPO_ROOT/.worktrees/$task_id"
+  BRANCH_NAME="$task_id"
   if [ ! -d "$WORKTREE_DIR" ]; then
     echo "   Creating worktree: $WORKTREE_DIR"
-    git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" -b "$task_id"
+    git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME"
   else
     echo "   Reusing existing worktree: $WORKTREE_DIR"
   fi
+  record_task_meta "$task_id" "$WORKTREE_DIR" "$BRANCH_NAME"
 
   # Run task in subshell so directory changes don't affect the main loop
   (
@@ -369,6 +389,18 @@ while true; do
       if [ "$EXIT_CODE" -eq 0 ]; then
         echo "   ✅ Task completed successfully"
         mark_status "$TASK_ID" "done"
+        python3 -c "
+import json
+from datetime import datetime
+with open('$QUEUE_FILE', 'r') as f:
+    queue = json.load(f)
+for task in queue:
+    if task['id'] == '$TASK_ID':
+        task['completed_at'] = datetime.now().isoformat()
+with open('$QUEUE_FILE', 'w') as f:
+    json.dump(queue, f, indent=2)
+    f.write('\n')
+"
         promote_dependents
         SUCCESSES=$((SUCCESSES + 1))
       else

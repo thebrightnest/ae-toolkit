@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed
+Accepted
+
+**Validated by:** `workflow-audit-2026-06-01.md` — Coverage Batch 2 cleanup confirmed the same pattern across TEST-5, E2E-critical-journeys, KNW-T1, and TEST-3. Local branch deletion alone is insufficient; remote branches persist and accumulate post-merge commits.
 
 ## Context
 
