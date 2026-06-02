@@ -24,13 +24,13 @@ As a toolkit user, when I invoke a planning skill with an imperative request, th
 
 ## Task List
 
-1. [ ] Update `aet-plan/SKILL.md` with lockout section, rules, and principles
-2. [ ] Update `aet-pipeline-plan/SKILL.md` with lockout section, Step 0 banner, and principles
-3. [ ] Update `aet-discover/SKILL.md` with lockout language
-4. [ ] Update `aet-validate-scope/SKILL.md` with lockout language
-5. [ ] Create ADR `docs/adr/002-planning-implementation-lockout.md`
-6. [ ] Run `make validate`
-7. [ ] Run `make package`
+1. [x] Update `aet-plan/SKILL.md` with lockout section, rules, and principles
+2. [x] Update `aet-pipeline-plan/SKILL.md` with lockout section, Step 0 banner, and principles
+3. [x] Update `aet-discover/SKILL.md` with lockout language
+4. [x] Update `aet-validate-scope/SKILL.md` with lockout language
+5. [x] Create ADR `docs/adr/002-planning-implementation-lockout.md`
+6. [x] Run `make validate`
+7. [x] Run `make package`
 
 ## Self-Validation Strategy
 
@@ -41,5 +41,5 @@ As a toolkit user, when I invoke a planning skill with an imperative request, th
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-pipeline-implement` or `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
