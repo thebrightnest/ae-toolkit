@@ -135,7 +135,6 @@ Run the pre-merge validation gate.
 - Test failures
 - Coverage drop below threshold
 - `aet-cso` fail (Critical/High findings)
-
 - Merge verification failure (commits not on origin/main)
 
 **Output:**
@@ -143,7 +142,6 @@ Run the pre-merge validation gate.
 - Clean branch with bisectable commits
 - PR with linked plan.md and PRD
 - CHANGELOG entry
-
 - Merge verification status
 - Safe branch deletion confirmation (if applicable)
 
