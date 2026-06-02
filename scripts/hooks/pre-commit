@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# AE Toolkit pre-commit hook
+# Runs markdownlint, format-check, and secrets scan.
+
+echo "Running pre-commit checks..."
+
+if command -v pre-commit > /dev/null 2>&1; then
+  pre-commit run
+else
+  echo "pre-commit not found; running fallback checks..."
+  make lint
+  make format-check
+fi
+
+echo "Pre-commit checks passed."
