@@ -71,6 +71,20 @@ Step 6: aet-sync-docs   (sync PRD + plan to reality — only if divergences foun
 Branch ready for aet-ship
 ```
 
+**Step Budget & Terminal Mode:**
+
+Agents have a finite step budget (typically 100 steps). When fewer than 10 steps remain, the pipeline MUST enter terminal mode:
+
+1. **Skip non-essential stages** — do not start aet-review, aet-cso, or aet-sync-docs if not already in progress.
+2. **Reserve the final ~5 steps for git actions only:**
+   - Auto-fix lint/format issues
+   - `git add -A`
+   - `git commit --no-edit` (use `--no-verify` if pre-commit hooks would fail and steps are exhausted)
+   - Optional `git push`
+3. **In terminal mode, do not generate or commit reports.** Reports from aet-qa, aet-review, and aet-cso are written to `/tmp/aet-reports/{task-id}/` and are never committed to the repository.
+
+The task ID should be derived from the active plan filename (e.g., `waf-04` from `waf-04-pipeline-implement-terminal.md`) or the current branch name.
+
 **Guardrails:**
 
 - **Never create `docs/plans/plans/` or any nested duplicate directory.** If updating a plan, write to the existing `docs/plans/{ticket}-plan.md` path only.
@@ -207,10 +221,7 @@ After all steps complete:
    ✓ Implementation pipeline complete.
 
    Branch: {branch}
-   Reports committed:
-   - .review-report.md
-   - .security-audit.md  (if aet-cso ran)
-   - .qa-report.md
+   Stage: synced
 
    Next step: run `aet-ship` to open a PR, then `post-ship-verify` to reach `merged`.
    ```
