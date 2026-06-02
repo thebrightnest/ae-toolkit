@@ -2,14 +2,22 @@
 
 ## Unreleased
 
+## [0.3.0] — 2026-06-02
+
 ### Added
 
+- **aet-release-prep**: New skill for automated release preparation. Analyzes commits since the last tag, detects versioning scheme, suggests semantic version bumps, and updates `CHANGELOG.md`.
+- **aet-pipeline-implement**: Terminal resilience improvements. Added step-budget mode for long-running pipelines, temporary report files for progress tracking, and `gitignore` safety checks to prevent leaking generated artifacts.
 - **aet-work**: Queue state hardening. Added `merged` and `abandoned` terminal statuses; `done` is deprecated but retained for backwards compatibility. New `mark-terminal` command enforces `merge_verified: true` before marking `merged`, and requires a `reason` for `abandoned`. `status` now validates `worktree` fields and flags stale entries. `cleanup` repairs stale worktree fields (missing directories or 0 commits ahead of main). Orchestrator template updated to record `worktree`/`branch` metadata and `completed_at` timestamps. ([PRD](docs/prds/workflow-audit-fixes-prd.md))
-
-- **docs/adr/003-toolkit-level-branch-safety.md**: Accepted. Validated by Coverage Batch 2 cleanup findings.
 - **aet-work**: Orchestrator auto-removes empty worktrees. After a task exits (success or failure), the orchestrator checks if the worktree has 0 commits ahead of main. If so, it removes the worktree and clears the queue's `worktree` field, preventing disk-space leaks from failed or no-op tasks.
 - **aet-work**: Orchestrator copies untracked plan and PRD files into worktrees read-only. This ensures agents can reference new plans that exist in the main working directory but have not yet been committed.
 - **aet-plan**, **aet-pipeline-implement**: Added explicit guardrails against creating `docs/plans/plans/` or any nested duplicate directory. Agents are instructed to write plan files directly to `docs/plans/{filename}` only.
+- **Repo hooks**: Pre-push deletion short-circuit. Added a safety hook that prevents accidental deletion of protected branches during push operations.
+
+### Changed
+
+- **aet-ship**: Branch lifecycle & release gating. Improved branch tracking through the shipping pipeline with clearer release readiness checks and gating logic.
+- **docs/adr/003-toolkit-level-branch-safety.md**: Accepted. Validated by Coverage Batch 2 cleanup findings.
 
 ### Fixed
 
