@@ -76,5 +76,5 @@ If issues arise:
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-pipeline-implement` or `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`, then `post-ship-verify` to reach `merged`_
