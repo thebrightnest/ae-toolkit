@@ -39,7 +39,7 @@ The work queue uses the following terminal statuses:
 
 | Status      | Meaning                                                                                                   | Set by                                |
 | ----------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `merged`    | Code is verified on `origin/main` (`merge_verified: true`)                                                | `post-ship-verify` or `mark-terminal` |
+| `merged`    | Code is verified on `origin/main`                                                                         | `post-ship-verify` or `mark-terminal` |
 | `done`      | **Deprecated.** Pipeline completed but not yet verified on main. Treated as `merged` for promotion logic. | Orchestrator (legacy)                 |
 | `abandoned` | Task explicitly cancelled with a documented reason                                                        | `mark-terminal`                       |
 | `failed`    | Pipeline failed; requires human inspection                                                                | Orchestrator                          |
@@ -57,8 +57,8 @@ Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
 3. For each plan.md, extract: title, task ID (from filename or frontmatter), blocking relationships
 4. Build the DAG using `blocks` and `blocked_by` arrays
 5. For each plan:
-   - If its `plan_file` already exists in `existing_queue`, preserve its `status`, `merge_verified`, `merge_commit`, `completed_at`, `merged_at`, and `branch`
-   - If new, set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise; set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
+   - If its `plan_file` already exists in `existing_queue`, preserve its `status`, `merge_commit`, `completed_at`, `merged_at`, and `branch`
+   - If new, set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise; set `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
    - **Branch naming:** the orchestrator uses the task ID as the branch name. If a task requires a prefixed branch (e.g., `feat/`), store the actual branch name in the `branch` field during `init-queue` or via `mark-terminal`.
 6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
 7. Set `queue_updated_at` to the current ISO-8601 timestamp
@@ -79,7 +79,7 @@ Incrementally sync `docs/plans/*.md` into the existing work queue without losing
    - **Validate task sizes:** Scan the plan's task list. If any task exceeds the AI-complexity limit (> 8 files OR > 300 diff lines), refuse to add the plan and emit a split suggestion. If the plan contains `⚠️ ATOMIC OVERSIZED`, add it but set `oversized: true` on the queue entry.
    - **Validate atomicity:** If the plan references other plan files or contains multiple "Phase" sections, emit a warning and skip it. Non-atomic documents belong in `docs/roadmaps/` or `docs/audits/`.
    - Set status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
-   - Set `merge_verified: false`, `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
+   - Set `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
    - Append to queue array
 4. For any queue entry whose `plan_file` no longer exists on disk:
    - Set `status: "orphaned"` and print a warning
@@ -148,7 +148,7 @@ AFK loop with OS-level process isolation and parallel execution. Generates a bas
 
    - Read `aet-work/references/orchestrator-template.sh` from this skill directory
    - Ensure the script includes merge verification: before each task, check
-     `merge_verified` on all `blocked_by` entries. Warn if unverified, but continue.
+     `status` on all `blocked_by` entries. Warn if any dependency status is not `merged`, but continue.
    - Substitute template variables using the self-reported CLI configuration from
      Step 3.
    - Write to `scripts/.aet-work-orchestrator.sh`
@@ -243,8 +243,8 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 1. Read `.agents/work-queue.json`
 2. Find the task by ID
 3. If setting to `merged`:
-   - Verify `merge_verified: true` and `merge_commit` is set
-   - If not verified, STOP and print: `⛔ Cannot mark as merged: merge_verified is false. Run aet-ship and post-ship-verify first.`
+   - Verify `merge_commit` is set and `git merge-base --is-ancestor <merge_commit> origin/main` passes
+   - If not verified, STOP and print: `⛔ Cannot mark as merged: merge_commit is missing or not on origin/main. Run aet-ship and post-ship-verify first.`
 4. If setting to `abandoned`:
    - Require a `reason` argument (non-empty string)
    - Set `abandoned_at` to current ISO-8601 timestamp
@@ -253,17 +253,17 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 
 **Rules:**
 
-- Never mark a task `merged` without `merge_verified: true`
+- Never mark a task `merged` without verifying its merge_commit is on origin/main
 - Never mark a task `done` manually; use `merged` (if on main) or `abandoned` (if cancelled)
 
 ### `cleanup`
 
-Remove worktrees for tasks that are merge-verified, and repair stale queue entries.
+Remove worktrees for merged tasks, and repair stale queue entries.
 
 **Procedure:**
 
 1. Read `.agents/work-queue.json`
-2. For each task where `merge_verified` is `true`:
+2. For each task where `status` is `merged`:
 
    ```bash
    git worktree remove .worktrees/<task-id>
