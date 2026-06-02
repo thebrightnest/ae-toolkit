@@ -41,7 +41,6 @@ Deleted branch feat/auth-refactor (was e5f6a7b).
 {
   "ticket": "feat/auth-refactor",
   "merge_commit": "a1b2c3d4...",
-  "merge_verified": true,
   "merge_strategy": "squash"
 }
 ```

@@ -122,7 +122,6 @@ Run the pre-merge validation gate.
          ```json
          {
            "merge_commit": "<commit-sha>",
-           "merge_verified": true,
            "merge_strategy": "regular|squash"
          }
          ```

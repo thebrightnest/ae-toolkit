@@ -188,7 +188,7 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
      *Next step: none — pipeline complete*
      ```
 
-   - If `.agents/work-queue.json` exists, find the task matching the current branch and set `merge_verified: true`, `merged_at` to current ISO-8601 timestamp, and `completed_at` to current ISO-8601 timestamp if not already set
+   - If `.agents/work-queue.json` exists, find the task matching the current branch and set `status` to `merged`, `merged_at` to current ISO-8601 timestamp, and `completed_at` to current ISO-8601 timestamp if not already set
    - Print:
 
      ```
@@ -196,7 +196,7 @@ Verify the branch has been merged to `origin/main` and advance the plan to `merg
 
      Branch: {branch}
      Stage: merged
-     Work queue: merge_verified
+     Work queue: status = merged
      ```
 
 ## Auto-retry Rules
