@@ -1,6 +1,6 @@
 ---
 name: aet-ship
-description: Pre-merge validation gate with bisectable commits, changelog generation, and PR creation. Use when code is reviewed and ready to merge. Fully non-interactive except for merge conflicts, test failures, and version bump decisions. Triggers on requests like "ship this," "prepare PR," or "merge ready."
+description: Pre-merge validation gate with bisectable commits, commit-message conventions, and PR creation. Use when code is reviewed and ready to merge. Fully non-interactive except for merge conflicts, test failures, and version bump decisions. Triggers on requests like "ship this," "prepare PR," or "merge ready."
 ---
 
 # aet-ship
@@ -12,6 +12,12 @@ Pre-merge validation for agentic engineering. The final gate before code lands.
 - Code has been implemented and reviewed
 - You're ready to open or update a PR
 - As the final step of the PIV loop
+
+## What This Skill Does NOT Do
+
+- Does not update project-level `CHANGELOG.md` or `PRODUCT.md` (use `aet-release-prep` for release documentation)
+- Does not decide when to cut a release or bump version (use `aet-release-prep` after merging)
+- Does not publish artifacts or create git tags
 
 ## Shared Preamble
 
