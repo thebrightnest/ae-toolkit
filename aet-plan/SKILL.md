@@ -205,6 +205,7 @@ From a ticket/story, produce a structured `plan.md` for implementation.
    - Files to create and modify
    - Ordered, granular task list with size labels (S/M/L)
    - Self-validation strategy (lint, type-check, unit tests, e2e)
+   - **Never create `docs/plans/plans/` or any nested duplicate directory.** Always write directly to `docs/plans/{filename}`.
 4. **Apply task size guardrails** to the task list. Evaluate each task against the dual-limit model (≤ 4 agent-hours; ≤ 8 files / 300 diff lines). Auto-split oversized tasks into subtasks with explicit dependencies. Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 5. Ask the user to review and iterate. This is the last chance to steer before implementation.
 
@@ -244,3 +245,4 @@ After the `plan` command completes and the plan.md is ready for review:
 - **Planning lockout** — Never edit application source files during planning. Research and exploration are allowed; code changes are not.
 - **Imperative input = planning target** — When the user says "do X," interpret it as "help me plan X."
 - **Session-sized tasks only** — No task larger than a single agent session. Split early, split often.
+- **No nested plan directories** — Never write to `docs/plans/plans/`. The correct path is always `docs/plans/{ticket-id}-plan.md`.

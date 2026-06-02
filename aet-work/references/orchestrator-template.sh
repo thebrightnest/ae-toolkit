@@ -147,6 +147,39 @@ with open('$QUEUE_FILE', 'w') as f:
 "
 }
 
+clear_worktree_field() {
+  local task_id="$1"
+  python3 -c "
+import json
+with open('$QUEUE_FILE', 'r') as f:
+    queue = json.load(f)
+for task in queue:
+    if task['id'] == '$task_id':
+        task['worktree'] = None
+with open('$QUEUE_FILE', 'w') as f:
+    json.dump(queue, f, indent=2)
+    f.write('\n')
+"
+}
+
+remove_empty_worktree() {
+  local task_id="$1"
+  local worktree_dir="$REPO_ROOT/.worktrees/$task_id"
+  if [ ! -d "$worktree_dir" ]; then
+    return 0
+  fi
+  local ahead
+  ahead=$(git -C "$worktree_dir" rev-list --count main..HEAD 2>/dev/null || echo 0)
+  if [ "$ahead" -eq 0 ]; then
+    if git -C "$REPO_ROOT" worktree remove "$worktree_dir" 2>/dev/null; then
+      clear_worktree_field "$task_id"
+      echo "   🧹 Removed empty worktree for $task_id (0 commits ahead of main)"
+    else
+      echo "   ⚠️  Empty worktree for $task_id has uncommitted changes; leaving for inspection"
+    fi
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Pre-branch hygiene check
 # ---------------------------------------------------------------------------
@@ -277,6 +310,16 @@ spawn_task() {
     echo "   Reusing existing worktree: $WORKTREE_DIR"
   fi
   record_task_meta "$task_id" "$WORKTREE_DIR" "$BRANCH_NAME"
+
+  # Copy untracked plan/PRD files into the worktree so the agent can see them.
+  # The git worktree already contains tracked files; we only need untracked ones.
+  while IFS= read -r untracked_file; do
+    dest="$WORKTREE_DIR/$untracked_file"
+    mkdir -p "$(dirname "$dest")"
+    cp -p "$REPO_ROOT/$untracked_file" "$dest"
+    chmod a-w "$dest"
+    echo "   📄 Copied untracked $untracked_file (read-only)"
+  done < <(git -C "$REPO_ROOT" ls-files --others --exclude-standard docs/plans/ docs/prds/)
 
   # Run task in subshell so directory changes don't affect the main loop
   (
@@ -409,6 +452,7 @@ with open('$QUEUE_FILE', 'w') as f:
         STOP_SPAWN=1
         FAILURES=$((FAILURES + 1))
       fi
+      remove_empty_worktree "$TASK_ID"
 
       break  # Handle one completion per outer iteration
     fi

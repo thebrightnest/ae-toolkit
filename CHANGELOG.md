@@ -7,6 +7,9 @@
 - **aet-work**: Queue state hardening. Added `merged` and `abandoned` terminal statuses; `done` is deprecated but retained for backwards compatibility. New `mark-terminal` command enforces `merge_verified: true` before marking `merged`, and requires a `reason` for `abandoned`. `status` now validates `worktree` fields and flags stale entries. `cleanup` repairs stale worktree fields (missing directories or 0 commits ahead of main). Orchestrator template updated to record `worktree`/`branch` metadata and `completed_at` timestamps. ([PRD](docs/prds/workflow-audit-fixes-prd.md))
 
 - **docs/adr/003-toolkit-level-branch-safety.md**: Accepted. Validated by Coverage Batch 2 cleanup findings.
+- **aet-work**: Orchestrator auto-removes empty worktrees. After a task exits (success or failure), the orchestrator checks if the worktree has 0 commits ahead of main. If so, it removes the worktree and clears the queue's `worktree` field, preventing disk-space leaks from failed or no-op tasks.
+- **aet-work**: Orchestrator copies untracked plan and PRD files into worktrees read-only. This ensures agents can reference new plans that exist in the main working directory but have not yet been committed.
+- **aet-plan**, **aet-pipeline-implement**: Added explicit guardrails against creating `docs/plans/plans/` or any nested duplicate directory. Agents are instructed to write plan files directly to `docs/plans/{filename}` only.
 
 ### Fixed
 

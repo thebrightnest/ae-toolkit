@@ -117,7 +117,8 @@ with open('$repo/.agents/work-queue.json') as f:
     queue = json.load(f)
 for t in queue:
     if t['id'] == '$task_id':
-        print(t.get('$field', 'NULL'))
+        val = t.get('$field', 'NULL')
+        print('NULL' if val is None else val)
         sys.exit(0)
 sys.exit(1)
 " "$repo"
@@ -127,6 +128,9 @@ sys.exit(1)
 run_orchestrator() {
   local repo="$1"
   cd "$repo"
+  # Commit any scaffold files so the pre-branch hygiene check passes
+  git add -A
+  git commit -q -m "test scaffold" || true
   set +e
   "$repo/scripts/.aet-work-orchestrator.sh" > "$TMPDIR/orchestrator.log" 2>&1
   local ec=$?
@@ -304,6 +308,54 @@ test_orphaned_in_progress() {
   TMPDIR=""
 }
 
+test_empty_worktree_cleanup_on_success() {
+  echo "TEST: empty worktree removed when agent makes no commits (success)"
+  setup_tmpdir
+  local repo
+  repo=$(setup_repo)
+  local cli
+  cli=$(create_mock_cli "mock-cli" 0 0)
+
+  generate_orchestrator "$repo" "$cli"
+
+  write_queue "$repo" \
+    '{"id":"t1","title":"Task 1","status":"unblocked","plan_file":"docs/plans/t1.md","blocked_by":[],"worktree":".worktrees/t1"}'
+
+  run_orchestrator "$repo"
+
+  assert "orchestrator exits 0" [ "$(cat "$TMPDIR/orchestrator.exit")" -eq 0 ]
+  assert "t1 done" [ "$(get_task_field "$repo" t1 status)" = "done" ]
+  assert "worktree directory removed" [ ! -d "$repo/.worktrees/t1" ]
+  assert "worktree field cleared" [ "$(get_task_field "$repo" t1 worktree)" = "NULL" ]
+
+  cleanup
+  TMPDIR=""
+}
+
+test_empty_worktree_cleanup_on_failure() {
+  echo "TEST: empty worktree removed when agent makes no commits (failure)"
+  setup_tmpdir
+  local repo
+  repo=$(setup_repo)
+  local cli
+  cli=$(create_mock_cli "mock-cli" 0 1)
+
+  generate_orchestrator "$repo" "$cli"
+
+  write_queue "$repo" \
+    '{"id":"t1","title":"Task 1","status":"unblocked","plan_file":"docs/plans/t1.md","blocked_by":[],"worktree":".worktrees/t1"}'
+
+  run_orchestrator "$repo"
+
+  assert "orchestrator exits non-zero" [ "$(cat "$TMPDIR/orchestrator.exit")" -ne 0 ]
+  assert "t1 failed" [ "$(get_task_field "$repo" t1 status)" = "failed" ]
+  assert "worktree directory removed" [ ! -d "$repo/.worktrees/t1" ]
+  assert "worktree field cleared" [ "$(get_task_field "$repo" t1 worktree)" = "NULL" ]
+
+  cleanup
+  TMPDIR=""
+}
+
 # ---- Main ---------------------------------------------------------------
 
 echo "============================================"
@@ -322,6 +374,8 @@ test_parallel_execution
 test_concurrency_cap
 test_drain_on_failure
 test_orphaned_in_progress
+test_empty_worktree_cleanup_on_success
+test_empty_worktree_cleanup_on_failure
 
 echo ""
 echo "============================================"
