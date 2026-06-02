@@ -168,6 +168,29 @@ When adding a new approval gate to a skill:
 - The pre-commit hook rejects release commits on non-main branches.
 - `aet-ship` does not bump versions; release versioning is a future skill responsibility.
 
+## Repository Hooks
+
+Hooks live in `scripts/hooks/` and must be symlinked from `.git/hooks/`:
+
+```bash
+ln -s $(pwd)/scripts/hooks/pre-push .git/hooks/pre-push
+ln -s $(pwd)/scripts/hooks/pre-commit .git/hooks/pre-commit
+```
+
+### pre-push
+
+Runs `make validate` before any push. Short-circuits (exits 0 immediately) when **all** pushed refs are branch deletions, so `git push origin --delete` is not blocked by a slow coverage gate.
+
+### pre-commit
+
+Runs the AE Toolkit quality checks:
+
+- **markdownlint** (`make lint`)
+- **format-check** (`make format-check`)
+- **secrets scan** (via `pre-commit run`, which includes `detect-private-key`)
+
+If the `pre-commit` framework is not installed, the hook falls back to `make lint` and `make format-check`.
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. The `.skill` package is a snapshot. No separate version field in frontmatter.
