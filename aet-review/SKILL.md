@@ -52,7 +52,11 @@ Staff-level diff review with multiple lenses.
    - **Removal Safety** — if the diff deletes symbols from bridge, API, registry, preload, or handler files, extract the deleted names and grep the codebase for remaining references. Flag any matches.
 4. For each issue found: classify as fix-now or flag-for-human
 5. Auto-fix obvious issues (typos, style, missing imports)
-6. Produce a review report with: pass/fail status, issues found, auto-fixes applied, human flags
+6. Produce a review report:
+   - Determine the task ID from the active plan filename or branch name
+   - Write the report to `/tmp/aet-reports/{task-id}/review-report.md`
+   - Include: pass/fail status, issues found, auto-fixes applied, human flags
+   - Do NOT write `.review-report.md` to the repository root
 
 ### `codex-review`
 

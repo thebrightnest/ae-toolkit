@@ -65,11 +65,11 @@ Scan the current branch diff for security issues.
 7. Check dependency changes:
    - New dependencies: are they maintained? any known issues?
    - Updated dependencies: check for known CVEs in the new version
-8. Produce a markdown security report with:
-   - Severity classification: Critical / High / Medium / Low / Info
-   - Description of each finding
-   - Recommended fix
-   - Pass/fail gate recommendation
+8. Produce a markdown security report:
+   - Determine the task ID from the active plan filename or branch name
+   - Write the report to `/tmp/aet-reports/{task-id}/security-audit.md`
+   - Include: severity classification (Critical / High / Medium / Low / Info), description of each finding, recommended fix, pass/fail gate recommendation
+   - Do NOT write `.security-audit.md` or `.security-*.md` to the repository root
 
 **Pass/fail gate:**
 
