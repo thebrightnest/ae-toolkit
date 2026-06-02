@@ -63,11 +63,10 @@ Run tiered automated validation.
    - Generate a regression test that would have caught it
    - Commit the fix and test atomically
 6. Produce a QA report:
-   - Pass/fail status per tier
-   - Bugs found and fixed
-   - Regression tests added
-   - Screenshot diffs (if browser mode used)
-   - Coverage delta
+   - Determine the task ID from the active plan filename or branch name
+   - Write the report to `/tmp/aet-reports/{task-id}/qa-report.md`
+   - Include: pass/fail status per tier, bugs found and fixed, regression tests added, screenshot diffs (if browser mode used), coverage delta
+   - Do NOT write `.qa-report.md` to the repository root
 
 **Browser tooling preference:**
 
