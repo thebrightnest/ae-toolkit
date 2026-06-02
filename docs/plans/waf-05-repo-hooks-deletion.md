@@ -40,5 +40,5 @@ Restore pre-push hook from git history.
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-pipeline-implement` or `aet-work`_
+\_Stage: merged
+\_Next step: none — pipeline complete
