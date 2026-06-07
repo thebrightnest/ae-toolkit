@@ -96,7 +96,7 @@ promote_dependents() {
 import json
 with open('$QUEUE_FILE', 'r') as f:
     queue = json.load(f)
-done_ids = {t['id'] for t in queue if t.get('status') in ('done', 'merged')}
+done_ids = {t['id'] for t in queue if t.get('status') in ('done', 'merged', 'merge_verified')}
 for task in queue:
     if task.get('status') == 'blocked':
         blockers = task.get('blocked_by', [])
@@ -121,7 +121,7 @@ for dep_id in task.get('blocked_by', []):
     dep = next((t for t in queue if t['id'] == dep_id), None)
     if not dep:
         continue
-    if dep.get('status') != 'merged':
+    if dep.get('status') not in ('merged', 'merge_verified'):
         print(f'⚠️  Warning: dependency {dep_id} is not merged. '
               f'This task may build on a stale base. Continuing anyway.')
         sys.stdout.flush()

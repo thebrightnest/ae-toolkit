@@ -37,14 +37,15 @@ If a stage is found, print at the start of execution: `"📍 Current stage: {sta
 
 The work queue uses the following terminal statuses:
 
-| Status      | Meaning                                                                                                   | Set by                                |
-| ----------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `merged`    | Code is verified on `origin/main`                                                                         | `post-ship-verify` or `mark-terminal` |
-| `done`      | **Deprecated.** Pipeline completed but not yet verified on main. Treated as `merged` for promotion logic. | Orchestrator (legacy)                 |
-| `abandoned` | Task explicitly cancelled with a documented reason                                                        | `mark-terminal`                       |
-| `failed`    | Pipeline failed; requires human inspection                                                                | Orchestrator                          |
+| Status           | Meaning                                                                                                                        | Set by                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `merged`         | Code is verified on `origin/main`                                                                                              | `post-ship-verify` or `mark-terminal` |
+| `merge_verified` | **Legacy alias for `merged`.** Some pipelines historically set this status. Normalized to `merged` by `init-queue` and `sync`. | Orchestrator (legacy)                 |
+| `done`           | **Deprecated.** Pipeline completed but not yet verified on main. Treated as `merged` for promotion logic.                      | Orchestrator (legacy)                 |
+| `abandoned`      | Task explicitly cancelled with a documented reason                                                                             | `mark-terminal`                       |
+| `failed`         | Pipeline failed; requires human inspection                                                                                     | Orchestrator                          |
 
-New tasks should reach `merged` or `abandoned`. `done` is retained for backwards compatibility.
+New tasks should reach `merged` or `abandoned`. `done` and `merge_verified` are retained for backwards compatibility and normalized to `merged` during queue sync.
 
 ### `init-queue`
 
@@ -58,6 +59,7 @@ Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
 4. Build the DAG using `blocks` and `blocked_by` arrays
 5. For each plan:
    - If its `plan_file` already exists in `existing_queue`, preserve its `status`, `merge_commit`, `completed_at`, `merged_at`, and `branch`
+   - **Normalize legacy statuses:** if an existing task has `status: "merge_verified"`, rewrite it to `status: "merged"`
    - If new, set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise; set `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
    - **Branch naming:** the orchestrator uses the task ID as the branch name. If a task requires a prefixed branch (e.g., `feat/`), store the actual branch name in the `branch` field during `init-queue` or via `mark-terminal`.
 6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
@@ -81,11 +83,12 @@ Incrementally sync `docs/plans/*.md` into the existing work queue without losing
    - Set status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
    - Set `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
    - Append to queue array
-4. For any queue entry whose `plan_file` no longer exists on disk:
+4. **Normalize legacy statuses:** For any existing queue entry with `status: "merge_verified"`, rewrite it to `status: "merged"`
+5. For any queue entry whose `plan_file` no longer exists on disk:
    - Set `status: "orphaned"` and print a warning
-5. Update `queue_updated_at` to current ISO-8601 timestamp
-6. Write `.agents/work-queue.json`
-7. Report: `N new tasks added, M existing tasks preserved, K orphaned tasks flagged`
+6. Update `queue_updated_at` to current ISO-8601 timestamp
+7. Write `.agents/work-queue.json`
+8. Report: `N new tasks added, M existing tasks preserved, K orphaned tasks flagged`
 
 **When to use:** After any session that creates or modifies plan files (e.g., after `aet-plan` or `aet-pipeline-plan`). This is the standard maintenance command; `init-queue` is for first-time setup.
 
@@ -101,10 +104,11 @@ Show the current state of the work queue.
    - Print `Run init-queue to sync, or acknowledge each plan manually.`
    - **Do not report "all clear" even if all tracked tasks are done**
 2. Read `.agents/work-queue.json`
-3. Report counts: unblocked, blocked, in-progress, done, merged, abandoned, failed
-4. List the next 3 unblocked tasks (topological order)
-5. List any failed tasks (require human attention)
-6. **Worktree validation:** For each task with a `worktree` field, check if the directory exists. If missing, print `⚠️ Stale worktree: {task_id} → {path} does not exist. Run cleanup to repair.`
+3. Report counts: unblocked, blocked, in-progress, done, merged, merge_verified, abandoned, failed
+4. **Legacy status nudge:** If any tasks have `status: "merge_verified"`, print `Run aet-work sync to normalize legacy merge_verified statuses to merged.`
+5. List the next 3 unblocked tasks (topological order)
+6. List any failed tasks (require human attention)
+7. **Worktree validation:** For each task with a `worktree` field, check if the directory exists. If missing, print `⚠️ Stale worktree: {task_id} → {path} does not exist. Run cleanup to repair.`
 
 ### `next`
 
@@ -225,7 +229,7 @@ Detect tasks marked `done` or `merged` whose commits are not on `origin/main`.
 
 1. Read `.agents/work-queue.json`
 2. Run `git fetch origin`
-3. For each task with status `done` or `merged`:
+3. For each task with status `done`, `merged`, or `merge_verified`:
    a. If `merge_commit` is set and `git merge-base --is-ancestor <merge_commit> origin/main` passes, skip (verified)
    b. If `branch` is set, run `git merge-base --is-ancestor <branch> origin/main`. If it fails, record as drifted
    c. If neither `merge_commit` nor `branch` is available, record as unverifiable
@@ -242,19 +246,22 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 
 1. Read `.agents/work-queue.json`
 2. Find the task by ID
-3. If setting to `merged`:
+3. If the requested status is `merge_verified`:
+   - STOP and print: `⛔ merge_verified is a legacy status. Use merged instead.`
+4. If setting to `merged`:
    - Verify `merge_commit` is set and `git merge-base --is-ancestor <merge_commit> origin/main` passes
    - If not verified, STOP and print: `⛔ Cannot mark as merged: merge_commit is missing or not on origin/main. Run aet-ship and post-ship-verify first.`
-4. If setting to `abandoned`:
+5. If setting to `abandoned`:
    - Require a `reason` argument (non-empty string)
    - Set `abandoned_at` to current ISO-8601 timestamp
    - Print: `⚠️ Task {id} marked abandoned. Reason: {reason}`
-5. Write `.agents/work-queue.json`
+6. Write `.agents/work-queue.json`
 
 **Rules:**
 
 - Never mark a task `merged` without verifying its merge_commit is on origin/main
 - Never mark a task `done` manually; use `merged` (if on main) or `abandoned` (if cancelled)
+- Never mark a task `merge_verified`; it is normalized automatically to `merged`
 
 ### `cleanup`
 
@@ -263,7 +270,7 @@ Remove worktrees for merged tasks, and repair stale queue entries.
 **Procedure:**
 
 1. Read `.agents/work-queue.json`
-2. For each task where `status` is `merged`:
+2. For each task where `status` is `merged` or `merge_verified`:
 
    ```bash
    git worktree remove .worktrees/<task-id>
@@ -272,7 +279,7 @@ Remove worktrees for merged tasks, and repair stale queue entries.
    # Then force-remove if safe: git worktree remove --force .worktrees/<task-id>
    ```
 
-3. **Stale worktree repair:** For each task with a `worktree` field:
+3. **Stale worktree repair (universal):** For each task with a `worktree` field, regardless of status:
    - If the directory does not exist, clear `worktree: null` and print `Repaired stale worktree field for {task_id}`
    - If the directory exists but has 0 commits ahead of main (`git rev-list --count main..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
 4. Report removed, repaired, and remaining worktrees
