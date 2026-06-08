@@ -75,11 +75,12 @@ Before writing any code, plan what to test and how.
 **Procedure:**
 
 1. Confirm with the user what interface changes are needed
-2. Confirm which behaviors to test (prioritize — you can't test everything)
+2. Enumerate every new source file or class introduced by the plan. For each, identify the behavior(s) it provides and write at least one test name. This list is the minimum test plan — behaviors beyond it are optional additions
 3. Identify opportunities for [deep modules](references/deep-modules.md) (small interface, deep implementation)
 4. Design interfaces for [testability](references/interface-design.md)
 5. List the behaviors to test (not implementation steps)
-6. Get user approval on the plan
+6. If the plan is a vertical slice that introduces both a backend endpoint and a frontend consumer, include an API boundary test. See [references/api-boundary-tests.md](references/api-boundary-tests.md) for patterns
+7. Get user approval on the plan
 
 **Ask:** "What should the public interface look like? Which behaviors are most important to test?"
 
@@ -146,9 +147,13 @@ After all tests pass, improve the code without changing behavior.
 [ ] No speculative features added
 ```
 
+## Coverage Completeness
+
+Before declaring `tdd-complete`, run the test suite with coverage. List every new source file and its coverage percentage. Any file at 0% is a blocking failure — the `tdd-complete` stage cannot be set until every new file has at least one test touching it.
+
 ## Completion Protocol
 
-After `refactor` completes and all tests pass:
+After `refactor` completes, all tests pass, and coverage completeness is satisfied:
 
 1. Update the plan.md footer to:
 
