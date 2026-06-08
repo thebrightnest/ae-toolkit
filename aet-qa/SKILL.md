@@ -48,24 +48,36 @@ Run tiered automated validation.
    - Integration tests
    - Type checking
    - Linting
-3. **Call completeness check** (if diff touches API, bridge, preload, or handler files):
+3. **Coverage check:**
+   - Run the test suite with coverage reporting (use the project's existing coverage tool)
+   - Identify all source files that are new or modified in the current diff
+   - When a diff introduces new source files, verify each has coverage > 0% — the completeness property for the test coverage domain
+   - Any new file at 0% coverage is a QA failure at all tiers
+   - Any modified file where all changed lines are uncovered is flagged for human review
+4. **Call completeness check** (if diff touches API, bridge, preload, or handler files):
    - Grep renderer/client code for API call patterns using project conventions or heuristics (`*Api`, `*Bridge`, `invoke`, `fetch`, `rpc`, etc.)
    - List all unique external calls found in new or modified renderer code
    - Cross-reference each call with backend handlers, preload definitions, or API route files
    - Flag any orphaned call (no backend match) as a QA failure
-4. If browser testing is available (Playwright configured):
+5. If browser testing is available (Playwright configured):
    - Launch headless browser
    - Navigate through critical user flows
    - Fill forms, click buttons, verify state changes
    - Capture screenshots for visual regression
-5. For any bug found:
+6. For any bug found:
    - Fix the bug in source
    - Generate a regression test that would have caught it
    - Commit the fix and test atomically
-6. Produce a QA report:
+7. Produce a QA report:
    - Determine the task ID from the active plan filename or branch name
    - Write the report to `/tmp/aet-reports/{task-id}/qa-report.md`
-   - Include: pass/fail status per tier, bugs found and fixed, regression tests added, screenshot diffs (if browser mode used), coverage delta
+   - Include:
+     - pass/fail status per tier
+     - bugs found and fixed
+     - regression tests added
+     - screenshot diffs (if browser mode used)
+     - coverage delta
+     - **Coverage section:** list files checked, their coverage %, and which (if any) failed the 0% gate
    - Do NOT write `.qa-report.md` to the repository root
 
 **Browser tooling preference:**
@@ -73,6 +85,12 @@ Run tiered automated validation.
 - Prefer a compiled CLI browser tool (e.g., Playwright CLI) over MCP-based browser automation
 - MCP browsers are often slower (2–3 seconds per action) and cause context bloat
 - A compiled binary keeps browser automation fast, reliable, and out of the agent's context window
+
+**Coverage tooling:**
+
+- Use the coverage tool already configured for the project; do not hardcode a specific tool
+- Language-appropriate defaults: `php artisan test --coverage` for Laravel, `vitest --coverage` or `jest --coverage` for JS/TS, `pytest --cov` for Python, `go test -cover` for Go
+- If the project has no coverage tool configured, flag this as a setup gap rather than silently skipping the check
 
 ## Completion Protocol
 
