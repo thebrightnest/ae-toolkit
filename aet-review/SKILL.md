@@ -42,14 +42,22 @@ Staff-level diff review with multiple lenses.
 1. Read the git diff for the current branch (or files specified by user)
 2. Read the corresponding `docs/plans/{ticket}-plan.md` to compare implementation against plan
 3. Run through review lenses:
+
    - **Project Structure** — do new files/directories follow the same pattern as existing ones? If the project uses symlinks, are new entries created in the real location (symlink target) and linked correctly? Run `ls -la` on the parent directory for any path where new files were created.
    - **Architecture** — does the change fit the existing structure? Are modules deep or shallow?
    - **SQL Safety** — are queries parameterized? Any injection risks?
    - **Conditional Side Effects** — are there hidden side effects in conditional branches?
    - **Error Handling** — are all error paths handled? Are failures observable?
    - **Completeness** — does the diff fulfill the plan? Any acceptance criteria missed?
-   - **Tests** — are there tests for new behavior? Are edge cases covered?
+   - **Tests** — coverage completeness check:
+
+     1. For each new source file in the diff, verify at least one test file imports or references it. If none exists, classify as **fix-now**.
+     2. If the diff introduces both a new backend route/controller and new frontend API client code, verify an API boundary test exists. If none exists, classify as **fix-now**.
+
+     A "new source file" is any file added by the diff that is not a test file, config file, migration, seed, or type-only definition. Apply judgment — a file exporting only interfaces does not require a test; a file containing business logic, a controller, an observer, or a job does. See `references/test-coverage-check.md` for the mechanical procedure.
+
    - **Removal Safety** — if the diff deletes symbols from bridge, API, registry, preload, or handler files, extract the deleted names and grep the codebase for remaining references. Flag any matches.
+
 4. For each issue found: classify as fix-now or flag-for-human
 5. Auto-fix obvious issues (typos, style, missing imports)
 6. Produce a review report:

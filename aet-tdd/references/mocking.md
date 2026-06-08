@@ -5,7 +5,7 @@ Mock at **system boundaries** only:
 - External APIs (payment, email, etc.)
 - Databases (sometimes — prefer test DB)
 - Time/randomness
-- File system (sometimes)
+- File system (sometimes — see below)
 
 Don't mock:
 
@@ -58,3 +58,7 @@ The SDK approach means:
 - No conditional logic in test setup
 - Easier to see which endpoints a test exercises
 - Type safety per endpoint
+
+## File System
+
+Filesystem mocking is acceptable for I/O performance, but must **not** be used in tests whose purpose is validating path resolution or storage configuration — mocking the filesystem there hides the bug.

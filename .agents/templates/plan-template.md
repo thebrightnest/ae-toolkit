@@ -33,7 +33,8 @@ If a task exceeds the agent session limit (≤ 4 hr / ≤ 8 files / ≤ 300 line
 
 - [ ] Lint passes
 - [ ] Tests pass
-- [ ] Manual verification step
+- [ ] For each new source file introduced by this plan, name the test that will cover it
+- [ ] Distinguish test types: unit tests (single layer), integration tests (cross-layer), API boundary tests (frontend ↔ backend contract)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
