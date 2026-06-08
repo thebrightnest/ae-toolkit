@@ -206,8 +206,11 @@ From a ticket/story, produce a structured `plan.md` for implementation.
    - Ordered, granular task list with size labels (S/M/L)
    - Self-validation strategy (lint, type-check, unit tests, e2e)
    - **Never create `docs/plans/plans/` or any nested duplicate directory.** Always write directly to `docs/plans/{filename}`.
-4. **Apply task size guardrails** to the task list. Evaluate each task against the dual-limit model (≤ 4 agent-hours; ≤ 8 files / 300 diff lines). Auto-split oversized tasks into subtasks with explicit dependencies. Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
-5. Ask the user to review and iterate. This is the last chance to steer before implementation.
+4. **Validation strategy gate.** The self-validation strategy must list, for each new source file or module introduced by the plan, at least one specifically named test that will cover it. A strategy that only says "add tests" or "write tests for new behavior" without naming what is tested is flagged as incomplete and must be revised before the plan is saved as `plan-draft`.
+   - Distinguish test types: **unit tests** (single layer), **integration tests** (cross-layer within backend or frontend), and **API boundary tests** (frontend ↔ backend contract for vertical slices that introduce both sides).
+   - _Cross-Cutting Completeness framing:_ When a plan introduces new source files, verify each has a named test in the validation strategy.
+5. **Apply task size guardrails** to the task list. Evaluate each task against the dual-limit model (≤ 4 agent-hours; ≤ 8 files / 300 diff lines). Auto-split oversized tasks into subtasks with explicit dependencies. Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
+6. Ask the user to review and iterate. This is the last chance to steer before implementation.
 
 **Context discipline:**
 
