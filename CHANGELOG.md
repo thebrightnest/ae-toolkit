@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## [0.4.0] — 2026-06-08
+
+### Added
+
+- **aet-review**: Rewrote the **Tests** lens into a concrete two-part coverage completeness check. New source files without test coverage are classified as `fix-now`; diffs introducing both backend routes and frontend API clients without an API boundary test are also `fix-now`. Added `references/test-coverage-check.md` with the mechanical procedure. ([PR #33](https://github.com/thebrightnest/ae-toolkit/pull/33))
+- **aet-tdd**: Added **Coverage Completeness** hard gate before `tdd-complete`. The `plan-tests` step now enumerates every new source file introduced by the plan and mandates at least one named test per file. Added **API boundary integration test** mandate for vertical slices touching both frontend and backend. Added `references/api-boundary-tests.md` and `docs/adr/008-test-coverage-completeness.md`. ([PR #34](https://github.com/thebrightnest/ae-toolkit/pull/34))
+- **aet-plan**: Added **Validation strategy gate** to the `plan` command procedure. Plans must now name at least one specifically named test for each new source file or module, and distinguish between unit, integration, and API boundary tests. Frames under the Cross-Cutting Completeness framework (ADR-001). Updated `.agents/templates/plan-template.md` with structured checklist items replacing the generic "Manual verification step". ([PR #35](https://github.com/thebrightnest/ae-toolkit/pull/35))
+- **aet-qa**: Added **coverage gate** to the QA procedure. After the automated test suite runs, the agent now checks coverage thresholds and flags any new source files with 0% coverage. Added coverage tooling note with language-appropriate defaults (Laravel, React, etc.). ([PR #36](https://github.com/thebrightnest/ae-toolkit/pull/36))
+
+### Fixed
+
+- **aet-work**: `cleanup` command now correctly handles the legacy `merge_verified` status by normalizing it to `merged` before removal.
+
 ## [0.3.0] — 2026-06-02
 
 ### Added
