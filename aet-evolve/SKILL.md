@@ -80,6 +80,36 @@ Update the layer that allowed the issue so it doesn't happen again.
 }
 ```
 
+### `--toolkit`
+
+Mine toolkit-relevant retros across projects for patterns and propose toolkit-level changes.
+
+**When to Use**
+
+- Monthly maintenance pass
+- After every 5 retros have accumulated
+- Before a toolkit release, to ensure lessons are incorporated
+
+**Procedure:**
+
+1. Scan for `reports/*.md` (or `docs/retros/*.md`) files with `toolkit-relevant: true` in frontmatter
+2. For each qualifying retro, extract: problem, root cause, fix, prevents
+3. Group by pattern similarity (same root-cause layer or same prevention type)
+4. Produce a summary with:
+   - **Pattern frequency** — how many times each class of issue occurred
+   - **Proposed toolkit changes** — specific additions to AGENTS.md, commands, references, or templates
+   - **Recommended gates** — whether a new validation step, checklist item, or executable gate is warranted
+5. If a pattern has occurred 3+ times, flag it for escalation to an executable gate
+6. Output the report to stdout and, if running in a project with `.agents/learnings.jsonl`, append high-confidence proposals as draft entries
+
+**Periodicity:**
+
+| Trigger                      | Action                                |
+| ---------------------------- | ------------------------------------- |
+| Calendar (monthly)           | Run `--toolkit` as scheduled review   |
+| Count-based (every 5 retros) | Run `--toolkit` when threshold hit    |
+| Pre-release                  | Run `--toolkit` before `make package` |
+
 ## Key Principles
 
 - **Outer loop vs inner loop** — inner loop: chug through tickets. Outer loop: pause and improve the AI layer.
@@ -87,3 +117,4 @@ Update the layer that allowed the issue so it doesn't happen again.
 - **One fix, one layer** — don't rewrite everything. The smallest rule change that prevents recurrence.
 - **Compounding quality** — `.agents/learnings.jsonl` makes the system smarter across sessions, not just within them.
 - **High leverage** — improving one command can save dozens of engineer-hours going forward.
+- **Cross-project propagation** — toolkit-relevant findings in `reports/` are mined by `--toolkit` so lessons travel farther than one project.
