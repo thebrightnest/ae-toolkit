@@ -65,7 +65,9 @@ Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
 6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
 7. Set `queue_updated_at` to the current ISO-8601 timestamp
 8. Write `.agents/work-queue.json`
-9. Report: `N existing tasks preserved, M new tasks added`
+9. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to compute derived statuses from ground truth
+10. For any task where derived status differs from stored status, update the stored status to match the derived status and print a warning
+11. Report: `N existing tasks preserved, M new tasks added`
 
 ### `sync`
 
@@ -88,7 +90,9 @@ Incrementally sync `docs/plans/*.md` into the existing work queue without losing
    - Set `status: "orphaned"` and print a warning
 6. Update `queue_updated_at` to current ISO-8601 timestamp
 7. Write `.agents/work-queue.json`
-8. Report: `N new tasks added, M existing tasks preserved, K orphaned tasks flagged`
+8. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to compute derived statuses for all entries
+9. For any task where derived status differs from stored status, update the stored status to match the derived status and print a warning
+10. Report: `N new tasks added, M existing tasks preserved, K orphaned tasks flagged`
 
 **When to use:** After any session that creates or modifies plan files (e.g., after `aet-plan` or `aet-pipeline-plan`). This is the standard maintenance command; `init-queue` is for first-time setup.
 
@@ -103,12 +107,14 @@ Show the current state of the work queue.
    - List the orphaned plan filenames
    - Print `Run init-queue to sync, or acknowledge each plan manually.`
    - **Do not report "all clear" even if all tracked tasks are done**
-2. Read `.agents/work-queue.json`
-3. Report counts: unblocked, blocked, in-progress, done, merged, merge_verified, abandoned, failed
-4. **Legacy status nudge:** If any tasks have `status: "merge_verified"`, print `Run aet-work sync to normalize legacy merge_verified statuses to merged.`
-5. List the next 3 unblocked tasks (topological order)
-6. List any failed tasks (require human attention)
-7. **Worktree validation:** For each task with a `worktree` field, check if the directory exists. If missing, print `⚠️ Stale worktree: {task_id} → {path} does not exist. Run cleanup to repair.`
+2. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to get ground-truth statuses
+3. Read `.agents/work-queue.json`
+4. Report counts: unblocked, blocked, in-progress, done, merged, merge_verified, abandoned, failed
+5. **Derived status column:** For each task, show both stored status and derived status. If they differ, highlight the discrepancy.
+6. **Legacy status nudge:** If any tasks have `status: "merge_verified"`, print `Run aet-work sync to normalize legacy merge_verified statuses to merged.`
+7. List the next 3 unblocked tasks (topological order)
+8. List any failed tasks (require human attention)
+9. **Worktree validation:** For each task with a `worktree` field, check if the directory exists. If missing, print `⚠️ Stale worktree: {task_id} → {path} does not exist. Run cleanup to repair.`
 
 ### `next`
 
@@ -117,11 +123,12 @@ Identify and output the next unblocked task.
 **Procedure:**
 
 1. Run the `plan-drift` check. If drift is detected, refuse to pick a task and instruct the user to run `init-queue` first
-2. Read `.agents/work-queue.json`
-3. Find tasks with `status: "unblocked"`
-4. Pick the first in topological order (respecting the DAG)
-5. Output: task ID, title, plan_file path
-6. Update status to `in-progress` in the queue file
+2. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to get ground-truth statuses
+3. Read `.agents/work-queue.json`
+4. Find tasks with `status: "unblocked"`
+5. Pick the first in topological order (respecting the DAG)
+6. Output: task ID, title, plan_file path
+7. Update status to `in-progress` via `python3 scripts/aet-state.py transition <task_id> <current_status> in-progress .agents/work-queue.json`
 
 ### `run`
 
@@ -206,6 +213,24 @@ Parent agent session (clean)
 
 **Unattended mode:** The generated script sets `AET_EXECUTION_MODE=unattended` in the environment of every spawned subagent. Skills that have interactive approval gates (e.g., `aet-implement`, `aet-pipeline-implement`) detect this variable and skip gates that require human input, logging the bypass for auditability. See `references/context-isolation.md` for details.
 
+### `derive`
+
+Recompute all non-declarative status fields from ground truth (git, filesystem) using `scripts/aet-state.py`.
+
+**Procedure:**
+
+1. Run `python3 scripts/aet-state.py derive .agents/work-queue.json`
+2. For each task, the derived status is computed:
+   - `plan_file` exists on disk → `planned`
+   - `branch` exists locally → `in-progress`
+   - `git merge-base --is-ancestor <branch> origin/main` → `merged`
+   - `worktree` directory present → `has_worktree`
+3. Compare derived status against stored `status` for each task
+4. Report any mismatches as warnings (e.g., `⚠️ Task {id} stored as done but derived as in-progress`)
+5. Return the derived JSON for use by other commands
+
+**When to use:** Before any command that reads queue status (`status`, `next`, `run`), and after any sync or initialization.
+
 ### `plan-drift`
 
 Detect plan files that exist on disk but are not represented in the work queue.
@@ -240,28 +265,29 @@ Detect tasks marked `done` or `merged` whose commits are not on `origin/main`.
 
 ### `mark-terminal`
 
-Mark a task as `merged` or `abandoned`. This is the only supported way to set a terminal status manually.
+Mark a task as `merged` or `abandoned`. This is the only supported way to set a terminal status manually. Uses `scripts/aet-state.py` for legality validation and atomic updates.
 
 **Procedure:**
 
-1. Read `.agents/work-queue.json`
+1. Read `.agents/work-queue.json` to determine the task's current status
 2. Find the task by ID
 3. If the requested status is `merge_verified`:
    - STOP and print: `⛔ merge_verified is a legacy status. Use merged instead.`
 4. If setting to `merged`:
-   - Verify `merge_commit` is set and `git merge-base --is-ancestor <merge_commit> origin/main` passes
-   - If not verified, STOP and print: `⛔ Cannot mark as merged: merge_commit is missing or not on origin/main. Run aet-ship and post-ship-verify first.`
+   - Run `python3 scripts/aet-state.py validate <task_id> <current_status> merged .agents/work-queue.json`
+   - If validation fails, STOP and print the error message
+   - If validation passes, run `python3 scripts/aet-state.py transition <task_id> <current_status> merged .agents/work-queue.json`
 5. If setting to `abandoned`:
    - Require a `reason` argument (non-empty string)
-   - Set `abandoned_at` to current ISO-8601 timestamp
+   - Run `python3 scripts/aet-state.py transition <task_id> <current_status> abandoned .agents/work-queue.json --reason="<reason>"`
    - Print: `⚠️ Task {id} marked abandoned. Reason: {reason}`
-6. Write `.agents/work-queue.json`
 
 **Rules:**
 
 - Never mark a task `merged` without verifying its merge_commit is on origin/main
 - Never mark a task `done` manually; use `merged` (if on main) or `abandoned` (if cancelled)
 - Never mark a task `merge_verified`; it is normalized automatically to `merged`
+- Always use `aet-state transition` instead of direct JSON mutation
 
 ### `cleanup`
 
@@ -269,8 +295,9 @@ Remove worktrees for merged tasks, and repair stale queue entries.
 
 **Procedure:**
 
-1. Read `.agents/work-queue.json`
-2. For each task where `status` is `merged` or `merge_verified`:
+1. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to get ground-truth statuses
+2. Read `.agents/work-queue.json`
+3. For each task where derived status is `merged` (or stored status is `merged`/`merge_verified`):
 
    ```bash
    git worktree remove .worktrees/<task-id>
@@ -279,10 +306,10 @@ Remove worktrees for merged tasks, and repair stale queue entries.
    # Then force-remove if safe: git worktree remove --force .worktrees/<task-id>
    ```
 
-3. **Stale worktree repair (universal):** For each task with a `worktree` field, regardless of status:
-   - If the directory does not exist, clear `worktree: null` and print `Repaired stale worktree field for {task_id}`
+4. **Stale worktree repair (universal):** For each task with a `worktree` field, regardless of status:
+   - If the directory does not exist, clear `worktree: null` via `aet-state transition` (or direct JSON update if the task status is unchanged) and print `Repaired stale worktree field for {task_id}`
    - If the directory exists but has 0 commits ahead of main (`git rev-list --count main..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
-4. Report removed, repaired, and remaining worktrees
+5. Report removed, repaired, and remaining worktrees
 
 ## Key Principles
 
