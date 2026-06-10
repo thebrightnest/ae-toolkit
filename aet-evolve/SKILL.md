@@ -22,7 +22,7 @@ Before executing any command in this skill, collect the following context:
 - `BRANCH` — current git branch
 - `REPO_STATE` — clean / dirty / merge-conflict
 - `AGENTS_MD` — presence and last-modified date of AGENTS.md
-- `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
+- `LEARNINGS` — entries from `.agents/learnings.jsonl` whose `trigger` field matches the current context (task type, files touched, or error class). If no trigger match, fall back to the most recent 3 entries.
 - `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
 - `LAST_PIV` — date of last completed plan-implement-validate cycle (from git log if available)
 
@@ -36,16 +36,20 @@ Analyze what went wrong in the last loop and identify the systemic root cause.
 
 **Procedure:**
 
-1. Read the completed `docs/plans/{ticket}-plan.md` and the actual implementation (git diff).
-2. Identify deviations: what did the agent do differently from the plan? What did you have to correct?
-3. Ask: which layer allowed this? Options:
+1. **Retro debt check** — review action items from the most recent `docs/retros/*.md`.
+   - Verified done → mark complete.
+   - Not done → convert to a queue task in `.agents/work-queue.json` or explicitly drop with reason.
+   - Record the outcome in the current retro context.
+2. Read the completed `docs/plans/{ticket}-plan.md` and the actual implementation (git diff).
+3. Identify deviations: what did the agent do differently from the plan? What did you have to correct?
+4. Ask: which layer allowed this? Options:
    - **Global rules** (`AGENTS.md`) — coding style, testing strategy, logging
    - **Commands** (`.agents/commands/*.md`) — prompts/procedures that were unclear or incomplete
    - **Reference docs** (`.agents/reference/*.md`) — missing or incorrect task-specific guidance
    - **Templates** (`.agents/templates/*.md`) — gaps in PRD/plan/retro structure
    - **On-demand context** (`docs/CONVENTIONS.md`, architecture notes) — outdated or AI-unreadable docs
-4. Use `.agents/templates/retro-template.md` to produce a retro document.
-5. Create `docs/retros/` if it doesn't exist. Save to `docs/retros/{date}-retro.md` or append to `.agents/learnings.jsonl`.
+5. Use `.agents/templates/retro-template.md` to produce a retro document.
+6. Create `docs/retros/` if it doesn't exist. Save to `docs/retros/{date}-retro.md` or append to `.agents/learnings.jsonl`.
 
 ### `system-evolve`
 
@@ -62,23 +66,28 @@ Update the layer that allowed the issue so it doesn't happen again.
 3. Show the exact diff before applying.
 4. Apply the change and commit it to source control.
 5. Document the learning in `.agents/learnings.jsonl` with:
-   - Date
-   - Problem summary
-   - Root cause layer
-   - Fix applied
-   - Expected prevention
+   - `date`
+   - `trigger` — string or list of keywords that describe when this learning applies (e.g., `["test factories", "catch blocks"]`)
+   - `problem`
+   - `layer`
+   - `fix`
+   - `prevents`
+   - Optional: `recurrence` — count of how many times this issue has recurred (used for escalation; see `references/escalation-ladder.md`)
 
 **Learning persistence format (`.agents/learnings.jsonl`):**
 
 ```json
 {
   "date": "2026-05-03",
+  "trigger": ["test factories", "catch blocks"],
   "problem": "Agent forgot to run tests before committing",
   "layer": "commands/implement.md",
   "fix": "Added explicit 'run tests' step to validation strategy in plan template",
   "prevents": "Untested code being committed"
 }
 ```
+
+Entries without a `trigger` field remain valid; matching falls back to recency.
 
 ## Key Principles
 
@@ -87,3 +96,4 @@ Update the layer that allowed the issue so it doesn't happen again.
 - **One fix, one layer** — don't rewrite everything. The smallest rule change that prevents recurrence.
 - **Compounding quality** — `.agents/learnings.jsonl` makes the system smarter across sessions, not just within them.
 - **High leverage** — improving one command can save dozens of engineer-hours going forward.
+- **Escalation ladder** — when a learning recurs, escalate enforcement strength. See `references/escalation-ladder.md`.
