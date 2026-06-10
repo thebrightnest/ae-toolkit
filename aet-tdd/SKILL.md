@@ -41,6 +41,27 @@ If a stage is found, print at the start of execution: `"📍 Current stage: {sta
 
 See [references/tests.md](references/tests.md) for examples and [references/mocking.md](references/mocking.md) for mocking guidelines.
 
+## Mock Boundary Policy
+
+Mock **system boundaries**, not **first-party code**.
+
+- **Acceptable to mock:** network calls, external APIs, file systems, email gateways, payment providers, timers, randomness
+- **Unacceptable to mock:** internal services, repositories, use-case classes, utility modules, or any first-party code you own
+
+Why: mocking first-party code hides real integration failures and makes tests match the imagined implementation. Execute your own code for real; isolate only what crosses the process boundary.
+
+**Example:**
+
+```python
+# ACCEPTABLE — mock the external HTTP boundary
+responses.add("GET", "https://api.stripe.com/v1/charges", json={"status": "succeeded"})
+
+# UNACCEPTABLE — mock an internal repository
+mock_repo.get.return_value = fake_order  # <- do not do this
+```
+
+If a test mocks a first-party module, treat it as a review flag and replace the mock with real code or move the test to an integration boundary.
+
 ## Anti-Pattern: Horizontal Slices
 
 **DO NOT write all tests first, then all implementation.** This is "horizontal slicing" — treating RED as "write all tests" and GREEN as "write all code."
