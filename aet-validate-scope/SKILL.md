@@ -76,6 +76,16 @@ Check the current plan/PRD against existing documentation and code. Surface cont
 - "You say 'account' here — do you mean Customer or User? Those are different things per CONTEXT.md."
 - "Your code cancels entire Orders, but this plan says partial cancellation is possible — which is right?"
 
+### UI Coverage Lens (conditional)
+
+If the plan or PRD describes any user-facing interface, apply the UI Coverage Lens as part of `validate`.
+
+1. Check whether the plan explicitly marks the feature as "no UI" (API-only, CLI-only, pure backend). If so, skip this lens.
+2. Follow the procedure in [references/ui-coverage-lens.md](references/ui-coverage-lens.md)
+3. For each of the seven categories (Accessibility, Responsive Design, Component Library Alignment, Form Validation & Error States, Motion & Animation, Information Architecture / Navigation, Content Strategy), rate `PASS`, `FAIL`, or `UNKNOWN` and assign severity `blocking` or `warning`
+4. Present findings as a concise per-category list with specific quotes from the source document
+5. **Gate:** If any category is rated `blocking`, stop validation and surface the gaps. Do not advance the stage until blocking gaps are addressed or explicitly accepted.
+
 ### `update-context`
 
 Update CONTEXT.md with resolved terms and relationships.
