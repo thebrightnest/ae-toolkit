@@ -4,7 +4,7 @@
 SKILLS_DIR ?= $(HOME)/.claude/skills
 REPO_DIR := $(shell pwd)
 SKILLS := $(filter-out README.md Makefile scripts .git .gitignore docs .agents content .claude, $(wildcard *))
-MARKDOWN_FILES := $(shell find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
+MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null || find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -71,11 +71,11 @@ lint: ## Run markdownlint on all markdown files
 	@echo "✓ Lint passed"
 
 format: ## Format all markdown files with prettier
-	@npx prettier@3.1.0 --write "**/*.md"
+	@npx prettier@3.1.0 --write $(MARKDOWN_FILES)
 	@echo "✓ Format complete"
 
 format-check: ## Check markdown formatting (CI mode)
-	@npx prettier@3.1.0 --check "**/*.md"
+	@npx prettier@3.1.0 --check $(MARKDOWN_FILES)
 	@echo "✓ Format check passed"
 
 validate: ## Run all quality checks (lint + format-check + skill-structure)

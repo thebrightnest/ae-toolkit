@@ -25,6 +25,8 @@ Before executing any command in this skill, collect the following context:
 - `LEARNINGS` — entries from `.agents/learnings.jsonl` whose `trigger` field matches the current context (task type, files touched, or error class). If no trigger match, fall back to the most recent 3 entries.
 - `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
 - `LAST_PIV` — date of last completed plan-implement-validate cycle (from git log if available)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
 
