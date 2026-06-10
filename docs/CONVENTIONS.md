@@ -191,6 +191,37 @@ Runs the AE Toolkit quality checks:
 
 If the `pre-commit` framework is not installed, the hook falls back to `make lint` and `make format-check`.
 
+## Cross-Project Feedback Channel
+
+Projects that use the AE Toolkit may produce retros with findings relevant to the toolkit itself. These are surfaced through a defined `reports/` convention.
+
+### Reports Directory
+
+Each project maintains a `docs/retros/` directory (or equivalent) for retrospectives. Toolkit-relevant retros are marked and mined periodically.
+
+### Toolkit-Relevant Marker
+
+A retro is toolkit-relevant when its frontmatter includes:
+
+```yaml
+---
+toolkit-relevant: true
+---
+```
+
+### Required Sections
+
+Every toolkit-relevant retro must contain:
+
+- **Problem** — What went wrong, with concrete example
+- **Root cause** — Why it happened (systemic layer, not individual mistake)
+- **Fix** — What was changed in the project
+- **Prevents** — What rule, check, or gate would have prevented it
+
+### Mining Procedure
+
+Run `aet-evolve --toolkit` periodically (monthly, or after every 5 retros) to scan `reports/*.md` files with `toolkit-relevant: true` and propose toolkit-level changes. See `aet-evolve/SKILL.md` for the full procedure.
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. The `.skill` package is a snapshot. No separate version field in frontmatter.
