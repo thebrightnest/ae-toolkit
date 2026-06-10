@@ -210,7 +210,15 @@ From a ticket/story, produce a structured `plan.md` for implementation.
    - Distinguish test types: **unit tests** (single layer), **integration tests** (cross-layer within backend or frontend), and **API boundary tests** (frontend ↔ backend contract for vertical slices that introduce both sides).
    - _Cross-Cutting Completeness framing:_ When a plan introduces new source files, verify each has a named test in the validation strategy.
 5. **Apply task size guardrails** to the task list. Evaluate each task against the dual-limit model (≤ 4 agent-hours; ≤ 8 files / 300 diff lines). Auto-split oversized tasks into subtasks with explicit dependencies. Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
-6. Ask the user to review and iterate. This is the last chance to steer before implementation.
+6. **Self-consistency lint.** Before saving the plan, run these checks on the produced plan.md. Print the result for each check as `PASS`, `WARN`, or `FAIL`.
+
+   - **Check 1 — Prose constraints in code blocks:** Scan the plan for constraints, requirements, or business rules stated in prose (outside code blocks). Verify each one is represented inside a code block, task list item, or explicit file edit. If a prose constraint has no corresponding code artifact, flag it.
+   - **Check 2 — Files assigned to tasks:** Extract every file path from the "Files to create and modify" section. Verify each path appears in at least one task. Unassigned files are a `FAIL`.
+   - **Check 3 — Observable acceptance criteria:** For each acceptance criterion, verify it describes an observable user behavior (e.g., "user sees an error message") rather than restating a task (e.g., "add error handling"). Criteria that merely restate tasks are `WARN`; criteria that are unverifiable are `FAIL`.
+
+   **Gate:** Any `FAIL` → stop and print the inconsistency. Do not advance to `plan-draft` until resolved. Any `WARN` → print the warning and continue.
+
+7. Ask the user to review and iterate. This is the last chance to steer before implementation.
 
 **Context discipline:**
 
