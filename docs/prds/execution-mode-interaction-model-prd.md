@@ -39,6 +39,7 @@ Introduce a formal execution-mode system across the AE Toolkit so that skills kn
 ```
 Environment variable: AET_EXECUTION_MODE
 Values:
+
   - unset or "interactive"  → Default. Hard gates enforced.
   - "unattended"            → Orchestrator/background mode. Gates bypassed with logging.
 ```

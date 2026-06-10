@@ -15,6 +15,7 @@ prevents undefined CSS classes from reaching `main`.
    - Document the mechanical procedure: extract `className` values from
      new/modified renderer components, filter known global classes, verify each
      remaining custom class exists in the project's stylesheet directory
+
    - Classify findings as **fix-now** (undefined custom classes)
    - Keep the lens description concise; move deep detail to
      `aet-review/references/` if needed
