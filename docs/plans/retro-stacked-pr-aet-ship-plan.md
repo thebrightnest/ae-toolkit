@@ -21,12 +21,14 @@ Fix layer: `~/.claude/skills/aet-ship/SKILL.md` — add a **Stacked branch detec
    ```
    1a. **Stacked branch detection** — Run `git merge-base HEAD main` and compare to `git rev-parse main`.
        If they differ, the current branch was not branched directly from main's current tip — treat it as stacked.
+
        - Identify the parent branch: scan `git log --oneline --decorate main..HEAD` for the nearest named ancestor (the last commit decorated with a non-HEAD, non-remote ref).
        - Still create the PR against the parent branch (this is correct at creation time).
        - Prepend a `⚠️ STACKED PR` section to the PR body:
          > Base is `[parent-branch]`. After `[parent-branch]` is merged to main, run:
          > `git rebase main && git push --force-with-lease && gh pr edit --base main`
          > before merging this PR.
+
        - Print a terminal stop-note after PR creation:
          > ⚠️  STACKED PR: this PR targets [parent-branch], not main.
          > After [parent-branch] merges, you must rebase and update the base before merging this PR.
