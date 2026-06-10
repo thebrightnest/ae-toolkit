@@ -24,14 +24,19 @@ bugs — without writing PRDs, user stories, or UI mockups.
 ## Hard Gate: Bug or Feature?
 
 Before proceeding, confirm this is a **bug** (unexpected behavior in existing code),
-not a **feature request** (missing capability).
+not a **feature request** or **redesign**.
 
-**Test:** Can you demonstrate the unexpected behavior?
+**Question:** Is this a new capability or redesign?
+
+- **Yes** → This is a feature. Stop and redirect to `aet-plan`:
+  _"This appears to be a new capability or redesign, not a reproducible bug.
+  Use `aet-plan` to define and plan the new work."_
+
+**Question:** Can you demonstrate the unexpected behavior?
 
 - **Yes** → Continue with this skill
-- **No** → Stop. Redirect to `aet-plan`:
-  _"This appears to be a feature request or enhancement, not a reproducible bug.
-  Use aet-plan to define and plan the new capability."_
+- **No** → Stop. A non-reproducible bug cannot be validated as fixed.
+  Redirect to `aet-plan` if the issue requires design work.
 
 ## Planning Lockout
 
@@ -84,6 +89,20 @@ Before writing any code, present your diagnosis and proposed fix to the user.
 revise the proposal and present again.
 
 **Do not write, modify, or delete any source code until explicit approval is given.**
+
+### Step 2.6: Diff Budget Gate
+
+Before applying the fix, evaluate the estimated scope against the diff budget.
+
+**Budget:** ≤ 3 files and ≤ 100 lines changed.
+
+If the fix exceeds either limit:
+
+1. Require explicit justification before writing code:
+   - Why a smaller change is insufficient
+   - Why the scope expansion is necessary to fix the root cause
+2. If the justification is weak or the fix requires redesign, stop and redirect to `aet-plan`:
+   _"This fix exceeds the bug diff budget and requires redesign. Use `aet-plan` to scope the new work."_
 
 ### Step 3: Fix
 

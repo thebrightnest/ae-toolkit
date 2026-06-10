@@ -41,6 +41,16 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 If a stage is found, print at the start of execution: `"📍 Current stage: {stage} — resuming pipeline from the appropriate step."`
 
+## Intake Triage
+
+Before planning, confirm this is a **feature or enhancement**, not a **reproducible defect** in existing code.
+
+**Question:** Can you demonstrate unexpected behavior in existing code?
+
+- **Yes** → This is a bug. Stop and redirect to `aet-bug-report`:
+  _"This appears to be a reproducible defect in existing code. Use `aet-bug-report` for structured investigation and targeted fixes."_
+- **No** → Continue with the planning pipeline
+
 ## Resuming from a Stage
 
 If `ACTIVE_PRD_STAGE` or `ACTIVE_PLAN_STAGE` is found, skip already-completed steps:
@@ -152,7 +162,8 @@ If this step was skipped, proceed directly to Step 3.
 
 After the pipeline completes all steps:
 
-1. Print:
+1. Confirm the intake triage guard was applied (bug vs. feature) and documented in the PRD or plan notes.
+2. Print:
 
    ```
    ✓ Planning pipeline complete.
