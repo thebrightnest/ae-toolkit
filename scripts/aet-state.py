@@ -1,0 +1,303 @@
+#!/usr/bin/env python3
+"""aet-state — Owns queue mutations, stage transitions, and footer updates.
+
+Standard-library Python only. Derives status from ground truth (git, filesystem),
+validates transition legality, and updates footers + queue JSON atomically.
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def load_queue(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_queue(path, queue):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(queue, f, indent=2)
+        f.write("\n")
+
+
+def find_task(queue, task_id):
+    for task in queue:
+        if task.get("id") == task_id:
+            return task
+    return None
+
+
+def run_git(*args, cwd=None):
+    """Run a git command; return (returncode, stdout, stderr)."""
+    cmd = ["git", *args]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, cwd=cwd, check=False
+        )
+    except FileNotFoundError:
+        return (127, "", "git not found")
+    return (result.returncode, result.stdout, result.stderr)
+
+
+def branch_exists(branch, cwd=None):
+    if not branch:
+        return False
+    rc, _, _ = run_git("show-ref", "--verify", "--quiet", f"refs/heads/{branch}", cwd=cwd)
+    return rc == 0
+
+
+def is_ancestor_of_main(branch, cwd=None):
+    if not branch:
+        return False
+    rc, _, _ = run_git("merge-base", "--is-ancestor", branch, "origin/main", cwd=cwd)
+    return rc == 0
+
+
+def derive_status(task, cwd=None):
+    """Derive status from ground truth."""
+    plan_file = task.get("plan_file")
+    branch = task.get("branch")
+    worktree = task.get("worktree")
+    merge_commit = task.get("merge_commit")
+
+    derived = {"derived_status": "unknown"}
+
+    # Plan file exists?
+    if plan_file and Path(plan_file).exists():
+        derived["plan_exists"] = True
+        derived["derived_status"] = "planned"
+    else:
+        derived["plan_exists"] = False
+
+    # Branch exists?
+    if branch and branch_exists(branch, cwd=cwd):
+        derived["branch_exists"] = True
+        derived["derived_status"] = "in-progress"
+    else:
+        derived["branch_exists"] = False
+
+    # Ancestry check
+    if branch and is_ancestor_of_main(branch, cwd=cwd):
+        derived["on_main"] = True
+        derived["derived_status"] = "merged"
+    else:
+        derived["on_main"] = False
+
+    # Worktree present?
+    if worktree and Path(worktree).is_dir():
+        derived["has_worktree"] = True
+    else:
+        derived["has_worktree"] = False
+
+    # Merge commit set?
+    if merge_commit:
+        derived["merge_verified"] = True
+    else:
+        derived["merge_verified"] = False
+
+    # Warnings
+    current_status = task.get("status", "")
+    warnings = []
+    if current_status == "done" and not merge_commit and not derived["on_main"]:
+        warnings.append("done without merge verification")
+    if current_status == "merged" and not derived["on_main"]:
+        warnings.append("merged status but not ancestor of origin/main")
+    if warnings:
+        derived["warnings"] = warnings
+        derived["derived_status"] = f"{derived['derived_status']} (warning: {'; '.join(warnings)})"
+
+    return derived
+
+
+def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
+    """Return (ok, message). ok=True means the transition is legal."""
+    current_status = task.get("status", "")
+    branch = task.get("branch")
+    merge_commit = task.get("merge_commit")
+    failure_reason = task.get("failure_reason")
+
+    # Basic: from_stage should match current status
+    if from_stage != current_status:
+        return (False, f"Current status is '{current_status}', not '{from_stage}'.")
+
+    # Cannot set merged without ancestry check
+    if to_stage == "merged":
+        if not branch:
+            return (False, "Cannot set merged: no branch associated with task.")
+        if not is_ancestor_of_main(branch, cwd=cwd):
+            return (False, "Cannot set merged: branch is not ancestor of origin/main.")
+
+    # Cannot transition from abandoned without explicit reason clear
+    if from_stage == "abandoned":
+        if failure_reason:
+            return (False, "Cannot transition from abandoned: failure_reason must be cleared first.")
+
+    # Cannot set done without merge verification (or explicit skip)
+    if to_stage == "done":
+        if not merge_commit and not is_ancestor_of_main(branch, cwd=cwd):
+            return (False, "Cannot set done: merge verification required (merge_commit missing and branch not on main).")
+
+    return (True, "Transition is valid.")
+
+
+def update_plan_footer(plan_path, stage):
+    """Atomically update the *Stage: ...* footer in a plan or PRD file."""
+    path = Path(plan_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Plan file not found: {plan_path}")
+
+    content = path.read_text(encoding="utf-8")
+    # Replace existing stage line
+    new_content = re.sub(
+        r"\*Stage:.*\*",
+        f"*Stage: {stage}*",
+        content,
+    )
+    # If no stage line exists, append it before the final separator or at the end
+    if new_content == content:
+        # Check if there's a trailing separator
+        if content.rstrip().endswith("---"):
+            new_content = content.rstrip() + f"\n\n*Stage: {stage}*\n"
+        else:
+            new_content = content.rstrip() + f"\n\n---\n\n*Stage: {stage}*\n"
+
+    path.write_text(new_content, encoding="utf-8")
+
+
+def cmd_derive(args):
+    queue = load_queue(args.queue)
+    cwd = os.path.dirname(args.queue) if args.queue else "."
+    results = {}
+    for task in queue:
+        results[task["id"]] = derive_status(task, cwd=cwd)
+    print(json.dumps(results, indent=2))
+    return 0
+
+
+def cmd_validate(args):
+    queue = load_queue(args.queue)
+    task = find_task(queue, args.task_id)
+    if not task:
+        print(f"Task not found: {args.task_id}", file=sys.stderr)
+        return 1
+    cwd = os.path.dirname(args.queue) if args.queue else "."
+    ok, msg = validate_transition(task, args.from_stage, args.to_stage, getattr(args, "reason", None), cwd=cwd)
+    if ok:
+        print(msg)
+        return 0
+    print(msg, file=sys.stderr)
+    return 1
+
+
+def cmd_transition(args):
+    queue = load_queue(args.queue)
+    task = find_task(queue, args.task_id)
+    if not task:
+        print(f"Task not found: {args.task_id}", file=sys.stderr)
+        return 1
+    cwd = os.path.dirname(args.queue) if args.queue else "."
+    ok, msg = validate_transition(task, args.from_stage, args.to_stage, args.reason, cwd=cwd)
+    if not ok:
+        print(msg, file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print(f"[dry-run] Would transition {args.task_id} {args.from_stage} -> {args.to_stage}")
+        return 0
+
+    task["status"] = args.to_stage
+    if args.to_stage == "merged":
+        task["merged_at"] = datetime.now(timezone.utc).isoformat()
+    if args.to_stage in ("done", "merged"):
+        task["completed_at"] = datetime.now(timezone.utc).isoformat()
+
+    save_queue(args.queue, queue)
+    print(f"Transitioned {args.task_id}: {args.from_stage} -> {args.to_stage}")
+    return 0
+
+
+def cmd_sync_footers(args):
+    queue = load_queue(args.queue)
+    plan_path = Path(args.plan)
+    if not plan_path.exists():
+        print(f"Plan file not found: {args.plan}", file=sys.stderr)
+        return 1
+
+    # Find the task that references this plan file
+    task = None
+    for t in queue:
+        if t.get("plan_file") == args.plan or Path(t.get("plan_file", "")).resolve() == plan_path.resolve():
+            task = t
+            break
+
+    if not task:
+        print(f"No queue entry references plan: {args.plan}", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print(f"[dry-run] Would update footer of {args.plan} to *Stage: {args.stage}*")
+        print(f"[dry-run] Would update queue task {task['id']} status to {args.stage}")
+        return 0
+
+    update_plan_footer(args.plan, args.stage)
+    task["status"] = args.stage
+    save_queue(args.queue, queue)
+    print(f"Synced footers: {args.plan} -> {args.stage}")
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="aet-state",
+        description="Owns queue mutations, stage transitions, and footer updates.",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Show changes without applying them.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # derive
+    derive_parser = subparsers.add_parser("derive", help="Recompute status from ground truth.")
+    derive_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+
+    # validate
+    validate_parser = subparsers.add_parser("validate", help="Check if a transition is legal.")
+    validate_parser.add_argument("task_id", help="Task ID.")
+    validate_parser.add_argument("from_stage", help="Current stage.")
+    validate_parser.add_argument("to_stage", help="Target stage.")
+    validate_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+
+    # transition
+    transition_parser = subparsers.add_parser("transition", help="Validate legality, then apply state change.")
+    transition_parser.add_argument("task_id", help="Task ID.")
+    transition_parser.add_argument("from_stage", help="Current stage.")
+    transition_parser.add_argument("to_stage", help="Target stage.")
+    transition_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+    transition_parser.add_argument("--reason", help="Reason for transition (used when leaving abandoned).")
+
+    # sync-footers
+    sync_parser = subparsers.add_parser("sync-footers", help="Atomically update plan/PRD footers and queue JSON.")
+    sync_parser.add_argument("plan", help="Path to plan markdown file.")
+    sync_parser.add_argument("stage", help="Stage to set.")
+    sync_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+
+    args = parser.parse_args()
+
+    if args.command == "derive":
+        return cmd_derive(args)
+    if args.command == "validate":
+        return cmd_validate(args)
+    if args.command == "transition":
+        return cmd_transition(args)
+    if args.command == "sync-footers":
+        return cmd_sync_footers(args)
+
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
