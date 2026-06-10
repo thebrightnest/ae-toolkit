@@ -1,6 +1,6 @@
 ---
 name: aet-plan
-description: PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Use when starting a new feature, sprint, or project. Prevents misalignment by building shared understanding before any code is written. Triggers on requests like "plan this feature," "create a PRD," "break this into tickets," "help me design," or "publish these to GitHub issues."
+description: PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Use when starting a new feature, sprint, or project. Prevents misalignment by building shared understanding before any code is written. Triggers on requests like "design this feature," "create a PRD," "break this into tickets," "help me design," or "publish these to GitHub issues."
 ---
 
 # aet-plan

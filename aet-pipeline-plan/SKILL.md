@@ -1,6 +1,6 @@
 ---
 name: aet-pipeline-plan
-description: End-to-end planning pipeline. Takes a validated idea and runs it through aet-plan → aet-validate-scope in sequence, with an optional aet-validate-ui step. Stops at human gates. Produces a scope-validated PRD and plan files ready for implementation. Triggers on requests like "pipeline plan this," "run the full planning flow," "plan this feature," or "help me design." UI validation runs when explicitly requested (e.g., "with UI," "validating UI") or when the user opts in at the PRD gate.
+description: End-to-end planning pipeline. Takes a validated idea and runs it through aet-plan → aet-validate-scope in sequence, with an optional aet-validate-ui step. Stops at human gates. Produces a scope-validated PRD and plan files ready for implementation. Triggers on requests like "pipeline plan this," "run the full planning flow," "plan and validate this feature," or "full planning pipeline." UI validation runs when explicitly requested (e.g., "with UI," "validating UI") or when the user opts in at the PRD gate.
 ---
 
 # aet-pipeline-plan

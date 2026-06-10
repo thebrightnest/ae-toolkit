@@ -6,7 +6,7 @@ Most AI coding sessions start strong and end in drift. The agent builds what it 
 
 AE Toolkit fixes this by encoding the best agentic engineering patterns from YC, Garry Tan (GStack), Matt Pocock, and the AI Transformation Workshop into a modular skill suite that runs in order:
 
-**Discover → Plan → Design → Validate → Prime → Implement → Review → QA → Ship → Evolve**
+**Discover → Plan → Design → Validate → Prime → Implement → QA → Review → Ship → Evolve**
 
 Each skill feeds into the next. `/aet-discover` validates demand before any planning begins. `/aet-plan` writes a PRD. `/aet-design-system-creation` produces DESIGN.md — your design source of truth. `/aet-validate-scope` checks the plan and design against your existing domain model and documented decisions before a single line of code is written. `/aet-implement` reads the plan — with `/aet-tdd` optionally guiding test-first development. `/aet-review` catches what `/aet-implement` missed. `/aet-qa` verifies the fix. `/aet-ship` gates the merge. `/aet-evolve` updates the rules so the bug never repeats. Nothing falls through the cracks because every step knows what came before it.
 
