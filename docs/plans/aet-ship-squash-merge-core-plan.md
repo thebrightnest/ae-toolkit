@@ -15,11 +15,13 @@
    ```
    12a. **Merge Strategy Detection** — after `git fetch origin`, run:
         `git merge-base --is-ancestor HEAD origin/main`
+
         - If exit 0: regular merge. Continue to Step 13 with `git branch -d`.
         - If exit 1: possible squash merge. Run secondary verification:
           `PR_NUMBER=$(gh pr view --json number --jq '.number')`
           `MERGE_COMMIT=$(gh pr view $PR_NUMBER --json mergeCommit --jq '.mergeCommit.oid')`
           `git merge-base --is-ancestor $MERGE_COMMIT origin/main`
+
           - If exit 0: squash merge verified. Continue to Step 13 with `git branch -D`.
           - If exit 1: STOP and print the existing merge verification failure message.
         - If `gh` is unavailable or the PR has no mergeCommit data, fall back to
@@ -29,6 +31,7 @@
    Update Step 13 to reference the detected merge strategy:
 
    ```
+
    13. **Safe Branch Deletion** — only run if merge verification passed:
        - Regular merge: `git branch -d <branch>`
        - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)

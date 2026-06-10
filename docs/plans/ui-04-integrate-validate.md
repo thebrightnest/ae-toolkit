@@ -33,5 +33,6 @@ Revert `README.md`, delete `aet-validate-ui.skill`, and re-run `make validate`.
 
 ---
 
-\*Stage: plan-approved*\*\*
-*Next step: run `aet-pipeline-implement` or `aet-work`\*
+\*Stage: plan-approved\*\*\*
+
+\*Next step: run `aet-pipeline-implement` or `aet-work`\*

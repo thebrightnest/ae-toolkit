@@ -27,6 +27,7 @@ documentation (ADR), plus the aet-implement validation reminder.
    - Define Cross-Cutting Completeness: what it is, why it matters
    - Document the pattern template: "When a diff touches [domain], verify
      [completeness property] by [mechanism]"
+
    - Include CSS as the first proven example
    - List future domains: i18n, assets, icons, feature flags
    - Reference `aet-review/references/css-completeness-check.md`

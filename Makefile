@@ -23,9 +23,17 @@ install-skills: ## Symlink all skills from this repo to ~/.claude/skills/
 		fi; \
 	done
 
-package: ## Package all skills into .skill files
+package: ## Package all skills into .skill files (assembles from templates first)
 	@for skill in $(SKILLS); do \
 		if [ -d "$$skill" ] && [ -f "$$skill/SKILL.md" ]; then \
+			if [ -f "$$skill/SKILL.md.template" ]; then \
+				python3 scripts/build-skills.py \
+					--template "$$skill/SKILL.md.template" \
+					--partials-dir scripts/partials \
+					--output "$$skill/SKILL.md" \
+					--skill-name "$$skill" \
+					--next-step ""; \
+			fi; \
 			zip -r "$$skill.skill" "$$skill" -x "*.git*" -x "*node_modules*" -x "*.DS_Store"; \
 			echo "✓ Packaged $$skill.skill"; \
 		fi; \
