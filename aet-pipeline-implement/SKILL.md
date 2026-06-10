@@ -36,12 +36,12 @@ The pipeline reads the plan's current stage and skips completed steps:
 
 | Stage found                          | Start from                                                |
 | ------------------------------------ | --------------------------------------------------------- |
-| `plan-approved` or `scope-validated` | Step 1 (aet-tdd)                                          |
-| `tdd-complete`                       | Step 2 (aet-implement)                                    |
-| `implemented`                        | Step 3 (aet-qa)                                           |
-| `qa-complete`                        | Step 4 (aet-review)                                       |
-| `reviewed`                           | Step 5 (aet-cso, if applicable) or Step 6 (aet-sync-docs) |
-| `secure`                             | Step 6 (aet-sync-docs)                                    |
+| `plan-approved` or `scope-validated` | Step 1 (aet-tdd + aet-implement)                          |
+| `tdd-complete`                       | Step 1 (continue implementation within vertical slices)   |
+| `implemented`                        | Step 2 (aet-qa)                                           |
+| `qa-complete`                        | Step 3 (aet-review)                                       |
+| `reviewed`                           | Step 4 (aet-cso, if applicable) or Step 5 (aet-sync-docs) |
+| `secure`                             | Step 5 (aet-sync-docs)                                    |
 | `synced`                             | Pipeline complete → `aet-ship` then `post-ship-verify`    |
 | `merged`                             | Pipeline complete → branch verified on `origin/main`      |
 
@@ -56,17 +56,19 @@ Run the full implementation sequence for a single plan.md.
 **Sequence:**
 
 ```
-Step 1: aet-tdd         (RED: write failing tests — the behavior contract)
-    ↓ [GATE: tests exist and fail for the right reasons]
-Step 2: aet-implement   (GREEN + refactor: write code to satisfy the tests)
+Step 1: aet-tdd + aet-implement (vertical slices)
+    For each behavior:
+      RED:   Write one failing test
+      GREEN: Minimal code to pass
+      Refactor
     ↓ [GATE: all tests pass, lint and type-check pass]
-Step 3: aet-qa          (tiered validation: unit → integration → browser)
+Step 2: aet-qa          (tiered validation: unit → integration → browser)
     ↓ [GATE: coverage maintained, no new bugs]
-Step 4: aet-review      (staff-level diff review)
+Step 3: aet-review      (staff-level diff review)
     ↓ [GATE: no critical architecture issues; auto-fixes applied]
-Step 5: aet-cso         (security audit — only if auth/data/API/deps changed)
+Step 4: aet-cso         (security audit — only if auth/data/API/deps changed)
     ↓ [GATE: no Critical or High findings]
-Step 6: aet-sync-docs   (sync PRD + plan to reality — only if divergences found)
+Step 5: aet-sync-docs   (sync PRD + plan to reality — only if divergences found)
     ↓
 Branch ready for aet-ship
 ```
@@ -92,20 +94,14 @@ The task ID should be derived from the active plan filename (e.g., `waf-04` from
 
 **Procedure:**
 
-**Step 1 — aet-tdd:**
+**Step 1 — aet-tdd + aet-implement (vertical slices):**
 
 1. Follow the `aet-tdd` → `plan-tests`, `tracer`, `cycle`, `refactor` command procedures
-2. Write failing tests that define the behavior contract for this plan
-3. **GATE:** Confirm tests exist and fail (RED confirmed). If tests cannot be written (no testable interface), note the reason and continue.
-4. Stage advances to `tdd-complete`
-
-**Step 2 — aet-implement:**
-
-1. Follow the `aet-implement` → `implement` command procedure
-2. Write code to satisfy the tests from Step 1
-3. Run validation: lint, type-check, all tests must pass
-4. **GATE:** All tests pass. If validation fails, auto-retry up to 3×, then stop for human review.
-5. Stage advances to `implemented`
+2. For each behavior, write one failing test, then minimal code to pass, then refactor
+3. Do not batch all tests before writing implementation — one vertical slice at a time
+4. Run validation after each slice: lint, type-check, tests must pass
+5. **GATE:** All tests pass. If validation fails, auto-retry up to 3×, then stop for human review.
+6. Stage advances to `implemented`
 
 **Step 3 — aet-qa:**
 
