@@ -56,6 +56,8 @@ Staff-level diff review with multiple lenses.
 
      A "new source file" is any file added by the diff that is not a test file, config file, migration, seed, or type-only definition. Apply judgment — a file exporting only interfaces does not require a test; a file containing business logic, a controller, an observer, or a job does. See `references/test-coverage-check.md` for the mechanical procedure.
 
+   - **Mock Boundaries** — does any test mock a first-party module (internal service, repository, use-case class, or utility)? System boundaries (network, external APIs, file system, timers) are acceptable to mock. First-party code is not. Flag every first-party mock as **fix-now** and require the test to exercise the real module or move to an integration boundary.
+
    - **Removal Safety** — if the diff deletes symbols from bridge, API, registry, preload, or handler files, extract the deleted names and grep the codebase for remaining references. Flag any matches.
 
 4. For each issue found: classify as fix-now or flag-for-human
