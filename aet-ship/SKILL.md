@@ -68,20 +68,34 @@ Run the pre-merge validation gate.
 5. **Plan completion check** — verify all tasks in `docs/plans/{ticket}-plan.md` are addressed
 6. **Run `aet-review`** — staff-level code review on the diff
 7. **Run `aet-cso`** — security audit if the diff touches auth, data, API, or dependencies
-8. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
-9. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
-10. **Push and open PR** — push branch, create PR with description linking plan.md and PRD
+8. **Critical-class `aet-verify` evidence gate** — if the active plan's `*Work class:*` is `critical`, require `aet-verify` evidence attached:
+
+   - Look for an evidence file at `.agents/verify/{ticket}-evidence.md` (or `.agents/verify/{ticket}-evidence/` if multiple captures)
+   - Evidence must include: mode used (foundation/feature/reproduction), command/output/screenshot, timestamp, and verifier signature (agent session or human)
+   - If no evidence is attached: **STOP** and print:
+
+     ```
+     ⛔ Pipeline paused at aet-ship.
+     Critical-class task requires aet-verify evidence.
+     Attach evidence at .agents/verify/{ticket}-evidence.md before shipping.
+     ```
+
+   - Do not open the PR until evidence is present
+
+9. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
+10. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
+11. **Push and open PR** — push branch, create PR with description linking plan.md and PRD
 
     > **Version bump is not handled here.** Release versioning is the responsibility of a future `aet-release` skill. Do not commit `chore(release)` or VERSION changes on feature branches.
 
-11. **Merge Verification** — after the PR is created and the user indicates it has been merged:
+12. **Merge Verification** — after the PR is created and the user indicates it has been merged:
 
     1. Run `git fetch origin`
 
-    2. **Merge Strategy Detection** (Step 11a):
+    2. **Merge Strategy Detection** (Step 12a):
 
        - Run: `git merge-base --is-ancestor HEAD origin/main`
-       - If exit 0: regular merge detected. Record `merge_strategy: regular` and continue to Step 12.
+       - If exit 0: regular merge detected. Record `merge_strategy: regular` and continue to Step 13.
        - If exit 1: possible squash merge. Run secondary verification:
 
          ```bash
@@ -90,7 +104,7 @@ Run the pre-merge validation gate.
          git merge-base --is-ancestor $MERGE_COMMIT origin/main
          ```
 
-         - If exit 0: squash merge verified. Record `merge_commit: $MERGE_COMMIT` and `merge_strategy: squash`. Continue to Step 12 with force-delete.
+         - If exit 0: squash merge verified. Record `merge_commit: $MERGE_COMMIT` and `merge_strategy: squash`. Continue to Step 13 with force-delete.
          - If exit 1: verification failed. STOP.
 
        - If `gh` is unavailable or the PR has no mergeCommit data, fall back to diff-based verification (see [references/squash-merge-handling.md](references/squash-merge-handling.md)).
@@ -126,9 +140,9 @@ Run the pre-merge validation gate.
          }
          ```
 
-       - Proceed to branch deletion (Step 12)
+       - Proceed to branch deletion (Step 13)
 
-12. **Safe Branch Deletion** — only run if merge verification passed:
+13. **Safe Branch Deletion** — only run if merge verification passed:
     - Regular merge: `git branch -d <branch>`
     - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)
     - Delete the remote branch: `git push origin --delete <branch>`

@@ -151,24 +151,13 @@ Before finishing:
 2. Run the test suite — it should pass
 3. Verify pre-commit hooks can install
 4. Confirm `AGENTS.md` is readable and actionable
+5. Run validation calibration as the final setup completion step — plant a trivial error, confirm each command in `.agents/validation-commands.json` fails, then revert
 
 ## Methodology by Topic
 
 ### AI Context Files (`AGENTS.md`)
 
-Always generate `AGENTS.md` at project root and per-subproject. It must contain:
-
-- Project overview and detected stack
-- Architecture pattern and layer rules
-- Directory structure
-- **Tooling reference table** — what command runs what check
-- **AI Guardrails** section with explicit Forbidden and Mandatory lists
-- **Context Budget** section — context window rules for agent sessions
-- **Agentic Workflow Guardrails** — rules for PRD-first, plan-first, session separation, and the design-to-implementation hard gate
-
-Keep `AGENTS.md` under 200 lines. Detailed, task-specific rules live in `.agents/reference/` and are loaded on demand only. This protects the context window.
-
-The guardrails must be generated based on the project's actual patterns, not copied from a template.
+Always generate `AGENTS.md` at project root and per-subproject. It must contain: project overview, stack, architecture, directory structure, tooling reference table, AI Guardrails (Forbidden + Mandatory), Context Budget, and Agentic Workflow Guardrails (PRD-first, plan-first, design-to-implementation hard gate). Keep it under 200 lines; detailed rules live in `.agents/reference/` and are loaded on demand. Generate guardrails from the project's actual patterns, not a template.
 
 ### Agentic Workflow Infrastructure (`.agents/`)
 
@@ -184,17 +173,21 @@ Create `.agents/` at project root as the agent-neutral home for workflows, templ
 │   ├── testing-strategy.md    # Loaded only for test work
 │   ├── security-guidelines.md # Loaded only for auth/data work
 │   └── README.md              # How to use reference docs
+├── smoke/                     # Session-level smoke checks
+│   ├── README.md              # How to run and extend smoke checks
+│   └── checks.sh              # Executable smoke suite (stack-specific)
 ├── templates/
 │   ├── prd-template.md        # PRD structure
 │   ├── plan-template.md       # Plan.md structure
 │   └── retro-template.md      # Retro document structure
+├── validation-commands.json   # Authoritative commands that must fail calibration
 ├── learnings.jsonl            # Persistent learning log
 └── .gitkeep
 ```
 
-Each skill creates its own `docs/` subdirectory on first use (e.g., `aet-plan` creates `docs/prds/` and `docs/plans/`, `aet-discover` creates `docs/product-briefs/`). `aet-setup` only scaffolds foundational infrastructure — not empty folders for skills that may never be invoked.
+`aet-setup` only scaffolds foundational infrastructure — not empty folders for skills that may never be invoked. Each skill creates its own `docs/` subdirectory on first use. Generate `.agents/reference/` docs as stubs and document in `AGENTS.md` that they are loaded on demand.
 
-Generate the reference docs as stubs with headers and brief descriptions. The team fills them in as the project grows. Document in `AGENTS.md` that `.agents/reference/` exists and should be loaded on demand.
+Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
 ### Type Safety
 
@@ -231,12 +224,45 @@ Define the testing pyramid:
 - **Coverage target:** Default 80%, but adjust to reality if the project is far below.
 - **Test data:** Use factories/fakers. Never hardcode domain values in tests.
 
+### Smoke Checks
+
+Smoke checks verify that the project is alive. Scaffold `.agents/smoke/checks.sh` and add a `make smoke` target to the root orchestration. Standard checks:
+
+- **Boot check** — the application starts without crashing
+- **Dev services** — required local services (DB, cache, queue) are reachable
+- **Login / auth handshake** — the primary identity path returns success
+- **Primary CRUD** — one read and one write through the main data path
+
+Run smoke checks **once per agent session**, not before every task. Record the result in `.agents/smoke/last-run.json` with timestamp and status. If smoke fails, halt task work and fix the foundation first.
+
+### Validation Calibration
+
+Before trusting any validation gate, prove it can actually fail. Calibration is a one-time setup ritual:
+
+1. **Plant a trivial error** — introduce a deliberate lint error, failing test, or type mismatch
+2. **Run the authoritative command** — the validation must report failure
+3. **Revert the planted error** — restore the codebase to clean
+4. **Record** — write the authoritative commands to `.agents/validation-commands.json`:
+
+   ```json
+   {
+     "commands": [
+       { "name": "lint", "command": "make lint" },
+       { "name": "format-check", "command": "make format-check" },
+       { "name": "type-check", "command": "make type-check" },
+       { "name": "test", "command": "make test" }
+     ]
+   }
+   ```
+
+Agents must use the commands listed in `.agents/validation-commands.json` as the source of truth for "does validation pass?" Never assume a new check works until calibration has demonstrated it failing.
+
 ### Git Hooks & Local Automation
 
 All quality gates must run locally:
 
 - Create `.pre-commit-config.yaml` or git hooks running: format check, lint, type check, security scan, tests
-- Create root orchestration (`Makefile` or `justfile`) with: install, dev, test, lint, format, type-check, security-audit
+- Create root orchestration (`Makefile` or `justfile`) with: install, dev, test, lint, format, type-check, security-audit, smoke
 - Ensure every target actually works
 
 ### Git Workflow
@@ -328,7 +354,9 @@ Agent-neutral home for workflows, templates, and state:
 - `.agents/commands/README.md` — how command workflows work
 - `.agents/commands/approval-checkpoint.md` — hard gate between design and implementation
 - `.agents/reference/*.md` — task-specific rules (loaded on demand)
+- `.agents/smoke/` — session-level smoke checks and last-run record
 - `.agents/templates/*.md` — PRD, plan, retro templates
+- `.agents/validation-commands.json` — authoritative validation commands (calibrated during setup)
 - `.agents/work-queue.json` — task queue (generated by aet-plan create-stories)
 - `.agents/learnings.jsonl` — persistent learning log
 - `.agents/.gitkeep`
