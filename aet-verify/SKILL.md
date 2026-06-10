@@ -26,6 +26,8 @@ Before executing any command in this skill, collect the following context:
 - `WORK_CLASS` — from the plan footer (`*Work class:`) or infer from task scope (trivial / normal / critical)
 - `SMOKE_CMD` — the project's smoke command (`make smoke`, `npm run smoke`, etc.) or check `.agents/smoke/`
 - `QA_REPORT_PATH` — `/tmp/aet-reports/{task-id}/qa-report.md` (standard aet-qa output location)
+- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
+- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
 

@@ -1,6 +1,6 @@
 ---
 name: aet-pipeline-plan
-description: End-to-end planning pipeline. Takes a validated idea and runs it through aet-plan → aet-validate-scope in sequence. Stops at human gates. Produces a scope-validated PRD and plan files ready for implementation. Triggers on requests like "pipeline plan this," "run the full planning flow," "plan this feature," or "help me design."
+description: End-to-end planning pipeline. Takes a validated idea and runs it through aet-plan → aet-validate-scope in sequence. Stops at human gates. Produces a scope-validated PRD and plan files ready for implementation. Triggers on requests like "pipeline plan this," "run the full planning flow," or "plan and validate this feature."
 ---
 
 # aet-pipeline-plan
