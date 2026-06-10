@@ -48,7 +48,7 @@ Staff-level diff review with multiple lenses.
    - **SQL Safety** — are queries parameterized? Any injection risks?
    - **Conditional Side Effects** — are there hidden side effects in conditional branches?
    - **Error Handling** — are all error paths handled? Are failures observable?
-   - **Completeness** — does the diff fulfill the plan? Any acceptance criteria missed?
+   - **Completeness** — does the diff deliver the behavior described in the acceptance criteria? Ask: "If I exercised this as the user, what would I see?" This catches missing CSS, missing endpoints, and missing error states even when the plan never mentioned them.
    - **Tests** — coverage completeness check:
 
      1. For each new source file in the diff, verify at least one test file imports or references it. If none exists, classify as **fix-now**.

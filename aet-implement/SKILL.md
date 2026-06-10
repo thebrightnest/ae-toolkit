@@ -74,12 +74,16 @@ Execute a plan.md from start to finish with self-validation.
       - If > 0: print `"Local main is behind origin/main. Pull first: git pull origin main"`; **hard stop** unless user confirms
 
 3. Read the plan.md file specified by the user
-4. Create a feature branch if not already on one
-5. Execute tasks in the order specified in the plan
-6. After each task, run the relevant validation from the plan's self-validation strategy
-7. Compare implementation against the plan — flag any deviation
-8. Commit with a message that references the ticket/plan
-9. Summarize what was built, what validation passed, and any deviations
+4. **Reconciliation checkpoint:** Before writing code, compare constraints and requirements stated in the plan's prose against the code blocks and file edits. If they disagree:
+   - Stop and print the discrepancy
+   - Do not silently follow the code block over the prose
+   - Flag for human judgment or replanning
+5. Create a feature branch if not already on one
+6. Execute tasks in the order specified in the plan
+7. After each task, run the relevant validation from the plan's self-validation strategy
+8. Compare implementation against the plan — flag any deviation
+9. Commit with a message that references the ticket/plan
+10. Summarize what was built, what validation passed, and any deviations
 
 **Fresh session reminder:**
 If this session still contains planning context, strongly recommend clearing it first:
@@ -110,7 +114,7 @@ Worktree mode puts each implementation on its own branch using standard git comm
    ```
 
 5. Execute the normal implement steps (above) from inside the worktree directory,
-   **skipping step 4** (branch already created by the worktree setup).
+   **skipping step 5** (branch already created by the worktree setup).
 6. Commit the work.
 7. Return to the repo root:
 
