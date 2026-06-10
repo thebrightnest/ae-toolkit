@@ -1,11 +1,11 @@
 ---
 name: aet-pipeline-plan
-description: End-to-end planning pipeline. Takes a validated idea and runs it through aet-plan → aet-validate-scope in sequence, with an optional aet-validate-ui step. Stops at human gates. Produces a scope-validated PRD and plan files ready for implementation. Triggers on requests like "pipeline plan this," "run the full planning flow," "plan this feature," or "help me design." UI validation runs when explicitly requested (e.g., "with UI," "validating UI") or when the user opts in at the PRD gate.
+description: End-to-end planning pipeline. Takes a validated idea and runs it through aet-plan → aet-validate-scope in sequence. Stops at human gates. Produces a scope-validated PRD and plan files ready for implementation. Triggers on requests like "pipeline plan this," "run the full planning flow," "plan this feature," or "help me design."
 ---
 
 # aet-pipeline-plan
 
-Planning pipeline for agentic engineering. One entry point — from validated idea to scope-validated, implementation-ready plan. Chains `aet-plan` and `aet-validate-scope` in order, with an optional `aet-validate-ui` step, and hard human gates between them.
+Planning pipeline for agentic engineering. One entry point — from validated idea to scope-validated, implementation-ready plan. Chains `aet-plan` and `aet-validate-scope` in order with hard human gates between them. UI/UX coverage validation is included as a conditional lens within `aet-validate-scope`.
 
 ## When to Use
 
@@ -57,8 +57,7 @@ If `ACTIVE_PRD_STAGE` or `ACTIVE_PLAN_STAGE` is found, skip already-completed st
 
 | Stage found                          | Resume from                                                        |
 | ------------------------------------ | ------------------------------------------------------------------ |
-| `prd-approved` or `prd-draft`        | Prompt for UI validation or skip to Step 3 (aet-validate-scope)    |
-| `ui-validated`                       | Step 3 (aet-validate-scope)                                        |
+| `prd-approved` or `prd-draft`        | Step 2 (aet-validate-scope)                                        |
 | `scope-validated` or `plan-approved` | Pipeline complete → suggest `aet-pipeline-implement` or `aet-work` |
 
 ## Commands
@@ -72,9 +71,7 @@ Run the full planning sequence from validated idea to scope-validated plan.
 ```
 Step 1: aet-plan
     ↓ [HARD GATE: user approves PRD]
-Step 2: aet-validate-ui (optional)
-    ↓ [HARD GATE: if run, blocking gaps addressed or accepted]
-Step 3: aet-validate-scope
+Step 2: aet-validate-scope
     ↓ [OUTPUT: scope-validated PRD + plan-approved plans]
 ```
 
@@ -101,51 +98,23 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
    ```
    "The PRD is ready. Please review docs/prds/{feature}-prd.md.
-   Approve to continue. Do you want to run UI validation before scope validation?
-   Reply with one of:
-   - 'yes' or 'with UI' to run UI validation
-   - 'no' or 'skip UI' to go straight to scope validation
-   - 'changes' to request PRD edits"
+   Approve to continue or request changes."
    ```
 
    Do NOT proceed until the user explicitly responds.
 
-   - If the user approves with UI → proceed to Step 2
-   - If the user approves without UI / skips → skip Step 2, proceed to Step 3
+   - If the user approves → proceed to Step 2
    - If the user requests changes → stop and return to Step 1
 
-**Step 2 — aet-validate-ui (conditional):**
-
-Run this step only if the user's original request contained an explicit UI validation trigger (e.g., "with UI", "validating UI", "run UI validation") OR if the user opted in at the Step 1 hard gate.
-
-1. Check the PRD for a "no UI" marker (API-only, CLI-only, pure backend). If found:
-   - Print: `"⏭️ UI validation skipped — PRD marked as no UI."`
-   - Continue directly to Step 3
-2. Follow the `aet-validate-ui` → `validate-ui` command procedure against `docs/prds/{feature}-prd.md`
-3. Produce a gap report and append its path to the PRD footer
-4. **HARD GATE:**
-
-   - If any `blocking` findings → stop the pipeline. Print:
-
-     ```
-     ⛔ Pipeline stopped at aet-validate-ui.
-     Blocking findings: {count}
-     Report: {path to gap report}
-     Address the blocking gaps or explicitly accept them to continue.
-     ```
-
-   - If only warnings / all PASS → continue to Step 3
-
-If this step was skipped, proceed directly to Step 3.
-
-**Step 3 — aet-validate-scope:**
+**Step 2 — aet-validate-scope:**
 
 1. Follow the `aet-validate-scope` → `validate` command procedure
 2. Surface conflicts, fuzzy language, code contradictions
-3. Update CONTEXT.md and propose ADRs as needed
-4. Update plan footers to `scope-validated` / `plan-approved`
+3. Apply the UI Coverage Lens if the PRD describes user-facing interfaces
+4. Update CONTEXT.md and propose ADRs as needed
+5. Update plan footers to `scope-validated` / `plan-approved`
 
-**Step 4 — aet-work sync:**
+**Step 3 — aet-work sync:**
 
 1. Run `aet-work sync` to incrementally add the newly created `docs/plans/*.md` files to `.agents/work-queue.json`. Only atomic plans from `docs/plans/` are synced; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
 2. Preserve all existing queue entries and their statuses
@@ -154,7 +123,6 @@ If this step was skipped, proceed directly to Step 3.
 **Output:**
 
 - `docs/prds/{feature}-prd.md` — stage: `scope-validated`
-- `docs/ui-reports/{feature}-ui-report.md` — gap report (if UI validation ran)
 - `docs/plans/*.md` — stage: `plan-approved`
 - `.agents/work-queue.json` — synced via `aet-work sync`, ready for `aet-work`
 
@@ -170,7 +138,6 @@ After the pipeline completes all steps:
 
    Artifacts:
    - PRD:       docs/prds/{feature}-prd.md (scope-validated)
-   - UI Report: docs/ui-reports/{feature}-ui-report.md (if UI validation ran)
    - Plans:     docs/plans/*.md (plan-approved)
    - Queue:     .agents/work-queue.json
 
@@ -186,6 +153,6 @@ After the pipeline completes all steps:
 - **Same quality as individual skills** — the pipeline chains skills, it does not shortcut them
 - **AFK-safe** — the only human touchpoints are the defined gates; everything else runs unattended
 - **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to `aet-pipeline-implement`
-- **UI validation is optional** — Run UI validation only when the user explicitly requests it or opts in at the PRD gate. The "no UI" marker still auto-skips.
+- **UI validation is a lens, not a stage** — UI/UX coverage is checked as part of `aet-validate-scope` when the PRD describes user-facing interfaces. It is not a separate pipeline step.
 - **Imperative requests are planning targets** — "Do X" means "Plan how to do X"
 - **Session-sized output** — The pipeline delegates to `aet-plan`, which enforces the dual-limit guardrail. Plans that enter the queue are guaranteed to be implementable in a single agent session.
