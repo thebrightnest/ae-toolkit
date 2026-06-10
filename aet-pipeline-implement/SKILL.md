@@ -117,10 +117,15 @@ The task ID should be derived from the active plan filename (e.g., `waf-04` from
 
 **Step 4 — aet-review:**
 
-1. Follow the `aet-review` → `review` command procedure
-2. Multi-lens review: architecture, SQL safety, error handling, completeness, tests
-3. Auto-fix obvious issues (style, imports, typos)
-4. **HARD GATE:** If architecture or scope issues found → stop pipeline. Print:
+1. **Ensure reviewer independence.** The review must work from disk artifacts only — never from the implementation conversation's memory.
+   - **Fresh context requirement:** Clear the session context or spawn a fresh subagent before starting the review step.
+   - **Disk-only artifacts:** The reviewer reads the plan file (`docs/plans/{ticket}-plan.md`) and the git diff (`git diff main...HEAD`) from disk. Do not rely on conversation history for what was implemented or why.
+   - **Subagent preferred:** If subagent support is available, spawn a fresh subagent with the review prompt and the diff/plan file paths. This eliminates bias from the implementation conversation.
+   - **Fallback:** If subagent support is unavailable, explicitly clear context (`/clear` or equivalent) and re-read the plan and diff from disk before beginning review.
+2. Follow the `aet-review` → `review` command procedure
+3. Multi-lens review: architecture, SQL safety, error handling, completeness, tests
+4. Auto-fix obvious issues (style, imports, typos)
+5. **HARD GATE:** If architecture or scope issues found → stop pipeline. Print:
 
    ```
    ⛔ Pipeline paused at aet-review.
@@ -128,7 +133,7 @@ The task ID should be derived from the active plan filename (e.g., `waf-04` from
    Resolve these before re-running aet-pipeline-implement (will resume from aet-review stage).
    ```
 
-5. Stage advances to `reviewed`
+6. Stage advances to `reviewed`
 
 **Step 5 — aet-cso (conditional):**
 
