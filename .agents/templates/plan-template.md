@@ -4,6 +4,11 @@
 
 Link to the PRD and any relevant prior decisions.
 
+## Intake Triage
+
+- [ ] Confirmed this is a **feature or enhancement**, not a reproducible defect
+- [ ] If a reproducible defect was described, redirected to `aet-bug-report`
+
 ## Tasks
 
 1. Task description — estimated size (S/M/L)

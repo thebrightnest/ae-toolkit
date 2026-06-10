@@ -35,6 +35,16 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
+## Intake Triage
+
+Before planning, confirm this is a **feature or enhancement**, not a **reproducible defect** in existing code.
+
+**Question:** Can you demonstrate unexpected behavior in existing code?
+
+- **Yes** → This is a bug. Stop and redirect to `aet-bug-report`:
+  _"This appears to be a reproducible defect in existing code. Use `aet-bug-report` for structured investigation and targeted fixes."_
+- **No** → Continue with planning
+
 ## Planning Lockout
 
 This skill is **planning-only**. No application source code is written, modified, or deleted.
@@ -236,7 +246,8 @@ After the `plan` command completes and the plan.md is ready for review:
    *Next step: run `aet-validate-scope`*
    ```
 
-3. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-pipeline-implement\` or \`aet-work\`"`
+3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
+4. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-pipeline-implement\` or \`aet-work\`"`
 
 ## Key Principles
 
