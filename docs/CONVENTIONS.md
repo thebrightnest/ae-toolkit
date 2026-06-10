@@ -222,6 +222,32 @@ Every toolkit-relevant retro must contain:
 
 Run `aet-evolve --toolkit` periodically (monthly, or after every 5 retros) to scan `reports/*.md` files with `toolkit-relevant: true` and propose toolkit-level changes. See `aet-evolve/SKILL.md` for the full procedure.
 
+## Build System
+
+Skills are built from shared partials rather than hand-maintained as 21 separate copies. The canonical preamble, guardrail blocks, and stage tables live in `scripts/partials/` and are assembled into each `SKILL.md` at build time.
+
+### Shared Partials
+
+| Partial                           | Purpose                                              |
+| --------------------------------- | ---------------------------------------------------- |
+| `scripts/partials/preamble.md`    | Canonical Shared Preamble (context collection rules) |
+| `scripts/partials/guardrails.md`  | Hard constraints replicated across all skills        |
+| `scripts/partials/stage-table.md` | Stage state machine and completion protocols         |
+
+### Assembly
+
+```bash
+make package
+```
+
+1. Substitutes partials into skill templates
+2. Validates: no trigger collisions, consistent next-step graph, matching preamble
+3. Produces `.skill` zip archives
+
+### Editing a Skill
+
+Edit the **template** or the **partial**, not the generated `SKILL.md`. Run `make package` after any change to regenerate the self-contained skill files.
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. The `.skill` package is a snapshot. No separate version field in frontmatter.

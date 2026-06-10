@@ -12,6 +12,10 @@ You have an idea. You want solid foundations from day one.
 /aet-setup
   → Scaffolds .agents/, docs/prds/, docs/plans/, AGENTS.md,
     linting, testing, git hooks, and agentic workflow infrastructure
+  → Creates `make smoke` with foundation checks:
+    login works, app boots, primary entity CRUDs, dev services respond
+  → Runs gate calibration: plants trivial error, confirms validation
+    commands actually fail, records authoritative commands
 
 /aet-plan clarify-goal
   → "I want to build a task management app with team collaboration"
@@ -80,7 +84,32 @@ You inherited a codebase with no standards. You want to add guardrails and start
 
 ---
 
-## Scenario 3: Single Task / PIV Loop
+## Scenario 3: Trivial Task — Fix and Ship
+
+You spot a typo in the UI. No PRD needed.
+
+```
+/aet-prime
+  → "Fix typo in login button"
+  → Classified: trivial (≤ 3 files, ≤ 100 lines)
+  → Routed to direct-edit path
+
+# Edit the file
+
+make validate
+  → Lint and format check
+
+/aet-ship
+  → Diff review → merge
+```
+
+**Skills used:** `aet-prime`, `aet-ship`
+
+**Key principle:** Trivial tasks skip planning, TDD, QA, and review. The triage front door prevents corporate-level ceremony from burdening every change.
+
+---
+
+## Scenario 4: Single Task / PIV Loop
 
 You have one well-defined ticket. You want to run the full Plan → Implement → Validate cycle.
 
@@ -136,7 +165,7 @@ You have one well-defined ticket. You want to run the full Plan → Implement �
 
 ---
 
-## Scenario 4: Big Feature / Epic with Multiple Tasks (AFK Loop)
+## Scenario 5: Big Feature / Epic with Multiple Tasks (AFK Loop)
 
 You have a multi-week epic. You want to plan it once, then let the agent work through tasks sequentially while you focus on other things.
 
@@ -191,7 +220,7 @@ You have a multi-week epic. You want to plan it once, then let the agent work th
 
 ---
 
-## Scenario 5: System Evolution After a Bug
+## Scenario 6: System Evolution After a Bug
 
 The agent made the same mistake twice. You want to fix the system, not just the code.
 
@@ -219,11 +248,16 @@ The agent made the same mistake twice. You want to fix the system, not just the 
 
 ---
 
-## Scenario 6: Security-First PR
+## Scenario 7: Security-First PR
 
-You're adding OAuth and payment processing. Security is non-negotiable.
+You're adding OAuth and payment processing. Security is non-negotiable. This is **critical-class** work.
 
 ```
+/aet-prime
+  → "Add OAuth and Stripe payment processing"
+  → Classified: critical (touches auth and payments)
+  → Routed to full PRD → TDD → QA → review → aet-verify → ship
+
 /aet-plan plan
   → docs/plans/auth-payment-plan.md
 
@@ -249,15 +283,70 @@ You're adding OAuth and payment processing. Security is non-negotiable.
   → All states tested: login, logout, expired token,
     payment success, payment failure, refund
 
+/aet-verify
+  → Foundation mode: `make smoke` (login, boot, CRUD)
+  → Feature mode: exercise OAuth flow in running app
+    → Capture: HTTP 302 redirect to provider, callback success,
+      session cookie set, JWT decoded correctly
+    → Evidence attached to QA report
+
 /aet-ship
-  → Pre-merge gate with security audit included
+  → Pre-merge gate: checks aet-verify evidence exists
+  → Merge only with observed proof
 ```
 
-**Skills used:** `aet-plan`, `aet-implement`, `aet-cso`, `aet-review`, `aet-qa`, `aet-ship`
+**Skills used:** `aet-prime`, `aet-plan`, `aet-implement`, `aet-cso`, `aet-review`, `aet-qa`, `aet-verify`, `aet-ship`
 
 ---
 
-## Scenario 7: Refactoring with TDD Safety Rails
+## Scenario 8: Dependency Upgrade
+
+Laravel 11 is out. You want to upgrade without breaking the app.
+
+```
+/aet-prime
+  → "Upgrade Laravel from 10 to 11"
+  → Classified: critical (dependency bump)
+  → Routed to aet-upgrade
+
+/aet-upgrade
+  → Fetches Laravel 11 upgrade guide and changelog
+  → Enumerates breaking changes:
+    1. `hashed` cast behavior changed (double-hashing risk)
+    2. `storage/app/private` path moved
+    3. Password validation rules stricter
+  → Greps codebase for each affected pattern
+  → Risk map:
+    - HIGH: User model uses `hashed` cast → 47 factory passwords affected
+    - MEDIUM: File upload references `storage/app/private`
+    - LOW: Password validation already meets new rules
+
+# Plan the fix
+
+/aet-plan plan
+  → docs/plans/laravel-11-upgrade-plan.md
+  → Tasks: update User model, fix factories, migrate storage paths
+
+/aet-verify
+  → Foundation mode: `make smoke` before upgrade
+  → All green — floor is solid
+
+/aet-implement docs/plans/laravel-11-upgrade-plan.md
+
+/aet-verify
+  → Foundation mode: `make smoke` after upgrade
+  → Login works, file uploads work, factories produce valid passwords
+
+/aet-ship
+```
+
+**Skills used:** `aet-prime`, `aet-upgrade`, `aet-plan`, `aet-verify`, `aet-implement`, `aet-ship`
+
+**Key principle:** Upgrades are not features and not bugs. They need their own skill because breaking-change analysis is a distinct competence from feature design or bug diagnosis.
+
+---
+
+## Scenario 9: Refactoring with TDD Safety Rails
 
 You need to refactor a messy module. You want tests as safety rails, written the right way.
 
@@ -295,7 +384,7 @@ You need to refactor a messy module. You want tests as safety rails, written the
 
 ---
 
-## Scenario 8: Validating a Plan Against Existing Architecture
+## Scenario 9: Validating a Plan Against Existing Architecture
 
 Your team has a mature codebase with documented domain language and ADRs. A new feature plan seems to contradict established patterns.
 
