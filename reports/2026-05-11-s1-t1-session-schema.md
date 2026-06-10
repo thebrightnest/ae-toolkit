@@ -20,7 +20,7 @@ When a constraint is described in prose but absent from the code block, it gets 
 
 ### Issue 2 — Drizzle raw SQL queries return snake_case column names
 
-The plan recommended `db.all(sql\`SELECT \* FROM session_messages WHERE rowid IN ...\`)` for FTS5 search. At runtime, this returns raw SQLite column names (`session_id`, `created_at`) rather than Drizzle's camelCase mappings (`sessionId`, `createdAt`). The TypeScript type was wrong on all rows returned by `searchMessages`, causing a test failure on first run.
+The plan recommended ``db.all(sql`SELECT * FROM session_messages WHERE rowid IN ...`)`` for FTS5 search. At runtime, this returns raw SQLite column names (`session_id`, `created_at`) rather than Drizzle's camelCase mappings (`sessionId`, `createdAt`). The TypeScript type was wrong on all rows returned by `searchMessages`, causing a test failure on first run.
 
 Required adding an unplanned `RawSessionMessage` interface and `mapRow()` function.
 
