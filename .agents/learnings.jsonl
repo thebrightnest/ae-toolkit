@@ -1,40 +1,6 @@
-[
-  {
-    "date": "2026-05-09",
-    "problem": "Agent planned Claude Code-specific worktree tooling (EnterWorktree, ExitWorktree) for skill instructions, violating the existing agent-agnostic rule in AGENTS.md",
-    "layer": ".agents/reference/skill-writing-guide.md",
-    "fix": "Added Pre-Plan Checklist to skill-writing-guide.md with agent-agnostic check as item #1, requiring AGENTS.md guardrails to be actually read before any skill design begins",
-    "prevents": "Claude Code-specific tooling being designed into skills that should work on any coding agent"
-  },
-  {
-    "date": "2026-05-11",
-    "problem": "Created 3 new skill directories directly in ~/.claude/skills/ (wrong location) instead of in the git repo at ~/Sites/aiskills/ and symlinking. Files worked for Claude Code but were outside git and silently untracked. aet-review passed without catching it because no lens checked file location.",
-    "layer": ".agents/reference/skill-writing-guide.md + aet-review/SKILL.md",
-    "fix": "Added 'New-file location verified' item to skill-writing-guide.md Pre-Plan Checklist requiring ls -la before mkdir to detect symlink structure. Added 'Project Structure' as the first review lens in aet-review, requiring ls -la on any parent directory where new files were created.",
-    "prevents": "New files created outside the git repo in projects that use symlink indirection between the tool-read directory and the tracked source directory."
-  },
-  {
-    "date": "2026-05-12",
-    "problem": "Stacked PR base not updated after parent merged. S2-T2 was stacked on S2-T1. After S2-T1's PR merged to main, S2-T2's PR still targeted the feature branch. No signal surfaced. S2-T2 landed in the wrong branch and required a manual recovery merge.",
-    "layer": "~/.claude/skills/aet-ship/SKILL.md",
-    "fix": "Added stacked branch detection step to aet-ship ship procedure (between Sync with main and Run test suite). Detection: compare git merge-base HEAD main vs git rev-parse main. If different, branch is stacked. Warning injected into PR body and printed as terminal stop-note. No auto-rebase — human acts at PR review time.",
-    "prevents": "Stacked PRs silently merged against a stale base after the parent branch lands in main."
-  }
-]
-,
-  {
-    "date": "2026-05-23",
-    "problem": "aet-work queue drift: new plan files added to docs/plans/ were invisible to the queue because status/next/run never compared the queue against disk. 7 orphaned plans created a false all-clear signal.",
-    "layer": "aet-work/SKILL.md",
-    "fix": "Added plan-drift command to detect orphaned plans and stale queues. Updated init-queue to merge instead of overwrite. Made status/next/run refuse to proceed when drift is detected.",
-    "prevents": "Untracked follow-up plans, recovery work, or cleanup tasks being silently ignored because the queue reports 100% completion."
-  }
-,
-  {
-    "date": "2026-05-23",
-    "problem": "Agent interpreted user's 'yes' to a planning question as carte blanche to implement 3 skill file changes immediately. No plan.md was written. No explicit scope confirmation was sought.",
-    "layer": "AGENTS.md + .agents/commands/approval-checkpoint.md",
-    "fix": "Added 'Design-to-implementation hard gate' to AGENTS.md Agentic Workflow Guardrails. Created .agents/commands/approval-checkpoint.md as a reusable procedure requiring explicit file enumeration and approval before any implementation.",
-    "prevents": "Implied approval escalation where free-form design conversations ('yes', 'sounds good') are treated as implementation approval."
-  }
-{"timestamp":"2026-06-01T18:00:30+01:00","context":"aet-work orchestrator","lesson":"Unattended orchestrators must use the most headless CLI mode (e.g. --afk, not --yolo) so approval gates auto-dismiss in background jobs with no terminal. Default Shell timeouts (60s foreground, 15min background) are too short for aet-pipeline-implement tasks that run 30-60 min each. Always specify an explicit timeout (e.g. 7200s) when spawning the orchestrator.","source":"docs/bugs/2026-06-01-orchestrator-timeout-bug-report.md"}
+{"date":"2026-05-09","problem":"Agent planned Claude Code-specific worktree tooling (EnterWorktree, ExitWorktree) for skill instructions, violating the existing agent-agnostic rule in AGENTS.md","layer":".agents/reference/skill-writing-guide.md","fix":"Added Pre-Plan Checklist to skill-writing-guide.md with agent-agnostic check as item #1, requiring AGENTS.md guardrails to be actually read before any skill design begins","prevents":"Claude Code-specific tooling being designed into skills that should work on any coding agent"}
+{"date":"2026-05-11","problem":"Created 3 new skill directories directly in ~/.claude/skills/ (wrong location) instead of in the git repo at ~/Sites/aiskills/ and symlinking. Files worked for Claude Code but were outside git and silently untracked. aet-review passed without catching it because no lens checked file location.","layer":".agents/reference/skill-writing-guide.md + aet-review/SKILL.md","fix":"Added 'New-file location verified' item to skill-writing-guide.md Pre-Plan Checklist requiring ls -la before mkdir to detect symlink structure. Added 'Project Structure' as the first review lens in aet-review, requiring ls -la on any parent directory where new files were created.","prevents":"New files created outside the git repo in projects that use symlink indirection between the tool-read directory and the tracked source directory."}
+{"date":"2026-05-12","trigger":["git branch","stacked PR","aet-ship"],"problem":"Stacked PR base not updated after parent merged. S2-T2 was stacked on S2-T1. After S2-T1's PR merged to main, S2-T2's PR still targeted the feature branch. No signal surfaced. S2-T2 landed in the wrong branch and required a manual recovery merge.","layer":"~/.claude/skills/aet-ship/SKILL.md","fix":"Added stacked branch detection step to aet-ship ship procedure (between Sync with main and Run test suite). Detection: compare git merge-base HEAD main vs git rev-parse main. If different, branch is stacked. Warning injected into PR body and printed as terminal stop-note. No auto-rebase — human acts at PR review time.","prevents":"Stacked PRs silently merged against a stale base after the parent branch lands in main."}
+{"date":"2026-05-23","trigger":["aet-work","queue","plan drift"],"problem":"aet-work queue drift: new plan files added to docs/plans/ were invisible to the queue because status/next/run never compared the queue against disk. 7 orphaned plans created a false all-clear signal.","layer":"aet-work/SKILL.md","fix":"Added plan-drift command to detect orphaned plans and stale queues. Updated init-queue to merge instead of overwrite. Made status/next/run refuse to proceed when drift is detected.","prevents":"Untracked follow-up plans, recovery work, or cleanup tasks being silently ignored because the queue reports 100% completion."}
+{"date":"2026-05-23","trigger":["planning","approval","implementation gate"],"problem":"Agent interpreted user's 'yes' to a planning question as carte blanche to implement 3 skill file changes immediately. No plan.md was written. No explicit scope confirmation was sought.","layer":"AGENTS.md + .agents/commands/approval-checkpoint.md","fix":"Added 'Design-to-implementation hard gate' to AGENTS.md Agentic Workflow Guardrails. Created .agents/commands/approval-checkpoint.md as a reusable procedure requiring explicit file enumeration and approval before any implementation.","prevents":"Implied approval escalation where free-form design conversations ('yes', 'sounds good') are treated as implementation approval."}
+{"timestamp":"2026-06-01T18:00:30+01:00","trigger":["orchestrator","background job","timeout"],"context":"aet-work orchestrator","lesson":"Unattended orchestrators must use the most headless CLI mode (e.g. --afk, not --yolo) so approval gates auto-dismiss in background jobs with no terminal. Default Shell timeouts (60s foreground, 15min background) are too short for aet-pipeline-implement tasks that run 30-60 min each. Always specify an explicit timeout (e.g. 7200s) when spawning the orchestrator.","source":"docs/bugs/2026-06-01-orchestrator-timeout-bug-report.md"}
