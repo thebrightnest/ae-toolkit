@@ -46,6 +46,11 @@ CLI_WORKDIR_FLAG="{{CLI_WORKDIR_FLAG}}"
 # Queue helpers (inline python3 — no jq dependency)
 # ---------------------------------------------------------------------------
 
+derive_statuses() {
+  echo "   Deriving ground-truth statuses from aet-state..."
+  python3 "$REPO_ROOT/scripts/aet-state.py" derive "$QUEUE_FILE" >/dev/null 2>&1 || true
+}
+
 get_next_unblocked() {
   python3 -c "
 import json, sys
@@ -353,6 +358,9 @@ else
 fi
 
 echo ""
+
+# Derive ground-truth statuses before starting
+derive_statuses
 
 # Handle orphaned in-progress tasks from a previous run
 handle_orphaned_in_progress
