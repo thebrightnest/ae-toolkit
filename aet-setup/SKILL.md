@@ -196,6 +196,8 @@ Each skill creates its own `docs/` subdirectory on first use (e.g., `aet-plan` c
 
 Generate the reference docs as stubs with headers and brief descriptions. The team fills them in as the project grows. Document in `AGENTS.md` that `.agents/reference/` exists and should be loaded on demand.
 
+If the project uses AE Toolkit workflows (detected by `.agents/` or `docs/plans/` presence), also scaffold `scripts/aet-state.py` — the standard-library Python helper that owns queue mutations, stage transitions, and footer updates. See `aet-work` and `aet-pipeline-implement` skills for integration details.
+
 ### Type Safety
 
 For every typed language in the project:
@@ -354,6 +356,10 @@ Linter, formatter, type checker, security scanner configs tailored to the detect
 ### 7. ADR template
 
 `docs/adr/000-template.md` and `docs/adr/README.md`
+
+### 8. `scripts/aet-state.py` (AE Toolkit projects only)
+
+If the project uses AE Toolkit workflows, scaffold `scripts/aet-state.py` alongside `.agents/`. This standard-library Python script owns queue mutations, stage transitions, and footer updates. It derives status from ground truth (git, filesystem), validates transition legality, and updates footers + queue JSON atomically. Required by `aet-work` and `aet-pipeline-implement`.
 
 ## AI Guardrails Template
 
