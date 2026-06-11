@@ -189,7 +189,7 @@ Create `.agents/` at project root as the agent-neutral home for workflows, templ
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
-If the project uses AE Toolkit workflows (detected by `.agents/` or `docs/plans/` presence), also scaffold `scripts/aet-state.py` — the standard-library Python helper that owns queue mutations, stage transitions, and footer updates. See `aet-work` and `aet-pipeline-implement` skills for integration details.
+If the project uses AE Toolkit workflows (detected by `.agents/` or `docs/plans/` presence), also scaffold `scripts/aet-state.py` — the standard-library Python helper that owns queue mutations, stage transitions, and footer updates. See `aet-work` skill for integration details.
 
 ### Type Safety
 
@@ -387,7 +387,7 @@ Linter, formatter, type checker, security scanner configs tailored to the detect
 
 ### 8. `scripts/aet-state.py` (AE Toolkit projects only)
 
-If the project uses AE Toolkit workflows, scaffold `scripts/aet-state.py` alongside `.agents/`. This standard-library Python script owns queue mutations, stage transitions, and footer updates. It derives status from ground truth (git, filesystem), validates transition legality, and updates footers + queue JSON atomically. Required by `aet-work` and `aet-pipeline-implement`.
+If the project uses AE Toolkit workflows, scaffold `scripts/aet-state.py` alongside `.agents/`. This standard-library Python script owns queue mutations, stage transitions, and footer updates. It derives status from ground truth (git, filesystem), validates transition legality, and updates footers + queue JSON atomically. Required by `aet-work`.
 
 ## AI Guardrails Template
 

@@ -12,7 +12,7 @@ Documentation sync for agentic engineering. When implementation diverges from th
 - After `aet-review` or `aet-cso` noted deviations from the plan
 - After `aet-implement` reported divergences
 - Whenever the PRD or plan.md no longer matches the branch reality
-- As the final step in `aet-pipeline-implement` (automatic)
+- As the final step in the implementation pipeline (automatic)
 - Manually, when a PRD feels stale after any implementation cycle
 
 ## Shared Preamble

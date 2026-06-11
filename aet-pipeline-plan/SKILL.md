@@ -55,10 +55,10 @@ Before planning, confirm this is a **feature or enhancement**, not a **reproduci
 
 If `ACTIVE_PRD_STAGE` or `ACTIVE_PLAN_STAGE` is found, skip already-completed steps:
 
-| Stage found                          | Resume from                                                        |
-| ------------------------------------ | ------------------------------------------------------------------ |
-| `prd-approved` or `prd-draft`        | Step 2 (aet-validate-scope)                                        |
-| `scope-validated` or `plan-approved` | Pipeline complete → suggest `aet-pipeline-implement` or `aet-work` |
+| Stage found                          | Resume from                            |
+| ------------------------------------ | -------------------------------------- |
+| `prd-approved` or `prd-draft`        | Step 2 (aet-validate-scope)            |
+| `scope-validated` or `plan-approved` | Pipeline complete → suggest `aet-work` |
 
 ## Commands
 
@@ -142,7 +142,7 @@ After the pipeline completes all steps:
    - Queue:     .agents/work-queue.json
 
    Next step:
-   - Single task: run `aet-pipeline-implement docs/plans/{ticket}-plan.md`
+   - Single task: run `aet-work run-one docs/plans/{ticket}-plan.md`
    - All tasks (AFK): run `aet-work run`
    ```
 
@@ -152,7 +152,7 @@ After the pipeline completes all steps:
 - **Resumable** — if a stage is found in the footer, skip completed steps
 - **Same quality as individual skills** — the pipeline chains skills, it does not shortcut them
 - **AFK-safe** — the only human touchpoints are the defined gates; everything else runs unattended
-- **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to `aet-pipeline-implement`
+- **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to `aet-work`
 - **UI validation is a lens, not a stage** — UI/UX coverage is checked as part of `aet-validate-scope` when the PRD describes user-facing interfaces. It is not a separate pipeline step.
 - **Imperative requests are planning targets** — "Do X" means "Plan how to do X"
 - **Session-sized output** — The pipeline delegates to `aet-plan`, which enforces the dual-limit guardrail. Plans that enter the queue are guaranteed to be implementable in a single agent session.

@@ -23,7 +23,7 @@ This skill is **validation-only**. No application source code is written, modifi
 - Do not run application tests, linting, or type-checking
 - Do not implement "quick fixes" found during validation
 
-If validation reveals that code changes are needed, stop and redirect to `aet-plan` or `aet-pipeline-implement`.
+If validation reveals that code changes are needed, stop and redirect to `aet-plan` or `aet-work`.
 
 ## Before You Start
 
@@ -167,17 +167,17 @@ After `validate` completes and conflicts are resolved:
 
    ```
    *Stage: scope-validated*
-   *Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)*
+   *Next step: run `aet-work` (single-plan or multi-task queue)*
    ```
 
 2. Update the plan.md footer to:
 
    ```
    *Stage: plan-approved*
-   *Next step: run `aet-pipeline-implement` or `aet-work`*
+   *Next step: run `aet-work`*
    ```
 
-3. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-pipeline-implement\` (single task) or \`aet-work\` (multi-task queue)"`
+3. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-work\`"`
 
 ## Key Principles
 
