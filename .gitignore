@@ -3,7 +3,6 @@ content/
 node_modules/
 .lycheecache
 .worktrees/
-scripts/.aet-work-orchestrator.sh
 .review-report.md
 .qa-report.md
 .security-*.md
