@@ -46,7 +46,7 @@ Parent agent session (clean)
 - Requires the agent CLI to support non-interactive/print mode
 - Each task incurs CLI startup overhead (2–10s depending on runtime)
 - The parent session must remain open to wait for the background script
-- Interactive approval gates inside skills must be bypassed when running headless. The orchestrator sets `AET_EXECUTION_MODE=unattended`; skills that gate on human judgment (e.g., `aet-implement`, `aet-pipeline-implement`) detect this and skip the gate, logging the bypass for auditability.
+- Interactive approval gates inside skills must be bypassed when running headless. The orchestrator sets `AET_EXECUTION_MODE=unattended`; skills that gate on human judgment (e.g., `aet-implement`) detect this and skip the gate, logging the bypass for auditability.
 
 ## Runtime Self-Detection
 

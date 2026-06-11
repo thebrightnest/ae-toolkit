@@ -76,7 +76,7 @@ cp -r aet-setup ~/.claude/skills/
 | **Cursor**                    | Natural language or rules | "Set up this project with aet-setup"  |
 | **Codex / Copilot / Generic** | Paste into prompt         | Copy `SKILL.md` content into the chat |
 
-Pipelines work the same way — just invoke `aet-pipeline-plan` or `aet-pipeline-implement` instead of an individual skill.
+Pipelines work the same way — just invoke `aet-pipeline-plan` for planning or `aet-work run` for implementation with session-isolated stages.
 
 All skills follow the same markdown-based format. The agent reads the YAML frontmatter (`name`, `description`) to decide when to trigger, then loads the full instructions on demand.
 
