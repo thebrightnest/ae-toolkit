@@ -1,6 +1,43 @@
 # Changelog
 
-## Unreleased
+## [0.5.0] — 2026-06-11
+
+### Added
+
+- **aet-verify**: New skill for conditional live verification. Three modes — foundation smoke checks, feature evidence capture, and bug reproduction with step-by-step evidence capture.
+- **aet-upgrade**: New skill for dependency and framework upgrade planning. Analyzes changelogs, greps codebase for affected patterns, classifies risk per breaking change, and produces a risk-mapped upgrade plan.
+- **aet-work**: Unified orchestrator with session-isolated pipeline. Replaces the standalone `aet-pipeline-implement` skill with a centralized Python orchestrator that spawns fresh agent sessions per pipeline stage, eliminating context leakage between skills.
+- **aet-work**: Ground-truth status derivation via `scripts/aet-state.py`. Queue commands now compute derived statuses from git ground truth and surface discrepancies between stored and actual states.
+- **aet-prime**: Repurposed as triage front door. Added work-class routing and active PRD/plan stage tracking to classify incoming requests before context loading.
+- **aet-evolve**: Added trigger schema for learnings (keyword-based matching), retro debt check (verify past retro action items), and escalation ladder for unresolved systemic issues.
+- **aet-validate-scope**: Integrated UI Coverage Lens from `aet-validate-ui`. Seven-category UI/UX validation with blocking/warning severity ratings.
+- **Build system**: New `scripts/build-skills.py` with incremental packaging, dependency graph validation, and comprehensive build system test suite.
+- **Validation**: Enhanced `scripts/validate-skills.sh` with composition contradiction detection and improved guardrails.
+- **Testing**: Added unit tests for orchestrator lib modules (`tests/test_*.py`).
+
+### Changed
+
+- **aet-work**: `run` command now invokes the centralized Python orchestrator instead of generating bash scripts. Improved worktree isolation and parallel execution semantics.
+- **aet-pipeline-plan**: Streamlined pipeline sequence. Removed `aet-pipeline-implement` references; all implementation flows now route through `aet-work`.
+- **aet-setup**: Enhanced with additional guardrails and setup validation procedures.
+- **aet-ship**: Updated branch lifecycle and release gating procedures.
+- **aet-bug-report**: Updated investigation procedures and reference materials.
+- **aet-plan**: Enhanced validation strategy gate with explicit test coverage requirements per source file.
+- **aet-tdd**: Added coverage completeness hard gate before `tdd-complete`.
+- **aet-implement**: Updated execution routing to use `aet-work`.
+- **docs/CONVENTIONS.md**: Synced with v1.2 toolkit conventions and clarified planning artifact directory rules.
+
+### Removed
+
+- **aet-pipeline-implement**: Skill removed. Functionality unified into `aet-work` orchestrator.
+- **aet-validate-ui**: Standalone skill removed. UI validation folded into `aet-validate-scope`.
+
+### Fixed
+
+- **aet-verify**: Resolved validation errors for preamble formatting and trigger collision.
+- **aet-work**: Orchestrator now verifies commits exist before marking tasks as done.
+
+---
 
 ## [0.4.0] — 2026-06-08
 
