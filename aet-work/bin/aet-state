@@ -89,8 +89,13 @@ def derive_status(task, cwd=None):
     else:
         derived["branch_exists"] = False
 
-    # Ancestry check
+    # Ancestry check (branch OR merge_commit must be on main)
+    on_main = False
     if branch and is_ancestor_of_main(branch, cwd=cwd):
+        on_main = True
+    if merge_commit and is_ancestor_of_main(merge_commit, cwd=cwd):
+        on_main = True
+    if on_main:
         derived["on_main"] = True
         derived["derived_status"] = "merged"
     else:
