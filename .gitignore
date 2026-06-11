@@ -7,3 +7,4 @@ scripts/.aet-work-orchestrator.sh
 .review-report.md
 .qa-report.md
 .security-*.md
+tests/__pycache__
