@@ -1074,14 +1074,15 @@
       "id": "unified-orchestrator-plan",
       "title": "Plan: Unified Orchestrator with Session-Isolated Pipeline",
       "plan_file": "docs/plans/unified-orchestrator-plan.md",
-      "status": "done",
+      "status": "merged",
       "blocks": [],
       "blocked_by": [],
-      "merge_commit": null,
+      "merge_commit": "1576b0dbac8f4a469d39e368320921f75ecb0333",
       "completed_at": "2026-06-11T19:14:34.542364",
-      "merged_at": null,
+      "merged_at": "2026-06-11T20:48:27.897389+00:00",
       "worktree": null,
-      "branch": null
+      "branch": "unified-orchestrator",
+      "merge_strategy": "squash"
     },
     {
       "id": "qai-04-migration-validate",
