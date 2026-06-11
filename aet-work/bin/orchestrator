@@ -121,6 +121,9 @@ def process_task(
     copy_untracked_files(repo_root, worktree_dir)
     print(f"   Worktree: {worktree_dir}")
 
+    # Use the worktree copy of the plan file for stages and verification.
+    plan_file = os.path.join(worktree_dir, os.path.relpath(plan_file, repo_root))
+
     # Determine current stage from plan footer
     from verifier import read_plan_stage
 
@@ -134,55 +137,56 @@ def process_task(
             print(f"   ⚠️  Shutdown requested, stopping task {task_id}")
             return False
 
-        # Find the first stage in this group that hasn't been completed yet
-        target_stage = None
-        for stage in group:
-            if stage.name == current_stage:
-                target_stage = stage
+        while True:
+            # Find the first stage in this group that hasn't been completed yet
+            target_stage = None
+            for stage in group:
+                if stage.name == current_stage:
+                    target_stage = stage
+                    break
+
+            if not target_stage:
+                # All stages in this group are done; break to next group
                 break
 
-        if not target_stage:
-            # All stages in this group are done; skip
-            continue
+            # Check conditional stages
+            if target_stage.conditional and not target_stage.conditional(plan_file, worktree_dir):
+                print(f"   ⏭️  Skipping conditional stage: {target_stage.name}")
+                current_stage = target_stage.next_stage or current_stage
+                continue
 
-        # Check conditional stages
-        if target_stage.conditional and not target_stage.conditional(plan_file, worktree_dir):
-            print(f"   ⏭️  Skipping conditional stage: {target_stage.name}")
-            current_stage = target_stage.next_stage or current_stage
-            continue
+            next_stage_name = target_stage.next_stage or current_stage
+            skills = target_stage.skills
 
-        next_stage_name = target_stage.next_stage or current_stage
-        skills = target_stage.skills
+            if not skills:
+                # Terminal stage (synced)
+                current_stage = next_stage_name
+                continue
 
-        if not skills:
-            # Terminal stage (synced)
+            print(f"   Stage: {target_stage.name} → {next_stage_name} ({' → '.join(skills)})")
+
+            exit_code = run_stage(
+                adapter,
+                repo_root,
+                plan_file,
+                worktree_dir,
+                skills,
+                target_stage.name,
+                next_stage_name,
+            )
+
+            if exit_code != 0:
+                print(f"   ❌ Stage failed with exit code {exit_code}")
+                return False
+
+            # Verify stage advancement
+            ok, msg = verify_stage_advancement(plan_file, worktree_dir, next_stage_name, retries=1)
+            if not ok:
+                print(f"   ❌ Stage verification failed: {msg}")
+                return False
+
+            print(f"   ✅ Stage advanced to {next_stage_name}")
             current_stage = next_stage_name
-            continue
-
-        print(f"   Stage: {target_stage.name} → {next_stage_name} ({' → '.join(skills)})")
-
-        exit_code = run_stage(
-            adapter,
-            repo_root,
-            plan_file,
-            worktree_dir,
-            skills,
-            target_stage.name,
-            next_stage_name,
-        )
-
-        if exit_code != 0:
-            print(f"   ❌ Stage failed with exit code {exit_code}")
-            return False
-
-        # Verify stage advancement
-        ok, msg = verify_stage_advancement(plan_file, worktree_dir, next_stage_name, retries=1)
-        if not ok:
-            print(f"   ❌ Stage verification failed: {msg}")
-            return False
-
-        print(f"   ✅ Stage advanced to {next_stage_name}")
-        current_stage = next_stage_name
 
     print(f"   ✅ Task complete: {task_id}")
     return True
