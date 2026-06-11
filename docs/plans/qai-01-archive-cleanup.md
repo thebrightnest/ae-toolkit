@@ -70,5 +70,5 @@ This plan introduces the physical archive file and wires it into `aet-work clean
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
