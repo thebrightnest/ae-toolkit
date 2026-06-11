@@ -7,7 +7,7 @@
 - **aet-verify**: New skill for conditional live verification. Three modes — foundation smoke checks, feature evidence capture, and bug reproduction with step-by-step evidence capture.
 - **aet-upgrade**: New skill for dependency and framework upgrade planning. Analyzes changelogs, greps codebase for affected patterns, classifies risk per breaking change, and produces a risk-mapped upgrade plan.
 - **aet-work**: Unified orchestrator with session-isolated pipeline. Replaces the standalone `aet-pipeline-implement` skill with a centralized Python orchestrator that spawns fresh agent sessions per pipeline stage, eliminating context leakage between skills.
-- **aet-work**: Ground-truth status derivation via `scripts/aet-state.py`. Queue commands now compute derived statuses from git ground truth and surface discrepancies between stored and actual states.
+- **aet-work**: Ground-truth status derivation via centralized `aet-state` helper. Queue commands now compute derived statuses from git ground truth and surface discrepancies between stored and actual states.
 - **aet-prime**: Repurposed as triage front door. Added work-class routing and active PRD/plan stage tracking to classify incoming requests before context loading.
 - **aet-evolve**: Added trigger schema for learnings (keyword-based matching), retro debt check (verify past retro action items), and escalation ladder for unresolved systemic issues.
 - **aet-validate-scope**: Integrated UI Coverage Lens from `aet-validate-ui`. Seven-category UI/UX validation with blocking/warning severity ratings.

@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-AET_STATE = Path(__file__).with_name("aet-state.py").resolve()
+AET_STATE = Path(__file__).resolve().parents[1] / "aet-work" / "bin" / "aet-state"
 
 
 class TestAetState(unittest.TestCase):

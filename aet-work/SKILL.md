@@ -65,7 +65,7 @@ Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
 6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
 7. Set `queue_updated_at` to the current ISO-8601 timestamp
 8. Write `.agents/work-queue.json`
-9. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to compute derived statuses from ground truth
+9. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to compute derived statuses from ground truth
 10. For any task where derived status differs from stored status, update the stored status to match the derived status and print a warning
 11. Report: `N existing tasks preserved, M new tasks added`
 
@@ -90,7 +90,7 @@ Incrementally sync `docs/plans/*.md` into the existing work queue without losing
    - Set `status: "orphaned"` and print a warning
 6. Update `queue_updated_at` to current ISO-8601 timestamp
 7. Write `.agents/work-queue.json`
-8. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to compute derived statuses for all entries
+8. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to compute derived statuses for all entries
 9. For any task where derived status differs from stored status, update the stored status to match the derived status and print a warning
 10. Report: `N new tasks added, M existing tasks preserved, K orphaned tasks flagged`
 
@@ -107,7 +107,7 @@ Show the current state of the work queue.
    - List the orphaned plan filenames
    - Print `Run init-queue to sync, or acknowledge each plan manually.`
    - **Do not report "all clear" even if all tracked tasks are done**
-2. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to get ground-truth statuses
+2. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses
 3. Read `.agents/work-queue.json`
 4. Report counts: unblocked, blocked, in-progress, done, merged, merge_verified, abandoned, failed
 5. **Derived status column:** For each task, show both stored status and derived status. If they differ, highlight the discrepancy.
@@ -123,12 +123,12 @@ Identify and output the next unblocked task.
 **Procedure:**
 
 1. Run the `plan-drift` check. If drift is detected, refuse to pick a task and instruct the user to run `init-queue` first
-2. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to get ground-truth statuses
+2. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses
 3. Read `.agents/work-queue.json`
 4. Find tasks with `status: "unblocked"`
 5. Pick the first in topological order (respecting the DAG)
 6. Output: task ID, title, plan_file path
-7. Update status to `in-progress` via `python3 scripts/aet-state.py transition <task_id> <current_status> in-progress .agents/work-queue.json`
+7. Update status to `in-progress` via `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_status> in-progress .agents/work-queue.json`
 
 ### `run`
 
@@ -207,11 +207,11 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 ### `derive`
 
-Recompute all non-declarative status fields from ground truth (git, filesystem) using `scripts/aet-state.py`.
+Recompute all non-declarative status fields from ground truth (git, filesystem) using the centralized `aet-state` helper.
 
 **Procedure:**
 
-1. Run `python3 scripts/aet-state.py derive .agents/work-queue.json`
+1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json`
 2. For each task, the derived status is computed:
    - `plan_file` exists on disk → `planned`
    - `branch` exists locally → `in-progress`
@@ -257,7 +257,7 @@ Detect tasks marked `done` or `merged` whose commits are not on `origin/main`.
 
 ### `mark-terminal`
 
-Mark a task as `merged` or `abandoned`. This is the only supported way to set a terminal status manually. Uses `scripts/aet-state.py` for legality validation and atomic updates.
+Mark a task as `merged` or `abandoned`. This is the only supported way to set a terminal status manually. Uses the centralized `aet-state` helper for legality validation and atomic updates.
 
 **Procedure:**
 
@@ -266,12 +266,12 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 3. If the requested status is `merge_verified`:
    - STOP and print: `⛔ merge_verified is a legacy status. Use merged instead.`
 4. If setting to `merged`:
-   - Run `python3 scripts/aet-state.py validate <task_id> <current_status> merged .agents/work-queue.json`
+   - Run `python3 ~/.claude/skills/aet-work/bin/aet-state validate <task_id> <current_status> merged .agents/work-queue.json`
    - If validation fails, STOP and print the error message
-   - If validation passes, run `python3 scripts/aet-state.py transition <task_id> <current_status> merged .agents/work-queue.json`
+   - If validation passes, run `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_status> merged .agents/work-queue.json`
 5. If setting to `abandoned`:
    - Require a `reason` argument (non-empty string)
-   - Run `python3 scripts/aet-state.py transition <task_id> <current_status> abandoned .agents/work-queue.json --reason="<reason>"`
+   - Run `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_status> abandoned .agents/work-queue.json --reason="<reason>"`
    - Print: `⚠️ Task {id} marked abandoned. Reason: {reason}`
 
 **Rules:**
@@ -287,7 +287,7 @@ Remove worktrees for merged tasks, and repair stale queue entries.
 
 **Procedure:**
 
-1. Run `python3 scripts/aet-state.py derive .agents/work-queue.json` to get ground-truth statuses
+1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses
 2. Read `.agents/work-queue.json`
 3. For each task where derived status is `merged` (or stored status is `merged`/`merge_verified`):
 
