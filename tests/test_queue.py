@@ -39,6 +39,38 @@ class TestQueue(unittest.TestCase):
         read_back = read_queue(path)
         self.assertEqual(read_back[0]["id"], "t1")
 
+    def test_read_queue_missing_tasks_fallback(self):
+        """Dict without 'tasks' key should return empty list, not the dict."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            path = f.name
+            json.dump({"source_prd": "foo"}, f)
+
+        read_back = read_queue(path)
+        self.assertEqual(read_back, [])
+
+    def test_write_queue_preserves_wrapper(self):
+        """Wrapper metadata (source_prd, queue_updated_at) must survive a read-write cycle."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            path = f.name
+            original = {
+                "source_prd": "docs/prds/test.md",
+                "queue_updated_at": "2026-01-01T00:00:00Z",
+                "tasks": [{"id": "t1", "status": "unblocked"}],
+            }
+            json.dump(original, f)
+
+        queue = read_queue(path)
+        mark_status(queue, "t1", "in-progress")
+        write_queue(path, queue)
+
+        with open(path, "r") as f:
+            data = json.load(f)
+
+        self.assertIsInstance(data, dict)
+        self.assertEqual(data.get("source_prd"), "docs/prds/test.md")
+        self.assertEqual(data.get("queue_updated_at"), "2026-01-01T00:00:00Z")
+        self.assertEqual(data["tasks"][0]["status"], "in-progress")
+
     def test_get_next_unblocked(self):
         queue = [
             {"id": "t1", "status": "blocked"},

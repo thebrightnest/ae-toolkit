@@ -20,6 +20,13 @@ def load_queue(path):
         return json.load(f)
 
 
+def get_tasks(queue):
+    """Extract the tasks list from either a wrapper dict or a plain list."""
+    if isinstance(queue, dict):
+        return queue.get("tasks", [])
+    return queue
+
+
 def save_queue(path, queue):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(queue, f, indent=2)
@@ -27,7 +34,7 @@ def save_queue(path, queue):
 
 
 def find_task(queue, task_id):
-    for task in queue:
+    for task in get_tasks(queue):
         if task.get("id") == task_id:
             return task
     return None
@@ -174,7 +181,7 @@ def cmd_derive(args):
     queue = load_queue(args.queue)
     cwd = os.path.dirname(args.queue) if args.queue else "."
     results = {}
-    for task in queue:
+    for task in get_tasks(queue):
         results[task["id"]] = derive_status(task, cwd=cwd)
     print(json.dumps(results, indent=2))
     return 0
@@ -231,7 +238,7 @@ def cmd_sync_footers(args):
 
     # Find the task that references this plan file
     task = None
-    for t in queue:
+    for t in get_tasks(queue):
         if t.get("plan_file") == args.plan or Path(t.get("plan_file", "")).resolve() == plan_path.resolve():
             task = t
             break

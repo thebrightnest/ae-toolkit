@@ -124,6 +124,7 @@ Because bash job control guarantees only one `wait` returns at a time, queue mut
 
 ## Further Reading
 
-- `references/orchestrator-template.sh` — the template used by `run` to generate the orchestrator
-- `references/afk-loop-orchestrator.sh` — a standalone, heavily commented example script you can adapt for custom orchestration
-- `references/parallel-execution.md` — deep dive on concurrency caps, bash job control, and resume behavior
+- `bin/orchestrator` — the unified Python orchestrator invoked by `aet-work run`
+- `lib/queue.py` — queue read/write operations with wrapper-format preservation
+- `lib/cli_adapter.py` — CLI detection and command building for Kimi and Claude
+- `references/parallel-execution.md` — deep dive on concurrency caps and resume behavior

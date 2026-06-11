@@ -7,23 +7,38 @@ import os
 from datetime import datetime
 from typing import Any
 
+# Tracks wrapper metadata per queue file so write_queue can preserve it.
+_queue_wrappers: dict[str, dict[str, Any]] = {}
+
 
 def read_queue(queue_file: str) -> list[dict[str, Any]]:
-    """Read the queue from JSON."""
+    """Read the queue from JSON.
+
+    Supports both flat list and dict-wrapper formats (e.g.
+    {"source_prd": "...", "tasks": [...], "queue_updated_at": "..."}).
+    Wrapper metadata is stored so write_queue can restore it.
+    """
+    _queue_wrappers.pop(queue_file, None)
     if not os.path.exists(queue_file):
         return []
     with open(queue_file, "r", encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict):
-        return data.get("tasks", data)
+        _queue_wrappers[queue_file] = {k: v for k, v in data.items() if k != "tasks"}
+        return data.get("tasks", [])
     return data
 
 
 def write_queue(queue_file: str, queue: list[dict[str, Any]]) -> None:
-    """Write the queue back to JSON."""
+    """Write the queue back to JSON, preserving any wrapper metadata."""
     os.makedirs(os.path.dirname(queue_file), exist_ok=True)
+    wrapper = _queue_wrappers.pop(queue_file, {})
+    if wrapper:
+        data = {**wrapper, "tasks": queue}
+    else:
+        data = queue
     with open(queue_file, "w", encoding="utf-8") as f:
-        json.dump(queue, f, indent=2)
+        json.dump(data, f, indent=2)
         f.write("\n")
 
 
