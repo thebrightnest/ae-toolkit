@@ -9,12 +9,17 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class CLIAdapter:
-    """Configuration for invoking an AI coding agent CLI."""
+    """Configuration for invoking an AI coding agent CLI.
+
+    The orchestrator handles the working directory via ``subprocess.run(cwd=...)``,
+    so ``workdir_flag`` is ``None`` for CLIs that do not expose a dedicated
+    work-directory flag (e.g. kimi, claude).
+    """
 
     name: str
     bin: str
     prompt_flag: str
-    workdir_flag: str
+    workdir_flag: str | None
     headless_flag: str
 
     def build_cmd(
@@ -41,14 +46,14 @@ ADAPTERS: dict[str, CLIAdapter] = {
         name="kimi",
         bin="kimi",
         prompt_flag="-p",
-        workdir_flag="--work-dir",
-        headless_flag="--afk",
+        workdir_flag=None,
+        headless_flag="--yolo",
     ),
     "claude": CLIAdapter(
         name="claude",
         bin="claude",
         prompt_flag="-p",
-        workdir_flag="--cwd",
+        workdir_flag=None,
         headless_flag="--dangerously-skip-permissions",
     ),
 }

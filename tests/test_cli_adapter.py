@@ -16,15 +16,15 @@ class TestCLIAdapter(unittest.TestCase):
         self.assertEqual(adapter.name, "kimi")
         self.assertEqual(adapter.bin, "kimi")
         self.assertEqual(adapter.prompt_flag, "-p")
-        self.assertEqual(adapter.workdir_flag, "--work-dir")
-        self.assertEqual(adapter.headless_flag, "--afk")
+        self.assertIsNone(adapter.workdir_flag)
+        self.assertEqual(adapter.headless_flag, "--yolo")
 
     def test_claude_adapter(self):
         adapter = resolve_cli_adapter("claude")
         self.assertEqual(adapter.name, "claude")
         self.assertEqual(adapter.bin, "claude")
         self.assertEqual(adapter.prompt_flag, "-p")
-        self.assertEqual(adapter.workdir_flag, "--cwd")
+        self.assertIsNone(adapter.workdir_flag)
         self.assertEqual(adapter.headless_flag, "--dangerously-skip-permissions")
 
     def test_build_cmd(self):
@@ -37,6 +37,14 @@ class TestCLIAdapter(unittest.TestCase):
         )
         cmd = adapter.build_cmd("run tests", workdir="/tmp/proj", headless=True)
         self.assertEqual(cmd, ["test", "--headless", "-p", "run tests", "--cwd", "/tmp/proj"])
+
+    def test_build_cmd_no_workdir_flag(self):
+        """When workdir_flag is None, cwd is omitted (handled by subprocess)."""
+        adapter = CLIAdapter(
+            name="test", bin="test", prompt_flag="-p", workdir_flag=None, headless_flag="--headless"
+        )
+        cmd = adapter.build_cmd("run tests", workdir="/tmp/proj", headless=True)
+        self.assertEqual(cmd, ["test", "--headless", "-p", "run tests"])
 
     def test_build_cmd_no_headless(self):
         adapter = CLIAdapter(
