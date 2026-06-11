@@ -19,18 +19,17 @@ The only reliable solution is to move isolation out of the skill and into the OS
 
 ## OS-Process Isolation — `aet-work run`
 
-`aet-work run` generates a bash orchestrator that spawns a fresh OS process for every task:
+`aet-work run` invokes the unified Python orchestrator that spawns a fresh OS process for every task:
 
 ```
 Parent agent session (clean)
   → detects runtime
-  → generates scripts/.aet-work-orchestrator.sh
-  → Shell(run_in_background=true) to spawn script
-    → Script spawns Agent CLI process #1 (clean context, fresh process)
+  → invokes `bin/orchestrator`
+    → Orchestrator spawns Agent CLI process #1 (clean context, fresh process)
       → Task 1 completes, commits, exits
-    → Script spawns Agent CLI process #2 (clean context, fresh process)
+    → Orchestrator spawns Agent CLI process #2 (clean context, fresh process)
       → Task 2 completes, commits, exits
-  → TaskOutput(block=true) returns
+  → Orchestrator returns
   → Parent session remains clean
 ```
 
@@ -45,7 +44,7 @@ Parent agent session (clean)
 
 - Requires the agent CLI to support non-interactive/print mode
 - Each task incurs CLI startup overhead (2–10s depending on runtime)
-- The parent session must remain open to wait for the background script
+- The parent session must remain open to wait for the orchestrator to finish
 - Interactive approval gates inside skills must be bypassed when running headless. The orchestrator sets `AET_EXECUTION_MODE=unattended`; skills that gate on human judgment (e.g., `aet-implement`) detect this and skip the gate, logging the bypass for auditability.
 
 ## Runtime Self-Detection
@@ -118,12 +117,13 @@ Under parallel execution, only the main orchestrator loop reads and writes `.age
 
 - The orchestrator spawns a child
 - The child runs to completion and exits
-- The orchestrator's `wait` returns, and only then does it update the queue
+- The orchestrator polls for completion and only then does it update the queue
 
-Because bash job control guarantees only one `wait` returns at a time, queue mutations are naturally serialized. No lock file, no `flock`, no database is required.
+Because the Python orchestrator processes one completion at a time in its polling loop, queue mutations are naturally serialized. No lock file, no `flock`, no database is required.
 
 ## Further Reading
 
-- `references/orchestrator-template.sh` — the template used by `run` to generate the orchestrator
-- `references/afk-loop-orchestrator.sh` — a standalone, heavily commented example script you can adapt for custom orchestration
-- `references/parallel-execution.md` — deep dive on concurrency caps, bash job control, and resume behavior
+- `bin/orchestrator` — the unified Python orchestrator invoked by `aet-work run`
+- `lib/queue.py` — queue read/write operations with wrapper-format preservation
+- `lib/cli_adapter.py` — CLI detection and command building for Kimi and Claude
+- `references/parallel-execution.md` — deep dive on concurrency caps and resume behavior

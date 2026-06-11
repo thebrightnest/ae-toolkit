@@ -42,7 +42,7 @@ def read_plan_stage(plan_file: str) -> str | None:
     with open(plan_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    match = re.search(r"\*Stage:\s*(\w+)\*", content)
+    match = re.search(r"[*_]Stage:\s*([\w-]+)[*_]", content)
     if match:
         return match.group(1)
     return None

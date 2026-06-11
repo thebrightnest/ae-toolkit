@@ -31,6 +31,8 @@ Entry-point skills enforce symmetric guards to prevent misrouted work:
 
 ## Canonical Stage State Machine
 
+The `aet-work` orchestrator is the sole conductor of the pipeline. It reads each plan's stage footer, spawns isolated agent sessions per stage group, and advances plans automatically.
+
 | Stage             | Meaning                             | Next Step                 |
 | ----------------- | ----------------------------------- | ------------------------- |
 | `plan-draft`      | PRD written, not yet validated      | `aet-validate-scope`      |

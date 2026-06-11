@@ -6,6 +6,7 @@ validates transition legality, and updates footers + queue JSON atomically.
 """
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -14,10 +15,23 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# Load the shared queue library from aet-work/lib/queue.py.
+_QUEUE_PY = Path(__file__).resolve().parent.parent / "lib" / "queue.py"
+_queue_spec = importlib.util.spec_from_file_location("aet_queue", _QUEUE_PY)
+queue_lib = importlib.util.module_from_spec(_queue_spec)
+_queue_spec.loader.exec_module(queue_lib)
+
 
 def load_queue(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def get_tasks(queue):
+    """Extract the tasks list from either a wrapper dict or a plain list."""
+    if isinstance(queue, dict):
+        return queue.get("tasks", [])
+    return queue
 
 
 def save_queue(path, queue):
@@ -27,7 +41,7 @@ def save_queue(path, queue):
 
 
 def find_task(queue, task_id):
-    for task in queue:
+    for task in get_tasks(queue):
         if task.get("id") == task_id:
             return task
     return None
@@ -82,8 +96,13 @@ def derive_status(task, cwd=None):
     else:
         derived["branch_exists"] = False
 
-    # Ancestry check
+    # Ancestry check (branch OR merge_commit must be on main)
+    on_main = False
     if branch and is_ancestor_of_main(branch, cwd=cwd):
+        on_main = True
+    if merge_commit and is_ancestor_of_main(merge_commit, cwd=cwd):
+        on_main = True
+    if on_main:
         derived["on_main"] = True
         derived["derived_status"] = "merged"
     else:
@@ -174,7 +193,7 @@ def cmd_derive(args):
     queue = load_queue(args.queue)
     cwd = os.path.dirname(args.queue) if args.queue else "."
     results = {}
-    for task in queue:
+    for task in get_tasks(queue):
         results[task["id"]] = derive_status(task, cwd=cwd)
     print(json.dumps(results, indent=2))
     return 0
@@ -222,6 +241,34 @@ def cmd_transition(args):
     return 0
 
 
+def cmd_archive(args):
+    """Archive terminal tasks from the queue into the archive file."""
+    # Read the queue *before* archiving so we can report skipped tasks.
+    queue_before = queue_lib.read_queue(args.queue)
+    terminal_before = {
+        t.get("id")
+        for t in queue_before
+        if t.get("status", "") in queue_lib.TERMINAL_STATUSES
+        or t.get("status") == "merge_verified"
+    }
+
+    new_queue, archived = queue_lib.archive_tasks(args.queue, args.archive)
+    archived_ids = {t.get("id") for t in archived}
+    skipped = len(terminal_before - archived_ids)
+
+    if archived:
+        ids = ", ".join(t.get("id") for t in archived)
+        print(f"Archived {len(archived)} tasks: {ids}")
+    else:
+        print("Archived 0 tasks")
+
+    if skipped:
+        print(f"Skipped {skipped} terminal tasks with active dependents")
+
+    print(f"Active queue: {len(new_queue)} tasks remaining")
+    return 0
+
+
 def cmd_sync_footers(args):
     queue = load_queue(args.queue)
     plan_path = Path(args.plan)
@@ -231,7 +278,7 @@ def cmd_sync_footers(args):
 
     # Find the task that references this plan file
     task = None
-    for t in queue:
+    for t in get_tasks(queue):
         if t.get("plan_file") == args.plan or Path(t.get("plan_file", "")).resolve() == plan_path.resolve():
             task = t
             break
@@ -285,6 +332,11 @@ def main():
     sync_parser.add_argument("stage", help="Stage to set.")
     sync_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
 
+    # archive
+    archive_parser = subparsers.add_parser("archive", help="Move terminal tasks from queue to archive.")
+    archive_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+    archive_parser.add_argument("archive", nargs="?", default=".agents/work-archive.json", help="Path to archive JSON.")
+
     args = parser.parse_args()
 
     if args.command == "derive":
@@ -295,6 +347,8 @@ def main():
         return cmd_transition(args)
     if args.command == "sync-footers":
         return cmd_sync_footers(args)
+    if args.command == "archive":
+        return cmd_archive(args)
 
     return 1
 
