@@ -266,3 +266,23 @@ The orchestrator monitors disk usage throughout execution:
 2. Should `--plan-file` be exposed as a separate command (`aet-work run-one`) for easier UX, or is the flag style (`aet-work run --plan-file`) acceptable?
 3. Do we need an explicit `AET_MAX_STEPS_PER_STAGE` config to avoid the 100-step limit, or should each skill internally handle step budgets?
 4. Should the orchestrator support resuming a single plan from an arbitrary stage, or only from the stage recorded in the plan.md footer?
+
+## Divergence Summary
+
+_Recorded: 2026-06-11 — Branch: unified-orchestrator_
+
+### Changed from plan
+
+- **Documentation**: `docs/use-cases.md` and `aet-setup/checklist.md` required no changes (already free of `aet-pipeline-implement` references). The `aet-work/references/orchestrator-spec.md` behavior contract was deferred.
+- **Conditional divergence check**: `_divergences_found` uses a simplified heuristic (any `.md` file in `/tmp/aet-reports/{task_id}/`) rather than parsing specific review/CSO divergence annotations.
+
+### Added (unplanned)
+
+- **Archive cleanup integration**: `aet-work/bin/aet-state` was enhanced with `derive` and `archive` subcommands to support atomic queue archival during cleanup, discovered during implementation as necessary for queue hygiene at scale.
+
+### Deferred
+
+- **Disk space management**: Pre-flight disk estimation, per-task size cap, and `AET_WORK_MAX_DISC_USAGE_GB` config were deferred to a future hardening cycle.
+- **Manual reconcile command**: `aet-work reconcile --task-id <id> --to-stage <stage>` override was deferred; queue/plan footer reconciliation is currently handled automatically on startup.
+
+_Stage: synced_ / _Next step: run `aet-ship`_

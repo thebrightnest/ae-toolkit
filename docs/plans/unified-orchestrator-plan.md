@@ -12,7 +12,7 @@
 
 ## Tasks
 
-1. **Create `aet-work/lib/` modules** — M
+1. ✓ **Create `aet-work/lib/` modules** — M
 
    - `cli_adapter.py`: `CLIAdapter` dataclass, Kimi + Claude adapters, explicit `--cli-bin` resolution
    - `pipeline.py`: `STAGES` list, session groups, isolation levels, conditional stage logic
@@ -20,7 +20,7 @@
    - `worktree.py`: create/remove worktrees, copy untracked plans, disk estimation
    - `verifier.py`: commit count check, stage advancement read from plan footer, retry logic
 
-2. **Create `aet-work/bin/orchestrator`** — M
+2. ✓ **Create `aet-work/bin/orchestrator`** — M
 
    - Argument parsing (`--queue-file`, `--plan-file`, `--cli-bin`, `--isolation`, `--max-jobs`)
    - Batch mode: parallel task spawning with slot pool, PID tracking, drain-on-failure
@@ -29,7 +29,7 @@
    - Prompt construction per stage group
    - Trust boundary enforcement (CLI allowlist, no global config mutation)
 
-3. **Update `aet-work/SKILL.md` and remove legacy files** — S
+3. ✓ **Update `aet-work/SKILL.md` and remove legacy files** — S
 
    - Rewrite `run` command to invoke `bin/orchestrator` instead of generating a bash script
    - Add `run-one` alias (or document `--plan-file` usage)
@@ -37,20 +37,20 @@
    - Delete `aet-pipeline-implement/` directory entirely
    - Update `aet-work/references/` README if it references the old template
 
-4. **Update documentation** — S
+4. ✓ **Update documentation** — S [Changed: `docs/use-cases.md` and `aet-setup/checklist.md` were already clean; `aet-work/references/orchestrator-spec.md` deferred]
 
    - `docs/PIPELINE.md`: orchestrator is the sole conductor, stage machine diagram
    - `docs/use-cases.md`: replace `aet-pipeline-implement` references with `aet-work run --plan-file`
    - `aet-setup/checklist.md` or template: remove `scripts/.aet-work-orchestrator.sh` from `.gitignore` recommendations
 
-5. **Add unit tests** — M
+5. ✓ **Add unit tests** — M
 
    - `tests/test_cli_adapter.py`: adapter selection, flag generation, explicit bin resolution
    - `tests/test_pipeline.py`: stage transitions, conditional skips, isolation levels
    - `tests/test_verifier.py`: commit verification, stage advancement, retry behavior
    - `tests/test_queue.py`: status updates, dependent promotion
 
-6. **Merge to main and validate** — S
+6. **Merge to main and validate** — S [Deferred: pending `aet-ship`]
    - Run `make validate`
    - Run test suite
    - Delete `scripts/.aet-work-orchestrator.sh` from this repo
@@ -72,9 +72,9 @@
 
 ## Validation Steps
 
-- [ ] `make validate` passes (lint + format + skill structure)
-- [ ] `python3 -m pytest tests/` passes
-- [ ] `aet-work/bin/orchestrator --help` runs without error
+- [x] `make validate` passes (lint + format + skill structure)
+- [x] `python3 -m pytest tests/` passes
+- [x] `aet-work/bin/orchestrator --help` runs without error
 - [ ] Integration test (manual): run `--plan-file` on a toy plan in a temp repo and verify stages advance
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -87,4 +87,4 @@ If the unified orchestrator fails in production:
 3. Projects with legacy `scripts/.aet-work-orchestrator.sh` can continue using it until they update.
 4. No data migration is needed — queue JSON and plan.md footers remain compatible.
 
-_Stage: reviewed_
+_Stage: synced_ / _Next step: run `aet-ship`_
