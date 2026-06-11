@@ -87,5 +87,5 @@ If the unified orchestrator fails in production:
 3. Projects with legacy `scripts/.aet-work-orchestrator.sh` can continue using it until they update.
 4. No data migration is needed — queue JSON and plan.md footers remain compatible.
 
-_Stage: plan-approved_
-_Next step: run `aet-tdd` + `aet-implement` (Task 1 + Task 2)_
+_Stage: implemented_
+_Next step: run `aet-qa`_
