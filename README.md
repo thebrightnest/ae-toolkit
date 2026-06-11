@@ -20,7 +20,7 @@ AE Toolkit fixes this by encoding the best agentic engineering patterns from YC,
 - **Test-first development** — `aet-tdd` guides red-green-refactor with vertical tracer bullets and integration-style tests that survive refactors
 - **Fresh-session implementation** — plans and code never share a context window; bias can't leak
 - **Night-shift productivity** — `aet-work run` grinds through your task queue while you sleep, clearing context between each ticket so quality doesn't degrade
-- **One-command full flows** — `aet-pipeline-plan` runs the entire planning sequence; `aet-pipeline-implement` runs the full implementation sequence without manual skill switching
+- **One-command full flows** — `aet-pipeline-plan` runs the entire planning sequence; `aet-work run` runs the full implementation sequence with session-isolated stages
 - **Dependency upgrades as first-class work** — `aet-upgrade` analyzes breaking changes, maps risk, and validates before you bump a framework version
 - **Compounding quality** — every bug updates a rule, template, or guardrail in `.agents/`. The system gets smarter across sessions, not just within them.
 - **Agent-agnostic** — works with Claude Code, Kimi, Cursor, Codex, Copilot, or paste-into-chat. Your workflow is portable.
@@ -117,10 +117,10 @@ npx skills add getatelier/ae-toolkit.git@<skill-name>
 
 These skills chain multiple individual skills into complete end-to-end flows:
 
-| Skill                                              | Description                                                                                                         |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| [aet-pipeline-plan](./aet-pipeline-plan)           | End-to-end planning pipeline. Runs triage → discover → plan → validate-scope with hard human gates.                 |
-| [aet-pipeline-implement](./aet-pipeline-implement) | End-to-end implementation pipeline. Runs tdd → implement → qa → review → cso → sync-docs, resumable from any stage. |
+| Skill                                    | Description                                                                                           |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [aet-pipeline-plan](./aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → discover → plan → validate-scope with hard human gates.   |
+| [aet-work](./aet-work)                   | Work queue management with unified orchestrator. Runs plans in parallel with session-isolated stages. |
 
 ---
 
