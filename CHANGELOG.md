@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.1] — 2026-06-11
+
+### Added
+
+- **AGENTS.md**: Analysis-to-action discipline guardrail. When analysis identifies a principle violation, the agent must state the conclusion and propose the fix — not offer options that preserve the violation.
+
+### Changed
+
+- **aet-work**: `aet-state` helper is now centralized in `aet-work/bin/aet-state` alongside the orchestrator. `aet-setup` no longer scaffolds a per-project copy.
+- **aet-setup**: Scaffold template now includes the analysis-to-action discipline guardrail.
+
+---
+
 ## [0.5.0] — 2026-06-11
 
 ### Added
