@@ -185,7 +185,7 @@ Parent agent session (clean)
 
 ### `run-one`
 
-Run the full pipeline on a single plan with session-isolated stages. Replaces the manual `aet-pipeline-implement` workflow.
+Run the full pipeline on a single plan with session-isolated stages. Replaces the manual multi-skill pipeline workflow.
 
 **Procedure:**
 

@@ -255,7 +255,7 @@ After the `plan` command completes and the plan.md is ready for review:
    ```
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
-4. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-pipeline-implement\` or \`aet-work\`"`
+4. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
 
 ## Key Principles
 
