@@ -17,7 +17,7 @@ This plan migrates the existing 65 merged/done tasks from the active queue to th
 
    - Execute `python3 aet-work/bin/aet-state archive .agents/work-queue.json .agents/work-archive.json`
    - Verify: `.agents/work-archive.json` contains 65+ terminal tasks
-   - Verify: `.agents/work-queue.json` contains only active tasks (unblocked, blocked, in-progress, failed)
+   - Verify: `.agents/work-queue.json` contains only active tasks (unblocked, blocked, in-progress, failed, done)
    - Commit both files with message: `chore(queue): archive terminal tasks after qai rollout`
 
 2. **Run performance validation** — S
