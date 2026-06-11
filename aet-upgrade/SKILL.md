@@ -102,7 +102,7 @@ After the upgrade plan is produced:
    ```
    *Stage: plan-approved*
    *Work class: critical*
-   *Next step: aet-pipeline-implement*
+   *Next step: aet-work*
    ```
 
 2. Print:
@@ -115,7 +115,7 @@ After the upgrade plan is produced:
    Medium-risk breaking changes: {N}
    Low-risk breaking changes: {N}
 
-   Next step: run aet-pipeline-implement to execute the upgrade with full governance.
+   Next step: run aet-work to execute the upgrade with full governance.
    ```
 
 ## Key Principles
