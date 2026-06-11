@@ -1186,19 +1186,6 @@
       "merge_strategy": "squash"
     },
     {
-      "id": "qai-02-incremental-sync",
-      "title": "Incremental Derive and Sync",
-      "plan_file": "docs/plans/qai-02-incremental-sync.md",
-      "status": "done",
-      "blocked_by": [],
-      "blocks": ["qai-04-migration-validate"],
-      "merge_commit": null,
-      "completed_at": "2026-06-11T18:59:25.610797",
-      "merged_at": null,
-      "worktree": null,
-      "branch": null
-    },
-    {
       "id": "qai-03-active-status",
       "title": "Active-Only Status View",
       "plan_file": "docs/plans/qai-03-active-status.md",
