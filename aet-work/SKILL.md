@@ -132,7 +132,7 @@ Identify and output the next unblocked task.
 
 ### `run`
 
-AFK loop with OS-level process isolation and parallel execution. Generates a bash orchestrator script tailored to the detected agent CLI, spawns it as a background OS process, and waits for completion. Independent tasks execute simultaneously—each in its own git worktree and agent process—up to a configurable concurrency cap. Context leakage and branch overlap are eliminated entirely.
+AFK loop with OS-level process isolation and parallel execution. Invokes the centralized `aet-work/bin/orchestrator` Python script, which spawns fresh agent sessions per pipeline stage. Independent tasks execute simultaneously—each in its own git worktree—up to a configurable concurrency cap. Context leakage between skills is eliminated by session isolation.
 
 **Procedure:**
 
@@ -142,76 +142,68 @@ AFK loop with OS-level process isolation and parallel execution. Generates a bas
 
    Before spawning the first task, the orchestrator ensures `main` is clean and synchronized with `origin/main`. If `main` is dirty, ahead, or behind, the orchestrator prints actionable warnings and halts before creating any worktrees. In unattended mode, warnings are logged but the loop continues.
 
-3. **Runtime self-identification:**
+3. **Invoke the unified orchestrator:**
 
-   - You are the AI coding agent currently executing this skill. Determine the CLI
-     command that should be used to spawn a fresh process of yourself (e.g. `kimi`,
-     `claude`, `cursor`).
-   - Determine the flags your CLI accepts for: (a) passing a prompt/message,
-     (b) setting the working directory, and (c) any recommended non-interactive flags.
-     For unattended execution use the most headless mode available (e.g. Kimi: `--afk`,
-     Claude: `--dangerously-skip-permissions`, Cursor: non-interactive flags) so that
-     approval gates are auto-dismissed and the agent never blocks for human input.
-   - Use these self-reported values for the template variables `CLI_BIN`, `CLI_ARGS`,
-     `CLI_PROMPT_FLAG`, and `CLI_WORKDIR_FLAG`.
+   ```bash
+   ~/.claude/skills/aet-work/bin/orchestrator \
+     --queue-file .agents/work-queue.json \
+     --repo-root . \
+     --cli-bin $(which kimi) \
+     --isolation standard \
+     --max-jobs 4
+   ```
 
-4. **Generate orchestrator script:**
+   The orchestrator handles CLI detection, worktree management, parallel execution, and stage advancement automatically.
 
-   - Read `aet-work/references/orchestrator-template.sh` from this skill directory
-   - Ensure the script includes merge verification: before each task, check
-     `status` on all `blocked_by` entries. Warn if any dependency status is not `merged`, but continue.
-   - Substitute template variables using the self-reported CLI configuration from
-     Step 3.
-   - Write to `scripts/.aet-work-orchestrator.sh`
-   - `chmod +x scripts/.aet-work-orchestrator.sh`
-
-5. **Spawn and wait (parallel):**
-
-   - The orchestrator maintains a slot pool up to the concurrency cap
-   - While slots are available and unblocked tasks exist:
-     - Spawn the next unblocked task as a background job in its worktree
-     - Increment active slot counter
-   - When a job finishes:
-     - Collect exit code
-     - Update queue status (`done` or `failed`)
-     - Promote dependents to `unblocked`
-     - Decrement slot counter
-   - On task failure:
-     - Allow currently running tasks to finish (drain)
-     - Do not start new tasks
-     - Exit with failure after drain completes
-   - `Shell(run_in_background=true, timeout=7200)` to execute `scripts/.aet-work-orchestrator.sh`
-     (2-hour ceiling; aet-pipeline-implement tasks can run 30–60 min each, and 4 parallel
-     slots may need >1 hour for the first batch to finish)
-   - `TaskOutput(block=true)` to wait for completion
-
-6. **Concurrency cap:**
+4. **Concurrency cap:**
 
    - Default: `4` jobs (override with `AET_WORK_JOBS` env var), hard cap at 8
    - Override: set `AET_WORK_JOBS` environment variable
    - The orchestrator never exceeds the cap to prevent resource exhaustion
 
-7. **Resume behavior:**
-   - Re-running `run` regenerates the script and resumes from the current queue state
+5. **Resume behavior:**
+   - Re-running `run` resumes from the current queue state
    - Already-done or in-progress tasks with existing worktrees are skipped automatically
 
 **Context isolation mechanism:**
 
 ```
 Parent agent session (clean)
-  → self-reports runtime
-  → generates scripts/.aet-work-orchestrator.sh
-  → Shell(run_in_background=true) to spawn script
-    → Script spawns Agent CLI process #1 (clean context, worktree A)
-    → Script spawns Agent CLI process #2 (clean context, worktree B)
-    → Script spawns Agent CLI process #3 (clean context, worktree C)
-    → … up to concurrency cap
-    → As each process exits, queue updates, new tasks spawn
-  → TaskOutput(block=true) returns
+  → invokes aet-work/bin/orchestrator
+  → Orchestrator spawns Stage 1 session (clean context, worktree A)
+    → TDD + Implement + QA run in one isolated session
+  → Orchestrator spawns Stage 2 session (clean context, worktree A)
+    → Review runs with no implementation context
+  → Orchestrator spawns Stage 3 session (clean context, worktree A)
+    → CSO + Sync-docs run with no review bias
+  → … up to concurrency cap for parallel tasks
+  → Orchestrator returns
   → Parent session remains clean
 ```
 
-**Unattended mode:** The generated script sets `AET_EXECUTION_MODE=unattended` in the environment of every spawned subagent. Skills that have interactive approval gates (e.g., `aet-implement`, `aet-pipeline-implement`) detect this variable and skip gates that require human input, logging the bypass for auditability. See `references/context-isolation.md` for details.
+**Unattended mode:** The orchestrator sets `AET_EXECUTION_MODE=unattended` in the environment of every spawned subagent. Skills that have interactive approval gates (e.g., `aet-implement`) detect this variable and skip gates that require human input, logging the bypass for auditability. See `references/context-isolation.md` for details.
+
+### `run-one`
+
+Run the full pipeline on a single plan with session-isolated stages. Replaces the manual `aet-pipeline-implement` workflow.
+
+**Procedure:**
+
+1. Accept a plan file path: `aet-work run-one docs/plans/FEAT-001-plan.md`
+2. Invoke the orchestrator in single-plan mode:
+
+   ```bash
+   ~/.claude/skills/aet-work/bin/orchestrator \
+     --plan-file docs/plans/FEAT-001-plan.md \
+     --repo-root . \
+     --cli-bin $(which kimi) \
+     --isolation standard
+   ```
+
+3. The orchestrator advances the plan through all stage groups sequentially.
+4. On completion, the branch is ready for `aet-ship`.
+
+**When to use:** For one-off plans where you want the full pipeline but don't need a queue.
 
 ### `derive`
 
@@ -313,8 +305,8 @@ Remove worktrees for merged tasks, and repair stale queue entries.
 
 ## Key Principles
 
-- **Queue-unaware pipeline** — aet-pipeline-implement knows nothing about the queue. aet-work checks results and updates the queue.
-- **OS-process isolation** — `run` generates a bash orchestrator that spawns fresh OS processes for tasks. See `references/context-isolation.md` for details.
+- **Queue-unaware pipeline** — individual skills (aet-tdd, aet-implement, aet-qa, etc.) know nothing about the queue. The orchestrator checks results and updates the queue.
+- **OS-process isolation** — `run` invokes the unified orchestrator, which spawns fresh OS processes for each pipeline stage. See `references/context-isolation.md` for details.
 - **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
 - **Queue file is the memory** — `.agents/work-queue.json` persists state across process boundaries by design.
 - **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.

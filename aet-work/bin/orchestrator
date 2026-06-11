@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+"""Unified orchestrator for the Agentic Engineering Toolkit.
+
+Usage:
+    orchestrator --queue-file .agents/work-queue.json
+    orchestrator --plan-file docs/plans/FEAT-001-plan.md
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+# Add lib to path
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+from cli_adapter import resolve_cli_adapter
+from pipeline import STAGE_MAP, group_stages_by_session
+from queue import (
+    get_next_unblocked,
+    has_pending_tasks,
+    mark_completed,
+    mark_status,
+    promote_dependents,
+    read_queue,
+    record_task_meta,
+    write_queue,
+)
+from verifier import verify_stage_advancement
+from worktree import (
+    check_main_hygiene,
+    copy_untracked_files,
+    create_worktree,
+    estimate_repo_size,
+    remove_worktree,
+)
+
+# Global shutdown flag
+_shutdown_requested = False
+
+
+def _handle_signal(signum: int, _frame) -> None:
+    global _shutdown_requested
+    _shutdown_requested = True
+    print(f"\n⚠️  Received signal {signum}. Shutting down gracefully...")
+
+
+signal.signal(signal.SIGINT, _handle_signal)
+signal.signal(signal.SIGTERM, _handle_signal)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="AE Toolkit Unified Orchestrator")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--queue-file", help="Path to work-queue.json (batch mode)")
+    group.add_argument("--plan-file", help="Path to a single plan.md (single-plan mode)")
+    parser.add_argument("--repo-root", default=os.getcwd(), help="Repository root path")
+    parser.add_argument("--cli-bin", default=None, help="Agent CLI binary path")
+    parser.add_argument("--isolation", default="standard", choices=["minimal", "standard", "full"])
+    parser.add_argument("--max-jobs", type=int, default=4, help="Max parallel tasks (batch mode)")
+    return parser.parse_args()
+
+
+def build_prompt(skills: list[str], plan_file: str, current_stage: str, next_stage: str) -> str:
+    skills_str = " → ".join(skills)
+    return (
+        f"Run {skills_str} on {plan_file}\n"
+        f"Current stage: {current_stage}. Target stage: {next_stage}.\n"
+        f"Execute only this stage. Do not proceed to subsequent stages.\n"
+        f"Commit your work and update the plan footer to *Stage: {next_stage}* before exiting."
+    )
+
+
+def run_stage(
+    adapter,
+    repo_root: str,
+    plan_file: str,
+    worktree_dir: str,
+    skills: list[str],
+    current_stage: str,
+    next_stage: str,
+) -> int:
+    """Spawn a single stage session and return exit code."""
+    prompt = build_prompt(skills, plan_file, current_stage, next_stage)
+    cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
+
+    env = os.environ.copy()
+    env["AET_EXECUTION_MODE"] = "unattended"
+    env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+
+    print(f"   Invoking: {' '.join(cmd)}")
+    result = subprocess.run(cmd, cwd=worktree_dir, env=env)
+    return result.returncode
+
+
+def process_task(
+    task: dict,
+    repo_root: str,
+    adapter,
+    isolation: str,
+) -> bool:
+    """Process a single task through all its stage groups."""
+    task_id = task["id"]
+    plan_file = task.get("plan_file", "")
+    if not os.path.isabs(plan_file):
+        plan_file = os.path.join(repo_root, plan_file)
+
+    print(f"▶️  Task: {task.get('title', task_id)} ({task_id})")
+    print(f"   Plan: {plan_file}")
+
+    # Create worktree
+    worktree_dir = create_worktree(repo_root, task_id)
+    copy_untracked_files(repo_root, worktree_dir)
+    print(f"   Worktree: {worktree_dir}")
+
+    # Determine current stage from plan footer
+    from verifier import read_plan_stage
+
+    current_stage = read_plan_stage(plan_file) or "plan-approved"
+
+    # Group stages by isolation level
+    groups = group_stages_by_session(isolation)
+
+    for group in groups:
+        if _shutdown_requested:
+            print(f"   ⚠️  Shutdown requested, stopping task {task_id}")
+            return False
+
+        # Find the first stage in this group that hasn't been completed yet
+        target_stage = None
+        for stage in group:
+            if stage.name == current_stage:
+                target_stage = stage
+                break
+
+        if not target_stage:
+            # All stages in this group are done; skip
+            continue
+
+        # Check conditional stages
+        if target_stage.conditional and not target_stage.conditional(plan_file, worktree_dir):
+            print(f"   ⏭️  Skipping conditional stage: {target_stage.name}")
+            current_stage = target_stage.next_stage or current_stage
+            continue
+
+        next_stage_name = target_stage.next_stage or current_stage
+        skills = target_stage.skills
+
+        if not skills:
+            # Terminal stage (synced)
+            current_stage = next_stage_name
+            continue
+
+        print(f"   Stage: {target_stage.name} → {next_stage_name} ({' → '.join(skills)})")
+
+        exit_code = run_stage(
+            adapter,
+            repo_root,
+            plan_file,
+            worktree_dir,
+            skills,
+            target_stage.name,
+            next_stage_name,
+        )
+
+        if exit_code != 0:
+            print(f"   ❌ Stage failed with exit code {exit_code}")
+            return False
+
+        # Verify stage advancement
+        ok, msg = verify_stage_advancement(plan_file, worktree_dir, next_stage_name, retries=1)
+        if not ok:
+            print(f"   ❌ Stage verification failed: {msg}")
+            return False
+
+        print(f"   ✅ Stage advanced to {next_stage_name}")
+        current_stage = next_stage_name
+
+    print(f"   ✅ Task complete: {task_id}")
+    return True
+
+
+def run_batch(args: argparse.Namespace, adapter) -> int:
+    """Run batch mode from queue file."""
+    queue_file = args.queue_file
+    repo_root = args.repo_root
+    max_jobs = min(args.max_jobs, 8)
+
+    queue = read_queue(queue_file)
+    if not queue:
+        print("✅ Queue is empty.")
+        return 0
+
+    print(f"🚀 Batch orchestrator starting")
+    print(f"   Queue: {queue_file}")
+    print(f"   Concurrency: {max_jobs}")
+    print()
+
+    # Check main hygiene
+    ok, msg = check_main_hygiene(repo_root)
+    if not ok:
+        if os.environ.get("AET_EXECUTION_MODE") == "unattended":
+            print(f"   ⚠️  {msg}. Continuing in unattended mode.")
+        else:
+            print(f"⛔ {msg}. Halting.")
+            return 1
+
+    running: dict[str, subprocess.Popen] = {}
+    successes = 0
+    failures = 0
+    stop_spawn = False
+
+    while True:
+        # Spawn tasks while slots available
+        while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
+            task = get_next_unblocked(queue)
+            if not task:
+                break
+
+            task_id = task["id"]
+            mark_status(queue, task_id, "in-progress")
+            write_queue(queue_file, queue)
+
+            # Fork a subprocess for this task
+            env = os.environ.copy()
+            env["AET_TASK_ID"] = task_id
+            env["AET_PLAN_FILE"] = task.get("plan_file", "")
+            env["AET_WORKTREE"] = create_worktree(repo_root, task_id)
+
+            # Build the orchestrator command for single-task mode
+            cmd = [
+                sys.executable,
+                __file__,
+                "--plan-file",
+                task.get("plan_file", ""),
+                "--repo-root",
+                repo_root,
+                "--cli-bin",
+                adapter.bin,
+                "--isolation",
+                args.isolation,
+            ]
+
+            proc = subprocess.Popen(cmd, env=env)
+            running[task_id] = proc
+            print(f"▶️  Spawned {task.get('title', task_id)} (PID {proc.pid})")
+
+        if not running:
+            if stop_spawn or _shutdown_requested:
+                break
+            if not has_pending_tasks(queue):
+                break
+            time.sleep(0.2)
+            continue
+
+        # Poll for finished processes
+        finished = []
+        for task_id, proc in list(running.items()):
+            ret = proc.poll()
+            if ret is not None:
+                finished.append((task_id, ret))
+
+        for task_id, ret in finished:
+            del running[task_id]
+
+            if ret == 0:
+                print(f"   ✅ {task_id} completed")
+                mark_completed(queue, task_id)
+                promote_dependents(queue)
+                successes += 1
+            else:
+                print(f"   ❌ {task_id} failed (exit {ret})")
+                mark_status(queue, task_id, "failed", "pipeline")
+                stop_spawn = True
+                failures += 1
+
+            write_queue(queue_file, queue)
+            remove_worktree(repo_root, task_id)
+
+        if not finished:
+            time.sleep(0.2)
+
+    # Summary
+    print()
+    print(f"🏁 Orchestrator finished.")
+    print(f"   Succeeded: {successes}")
+    print(f"   Failed:    {failures}")
+    return 1 if failures > 0 else 0
+
+
+def run_single(args: argparse.Namespace, adapter) -> int:
+    """Run single-plan mode."""
+    repo_root = args.repo_root
+    plan_file = args.plan_file
+
+    if not os.path.isabs(plan_file):
+        plan_file = os.path.join(repo_root, plan_file)
+
+    # Create a synthetic task
+    task_id = os.path.basename(plan_file).replace("-plan.md", "")
+    task = {
+        "id": task_id,
+        "title": task_id,
+        "plan_file": plan_file,
+    }
+
+    success = process_task(task, repo_root, adapter, args.isolation)
+    return 0 if success else 1
+
+
+def main() -> int:
+    args = parse_args()
+    adapter = resolve_cli_adapter(args.cli_bin)
+
+    print(f"🤖 Orchestrator using {adapter.name} ({adapter.bin})")
+
+    if args.queue_file:
+        return run_batch(args, adapter)
+    else:
+        return run_single(args, adapter)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

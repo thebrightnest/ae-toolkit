@@ -35,8 +35,8 @@ Entry-point skills enforce symmetric guards to prevent misrouted work:
 | ----------------- | ----------------------------------- | ------------------------- |
 | `plan-draft`      | PRD written, not yet validated      | `aet-validate-scope`      |
 | `prd-approved`    | PRD approved by human               | `aet-validate-scope`      |
-| `scope-validated` | Scope validated, plans approved     | `aet-pipeline-implement`  |
-| `plan-approved`   | Plan ready for implementation       | `aet-pipeline-implement`  |
+| `scope-validated` | Scope validated, plans approved     | `aet-work run`            |
+| `plan-approved`   | Plan ready for implementation       | `aet-work run`            |
 | `tdd-complete`    | Tests written, failing (RED)        | `aet-implement`           |
 | `implemented`     | Code written, tests passing         | `aet-qa`                  |
 | `qa-complete`     | All tests pass, coverage maintained | `aet-review`              |

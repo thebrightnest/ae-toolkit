@@ -34,7 +34,7 @@ package: ## Package all skills into .skill files (assembles from templates first
 					--skill-name "$$skill" \
 					--next-step ""; \
 			fi; \
-			zip -r "$$skill.skill" "$$skill" -x "*.git*" -x "*node_modules*" -x "*.DS_Store"; \
+			zip -r "$$skill.skill" "$$skill" -x "*.git*" -x "*node_modules*" -x "*.DS_Store" -x "*__pycache__*" -x "*.pyc"; \
 			echo "✓ Packaged $$skill.skill"; \
 		fi; \
 	done
