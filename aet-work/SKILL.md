@@ -283,13 +283,23 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 
 ### `cleanup`
 
-Remove worktrees for merged tasks, and repair stale queue entries.
+Archive terminal tasks and remove their worktrees atomically. Repairs stale queue entries.
 
 **Procedure:**
 
-1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses
+1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses for active (non-terminal) tasks only.
 2. Read `.agents/work-queue.json`
-3. For each task where derived status is `merged` (or stored status is `merged`/`merge_verified`):
+3. Identify terminal tasks: status is `merged`, `done`, or `abandoned`. Normalize any `merge_verified` statuses to `merged`.
+4. Archive terminal tasks without active dependents:
+
+   ```bash
+   python3 ~/.claude/skills/aet-work/bin/aet-state archive .agents/work-queue.json .agents/work-archive.json
+   ```
+
+   This appends eligible terminal tasks to `.agents/work-archive.json` and removes them from `.agents/work-queue.json`.
+
+5. **Atomicity:** If archiving fails, STOP. Do not remove any worktrees. Investigate the failure and re-run `cleanup`.
+6. Remove worktrees for archived tasks:
 
    ```bash
    git worktree remove .worktrees/<task-id>
@@ -298,10 +308,10 @@ Remove worktrees for merged tasks, and repair stale queue entries.
    # Then force-remove if safe: git worktree remove --force .worktrees/<task-id>
    ```
 
-4. **Stale worktree repair (universal):** For each task with a `worktree` field, regardless of status:
+7. **Stale worktree repair (universal):** For each remaining task with a `worktree` field, regardless of status:
    - If the directory does not exist, clear `worktree: null` via `aet-state transition` (or direct JSON update if the task status is unchanged) and print `Repaired stale worktree field for {task_id}`
    - If the directory exists but has 0 commits ahead of main (`git rev-list --count main..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
-5. Report removed, repaired, and remaining worktrees
+8. Report archived, removed, repaired, and remaining worktrees
 
 ## Key Principles
 
