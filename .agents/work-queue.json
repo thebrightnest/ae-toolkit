@@ -1,5 +1,5 @@
 {
-  "queue_updated_at": "2026-06-11T13:56:15.046616+00:00",
+  "queue_updated_at": "2026-06-11T16:26:28.539399+00:00",
   "tasks": [
     {
       "id": "aet-design-system-creation-01",
@@ -609,6 +609,45 @@
       "status": "unblocked",
       "blocks": [],
       "blocked_by": [],
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "qai-02-incremental-sync",
+      "title": "Incremental Derive and Sync",
+      "plan_file": "docs/plans/qai-02-incremental-sync.md",
+      "status": "unblocked",
+      "blocked_by": [],
+      "blocks": ["qai-04-migration-validate"],
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "qai-03-active-status",
+      "title": "Active-Only Status View",
+      "plan_file": "docs/plans/qai-03-active-status.md",
+      "status": "unblocked",
+      "blocked_by": [],
+      "blocks": ["qai-04-migration-validate"],
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "qai-04-migration-validate",
+      "title": "One-Time Migration and Full Validation",
+      "plan_file": "docs/plans/qai-04-migration-validate.md",
+      "status": "blocked",
+      "blocked_by": ["qai-02-incremental-sync", "qai-03-active-status"],
+      "blocks": [],
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
