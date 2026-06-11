@@ -166,6 +166,27 @@ with open('$QUEUE_FILE', 'w') as f:
 "
 }
 
+verify_branch_has_commits() {
+  local task_id="$1"
+  local worktree_dir="$REPO_ROOT/.worktrees/$task_id"
+  if [ ! -d "$worktree_dir" ]; then
+    echo "   ⚠️  Worktree $task_id does not exist"
+    return 1
+  fi
+  local ahead
+  ahead=$(git -C "$worktree_dir" rev-list --count main..HEAD 2>/dev/null || echo 0)
+  if [ "$ahead" -gt 0 ]; then
+    return 0
+  fi
+  # No commits — check for uncommitted changes (agent wrote code but forgot to commit)
+  if [ -n "$(git -C "$worktree_dir" status --short)" ]; then
+    echo "   ⚠️  Branch $task_id has uncommitted changes but no commits"
+    return 1
+  fi
+  echo "   ⚠️  Branch $task_id has 0 commits and no changes"
+  return 1
+}
+
 remove_empty_worktree() {
   local task_id="$1"
   local worktree_dir="$REPO_ROOT/.worktrees/$task_id"
@@ -437,9 +458,10 @@ while true; do
       cd "$REPO_ROOT"
 
       if [ "$EXIT_CODE" -eq 0 ]; then
-        echo "   ✅ Task completed successfully"
-        mark_status "$TASK_ID" "done"
-        python3 -c "
+        if verify_branch_has_commits "$TASK_ID"; then
+          echo "   ✅ Task completed successfully"
+          mark_status "$TASK_ID" "done"
+          python3 -c "
 import json
 from datetime import datetime
 with open('$QUEUE_FILE', 'r') as f:
@@ -451,8 +473,14 @@ with open('$QUEUE_FILE', 'w') as f:
     json.dump(queue, f, indent=2)
     f.write('\n')
 "
-        promote_dependents
-        SUCCESSES=$((SUCCESSES + 1))
+          promote_dependents
+          SUCCESSES=$((SUCCESSES + 1))
+        else
+          echo "   ❌ Task agent exited cleanly but branch has no commits"
+          mark_status "$TASK_ID" "failed" "uncommitted"
+          STOP_SPAWN=1
+          FAILURES=$((FAILURES + 1))
+        fi
       else
         echo "   ❌ Task failed with exit code $EXIT_CODE"
         mark_status "$TASK_ID" "failed" "pipeline"
