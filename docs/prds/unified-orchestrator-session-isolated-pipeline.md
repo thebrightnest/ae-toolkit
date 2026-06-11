@@ -229,22 +229,6 @@ aet-work reconcile --task-id FEAT-001 --to-stage reviewed
 
 This updates both the queue and the plan.md footer atomically.
 
-### Queue Schema Versioning
-
-The queue JSON includes a `version` field:
-
-```json
-{
-  "version": 2,
-  "tasks": [...]
-}
-```
-
-- **No version field** → treated as version 1 (legacy flat array).
-- **Version mismatch** → the orchestrator refuses to start and prints a clear error with migration instructions.
-- **Bumping version** → only done when the schema changes structurally (new required fields, renamed fields).
-- **Migration** → simple migrations are handled automatically by the orchestrator on first read; complex migrations require a separate script.
-
 ### Disk Space Management
 
 The orchestrator monitors disk usage throughout execution:
