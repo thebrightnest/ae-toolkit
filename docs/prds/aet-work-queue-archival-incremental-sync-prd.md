@@ -32,7 +32,7 @@ Redesign the aet-work skill's queue lifecycle so that terminal tasks (merged, do
 - [ ] `.agents/work-archive.json` exists after the first `cleanup` run and contains only tasks whose status is `merged`, `done`, or `abandoned`.
 - [ ] `.agents/work-queue.json` after cleanup contains only tasks whose status is `unblocked`, `blocked`, `in-progress`, `failed`, or `done`.
 - [ ] `aet-work sync` runs `aet-state derive` only on tasks that are not in a terminal status. If no new plans were added, sync completes without spawning any `git merge-base` subprocesses for archived tasks.
-- [ ] `aet-work status` shows counts and lists for `unblocked`, `blocked`, `in-progress`, `failed`, and `done` only. A note at the bottom indicates how many tasks are archived.
+- [ ] `aet-work status` shows counts and lists for `unblocked`, `blocked`, `in-progress`, `failed`, and `done` only.
 - [ ] `aet-work cleanup` archives terminal tasks before removing their worktrees. If archiving fails, worktree removal is skipped (atomic behavior).
 - [ ] `aet-work init-queue` derives only open tasks; terminal tasks that may exist in an old queue are archived during the first post-change cleanup.
 - [ ] Existing queue entries with status `merge_verified` are normalized to `merged` and then treated as terminal for archival.

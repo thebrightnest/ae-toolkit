@@ -19,7 +19,6 @@ This plan updates `aet-work status` to display only active tasks by default, wit
    - Remove `merged`, `merge_verified` from the count report
    - Step 5 (Derived status column): Show derived vs. stored only for active tasks
    - Step 7: "Next 3 unblocked tasks" remains unchanged (now naturally operates on smaller active set)
-   - New step after counts: Print `N tasks archived. Run aet-work cleanup to archive terminal tasks.`
    - Remove step 6 (Legacy status nudge) — `merge_verified` is handled by archive/cleanup now
 
 2. **Update `aet-work/SKILL.md` plan-drift procedure** — S
@@ -37,7 +36,6 @@ This plan updates `aet-work status` to display only active tasks by default, wit
 
 - [ ] `make validate` passes
 - [ ] `aet-work status` (as executed by the agent) reports active task counts (`unblocked`, `blocked`, `in-progress`, `failed`, `done`)
-- [ ] `aet-work status` prints the archive count note when tasks have been archived
 - [ ] No references to `merge_verified` remain in the `status` procedure
 
 ## Rollback Plan
