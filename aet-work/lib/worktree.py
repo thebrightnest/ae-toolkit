@@ -83,8 +83,11 @@ def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
         src = os.path.join(repo_root, untracked)
         dest = os.path.join(worktree_dir, untracked)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
+        # If the destination exists and is read-only from a previous copy,
+        # temporarily make it writable so copy2 can overwrite it.
+        if os.path.exists(dest) and not os.access(dest, os.W_OK):
+            os.chmod(dest, 0o644)
         shutil.copy2(src, dest)
-        os.chmod(dest, 0o444)
 
 
 def estimate_repo_size(repo_root: str) -> int:
