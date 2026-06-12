@@ -45,5 +45,5 @@ This plan updates `aet-work status` to display only active tasks by default, wit
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-work sync` to refresh queue state_
