@@ -109,12 +109,11 @@ Show the current state of the work queue.
    - **Do not report "all clear" even if all tracked tasks are done**
 2. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses
 3. Read `.agents/work-queue.json`
-4. Report counts: unblocked, blocked, in-progress, done, merged, merge_verified, abandoned, failed
-5. **Derived status column:** For each task, show both stored status and derived status. If they differ, highlight the discrepancy.
-6. **Legacy status nudge:** If any tasks have `status: "merge_verified"`, print `Run aet-work sync to normalize legacy merge_verified statuses to merged.`
-7. List the next 3 unblocked tasks (topological order)
-8. List any failed tasks (require human attention)
-9. **Worktree validation:** For each task with a `worktree` field, check if the directory exists. If missing, print `⚠️ Stale worktree: {task_id} → {path} does not exist. Run cleanup to repair.`
+4. Report counts for active tasks only: `unblocked`, `blocked`, `in-progress`, `failed`, `done`
+5. **Derived status column:** For each active task, show both stored status and derived status. If they differ, highlight the discrepancy. Skip terminal tasks (`merged`, `abandoned`, legacy `merge_verified`).
+6. List the next 3 unblocked tasks (topological order)
+7. List any failed tasks (require human attention)
+8. **Worktree validation:** For each active task with a `worktree` field, check if the directory exists. If missing, print `⚠️ Stale worktree: {task_id} → {path} does not exist. Run cleanup to repair.`
 
 ### `next`
 
@@ -237,6 +236,8 @@ Detect plan files that exist on disk but are not represented in the work queue.
    - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Run init-queue to sync.`
    - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last init-queue). Run init-queue to sync.`
    - If none: print `✅ No plan drift detected. All plans are tracked in the queue.`
+
+`plan-drift` checks only the active queue. Archived tasks are ignored; their plan files may still exist on disk but are no longer tracked as active work.
 
 ### `drift-check`
 
