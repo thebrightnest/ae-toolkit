@@ -20,6 +20,11 @@ Run this before designing any solution that touches a `SKILL.md`:
       target (the real repo), then add a symlink from the skills directory.
       Never `mkdir` a new skill directly into `~/.claude/skills/` — it will be outside
       the git repo and silently untracked.
+- [ ] **Package-deliverable rules** — every rule, guardrail, or convention this skill
+      enforces must live inside the skill's packaged files (`SKILL.md`, `references/`,
+      `examples/`). Do not rely on `.agents/reference/`, `AGENTS.md`, or other
+      toolkit-internal documents for runtime skill behavior, because those files are
+      not packaged with the skill when it is installed in another project.
 
 ## Frontmatter Schema
 
@@ -108,3 +113,4 @@ ADR 005 to document the exemption.
 - [ ] No agent-specific syntax unless unavoidable
 - [ ] All external links are valid
 - [ ] If the skill has approval gates, `AET_EXECUTION_MODE` is handled (unless the skill is documented as interactive-only)
+- [ ] All rules the skill enforces are package-deliverable (inside `SKILL.md`, `references/`, or `examples/`), with no dependency on `.agents/reference/` or other toolkit-internal docs

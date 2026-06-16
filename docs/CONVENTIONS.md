@@ -19,6 +19,16 @@ Each skill lives in its own directory at the repository root:
 
 Skill directories are packaged into `.skill` files (zip archives) via `make package`.
 
+## Package-Deliverable Rules
+
+A skill must be self-contained. Every rule, guardrail, convention, or hygiene check that the skill enforces at runtime must live inside the skill's packaged files (`SKILL.md`, `references/`, `examples/`, or executable scripts inside the skill directory).
+
+Rules:
+
+- Do not put runtime skill behavior rules in `.agents/reference/`, `AGENTS.md`, `docs/CONVENTIONS.md`, or other toolkit-internal documents. Those files are not packaged with the skill and are invisible to projects that install it.
+- It is fine to document cross-skill patterns or authoring guidance in `.agents/reference/` and `docs/CONVENTIONS.md`, but the skill itself must repeat or link to any rule it actually enforces.
+- If a rule spans multiple skills, either duplicate the relevant portion in each skill or create a skill-level reference doc and link it from `SKILL.md`. Avoid cross-skill file references that would break when a skill is installed alone.
+
 ## Planning Artifact Directories
 
 The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/`; all other planning artifacts belong in their designated directories.
