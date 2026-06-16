@@ -41,6 +41,7 @@ from worktree import (
     create_worktree,
     estimate_repo_size,
     remove_worktree,
+    symlink_node_modules,
 )
 
 # Global shutdown flag
@@ -119,6 +120,7 @@ def process_task(
     # Create worktree
     worktree_dir = create_worktree(repo_root, task_id)
     copy_untracked_files(repo_root, worktree_dir)
+    symlink_node_modules(repo_root, worktree_dir)
     print(f"   Worktree: {worktree_dir}")
 
     # Use the worktree copy of the plan file for stages and verification.
@@ -237,7 +239,9 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             env = os.environ.copy()
             env["AET_TASK_ID"] = task_id
             env["AET_PLAN_FILE"] = task.get("plan_file", "")
-            env["AET_WORKTREE"] = create_worktree(repo_root, task_id)
+            worktree_dir = create_worktree(repo_root, task_id)
+            symlink_node_modules(repo_root, worktree_dir)
+            env["AET_WORKTREE"] = worktree_dir
 
             # Build the orchestrator command for single-task mode
             cmd = [
