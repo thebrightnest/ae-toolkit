@@ -1,5 +1,5 @@
 {
-  "archived_at": "2026-06-11T19:59:00.010785",
+  "archived_at": "2026-06-15T21:37:41.612257",
   "tasks": [
     {
       "id": "aet-design-system-creation-05",
@@ -1289,6 +1289,84 @@
       "block_reason": null,
       "oversized": null,
       "merge_strategy": "squash"
+    },
+    {
+      "id": "aet-ship-squash-merge-core-plan",
+      "title": "Plan: aet-ship Squash-Merge Core Support",
+      "plan_file": "docs/plans/aet-ship-squash-merge-core-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "done",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "ccs-01-review-css-lens",
+      "title": "Plan: CCS-01 \u2014 aet-review UI/CSS Completeness Lens",
+      "plan_file": "docs/plans/ccs-01-review-css-lens.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "done",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "ccs-02-template-framework-doc",
+      "title": "Plan: CCS-02 \u2014 Plan Template Update + Framework ADR + aet-implement Validation",
+      "plan_file": "docs/plans/ccs-02-template-framework-doc.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "merged",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "clv-01-aet-verify-skill",
+      "title": "Plan: Create aet-verify Skill",
+      "plan_file": "docs/plans/clv-01-aet-verify-skill.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "done",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "cov-03-qa-coverage-gate",
+      "title": "Plan: aet-qa \u2014 Coverage as a First-Class QA Gate",
+      "plan_file": "docs/plans/cov-03-qa-coverage-gate.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "done",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "retro-stacked-pr-aet-ship-plan",
+      "title": "Plan: aet-ship \u2014 Stacked Branch Detection",
+      "plan_file": "docs/plans/retro-stacked-pr-aet-ship-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "done",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
     }
   ]
 }

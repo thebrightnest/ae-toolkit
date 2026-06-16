@@ -47,7 +47,9 @@ ADAPTERS: dict[str, CLIAdapter] = {
         bin="kimi",
         prompt_flag="-p",
         workdir_flag=None,
-        headless_flag="--yolo",
+        # kimi's -p mode is already non-interactive and cannot be combined
+        # with --yolo or --auto; AET_EXECUTION_MODE=unattended handles gates.
+        headless_flag=None,
     ),
     "claude": CLIAdapter(
         name="claude",

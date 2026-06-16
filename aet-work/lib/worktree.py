@@ -90,6 +90,30 @@ def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
         shutil.copy2(src, dest)
 
 
+def symlink_node_modules(repo_root: str, worktree_dir: str) -> None:
+    """Symlink app/node_modules from the main repo into the worktree.
+
+    Git worktrees do not copy ignored directories such as node_modules, but
+    frontend tests/builds need them. Sharing the main repo's installed
+    dependencies avoids a slow `npm ci` in every worktree.
+    """
+    source = os.path.join(repo_root, "app", "node_modules")
+    target = os.path.join(worktree_dir, "app", "node_modules")
+
+    if not os.path.isdir(source):
+        return
+
+    if os.path.islink(target):
+        return
+
+    if os.path.isdir(target):
+        # Remove an existing (likely partial) node_modules directory so we can
+        # replace it with a symlink.
+        shutil.rmtree(target)
+
+    os.symlink(source, target)
+
+
 def estimate_repo_size(repo_root: str) -> int:
     """Estimate repo size in bytes using du."""
     result = subprocess.run(

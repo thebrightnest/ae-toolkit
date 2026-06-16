@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "aet-state-telemetry-foundation-plan",
+    "title": "Plan: aet-state and Telemetry Foundation",
+    "plan_file": "docs/plans/aet-state-telemetry-foundation-plan.md",
+    "blocked_by": [],
+    "blocks": [],
+    "status": "unblocked",
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null,
+    "worktree": null,
+    "branch": null
+  }
+]
