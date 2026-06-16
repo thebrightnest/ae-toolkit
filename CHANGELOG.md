@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.0] — 2026-06-16
+
+### Added
+
+- **aet-work**: Active-only status view. `status` now reports only active tasks and highlights discrepancies between stored and derived statuses.
+- **aet-work**: `cleanup` now archives terminal tasks atomically before removing their worktrees.
+- **Unified orchestrator**: Finalized orchestrator cleanup and routed `aet-plan` implementation flows through `aet-work`.
+
+### Changed
+
+- **aet-work**: `status` view now includes `done` tasks in active reporting and removes the archived-tasks note.
+- **docs/CONVENTIONS.md**: Added Package-Deliverable Rules section requiring all runtime skill rules to live inside skill packages.
+
+### Fixed
+
+- **aet-ship** and **aet-work**: Worktrees now branch from `origin/main`, independent branches are rebased onto `origin/main` before shipping, stacked branches open against their parent, and PR scope audits flag global files.
+- **Orchestrator**: Fixed CLI adapter to use real `kimi`/`claude` flags, preserved queue dict-wrapper format on write, and copied untracked plan/PRD files into worktrees.
+- **aet-state**: `derive` now verifies `merge_commit` ancestry before marking tasks as merged.
+- **aet-work**: Removed project-specific `app/node_modules` symlink from worktree setup.
+
+### Documentation
+
+- Added `docs/retros/2026-06-16-aet-work-pr-scope-retro.md` documenting the worktree/ship hygiene incident.
+- Updated `.agents/reference/skill-writing-guide.md` with package-deliverable checklist items.
+
+---
+
 ## [0.5.1] — 2026-06-11
 
 ### Added
