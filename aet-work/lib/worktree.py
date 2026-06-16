@@ -8,12 +8,23 @@ import subprocess
 
 
 def create_worktree(repo_root: str, task_id: str) -> str:
-    """Create a git worktree for the task. Return the worktree path."""
+    """Create a git worktree for the task. Return the worktree path.
+
+    New branches are always based on ``origin/main`` so that worktrees do not
+    accidentally inherit commits from the parent session's current branch.
+    """
     worktree_dir = os.path.join(repo_root, ".worktrees", task_id)
     branch_name = task_id
 
     if os.path.isdir(worktree_dir):
         return worktree_dir
+
+    # Ensure origin/main is up to date; failures are non-fatal.
+    subprocess.run(
+        ["git", "-C", repo_root, "fetch", "origin", "main"],
+        capture_output=True,
+    )
+    base = "origin/main"
 
     # Check if branch already exists
     result = subprocess.run(
@@ -21,15 +32,35 @@ def create_worktree(repo_root: str, task_id: str) -> str:
         capture_output=True,
     )
     if result.returncode == 0:
-        subprocess.run(
-            ["git", "-C", repo_root, "worktree", "add", worktree_dir, branch_name],
-            check=True,
+        # If the existing branch is not based on origin/main, recreate it so the
+        # worktree starts from a clean base.
+        mb_result = subprocess.run(
+            ["git", "-C", repo_root, "merge-base", branch_name, base],
+            capture_output=True,
+            text=True,
         )
-    else:
-        subprocess.run(
-            ["git", "-C", repo_root, "worktree", "add", worktree_dir, "-b", branch_name],
-            check=True,
+        base_oid = subprocess.run(
+            ["git", "-C", repo_root, "rev-parse", base],
+            capture_output=True,
+            text=True,
         )
+        if mb_result.returncode != 0 or mb_result.stdout.strip() != base_oid.stdout.strip():
+            subprocess.run(
+                ["git", "-C", repo_root, "branch", "-D", branch_name],
+                check=True,
+                capture_output=True,
+            )
+        else:
+            subprocess.run(
+                ["git", "-C", repo_root, "worktree", "add", worktree_dir, branch_name],
+                check=True,
+            )
+            return worktree_dir
+
+    subprocess.run(
+        ["git", "-C", repo_root, "worktree", "add", worktree_dir, "-b", branch_name, base],
+        check=True,
+    )
     return worktree_dir
 
 
@@ -88,30 +119,6 @@ def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
         if os.path.exists(dest) and not os.access(dest, os.W_OK):
             os.chmod(dest, 0o644)
         shutil.copy2(src, dest)
-
-
-def symlink_node_modules(repo_root: str, worktree_dir: str) -> None:
-    """Symlink app/node_modules from the main repo into the worktree.
-
-    Git worktrees do not copy ignored directories such as node_modules, but
-    frontend tests/builds need them. Sharing the main repo's installed
-    dependencies avoids a slow `npm ci` in every worktree.
-    """
-    source = os.path.join(repo_root, "app", "node_modules")
-    target = os.path.join(worktree_dir, "app", "node_modules")
-
-    if not os.path.isdir(source):
-        return
-
-    if os.path.islink(target):
-        return
-
-    if os.path.isdir(target):
-        # Remove an existing (likely partial) node_modules directory so we can
-        # replace it with a symlink.
-        shutil.rmtree(target)
-
-    os.symlink(source, target)
 
 
 def estimate_repo_size(repo_root: str) -> int:
