@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import signal
@@ -25,8 +26,6 @@ sys.path.insert(0, str(_LIB_DIR))
 from cli_adapter import resolve_cli_adapter
 from pipeline import STAGE_MAP, group_stages_by_session
 from queue import (
-    get_next_unblocked,
-    has_pending_tasks,
     mark_completed,
     mark_status,
     read_queue,
@@ -191,6 +190,48 @@ def process_task(
     return True
 
 
+def derive_statuses(queue_file: str) -> dict[str, dict]:
+    """Derive ground-truth statuses for every task in the queue."""
+    result = subprocess.run(
+        ["python3", str(_SCRIPT_DIR / "aet-state"), "derive", queue_file],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return {}
+    return json.loads(result.stdout) if result.stdout.strip() else {}
+
+
+def get_next_derived_unblocked(
+    queue: list[dict], derived: dict[str, dict]
+) -> dict | None:
+    """Return the first task whose derived status is ``unblocked``."""
+    for task in queue:
+        task_id = task.get("id")
+        ds = derived.get(task_id, {}).get("derived_status", "")
+        clean = ds.split(" (warning")[0]
+        if clean == "unblocked":
+            return task
+    return None
+
+
+def has_derived_pending_tasks(
+    queue: list[dict], derived: dict[str, dict]
+) -> bool:
+    """Return True if any task is still actionable (derived non-terminal)."""
+    terminal = {"merged", "abandoned", "done"}
+    for task in queue:
+        task_id = task.get("id")
+        ds = derived.get(task_id, {}).get("derived_status", "")
+        clean = ds.split(" (warning")[0]
+        if clean not in terminal and clean != "":
+            return True
+        if task.get("status") == "failed":
+            return True
+    return False
+
+
 def run_batch(args: argparse.Namespace, adapter) -> int:
     """Run batch mode from queue file."""
     queue_file = args.queue_file
@@ -220,11 +261,16 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     successes = 0
     failures = 0
     stop_spawn = False
+    derived = derive_statuses(queue_file)
 
     while True:
+        # Refresh derived state before each spawn pass.
+        derived = derive_statuses(queue_file)
+        queue = read_queue(queue_file)
+
         # Spawn tasks while slots available
         while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
-            task = get_next_unblocked(queue)
+            task = get_next_derived_unblocked(queue, derived)
             if not task:
                 break
 
@@ -260,7 +306,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         if not running:
             if stop_spawn or _shutdown_requested:
                 break
-            if not has_pending_tasks(queue):
+            if not has_derived_pending_tasks(queue, derived):
                 break
             time.sleep(0.2)
             continue
