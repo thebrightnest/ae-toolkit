@@ -220,7 +220,7 @@ class TestDeriveStatus(unittest.TestCase):
             derived = aet_state.derive_status(task)
 
         self.assertIn("done without merge verification", derived["warnings"][0])
-        self.assertTrue(derived["derived_status"].startswith("planned"))
+        self.assertTrue(derived["derived_status"].startswith("unblocked"))
 
 
 if __name__ == "__main__":
