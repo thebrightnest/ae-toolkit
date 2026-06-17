@@ -5,12 +5,13 @@
     "plan_file": "docs/plans/aet-work-state-refactor-derive-plan.md",
     "blocked_by": [],
     "blocks": [],
-    "status": "unblocked",
+    "status": "failed",
     "merge_commit": null,
     "completed_at": null,
     "merged_at": null,
     "worktree": null,
-    "branch": null
+    "branch": null,
+    "failed_stage": "pipeline"
   },
   {
     "id": "aet-work-state-refactor-status-next-plan",
@@ -18,12 +19,13 @@
     "plan_file": "docs/plans/aet-work-state-refactor-status-next-plan.md",
     "blocked_by": [],
     "blocks": [],
-    "status": "unblocked",
+    "status": "failed",
     "merge_commit": null,
     "completed_at": null,
     "merged_at": null,
     "worktree": null,
-    "branch": null
+    "branch": null,
+    "failed_stage": "pipeline"
   },
   {
     "id": "aet-work-state-refactor-sync-init-plan",
@@ -31,12 +33,13 @@
     "plan_file": "docs/plans/aet-work-state-refactor-sync-init-plan.md",
     "blocked_by": [],
     "blocks": [],
-    "status": "unblocked",
+    "status": "failed",
     "merge_commit": null,
     "completed_at": null,
     "merged_at": null,
     "worktree": null,
-    "branch": null
+    "branch": null,
+    "failed_stage": "pipeline"
   },
   {
     "id": "aet-validate-scope-closure-discipline-plan",
@@ -44,11 +47,12 @@
     "plan_file": "docs/plans/aet-validate-scope-closure-discipline-plan.md",
     "blocked_by": [],
     "blocks": [],
-    "status": "unblocked",
+    "status": "failed",
     "merge_commit": null,
     "completed_at": null,
     "merged_at": null,
     "worktree": null,
-    "branch": null
+    "branch": null,
+    "failed_stage": "pipeline"
   }
 ]
