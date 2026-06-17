@@ -47,7 +47,7 @@ ADAPTERS: dict[str, CLIAdapter] = {
         bin="kimi",
         prompt_flag="-p",
         workdir_flag=None,
-        headless_flag="--yolo",
+        headless_flag="",
     ),
     "claude": CLIAdapter(
         name="claude",
