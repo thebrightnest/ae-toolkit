@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""aet-work report — Print an execution telemetry summary.
+
+Reads `.agents/execution.log.jsonl` (or a custom path) and prints a text
+summary: runs, success/failure counts, wall-clock time, and average
+isolation level.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+import telemetry  # noqa: E402
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Print execution telemetry summary.",
+    )
+    parser.add_argument(
+        "--log",
+        default=".agents/execution.log.jsonl",
+        help="Path to execution log JSONL file",
+    )
+    parser.add_argument(
+        "--since",
+        default=None,
+        help="Only include records at or after this ISO-8601 timestamp",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    print(telemetry.report(args.log, since=args.since), end="")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
