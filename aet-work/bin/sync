@@ -310,14 +310,6 @@ def main() -> int:
             if blocker in task_by_id:
                 task_by_id[blocker].setdefault("blocks", []).append(task["id"])
 
-    # Promote blocked tasks whose blockers are terminal.
-    terminal = {"merged", "done", "abandoned"}
-    for task in final_queue:
-        if task.get("status") == "blocked":
-            blockers = task.get("blocked_by", [])
-            if all(task_by_id.get(b, {}).get("status") in terminal for b in blockers):
-                task["status"] = "unblocked"
-
     write_queue(queue_file, final_queue)
 
     # Add wrapper metadata if the queue file didn't have any.
@@ -335,6 +327,7 @@ def main() -> int:
 
     # Derive ground-truth statuses.
     derived = derive_statuses(queue_file)
+    terminal = {"merged", "done", "abandoned"}
     for task in final_queue:
         d = derived.get(task["id"], {})
         ds = d.get("derived_status", "unknown").split(" (warning")[0]
