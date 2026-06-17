@@ -163,7 +163,24 @@ Derive pickable tasks before selecting the next task to run. Do not rely on stor
 
 None.
 
+## Divergence Summary
+
+_Recorded: 2026-06-17 — Branch: aet-work-state-refactor-derive_
+
+### Changed from plan
+
+- `aet-work/bin/aet-state derive_status`: implemented blocker inspection via a recursive `blocker_status_fn` callback rather than passing the full queue or a static blocker map. The derivation behavior matches the plan; only the internal interface differed.
+
+### Added (unplanned)
+
+- `aet-work/lib/cli_adapter.py`: changed the Kimi adapter's `headless_flag` from `None` to `--yolo`. This was not listed in the derive plan.
+- `aet-work/bin/sync`: removed the blocker-promotion loop and moved ground-truth derivation after the queue write so `sync` no longer stores `unblocked` statuses. This aligns with the broader PRD but was outside the derive plan's explicit tasks.
+
+### Deferred
+
+- None.
+
 ---
 
-_Stage: scope-validated_
-_Next step: run `aet-pipeline-implement` or `aet-work` to execute the refactor_
+_Stage: synced_
+_Next step: run `aet-ship`_
