@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""aet-work init-queue — Rebuild the work queue from docs/plans/*.md.
+
+Reads every atomic plan, rebuilds dependency facts, preserves terminal
+metadata from an existing queue, and writes a fresh `.agents/work-queue.json`.
+It does **not** derive actionable status or promote tasks.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from datetime import datetime
+from pathlib import Path
+
+# Load shared libraries.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+from plan_parser import build_ticket_map, most_recent_prd, new_task_from_plan, title_from_plan  # noqa: E402
+from queue import TERMINAL_STATUSES, read_queue, write_queue  # noqa: E402
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Rebuild the work queue from docs/plans.")
+    parser.add_argument(
+        "--queue-file",
+        default=".agents/work-queue.json",
+        help="Path to work-queue.json",
+    )
+    parser.add_argument(
+        "--archive-file",
+        default=".agents/work-archive.json",
+        help="Path to work-archive.json",
+    )
+    parser.add_argument(
+        "--plans-dir",
+        default="docs/plans",
+        help="Directory containing atomic plan markdown files",
+    )
+    parser.add_argument(
+        "--prds-dir",
+        default="docs/prds",
+        help="Directory containing PRD markdown files",
+    )
+    return parser.parse_args()
+
+
+def load_archive(path: str) -> list[dict]:
+    """Load the archive for deduplication context."""
+    if not Path(path).exists():
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        data = __import__("json").load(f)
+    if isinstance(data, dict):
+        return data.get("tasks", [])
+    return data
+
+
+def preserve_task_metadata(existing: dict, fresh: dict) -> dict:
+    """Preserve terminal status and metadata from an existing queue entry.
+
+    Non-terminal stored statuses are normalized to ``planned``. Legacy
+    ``merge_verified`` is treated as terminal and normalized to ``merged``.
+    """
+    status = existing.get("status", "planned")
+    if status == "merge_verified":
+        status = "merged"
+    elif status not in TERMINAL_STATUSES:
+        status = "planned"
+
+    fresh["status"] = status
+    for key in ("branch", "worktree", "merge_commit", "completed_at", "merged_at", "failed_stage"):
+        if key in existing:
+            fresh[key] = existing[key]
+    return fresh
+
+
+def build_blocks(queue: list[dict]) -> None:
+    """Recompute ``blocks`` as the inverse of ``blocked_by`` for the whole queue."""
+    task_by_id = {t["id"]: t for t in queue if t.get("id")}
+    for task in queue:
+        task["blocks"] = []
+    for task in queue:
+        for blocker in task.get("blocked_by", []):
+            if blocker in task_by_id:
+                task_by_id[blocker].setdefault("blocks", []).append(task["id"])
+
+
+def main() -> int:
+    args = parse_args()
+    queue_file = args.queue_file
+    plans_dir = Path(args.plans_dir)
+    prds_dir = Path(args.prds_dir)
+
+    queue = read_queue(queue_file)
+    existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
+
+    plan_files = sorted(plans_dir.glob("*.md"))
+    ticket_map = build_ticket_map(plan_files)
+
+    preserved = 0
+    added = 0
+    final_queue: list[dict] = []
+    seen_files = set()
+
+    for pf in plan_files:
+        pf_str = str(pf)
+        if pf_str in existing_by_file:
+            existing = existing_by_file[pf_str]
+            fresh = new_task_from_plan(pf, ticket_map, status="planned")
+            task = preserve_task_metadata(existing, fresh)
+            preserved += 1
+        else:
+            task = new_task_from_plan(pf, ticket_map, status="planned")
+            added += 1
+
+        final_queue.append(task)
+        seen_files.add(pf_str)
+
+    # Retain any queue entries whose plan file is temporarily missing rather
+    # than silently dropping them; drift is reported by ``status`` / ``sync``.
+    for task in queue:
+        pf = task.get("plan_file")
+        if pf and pf not in seen_files:
+            final_queue.append(task)
+            seen_files.add(pf)
+
+    build_blocks(final_queue)
+
+    source_prd = most_recent_prd(prds_dir)
+    wrapper: dict = {"queue_updated_at": datetime.now().isoformat()}
+    if source_prd is not None:
+        wrapper["source_prd"] = str(source_prd)
+
+    write_queue(queue_file, final_queue, wrapper=wrapper)
+
+    print(
+        f"✅ init-queue complete: {added} new tasks added, {preserved} existing tasks preserved, "
+        f"{len(final_queue)} total tasks."
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
