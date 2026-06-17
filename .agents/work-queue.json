@@ -19,13 +19,13 @@
     "plan_file": "docs/plans/aet-work-state-refactor-status-next-plan.md",
     "blocked_by": [],
     "blocks": [],
-    "status": "done",
+    "status": "unblocked",
     "merge_commit": null,
-    "completed_at": "2026-06-17T21:57:10.749211",
+    "completed_at": null,
     "merged_at": null,
     "worktree": null,
     "branch": null,
-    "failed_stage": "pipeline"
+    "merge_strategy": null
   },
   {
     "id": "aet-work-state-refactor-sync-init-plan",
@@ -33,13 +33,13 @@
     "plan_file": "docs/plans/aet-work-state-refactor-sync-init-plan.md",
     "blocked_by": [],
     "blocks": [],
-    "status": "done",
+    "status": "unblocked",
     "merge_commit": null,
-    "completed_at": "2026-06-17T21:50:27.827870",
+    "completed_at": null,
     "merged_at": null,
     "worktree": null,
     "branch": null,
-    "failed_stage": "pipeline"
+    "merge_strategy": null
   },
   {
     "id": "aet-validate-scope-closure-discipline-plan",
@@ -47,12 +47,12 @@
     "plan_file": "docs/plans/aet-validate-scope-closure-discipline-plan.md",
     "blocked_by": [],
     "blocks": [],
-    "status": "done",
+    "status": "unblocked",
     "merge_commit": null,
-    "completed_at": "2026-06-17T21:49:16.886499",
+    "completed_at": null,
     "merged_at": null,
     "worktree": null,
     "branch": null,
-    "failed_stage": "pipeline"
+    "merge_strategy": null
   }
 ]
