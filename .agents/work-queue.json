@@ -221,7 +221,8 @@
       "completed_at": "2026-06-17T21:50:30.363362",
       "merged_at": "2026-06-17T21:14:54.410647+00:00",
       "worktree": null,
-      "branch": "aet-work-state-refactor-derive"
+      "branch": "aet-work-state-refactor-derive",
+      "merge_strategy": "squash"
     },
     {
       "id": "aet-work-state-refactor-status-next-plan",

@@ -47,17 +47,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_archive(path: str) -> list[dict]:
-    """Load the archive for deduplication context."""
-    if not Path(path).exists():
-        return []
-    with open(path, "r", encoding="utf-8") as f:
-        data = __import__("json").load(f)
-    if isinstance(data, dict):
-        return data.get("tasks", [])
-    return data
-
-
 def preserve_task_metadata(existing: dict, fresh: dict) -> dict:
     """Preserve terminal status and metadata from an existing queue entry.
 
@@ -71,7 +60,15 @@ def preserve_task_metadata(existing: dict, fresh: dict) -> dict:
         status = "planned"
 
     fresh["status"] = status
-    for key in ("branch", "worktree", "merge_commit", "completed_at", "merged_at", "failed_stage"):
+    for key in (
+        "branch",
+        "worktree",
+        "merge_commit",
+        "merge_strategy",
+        "completed_at",
+        "merged_at",
+        "failed_stage",
+    ):
         if key in existing:
             fresh[key] = existing[key]
     return fresh

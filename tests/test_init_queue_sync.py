@@ -125,6 +125,7 @@ class TestInitQueue(unittest.TestCase):
                     "blocks": [],
                     "status": "merged",
                     "merge_commit": "abc1234",
+                    "merge_strategy": "squash",
                     "branch": "feat-old",
                     "worktree": "/worktrees/old",
                     "completed_at": "2026-01-01T00:00:00Z",
@@ -156,6 +157,7 @@ class TestInitQueue(unittest.TestCase):
         # Terminal task preserved.
         self.assertEqual(tasks["old"]["status"], "merged")
         self.assertEqual(tasks["old"]["merge_commit"], "abc1234")
+        self.assertEqual(tasks["old"]["merge_strategy"], "squash")
         self.assertEqual(tasks["old"]["branch"], "feat-old")
         self.assertEqual(tasks["old"]["worktree"], "/worktrees/old")
         # Non-terminal task normalized to planned.
