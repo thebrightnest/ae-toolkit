@@ -231,6 +231,22 @@ Recompute all non-declarative status fields from ground truth (git, filesystem) 
 
 **When to use:** Before any command that reads queue status (`status`, `next`, `run`), and after any sync or initialization.
 
+### `report`
+
+Print an execution telemetry summary from `.agents/execution.log.jsonl`.
+
+**Procedure:**
+
+1. Run `python3 ~/.claude/skills/aet-work/bin/report`
+2. The helper reads `.agents/execution.log.jsonl` and prints:
+   - Total runs
+   - Tasks spawned, succeeded, and failed
+   - Total wall-clock time
+   - Average isolation level observed across stage records
+3. Use `--since <ISO-8601-timestamp>` to restrict the summary to recent runs
+
+**When to use:** After one or more orchestrator runs to inspect throughput, failure rate, and resource usage.
+
 ### `plan-drift`
 
 Detect plan files that exist on disk but are not represented in the active work queue.
@@ -330,5 +346,7 @@ Archive terminal tasks and remove their worktrees atomically. Repairs stale queu
 - **OS-process isolation** — `run` invokes the unified orchestrator, which spawns fresh OS processes for each pipeline stage. See `references/context-isolation.md` for details.
 - **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
 - **Queue file is the memory** — `.agents/work-queue.json` persists state across process boundaries by design.
+- **Derived status** — `aet-state derive` recomputes canonical statuses from git branches, worktrees, plan files, and `origin/main` ancestry; the queue stores the declaration.
+- **Execution telemetry** — `.agents/execution.log.jsonl` is an append-only record of stage and run-summary events produced by the orchestrator. Use `aet-work report` to summarize it.
 - **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.
 - **Drain on failure** — running tasks finish, new spawns halt. Preserves in-progress work while stopping the pipeline.
