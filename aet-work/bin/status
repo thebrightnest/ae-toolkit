@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""aet-work status — Show the current state of the work queue.
+
+Checks plan drift against both the active queue and the archive, derives
+ground-truth statuses, and reports counts, next tasks, failed tasks, and
+worktree health.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+from queue import read_archive, read_queue  # noqa: E402
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Show work queue status.")
+    parser.add_argument(
+        "--queue-file",
+        default=".agents/work-queue.json",
+        help="Path to work-queue.json",
+    )
+    parser.add_argument(
+        "--archive-file",
+        default=".agents/work-archive.json",
+        help="Path to work-archive.json",
+    )
+    parser.add_argument(
+        "--plans-dir",
+        default="docs/plans",
+        help="Directory containing atomic plan markdown files",
+    )
+    return parser.parse_args()
+
+
+def derive_statuses(queue_file: str) -> dict[str, dict]:
+    result = subprocess.run(
+        ["python3", str(_SCRIPT_DIR / "aet-state"), "derive", queue_file],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        return {}
+    return json.loads(result.stdout) if result.stdout.strip() else {}
+
+
+def main() -> int:
+    args = parse_args()
+    queue = read_queue(args.queue_file)
+    archive = read_archive(args.archive_file)
+    plans_dir = Path(args.plans_dir)
+
+    queued_files = {t.get("plan_file") for t in queue if t.get("plan_file")}
+    archived_files = {t.get("plan_file") for t in archive if t.get("plan_file")}
+    plan_files = sorted(plans_dir.glob("*.md"))
+
+    orphaned = [
+        str(pf)
+        for pf in plan_files
+        if str(pf) not in queued_files and str(pf) not in archived_files
+    ]
+
+    if orphaned:
+        print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")
+        for pf in orphaned:
+            print(f"  - {pf}")
+        print("Run init-queue to sync, or acknowledge each plan manually.")
+    else:
+        print("✅ No plan drift detected. All plans are tracked in the queue.")
+
+    derived = derive_statuses(args.queue_file)
+
+    counts = {"unblocked": 0, "blocked": 0, "in-progress": 0, "failed": 0, "done": 0}
+    for task in queue:
+        status = task.get("status", "")
+        if status in counts:
+            counts[status] += 1
+
+    print("\nQueue summary (active tasks only):")
+    for status, count in counts.items():
+        print(f"  {status}: {count}")
+
+    terminal = {"merged", "abandoned", "merge_verified"}
+    print(f"\n{'ID':<40} {'Stored':<12} {'Derived':<20}")
+    print("-" * 72)
+    for task in queue:
+        if task.get("status") in terminal:
+            continue
+        task_id = task.get("id", "")
+        stored = task.get("status", "")
+        task_derived = derived.get(task_id, {})
+        derived_status = task_derived.get("derived_status", "unknown")
+        clean_derived = derived_status.split(" (warning")[0]
+        marker = " ⚠️" if clean_derived != stored else ""
+        print(f"{task_id:<40} {stored:<12} {derived_status:<20}{marker}")
+
+    unblocked = [t for t in queue if t.get("status") == "unblocked"]
+    print("\nNext unblocked tasks:")
+    if unblocked:
+        for task in unblocked[:3]:
+            print(f"  - {task.get('id')} — {task.get('title')} → {task.get('plan_file')}")
+    else:
+        print("  None.")
+
+    failed = [t for t in queue if t.get("status") == "failed"]
+    print("\nFailed tasks:")
+    if failed:
+        for task in failed:
+            print(f"  - {task.get('id')} — {task.get('title')}")
+    else:
+        print("  None.")
+
+    print("\nWorktree validation:")
+    stale = 0
+    for task in queue:
+        worktree = task.get("worktree")
+        if worktree and not Path(worktree).is_dir():
+            print(
+                f"  ⚠️ Stale worktree: {task.get('id')} → {worktree} does not exist."
+            )
+            stale += 1
+    if not stale:
+        print("  All registered worktrees present.")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
