@@ -1,5 +1,5 @@
 {
-  "archived_at": "2026-06-15T21:37:41.612257",
+  "archived_at": "2026-06-17T17:48:09.432269",
   "tasks": [
     {
       "id": "aet-design-system-creation-05",
@@ -1367,6 +1367,20 @@
       "merged_at": null,
       "worktree": null,
       "branch": null
+    },
+    {
+      "id": "aet-state-telemetry-foundation-plan",
+      "title": "Plan: aet-state and Telemetry Foundation",
+      "plan_file": "docs/plans/aet-state-telemetry-foundation-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "merged",
+      "merge_commit": "a3232f5",
+      "completed_at": "2026-06-17T16:48:02.623188+00:00",
+      "merged_at": "2026-06-17T16:48:02.622829+00:00",
+      "worktree": null,
+      "branch": "aet-state-telemetry-foundation",
+      "failed_stage": "pipeline"
     }
   ]
 }
