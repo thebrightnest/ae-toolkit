@@ -14,7 +14,6 @@ from queue import (
     has_pending_tasks,
     mark_completed,
     mark_status,
-    promote_dependents,
     read_queue,
     record_task_meta,
     write_queue,
@@ -102,14 +101,6 @@ class TestQueue(unittest.TestCase):
         mark_completed(queue, "t1")
         self.assertEqual(queue[0]["status"], "done")
         self.assertIn("completed_at", queue[0])
-
-    def test_promote_dependents(self):
-        queue = [
-            {"id": "t1", "status": "done"},
-            {"id": "t2", "status": "blocked", "blocked_by": ["t1"]},
-        ]
-        promote_dependents(queue)
-        self.assertEqual(queue[1]["status"], "unblocked")
 
     def test_record_task_meta(self):
         queue = [{"id": "t1"}]

@@ -73,8 +73,17 @@ def is_ancestor_of_main(branch, cwd=None):
     return rc == 0
 
 
-def derive_status(task, cwd=None):
-    """Derive status from ground truth."""
+def derive_status(task, blocker_status_fn=None, cwd=None):
+    """Derive status from ground truth.
+
+    Derivation rules, applied in order:
+      1. merged   — branch or merge_commit is an ancestor of origin/main.
+      2. in-progress — local branch exists.
+      3. unblocked — plan exists, no branch, and all blockers are terminal.
+      4. blocked  — plan exists, no branch, and some blocker is not terminal.
+      5. drift    — plan file is missing.
+      6. planned  — plan exists, no branch, no blockers.
+    """
     plan_file = task.get("plan_file")
     branch = task.get("branch")
     worktree = task.get("worktree")
@@ -85,14 +94,12 @@ def derive_status(task, cwd=None):
     # Plan file exists?
     if plan_file and Path(plan_file).exists():
         derived["plan_exists"] = True
-        derived["derived_status"] = "planned"
     else:
         derived["plan_exists"] = False
 
     # Branch exists?
     if branch and branch_exists(branch, cwd=cwd):
         derived["branch_exists"] = True
-        derived["derived_status"] = "in-progress"
     else:
         derived["branch_exists"] = False
 
@@ -102,11 +109,7 @@ def derive_status(task, cwd=None):
         on_main = True
     if merge_commit and is_ancestor_of_main(merge_commit, cwd=cwd):
         on_main = True
-    if on_main:
-        derived["on_main"] = True
-        derived["derived_status"] = "merged"
-    else:
-        derived["on_main"] = False
+    derived["on_main"] = on_main
 
     # Worktree present?
     if worktree and Path(worktree).is_dir():
@@ -120,17 +123,36 @@ def derive_status(task, cwd=None):
     else:
         derived["merge_verified"] = False
 
+    # Determine actionable status.
+    status = "unknown"
+    if on_main:
+        status = "merged"
+    elif derived["branch_exists"]:
+        status = "in-progress"
+    elif derived["plan_exists"]:
+        blockers = task.get("blocked_by", [])
+        if blockers and blocker_status_fn:
+            terminal = {"merged", "abandoned"}
+            all_terminal = all(blocker_status_fn(b) in terminal for b in blockers)
+            status = "unblocked" if all_terminal else "blocked"
+        else:
+            status = "planned"
+    else:
+        status = "drift"
+        derived["drift"] = "plan_file missing"
+
     # Warnings
     current_status = task.get("status", "")
     warnings = []
-    if current_status == "done" and not merge_commit and not derived["on_main"]:
+    if current_status == "done" and not merge_commit and not on_main:
         warnings.append("done without merge verification")
-    if current_status == "merged" and not derived["on_main"]:
+    if current_status == "merged" and not on_main:
         warnings.append("merged status but not ancestor of origin/main")
     if warnings:
         derived["warnings"] = warnings
-        derived["derived_status"] = f"{derived['derived_status']} (warning: {'; '.join(warnings)})"
+        status = f"{status} (warning: {'; '.join(warnings)})"
 
+    derived["derived_status"] = status
     return derived
 
 
@@ -192,9 +214,20 @@ def update_plan_footer(plan_path, stage):
 def cmd_derive(args):
     queue = load_queue(args.queue)
     cwd = os.path.dirname(args.queue) if args.queue else "."
+    tasks = get_tasks(queue)
+    task_by_id = {t["id"]: t for t in tasks}
+    derived = {}
+
+    def blocker_status(task_id):
+        """Return the clean derived status of a blocker, deriving it if needed."""
+        if task_id not in derived and task_id in task_by_id:
+            derived[task_id] = derive_status(task_by_id[task_id], blocker_status, cwd=cwd)
+        status = derived.get(task_id, {}).get("derived_status", "unknown")
+        return status.split(" (warning")[0]
+
     results = {}
-    for task in get_tasks(queue):
-        results[task["id"]] = derive_status(task, cwd=cwd)
+    for task in tasks:
+        results[task["id"]] = derive_status(task, blocker_status, cwd=cwd)
     print(json.dumps(results, indent=2))
     return 0
 

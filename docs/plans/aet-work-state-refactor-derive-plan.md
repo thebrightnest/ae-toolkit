@@ -8,7 +8,7 @@
 
 ## Tasks
 
-1. **Update `aet-work/bin/aet-state` `derive_status`** — M
+1. ✓ **Update `aet-work/bin/aet-state` `derive_status`** — M [Changed: uses a recursive `blocker_status_fn` callback instead of a full-queue/blocker-map argument; behavior matches the plan.]
 
    - Accept the full queue (or blocker map) so the helper can inspect `blocked_by` statuses.
    - Apply the derivation rules in order:
@@ -19,12 +19,12 @@
    - If `plan_file` is missing, report drift rather than returning a status.
    - Keep existing warning logic for `done` without merge verification during the transition.
 
-2. **Remove `promote_dependents` from `aet-work/lib/queue.py`** — S
+2. ✓ **Remove `promote_dependents` from `aet-work/lib/queue.py`** — S
 
    - Delete the function and any internal callers.
    - The orchestrator and `next` will rely on derived `unblocked` instead.
 
-3. **Update `aet-work/SKILL.md` `derive` section** — S
+3. ✓ **Update `aet-work/SKILL.md` `derive` section** — S
    - Document that `derive` is the single source of truth for actionable state and that it respects `blocked_by`.
    - Remove language suggesting `sync` or `init-queue` should promote tasks to `unblocked`.
 
@@ -51,5 +51,5 @@
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_

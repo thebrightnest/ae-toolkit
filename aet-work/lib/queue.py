@@ -81,20 +81,6 @@ def mark_completed(queue: list[dict[str, Any]], task_id: str) -> None:
             task["completed_at"] = datetime.now().isoformat()
 
 
-def promote_dependents(queue: list[dict[str, Any]]) -> None:
-    """Promote blocked tasks whose dependencies are done/merged."""
-    done_ids = {
-        t["id"]
-        for t in queue
-        if t.get("status") in ("done", "merged", "merge_verified")
-    }
-    for task in queue:
-        if task.get("status") == "blocked":
-            blockers = task.get("blocked_by", [])
-            if all(b in done_ids for b in blockers):
-                task["status"] = "unblocked"
-
-
 def record_task_meta(
     queue: list[dict[str, Any]],
     task_id: str,
@@ -150,7 +136,7 @@ def archive_tasks(
 
     Terminal tasks that have active dependents (tasks in the queue whose
     ``blocked_by`` list includes the terminal task's id) are kept in the
-    queue so that ``promote_dependents`` can still unblock them.
+    queue so that derived blocker-aware state remains resolvable.
 
     Legacy ``merge_verified`` statuses are normalized to ``merged`` before
     archiving.
