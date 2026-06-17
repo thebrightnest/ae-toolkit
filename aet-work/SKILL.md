@@ -41,7 +41,7 @@ The work queue uses the following terminal statuses:
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
 | `merged`         | Code is verified on `origin/main`                                                                                              | `post-ship-verify` or `mark-terminal` |
 | `merge_verified` | **Legacy alias for `merged`.** Some pipelines historically set this status. Normalized to `merged` by `init-queue` and `sync`. | Orchestrator (legacy)                 |
-| `done`           | **Deprecated.** Pipeline completed but not yet verified on main. Treated as `merged` for promotion logic.                      | Orchestrator (legacy)                 |
+| `done`           | **Deprecated.** Pipeline completed but not yet verified on main. Treated as terminal for blocker-resolution purposes.          | Orchestrator (legacy)                 |
 | `abandoned`      | Task explicitly cancelled with a documented reason                                                                             | `mark-terminal`                       |
 | `failed`         | Pipeline failed; requires human inspection                                                                                     | Orchestrator                          |
 
@@ -215,21 +215,22 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 ### `derive`
 
-Recompute all non-declarative status fields from ground truth (git, filesystem) using the centralized `aet-state` helper.
+Recompute all actionable status fields from ground truth (git, filesystem, and `blocked_by`) using the centralized `aet-state` helper. `derive` is the single source of truth for whether a task is pickable.
 
 **Procedure:**
 
 1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json`
-2. For each task, the derived status is computed:
-   - `plan_file` exists on disk → `planned`
-   - `branch` exists locally → `in-progress`
-   - `git merge-base --is-ancestor <branch> origin/main` → `merged`
-   - `worktree` directory present → `has_worktree`
+2. For each task, the derived status is computed in order:
+   - `merged` — `branch` or `merge_commit` is an ancestor of `origin/main`
+   - `in-progress` — local `branch` exists
+   - `unblocked` — `plan_file` exists, no local branch, and every task in `blocked_by` is terminal (`merged` or `abandoned`)
+   - `blocked` — `plan_file` exists, no local branch, and some blocker is not terminal
+   - `drift` — `plan_file` is missing
 3. Compare derived status against stored `status` for each task
 4. Report any mismatches as warnings (e.g., `⚠️ Task {id} stored as done but derived as in-progress`)
 5. Return the derived JSON for use by other commands
 
-**When to use:** Before any command that reads queue status (`status`, `next`, `run`), and after any sync or initialization.
+**When to use:** Before any command that reads queue status (`status`, `next`, `run`), and after any sync or initialization. Do not rely on `sync` or `init-queue` to promote tasks to `unblocked`; derive that state on read instead.
 
 ### `report`
 

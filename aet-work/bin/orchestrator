@@ -29,7 +29,6 @@ from queue import (
     has_pending_tasks,
     mark_completed,
     mark_status,
-    promote_dependents,
     read_queue,
     record_task_meta,
     write_queue,
@@ -279,7 +278,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             if ret == 0:
                 print(f"   ✅ {task_id} completed")
                 mark_completed(queue, task_id)
-                promote_dependents(queue)
                 successes += 1
             else:
                 print(f"   ❌ {task_id} failed (exit {ret})")
