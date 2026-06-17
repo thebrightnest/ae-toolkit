@@ -106,18 +106,23 @@ Show the current state of the work queue.
 
 **Procedure:**
 
-1. Run the `plan-drift` check (see below). If drift is detected:
-   - Print `⚠️ Plan drift detected: N plan file(s) not in queue`
-   - List the orphaned plan filenames
-   - Print `Run init-queue to sync, or acknowledge each plan manually.`
-   - **Do not report "all clear" even if all tracked tasks are done**
-2. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses
-3. Read `.agents/work-queue.json`
-4. Report counts for active tasks only: `unblocked`, `blocked`, `in-progress`, `failed`, `done`
-5. **Derived status column:** For each active task, show both stored status and derived status. If they differ, highlight the discrepancy. Skip terminal tasks (`merged`, `abandoned`, legacy `merge_verified`).
-6. List the next 3 unblocked tasks (topological order)
-7. List any failed tasks (require human attention)
-8. **Worktree validation:** For each active task with a `worktree` field, check if the directory exists. If missing, print `⚠️ Stale worktree: {task_id} → {path} does not exist. Run cleanup to repair.`
+Invoke the status helper, which runs an archive-aware `plan-drift` check, derives ground-truth statuses, and prints the summary:
+
+```bash
+python3 ~/.claude/skills/aet-work/bin/status \
+  --queue-file .agents/work-queue.json \
+  --archive-file .agents/work-archive.json \
+  --plans-dir docs/plans
+```
+
+The helper reports:
+
+1. Any plan drift (plans on disk that are neither queued nor archived)
+2. Active task counts: `unblocked`, `blocked`, `in-progress`, `failed`, `done`
+3. A derived-status column for each active task, highlighting mismatches
+4. The next 3 unblocked tasks
+5. Any failed tasks
+6. Stale worktree warnings
 
 ### `next`
 
@@ -228,15 +233,16 @@ Recompute all non-declarative status fields from ground truth (git, filesystem) 
 
 ### `plan-drift`
 
-Detect plan files that exist on disk but are not represented in the work queue.
+Detect plan files that exist on disk but are not represented in the active work queue.
 
 **Procedure:**
 
 1. Read `.agents/work-queue.json` and collect all `plan_file` paths
-2. List all `docs/plans/*.md` files. Only atomic plans in this directory are considered; roadmaps and audits stored elsewhere are ignored.
-3. Identify any plan files whose path is not found in the queue's `plan_file` set
-4. Compare the most recent modification time of any `docs/plans/*.md` against the `queue_updated_at` field (or the queue file's mtime as fallback)
-5. Report findings:
+2. Read `.agents/work-archive.json` and collect all archived `plan_file` paths (archive uses dict-wrapper format `{"archived_at": "...", "tasks": [...]}`)
+3. List all `docs/plans/*.md` files. Only atomic plans in this directory are considered; roadmaps and audits stored elsewhere are ignored.
+4. Identify any plan files whose path is not found in the queue's `plan_file` set **and** not found in the archive's `plan_file` set
+5. Compare the most recent modification time of any `docs/plans/*.md` against the `queue_updated_at` field (or the queue file's mtime as fallback)
+6. Report findings:
    - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Run init-queue to sync.`
    - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last init-queue). Run init-queue to sync.`
    - If none: print `✅ No plan drift detected. All plans are tracked in the queue.`
