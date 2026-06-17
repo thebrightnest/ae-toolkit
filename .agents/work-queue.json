@@ -5,13 +5,13 @@
     "plan_file": "docs/plans/aet-work-state-refactor-derive-plan.md",
     "blocked_by": [],
     "blocks": [],
-    "status": "done",
-    "merge_commit": null,
+    "status": "merged",
+    "merge_commit": "275d4ca2334d8a106c72ab806fbf399e55ec407e",
     "completed_at": "2026-06-17T21:50:30.363362",
-    "merged_at": null,
+    "merged_at": "2026-06-17T21:14:54.410647+00:00",
     "worktree": null,
-    "branch": null,
-    "failed_stage": "pipeline"
+    "branch": "aet-work-state-refactor-derive",
+    "merge_strategy": "squash"
   },
   {
     "id": "aet-work-state-refactor-status-next-plan",
