@@ -271,14 +271,18 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         queue = read_queue(queue_file)
 
         # Spawn tasks while slots available
+        spawned_this_cycle: set[str] = set()
         while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
             task = get_next_derived_unblocked(queue, derived)
             if not task:
                 break
 
             task_id = task["id"]
+            if task_id in spawned_this_cycle:
+                # Defensive: derived state is stale and keeps returning the same task.
+                break
+
             mark_status(queue, task_id, "in-progress")
-            write_queue(queue_file, queue)
 
             # Fork a subprocess for this task
             env = os.environ.copy()
@@ -286,6 +290,17 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             env["AET_PLAN_FILE"] = task.get("plan_file", "")
             worktree_dir = create_worktree(repo_root, task_id)
             env["AET_WORKTREE"] = worktree_dir
+
+            # Record branch/worktree so aet-state derive sees in-progress and does
+            # not spawn the same task again on the next loop iteration.
+            # Store a repo-relative worktree path for portability.
+            record_task_meta(
+                queue,
+                task_id,
+                os.path.relpath(worktree_dir, repo_root),
+                task_id,
+            )
+            write_queue(queue_file, queue)
 
             # Build the orchestrator command for single-task mode
             cmd = [
@@ -303,7 +318,13 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
 
             proc = subprocess.Popen(cmd, env=env)
             running[task_id] = proc
+            spawned_this_cycle.add(task_id)
             print(f"▶️  Spawned {task.get('title', task_id)} (PID {proc.pid})")
+
+            # Refresh derived state so the next spawn pass respects the branch we
+            # just recorded and does not pick the same task again.
+            derived = derive_statuses(queue_file)
+            queue = read_queue(queue_file)
 
         if not running:
             if stop_spawn or _shutdown_requested:
