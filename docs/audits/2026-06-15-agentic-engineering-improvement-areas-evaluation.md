@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD060 -->
+
 # AE Toolkit: Evaluation of Proposed Agentic-Engineering Improvement Areas
 
 **Date:** 2026-06-15
