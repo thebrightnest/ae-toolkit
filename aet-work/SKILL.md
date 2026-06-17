@@ -118,10 +118,10 @@ python3 ~/.claude/skills/aet-work/bin/status \
 The helper reports:
 
 1. Any plan drift (plans on disk that are neither queued nor archived)
-2. Active task counts: `unblocked`, `blocked`, `in-progress`, `failed`, `done`
-3. A derived-status column for each active task, highlighting mismatches
-4. The next 3 unblocked tasks
-5. Any failed tasks
+2. Active task counts: `unblocked`, `blocked`, `in-progress`, `failed`, `done` (counts are computed from derived status; `failed` is read from stored status)
+3. A derived-status column for each active task, highlighting only derive-time warnings (e.g., `done` without merge verification), not ordinary stored-vs-derived mismatches
+4. The next 3 tasks whose derived status is `unblocked`
+5. Any failed tasks (from stored status)
 6. Stale worktree warnings
 
 ### `next`
@@ -133,10 +133,10 @@ Identify and output the next unblocked task.
 1. Run the `plan-drift` check. If drift is detected, refuse to pick a task and instruct the user to run `init-queue` first
 2. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses
 3. Read `.agents/work-queue.json`
-4. Find tasks with `status: "unblocked"`
+4. Find tasks whose **derived** status is `unblocked` (do not rely on the stored `status` field)
 5. Pick the first in topological order (respecting the DAG)
 6. Output: task ID, title, plan_file path
-7. Update status to `in-progress` via `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_status> in-progress .agents/work-queue.json`
+7. Update status to `in-progress` via `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_status> in-progress .agents/work-queue.json`, then record `branch: <task_id>` and `worktree: .worktrees/<task_id>`
 
 ### `run`
 
