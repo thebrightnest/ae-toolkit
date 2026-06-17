@@ -139,7 +139,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 4. **Apply task size guardrails**. Evaluate each story against the dual-limit model (≤ 2 days human time; ≤ 10 files / 500 diff lines AI-complexity). Auto-split oversized stories recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 5. Define blocking relationships between tickets (directed acyclic graph).
 6. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort, size label (S/M/L).
-7. **Queue handoff.** After all plan files are written, the queue is updated by `aet-work sync`. Do not write `.agents/work-queue.json` directly from this skill.
+7. **Queue handoff.** After all plan files are written, run `aet-work sync` to add them to `.agents/work-queue.json`. Do not write `.agents/work-queue.json` directly from this skill. Do not mark the command complete until the queue contains the new plan files.
 
 **Vertical slice rule:**
 
@@ -255,7 +255,8 @@ After the `plan` command completes and the plan.md is ready for review:
    ```
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
-4. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
+4. Confirm the new plan files appear in `.agents/work-queue.json` after `aet-work sync`.
+5. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
 
 ## Key Principles
 

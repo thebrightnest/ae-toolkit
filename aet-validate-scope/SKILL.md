@@ -60,8 +60,12 @@ Check the current plan/PRD against existing documentation and code. Surface cont
    - Vague or overloaded language that should be sharpened
    - Stated behavior that contradicts existing code
    - Architectural decisions that contradict existing ADRs
-6. Present findings as a concise list (not a 20-question interview)
-7. Ask **targeted questions** about the gaps found — one at a time
+6. **Closure Check** — before declaring scope validated, verify the handoff artifacts exist:
+   - At least one `docs/plans/*.md` file references the PRD (via Context or frontmatter).
+   - Every such plan file is present in `.agents/work-queue.json`.
+   - If either check fails, stop and redirect: do not update the PRD footer to `scope-validated`.
+7. Present findings as a concise list (not a 20-question interview)
+8. Ask **targeted questions** about the gaps found — one at a time
 
 **Rules:**
 
@@ -159,9 +163,20 @@ Infer which structure applies:
 
 When multiple contexts exist, infer which one the current topic relates to. If unclear, ask.
 
+## Closure Check Failure Messages
+
+If the closure check fails, print exactly one of the following and stop:
+
+- **No plan files:**
+
+  > "Scope validation cannot complete: no plan files reference this PRD. Break the PRD into `docs/plans/*.md` files (e.g., via `aet-plan`), then re-run `aet-validate-scope`."
+
+- **Plans not synced:**
+  > "Scope validation cannot complete: plan files exist but are not synced to `.agents/work-queue.json`. Run `aet-work sync`, then re-run `aet-validate-scope`."
+
 ## Completion Protocol
 
-After `validate` completes and conflicts are resolved:
+After `validate` completes, conflicts are resolved, and the closure check passes:
 
 1. Update the PRD file footer to:
 

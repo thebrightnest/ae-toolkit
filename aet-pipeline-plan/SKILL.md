@@ -118,7 +118,10 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
 1. Run `aet-work sync` to incrementally add the newly created `docs/plans/*.md` files to `.agents/work-queue.json`. Only atomic plans from `docs/plans/` are synced; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
 2. Preserve all existing queue entries and their statuses
-3. If drift or orphaned entries are surfaced, resolve them before declaring the pipeline complete
+3. Run `aet-work status` and verify:
+   - No plan drift is reported.
+   - At least one newly created task appears in the queue summary.
+4. If drift, orphaned entries, or missing tasks are surfaced, resolve them before declaring the pipeline complete
 
 **Output:**
 
@@ -139,7 +142,7 @@ After the pipeline completes all steps:
    Artifacts:
    - PRD:       docs/prds/{feature}-prd.md (scope-validated)
    - Plans:     docs/plans/*.md (plan-approved)
-   - Queue:     .agents/work-queue.json
+   - Queue:     .agents/work-queue.json (sync verified, no drift)
 
    Next step:
    - Single task: run `aet-work run-one docs/plans/{ticket}-plan.md`
