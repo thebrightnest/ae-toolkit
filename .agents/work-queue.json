@@ -1,1 +1,54 @@
-[]
+[
+  {
+    "id": "aet-work-state-refactor-derive-plan",
+    "title": "Plan: Make `aet-state derive` Blocker-Aware",
+    "plan_file": "docs/plans/aet-work-state-refactor-derive-plan.md",
+    "blocked_by": [],
+    "blocks": [],
+    "status": "unblocked",
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null,
+    "worktree": null,
+    "branch": null
+  },
+  {
+    "id": "aet-work-state-refactor-status-next-plan",
+    "title": "Plan: Update `status`, `next`, and Orchestrator to Use Derived State",
+    "plan_file": "docs/plans/aet-work-state-refactor-status-next-plan.md",
+    "blocked_by": [],
+    "blocks": [],
+    "status": "unblocked",
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null,
+    "worktree": null,
+    "branch": null
+  },
+  {
+    "id": "aet-work-state-refactor-sync-init-plan",
+    "title": "Plan: Simplify `sync` and Create `init-queue`",
+    "plan_file": "docs/plans/aet-work-state-refactor-sync-init-plan.md",
+    "blocked_by": [],
+    "blocks": [],
+    "status": "unblocked",
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null,
+    "worktree": null,
+    "branch": null
+  },
+  {
+    "id": "aet-validate-scope-closure-discipline-plan",
+    "title": "Plan: Add Closure Checks to Planning and Validation Skills",
+    "plan_file": "docs/plans/aet-validate-scope-closure-discipline-plan.md",
+    "blocked_by": [],
+    "blocks": [],
+    "status": "unblocked",
+    "merge_commit": null,
+    "completed_at": null,
+    "merged_at": null,
+    "worktree": null,
+    "branch": null
+  }
+]
