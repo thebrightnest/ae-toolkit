@@ -79,10 +79,11 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
     Derivation rules, applied in order:
       1. merged   — branch or merge_commit is an ancestor of origin/main.
       2. in-progress — local branch exists.
-      3. unblocked — plan exists, no branch, and all blockers are terminal.
+      3. unblocked — plan exists, no branch, and all blockers are terminal
+                   (including the case of no blockers).
       4. blocked  — plan exists, no branch, and some blocker is not terminal.
       5. drift    — plan file is missing.
-      6. planned  — plan exists, no branch, no blockers.
+      6. planned  — plan exists, no branch, no blockers (legacy compatibility).
     """
     plan_file = task.get("plan_file")
     branch = task.get("branch")
@@ -135,8 +136,12 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
             terminal = {"merged", "abandoned"}
             all_terminal = all(blocker_status_fn(b) in terminal for b in blockers)
             status = "unblocked" if all_terminal else "blocked"
-        else:
+        elif blockers and not blocker_status_fn:
+            # Blockers exist but we cannot resolve them; fall back to planned.
             status = "planned"
+        else:
+            # No blockers means the task is actionable.
+            status = "unblocked"
     else:
         status = "drift"
         derived["drift"] = "plan_file missing"
