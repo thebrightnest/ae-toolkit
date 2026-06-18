@@ -80,5 +80,5 @@ Revert `aet-work/bin/orchestrator`, `aet-work/SKILL.md`, and `tests/test_orchest
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
