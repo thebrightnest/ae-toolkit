@@ -1147,12 +1147,13 @@
       "plan_file": "docs/plans/fods-01-record-merge.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
+      "status": "merged",
+      "merge_commit": "2ab940e45ad1dde45145428be6bf16fc33c07328",
+      "completed_at": "2026-06-18T18:40:08.551948+00:00",
+      "merged_at": "2026-06-18T18:40:08.551948+00:00",
       "worktree": null,
-      "branch": null
+      "branch": "fods-01-record-merge",
+      "merge_strategy": "squash"
     },
     {
       "id": "fods-02-state-spine",
