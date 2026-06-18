@@ -46,6 +46,14 @@ class TestCLIAdapter(unittest.TestCase):
         cmd = adapter.build_cmd("run tests", workdir="/tmp/proj", headless=True)
         self.assertEqual(cmd, ["test", "--headless", "-p", "run tests"])
 
+    def test_kimi_headless_build_cmd(self):
+        """Regression: kimi -p mode cannot combine with --yolo or --auto."""
+        adapter = resolve_cli_adapter("kimi")
+        cmd = adapter.build_cmd("run tests", headless=True)
+        self.assertNotIn("--yolo", cmd)
+        self.assertNotIn("--auto", cmd)
+        self.assertEqual(cmd, ["kimi", "-p", "run tests"])
+
     def test_build_cmd_no_headless(self):
         adapter = CLIAdapter(
             name="test", bin="test", prompt_flag="-p", workdir_flag="", headless_flag=""

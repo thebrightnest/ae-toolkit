@@ -81,9 +81,16 @@ def main() -> int:
 
     counts = {"unblocked": 0, "blocked": 0, "in-progress": 0, "failed": 0, "done": 0}
     for task in queue:
-        status = task.get("status", "")
-        if status in counts:
-            counts[status] += 1
+        task_id = task.get("id", "")
+        stored = task.get("status", "")
+        if stored == "failed":
+            counts["failed"] += 1
+            continue
+        task_derived = derived.get(task_id, {})
+        derived_status = task_derived.get("derived_status", "unknown")
+        clean_derived = derived_status.split(" (warning")[0]
+        if clean_derived in counts:
+            counts[clean_derived] += 1
 
     print("\nQueue summary (active tasks only):")
     for status, count in counts.items():
@@ -99,11 +106,15 @@ def main() -> int:
         stored = task.get("status", "")
         task_derived = derived.get(task_id, {})
         derived_status = task_derived.get("derived_status", "unknown")
-        clean_derived = derived_status.split(" (warning")[0]
-        marker = " ⚠️" if clean_derived != stored else ""
+        marker = " ⚠️" if "(warning:" in derived_status else ""
         print(f"{task_id:<40} {stored:<12} {derived_status:<20}{marker}")
 
-    unblocked = [t for t in queue if t.get("status") == "unblocked"]
+    unblocked = [
+        t
+        for t in queue
+        if derived.get(t.get("id", ""), {}).get("derived_status", "").split(" (warning")[0]
+        == "unblocked"
+    ]
     print("\nNext unblocked tasks:")
     if unblocked:
         for task in unblocked[:3]:
