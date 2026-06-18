@@ -50,12 +50,13 @@
       "plan_file": "docs/plans/04-port-phase-5-preview.md",
       "blocked_by": ["03-port-phases-3-4"],
       "blocks": ["05-integration-polish"],
-      "status": "planned",
-      "merge_commit": null,
+      "status": "merged",
+      "merge_commit": "34d59dc",
       "completed_at": null,
-      "merged_at": null,
+      "merged_at": "2026-06-18T11:20:00+00:00",
       "worktree": null,
-      "branch": null
+      "branch": "04-port-phase-5-preview",
+      "merge_strategy": "squash"
     },
     {
       "id": "05-integration-polish",
