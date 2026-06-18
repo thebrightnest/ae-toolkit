@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""aet-work next — Pick the next derived-unblocked task.
+"""aet-work next — Pick the next stored-ready task.
 
-Derives ground-truth statuses, refuses to proceed if plan drift is detected,
-and transitions the first topological derived-unblocked task to in-progress.
+Reads stored state, refuses to proceed if plan drift is detected, and
+transitions the first topological ready task to in_progress.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from queue import current_state, read_archive, read_queue, record_task_meta, wri
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pick the next unblocked task.")
+    parser = argparse.ArgumentParser(description="Pick the next ready task.")
     parser.add_argument(
         "--queue-file",
         default=".agents/work-queue.json",

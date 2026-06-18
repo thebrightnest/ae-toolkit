@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """aet-work status — Show the current state of the work queue.
 
-Checks plan drift against both the active queue and the archive, derives
-ground-truth statuses, and reports counts, next tasks, failed tasks, and
-worktree health.
+Checks plan drift against both the active queue and the archive, reads the
+stored state, and reports counts, next tasks, failed tasks, and worktree health.
 """
 
 from __future__ import annotations

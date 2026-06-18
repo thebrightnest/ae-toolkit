@@ -29,8 +29,6 @@ from queue import (
     current_state,
     get_next_unblocked,
     has_pending_tasks as queue_has_pending_tasks,
-    mark_awaiting_merge,
-    mark_status,
     read_queue,
     record_task_meta,
     write_queue,
@@ -236,8 +234,9 @@ def _mark_failed(queue_file: str, task_id: str, from_state: str | None) -> None:
     """Mark a task as failed, preferring the canonical state transition.
 
     Routes through ``aet-state transition`` so the stored ``state`` field is
-    updated. Falls back to the legacy ``mark_status`` write only when the
-    transition itself cannot be applied.
+    updated. If the transition cannot be applied (e.g., the task has already
+    moved to another state), re-read the queue and write the canonical
+    ``state`` field directly so reads never observe a stale effective state.
     """
     if from_state is None:
         from_state = "in_progress"
@@ -258,7 +257,11 @@ def _mark_failed(queue_file: str, task_id: str, from_state: str | None) -> None:
     if result.returncode != 0:
         print(f"   ⚠️  Could not transition {task_id} to failed: {result.stderr.strip()}")
         queue = read_queue(queue_file)
-        mark_status(queue, task_id, "failed", "pipeline")
+        for task in queue:
+            if task.get("id") == task_id:
+                task["state"] = "failed"
+                task["failed_stage"] = "pipeline"
+                break
         write_queue(queue_file, queue)
 
 
