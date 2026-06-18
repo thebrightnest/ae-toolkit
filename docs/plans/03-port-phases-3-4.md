@@ -15,15 +15,18 @@ Also implement taste profile reading/writing to `docs/designs/taste-profile.json
 
 ## Acceptance Criteria
 
-- [ ] Phase 3: Skill presents a complete design proposal covering all dimensions (aesthetic, typography, color, layout, spacing, motion)
-- [ ] Phase 3: Proposal includes specific font names (not generic defaults) and hex color values
-- [ ] Phase 3: SAFE/RISK breakdown clearly labels which choices are conservative vs. bold
-- [ ] Phase 3: User can accept, reject, or modify any aspect via conversation
-- [ ] Phase 4: Skill generates `DESIGN.md` with all required sections (Aesthetic Direction, Typography, Color System, Layout & Spacing, Motion & Animation, Component Patterns, Asset Guidelines, Accessibility)
-- [ ] Taste profile: Skill reads `docs/designs/taste-profile.json` at start if it exists
-- [ ] Taste profile: Skill updates `docs/designs/taste-profile.json` with approvals/rejections at end
-- [ ] Taste profile: Confidence scores decay 5% per week of inactivity
-- [ ] If taste profile contradicts user request, skill flags the conflict and asks how to proceed
+- [x] Phase 3: Skill presents a complete design proposal covering all dimensions (aesthetic, typography, color, layout, spacing, motion)
+- [x] Phase 3: Proposal includes specific font names (not generic defaults) and hex color values
+- [x] Phase 3: SAFE/RISK breakdown clearly labels which choices are conservative vs. bold
+- [x] Phase 3: User can accept, reject, or modify any aspect via conversation
+- [x] Phase 4: Skill generates `DESIGN.md` following the canonical section order (Overview → Colors → Typography → Layout → Elevation & Depth → Shapes → Components → Do's and Don'ts)
+- [x] Taste profile: Skill reads `docs/designs/taste-profile.json` at start if it exists
+- [x] Taste profile: Skill updates `docs/designs/taste-profile.json` with approvals/rejections at end
+- [x] Taste profile: Confidence scores decay 5% per week of inactivity
+- [x] If taste profile contradicts user request, skill flags the conflict and asks how to proceed
+
+_Stage: implemented_
+_Note: Phases 3–4 and taste profile handling are already present in AET-native form in `aet-design-system-creation/SKILL.md`, aligned with the Google design.md spec._
 
 ## Blocked by
 
