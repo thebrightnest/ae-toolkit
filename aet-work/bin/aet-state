@@ -246,15 +246,24 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
 
 
 def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
-    """Return (ok, message). ok=True means the transition is legal."""
-    current_status = task.get("status", "")
+    """Return (ok, message). ok=True means the state transition is legal.
+
+    Validates the recorded-forward lifecycle (ADR-011).  ``from_stage`` and
+    ``to_stage`` are canonical state values, not legacy status strings.
+    """
+    current_state = queue_lib.current_state(task)
     branch = task.get("branch")
     merge_commit = task.get("merge_commit")
     failure_reason = task.get("failure_reason")
 
-    # Basic: from_stage should match current status
-    if from_stage != current_status:
-        return (False, f"Current status is '{current_status}', not '{from_stage}'.")
+    # Basic: from_stage should match current state
+    if from_stage != current_state:
+        return (False, f"Current state is '{current_state}', not '{from_stage}'.")
+
+    # Transition must be legal in the lifecycle
+    legal = queue_lib.LEGAL_TRANSITIONS.get(from_stage, set())
+    if to_stage not in legal:
+        return (False, f"Illegal transition: {from_stage} -> {to_stage}.")
 
     # Cannot set merged without ancestry check
     if to_stage == "merged":
@@ -271,12 +280,50 @@ def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
         if failure_reason:
             return (False, "Cannot transition from abandoned: failure_reason must be cleared first.")
 
-    # Cannot set done without merge verification (or explicit skip)
-    if to_stage == "done":
-        if not merge_commit and not is_ancestor_of_main(branch, cwd=cwd):
-            return (False, "Cannot set done: merge verification required (merge_commit missing and branch not on main).")
-
     return (True, "Transition is valid.")
+
+
+def _apply_transition(queue_path, queue, task, from_state, to_state, by, evidence=None, cwd=None):
+    """Apply a validated state transition and propagate the forward frontier.
+
+    This is the only function that assigns ``task["state"]``.  It validates the
+    transition, appends history, promotes dependents after terminal transitions,
+    and writes the queue atomically.
+    """
+    ok, msg = validate_transition(task, from_state, to_state, cwd=cwd)
+    if not ok:
+        raise RuntimeError(msg)
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    task["state"] = to_state
+    # Keep legacy status in sync during the coexistence period (fods-02..fods-05).
+    task["status"] = queue_lib.state_to_status(to_state)
+
+    if to_state == "merged":
+        task["merged_at"] = now
+        task["completed_at"] = now
+    elif to_state in queue_lib.TERMINAL_STATES:
+        task["completed_at"] = now
+
+    queue_lib.append_history(task, from_state, to_state, by, evidence)
+
+    # Forward frontier: terminal transitions unblock dependents.
+    if to_state in queue_lib.TERMINAL_STATES:
+        for dep_id in task.get("blocks", []):
+            dep = find_task(queue, dep_id)
+            if not dep:
+                continue
+            pb = queue_lib.pending_blockers(dep)
+            if pb > 0:
+                pb -= 1
+                dep["pending_blockers"] = pb
+            if pb == 0 and queue_lib.current_state(dep) == "blocked":
+                dep["state"] = "ready"
+                dep["status"] = queue_lib.state_to_status("ready")
+                queue_lib.append_history(dep, "blocked", "ready", "release")
+
+    save_queue(queue_path, queue)
 
 
 def update_plan_footer(plan_path, stage):
@@ -346,22 +393,25 @@ def cmd_transition(args):
         print(f"Task not found: {args.task_id}", file=sys.stderr)
         return 1
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    ok, msg = validate_transition(task, args.from_stage, args.to_stage, args.reason, cwd=cwd)
-    if not ok:
+
+    if args.dry_run:
+        ok, msg = validate_transition(task, args.from_stage, args.to_stage, args.reason, cwd=cwd)
+        if ok:
+            print(f"[dry-run] Would transition {args.task_id} {args.from_stage} -> {args.to_stage}")
+            return 0
         print(msg, file=sys.stderr)
         return 1
 
-    if args.dry_run:
-        print(f"[dry-run] Would transition {args.task_id} {args.from_stage} -> {args.to_stage}")
-        return 0
+    evidence = {"reason": args.reason} if args.reason else None
+    try:
+        _apply_transition(
+            args.queue, queue, task, args.from_stage, args.to_stage,
+            by="transition", evidence=evidence, cwd=cwd,
+        )
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 1
 
-    task["status"] = args.to_stage
-    if args.to_stage == "merged":
-        task["merged_at"] = datetime.now(timezone.utc).isoformat()
-    if args.to_stage in ("done", "merged"):
-        task["completed_at"] = datetime.now(timezone.utc).isoformat()
-
-    save_queue(args.queue, queue)
     print(f"Transitioned {args.task_id}: {args.from_stage} -> {args.to_stage}")
     return 0
 
@@ -394,31 +444,38 @@ def cmd_record_merge(args):
         )
         return 1
 
-    current_status = task.get("status", "")
-    # Stash any existing merge_commit so validate_transition sees the resolved SHA.
+    current_state = queue_lib.current_state(task)
+    # Stash any existing merge_commit so we can revert on validation failure.
     previous_merge_commit = task.get("merge_commit")
+    previous_merge_strategy = task.get("merge_strategy")
     task["merge_commit"] = merge_commit
-    ok, msg = validate_transition(task, current_status, "merged", cwd=cwd)
-    if not ok:
+    task["merge_strategy"] = merge_strategy
+
+    if args.dry_run:
+        ok, msg = validate_transition(task, current_state, "merged", cwd=cwd)
+        if ok:
+            print(
+                f"[dry-run] Would record merge for {args.task_id}: "
+                f"{merge_commit} ({merge_strategy})"
+            )
+            return 0
         task["merge_commit"] = previous_merge_commit
+        task["merge_strategy"] = previous_merge_strategy
         print(msg, file=sys.stderr)
         return 1
 
-    if args.dry_run:
-        print(
-            f"[dry-run] Would record merge for {args.task_id}: "
-            f"{merge_commit} ({merge_strategy})"
+    evidence = {"merge_commit": merge_commit, "merge_strategy": merge_strategy}
+    try:
+        _apply_transition(
+            args.queue, queue, task, current_state, "merged",
+            by="record-merge", evidence=evidence, cwd=cwd,
         )
-        return 0
+    except RuntimeError as e:
+        task["merge_commit"] = previous_merge_commit
+        task["merge_strategy"] = previous_merge_strategy
+        print(str(e), file=sys.stderr)
+        return 1
 
-    now = datetime.now(timezone.utc).isoformat()
-    task["merge_commit"] = merge_commit
-    task["merge_strategy"] = merge_strategy
-    task["status"] = "merged"
-    task["merged_at"] = now
-    task["completed_at"] = now
-
-    save_queue(args.queue, queue)
     print(f"Recorded merge for {args.task_id}: {merge_commit} ({merge_strategy})")
     return 0
 

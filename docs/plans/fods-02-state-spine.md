@@ -69,5 +69,4 @@ Revert `aet-work/bin/aet-state` and `aet-work/lib/queue.py`. The legacy `status`
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_

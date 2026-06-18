@@ -382,5 +382,179 @@ class TestDeriveStatus(unittest.TestCase):
         self.assertTrue(derived["derived_status"].startswith("unblocked"))
 
 
+class TestStateTransition(unittest.TestCase):
+    """Tests for the forward-only recorded state lifecycle (fods-02)."""
+
+    def test_legal_transition_matrix(self):
+        """Every legal lifecycle transition is accepted by validate_transition."""
+        ancestry_responses = {
+            ("git", "merge-base", "--is-ancestor", "feat-001", "origin/main"): (0, "", ""),
+        }
+
+        for from_state, targets in aet_state.queue_lib.LEGAL_TRANSITIONS.items():
+            for to_state in targets:
+                # Pre-intake has neither state nor status; otherwise use state.
+                if from_state is None:
+                    task = {"id": "t", "branch": "feat-001"}
+                else:
+                    task = {"id": "t", "state": from_state, "branch": "feat-001"}
+                with patch.object(
+                    aet_state.subprocess, "run", side_effect=_subprocess_mock(ancestry_responses)
+                ):
+                    ok, msg = aet_state.validate_transition(task, from_state, to_state)
+                self.assertTrue(ok, f"{from_state} -> {to_state}: {msg}")
+
+    def test_illegal_transition_rejected_no_mutation(self):
+        """An illegal transition is rejected and the queue file is not mutated."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            queue = {"tasks": [{"id": "t1", "state": "planned"}]}
+            json.dump(queue, f)
+            queue_path = f.name
+
+        args = aet_state.argparse.Namespace(
+            command="transition",
+            task_id="t1",
+            from_stage="planned",
+            to_stage="merged",
+            queue=queue_path,
+            dry_run=False,
+            reason=None,
+        )
+
+        rc = aet_state.cmd_transition(args)
+        self.assertEqual(rc, 1)
+
+        with open(queue_path, "r", encoding="utf-8") as f:
+            after = json.load(f)
+        self.assertEqual(after["tasks"][0].get("state"), "planned")
+        self.assertNotIn("history", after["tasks"][0])
+
+    def test_history_entry_shape(self):
+        """A transition appends a history entry with the required shape."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            queue = {"tasks": [{"id": "t1", "state": "planned"}]}
+            json.dump(queue, f)
+            queue_path = f.name
+
+        args = aet_state.argparse.Namespace(
+            command="transition",
+            task_id="t1",
+            from_stage="planned",
+            to_stage="ready",
+            queue=queue_path,
+            dry_run=False,
+            reason=None,
+        )
+
+        rc = aet_state.cmd_transition(args)
+        self.assertEqual(rc, 0)
+
+        with open(queue_path, "r", encoding="utf-8") as f:
+            after = json.load(f)
+        task = after["tasks"][0]
+        self.assertEqual(task["state"], "ready")
+        self.assertEqual(len(task["history"]), 1)
+        entry = task["history"][0]
+        self.assertEqual(entry["from"], "planned")
+        self.assertEqual(entry["to"], "ready")
+        self.assertEqual(entry["by"], "transition")
+        self.assertIn("at", entry)
+
+    def test_terminal_transition_promotes_dependent(self):
+        """A terminal transition decrements pending_blockers and promotes dependents."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            queue = {
+                "tasks": [
+                    {
+                        "id": "blocker",
+                        "state": "awaiting_merge",
+                        "blocks": ["dependent"],
+                    },
+                    {
+                        "id": "dependent",
+                        "state": "blocked",
+                        "blocked_by": ["blocker"],
+                        "pending_blockers": 1,
+                    },
+                ]
+            }
+            json.dump(queue, f)
+            queue_path = f.name
+
+        args = aet_state.argparse.Namespace(
+            command="transition",
+            task_id="blocker",
+            from_stage="awaiting_merge",
+            to_stage="abandoned",
+            queue=queue_path,
+            dry_run=False,
+            reason="no longer needed",
+        )
+
+        rc = aet_state.cmd_transition(args)
+        self.assertEqual(rc, 0)
+
+        with open(queue_path, "r", encoding="utf-8") as f:
+            after = json.load(f)
+        by_id = {t["id"]: t for t in after["tasks"]}
+        self.assertEqual(by_id["blocker"]["state"], "abandoned")
+        self.assertEqual(by_id["dependent"]["state"], "ready")
+        self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
+        release_entries = [h for h in by_id["dependent"]["history"] if h["by"] == "release"]
+        self.assertEqual(len(release_entries), 1)
+        self.assertEqual(release_entries[0]["from"], "blocked")
+        self.assertEqual(release_entries[0]["to"], "ready")
+
+    def test_record_merge_drives_merged_and_promotes(self):
+        """record-merge reaches merged through the sole writer and unblocks dependents."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            queue = {
+                "tasks": [
+                    {
+                        "id": "blocker",
+                        "state": "awaiting_merge",
+                        "branch": "feat-blocker",
+                        "blocks": ["dependent"],
+                    },
+                    {
+                        "id": "dependent",
+                        "state": "blocked",
+                        "blocked_by": ["blocker"],
+                        "pending_blockers": 1,
+                    },
+                ]
+            }
+            json.dump(queue, f)
+            queue_path = f.name
+
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-blocker"): (0, "abc1234\n", ""),
+            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="blocker",
+            queue=queue_path,
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 0)
+        with open(queue_path, "r", encoding="utf-8") as f:
+            after = json.load(f)
+        by_id = {t["id"]: t for t in after["tasks"]}
+        self.assertEqual(by_id["blocker"]["state"], "merged")
+        self.assertEqual(by_id["blocker"]["merge_commit"], "abc1234")
+        self.assertEqual(by_id["dependent"]["state"], "ready")
+        self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
+        merge_entries = [h for h in by_id["blocker"]["history"] if h["by"] == "record-merge"]
+        self.assertEqual(len(merge_entries), 1)
+        self.assertEqual(merge_entries[0]["to"], "merged")
+
+
 if __name__ == "__main__":
     unittest.main()
