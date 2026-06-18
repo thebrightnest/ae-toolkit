@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -228,6 +229,232 @@ class TestProcessTaskPlanPresence(unittest.TestCase):
                 task, repo_root, _FAKE_ADAPTER, "standard"
             )
             self.assertFalse(result)
+
+
+def _write_queue(repo_root: str, tasks: list[dict]) -> str:
+    """Write a wrapper-format queue file and return its path."""
+    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
+    with open(queue_file, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "queue_updated_at": "2026-06-18T00:00:00Z",
+                "source_prd": "docs/prds/demo-prd.md",
+                "tasks": tasks,
+            },
+            f,
+            indent=2,
+        )
+    return queue_file
+
+
+class TestRunOneQueueBookkeeping(unittest.TestCase):
+    def test_run_single_records_branch_and_worktree_when_plan_is_queued(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo-plan.md",
+                        "blocked_by": [],
+                        "status": "planned",
+                    }
+                ],
+            )
+
+            args = _make_args(repo_root, plan_file)
+            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+                with patch.object(orchestrator, "process_task", return_value=True):
+                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+
+            self.assertEqual(exit_code, 0)
+            with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
+                queue = json.load(f)
+            task = queue["tasks"][0]
+            self.assertEqual(task["status"], "awaiting_merge")
+            self.assertEqual(task["state"], "awaiting_merge")
+            self.assertEqual(task["branch"], "demo")
+            self.assertEqual(task["worktree"], ".worktrees/demo")
+
+    def test_run_single_does_not_mutate_queue_when_plan_not_queued(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "other-plan.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: other\n---\n\n# Other\n\n_Stage: implemented_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo-plan.md",
+                        "blocked_by": [],
+                        "status": "planned",
+                    }
+                ],
+            )
+
+            args = _make_args(repo_root, plan_file)
+            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+                with patch.object(orchestrator, "process_task", return_value=True):
+                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+
+            self.assertEqual(exit_code, 0)
+            with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
+                queue = json.load(f)
+            task = queue["tasks"][0]
+            self.assertEqual(task["status"], "planned")
+            self.assertEqual(task.get("branch"), None)
+            self.assertEqual(task.get("worktree"), None)
+
+    def test_run_single_does_not_mutate_queue_when_spawned_by_batch(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo-plan.md",
+                        "blocked_by": [],
+                        "status": "planned",
+                    }
+                ],
+            )
+
+            args = _make_args(repo_root, plan_file)
+            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended", "AET_TASK_ID": "demo"}):
+                with patch.object(orchestrator, "process_task", return_value=True):
+                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+
+            self.assertEqual(exit_code, 0)
+            with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
+                queue = json.load(f)
+            task = queue["tasks"][0]
+            self.assertEqual(task["status"], "planned")
+            self.assertEqual(task.get("branch"), None)
+            self.assertEqual(task.get("worktree"), None)
+
+    def test_record_merge_succeeds_after_run_one(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            queue_file = _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo-plan.md",
+                        "blocked_by": [],
+                        "status": "planned",
+                    }
+                ],
+            )
+
+            args = _make_args(repo_root, plan_file)
+            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+                with patch.object(orchestrator, "process_task", return_value=True):
+                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+            self.assertEqual(exit_code, 0)
+
+            # Simulate the branch being merged into origin/main by fast-forwarding
+            # the local main to the worktree branch tip, then updating origin/main.
+            subprocess.run(
+                ["git", "-C", repo_root, "checkout", "main"],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "merge", "--ff-only", "demo"],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            aet_state_bin = str(Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state")
+            result = subprocess.run(
+                [sys.executable, aet_state_bin, "record-merge", "demo", queue_file],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            with open(queue_file, encoding="utf-8") as f:
+                queue = json.load(f)
+            task = queue["tasks"][0]
+            self.assertEqual(task["status"], "merged")
+            self.assertEqual(task["state"], "merged")
+            self.assertIn("merge_commit", task)
+            self.assertIsNotNone(task["merge_commit"])
 
 
 class TestRunSummaryTelemetry(unittest.TestCase):
