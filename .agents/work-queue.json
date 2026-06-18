@@ -1,5 +1,5 @@
 {
-  "queue_updated_at": "2026-06-18T22:04:28.290973",
+  "queue_updated_at": "2026-06-18T22:37:10.365160",
   "source_prd": "docs/prds/forward-only-deterministic-work-state-prd.md",
   "tasks": [
     {
@@ -1177,6 +1177,19 @@
         "fods-06-migration-reconcile",
         "fods-07-live-settled-partition"
       ],
+      "blocks": [],
+      "status": "planned",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null
+    },
+    {
+      "id": "run-one-queue-bookkeeping-plan",
+      "title": "Plan: Make `run-one` update the work queue",
+      "plan_file": "docs/plans/run-one-queue-bookkeeping-plan.md",
+      "blocked_by": [],
       "blocks": [],
       "status": "planned",
       "merge_commit": null,
