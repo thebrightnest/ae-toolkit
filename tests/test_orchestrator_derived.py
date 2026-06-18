@@ -118,6 +118,50 @@ class TestStoredStateHelpers(unittest.TestCase):
         self.assertFalse(orchestrator.has_pending_tasks(queue))
 
 
+class TestRecordStage(unittest.TestCase):
+    def test_record_stage_persists_to_queue(self):
+        """_record_stage calls aet-state set-stage and updates the task."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            agents_dir = Path(repo_root) / ".agents"
+            agents_dir.mkdir()
+            queue_file = agents_dir / "work-queue.json"
+            queue = [{"id": "t1", "state": "in_progress", "title": "One"}]
+            queue_file.write_text(json.dumps(queue), encoding="utf-8")
+
+            task = {"id": "t1"}
+            result = orchestrator._record_stage(task, "implemented", repo_root)
+
+            self.assertTrue(result)
+            self.assertEqual(task["stage"], "implemented")
+            data = json.loads(queue_file.read_text(encoding="utf-8"))
+            self.assertEqual(data[0]["stage"], "implemented")
+            self.assertEqual(data[0]["history"][0]["to"], "implemented")
+
+    def test_record_stage_without_queue_updates_in_memory(self):
+        """_record_stage updates the task dict directly when no queue exists."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            task = {"id": "t1"}
+            result = orchestrator._record_stage(task, "implemented", repo_root)
+
+            self.assertTrue(result)
+            self.assertEqual(task["stage"], "implemented")
+
+    def test_record_stage_returns_false_when_set_stage_fails(self):
+        """_record_stage returns False if aet-state set-stage rejects."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            agents_dir = Path(repo_root) / ".agents"
+            agents_dir.mkdir()
+            queue_file = agents_dir / "work-queue.json"
+            queue = [{"id": "t1", "state": "ready", "title": "One"}]
+            queue_file.write_text(json.dumps(queue), encoding="utf-8")
+
+            task = {"id": "t1"}
+            result = orchestrator._record_stage(task, "implemented", repo_root)
+
+            self.assertFalse(result)
+            self.assertNotIn("stage", task)
+
+
 class TestMarkFailed(unittest.TestCase):
     def test_mark_failed_updates_canonical_state(self):
         """_mark_failed writes the failed state through the transition writer."""
