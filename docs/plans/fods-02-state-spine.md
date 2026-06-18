@@ -69,5 +69,5 @@ Revert `aet-work/bin/aet-state` and `aet-work/lib/queue.py`. The legacy `status`
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
