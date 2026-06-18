@@ -1,5 +1,5 @@
 {
-  "archived_at": "2026-06-17T17:48:09.432269",
+  "archived_at": "2026-06-18T22:31:47.386786",
   "tasks": [
     {
       "id": "aet-design-system-creation-05",
@@ -1381,6 +1381,103 @@
       "worktree": null,
       "branch": "aet-state-telemetry-foundation",
       "failed_stage": "pipeline"
+    },
+    {
+      "id": "aet-validate-scope-closure-discipline-plan",
+      "title": "Plan: Add Closure Checks to Planning and Validation Skills",
+      "plan_file": "docs/plans/aet-validate-scope-closure-discipline-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "merged",
+      "merge_commit": "b5d0b0e7556e9519512d9e2521f4d1b17342b4c5",
+      "completed_at": null,
+      "merged_at": "2026-06-18T01:05:00+00:00",
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": "squash"
+    },
+    {
+      "id": "aet-work-state-refactor-derive-plan",
+      "title": "Plan: Make `aet-state derive` Blocker-Aware",
+      "plan_file": "docs/plans/aet-work-state-refactor-derive-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "merged",
+      "merge_commit": "275d4ca2334d8a106c72ab806fbf399e55ec407e",
+      "completed_at": "2026-06-17T21:50:30.363362",
+      "merged_at": "2026-06-17T21:14:54.410647+00:00",
+      "worktree": null,
+      "branch": "aet-work-state-refactor-derive",
+      "merge_strategy": "squash"
+    },
+    {
+      "id": "aet-work-state-refactor-status-next-plan",
+      "title": "Plan: Update `status`, `next`, and Orchestrator to Use Derived State",
+      "plan_file": "docs/plans/aet-work-state-refactor-status-next-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "merged",
+      "merge_commit": "5937509a564542f0e2794ef830bbe5dbf14a1d11",
+      "completed_at": null,
+      "merged_at": "2026-06-18T00:43:00+00:00",
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": "squash"
+    },
+    {
+      "id": "aet-work-state-refactor-sync-init-plan",
+      "title": "Plan: Simplify `sync` and Create `init-queue`",
+      "plan_file": "docs/plans/aet-work-state-refactor-sync-init-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "merged",
+      "merge_commit": "68f632240b1936612d96ea49b7628bb74755a81d",
+      "completed_at": null,
+      "merged_at": "2026-06-18T00:54:00+00:00",
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": "squash"
+    },
+    {
+      "id": "fods-01-record-merge",
+      "title": "Plan: Deterministic Merge Recording (`aet-state record-merge`)",
+      "plan_file": "docs/plans/fods-01-record-merge.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "merged",
+      "merge_commit": "2ab940e45ad1dde45145428be6bf16fc33c07328",
+      "completed_at": "2026-06-18T18:40:08.551948+00:00",
+      "merged_at": "2026-06-18T18:40:08.551948+00:00",
+      "worktree": null,
+      "branch": "fods-01-record-merge",
+      "merge_strategy": "squash"
+    },
+    {
+      "id": "2026-06-18-orchestrator-run-one-hardening",
+      "title": "Plan: Harden `run-one` \u2014 main-hygiene gate, plan-presence guard, unmaskable run outcome",
+      "plan_file": "docs/plans/2026-06-18-orchestrator-run-one-hardening.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "merged",
+      "state": "merged",
+      "merge_commit": "16a631f66d38bdf713db35f438b3f58805ee2f70",
+      "completed_at": "2026-06-18T21:31:32.366886+00:00",
+      "merged_at": "2026-06-18T21:31:32.366886+00:00",
+      "worktree": ".worktrees/2026-06-18-orchestrator-run-one-hardening",
+      "branch": "2026-06-18-orchestrator-run-one-hardening",
+      "merge_strategy": "squash",
+      "history": [
+        {
+          "from": "awaiting_merge",
+          "to": "merged",
+          "at": "2026-06-18T21:31:32.367198+00:00",
+          "by": "record-merge",
+          "evidence": {
+            "merge_commit": "16a631f66d38bdf713db35f438b3f58805ee2f70",
+            "merge_strategy": "squash"
+          }
+        }
+      ]
     }
   ]
 }
