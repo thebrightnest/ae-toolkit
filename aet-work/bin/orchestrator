@@ -57,6 +57,49 @@ signal.signal(signal.SIGINT, _handle_signal)
 signal.signal(signal.SIGTERM, _handle_signal)
 
 
+def get_current_stage(task: dict, plan_file: str) -> str:
+    """Return the current pipeline stage from the task record.
+
+    The footer is consulted only as a backward-compatible fallback; it is
+    never used to make scheduling decisions (ADR-011).
+    """
+    return task.get("stage") or read_plan_stage(plan_file) or "plan-approved"
+
+
+def _record_stage(task: dict, stage: str, repo_root: str) -> bool:
+    """Persist an advanced pipeline stage to the task record.
+
+    When the task is tracked in the work queue, this routes through
+    ``aet-state set-stage`` so the sole-writer rule is preserved.  Otherwise
+    the in-memory task dict is updated directly (single-plan mode without a
+    queue).
+    """
+    task_id = task.get("id")
+    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    if task_id and os.path.exists(queue_file):
+        aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+        result = subprocess.run(
+            [
+                sys.executable,
+                aet_state_bin,
+                "set-stage",
+                task_id,
+                stage,
+                queue_file,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            task["stage"] = stage
+            return True
+        print(f"   ⚠️  Could not set stage for {task_id}: {result.stderr.strip()}")
+        return False
+
+    task["stage"] = stage
+    return True
+
+
 def enforce_main_hygiene(repo_root: str) -> bool:
     """Check main hygiene and decide whether to proceed.
 
@@ -154,8 +197,8 @@ def process_task(
         )
         return False
 
-    # Determine current stage from plan footer
-    current_stage = read_plan_stage(plan_file) or "plan-approved"
+    # Determine current stage from the task record; footer is only a breadcrumb.
+    current_stage = get_current_stage(task, plan_file)
 
     # Group stages by isolation level
     groups = group_stages_by_session(isolation)
@@ -207,8 +250,15 @@ def process_task(
                 print(f"   ❌ Stage failed with exit code {exit_code}")
                 return False
 
-            # Verify stage advancement
-            ok, msg = verify_stage_advancement(plan_file, worktree_dir, next_stage_name, retries=1)
+            # Record the advanced stage in the task record.
+            if not _record_stage(task, next_stage_name, repo_root):
+                print(f"   ❌ Could not record stage {next_stage_name} for {task_id}")
+                return False
+
+            # Verify stage advancement against the recorded stage.
+            ok, msg = verify_stage_advancement(
+                task.get("stage"), worktree_dir, next_stage_name, retries=1
+            )
             if not ok:
                 print(f"   ❌ Stage verification failed: {msg}")
                 return False
@@ -685,14 +735,8 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
     end_time = telemetry.iso_now()
 
-    # Read the final stage from the worktree plan file, falling back to the
-    # original plan path if no batch-provided worktree was used.
-    worktree_plan_file = plan_file
-    if worktree_dir:
-        worktree_plan_file = os.path.join(
-            worktree_dir, os.path.relpath(plan_file, repo_root)
-        )
-    final_stage = read_plan_stage(worktree_plan_file) or "plan-approved"
+    # Read the final stage from the task record; the footer is only a breadcrumb.
+    final_stage = task.get("stage") or read_plan_stage(plan_file) or "plan-approved"
 
     telemetry.append_record(
         telemetry.run_summary_record(
