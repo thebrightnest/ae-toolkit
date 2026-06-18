@@ -32,7 +32,8 @@ from queue import (
     record_task_meta,
     write_queue,
 )
-from verifier import verify_stage_advancement
+import telemetry
+from verifier import read_plan_stage, verify_stage_advancement
 from worktree import (
     check_main_hygiene,
     copy_untracked_files,
@@ -53,6 +54,25 @@ def _handle_signal(signum: int, _frame) -> None:
 
 signal.signal(signal.SIGINT, _handle_signal)
 signal.signal(signal.SIGTERM, _handle_signal)
+
+
+def enforce_main_hygiene(repo_root: str) -> bool:
+    """Check main hygiene and decide whether to proceed.
+
+    Returns True when the caller should continue, False when it should halt.
+    In unattended mode a violation prints a warning and returns True; in
+    interactive mode it prints an error and returns False.
+    """
+    ok, msg = check_main_hygiene(repo_root)
+    if ok:
+        return True
+
+    if os.environ.get("AET_EXECUTION_MODE") == "unattended":
+        print(f"   ⚠️  {msg}. Continuing in unattended mode.")
+        return True
+
+    print(f"⛔ {msg}. Halting.")
+    return False
 
 
 def parse_args() -> argparse.Namespace:
@@ -124,9 +144,16 @@ def process_task(
     # Use the worktree copy of the plan file for stages and verification.
     plan_file = os.path.join(worktree_dir, os.path.relpath(plan_file, repo_root))
 
-    # Determine current stage from plan footer
-    from verifier import read_plan_stage
+    # Fail loudly if the plan is missing in the worktree. A missing plan usually
+    # means the base branch (origin/main) is stale relative to the plan commit.
+    if not os.path.exists(plan_file):
+        print(
+            "   ❌ Plan not found in worktree — base may be stale; "
+            "ensure the plan is committed and pushed to origin/main"
+        )
+        return False
 
+    # Determine current stage from plan footer
     current_stage = read_plan_stage(plan_file) or "plan-approved"
 
     # Group stages by isolation level
@@ -234,15 +261,41 @@ def has_derived_pending_tasks(
     return False
 
 
+def _log_path(repo_root: str) -> str:
+    """Return the repo-root-relative telemetry log path."""
+    return os.path.join(repo_root, telemetry.DEFAULT_LOG_PATH)
+
+
 def run_batch(args: argparse.Namespace, adapter) -> int:
     """Run batch mode from queue file."""
     queue_file = args.queue_file
     repo_root = args.repo_root
     max_jobs = min(args.max_jobs, 8)
+    log_path = _log_path(repo_root)
+
+    run_id = telemetry.new_run_id()
+    start_time = telemetry.iso_now()
+    task_ids: list[str] = []
 
     queue = read_queue(queue_file)
     if not queue:
         print("✅ Queue is empty.")
+        end_time = telemetry.iso_now()
+        telemetry.append_record(
+            telemetry.run_summary_record(
+                run_id=run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=0,
+                outcome="success",
+                exit_code=0,
+                task_ids=[],
+                final_stage=None,
+            ),
+            log_path=log_path,
+        )
         return 0
 
     print(f"🚀 Batch orchestrator starting")
@@ -251,13 +304,24 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     print()
 
     # Check main hygiene
-    ok, msg = check_main_hygiene(repo_root)
-    if not ok:
-        if os.environ.get("AET_EXECUTION_MODE") == "unattended":
-            print(f"   ⚠️  {msg}. Continuing in unattended mode.")
-        else:
-            print(f"⛔ {msg}. Halting.")
-            return 1
+    if not enforce_main_hygiene(repo_root):
+        end_time = telemetry.iso_now()
+        telemetry.append_record(
+            telemetry.run_summary_record(
+                run_id=run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=0,
+                outcome="failure",
+                exit_code=1,
+                task_ids=[],
+                final_stage=None,
+            ),
+            log_path=log_path,
+        )
+        return 1
 
     running: dict[str, subprocess.Popen] = {}
     successes = 0
@@ -319,6 +383,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             proc = subprocess.Popen(cmd, env=env)
             running[task_id] = proc
             spawned_this_cycle.add(task_id)
+            task_ids.append(task_id)
             print(f"▶️  Spawned {task.get('title', task_id)} (PID {proc.pid})")
 
             # Refresh derived state so the next spawn pass respects the branch we
@@ -361,20 +426,61 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             time.sleep(0.2)
 
     # Summary
+    exit_code = 1 if failures > 0 else 0
+    end_time = telemetry.iso_now()
+    telemetry.append_record(
+        telemetry.run_summary_record(
+            run_id=run_id,
+            start_time=start_time,
+            end_time=end_time,
+            tasks_spawned=len(task_ids),
+            tasks_succeeded=successes,
+            tasks_failed=failures,
+            outcome="success" if exit_code == 0 else "failure",
+            exit_code=exit_code,
+            task_ids=task_ids,
+            final_stage=None,
+        ),
+        log_path=log_path,
+    )
     print()
     print(f"🏁 Orchestrator finished.")
     print(f"   Succeeded: {successes}")
     print(f"   Failed:    {failures}")
-    return 1 if failures > 0 else 0
+    return exit_code
 
 
 def run_single(args: argparse.Namespace, adapter) -> int:
     """Run single-plan mode."""
     repo_root = args.repo_root
     plan_file = args.plan_file
+    log_path = _log_path(repo_root)
+
+    run_id = telemetry.new_run_id()
+    start_time = telemetry.iso_now()
 
     if not os.path.isabs(plan_file):
         plan_file = os.path.join(repo_root, plan_file)
+
+    # Check main hygiene before any worktree work.
+    if not enforce_main_hygiene(repo_root):
+        end_time = telemetry.iso_now()
+        telemetry.append_record(
+            telemetry.run_summary_record(
+                run_id=run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=1,
+                outcome="failure",
+                exit_code=1,
+                task_ids=[],
+                final_stage=None,
+            ),
+            log_path=log_path,
+        )
+        return 1
 
     # Create a synthetic task. Prefer the batch-provided task ID/worktree so
     # parent and child agree on worktree/branch names (e.g. "*-plan" suffixes).
@@ -390,7 +496,34 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     }
 
     success = process_task(task, repo_root, adapter, args.isolation, worktree_dir)
-    return 0 if success else 1
+    exit_code = 0 if success else 1
+    end_time = telemetry.iso_now()
+
+    # Read the final stage from the worktree plan file, falling back to the
+    # original plan path if no batch-provided worktree was used.
+    worktree_plan_file = plan_file
+    if worktree_dir:
+        worktree_plan_file = os.path.join(
+            worktree_dir, os.path.relpath(plan_file, repo_root)
+        )
+    final_stage = read_plan_stage(worktree_plan_file) or "plan-approved"
+
+    telemetry.append_record(
+        telemetry.run_summary_record(
+            run_id=run_id,
+            start_time=start_time,
+            end_time=end_time,
+            tasks_spawned=1,
+            tasks_succeeded=1 if success else 0,
+            tasks_failed=0 if success else 1,
+            outcome="success" if success else "failure",
+            exit_code=exit_code,
+            task_ids=[task_id],
+            final_stage=final_stage,
+        ),
+        log_path=log_path,
+    )
+    return exit_code
 
 
 def main() -> int:
