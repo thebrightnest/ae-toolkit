@@ -12,6 +12,7 @@ import unittest
 from queue import (
     get_next_unblocked,
     has_pending_tasks,
+    mark_awaiting_merge,
     mark_completed,
     mark_status,
     read_queue,
@@ -101,6 +102,16 @@ class TestQueue(unittest.TestCase):
         mark_completed(queue, "t1")
         self.assertEqual(queue[0]["status"], "done")
         self.assertIn("completed_at", queue[0])
+
+    def test_mark_awaiting_merge(self):
+        queue = [{"id": "t1", "status": "in-progress"}]
+        mark_awaiting_merge(queue, "t1")
+        self.assertEqual(queue[0]["status"], "awaiting_merge")
+        self.assertIn("completed_at", queue[0])
+
+    def test_has_pending_tasks_awaiting_merge(self):
+        queue = [{"id": "t1", "status": "awaiting_merge"}]
+        self.assertTrue(has_pending_tasks(queue))
 
     def test_record_task_meta(self):
         queue = [{"id": "t1"}]

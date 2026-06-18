@@ -193,59 +193,41 @@ Run the pre-merge validation gate.
 
 15. **Merge Verification** — after the PR is created and the user indicates it has been merged:
 
-    1. Run `git fetch origin`
+    Run the deterministic merge recorder:
 
-    2. **Merge Strategy Detection** (Step 12a):
+    ```bash
+    aet-state record-merge <task_id>
+    ```
 
-       - Run: `git merge-base --is-ancestor HEAD origin/main`
-       - If exit 0: regular merge detected. Record `merge_strategy: regular` and continue to Step 13.
-       - If exit 1: possible squash merge. Run secondary verification:
+    This command:
 
-         ```bash
-         PR_NUMBER=$(gh pr view --json number --jq '.number')
-         MERGE_COMMIT=$(gh pr view $PR_NUMBER --json mergeCommit --jq '.mergeCommit.oid')
-         git merge-base --is-ancestor $MERGE_COMMIT origin/main
-         ```
+    - Runs `git fetch origin`.
+    - Detects a regular merge when the branch tip is an ancestor of `origin/main`.
+    - Detects a squash merge via `gh pr view <branch> --json mergeCommit` and verifies the SHA is an ancestor of `origin/main`.
+    - Falls back to diff-equivalence detection against recent `origin/main` commits (see [references/squash-merge-handling.md](references/squash-merge-handling.md)).
+    - On success, atomically writes `merge_commit`, `merge_strategy`, `status: merged`, and `merged_at` to `.agents/work-queue.json`.
+    - On failure, exits non-zero without mutating the queue.
 
-         - If exit 0: squash merge verified. Record `merge_commit: $MERGE_COMMIT` and `merge_strategy: squash`. Continue to Step 13 with force-delete.
-         - If exit 1: verification failed. STOP.
+    If `aet-state record-merge` fails:
 
-       - If `gh` is unavailable or the PR has no mergeCommit data, fall back to diff-based verification (see [references/squash-merge-handling.md](references/squash-merge-handling.md)).
+    - **STOP** and print:
 
-    3. If verification fails:
+      ```
+      ⚠️  MERGE VERIFICATION FAILED
+          This branch's commits are NOT ancestors of origin/main.
+          Possible causes:
+          - PR was merged locally but not pushed
+          - PR targeted a different base branch
+          - A git reset --hard origin/main discarded the merge
+          - PR was squash-merged and the squash commit could not be verified
 
-       - **STOP** and print:
+          DO NOT DELETE THIS BRANCH until the merge is confirmed on origin/main.
+      ```
 
-         ```
-         ⚠️  MERGE VERIFICATION FAILED
-             This branch's commits are NOT ancestors of origin/main.
-             Possible causes:
-             - PR was merged locally but not pushed
-             - PR targeted a different base branch
-             - A git reset --hard origin/main discarded the merge
-             - PR was squash-merged and the squash commit could not be verified
+    - Offer to open the PR in the browser for manual verification.
+    - Exit with non-zero status.
 
-             DO NOT DELETE THIS BRANCH until the merge is confirmed on origin/main.
-         ```
-
-       - Offer to open the PR in the browser for manual verification
-       - Exit with non-zero status
-
-    4. If verification passes:
-
-       - Print: `✅ Merge verified on origin/main`
-       - Update `.agents/work-queue.json` with the merge result:
-
-         ```json
-         {
-           "merge_commit": "<commit-sha>",
-           "merge_strategy": "regular|squash"
-         }
-         ```
-
-       - Proceed to branch deletion (Step 13)
-
-16. **Safe Branch Deletion** — only run if merge verification passed:
+16. **Safe Branch Deletion** — only run if `aet-state record-merge` succeeded:
     - Regular merge: `git branch -d <branch>`
     - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)
     - Delete the remote branch: `git push origin --delete <branch>`

@@ -2,6 +2,8 @@
 
 import importlib.machinery
 import importlib.util
+import json
+import os
 import sys
 import tempfile
 import unittest
@@ -35,6 +37,163 @@ def _git_mock(responses):
         return MockResult(rc, out, err)
 
     return mock_run
+
+
+def _subprocess_mock(responses):
+    """Return a mock subprocess.run that answers git and gh commands.
+
+    responses maps tuple(program, *args) -> (returncode, stdout, stderr).
+    """
+
+    def mock_run(cmd, **kwargs):
+        args = tuple(cmd)
+        rc, out, err = responses.get(args, (1, "", ""))
+        return MockResult(rc, out, err)
+
+    return mock_run
+
+
+class TestRecordMerge(unittest.TestCase):
+    def setUp(self):
+        self.queue_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        self.queue = {
+            "tasks": [
+                {
+                    "id": "t1",
+                    "status": "awaiting_merge",
+                    "branch": "feat-001",
+                    "plan_file": "docs/plans/t1.md",
+                }
+            ]
+        }
+        json.dump(self.queue, self.queue_file)
+        self.queue_file.close()
+
+    def tearDown(self):
+        os.unlink(self.queue_file.name)
+
+    def _load_task(self):
+        with open(self.queue_file.name, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data["tasks"][0]
+
+    def test_regular_merge(self):
+        """A branch tip that is an ancestor of origin/main is recorded as regular."""
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=self.queue_file.name,
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 0)
+        task = self._load_task()
+        self.assertEqual(task["status"], "merged")
+        self.assertEqual(task["merge_commit"], "abc1234")
+        self.assertEqual(task["merge_strategy"], "regular")
+        self.assertIn("merged_at", task)
+
+    def test_squash_merge_via_gh(self):
+        """A squash merge resolved via gh pr view is recorded."""
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
+            ("git", "merge-base", "--is-ancestor", "branch_tip", "origin/main"): (1, "", ""),
+            ("gh", "pr", "view", "feat-001", "--json", "mergeCommit"): (
+                0,
+                '{"mergeCommit":{"oid":"squash_sha"}}',
+                "",
+            ),
+            ("git", "merge-base", "--is-ancestor", "squash_sha", "origin/main"): (0, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=self.queue_file.name,
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 0)
+        task = self._load_task()
+        self.assertEqual(task["status"], "merged")
+        self.assertEqual(task["merge_commit"], "squash_sha")
+        self.assertEqual(task["merge_strategy"], "squash")
+
+    def test_diff_fallback(self):
+        """When gh fails, a matching diff on origin/main is used."""
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
+            ("git", "merge-base", "--is-ancestor", "branch_tip", "origin/main"): (1, "", ""),
+            ("gh", "pr", "view", "feat-001", "--json", "mergeCommit"): (1, "", "gh failed"),
+            ("git", "merge-base", "feat-001", "origin/main"): (0, "merge_base\n", ""),
+            ("git", "diff", "merge_base..feat-001"): (0, "branch diff\n", ""),
+            ("git", "rev-list", "--max-count", "20", "origin/main"): (
+                0,
+                "squash_sha\nother_sha\n",
+                "",
+            ),
+            ("git", "diff", "squash_sha^..squash_sha"): (0, "branch diff\n", ""),
+            ("git", "diff", "other_sha^..other_sha"): (0, "other diff\n", ""),
+            ("git", "merge-base", "--is-ancestor", "squash_sha", "origin/main"): (0, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=self.queue_file.name,
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 0)
+        task = self._load_task()
+        self.assertEqual(task["status"], "merged")
+        self.assertEqual(task["merge_commit"], "squash_sha")
+        self.assertEqual(task["merge_strategy"], "squash")
+
+    def test_unresolved_leaves_queue_unchanged(self):
+        """If no merge commit can be resolved, the command fails without mutating the queue."""
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
+            ("git", "merge-base", "--is-ancestor", "branch_tip", "origin/main"): (1, "", ""),
+            ("gh", "pr", "view", "feat-001", "--json", "mergeCommit"): (1, "", "gh failed"),
+            ("git", "merge-base", "feat-001", "origin/main"): (0, "merge_base\n", ""),
+            ("git", "diff", "merge_base..feat-001"): (0, "branch diff\n", ""),
+            ("git", "rev-list", "--max-count", "20", "origin/main"): (0, "other_sha\n", ""),
+            ("git", "diff", "other_sha^..other_sha"): (0, "other diff\n", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=self.queue_file.name,
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 1)
+        task = self._load_task()
+        self.assertEqual(task["status"], "awaiting_merge")
+        self.assertNotIn("merge_commit", task)
 
 
 class TestDeriveStatus(unittest.TestCase):
