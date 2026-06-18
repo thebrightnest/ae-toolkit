@@ -71,5 +71,5 @@ Revert `aet-work/bin/orchestrator`, `aet-work/lib/telemetry.py`, the `aet-work/S
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
