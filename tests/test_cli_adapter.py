@@ -19,6 +19,13 @@ class TestCLIAdapter(unittest.TestCase):
         self.assertIsNone(adapter.workdir_flag)
         self.assertEqual(adapter.headless_flag, "")
 
+    def test_kimi_build_cmd_no_headless_flag(self):
+        """kimi rejects combining -p/--prompt with --yolo; use -p alone."""
+        adapter = resolve_cli_adapter("kimi")
+        cmd = adapter.build_cmd("run tests", headless=True)
+        self.assertEqual(cmd, ["kimi", "-p", "run tests"])
+        self.assertNotIn("--yolo", cmd)
+
     def test_claude_adapter(self):
         adapter = resolve_cli_adapter("claude")
         self.assertEqual(adapter.name, "claude")
