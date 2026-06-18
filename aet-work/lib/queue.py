@@ -4,11 +4,114 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 # Tracks wrapper metadata per queue file so write_queue can preserve it.
 _queue_wrappers: dict[str, dict[str, Any]] = {}
+
+# ---------------------------------------------------------------------------
+# Forward-only deterministic state model (ADR-011)
+# ---------------------------------------------------------------------------
+
+STATES = {
+    "planned",
+    "ready",
+    "blocked",
+    "in_progress",
+    "awaiting_merge",
+    "merged",
+    "abandoned",
+    "failed",
+}
+
+TERMINAL_STATES = {"merged", "abandoned"}
+
+# Legal transitions for the recorded-forward lifecycle.  ``None`` is the
+# pre-intake state used only during initial sync.  ``abandoned`` is a terminal
+# human-initiated transition allowed from every non-terminal state.
+LEGAL_TRANSITIONS: dict[str | None, set[str]] = {
+    None: {"planned"},
+    "planned": {"blocked", "ready", "abandoned"},
+    "blocked": {"ready", "abandoned"},
+    "ready": {"in_progress", "abandoned"},
+    "in_progress": {"in_progress", "awaiting_merge", "failed", "abandoned"},
+    "awaiting_merge": {"merged", "abandoned"},
+    "merged": set(),
+    "abandoned": set(),
+    "failed": {"in_progress", "ready", "blocked", "abandoned"},
+}
+
+# Coexistence shim: map between the new ``state`` field and the legacy
+# ``status`` field until the migration in fods-06 retires ``status``.
+_STATE_TO_STATUS: dict[str | None, str] = {
+    None: "planned",
+    "ready": "unblocked",
+    "in_progress": "in-progress",
+}
+
+_STATUS_TO_STATE: dict[str | None, str] = {
+    None: "planned",
+    "unblocked": "ready",
+    "in-progress": "in_progress",
+    "done": "awaiting_merge",
+    "merge_verified": "awaiting_merge",
+}
+
+
+def state_to_status(state: str | None) -> str:
+    """Return the legacy status that corresponds to ``state``."""
+    return _STATE_TO_STATUS.get(state, state or "planned")
+
+
+def status_to_state(status: str | None) -> str:
+    """Return the canonical state that corresponds to legacy ``status``."""
+    return _STATUS_TO_STATE.get(status, status or "planned")
+
+
+def current_state(task: dict[str, Any]) -> str | None:
+    """Return the task's recorded state, falling back to legacy status.
+
+    Returns ``None`` only when neither ``state`` nor ``status`` is set
+    (pre-intake).
+    """
+    state = task.get("state")
+    if state is not None:
+        return state
+    status = task.get("status")
+    if status is not None:
+        return status_to_state(status)
+    return None
+
+
+def append_history(
+    task: dict[str, Any],
+    frm: str | None,
+    to: str,
+    by: str,
+    evidence: dict[str, Any] | None = None,
+) -> None:
+    """Append a transition entry to the task's append-only history."""
+    entry: dict[str, Any] = {
+        "from": frm,
+        "to": to,
+        "at": datetime.now(timezone.utc).isoformat(),
+        "by": by,
+    }
+    if evidence:
+        entry["evidence"] = evidence
+    task.setdefault("history", []).append(entry)
+
+
+def pending_blockers(task: dict[str, Any]) -> int:
+    """Return the number of blockers still pending for this task.
+
+    If the counter has not been initialized, derive it from ``blocked_by``.
+    """
+    pb = task.get("pending_blockers")
+    if pb is not None:
+        return pb
+    return len(task.get("blocked_by", []))
 
 
 def read_queue(queue_file: str) -> list[dict[str, Any]]:
