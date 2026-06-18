@@ -1191,12 +1191,38 @@
       "plan_file": "docs/plans/run-one-queue-bookkeeping-plan.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null
+      "status": "merged",
+      "merge_commit": "61de14d474a15a6b9f0c6662960269f0ff6173f2",
+      "completed_at": "2026-06-18T22:09:45.297618+00:00",
+      "merged_at": "2026-06-18T22:09:45.297618+00:00",
+      "worktree": ".worktrees/run-one-queue-bookkeeping-plan",
+      "branch": "run-one-queue-bookkeeping-plan",
+      "state": "merged",
+      "history": [
+        {
+          "from": "planned",
+          "to": "in_progress",
+          "at": "2026-06-18T22:09:37.393629+00:00",
+          "by": "transition"
+        },
+        {
+          "from": "in_progress",
+          "to": "awaiting_merge",
+          "at": "2026-06-18T22:09:37.529069+00:00",
+          "by": "transition"
+        },
+        {
+          "from": "awaiting_merge",
+          "to": "merged",
+          "at": "2026-06-18T22:09:45.297993+00:00",
+          "by": "record-merge",
+          "evidence": {
+            "merge_commit": "61de14d474a15a6b9f0c6662960269f0ff6173f2",
+            "merge_strategy": "squash"
+          }
+        }
+      ],
+      "merge_strategy": "squash"
     }
   ]
 }
