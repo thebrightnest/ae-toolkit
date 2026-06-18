@@ -1105,12 +1105,27 @@
       "plan_file": "docs/plans/fods-03-read-path-zero-git.md",
       "blocked_by": ["fods-02-state-spine"],
       "blocks": ["fods-04-stage-substate", "fods-07-live-settled-partition"],
-      "status": "planned",
+      "status": "awaiting_merge",
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null
+      "worktree": ".worktrees/fods-03-read-path-zero-git",
+      "branch": "fods-03-read-path-zero-git",
+      "state": "awaiting_merge",
+      "history": [
+        {
+          "from": "planned",
+          "to": "in_progress",
+          "at": "2026-06-18T22:18:23.967866+00:00",
+          "by": "transition"
+        },
+        {
+          "from": "in_progress",
+          "to": "awaiting_merge",
+          "at": "2026-06-18T22:35:35.395749+00:00",
+          "by": "transition"
+        }
+      ]
     },
     {
       "id": "fods-04-stage-substate",
