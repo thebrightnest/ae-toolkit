@@ -7,3 +7,6 @@ node_modules/
 .qa-report.md
 .security-*.md
 __pycache__
+.agents/execution.log.jsonl
+aet-work.log
+aet-work-*.log
