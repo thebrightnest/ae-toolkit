@@ -71,5 +71,5 @@ The migration runs against a branch; revert the branch to restore the prior `doc
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
