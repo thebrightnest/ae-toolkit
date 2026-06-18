@@ -61,6 +61,34 @@ The product requirements document that generated the current queue, stored as wr
 >
 > **Expert:** “`unblocked` is derived, not stored. Run `aet-work sync` so the **Work Queue** has the **Persistent Facts**, then `derive` will compute the **Derived Status** from the blockers and git state.”
 
+## Forward-Only State Model (ADR-011)
+
+**State**:
+The canonical workflow state stored in `tasks[].state`: `planned`, `ready`, `blocked`, `in_progress`, `awaiting_merge`, `merged`, `abandoned`, or `failed`.
+_Avoid_: using `status` for scheduling truth once the forward-only spine is active.
+
+**Terminal State**:
+A `state` value that ends a task's lifecycle and satisfies blockers: `merged` or `abandoned`. `failed` is **not** terminal and does **not** unblock dependents.
+_Avoid_: treating `failed` or legacy `done` as terminal.
+
+**History**:
+Append-only array of transition entries `{from, to, at, by, evidence}` recording every state change.
+
+**Pending Blockers**:
+Counter maintained forward by the state writer; a task becomes `ready` only when `pending_blockers == 0`.
+
+**Stage**:
+Sub-state of `in_progress` recorded in the task record (e.g., `implement`, `qa`, `review`), never in plan frontmatter.
+
+**Live Set**:
+Non-terminal tasks in `.agents/work-queue.json`; the only set loaded for scheduling.
+
+**Settled History**:
+Terminal tasks appended to `.agents/work-history.jsonl`; retained but never loaded for scheduling.
+
+**Audit**:
+Explicit human-run reconciliation of stored state against git; replaces implicit derive-on-read.
+
 ## Flagged ambiguities
 
 - “status” was used to mean both **Stored Status** and **Derived Status**. Resolved: these are distinct concepts; only **Stored Status** lives in JSON.
