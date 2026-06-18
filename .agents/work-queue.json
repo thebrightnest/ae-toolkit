@@ -1161,12 +1161,13 @@
       "plan_file": "docs/plans/fods-02-state-spine.md",
       "blocked_by": [],
       "blocks": ["fods-03-read-path-zero-git", "fods-05-frontmatter-intake"],
-      "status": "planned",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
+      "status": "merged",
+      "merge_commit": "0fdf8cca7a0c194619ada68abf8e1a9e7c376486",
+      "completed_at": "2026-06-18T20:38:06.438823+00:00",
+      "merged_at": "2026-06-18T20:38:06.438823+00:00",
       "worktree": null,
-      "branch": null
+      "branch": "fods-02-state-spine",
+      "merge_strategy": "squash"
     },
     {
       "id": "fods-03-read-path-zero-git",
