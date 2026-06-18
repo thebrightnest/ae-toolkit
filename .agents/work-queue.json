@@ -151,12 +151,13 @@
       "plan_file": "docs/plans/aet-validate-scope-closure-discipline-plan.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "merge_commit": null,
+      "status": "merged",
+      "merge_commit": "b5d0b0e7556e9519512d9e2521f4d1b17342b4c5",
       "completed_at": null,
-      "merged_at": null,
+      "merged_at": "2026-06-18T01:05:00+00:00",
       "worktree": null,
-      "branch": null
+      "branch": null,
+      "merge_strategy": "squash"
     },
     {
       "id": "aet-work-hybrid-orchestrator-core-plan",
@@ -230,12 +231,13 @@
       "plan_file": "docs/plans/aet-work-state-refactor-status-next-plan.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "merge_commit": null,
+      "status": "merged",
+      "merge_commit": "5937509a564542f0e2794ef830bbe5dbf14a1d11",
       "completed_at": null,
-      "merged_at": null,
+      "merged_at": "2026-06-18T00:43:00+00:00",
       "worktree": null,
-      "branch": null
+      "branch": null,
+      "merge_strategy": "squash"
     },
     {
       "id": "aet-work-state-refactor-sync-init-plan",
@@ -243,12 +245,13 @@
       "plan_file": "docs/plans/aet-work-state-refactor-sync-init-plan.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "merge_commit": null,
+      "status": "merged",
+      "merge_commit": "68f632240b1936612d96ea49b7628bb74755a81d",
       "completed_at": null,
-      "merged_at": null,
+      "merged_at": "2026-06-18T00:54:00+00:00",
       "worktree": null,
-      "branch": null
+      "branch": null,
+      "merge_strategy": "squash"
     },
     {
       "id": "aet-work-yaml-fix-plan",
