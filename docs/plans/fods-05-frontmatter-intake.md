@@ -66,5 +66,5 @@ Revert `plan_parser.py`, `sync`, `init-queue`, and the template. Existing plans 
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
