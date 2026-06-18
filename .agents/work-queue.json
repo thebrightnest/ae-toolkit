@@ -1109,8 +1109,8 @@
       "merge_commit": "401f6a0bf8e4960c418a0451bd0a95674a37d35d",
       "completed_at": "2026-06-18T23:39:28.925935+00:00",
       "merged_at": "2026-06-18T23:39:28.925935+00:00",
-      "worktree": ".worktrees/fods-03-read-path-zero-git",
-      "branch": "fods-03-read-path-zero-git",
+      "worktree": null,
+      "branch": null,
       "state": "merged",
       "history": [
         {
