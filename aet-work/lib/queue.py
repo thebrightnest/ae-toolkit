@@ -32,7 +32,9 @@ TERMINAL_STATES = {"merged", "abandoned"}
 # human-initiated transition allowed from every non-terminal state.
 LEGAL_TRANSITIONS: dict[str | None, set[str]] = {
     None: {"planned"},
-    "planned": {"blocked", "ready", "abandoned"},
+    # ``run-one`` may start a queued task directly from ``planned`` when the
+    # user explicitly selects a plan, bypassing the normal ``ready`` step.
+    "planned": {"blocked", "ready", "in_progress", "abandoned"},
     "blocked": {"ready", "abandoned"},
     "ready": {"in_progress", "abandoned"},
     "in_progress": {"in_progress", "awaiting_merge", "failed", "abandoned"},
