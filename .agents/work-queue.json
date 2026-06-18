@@ -22,13 +22,13 @@
       "plan_file": "docs/plans/02-port-phases-0-2.md",
       "blocked_by": ["01-scaffold-skill-structure"],
       "blocks": ["03-port-phases-3-4"],
-      "status": "merged",
-      "merge_commit": "89abddf",
+      "status": "planned",
+      "merge_commit": null,
       "completed_at": null,
-      "merged_at": "2026-06-18T11:10:00+00:00",
+      "merged_at": null,
       "worktree": null,
       "branch": "02-port-phases-0-2",
-      "merge_strategy": "squash"
+      "merge_strategy": null
     },
     {
       "id": "03-port-phases-3-4",
@@ -36,13 +36,13 @@
       "plan_file": "docs/plans/03-port-phases-3-4.md",
       "blocked_by": ["02-port-phases-0-2"],
       "blocks": ["04-port-phase-5-preview"],
-      "status": "merged",
-      "merge_commit": "c09b824",
+      "status": "planned",
+      "merge_commit": null,
       "completed_at": null,
-      "merged_at": "2026-06-18T11:15:00+00:00",
+      "merged_at": null,
       "worktree": null,
       "branch": "03-port-phases-3-4",
-      "merge_strategy": "squash"
+      "merge_strategy": null
     },
     {
       "id": "04-port-phase-5-preview",
@@ -50,13 +50,13 @@
       "plan_file": "docs/plans/04-port-phase-5-preview.md",
       "blocked_by": ["03-port-phases-3-4"],
       "blocks": ["05-integration-polish"],
-      "status": "merged",
-      "merge_commit": "34d59dc",
+      "status": "planned",
+      "merge_commit": null,
       "completed_at": null,
-      "merged_at": "2026-06-18T11:20:00+00:00",
+      "merged_at": null,
       "worktree": null,
       "branch": "04-port-phase-5-preview",
-      "merge_strategy": "squash"
+      "merge_strategy": null
     },
     {
       "id": "05-integration-polish",
