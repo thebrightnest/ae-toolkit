@@ -315,17 +315,44 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # Defensive: stored state is stale and keeps returning the same task.
                 break
 
-            mark_status(queue, task_id, "in-progress")
+            # Transition the task to in_progress through the sole writer so
+            # stored state reflects that it has been picked up.
+            from_state = current_state(task) or "ready"
+            aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    aet_state_bin,
+                    "transition",
+                    task_id,
+                    from_state,
+                    "in_progress",
+                    queue_file,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                print(
+                    f"   ⚠️  Could not transition {task_id} to in_progress: {result.stderr.strip()}"
+                )
+                queue = read_queue(queue_file)
+                mark_status(queue, task_id, "failed", "pipeline")
+                write_queue(queue_file, queue)
+                failures += 1
+                stop_spawn = True
+                break
 
-            # Fork a subprocess for this task
+            # Re-read queue after transition and record branch/worktree so the
+            # stored state reflects in_progress and does not spawn the same task
+            # again on the next loop iteration.
+            queue = read_queue(queue_file)
+            worktree_dir = create_worktree(repo_root, task_id)
             env = os.environ.copy()
             env["AET_TASK_ID"] = task_id
             env["AET_PLAN_FILE"] = task.get("plan_file", "")
-            worktree_dir = create_worktree(repo_root, task_id)
             env["AET_WORKTREE"] = worktree_dir
 
-            # Record branch/worktree so the stored state reflects in_progress and
-            # does not spawn the same task again on the next loop iteration.
             # Store a repo-relative worktree path for portability.
             record_task_meta(
                 queue,
