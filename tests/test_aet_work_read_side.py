@@ -92,6 +92,29 @@ class TestStatusStoredState(unittest.TestCase):
         self.assertIn("unblocked: 1", output)
         self.assertIn("blocked: 1", output)
 
+    def test_counts_include_awaiting_merge(self):
+        """status summary includes awaiting_merge tasks."""
+        plans_dir_tmp = _make_plans_dir(["t1.md"])
+        plans_dir = plans_dir_tmp.name
+        queue_file = _make_queue(_resolve_plan_files([
+            {"id": "t1", "state": "awaiting_merge", "title": "Done-ish", "plan_file": "docs/plans/t1.md"},
+        ], plans_dir))
+        archive_file = _make_archive([])
+
+        stdout = io.StringIO()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--queue-file", queue_file,
+                "--archive-file", archive_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = status.main()
+
+        self.assertEqual(rc, 0)
+        output = stdout.getvalue()
+        self.assertIn("awaiting_merge: 1", output)
+
     def test_failed_tasks_reported_from_stored_status(self):
         """Failed tasks are reported from stored state."""
         plans_dir_tmp = _make_plans_dir(["t1.md"])

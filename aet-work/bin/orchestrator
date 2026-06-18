@@ -232,6 +232,36 @@ def has_pending_tasks(queue: list[dict]) -> bool:
     return queue_has_pending_tasks(queue)
 
 
+def _mark_failed(queue_file: str, task_id: str, from_state: str | None) -> None:
+    """Mark a task as failed, preferring the canonical state transition.
+
+    Routes through ``aet-state transition`` so the stored ``state`` field is
+    updated. Falls back to the legacy ``mark_status`` write only when the
+    transition itself cannot be applied.
+    """
+    if from_state is None:
+        from_state = "in_progress"
+    aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+    result = subprocess.run(
+        [
+            sys.executable,
+            aet_state_bin,
+            "transition",
+            task_id,
+            from_state,
+            "failed",
+            queue_file,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"   ⚠️  Could not transition {task_id} to failed: {result.stderr.strip()}")
+        queue = read_queue(queue_file)
+        mark_status(queue, task_id, "failed", "pipeline")
+        write_queue(queue_file, queue)
+
+
 def _log_path(repo_root: str) -> str:
     """Return the repo-root-relative telemetry log path."""
     return os.path.join(repo_root, telemetry.DEFAULT_LOG_PATH)
@@ -336,9 +366,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 print(
                     f"   ⚠️  Could not transition {task_id} to in_progress: {result.stderr.strip()}"
                 )
-                queue = read_queue(queue_file)
-                mark_status(queue, task_id, "failed", "pipeline")
-                write_queue(queue_file, queue)
+                _mark_failed(queue_file, task_id, from_state)
                 failures += 1
                 stop_spawn = True
                 break
@@ -428,14 +456,18 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     )
                     if result.returncode != 0:
                         print(f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}")
-                        mark_status(queue, task_id, "failed", "pipeline")
+                        _mark_failed(queue_file, task_id, from_state)
                         stop_spawn = True
                         failures += 1
                     else:
                         successes += 1
             else:
                 print(f"   ❌ {task_id} failed (exit {ret})")
-                mark_status(queue, task_id, "failed", "pipeline")
+                queue = read_queue(queue_file)
+                task = next((t for t in queue if t.get("id") == task_id), None)
+                from_state = current_state(task) if task else "in_progress"
+                _mark_failed(queue_file, task_id, from_state)
+                queue = read_queue(queue_file)
                 stop_spawn = True
                 failures += 1
 

@@ -36,7 +36,7 @@ LEGAL_TRANSITIONS: dict[str | None, set[str]] = {
     # user explicitly selects a plan, bypassing the normal ``ready`` step.
     "planned": {"blocked", "ready", "in_progress", "abandoned"},
     "blocked": {"ready", "abandoned"},
-    "ready": {"in_progress", "abandoned"},
+    "ready": {"in_progress", "failed", "abandoned"},
     "in_progress": {"in_progress", "awaiting_merge", "failed", "abandoned"},
     "awaiting_merge": {"merged", "abandoned"},
     "merged": set(),

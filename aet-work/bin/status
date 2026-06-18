@@ -68,7 +68,7 @@ def main() -> int:
     else:
         print("✅ No plan drift detected. All plans are tracked in the queue.")
 
-    counts = {"planned": 0, "unblocked": 0, "blocked": 0, "in-progress": 0, "failed": 0, "done": 0}
+    counts = {"planned": 0, "unblocked": 0, "blocked": 0, "in-progress": 0, "awaiting_merge": 0, "failed": 0, "done": 0}
     for task in queue:
         category = _display_category(task)
         if category in counts:

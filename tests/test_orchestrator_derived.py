@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import json
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 _ORCHESTRATOR_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
 _spec = importlib.util.spec_from_loader(
@@ -62,6 +66,59 @@ class TestStoredStateHelpers(unittest.TestCase):
         ]
 
         self.assertFalse(orchestrator.has_pending_tasks(queue))
+
+
+class TestMarkFailed(unittest.TestCase):
+    def test_mark_failed_updates_canonical_state(self):
+        """_mark_failed writes the failed state through the transition writer."""
+        queue = [{"id": "t1", "state": "in_progress", "title": "One"}]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(queue, f)
+            queue_file = f.name
+
+        def mock_run(cmd, **_kwargs):
+            # Simulate a successful aet-state transition that updates the file.
+            if "transition" in cmd:
+                with open(queue_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for task in data:
+                    if task.get("id") == "t1":
+                        task["state"] = "failed"
+                with open(queue_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with patch.object(subprocess, "run", side_effect=mock_run):
+            orchestrator._mark_failed(queue_file, "t1", "in_progress")
+
+        with open(queue_file, "r", encoding="utf-8") as f:
+            result = json.load(f)
+        self.assertEqual(result[0]["state"], "failed")
+
+    def test_mark_failed_ready_to_failed_is_legal(self):
+        """A ready task that fails during pickup can transition to failed."""
+        queue = [{"id": "t1", "state": "ready", "title": "One"}]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(queue, f)
+            queue_file = f.name
+
+        def mock_run(cmd, **_kwargs):
+            if "transition" in cmd:
+                with open(queue_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for task in data:
+                    if task.get("id") == "t1":
+                        task["state"] = "failed"
+                with open(queue_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with patch.object(subprocess, "run", side_effect=mock_run):
+            orchestrator._mark_failed(queue_file, "t1", "ready")
+
+        with open(queue_file, "r", encoding="utf-8") as f:
+            result = json.load(f)
+        self.assertEqual(result[0]["state"], "failed")
 
 
 if __name__ == "__main__":

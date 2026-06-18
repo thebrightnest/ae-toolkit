@@ -6,7 +6,7 @@
 
 ## Design Principle
 
-The queue file stores **persistent facts** about each task. Actionable pickability (`blocked` / `unblocked`) is **derived on read** from those facts, not stored in the JSON.
+The queue file stores **persistent facts** about each task, including the task's canonical `state`. Reads (`aet-work status`, `aet-work next`, the orchestrator) project the stored `state` directly; they do not derive pickability from git on every read. A separate `aet-state audit` command reconciles stored state against git ground truth on demand.
 
 ## Schema
 
@@ -66,16 +66,30 @@ Legacy statuses:
 - `done` and `merge_verified` are normalized to `merged` during queue sync.
 - `blocked` and `unblocked` are **not stored**; they are derived from `blocked_by`, git state, and branch existence.
 
-## Derived Statuses
+## Stored States
 
-Derived status is computed on read by `aet-state derive`:
+The canonical `tasks[].state` field is the source of truth for reads. The orchestrator and `aet-work` commands use `current_state()` from `aet-work/lib/queue.py`, which prefers `state` and falls back to the legacy `status` field during the fods-02..fods-05 coexistence window.
 
-1. If `branch` or `merge_commit` is an ancestor of `origin/main` → `merged`.
-2. Else if `branch` exists locally → `in-progress`.
-3. Else if all `blocked_by` tasks are `merged` or `abandoned` → `unblocked`.
-4. Else → `blocked`.
+Valid states:
 
-If `plan_file` is missing, the task is reported as plan drift rather than assigned a status.
+- `planned` — Initial state after queue sync. No branch yet.
+- `ready` — Task is pickable (all blockers terminal).
+- `blocked` — Task has pending blockers.
+- `in_progress` — Task has been picked and a worktree/branch exists.
+- `awaiting_merge` — Implementation finished; waiting for merge to `origin/main`.
+- `merged` — Branch or `merge_commit` is an ancestor of `origin/main`.
+- `abandoned` — Task was explicitly cancelled.
+- `failed` — Implementation or transition failed; requires human inspection.
+
+## Auditing Stored State
+
+To reconcile stored state against git ground truth, run:
+
+```bash
+python3 aet-work/bin/aet-state audit [.agents/work-queue.json]
+```
+
+`audit` reports every task whose stored state disagrees with the state derived from `branch`, `merge_commit`, `blocked_by`, and `plan_file` existence. It never mutates the queue.
 
 ## Transition Rules
 
