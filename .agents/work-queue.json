@@ -22,12 +22,13 @@
       "plan_file": "docs/plans/02-port-phases-0-2.md",
       "blocked_by": ["01-scaffold-skill-structure"],
       "blocks": ["03-port-phases-3-4"],
-      "status": "planned",
-      "merge_commit": null,
+      "status": "merged",
+      "merge_commit": "89abddf",
       "completed_at": null,
-      "merged_at": null,
+      "merged_at": "2026-06-18T11:10:00+00:00",
       "worktree": null,
-      "branch": null
+      "branch": "02-port-phases-0-2",
+      "merge_strategy": "squash"
     },
     {
       "id": "03-port-phases-3-4",
