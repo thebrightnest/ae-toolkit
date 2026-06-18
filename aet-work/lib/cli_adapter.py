@@ -20,7 +20,7 @@ class CLIAdapter:
     bin: str
     prompt_flag: str
     workdir_flag: str | None
-    headless_flag: str
+    headless_flag: str | None
 
     def build_cmd(
         self,
@@ -30,7 +30,7 @@ class CLIAdapter:
     ) -> list[str]:
         """Build the CLI invocation list."""
         cmd = [self.bin]
-        if headless and self.headless_flag:
+        if headless and self.headless_flag is not None:
             cmd.append(self.headless_flag)
         if self.prompt_flag:
             cmd.extend([self.prompt_flag, prompt])
@@ -47,7 +47,7 @@ ADAPTERS: dict[str, CLIAdapter] = {
         bin="kimi",
         prompt_flag="-p",
         workdir_flag=None,
-        headless_flag="",
+        headless_flag=None,
     ),
     "claude": CLIAdapter(
         name="claude",
