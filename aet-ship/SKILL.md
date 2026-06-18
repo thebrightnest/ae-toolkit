@@ -101,11 +101,17 @@ Run the pre-merge validation gate.
 
 6. **Plan completion check** — verify all tasks in `docs/plans/{ticket}-plan.md` are addressed
 
-7. **Run `aet-review`** — staff-level code review on the diff
+7. **Stage-aware review / CSO gate**
 
-8. **Run `aet-cso`** — security audit if the diff touches auth, data, API, or dependencies
+   Read the plan.md footer `*Stage:*`. The implementation pipeline (`aet-work run` / `run-one`) already advances plans through `reviewed` → `secure` → `synced`, so `aet-ship` must not duplicate that work.
 
-9. **Critical-class `aet-verify` evidence gate** — if the active plan's `*Work class:*` is `critical`, require `aet-verify` evidence attached:
+   - If stage is `synced` or `secure`: skip both `aet-review` and `aet-cso`.
+   - If stage is `reviewed`: run `aet-cso` only if the diff touches auth, data, API, or dependencies.
+   - If stage is `qa-complete` or earlier: run `aet-review`, then run `aet-cso` if the diff touches auth, data, API, or dependencies.
+
+   For each skipped step, print: `⏭️ Skipping {skill}: plan stage is already {stage}.`
+
+8. **Critical-class `aet-verify` evidence gate** — if the active plan's `*Work class:*` is `critical`, require `aet-verify` evidence attached:
 
    - Look for an evidence file at `.agents/verify/{ticket}-evidence.md` (or `.agents/verify/{ticket}-evidence/` if multiple captures)
    - Evidence must include: mode used (foundation/feature/reproduction), command/output/screenshot, timestamp, and verifier signature (agent session or human)
@@ -119,33 +125,33 @@ Run the pre-merge validation gate.
 
    - Do not open the PR until evidence is present
 
-10. **Scope audit**
+9. **Scope audit**
 
-    Run `git diff "$pr_base" --name-only` and check for files that are unlikely to belong to this task:
+   Run `git diff "$pr_base" --name-only` and check for files that are unlikely to belong to this task:
 
-    - `.agents/work-queue.json`
-    - `docs/plans/*.md` or `docs/prds/*.md` files that are not this task's own plan or associated PRD
+   - `.agents/work-queue.json`
+   - `docs/plans/*.md` or `docs/prds/*.md` files that are not this task's own plan or associated PRD
 
-    Build a `Scope audit` section for the PR body:
+   Build a `Scope audit` section for the PR body:
 
-    ```
-    ## Scope audit
+   ```
+   ## Scope audit
 
-    Files changed outside this task's expected scope:
+   Files changed outside this task's expected scope:
 
-    - docs/plans/OTHER-01-plan.md
-    - .agents/work-queue.json
-    ```
+   - docs/plans/OTHER-01-plan.md
+   - .agents/work-queue.json
+   ```
 
-    If no out-of-scope files are found, omit the section or print `✅ Scope audit: no unexpected files detected.`
+   If no out-of-scope files are found, omit the section or print `✅ Scope audit: no unexpected files detected.`
 
-    This is a warning, not a hard gate. Continue opening the PR so the reviewer can see the audit.
+   This is a warning, not a hard gate. Continue opening the PR so the reviewer can see the audit.
 
-11. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
+10. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
 
-12. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
+11. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
 
-13. **Push branch**
+12. **Push branch**
 
     - If the branch was rebased in step 2, push with force-with-lease:
 
@@ -159,7 +165,7 @@ Run the pre-merge validation gate.
       git push
       ```
 
-14. **Open PR** against the base determined in step 1:
+13. **Open PR** against the base determined in step 1:
 
     ```bash
     gh pr create --base "$pr_base" ...
@@ -168,7 +174,7 @@ Run the pre-merge validation gate.
     PR body must include:
 
     - Links to plan.md and PRD
-    - Scope audit section (from step 10) if any files were flagged
+    - Scope audit section (from step 9) if any files were flagged
     - A stacked-PR warning if `pr_base` is not `origin/main`
 
     **Stacked PR warning:**
@@ -191,7 +197,7 @@ Run the pre-merge validation gate.
 
     > **Version bump is not handled here.** Release versioning is the responsibility of a future `aet-release` skill. Do not commit `chore(release)` or VERSION changes on feature branches.
 
-15. **Merge Verification** — after the PR is created and the user indicates it has been merged:
+14. **Merge Verification** — after the PR is created and the user indicates it has been merged:
 
     Run the deterministic merge recorder:
 
@@ -227,7 +233,7 @@ Run the pre-merge validation gate.
     - Offer to open the PR in the browser for manual verification.
     - Exit with non-zero status.
 
-16. **Safe Branch Deletion** — only run if `aet-state record-merge` succeeded:
+15. **Safe Branch Deletion** — only run if `aet-state record-merge` succeeded:
     - Regular merge: `git branch -d <branch>`
     - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)
     - Delete the remote branch: `git push origin --delete <branch>`
@@ -239,7 +245,7 @@ Run the pre-merge validation gate.
 - Merge conflicts that can't be auto-resolved
 - Test failures
 - Coverage drop below threshold
-- `aet-cso` fail (Critical/High findings)
+- `aet-cso` fail (Critical/High findings, only if CSO ran)
 - Merge verification failure (commits not on origin/main)
 
 **Output:**
@@ -255,6 +261,7 @@ Run the pre-merge validation gate.
 
 - **Non-interactive by default** — the gate runs without human input until something is wrong
 - **Composable** — invokes `aet-review` and `aet-cso` rather than duplicating their logic
+- **Stage-aware** — respects the plan footer; does not rerun review or CSO already completed by the implementation pipeline
 - **Bisectable commits** — one logical change per commit, enforced at process level
 - **Auto-generated artifacts** — CHANGELOG entry is mechanical, not human work
 - **Merge verification is a hard gate** — commits must be ancestors of `origin/main` before any branch deletion
