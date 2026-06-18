@@ -17,7 +17,7 @@ class TestCLIAdapter(unittest.TestCase):
         self.assertEqual(adapter.bin, "kimi")
         self.assertEqual(adapter.prompt_flag, "-p")
         self.assertIsNone(adapter.workdir_flag)
-        self.assertEqual(adapter.headless_flag, "")
+        self.assertIsNone(adapter.headless_flag)
 
     def test_kimi_build_cmd_no_headless_flag(self):
         """kimi rejects combining -p/--prompt with --yolo; use -p alone."""
@@ -53,19 +53,11 @@ class TestCLIAdapter(unittest.TestCase):
         cmd = adapter.build_cmd("run tests", workdir="/tmp/proj", headless=True)
         self.assertEqual(cmd, ["test", "--headless", "-p", "run tests"])
 
-    def test_kimi_headless_build_cmd(self):
-        """Regression: kimi -p mode cannot combine with --yolo or --auto."""
-        adapter = resolve_cli_adapter("kimi")
-        cmd = adapter.build_cmd("run tests", headless=True)
-        self.assertNotIn("--yolo", cmd)
-        self.assertNotIn("--auto", cmd)
-        self.assertEqual(cmd, ["kimi", "-p", "run tests"])
-
-    def test_build_cmd_no_headless(self):
+    def test_build_cmd_no_headless_flag(self):
         adapter = CLIAdapter(
-            name="test", bin="test", prompt_flag="-p", workdir_flag="", headless_flag=""
+            name="test", bin="test", prompt_flag="-p", workdir_flag="", headless_flag=None
         )
-        cmd = adapter.build_cmd("run tests")
+        cmd = adapter.build_cmd("run tests", headless=True)
         self.assertEqual(cmd, ["test", "-p", "run tests"])
 
     def test_unsupported_cli_raises(self):
