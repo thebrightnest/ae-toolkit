@@ -1,4 +1,4 @@
-.PHONY: help install-skills package add-skill clean lint format format-check validate install-hooks
+.PHONY: help install-skills package add-skill clean lint format format-check validate install-hooks check-reproducible
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
 SKILLS_DIR ?= $(HOME)/.claude/skills
@@ -34,7 +34,8 @@ package: ## Package all skills into .skill files (assembles from templates first
 					--skill-name "$$skill" \
 					--next-step ""; \
 			fi; \
-			zip -r "$$skill.skill" "$$skill" -x "*.git*" -x "*node_modules*" -x "*.DS_Store" -x "*__pycache__*" -x "*.pyc"; \
+			find "$$skill" -exec touch -t 198001010000 {} +; \
+			zip -X -r "$$skill.skill" "$$skill" -x "*.git*" -x "*node_modules*" -x "*.DS_Store" -x "*__pycache__*" -x "*.pyc"; \
 			echo "✓ Packaged $$skill.skill"; \
 		fi; \
 	done
@@ -78,10 +79,14 @@ format-check: ## Check markdown formatting (CI mode)
 	@npx prettier@3.1.0 --check $(MARKDOWN_FILES)
 	@echo "✓ Format check passed"
 
-validate: ## Run all quality checks (lint + format-check + skill-structure)
+check-reproducible: ## Verify .skill packaging is byte-reproducible across runs
+	@./scripts/check-reproducible-package.sh
+
+validate: ## Run all quality checks (lint + format-check + skill-structure + reproducible package)
 	@$(MAKE) lint
 	@$(MAKE) format-check
 	@./scripts/validate-skills.sh
+	@$(MAKE) check-reproducible
 	@echo "✓ All validation checks passed"
 
 install-hooks: ## Install pre-commit hooks
