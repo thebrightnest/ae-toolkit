@@ -1105,13 +1105,13 @@
       "plan_file": "docs/plans/fods-03-read-path-zero-git.md",
       "blocked_by": ["fods-02-state-spine"],
       "blocks": ["fods-04-stage-substate", "fods-07-live-settled-partition"],
-      "status": "awaiting_merge",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
+      "status": "merged",
+      "merge_commit": "401f6a0bf8e4960c418a0451bd0a95674a37d35d",
+      "completed_at": "2026-06-18T23:39:28.925935+00:00",
+      "merged_at": "2026-06-18T23:39:28.925935+00:00",
       "worktree": ".worktrees/fods-03-read-path-zero-git",
       "branch": "fods-03-read-path-zero-git",
-      "state": "awaiting_merge",
+      "state": "merged",
       "history": [
         {
           "from": "planned",
@@ -1124,8 +1124,19 @@
           "to": "awaiting_merge",
           "at": "2026-06-18T22:35:35.395749+00:00",
           "by": "transition"
+        },
+        {
+          "from": "awaiting_merge",
+          "to": "merged",
+          "at": "2026-06-18T23:39:28.926319+00:00",
+          "by": "record-merge",
+          "evidence": {
+            "merge_commit": "401f6a0bf8e4960c418a0451bd0a95674a37d35d",
+            "merge_strategy": "squash"
+          }
         }
-      ]
+      ],
+      "merge_strategy": "squash"
     },
     {
       "id": "fods-04-stage-substate",
@@ -1138,7 +1149,8 @@
       "completed_at": null,
       "merged_at": null,
       "worktree": null,
-      "branch": null
+      "branch": null,
+      "pending_blockers": 0
     },
     {
       "id": "fods-05-frontmatter-intake",
@@ -1181,7 +1193,8 @@
       "completed_at": null,
       "merged_at": null,
       "worktree": null,
-      "branch": null
+      "branch": null,
+      "pending_blockers": 0
     },
     {
       "id": "fods-08-docs-package",
