@@ -1,27 +1,31 @@
 #!/usr/bin/env python3
-"""aet-work sync — Incrementally sync docs/plans/*.md into the work queue.
+"""aet-work sync — Append-only sync of docs/plans/*.md into the work queue.
 
-Skips plans already present in the queue or archive, validates atomicity and
-size, builds the dependency DAG, derives ground-truth status, and reports.
+Loads the existing queue and archive, appends only newly created plan files,
+validates atomicity and size, recomputes the dependency DAG, reports drift,
+and updates wrapper metadata. It does **not** derive status or promote tasks.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
-import os
-import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
-# Load shared queue library.
+# Load shared libraries.
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import read_queue, write_queue  # noqa: E402
+from plan_parser import (  # noqa: E402
+    build_ticket_map,
+    has_multiple_phase_sections,
+    new_task_from_plan,
+    references_other_plans,
+    validate_size,
+)
+from queue import read_queue, read_archive, write_queue  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,147 +48,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_archive(path: str) -> list[dict]:
-    if not os.path.exists(path):
-        return []
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if isinstance(data, dict):
-        return data.get("tasks", [])
-    return data
-
-
-def title_from_plan(path: Path) -> str:
-    content = path.read_text(errors="ignore")
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 2:
-            match = re.search(r"^title:\s*(.+)$", parts[1], re.M)
-            if match:
-                return match.group(1).strip()
-    match = re.search(r"^#\s+(.+)$", content, re.M)
-    if match:
-        return match.group(1).strip()
-    return path.stem
-
-
-def stage_from_plan(path: Path) -> str | None:
-    content = path.read_text(errors="ignore")
-    match = re.search(r"(?im)^[_\*]Stage:\s*(.+?)[_\*]$", content)
-    if match:
-        return match.group(1).strip()
-    return None
-
-
-def blocked_by_from_plan(path: Path, ticket_map: dict[str, str]) -> list[str]:
-    content = path.read_text(errors="ignore")
-    match = re.search(r"(?m)^##\s+Blocked by\s*\n(.*?)(?=\n## |\n---|\Z)", content, re.S)
-    if not match:
-        return []
-    section = match.group(1).strip()
-    if not section or re.search(r"(?im)^\s*none\b", section):
-        return []
-
-    ids: list[str] = []
-    for line in section.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        line = re.sub(r"^[\s\-\*\d\.\[\]xX]+", "", line).strip()
-        if not line:
-            continue
-
-        # Markdown link to another plan.
-        link_match = re.search(r"\[([^\]]*)\]\(([^)]+)\)", line)
-        if link_match:
-            target = link_match.group(2)
-            if target.endswith(".md"):
-                ids.append(Path(target).stem)
-            continue
-
-        # Plain filename reference.
-        if line.endswith(".md"):
-            ids.append(Path(line).stem)
-            continue
-
-        # Plain task ID.
-        if re.match(r"^[a-zA-Z0-9_-]+$", line):
-            ids.append(line)
-            continue
-
-        # "Ticket N" reference.
-        ticket_match = re.search(r"(?i)ticket\s+(\d+)", line)
-        if ticket_match:
-            key = ticket_match.group(1).lstrip("0") or "0"
-            if key in ticket_map:
-                ids.append(ticket_map[key])
-            continue
-
-    return list(dict.fromkeys(ids))
-
-
-def references_other_plans(path: Path) -> bool:
-    content = path.read_text(errors="ignore")
-    for match in re.finditer(r"\[([^\]]*)\]\(([^)]+)\)", content):
-        target = match.group(2)
-        if target.startswith("docs/plans/") or target.startswith("../plans/"):
-            return True
-        if "/plans/" in target and target.endswith(".md"):
-            return True
-    return False
-
-
-def has_multiple_phase_sections(path: Path) -> bool:
-    content = path.read_text(errors="ignore")
-    return len(re.findall(r"(?m)^#{1,3}\s+Phase", content)) > 1
-
-
-def count_files_to_modify(path: Path) -> int:
-    content = path.read_text(errors="ignore")
-    match = re.search(
-        r"(?m)^##\s+(Files to Modify|Files)\s*\n(.*?)(?=\n## |\n---|\Z)",
-        content,
-        re.S,
-    )
-    if not match:
-        return 0
-    return len(
-        [l for l in match.group(2).splitlines() if re.match(r"^\s*[\-\*\d]", l.strip())]
-    )
-
-
-def task_list_line_count(path: Path) -> int:
-    content = path.read_text(errors="ignore")
-    match = re.search(
-        r"(?m)^##\s+Task List\s*\n(.*?)(?=\n## |\n---|\Z)",
-        content,
-        re.S,
-    )
-    if not match:
-        return 0
-    return len([l for l in match.group(1).splitlines() if l.strip()])
-
-
-def validate_size(path: Path) -> tuple[bool, str | None]:
-    files = count_files_to_modify(path)
-    lines = task_list_line_count(path)
-    oversized = files > 8 or lines > 300
-    has_warning = "⚠️ ATOMIC OVERSIZED" in path.read_text(errors="ignore")
-    if oversized and not has_warning:
-        return False, f"files={files}, task_list_lines={lines}"
-    return True, None
-
-
-def derive_statuses(queue_file: str) -> dict[str, dict]:
-    result = subprocess.run(
-        ["python3", str(_SCRIPT_DIR / "aet-state"), "derive", queue_file],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(result.stderr, file=sys.stderr)
-        return {}
-    return json.loads(result.stdout) if result.stdout.strip() else {}
+def build_blocks(queue: list[dict]) -> None:
+    """Recompute ``blocks`` as the inverse of ``blocked_by`` for the whole queue."""
+    task_by_id = {t["id"]: t for t in queue if t.get("id")}
+    for task in queue:
+        task["blocks"] = []
+    for task in queue:
+        for blocker in task.get("blocked_by", []):
+            if blocker in task_by_id:
+                task_by_id[blocker].setdefault("blocks", []).append(task["id"])
 
 
 def main() -> int:
@@ -194,23 +66,14 @@ def main() -> int:
     plans_dir = Path(args.plans_dir)
 
     queue = read_queue(queue_file)
-    archive = load_archive(archive_file)
+    archive = read_archive(archive_file)
 
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
     archived_files = {t.get("plan_file") for t in archive if t.get("plan_file")}
     archived_ids = {t.get("id") for t in archive if t.get("id")}
 
     plan_files = sorted(plans_dir.glob("*.md"))
-
-    # Build ticket-number -> task-id map for descriptive blockers.
-    ticket_map: dict[str, str] = {}
-    for pf in plan_files:
-        title = title_from_plan(pf)
-        for pattern in (r"(?i)ticket\s+(\d+)", r"(?i)#\s*(\d+)"):
-            match = re.search(pattern, title)
-            if match:
-                key = match.group(1).lstrip("0") or "0"
-                ticket_map[key] = pf.stem
+    ticket_map = build_ticket_map(plan_files)
 
     added = 0
     preserved = 0
@@ -242,7 +105,7 @@ def main() -> int:
             skipped_atomicity += 1
             continue
 
-        ok, reason = validate_size(pf)
+        ok, reason, oversized = validate_size(pf)
         if not ok:
             print(
                 f"⚠️ Skipping {pf.name}: exceeds complexity limit ({reason}). Split the plan."
@@ -250,42 +113,17 @@ def main() -> int:
             skipped_size += 1
             continue
 
-        blocked_by = blocked_by_from_plan(pf, ticket_map)
-        task = {
-            "id": task_id,
-            "title": title_from_plan(pf),
-            "plan_file": pf_str,
-            "blocked_by": blocked_by,
-            "blocks": [],
-            "status": "unblocked" if not blocked_by else "blocked",
-            "merge_commit": None,
-            "completed_at": None,
-            "merged_at": None,
-            "worktree": None,
-            "branch": None,
-        }
-        if "⚠️ ATOMIC OVERSIZED" in pf.read_text(errors="ignore"):
+        task = new_task_from_plan(pf, ticket_map, status="planned")
+        if oversized:
             task["oversized"] = True
         new_tasks.append(task)
         added += 1
 
-    # Orphaned queue entries: plan file no longer exists.
-    orphaned = 0
-    plan_file_set = {str(pf) for pf in plan_files}
-    for task in queue:
-        pf = task.get("plan_file")
-        if pf and pf not in plan_file_set and pf not in existing_by_file:
-            # Only flag if it wasn't just preserved above.
-            pass
-    # Rebuild full queue preserving existing order and adding new tasks.
+    # Rebuild the queue in plan-file order, preserving existing entries.
     final_queue: list[dict] = []
     seen_files = set()
     for task in queue:
         pf = task.get("plan_file")
-        if pf and pf not in plan_file_set:
-            task["status"] = "orphaned"
-            orphaned += 1
-            print(f"⚠️ Orphaned task: {task.get('id')} -> {pf}")
         final_queue.append(task)
         if pf:
             seen_files.add(pf)
@@ -293,58 +131,34 @@ def main() -> int:
         pf = task.get("plan_file")
         if pf and pf not in seen_files:
             final_queue.append(task)
-            if pf:
-                seen_files.add(pf)
+            seen_files.add(pf)
 
     # Normalize legacy statuses.
     for task in final_queue:
         if task.get("status") == "merge_verified":
             task["status"] = "merged"
 
-    # Build blocks (inverse of blocked_by) for tasks still in queue.
-    task_by_id = {t["id"]: t for t in final_queue if t.get("id")}
+    build_blocks(final_queue)
+
+    # Report plan drift without mutating stored status.
+    plan_file_set = {str(pf) for pf in plan_files}
+    drifted = 0
     for task in final_queue:
-        task["blocks"] = []
-    for task in final_queue:
-        for blocker in task.get("blocked_by", []):
-            if blocker in task_by_id:
-                task_by_id[blocker].setdefault("blocks", []).append(task["id"])
+        pf = task.get("plan_file")
+        if pf and pf not in plan_file_set:
+            drifted += 1
+            print(f"⚠️ Drift: {task.get('id')} -> {pf}")
 
-    write_queue(queue_file, final_queue)
-
-    # Add wrapper metadata if the queue file didn't have any.
-    queue_path = Path(queue_file)
-    raw_data = json.loads(queue_path.read_text())
-    if isinstance(raw_data, list):
-        raw_data = {
-            "tasks": raw_data,
-            "queue_updated_at": datetime.now().isoformat(),
-        }
-        queue_path.write_text(json.dumps(raw_data, indent=2) + "\n")
-    elif isinstance(raw_data, dict):
-        raw_data["queue_updated_at"] = datetime.now().isoformat()
-        queue_path.write_text(json.dumps(raw_data, indent=2) + "\n")
-
-    # Derive ground-truth statuses.
-    derived = derive_statuses(queue_file)
-    terminal = {"merged", "done", "abandoned"}
-    for task in final_queue:
-        d = derived.get(task["id"], {})
-        ds = d.get("derived_status", "unknown").split(" (warning")[0]
-        stored = task.get("status", "")
-        if ds == "in-progress" and stored not in terminal:
-            task["status"] = "in-progress"
-            print(f"⚠️ Task {task['id']} derived as in-progress; updating stored status.")
-        elif ds == "merged" and stored not in terminal:
-            task["status"] = "merged"
-            print(f"⚠️ Task {task['id']} derived as merged; updating stored status.")
-
-    write_queue(queue_file, final_queue)
+    write_queue(
+        queue_file,
+        final_queue,
+        wrapper={"queue_updated_at": datetime.now().isoformat()},
+    )
 
     print(
         f"\n✅ Sync complete: {added} new tasks added, {preserved} existing tasks preserved, "
         f"{skipped_archive} skipped (already archived), {skipped_atomicity} skipped (atomicity), "
-        f"{skipped_size} skipped (size), {orphaned} orphaned tasks flagged."
+        f"{skipped_size} skipped (size), {drifted} drifted tasks reported."
     )
     return 0
 

@@ -17,7 +17,7 @@ class TestCLIAdapter(unittest.TestCase):
         self.assertEqual(adapter.bin, "kimi")
         self.assertEqual(adapter.prompt_flag, "-p")
         self.assertIsNone(adapter.workdir_flag)
-        self.assertEqual(adapter.headless_flag, "--yolo")
+        self.assertEqual(adapter.headless_flag, "")
 
     def test_claude_adapter(self):
         adapter = resolve_cli_adapter("claude")

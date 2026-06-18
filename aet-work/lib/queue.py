@@ -29,12 +29,21 @@ def read_queue(queue_file: str) -> list[dict[str, Any]]:
     return data
 
 
-def write_queue(queue_file: str, queue: list[dict[str, Any]]) -> None:
-    """Write the queue back to JSON, preserving any wrapper metadata."""
+def write_queue(
+    queue_file: str, queue: list[dict[str, Any]], wrapper: dict[str, Any] | None = None
+) -> None:
+    """Write the queue back to JSON, preserving any wrapper metadata.
+
+    If ``wrapper`` is supplied, its keys are merged into the stored wrapper
+    (e.g. to update ``source_prd`` or ``queue_updated_at``).
+    """
     os.makedirs(os.path.dirname(queue_file), exist_ok=True)
-    wrapper = _queue_wrappers.pop(queue_file, {})
+    stored = _queue_wrappers.pop(queue_file, {})
+    merged = {**stored}
     if wrapper:
-        data = {**wrapper, "tasks": queue}
+        merged.update(wrapper)
+    if merged:
+        data = {**merged, "tasks": queue}
     else:
         data = queue
     with open(queue_file, "w", encoding="utf-8") as f:
