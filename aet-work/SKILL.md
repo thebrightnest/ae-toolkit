@@ -140,13 +140,18 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
 
 3. **Invoke the unified orchestrator:**
 
+   Background the orchestrator with shell redirection so the launching shell
+   observes its true exit status; do not pipe through `tee` without `set -o
+pipefail`:
+
    ```bash
    ~/.claude/skills/aet-work/bin/orchestrator \
      --queue-file .agents/work-queue.json \
      --repo-root . \
      --cli-bin $(which kimi) \
      --isolation standard \
-     --max-jobs 4
+     --max-jobs 4 \
+     > aet-work.log 2>&1 &
    ```
 
    The orchestrator handles CLI detection, worktree management, parallel execution, and stage advancement automatically.
@@ -193,7 +198,8 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
      --plan-file docs/plans/FEAT-001-plan.md \
      --repo-root . \
      --cli-bin $(which kimi) \
-     --isolation standard
+     --isolation standard \
+     > aet-work-run-one.log 2>&1 &
    ```
 
 3. The orchestrator advances the plan through all stage groups sequentially.

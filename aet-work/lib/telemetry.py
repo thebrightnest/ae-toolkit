@@ -92,6 +92,10 @@ def run_summary_record(
     tasks_failed: int,
     parallel_conflicts_detected: int = 0,
     concurrency_cap: int = 4,
+    outcome: str | None = None,
+    exit_code: int | None = None,
+    task_ids: list[str] | None = None,
+    final_stage: str | None = None,
 ) -> dict[str, Any]:
     """Build a per-run summary telemetry record."""
     wall_clock_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
@@ -106,6 +110,10 @@ def run_summary_record(
         "tasks_failed": tasks_failed,
         "parallel_conflicts_detected": parallel_conflicts_detected,
         "concurrency_cap": concurrency_cap,
+        "outcome": outcome,
+        "exit_code": exit_code,
+        "task_ids": task_ids or [],
+        "final_stage": final_stage,
     }
 
 
