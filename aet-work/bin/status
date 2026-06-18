@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """aet-work status — Show the current state of the work queue.
 
-Checks plan drift against both the active queue and the archive, derives
-ground-truth statuses, and reports counts, next tasks, failed tasks, and
-worktree health.
+Checks plan drift against both the active queue and the archive, reads the
+stored state, and reports counts, next tasks, failed tasks, and worktree health.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -18,7 +15,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import read_archive, read_queue  # noqa: E402
+from queue import current_state, read_archive, read_queue, state_to_status  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,16 +38,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def derive_statuses(queue_file: str) -> dict[str, dict]:
-    result = subprocess.run(
-        ["python3", str(_SCRIPT_DIR / "aet-state"), "derive", queue_file],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(result.stderr, file=sys.stderr)
-        return {}
-    return json.loads(result.stdout) if result.stdout.strip() else {}
+def _display_category(task: dict) -> str:
+    """Return the human-readable category for a task's stored state."""
+    return state_to_status(current_state(task))
 
 
 def main() -> int:
@@ -77,52 +67,35 @@ def main() -> int:
     else:
         print("✅ No plan drift detected. All plans are tracked in the queue.")
 
-    derived = derive_statuses(args.queue_file)
-
-    counts = {"unblocked": 0, "blocked": 0, "in-progress": 0, "failed": 0, "done": 0}
+    counts = {"planned": 0, "unblocked": 0, "blocked": 0, "in-progress": 0, "awaiting_merge": 0, "failed": 0, "done": 0}
     for task in queue:
-        task_id = task.get("id", "")
-        stored = task.get("status", "")
-        if stored == "failed":
-            counts["failed"] += 1
-            continue
-        task_derived = derived.get(task_id, {})
-        derived_status = task_derived.get("derived_status", "unknown")
-        clean_derived = derived_status.split(" (warning")[0]
-        if clean_derived in counts:
-            counts[clean_derived] += 1
+        category = _display_category(task)
+        if category in counts:
+            counts[category] += 1
 
     print("\nQueue summary (active tasks only):")
     for status, count in counts.items():
         print(f"  {status}: {count}")
 
-    terminal = {"merged", "abandoned", "merge_verified"}
-    print(f"\n{'ID':<40} {'Stored':<12} {'Derived':<20}")
-    print("-" * 72)
+    terminal = {"merged", "abandoned"}
+    print(f"\n{'ID':<40} {'State':<20}")
+    print("-" * 60)
     for task in queue:
-        if task.get("status") in terminal:
+        if current_state(task) in terminal:
             continue
         task_id = task.get("id", "")
-        stored = task.get("status", "")
-        task_derived = derived.get(task_id, {})
-        derived_status = task_derived.get("derived_status", "unknown")
-        marker = " ⚠️" if "(warning:" in derived_status else ""
-        print(f"{task_id:<40} {stored:<12} {derived_status:<20}{marker}")
+        state = current_state(task) or "unknown"
+        print(f"{task_id:<40} {state:<20}")
 
-    unblocked = [
-        t
-        for t in queue
-        if derived.get(t.get("id", ""), {}).get("derived_status", "").split(" (warning")[0]
-        == "unblocked"
-    ]
-    print("\nNext unblocked tasks:")
-    if unblocked:
-        for task in unblocked[:3]:
+    ready = [t for t in queue if current_state(t) == "ready"]
+    print("\nNext ready tasks:")
+    if ready:
+        for task in ready[:3]:
             print(f"  - {task.get('id')} — {task.get('title')} → {task.get('plan_file')}")
     else:
         print("  None.")
 
-    failed = [t for t in queue if t.get("status") == "failed"]
+    failed = [t for t in queue if current_state(t) == "failed"]
     print("\nFailed tasks:")
     if failed:
         for task in failed:

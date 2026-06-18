@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""aet-work next — Pick the next derived-unblocked task.
+"""aet-work next — Pick the next stored-ready task.
 
-Derives ground-truth statuses, refuses to proceed if plan drift is detected,
-and transitions the first topological derived-unblocked task to in-progress.
+Reads stored state, refuses to proceed if plan drift is detected, and
+transitions the first topological ready task to in_progress.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -17,11 +16,11 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import read_archive, read_queue, record_task_meta, write_queue  # noqa: E402
+from queue import current_state, read_archive, read_queue, record_task_meta, write_queue  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pick the next unblocked task.")
+    parser = argparse.ArgumentParser(description="Pick the next ready task.")
     parser.add_argument(
         "--queue-file",
         default=".agents/work-queue.json",
@@ -38,18 +37,6 @@ def parse_args() -> argparse.Namespace:
         help="Directory containing atomic plan markdown files",
     )
     return parser.parse_args()
-
-
-def derive_statuses(queue_file: str) -> dict[str, dict]:
-    result = subprocess.run(
-        ["python3", str(_SCRIPT_DIR / "aet-state"), "derive", queue_file],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(result.stderr, file=sys.stderr)
-        return {}
-    return json.loads(result.stdout) if result.stdout.strip() else {}
 
 
 def plan_drift_detected(queue: list[dict], archive: list[dict], plans_dir: Path) -> bool:
@@ -93,32 +80,27 @@ def topological_sort(tasks: list[dict]) -> list[dict]:
     return ordered
 
 
-def pick_next_unblocked(
-    queue: list[dict], derived: dict[str, dict]
-) -> dict | None:
-    """Return the first derived-unblocked task in topological order."""
+def pick_next_ready(queue: list[dict]) -> dict | None:
+    """Return the first stored-ready task in topological order."""
     ordered = topological_sort(queue)
     for task in ordered:
-        task_id = task.get("id", "")
-        ds = derived.get(task_id, {}).get("derived_status", "")
-        clean = ds.split(" (warning")[0]
-        if clean == "unblocked":
+        if current_state(task) == "ready":
             return task
     return None
 
 
 def transition_task(queue_file: str, task: dict) -> bool:
-    """Transition a task to in-progress and record branch/worktree metadata."""
+    """Transition a task to in_progress and record branch/worktree metadata."""
     task_id = task.get("id", "")
-    current_status = task.get("status", "")
+    from_state = current_state(task) or "ready"
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(_SCRIPT_DIR / "aet-state"),
             "transition",
             task_id,
-            current_status,
-            "in-progress",
+            from_state,
+            "in_progress",
             queue_file,
         ],
         capture_output=True,
@@ -145,11 +127,10 @@ def main() -> int:
     if plan_drift_detected(queue, archive, plans_dir):
         return 1
 
-    derived = derive_statuses(args.queue_file)
-    task = pick_next_unblocked(queue, derived)
+    task = pick_next_ready(queue)
 
     if not task:
-        print("No unblocked tasks available.")
+        print("No ready tasks available.")
         return 0
 
     task_id = task.get("id", "")

@@ -65,7 +65,7 @@ Rebuild `.agents/work-queue.json` from `docs/plans/*.md`. Use this after a major
 7. Set `queue_updated_at` to the current ISO-8601 timestamp.
 8. Write `.agents/work-queue.json`.
 
-`init-queue` does **not** call `aet-state derive` or promote tasks to `unblocked`.
+`init-queue` does **not** call `aet-state audit` or promote tasks to `ready`.
 
 ### `sync`
 
@@ -86,7 +86,7 @@ Append-only sync of `docs/plans/*.md` into the existing queue. Implemented by `a
 7. Report any queue entry whose `plan_file` is missing as drift; do **not** mutate the stored status.
 8. Update `queue_updated_at` and write `.agents/work-queue.json`.
 
-`sync` does **not** call `aet-state derive` or promote dependents.
+`sync` does **not** call `aet-state audit` or promote dependents.
 
 ### `status`
 
@@ -94,7 +94,7 @@ Show the current state of the work queue.
 
 **Procedure:**
 
-Invoke the status helper, which runs an archive-aware `plan-drift` check, derives ground-truth statuses, and prints the summary:
+Invoke the status helper, which runs an archive-aware `plan-drift` check, reads stored state, and prints the summary:
 
 ```bash
 python3 ~/.claude/skills/aet-work/bin/status \
@@ -106,25 +106,24 @@ python3 ~/.claude/skills/aet-work/bin/status \
 The helper reports:
 
 1. Any plan drift (plans on disk that are neither queued nor archived)
-2. Active task counts: `unblocked`, `blocked`, `in-progress`, `failed`, `done` (counts are computed from derived status; `failed` is read from stored status)
-3. A derived-status column for each active task, highlighting only derive-time warnings (e.g., `done` without merge verification), not ordinary stored-vs-derived mismatches
-4. The next 3 tasks whose derived status is `unblocked`
-5. Any failed tasks (from stored status)
+2. Active task counts: `planned`, `unblocked`, `blocked`, `in-progress`, `failed`, `done` (counts are a projection of stored `state`; `failed` is read from stored state)
+3. The stored `state` for each active task
+4. The next 3 tasks whose stored state is `ready`
+5. Any failed tasks (from stored state)
 6. Stale worktree warnings
 
 ### `next`
 
-Identify and output the next unblocked task.
+Identify and output the next ready task.
 
 **Procedure:**
 
 1. Run the `plan-drift` check. If drift is detected, refuse to pick a task and instruct the user to run `init-queue` first
-2. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses
-3. Read `.agents/work-queue.json`
-4. Find tasks whose **derived** status is `unblocked` (do not rely on the stored `status` field)
-5. Pick the first in topological order (respecting the DAG)
-6. Output: task ID, title, plan_file path
-7. Update status to `in-progress` via `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_status> in-progress .agents/work-queue.json`, then record `branch: <task_id>` and `worktree: .worktrees/<task_id>`
+2. Read `.agents/work-queue.json`
+3. Find tasks whose stored `state` is `ready` (falling back to legacy `status` during migration)
+4. Pick the first in topological order (respecting the DAG)
+5. Output: task ID, title, plan_file path
+6. Transition to `in_progress` via `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_state> in_progress .agents/work-queue.json`, then record `branch: <task_id>` and `worktree: .worktrees/<task_id>`
 
 ### `run`
 
@@ -209,24 +208,24 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 **When to use:** For one-off plans where you want the full pipeline but don't need a queue.
 
-### `derive`
+### `audit`
 
-Recompute all actionable status fields from ground truth (git, filesystem, and `blocked_by`) using the centralized `aet-state` helper. `derive` is the single source of truth for whether a task is pickable.
+Reconcile stored state against git ground truth without mutating the queue. `audit` is a human-run diagnostic; it is never called during normal operation.
 
 **Procedure:**
 
-1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json`
+1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json`
 2. For each task, the derived status is computed in order:
    - `merged` — `branch` or `merge_commit` is an ancestor of `origin/main`
    - `in-progress` — local `branch` exists
    - `unblocked` — `plan_file` exists, no local branch, and every task in `blocked_by` is terminal (`merged` or `abandoned`)
    - `blocked` — `plan_file` exists, no local branch, and some blocker is not terminal
    - `drift` — `plan_file` is missing
-3. Compare derived status against stored `status` for each task
-4. Report any mismatches as warnings (e.g., `⚠️ Task {id} stored as done but derived as in-progress`)
-5. Return the derived JSON for use by other commands
+3. Compare stored `state` against the derived status for each task
+4. Report any discrepancies (e.g., `⚠️ Task {id} stored as awaiting_merge but derived as in-progress`)
+5. Return a JSON object showing `stored`, `derived`, and `discrepancy` for every task
 
-**When to use:** Before any command that reads queue status (`status`, `next`, `run`), and after any sync or initialization. Do not rely on `sync` or `init-queue` to promote tasks to `unblocked`; derive that state on read instead.
+**When to use:** When you suspect the stored queue state has drifted from git reality (e.g., after manual branch cleanup, a crash, or an external merge). Do not rely on `audit` during normal operation; `status`, `next`, and `run` read stored state directly.
 
 ### `report`
 
@@ -311,7 +310,7 @@ Archive terminal tasks and remove their worktrees atomically. Repairs stale queu
 
 **Procedure:**
 
-1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to get ground-truth statuses for active (non-terminal) tasks only.
+1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json` to reconcile stored state against git for active (non-terminal) tasks only.
 2. Read `.agents/work-queue.json`
 3. Identify terminal tasks: status is `merged`, `done`, or `abandoned`. Normalize any `merge_verified` statuses to `merged`.
 4. Archive terminal tasks without active dependents:
@@ -343,7 +342,7 @@ Archive terminal tasks and remove their worktrees atomically. Repairs stale queu
 - **OS-process isolation** — `run` invokes the unified orchestrator, which spawns fresh OS processes for each pipeline stage. See `references/context-isolation.md` for details.
 - **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
 - **Queue file is the memory** — `.agents/work-queue.json` persists state across process boundaries by design.
-- **Derived status** — `aet-state derive` recomputes canonical statuses from git branches, worktrees, plan files, and `origin/main` ancestry; the queue stores the declaration.
+- **Stored state, explicit audit** — `status`, `next`, and `run` read the recorded `state` field directly. `aet-state audit` recomputes canonical status from git for human review, but never runs during normal operation.
 - **Execution telemetry** — `.agents/execution.log.jsonl` is an append-only record of stage and run-summary events produced by the orchestrator. Use `aet-work report` to summarize it.
 - **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.
 - **Drain on failure** — running tasks finish, new spawns halt. Preserves in-progress work while stopping the pipeline.

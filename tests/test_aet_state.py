@@ -53,6 +53,78 @@ def _subprocess_mock(responses):
     return mock_run
 
 
+class TestAuditCommand(unittest.TestCase):
+    def test_derive_subcommand_removed(self):
+        """The old `derive` subcommand is no longer registered."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"tasks": []}, f)
+            queue_path = f.name
+
+        with patch.object(sys, "argv", ["aet-state", "derive", queue_path]):
+            with self.assertRaises(SystemExit) as cm:
+                aet_state.main()
+        self.assertEqual(cm.exception.code, 2)
+
+    def test_audit_reports_no_discrepancies_when_states_match(self):
+        """audit reports empty when stored state matches derived state."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            plan_path = "docs/plans/t1.md"
+            queue = {
+                "tasks": [
+                    {"id": "t1", "state": "planned", "plan_file": plan_path, "branch": None}
+                ]
+            }
+            json.dump(queue, f)
+            queue_path = f.name
+
+        responses = {
+            ("show-ref", "--verify", "--quiet", "refs/heads/None"): (1, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="audit",
+            queue=queue_path,
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
+            rc = aet_state.cmd_audit(args)
+
+        self.assertEqual(rc, 0)
+
+    def test_audit_reports_discrepancy_without_mutating(self):
+        """audit reports stored-vs-git discrepancies and never mutates the queue."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            plan_path = "docs/plans/t1.md"
+            queue = {
+                "tasks": [
+                    {"id": "t1", "state": "ready", "plan_file": plan_path, "branch": "feat-001"}
+                ]
+            }
+            json.dump(queue, f)
+            queue_path = f.name
+
+        responses = {
+            ("show-ref", "--verify", "--quiet", "refs/heads/feat-001"): (0, "", ""),
+            ("merge-base", "--is-ancestor", "feat-001", "origin/main"): (1, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="audit",
+            queue=queue_path,
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
+            rc = aet_state.cmd_audit(args)
+
+        self.assertEqual(rc, 0)
+
+        with open(queue_path, "r", encoding="utf-8") as f:
+            after = json.load(f)
+        self.assertEqual(after["tasks"][0]["state"], "ready")
+
+
 class TestRecordMerge(unittest.TestCase):
     def setUp(self):
         self.queue_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
