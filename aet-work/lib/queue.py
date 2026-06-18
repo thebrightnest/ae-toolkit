@@ -63,7 +63,7 @@ def has_pending_tasks(queue: list[dict[str, Any]]) -> bool:
     """Check if any tasks are not in a terminal state."""
     for task in queue:
         status = task.get("status", "")
-        if status in ("unblocked", "blocked", "in-progress"):
+        if status in ("unblocked", "blocked", "in-progress", "awaiting_merge"):
             return True
     return False
 
@@ -87,6 +87,14 @@ def mark_completed(queue: list[dict[str, Any]], task_id: str) -> None:
     for task in queue:
         if task.get("id") == task_id:
             task["status"] = "done"
+            task["completed_at"] = datetime.now().isoformat()
+
+
+def mark_awaiting_merge(queue: list[dict[str, Any]], task_id: str) -> None:
+    """Mark a finished-but-unmerged task as awaiting merge."""
+    for task in queue:
+        if task.get("id") == task_id:
+            task["status"] = "awaiting_merge"
             task["completed_at"] = datetime.now().isoformat()
 
 

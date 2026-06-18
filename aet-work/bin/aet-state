@@ -59,6 +59,18 @@ def run_git(*args, cwd=None):
     return (result.returncode, result.stdout, result.stderr)
 
 
+def run_gh(args, cwd=None):
+    """Run a gh command; return (returncode, stdout, stderr)."""
+    cmd = ["gh", *args]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, cwd=cwd, check=False
+        )
+    except FileNotFoundError:
+        return (127, "", "gh not found")
+    return (result.returncode, result.stdout, result.stderr)
+
+
 def branch_exists(branch, cwd=None):
     if not branch:
         return False
@@ -71,6 +83,78 @@ def is_ancestor_of_main(branch, cwd=None):
         return False
     rc, _, _ = run_git("merge-base", "--is-ancestor", branch, "origin/main", cwd=cwd)
     return rc == 0
+
+
+def resolve_merge_commit(branch, cwd=None):
+    """Resolve the merge commit for a branch on origin/main.
+
+    Tries, in order:
+      1. Regular merge: branch tip is an ancestor of origin/main.
+      2. Squash merge via `gh pr view <branch> --json mergeCommit`.
+      3. Diff-equivalence fallback against recent origin/main commits.
+
+    Returns (merge_commit, merge_strategy) or (None, None) if unresolved.
+    """
+    if not branch:
+        return None, None
+
+    # 1. Regular merge: branch tip is on origin/main.
+    rc, out, _ = run_git("rev-parse", branch, cwd=cwd)
+    if rc == 0:
+        tip = out.strip()
+        if is_ancestor_of_main(tip, cwd=cwd):
+            return tip, "regular"
+
+    # 2. Squash merge via GitHub CLI.
+    rc, out, _ = run_gh(["pr", "view", branch, "--json", "mergeCommit"], cwd=cwd)
+    if rc == 0:
+        try:
+            data = json.loads(out)
+            sha = data.get("mergeCommit", {}).get("oid")
+            if sha and is_ancestor_of_main(sha, cwd=cwd):
+                return sha, "squash"
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Diff-equivalence fallback.
+    sha = resolve_by_diff(branch, cwd=cwd)
+    if sha:
+        return sha, "squash"
+
+    return None, None
+
+
+def resolve_by_diff(branch, cwd=None, max_commits=20):
+    """Find a squash merge by matching the branch diff to a recent main commit."""
+    rc, merge_base, _ = run_git("merge-base", branch, "origin/main", cwd=cwd)
+    if rc != 0:
+        return None
+    merge_base = merge_base.strip()
+
+    rc, branch_diff, _ = run_git("diff", f"{merge_base}..{branch}", cwd=cwd)
+    if rc != 0:
+        return None
+    branch_diff = branch_diff.strip()
+    if not branch_diff:
+        return None
+
+    rc, commits_out, _ = run_git(
+        "rev-list", "--max-count", str(max_commits), "origin/main", cwd=cwd
+    )
+    if rc != 0:
+        return None
+
+    for commit in commits_out.strip().splitlines():
+        commit = commit.strip()
+        if not commit:
+            continue
+        rc, commit_diff, _ = run_git("diff", f"{commit}^..{commit}", cwd=cwd)
+        if rc != 0:
+            continue
+        if commit_diff.strip() == branch_diff:
+            return commit
+
+    return None
 
 
 def derive_status(task, blocker_status_fn=None, cwd=None):
@@ -176,8 +260,11 @@ def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
     if to_stage == "merged":
         if not branch:
             return (False, "Cannot set merged: no branch associated with task.")
-        if not is_ancestor_of_main(branch, cwd=cwd):
-            return (False, "Cannot set merged: branch is not ancestor of origin/main.")
+        on_main = is_ancestor_of_main(branch, cwd=cwd)
+        if merge_commit:
+            on_main = on_main or is_ancestor_of_main(merge_commit, cwd=cwd)
+        if not on_main:
+            return (False, "Cannot set merged: branch/merge_commit is not ancestor of origin/main.")
 
     # Cannot transition from abandoned without explicit reason clear
     if from_stage == "abandoned":
@@ -279,6 +366,63 @@ def cmd_transition(args):
     return 0
 
 
+def cmd_record_merge(args):
+    """Resolve and record the merge commit for a task atomically."""
+    queue = load_queue(args.queue)
+    task = find_task(queue, args.task_id)
+    if not task:
+        print(f"Task not found: {args.task_id}", file=sys.stderr)
+        return 1
+
+    cwd = os.path.dirname(args.queue) if args.queue else "."
+    branch = task.get("branch")
+    if not branch:
+        print(f"Task {args.task_id} has no branch.", file=sys.stderr)
+        return 1
+
+    # Fetch origin first.
+    rc, _, err = run_git("fetch", "origin", cwd=cwd)
+    if rc != 0:
+        print(f"git fetch origin failed: {err}", file=sys.stderr)
+        return 1
+
+    merge_commit, merge_strategy = resolve_merge_commit(branch, cwd=cwd)
+    if not merge_commit:
+        print(
+            "Merge verification failed: could not determine merge commit on origin/main.",
+            file=sys.stderr,
+        )
+        return 1
+
+    current_status = task.get("status", "")
+    # Stash any existing merge_commit so validate_transition sees the resolved SHA.
+    previous_merge_commit = task.get("merge_commit")
+    task["merge_commit"] = merge_commit
+    ok, msg = validate_transition(task, current_status, "merged", cwd=cwd)
+    if not ok:
+        task["merge_commit"] = previous_merge_commit
+        print(msg, file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print(
+            f"[dry-run] Would record merge for {args.task_id}: "
+            f"{merge_commit} ({merge_strategy})"
+        )
+        return 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    task["merge_commit"] = merge_commit
+    task["merge_strategy"] = merge_strategy
+    task["status"] = "merged"
+    task["merged_at"] = now
+    task["completed_at"] = now
+
+    save_queue(args.queue, queue)
+    print(f"Recorded merge for {args.task_id}: {merge_commit} ({merge_strategy})")
+    return 0
+
+
 def cmd_archive(args):
     """Archive terminal tasks from the queue into the archive file."""
     # Read the queue *before* archiving so we can report skipped tasks.
@@ -370,6 +514,15 @@ def main():
     sync_parser.add_argument("stage", help="Stage to set.")
     sync_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
 
+    # record-merge
+    record_merge_parser = subparsers.add_parser(
+        "record-merge", help="Resolve and record the merge commit for a task."
+    )
+    record_merge_parser.add_argument("task_id", help="Task ID.")
+    record_merge_parser.add_argument(
+        "queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON."
+    )
+
     # archive
     archive_parser = subparsers.add_parser("archive", help="Move terminal tasks from queue to archive.")
     archive_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
@@ -385,6 +538,8 @@ def main():
         return cmd_transition(args)
     if args.command == "sync-footers":
         return cmd_sync_footers(args)
+    if args.command == "record-merge":
+        return cmd_record_merge(args)
     if args.command == "archive":
         return cmd_archive(args)
 
