@@ -311,6 +311,43 @@ Each entry: `{ "value": "...", "confidence": 0.8, "approved_count": 3, "rejected
 5. Save updated profile to `docs/designs/taste-profile.json`
 6. Log a brief summary: "Recorded N approvals, M rejections. Top signals: [fonts: X], [colors: Y]"
 
+## Commands
+
+### `design-system`
+
+Run the full design system creation workflow.
+
+Procedure:
+
+1. Execute Phase 0 (pre-checks): detect existing DESIGN.md, PRD, and taste profile.
+2. Execute Phase 1 (product context): confirm product, audience, memorable thing.
+3. Optionally execute Phase 2 (research) if the user requests it.
+4. Execute Phase 3 (complete proposal): aesthetic direction, decoration level, layout, typography, color, motion.
+5. Execute Phase 4 (DESIGN.md generation): write `DESIGN.md` to project root.
+6. Execute Phase 5 (preview): write `docs/designs/DESIGN-preview.html`.
+7. Execute Phase 6 (taste profile update): update `docs/designs/taste-profile.json`.
+
+### `design-review`
+
+Review an existing `DESIGN.md` against the project's PRD, taste profile, and current codebase.
+
+Procedure:
+
+1. Read `DESIGN.md` and the most recent PRD.
+2. Check each design dimension for consistency with the memorable thing and product context.
+3. Flag SAFE/RISK choices that no longer fit or lack justification.
+4. Suggest concrete revisions and ask the user which to apply.
+
+### `design-check`
+
+Quick conformance check for an existing `DESIGN.md`.
+
+Procedure:
+
+1. Verify `DESIGN.md` exists.
+2. Check YAML frontmatter, token reference validity, section order, and quoted hex values.
+3. Report any structural issues without proposing design changes.
+
 ## Integration Points
 
 This skill sits between `aet-plan` and `aet-validate-scope` in the AET workflow:
