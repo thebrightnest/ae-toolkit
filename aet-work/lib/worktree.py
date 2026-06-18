@@ -92,7 +92,7 @@ def remove_worktree(repo_root: str, task_id: str) -> bool:
 
 
 def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
-    """Copy untracked plan/PRD files into the worktree."""
+    """Copy untracked plan/PRD and referenced docs into the worktree."""
     result = subprocess.run(
         [
             "git",
@@ -103,6 +103,10 @@ def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
             "--exclude-standard",
             "docs/plans/",
             "docs/prds/",
+            "docs/adr/",
+            "docs/audits/",
+            "docs/retros/",
+            "docs/product-briefs/",
         ],
         capture_output=True,
         text=True,
