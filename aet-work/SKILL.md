@@ -49,56 +49,44 @@ New tasks should reach `merged` or `abandoned`. `done` and `merge_verified` are 
 
 ### `init-queue`
 
-Read all `docs/plans/*.md` and produce or update `.agents/work-queue.json`.
+Rebuild `.agents/work-queue.json` from `docs/plans/*.md`. Use this after a major reorganization or when creating the queue for the first time.
 
 **Procedure:**
 
-1. Scan `docs/plans/` for all `*.md` files. This directory is for atomic, implementable task plans only. Roadmaps, audits, and meta-plans must be stored in `docs/roadmaps/` or `docs/audits/` and will not be added to the queue.
-2. If `.agents/work-queue.json` exists, load it as `existing_queue`
-3. Read `.agents/work-archive.json` and collect archived `plan_file` paths and task IDs
-4. For each plan.md, extract: title, task ID (from filename or frontmatter), blocking relationships
-5. Build the DAG using `blocks` and `blocked_by` arrays
-6. For each plan:
-   - If its `plan_file` already exists in `existing_queue`, preserve its `status`, `merge_commit`, `completed_at`, `merged_at`, and `branch`
-   - **Archive deduplication:** If its `plan_file` or task ID already exists in the archive, skip it
-   - **Normalize legacy statuses:** if an existing task has `status: "merge_verified"`, rewrite it to `status: "merged"`
-   - If new, set initial status: `unblocked` if `blocked_by` is empty, `blocked` otherwise; set `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
-   - **Branch naming:** the orchestrator uses the task ID as the branch name. If a task requires a prefixed branch (e.g., `feat/`), store the actual branch name in the `branch` field during `init-queue` or via `mark-terminal`.
-7. Set `source_prd` to the most recent PRD in `docs/prds/` (if any)
-8. Set `queue_updated_at` to the current ISO-8601 timestamp
-9. Write `.agents/work-queue.json`
-10. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to compute derived statuses from ground truth
-11. For any task where derived status is `in-progress` or `merged` and differs from stored status, update the stored status to match and print a warning
-12. Report: `N existing tasks preserved, M new tasks added, A skipped (already archived)`
+1. Scan `docs/plans/` for atomic, implementable task plans. Roadmaps, audits, and meta-plans belong in `docs/roadmaps/` or `docs/audits/` and are ignored.
+2. If `.agents/work-queue.json` exists, load it as `existing_queue`.
+3. For each plan.md, extract title, task ID (from filename or frontmatter), and blocking relationships.
+4. Build the DAG as `blocked_by` and `blocks` arrays.
+5. For each plan:
+   - If its `plan_file` exists in `existing_queue`, preserve `branch`, `worktree`, `merge_commit`, `completed_at`, `merged_at`, and terminal `status`.
+   - **Normalize legacy status:** if an existing task has `status: "merge_verified"`, rewrite it to `status: "merged"`.
+   - If new or non-terminal, set `status: "planned"` and clear execution metadata.
+6. Set `source_prd` to the most recent PRD in `docs/prds/` (if any).
+7. Set `queue_updated_at` to the current ISO-8601 timestamp.
+8. Write `.agents/work-queue.json`.
+
+`init-queue` does **not** call `aet-state derive` or promote tasks to `unblocked`.
 
 ### `sync`
 
-Incrementally sync `docs/plans/*.md` into the existing work queue without losing statuses. Implemented by `aet-work/bin/sync`.
+Append-only sync of `docs/plans/*.md` into the existing queue. Implemented by `aet-work/bin/sync`. Use this after adding new plan files.
 
 **Procedure:**
 
-1. Read `.agents/work-queue.json` if it exists; otherwise treat as empty array
-2. Read `.agents/work-archive.json` and collect archived `plan_file` paths and task IDs
-3. Scan `docs/plans/` for all `*.md` files
+1. Read `.agents/work-queue.json` if it exists; otherwise treat it as empty.
+2. Read `.agents/work-archive.json` and collect archived `plan_file` paths and task IDs.
+3. Scan `docs/plans/` for all `*.md` files.
 4. For each plan whose `plan_file` is not already in the queue:
-   - **Archive deduplication:** If its `plan_file` or task ID already exists in the archive, skip it. Completed work must not be resurrected into the active queue.
-   - Extract title, task ID, blocking relationships
-   - Determine `blocked_by` and `blocks` from the DAG
-   - **Validate task sizes:** Scan the plan's task list. If any task exceeds the AI-complexity limit (> 8 files OR > 300 diff lines), refuse to add the plan and emit a split suggestion. If the plan contains `⚠️ ATOMIC OVERSIZED`, add it but set `oversized: true` on the queue entry.
-   - **Validate atomicity:** If the plan references other plan files or contains multiple "Phase" sections, emit a warning and skip it. Non-atomic documents belong in `docs/roadmaps/` or `docs/audits/`.
-   - Set status: `unblocked` if `blocked_by` is empty, `blocked` otherwise
-   - Set `merge_commit: null`, `completed_at: null`, `merged_at: null`, `worktree: null`, `branch: null`
-   - Append to queue array
-5. **Normalize legacy statuses:** For any existing queue entry with `status: "merge_verified"`, rewrite it to `status: "merged"`
-6. For any queue entry whose `plan_file` no longer exists on disk:
-   - Set `status: "orphaned"` and print a warning
-7. Update `queue_updated_at` to current ISO-8601 timestamp
-8. Write `.agents/work-queue.json`
-9. Run `python3 ~/.claude/skills/aet-work/bin/aet-state derive .agents/work-queue.json` to compute derived statuses for all entries
-10. For any task where derived status is `in-progress` or `merged` and differs from stored status, update the stored status to match and print a warning
-11. Report: `N new tasks added, M existing tasks preserved, A skipped (already archived), K orphaned tasks flagged`
+   - **Archive deduplication:** skip if its `plan_file` or task ID is already archived.
+   - **Validate size:** skip plans that exceed the complexity limit unless they contain `⚠️ ATOMIC OVERSIZED` (set `oversized: true` if allowed).
+   - **Validate atomicity:** skip plans that reference other plan files or contain multiple "Phase" sections.
+   - Append a new task with `status: "planned"`.
+5. Recompute `blocks` for the entire queue.
+6. **Normalize legacy status:** rewrite `merge_verified` to `merged`.
+7. Report any queue entry whose `plan_file` is missing as drift; do **not** mutate the stored status.
+8. Update `queue_updated_at` and write `.agents/work-queue.json`.
 
-**When to use:** After any session that creates or modifies plan files (e.g., after `aet-plan` or `aet-pipeline-plan`). This is the standard maintenance command; `init-queue` is for first-time setup.
+`sync` does **not** call `aet-state derive` or promote dependents.
 
 ### `status`
 
