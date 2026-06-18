@@ -16,15 +16,18 @@ Remove all gstack-specific infrastructure: no binaries, no telemetry, no brain s
 
 ## Acceptance Criteria
 
-- [ ] Phase 0: Skill detects existing DESIGN.md and offers update/start-fresh/cancel
-- [ ] Phase 0: Skill reads PRD from `docs/prds/*.md` if available (soft gate, not hard block)
-- [ ] Phase 0: Skill gathers product context from README.md, package.json, directory structure
-- [ ] Phase 1: Skill asks the single product context question with pre-filled inference
-- [ ] Phase 1: Skill asks the "memorable thing" forcing question
-- [ ] Phase 2: Skill offers competitive research via WebSearch (user can decline)
-- [ ] Phase 2: If research enabled, skill searches for 5-10 products in the space
-- [ ] Phase 2: Skill synthesizes findings into Layer 1/2/3 analysis
-- [ ] No gstack binaries, telemetry, brain sync, or routing prompts anywhere in the skill
+- [x] Phase 0: Skill detects existing DESIGN.md and offers update/start-fresh/cancel
+- [x] Phase 0: Skill reads PRD from `docs/prds/*.md` if available (soft gate, not hard block)
+- [x] Phase 0: Skill gathers product context from README.md, package.json, directory structure
+- [x] Phase 1: Skill asks the single product context question with pre-filled inference
+- [x] Phase 1: Skill asks the "memorable thing" forcing question
+- [x] Phase 2: Skill offers competitive research via WebSearch (user can decline)
+- [x] Phase 2: If research enabled, skill searches for 5-10 products in the space
+- [x] Phase 2: Skill synthesizes findings into Layer 1/2/3 analysis
+- [x] No gstack binaries, telemetry, brain sync, or routing prompts anywhere in the skill
+
+_Stage: implemented_
+_Note: Phases 0–2 are already present in AET-native form in `aet-design-system-creation/SKILL.md`._
 
 ## Blocked by
 
