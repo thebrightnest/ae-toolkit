@@ -378,7 +378,8 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
     # Create a synthetic task. Prefer the batch-provided task ID/worktree so
     # parent and child agree on worktree/branch names (e.g. "*-plan" suffixes).
-    task_id = os.environ.get("AET_TASK_ID") or os.path.basename(plan_file).replace("-plan.md", "")
+    base_name = os.path.splitext(os.path.basename(plan_file))[0]
+    task_id = os.environ.get("AET_TASK_ID") or base_name.removesuffix("-plan")
     worktree_dir = os.environ.get("AET_WORKTREE")
     if worktree_dir and not os.path.isabs(worktree_dir):
         worktree_dir = os.path.join(repo_root, worktree_dir)
