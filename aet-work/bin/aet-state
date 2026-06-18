@@ -350,7 +350,13 @@ def update_plan_footer(plan_path, stage):
     path.write_text(new_content, encoding="utf-8")
 
 
-def cmd_derive(args):
+def cmd_audit(args):
+    """Reconcile stored state against git ground truth without mutating.
+
+    Reports every task where the recorded state disagrees with the state
+    derived from git. This is the old ``derive`` command repurposed as an
+    explicit, human-run audit; it never runs during normal operation.
+    """
     queue = load_queue(args.queue)
     cwd = os.path.dirname(args.queue) if args.queue else "."
     tasks = get_tasks(queue)
@@ -366,7 +372,17 @@ def cmd_derive(args):
 
     results = {}
     for task in tasks:
-        results[task["id"]] = derive_status(task, blocker_status, cwd=cwd)
+        task_id = task["id"]
+        stored_state = queue_lib.current_state(task)
+        stored_display = queue_lib.state_to_status(stored_state)
+        derived_info = derive_status(task, blocker_status, cwd=cwd)
+        derived_display = derived_info["derived_status"].split(" (warning")[0]
+        results[task_id] = {
+            "stored": stored_state,
+            "derived": derived_info["derived_status"],
+            "discrepancy": stored_display != derived_display,
+        }
+
     print(json.dumps(results, indent=2))
     return 0
 
@@ -546,9 +562,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Show changes without applying them.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # derive
-    derive_parser = subparsers.add_parser("derive", help="Recompute status from ground truth.")
-    derive_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+    # audit
+    audit_parser = subparsers.add_parser("audit", help="Reconcile stored state against git without mutating.")
+    audit_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
 
     # validate
     validate_parser = subparsers.add_parser("validate", help="Check if a transition is legal.")
@@ -587,8 +603,8 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "derive":
-        return cmd_derive(args)
+    if args.command == "audit":
+        return cmd_audit(args)
     if args.command == "validate":
         return cmd_validate(args)
     if args.command == "transition":

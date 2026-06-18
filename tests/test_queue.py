@@ -73,22 +73,25 @@ class TestQueue(unittest.TestCase):
 
     def test_get_next_unblocked(self):
         queue = [
-            {"id": "t1", "status": "blocked"},
-            {"id": "t2", "status": "unblocked"},
+            {"id": "t1", "state": "blocked"},
+            {"id": "t2", "state": "ready"},
         ]
         task = get_next_unblocked(queue)
         self.assertEqual(task["id"], "t2")
 
     def test_get_next_unblocked_none(self):
-        queue = [{"id": "t1", "status": "blocked"}]
+        queue = [{"id": "t1", "state": "blocked"}]
         self.assertIsNone(get_next_unblocked(queue))
 
     def test_has_pending_tasks(self):
-        queue = [{"id": "t1", "status": "in-progress"}]
+        queue = [{"id": "t1", "state": "in_progress"}]
         self.assertTrue(has_pending_tasks(queue))
 
     def test_has_pending_tasks_all_done(self):
-        queue = [{"id": "t1", "status": "done"}, {"id": "t2", "status": "merged"}]
+        queue = [
+            {"id": "t1", "state": "merged"},
+            {"id": "t2", "state": "abandoned"},
+        ]
         self.assertFalse(has_pending_tasks(queue))
 
     def test_mark_status(self):
@@ -110,7 +113,7 @@ class TestQueue(unittest.TestCase):
         self.assertIn("completed_at", queue[0])
 
     def test_has_pending_tasks_awaiting_merge(self):
-        queue = [{"id": "t1", "status": "awaiting_merge"}]
+        queue = [{"id": "t1", "state": "awaiting_merge"}]
         self.assertTrue(has_pending_tasks(queue))
 
     def test_record_task_meta(self):

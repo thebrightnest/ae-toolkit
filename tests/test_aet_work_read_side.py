@@ -6,6 +6,7 @@ import importlib.machinery
 import importlib.util
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -30,13 +31,6 @@ if _NEXT_PY.exists():
     _next_spec.loader.exec_module(next_cmd)
 else:
     next_cmd = None
-
-
-class _MockResult:
-    def __init__(self, returncode: int, stdout: str = "", stderr: str = ""):
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
 
 
 def _write_json_file(data) -> str:
@@ -72,130 +66,84 @@ def _resolve_plan_files(tasks: list[dict], plans_dir: str) -> list[dict]:
     return resolved
 
 
-class TestStatusDerivedState(unittest.TestCase):
-    def test_counts_use_derived_status(self):
-        """status uses derived status for the summary counts."""
+class TestStatusStoredState(unittest.TestCase):
+    def test_counts_use_stored_state(self):
+        """status uses stored state for the summary counts."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
         queue_file = _make_queue(_resolve_plan_files([
-            {"id": "t1", "status": "planned", "title": "One", "plan_file": "docs/plans/t1.md"},
-            {"id": "t2", "status": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+            {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
         archive_file = _make_archive([])
 
-        derived = {
-            "t1": {"derived_status": "unblocked"},
-            "t2": {"derived_status": "unblocked"},
-        }
-
         stdout = io.StringIO()
-        with patch.object(status, "derive_statuses", return_value=derived):
-            with patch.object(sys, "stdout", stdout):
-                with patch.object(sys, "argv", [
-                    "status",
-                    "--queue-file", queue_file,
-                    "--archive-file", archive_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    rc = status.main()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--queue-file", queue_file,
+                "--archive-file", archive_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = status.main()
 
         self.assertEqual(rc, 0)
         output = stdout.getvalue()
-        self.assertIn("unblocked: 2", output)
-        self.assertIn("blocked: 0", output)
-
-    def test_no_ordinary_mismatch_warning(self):
-        """Ordinary stored-vs-derived mismatches do not show a warning marker."""
-        plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
-        plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
-            {"id": "t1", "status": "planned", "title": "One", "plan_file": "docs/plans/t1.md"},
-            {"id": "t2", "status": "unblocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
-        ], plans_dir))
-        archive_file = _make_archive([])
-
-        derived = {
-            "t1": {"derived_status": "unblocked"},
-            "t2": {"derived_status": "blocked"},
-        }
-
-        stdout = io.StringIO()
-        with patch.object(status, "derive_statuses", return_value=derived):
-            with patch.object(sys, "stdout", stdout):
-                with patch.object(sys, "argv", [
-                    "status",
-                    "--queue-file", queue_file,
-                    "--archive-file", archive_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    status.main()
-
-        output = stdout.getvalue()
-        lines = [line for line in output.splitlines() if line.startswith("t")]
-        self.assertEqual(len(lines), 2)
-        for line in lines:
-            self.assertNotIn("⚠️", line)
+        self.assertIn("unblocked: 1", output)
+        self.assertIn("blocked: 1", output)
 
     def test_failed_tasks_reported_from_stored_status(self):
-        """Failed tasks are reported from stored status regardless of derived status."""
+        """Failed tasks are reported from stored state."""
         plans_dir_tmp = _make_plans_dir(["t1.md"])
         plans_dir = plans_dir_tmp.name
         queue_file = _make_queue(_resolve_plan_files([
-            {"id": "t1", "status": "failed", "title": "Broke", "plan_file": "docs/plans/t1.md"},
+            {"id": "t1", "state": "failed", "title": "Broke", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
         archive_file = _make_archive([])
 
-        derived = {"t1": {"derived_status": "blocked"}}
-
         stdout = io.StringIO()
-        with patch.object(status, "derive_statuses", return_value=derived):
-            with patch.object(sys, "stdout", stdout):
-                with patch.object(sys, "argv", [
-                    "status",
-                    "--queue-file", queue_file,
-                    "--archive-file", archive_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    status.main()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--queue-file", queue_file,
+                "--archive-file", archive_file,
+                "--plans-dir", plans_dir,
+            ]):
+                status.main()
 
         output = stdout.getvalue()
         self.assertIn("Failed tasks:", output)
         self.assertIn("Broke", output)
 
-    def test_next_unblocked_tasks_use_derived_status(self):
-        """The 'Next unblocked tasks' list uses derived status."""
+    def test_next_ready_tasks_use_stored_state(self):
+        """The 'Next ready tasks' list uses stored state."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
         queue_file = _make_queue(_resolve_plan_files([
-            {"id": "t1", "status": "planned", "title": "One", "plan_file": "docs/plans/t1.md"},
-            {"id": "t2", "status": "planned", "title": "Two", "plan_file": "docs/plans/t2.md"},
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+            {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
         archive_file = _make_archive([])
 
-        derived = {
-            "t1": {"derived_status": "unblocked"},
-            "t2": {"derived_status": "blocked"},
-        }
-
         stdout = io.StringIO()
-        with patch.object(status, "derive_statuses", return_value=derived):
-            with patch.object(sys, "stdout", stdout):
-                with patch.object(sys, "argv", [
-                    "status",
-                    "--queue-file", queue_file,
-                    "--archive-file", archive_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    status.main()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--queue-file", queue_file,
+                "--archive-file", archive_file,
+                "--plans-dir", plans_dir,
+            ]):
+                status.main()
 
         output = stdout.getvalue()
-        self.assertIn("Next unblocked tasks:", output)
+        self.assertIn("Next ready tasks:", output)
         self.assertIn("One", output)
-        self.assertNotIn("Two", output.split("Next unblocked tasks:")[1].split("\n\n")[0])
+        ready_section = output.split("Next ready tasks:")[1].split("\n\n")[0]
+        self.assertNotIn("Two", ready_section)
 
 
 @unittest.skipIf(next_cmd is None, "next command not yet implemented")
-class TestNextDerivedState(unittest.TestCase):
+class TestNextStoredState(unittest.TestCase):
     def test_refuses_on_plan_drift(self):
         """next exits non-zero when a plan file exists on disk but not in the queue."""
         queue_file = _make_queue([])
@@ -213,73 +161,67 @@ class TestNextDerivedState(unittest.TestCase):
 
         self.assertEqual(rc, 1)
 
-    def test_picks_first_derived_unblocked(self):
-        """next picks the first derived-unblocked task and transitions it."""
+    def test_picks_first_stored_ready_and_transitions(self):
+        """next picks the first stored-ready task and transitions it to in_progress."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
         queue_file = _make_queue(_resolve_plan_files([
-            {"id": "t1", "status": "planned", "title": "One", "plan_file": "docs/plans/t1.md"},
-            {"id": "t2", "status": "planned", "title": "Two", "plan_file": "docs/plans/t2.md"},
+            {"id": "t1", "state": "blocked", "title": "One", "plan_file": "docs/plans/t1.md"},
+            {"id": "t2", "state": "ready", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
         archive_file = _make_archive([])
-
-        derived = {
-            "t1": {"derived_status": "blocked"},
-            "t2": {"derived_status": "unblocked"},
-        }
 
         transition_calls = []
 
         def mock_run(cmd, **_kwargs):
-            transition_calls.append(cmd)
-            return _MockResult(0, "", "")
+            transition_calls.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-        with patch.object(next_cmd, "derive_statuses", return_value=derived):
-            with patch("subprocess.run", side_effect=mock_run):
-                with patch.object(sys, "argv", [
-                    "next",
-                    "--queue-file", queue_file,
-                    "--archive-file", archive_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    rc = next_cmd.main()
+        with patch.object(subprocess, "run", side_effect=mock_run):
+            with patch.object(sys, "argv", [
+                "next",
+                "--queue-file", queue_file,
+                "--archive-file", archive_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = next_cmd.main()
 
         self.assertEqual(rc, 0)
-        self.assertTrue(any("t2" in c and "in-progress" in c for c in transition_calls))
+        self.assertTrue(
+            any("t2" in c and "transition" in c and "in_progress" in c for c in transition_calls),
+            f"Expected transition to in_progress for t2, got {transition_calls}",
+        )
 
     def test_topological_order_respected(self):
-        """next picks the earliest derived-unblocked task in topological order."""
+        """next picks the earliest stored-ready task in topological order."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
         queue_file = _make_queue(_resolve_plan_files([
-            {"id": "t1", "status": "planned", "title": "One", "plan_file": "docs/plans/t1.md", "blocked_by": []},
-            {"id": "t2", "status": "planned", "title": "Two", "plan_file": "docs/plans/t2.md", "blocked_by": ["t1"]},
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md", "blocked_by": []},
+            {"id": "t2", "state": "ready", "title": "Two", "plan_file": "docs/plans/t2.md", "blocked_by": ["t1"]},
         ], plans_dir))
         archive_file = _make_archive([])
-
-        derived = {
-            "t1": {"derived_status": "unblocked"},
-            "t2": {"derived_status": "unblocked"},
-        }
 
         transition_calls = []
 
         def mock_run(cmd, **_kwargs):
-            transition_calls.append(cmd)
-            return _MockResult(0, "", "")
+            transition_calls.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-        with patch.object(next_cmd, "derive_statuses", return_value=derived):
-            with patch("subprocess.run", side_effect=mock_run):
-                with patch.object(sys, "argv", [
-                    "next",
-                    "--queue-file", queue_file,
-                    "--archive-file", archive_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    rc = next_cmd.main()
+        with patch.object(subprocess, "run", side_effect=mock_run):
+            with patch.object(sys, "argv", [
+                "next",
+                "--queue-file", queue_file,
+                "--archive-file", archive_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = next_cmd.main()
 
         self.assertEqual(rc, 0)
-        self.assertTrue(any("t1" in c and "in-progress" in c for c in transition_calls))
+        self.assertTrue(
+            any("t1" in c and "transition" in c and "in_progress" in c for c in transition_calls),
+            f"Expected transition to in_progress for t1, got {transition_calls}",
+        )
 
 
 if __name__ == "__main__":

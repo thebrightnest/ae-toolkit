@@ -27,6 +27,8 @@ from cli_adapter import resolve_cli_adapter
 from pipeline import STAGE_MAP, group_stages_by_session
 from queue import (
     current_state,
+    get_next_unblocked,
+    has_pending_tasks as queue_has_pending_tasks,
     mark_awaiting_merge,
     mark_status,
     read_queue,
@@ -220,46 +222,14 @@ def process_task(
     return True
 
 
-def derive_statuses(queue_file: str) -> dict[str, dict]:
-    """Derive ground-truth statuses for every task in the queue."""
-    result = subprocess.run(
-        ["python3", str(_SCRIPT_DIR / "aet-state"), "derive", queue_file],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(result.stderr, file=sys.stderr)
-        return {}
-    return json.loads(result.stdout) if result.stdout.strip() else {}
+def get_next_ready_task(queue: list[dict]) -> dict | None:
+    """Return the first task whose stored state is ``ready``."""
+    return get_next_unblocked(queue)
 
 
-def get_next_derived_unblocked(
-    queue: list[dict], derived: dict[str, dict]
-) -> dict | None:
-    """Return the first task whose derived status is ``unblocked``."""
-    for task in queue:
-        task_id = task.get("id")
-        ds = derived.get(task_id, {}).get("derived_status", "")
-        clean = ds.split(" (warning")[0]
-        if clean == "unblocked":
-            return task
-    return None
-
-
-def has_derived_pending_tasks(
-    queue: list[dict], derived: dict[str, dict]
-) -> bool:
-    """Return True if any task is still actionable (derived non-terminal)."""
-    terminal = {"merged", "abandoned", "done"}
-    for task in queue:
-        task_id = task.get("id")
-        ds = derived.get(task_id, {}).get("derived_status", "")
-        clean = ds.split(" (warning")[0]
-        if clean not in terminal and clean != "":
-            return True
-        if task.get("status") == "failed":
-            return True
-    return False
+def has_pending_tasks(queue: list[dict]) -> bool:
+    """Return True if any task is still actionable (stored non-terminal)."""
+    return queue_has_pending_tasks(queue)
 
 
 def _log_path(repo_root: str) -> str:
@@ -328,23 +298,21 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     successes = 0
     failures = 0
     stop_spawn = False
-    derived = derive_statuses(queue_file)
 
     while True:
-        # Refresh derived state before each spawn pass.
-        derived = derive_statuses(queue_file)
+        # Refresh stored state before each spawn pass.
         queue = read_queue(queue_file)
 
         # Spawn tasks while slots available
         spawned_this_cycle: set[str] = set()
         while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
-            task = get_next_derived_unblocked(queue, derived)
+            task = get_next_ready_task(queue)
             if not task:
                 break
 
             task_id = task["id"]
             if task_id in spawned_this_cycle:
-                # Defensive: derived state is stale and keeps returning the same task.
+                # Defensive: stored state is stale and keeps returning the same task.
                 break
 
             mark_status(queue, task_id, "in-progress")
@@ -356,8 +324,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             worktree_dir = create_worktree(repo_root, task_id)
             env["AET_WORKTREE"] = worktree_dir
 
-            # Record branch/worktree so aet-state derive sees in-progress and does
-            # not spawn the same task again on the next loop iteration.
+            # Record branch/worktree so the stored state reflects in_progress and
+            # does not spawn the same task again on the next loop iteration.
             # Store a repo-relative worktree path for portability.
             record_task_meta(
                 queue,
@@ -387,15 +355,14 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             task_ids.append(task_id)
             print(f"▶️  Spawned {task.get('title', task_id)} (PID {proc.pid})")
 
-            # Refresh derived state so the next spawn pass respects the branch we
+            # Refresh stored state so the next spawn pass respects the branch we
             # just recorded and does not pick the same task again.
-            derived = derive_statuses(queue_file)
             queue = read_queue(queue_file)
 
         if not running:
             if stop_spawn or _shutdown_requested:
                 break
-            if not has_derived_pending_tasks(queue, derived):
+            if not has_pending_tasks(queue):
                 break
             time.sleep(0.2)
             continue
@@ -412,8 +379,33 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
 
             if ret == 0:
                 print(f"   ✅ {task_id} awaiting merge")
-                mark_awaiting_merge(queue, task_id)
-                successes += 1
+                queue = read_queue(queue_file)
+                task = next((t for t in queue if t.get("id") == task_id), None)
+                from_state = current_state(task) if task else "in_progress"
+                aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+                if from_state == "awaiting_merge":
+                    successes += 1
+                else:
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            aet_state_bin,
+                            "transition",
+                            task_id,
+                            from_state,
+                            "awaiting_merge",
+                            queue_file,
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    if result.returncode != 0:
+                        print(f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}")
+                        mark_status(queue, task_id, "failed", "pipeline")
+                        stop_spawn = True
+                        failures += 1
+                    else:
+                        successes += 1
             else:
                 print(f"   ❌ {task_id} failed (exit {ret})")
                 mark_status(queue, task_id, "failed", "pipeline")

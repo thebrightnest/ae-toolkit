@@ -157,18 +157,19 @@ def write_queue(
 
 
 def get_next_unblocked(queue: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Return the first unblocked task."""
+    """Return the first stored-ready task."""
     for task in queue:
-        if task.get("status") == "unblocked":
+        if current_state(task) == "ready":
             return task
     return None
 
 
 def has_pending_tasks(queue: list[dict[str, Any]]) -> bool:
     """Check if any tasks are not in a terminal state."""
+    terminal = {"merged", "abandoned"}
     for task in queue:
-        status = task.get("status", "")
-        if status in ("unblocked", "blocked", "in-progress", "awaiting_merge"):
+        state = current_state(task)
+        if state is not None and state not in terminal:
             return True
     return False
 
