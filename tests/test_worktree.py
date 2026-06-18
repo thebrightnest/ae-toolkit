@@ -1,0 +1,63 @@
+"""Tests for aet-work worktree helpers."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+import worktree
+
+
+class TestCopyUntrackedFiles(unittest.TestCase):
+    def test_copies_untracked_plan_prd_and_adr_into_worktree(self):
+        """Untracked docs referenced by a plan are copied to the worktree."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+
+            # Initialize a repo so git ls-files works.
+            subprocess.run(["git", "init", "-q", repo_root], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "config", "user.name", "Test User"],
+                check=True,
+            )
+
+            # Create tracked directories so pathspecs match.
+            for subdir in [
+                "docs/plans",
+                "docs/prds",
+                "docs/adr",
+                "docs/audits",
+                "docs/retros",
+                "docs/product-briefs",
+            ]:
+                Path(repo_root, subdir).mkdir(parents=True, exist_ok=True)
+
+            # Create untracked files.
+            untracked_files = [
+                "docs/plans/x-demo.md",
+                "docs/prds/x-demo-prd.md",
+                "docs/adr/099-x-demo.md",
+                "docs/audits/x-demo-audit.md",
+                "docs/retros/x-demo-retro.md",
+                "docs/product-briefs/x-demo-brief.md",
+            ]
+            for rel_path in untracked_files:
+                Path(repo_root, rel_path).write_text("content", encoding="utf-8")
+
+            worktree.copy_untracked_files(repo_root, worktree_dir)
+
+            for rel_path in untracked_files:
+                dest = Path(worktree_dir, rel_path)
+                self.assertTrue(dest.exists(), f"Expected {rel_path} to be copied")
+                self.assertEqual(dest.read_text(encoding="utf-8"), "content")
+
+
+if __name__ == "__main__":
+    unittest.main()
