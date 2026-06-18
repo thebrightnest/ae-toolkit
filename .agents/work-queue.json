@@ -36,12 +36,13 @@
       "plan_file": "docs/plans/03-port-phases-3-4.md",
       "blocked_by": ["02-port-phases-0-2"],
       "blocks": ["04-port-phase-5-preview"],
-      "status": "planned",
-      "merge_commit": null,
+      "status": "merged",
+      "merge_commit": "c09b824",
       "completed_at": null,
-      "merged_at": null,
+      "merged_at": "2026-06-18T11:15:00+00:00",
       "worktree": null,
-      "branch": null
+      "branch": "03-port-phases-3-4",
+      "merge_strategy": "squash"
     },
     {
       "id": "04-port-phase-5-preview",
