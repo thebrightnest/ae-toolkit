@@ -1,5 +1,5 @@
 {
-  "queue_updated_at": "2026-06-18T19:11:16.674430",
+  "queue_updated_at": "2026-06-18T22:04:28.290973",
   "source_prd": "docs/prds/forward-only-deterministic-work-state-prd.md",
   "tasks": [
     {
@@ -150,20 +150,6 @@
       "branch": null
     },
     {
-      "id": "aet-validate-scope-closure-discipline-plan",
-      "title": "Plan: Add Closure Checks to Planning and Validation Skills",
-      "plan_file": "docs/plans/aet-validate-scope-closure-discipline-plan.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "merged",
-      "merge_commit": "b5d0b0e7556e9519512d9e2521f4d1b17342b4c5",
-      "completed_at": null,
-      "merged_at": "2026-06-18T01:05:00+00:00",
-      "worktree": null,
-      "branch": null,
-      "merge_strategy": "squash"
-    },
-    {
       "id": "aet-work-hybrid-orchestrator-core-plan",
       "title": "Plan: aet-work Hybrid Orchestrator \u2014 Core Implementation",
       "plan_file": "docs/plans/aet-work-hybrid-orchestrator-core-plan.md",
@@ -214,48 +200,6 @@
       "merged_at": null,
       "worktree": null,
       "branch": null
-    },
-    {
-      "id": "aet-work-state-refactor-derive-plan",
-      "title": "Plan: Make `aet-state derive` Blocker-Aware",
-      "plan_file": "docs/plans/aet-work-state-refactor-derive-plan.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "merged",
-      "merge_commit": "275d4ca2334d8a106c72ab806fbf399e55ec407e",
-      "completed_at": "2026-06-17T21:50:30.363362",
-      "merged_at": "2026-06-17T21:14:54.410647+00:00",
-      "worktree": null,
-      "branch": "aet-work-state-refactor-derive",
-      "merge_strategy": "squash"
-    },
-    {
-      "id": "aet-work-state-refactor-status-next-plan",
-      "title": "Plan: Update `status`, `next`, and Orchestrator to Use Derived State",
-      "plan_file": "docs/plans/aet-work-state-refactor-status-next-plan.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "merged",
-      "merge_commit": "5937509a564542f0e2794ef830bbe5dbf14a1d11",
-      "completed_at": null,
-      "merged_at": "2026-06-18T00:43:00+00:00",
-      "worktree": null,
-      "branch": null,
-      "merge_strategy": "squash"
-    },
-    {
-      "id": "aet-work-state-refactor-sync-init-plan",
-      "title": "Plan: Simplify `sync` and Create `init-queue`",
-      "plan_file": "docs/plans/aet-work-state-refactor-sync-init-plan.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "merged",
-      "merge_commit": "68f632240b1936612d96ea49b7628bb74755a81d",
-      "completed_at": null,
-      "merged_at": "2026-06-18T00:54:00+00:00",
-      "worktree": null,
-      "branch": null,
-      "merge_strategy": "squash"
     },
     {
       "id": "aet-work-yaml-fix-plan",
@@ -1140,20 +1084,6 @@
       "merged_at": null,
       "worktree": null,
       "branch": null
-    },
-    {
-      "id": "fods-01-record-merge",
-      "title": "Plan: Deterministic Merge Recording (`aet-state record-merge`)",
-      "plan_file": "docs/plans/fods-01-record-merge.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "merged",
-      "merge_commit": "2ab940e45ad1dde45145428be6bf16fc33c07328",
-      "completed_at": "2026-06-18T18:40:08.551948+00:00",
-      "merged_at": "2026-06-18T18:40:08.551948+00:00",
-      "worktree": null,
-      "branch": "fods-01-record-merge",
-      "merge_strategy": "squash"
     },
     {
       "id": "fods-02-state-spine",
