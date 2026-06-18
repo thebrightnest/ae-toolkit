@@ -59,5 +59,5 @@ Revert the `aet-work/bin/aet-state`, `aet-ship/SKILL.md`, and `aet-work/bin/orch
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
