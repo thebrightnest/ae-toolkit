@@ -205,6 +205,8 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 3. The orchestrator advances the plan through all stage groups sequentially.
 4. On completion, the branch is ready for `aet-ship`.
 
+**Queue bookkeeping:** When the plan file corresponds to a task already tracked in `.agents/work-queue.json`, `run-one` records the task's `branch` and `worktree`, transitions it to `in_progress` at the start of the run, and transitions it to `awaiting_merge` on success. This lets `aet-state record-merge` resolve the merge commit automatically after the PR ships. If the plan is not in the queue, or if `run-one` was spawned by `run` (`AET_TASK_ID` is set), the queue is left unchanged.
+
 **When to use:** For one-off plans where you want the full pipeline but don't need a queue.
 
 ### `derive`

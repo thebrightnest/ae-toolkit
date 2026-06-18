@@ -26,6 +26,7 @@ sys.path.insert(0, str(_LIB_DIR))
 from cli_adapter import resolve_cli_adapter
 from pipeline import STAGE_MAP, group_stages_by_session
 from queue import (
+    current_state,
     mark_awaiting_merge,
     mark_status,
     read_queue,
@@ -450,6 +451,88 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     return exit_code
 
 
+def _find_queued_task(queue: list[dict], plan_file: str) -> dict | None:
+    """Find a queued task that corresponds to ``plan_file``.
+
+    Prefer an exact match on ``plan_file``. Fall back to matching the task
+    ``id`` against the plan filename stem (with any ``-plan`` suffix removed).
+    """
+    plan_abs = os.path.abspath(plan_file)
+
+    # First pass: exact path match (normalize both sides).
+    for task in queue:
+        task_plan = task.get("plan_file", "")
+        if not task_plan:
+            continue
+        try:
+            if os.path.abspath(task_plan) == plan_abs:
+                return task
+        except OSError:
+            continue
+
+    # Second pass: task id matches filename stem.
+    stem = os.path.splitext(os.path.basename(plan_file))[0]
+    task_id = stem.removesuffix("-plan")
+    for task in queue:
+        if task.get("id") == task_id:
+            return task
+
+    return None
+
+
+def _record_run_one_in_queue(
+    queue_file: str,
+    task_id: str,
+    worktree: str,
+    branch: str,
+) -> bool:
+    """Transition a queued task to in-progress and record branch/worktree.
+
+    Uses ``aet-state transition`` to keep the queue's sole-writer rule intact,
+    then re-reads the queue and records worktree/branch metadata atomically.
+    Errors are logged but not raised so that a queue bookkeeping failure does
+    not block the underlying run.
+    """
+    try:
+        queue = read_queue(queue_file)
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        if not task:
+            print(f"   ⚠️  Task {task_id} disappeared from queue; skipping bookkeeping")
+            return False
+
+        from_state = current_state(task)
+        if from_state is None:
+            from_state = "planned"
+
+        aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+        result = subprocess.run(
+            [
+                sys.executable,
+                aet_state_bin,
+                "transition",
+                task_id,
+                from_state,
+                "in_progress",
+                queue_file,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"   ⚠️  Could not transition {task_id} to in_progress: {result.stderr.strip()}")
+            return False
+
+        # Re-read the latest queue and record branch/worktree.
+        queue = read_queue(queue_file)
+        record_task_meta(queue, task_id, worktree, branch)
+        write_queue(queue_file, queue)
+        print(f"   📝 Recorded {task_id} as in-progress (branch={branch}, worktree={worktree})")
+        return True
+    except Exception as exc:  # pragma: no cover - defensive logging
+        print(f"   ⚠️  Queue bookkeeping failed for {task_id}: {exc}")
+        return False
+
+
 def run_single(args: argparse.Namespace, adapter) -> int:
     """Run single-plan mode."""
     repo_root = args.repo_root
@@ -489,6 +572,25 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     worktree_dir = os.environ.get("AET_WORKTREE")
     if worktree_dir and not os.path.isabs(worktree_dir):
         worktree_dir = os.path.join(repo_root, worktree_dir)
+
+    # If this plan is tracked in the work queue and this is a top-level run-one
+    # (not a child spawned by run_batch), transition the task to in-progress
+    # and record branch/worktree so aet-state record-merge works after shipping.
+    spawned_by_batch = bool(os.environ.get("AET_TASK_ID"))
+    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    queued_task = None
+    if os.path.exists(queue_file) and not spawned_by_batch:
+        queue = read_queue(queue_file)
+        queued_task = _find_queued_task(queue, plan_file)
+
+    if queued_task and not spawned_by_batch:
+        queued_task_id = queued_task.get("id", task_id)
+        # Ensure the worktree/branch exist before recording them.
+        worktree_dir = create_worktree(repo_root, queued_task_id)
+        worktree_rel = os.path.relpath(worktree_dir, repo_root)
+        _record_run_one_in_queue(queue_file, queued_task_id, worktree_rel, queued_task_id)
+        task_id = queued_task_id
+
     task = {
         "id": task_id,
         "title": task_id,
@@ -497,6 +599,36 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
     success = process_task(task, repo_root, adapter, args.isolation, worktree_dir)
     exit_code = 0 if success else 1
+
+    # For top-level run-one on a queued task, mirror run_batch and transition
+    # the task to awaiting_merge on success so aet-state record-merge can run.
+    if success and queued_task and not spawned_by_batch:
+        try:
+            queue = read_queue(queue_file)
+            task = next((t for t in queue if t.get("id") == task_id), None)
+            if task:
+                from_state = current_state(task) or "in_progress"
+                aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        aet_state_bin,
+                        "transition",
+                        task_id,
+                        from_state,
+                        "awaiting_merge",
+                        queue_file,
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    print(f"   ✅ Task {task_id} awaiting merge")
+                else:
+                    print(f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}")
+        except Exception as exc:  # pragma: no cover - defensive logging
+            print(f"   ⚠️  Could not mark {task_id} awaiting merge: {exc}")
+
     end_time = telemetry.iso_now()
 
     # Read the final stage from the worktree plan file, falling back to the
