@@ -1,3 +1,9 @@
+---
+id: waf-03-aet-ship-branch-lifecycle
+blocked_by: []
+size: M
+---
+
 # Plan: aet-ship Branch Lifecycle & Release Gating
 
 ## Context

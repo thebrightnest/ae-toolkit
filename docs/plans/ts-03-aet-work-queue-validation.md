@@ -1,3 +1,10 @@
+---
+id: ts-03-aet-work-queue-validation
+blocked_by:
+  - ts-01-aet-plan-guardrail
+size: M
+---
+
 # Plan: Add Queue Size Validation to aet-work
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: ph-03-aet-review-removal-safety
+blocked_by: []
+size: M
+---
+
 # Plan: Add Removal Safety Lens to aet-review
 
 ## Context

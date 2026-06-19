@@ -1,3 +1,9 @@
+---
+id: abr-gate-01-fix-approval-gate
+blocked_by: []
+size: S
+---
+
 # abr-gate-01: Add Fix Approval Gate to aet-bug-report
 
 ## Context

@@ -1,3 +1,10 @@
+---
+id: rp-06-write-adr
+blocked_by:
+  - rp-03-write-skill-core
+size: S
+---
+
 # Plan: Write ADR for Ship/Release-Prep Separation
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: rp-03-write-skill-core
+blocked_by: []
+size: S
+---
+
 # Plan: Write SKILL.md Core Workflow
 
 ## Context

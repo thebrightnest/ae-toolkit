@@ -1,3 +1,9 @@
+---
+id: rp-02-write-bash-script
+blocked_by: []
+size: S
+---
+
 # Plan: Write release-prep.sh Bash Script
 
 ## Context

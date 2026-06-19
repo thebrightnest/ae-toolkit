@@ -1,3 +1,9 @@
+---
+id: cov-01-plan-validation-strategy
+blocked_by: []
+size: M
+---
+
 # Plan: aet-plan — Concrete Validation Strategy Requirement
 
 ## Context

@@ -1,3 +1,10 @@
+---
+id: 02-port-phases-0-2
+blocked_by:
+  - 01-scaffold-skill-structure
+size: M
+---
+
 # Ticket 2: Port Phases 0–2 (Pre-checks, Context, Research)
 
 ## Parent

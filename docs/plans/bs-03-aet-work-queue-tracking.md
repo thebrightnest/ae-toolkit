@@ -1,3 +1,10 @@
+---
+id: bs-03-aet-work-queue-tracking
+blocked_by:
+  - bs-02-pipeline-implement-merged-stage
+size: S
+---
+
 # Plan: aet-work Queue-Level Branch Tracking
 
 ## Context

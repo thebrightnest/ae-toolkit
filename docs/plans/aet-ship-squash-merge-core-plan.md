@@ -1,3 +1,9 @@
+---
+id: aet-ship-squash-merge-core-plan
+blocked_by: []
+size: M
+---
+
 # Plan: aet-ship Squash-Merge Core Support
 
 ## Context

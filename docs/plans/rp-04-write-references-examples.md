@@ -1,3 +1,10 @@
+---
+id: rp-04-write-references-examples
+blocked_by:
+  - rp-03-write-skill-core
+size: S
+---
+
 # Plan: Write References and Examples
 
 ## Context

@@ -1,3 +1,14 @@
+---
+id: ts-06-package-validate
+blocked_by:
+  - ts-01-aet-plan-guardrail
+  - ts-02-aet-pipeline-plan-guardrail
+  - ts-03-aet-work-queue-validation
+  - ts-04-aet-implement-runtime-enforcement
+  - ts-05-conventions-docs
+size: S
+---
+
 # Plan: Package and Validate All Updated Skills
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: aug-01-aet-upgrade-skill
+blocked_by: []
+size: M
+---
+
 # Plan: Create aet-upgrade Skill
 
 ## Context

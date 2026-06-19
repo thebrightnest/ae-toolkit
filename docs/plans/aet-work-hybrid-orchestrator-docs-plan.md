@@ -1,3 +1,10 @@
+---
+id: aet-work-hybrid-orchestrator-docs-plan
+blocked_by:
+  - aet-work-hybrid-orchestrator-core-plan
+size: M
+---
+
 # Plan: aet-work Hybrid Orchestrator — Documentation & Validation
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: 2026-06-18-fix-nondeterministic-skill-packaging
+blocked_by: []
+size: S
+---
+
 # Plan: Fix Non-Deterministic Skill Packaging
 
 ## Problem

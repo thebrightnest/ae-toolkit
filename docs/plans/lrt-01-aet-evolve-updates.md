@@ -1,3 +1,9 @@
+---
+id: lrt-01-aet-evolve-updates
+blocked_by: []
+size: M
+---
+
 # Plan: Update aet-evolve with Schema, Retro Debt, and Escalation Ladder
 
 ## Context

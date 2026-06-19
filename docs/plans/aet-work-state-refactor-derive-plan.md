@@ -1,3 +1,10 @@
+---
+id: aet-work-state-refactor-derive-plan
+blocked_by:
+  - aet-work-state-refactor-status-next-plan
+size: M
+---
+
 # Plan: Make `aet-state derive` Blocker-Aware
 
 ## Context
