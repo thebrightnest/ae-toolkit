@@ -46,6 +46,26 @@ Rules:
 - The dual-limit model (Task Size Guardrails) is the operative filter: if a plan exceeds AI-complexity limits, it does not belong in `docs/plans/`.
 - Directory creation is the user's responsibility; skills document the convention but do not auto-create directories.
 
+## Plan Frontmatter Contract
+
+Every atomic plan file in `docs/plans/` must begin with YAML frontmatter:
+
+```yaml
+---
+id: { ticket-id }
+size: S/M/L
+blocked_by:
+  - { blocker-id }
+---
+```
+
+- `id` must match the plan filename stem and be unique within the PRD family.
+- `blocked_by` is the authoritative dependency list; prose dependency sections are ignored by `aet-work sync`.
+- `size` is the S/M/L complexity label from the dual-limit model.
+- `stage` lives only in the task record, never in plan frontmatter.
+
+`aet-work sync` validates the contract and fails closed on missing or duplicate IDs, unknown blockers, mismatched filenames, or invalid size values.
+
 ## SKILL.md Format
 
 ### YAML Frontmatter
@@ -126,6 +146,35 @@ When a task exceeds limits:
 2. Re-evaluate each child. Repeat recursively.
 3. **Max split depth = 3.** If a child still fails, mark it `⚠️ ATOMIC OVERSIZED` and surface for explicit user approval.
 4. Document splits with `Split from: {parent-id}` and suffix IDs (`01a`, `01b`).
+
+## Recorded-Forward Work Queue State
+
+Workflow state is recorded at transition time and trusted on read.
+
+- `aet-state transition` is the only writer of `tasks[].state`.
+- `aet-work status`, `aet-work next`, and the orchestrator read stored `state` directly and make zero git calls on the read path.
+- `aet-state audit` reconciles stored state against git ground truth on demand; it never runs during normal operation.
+
+### Legal Transitions
+
+```text
+sync:        ∅ → planned
+sync:        planned → blocked            (pending_blockers > 0)
+sync:        planned → ready              (pending_blockers == 0)
+transition:  blocked → ready              (last blocker reached terminal)
+transition:  ready → in_progress          (branch + worktree recorded)
+transition:  in_progress.stage advances   (tdd → implement → qa → review → cso → sync-docs)
+transition:  in_progress → awaiting_merge (pipeline exited 0; NOT terminal)
+transition:  awaiting_merge → merged      (TERMINAL; merge_commit verified once)
+transition:  any → abandoned (reason)     (TERMINAL)
+transition:  in_progress → failed         (needs inspection; may re-enter)
+```
+
+Terminal states are `merged` and `abandoned`. Only terminal states satisfy blockers; `awaiting_merge` does not.
+
+### Live / Settled Partition
+
+`.agents/work-queue.json` holds only non-terminal tasks. When a task reaches a terminal state, the writer appends its final record and history to `.agents/work-history.jsonl` and removes it from the live file atomically. Settled history is retained for auditability but is never loaded for scheduling.
 
 ## Execution Mode
 

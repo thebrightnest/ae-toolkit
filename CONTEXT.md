@@ -20,13 +20,13 @@ _Avoid_: PRD, roadmap, spec.
 A value stored in the queue JSON that does not change unless the underlying reality changes, such as `plan_file`, `blocked_by`, `branch`, `worktree`, or `merge_commit`.
 _Avoid_: status.
 
-**Stored Status**:
-A workflow state written to `tasks[].status`: `planned`, `in-progress`, `merged`, `abandoned`, or `failed`.
-_Avoid_: blocked, unblocked.
+**State**:
+The canonical workflow state stored in `tasks[].state`: `planned`, `ready`, `blocked`, `in_progress`, `awaiting_merge`, `merged`, `abandoned`, or `failed`.
+_Avoid_: using `status` for scheduling truth.
 
-**Derived Status**:
-Actionable state computed on read from persistent facts and git ground truth: `blocked`, `unblocked`, `in-progress`, or `merged`.
-_Avoid_: stored status.
+**Status (legacy)**:
+The historical `tasks[].status` field. New code uses `state`; `status` is retained only for backwards compatibility during migration.
+_Avoid_: writing new logic against `status`.
 
 **Blocker**:
 A task that must reach a terminal state before another task can become pickable.
@@ -52,14 +52,14 @@ The product requirements document that generated the current queue, stored as wr
 - A **Task** has exactly one **Plan File**.
 - A **Task** may have zero or more **Blockers**.
 - A **Task** may be a **Blocker** for zero or more **Dependents**.
-- A **Dependent** is **Derived** as `unblocked` only when all its **Blockers** have a **Terminal Status**.
+- A **Dependent** becomes `ready` only when all its **Blockers** have a **Terminal State**; the writer promotes it forward when the last blocker reaches terminal.
 - **Plan Drift** occurs when a **Plan File** is absent from both the **Work Queue** and the **Archive / Settled History**.
 
 ## Example dialogue
 
-> **Dev:** “I added a new plan file. Why doesn’t `aet-work status` show it as unblocked?”
+> **Dev:** “I added a new plan file. Why doesn’t `aet-work status` show it as `ready`?”
 >
-> **Expert:** “`unblocked` is derived, not stored. Run `aet-work sync` so the **Work Queue** has the **Persistent Facts**, then `derive` will compute the **Derived Status** from the blockers and git state.”
+> **Expert:** “`ready` is a stored state. Run `aet-work sync` to compile the frontmatter contract into the **Work Queue**; `sync` will set `state` to `ready` if `blocked_by` is empty, or to `blocked` with `pending_blockers` set. The writer promotes dependents to `ready` forward as blockers become terminal.”
 
 ## Forward-Only State Model (ADR-011)
 
@@ -91,5 +91,5 @@ Explicit human-run reconciliation of stored state against git; replaces implicit
 
 ## Flagged ambiguities
 
-- “status” was used to mean both **Stored Status** and **Derived Status**. Resolved: these are distinct concepts; only **Stored Status** lives in JSON.
-- “done” was used interchangeably with `merged`. Resolved: `merged` is the canonical terminal status; `done` is legacy.
+- “status” was used to mean both stored state and derived state. Resolved: `state` is the canonical stored value; `status` is legacy.
+- “done” was used interchangeably with `merged`. Resolved: `merged` is the canonical terminal state; `done` is legacy.

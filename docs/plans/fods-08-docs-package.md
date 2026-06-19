@@ -61,5 +61,5 @@ Docs-only and regenerated artifacts; revert the doc commits and re-run `make pac
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_

@@ -31,7 +31,7 @@ Entry-point skills enforce symmetric guards to prevent misrouted work:
 
 ## Canonical Stage State Machine
 
-The `aet-work` orchestrator is the sole conductor of the pipeline. It reads each plan's stage footer, spawns isolated agent sessions per stage group, and advances plans automatically.
+The `aet-work` orchestrator is the sole conductor of the pipeline. It reads each task's recorded `state` and `stage` from `.agents/work-queue.json`, spawns isolated agent sessions per stage group, and advances plans automatically. The plan footer `*Stage:*` is a human breadcrumb, not a scheduler input.
 
 | Stage             | Meaning                             | Next Step                 |
 | ----------------- | ----------------------------------- | ------------------------- |
@@ -46,6 +46,55 @@ The `aet-work` orchestrator is the sole conductor of the pipeline. It reads each
 | `secure`          | Security audit passed               | `aet-sync-docs`           |
 | `synced`          | Docs synced to reality              | `aet-ship`                |
 | `merged`          | On `origin/main`                    | None — pipeline complete  |
+
+## Recorded-Forward State
+
+Workflow state is **recorded at transition time and trusted on read**.
+
+- `aet-state transition` is the only writer of `tasks[].state`.
+- `aet-work status`, `aet-work next`, and the orchestrator project the stored `state` directly and make **zero git calls** on the read path.
+- `aet-state audit` reconciles stored state against git ground truth on demand; it is never invoked during normal operation.
+
+## Legal Transitions
+
+```text
+sync:        ∅ → planned
+sync:        planned → blocked            (pending_blockers > 0)
+sync:        planned → ready              (pending_blockers == 0)
+transition:  blocked → ready              (last blocker reached terminal)
+transition:  ready → in_progress          (branch + worktree recorded)
+transition:  in_progress.stage advances   (tdd → implement → qa → review → cso → sync-docs)
+transition:  in_progress → awaiting_merge (pipeline exited 0; NOT terminal)
+transition:  awaiting_merge → merged      (TERMINAL; merge_commit verified once)
+transition:  any → abandoned (reason)     (TERMINAL)
+transition:  in_progress → failed         (needs inspection; may re-enter)
+```
+
+Terminal states are `merged` and `abandoned`. Only terminal states satisfy blockers. `awaiting_merge` deliberately does **not** satisfy blockers.
+
+## Intake Contract
+
+Atomic plan files must carry a validated YAML frontmatter contract:
+
+```yaml
+---
+id: { ticket-id }
+size: S/M/L
+blocked_by:
+  - { blocker-id }
+---
+```
+
+- `id` must match the filename stem and be unique within the PRD family.
+- `blocked_by` is the authoritative dependency DAG; prose dependency sections are ignored by `aet-work sync`.
+- `size` is the S/M/L complexity label.
+- `stage` lives only in the task record, never in plan frontmatter.
+
+`aet-work sync` validates every plan and fails closed on missing, duplicate, or mismatched IDs, unknown blockers, or invalid size values.
+
+## Live / Settled Partition
+
+`.agents/work-queue.json` holds only non-terminal tasks. When a task reaches a terminal state, the writer appends its final record plus history to `.agents/work-history.jsonl` and removes it from the live file atomically. The orchestrator, `status`, and `next` never load settled history for scheduling.
 
 ## Diff Budget for Bug Fixes
 
