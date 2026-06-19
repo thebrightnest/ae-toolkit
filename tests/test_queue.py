@@ -16,6 +16,7 @@ from queue import (
     mark_awaiting_merge,
     mark_completed,
     mark_status,
+    read_history,
     read_queue,
     record_task_meta,
     seal_terminal,
@@ -123,6 +124,21 @@ class TestQueue(unittest.TestCase):
         record_task_meta(queue, "t1", "/path/to/wt", "feat-001")
         self.assertEqual(queue[0]["worktree"], "/path/to/wt")
         self.assertEqual(queue[0]["branch"], "feat-001")
+
+    def test_read_history_missing_file_returns_empty_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_file = Path(tmp) / "work-history.jsonl"
+            self.assertEqual(read_history(str(history_file)), [])
+
+    def test_read_history_skips_blank_lines_and_parses_jsonl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_file = Path(tmp) / "work-history.jsonl"
+            history_file.write_text(
+                '{"id": "t1", "state": "merged"}\n\n{"id": "t2", "state": "abandoned"}\n',
+                encoding="utf-8",
+            )
+            records = read_history(str(history_file))
+            self.assertEqual([r["id"] for r in records], ["t1", "t2"])
 
     def test_terminal_seal_removes_from_live_and_appends_jsonl(self):
         """Sealing a task moves it from the live queue to the settled history log."""
