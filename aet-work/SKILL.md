@@ -345,6 +345,8 @@ Seal terminal tasks and remove their worktrees atomically. Repairs stale queue e
    - If the directory exists but has 0 commits ahead of main (`git rev-list --count main..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
 8. Report archived, removed, repaired, and remaining worktrees
 
+For the full one-time upgrade procedure for older projects that predate the forward-only state model, see [`references/upgrading-existing-project.md`](references/upgrading-existing-project.md).
+
 ## Key Principles
 
 - **Queue-unaware pipeline** — individual skills (aet-tdd, aet-implement, aet-qa, etc.) know nothing about the queue. The orchestrator checks results and updates the queue.
