@@ -267,9 +267,9 @@ def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
 
     # Cannot set merged without ancestry check
     if to_stage == "merged":
-        if not branch:
-            return (False, "Cannot set merged: no branch associated with task.")
-        on_main = is_ancestor_of_main(branch, cwd=cwd)
+        on_main = False
+        if branch:
+            on_main = is_ancestor_of_main(branch, cwd=cwd)
         if merge_commit:
             on_main = on_main or is_ancestor_of_main(merge_commit, cwd=cwd)
         if not on_main:
