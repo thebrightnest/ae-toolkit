@@ -34,7 +34,11 @@ from queue import (
     write_queue,
 )
 import telemetry
-from verifier import read_plan_stage, verify_stage_advancement
+from verifier import (
+    read_plan_stage,
+    verify_branch_has_commits,
+    verify_stage_advancement,
+)
 from worktree import (
     check_main_hygiene,
     copy_untracked_files,
@@ -250,14 +254,20 @@ def process_task(
                 print(f"   ❌ Stage failed with exit code {exit_code}")
                 return False
 
+            # Verify the stage produced commits before persisting the advance.
+            ok, msg = verify_branch_has_commits(worktree_dir)
+            if not ok:
+                print(f"   ❌ Stage verification failed: {msg}")
+                return False
+
             # Record the advanced stage in the task record.
             if not _record_stage(task, next_stage_name, repo_root):
                 print(f"   ❌ Could not record stage {next_stage_name} for {task_id}")
                 return False
 
-            # Verify stage advancement against the recorded stage.
+            # Confirm the recorded stage matches the expected target.
             ok, msg = verify_stage_advancement(
-                task.get("stage"), worktree_dir, next_stage_name, retries=1
+                task.get("stage"), worktree_dir, next_stage_name, retries=0
             )
             if not ok:
                 print(f"   ❌ Stage verification failed: {msg}")
