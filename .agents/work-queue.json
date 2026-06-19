@@ -1170,20 +1170,32 @@
       "plan_file": "docs/plans/2026-06-18-orchestrator-run-one-hardening.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "state": "ready",
+      "status": "failed",
+      "state": "failed",
       "pending_blockers": 0,
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null,
+      "worktree": ".worktrees/2026-06-18-orchestrator-run-one-hardening",
+      "branch": "2026-06-18-orchestrator-run-one-hardening",
       "history": [
         {
           "from": null,
           "to": "planned",
           "at": "2026-06-19T17:23:21.877233+00:00",
           "by": "sync"
+        },
+        {
+          "from": "ready",
+          "to": "in_progress",
+          "at": "2026-06-19T17:53:53.810086+00:00",
+          "by": "transition"
+        },
+        {
+          "from": "in_progress",
+          "to": "failed",
+          "at": "2026-06-19T17:54:05.014743+00:00",
+          "by": "transition"
         }
       ]
     },
@@ -1193,20 +1205,32 @@
       "plan_file": "docs/plans/aet-validate-scope-closure-discipline-plan.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "state": "ready",
+      "status": "failed",
+      "state": "failed",
       "pending_blockers": 0,
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null,
+      "worktree": ".worktrees/aet-validate-scope-closure-discipline-plan",
+      "branch": "aet-validate-scope-closure-discipline-plan",
       "history": [
         {
           "from": null,
           "to": "planned",
           "at": "2026-06-19T17:23:21.878541+00:00",
           "by": "sync"
+        },
+        {
+          "from": "ready",
+          "to": "in_progress",
+          "at": "2026-06-19T17:53:56.787454+00:00",
+          "by": "transition"
+        },
+        {
+          "from": "in_progress",
+          "to": "failed",
+          "at": "2026-06-19T17:54:05.341319+00:00",
+          "by": "transition"
         }
       ]
     },
@@ -1291,20 +1315,32 @@
       "plan_file": "docs/plans/fods-01-record-merge.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "state": "ready",
+      "status": "failed",
+      "state": "failed",
       "pending_blockers": 0,
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null,
+      "worktree": ".worktrees/fods-01-record-merge",
+      "branch": "fods-01-record-merge",
       "history": [
         {
           "from": null,
           "to": "planned",
           "at": "2026-06-19T17:23:21.881339+00:00",
           "by": "sync"
+        },
+        {
+          "from": "ready",
+          "to": "in_progress",
+          "at": "2026-06-19T17:53:59.463797+00:00",
+          "by": "transition"
+        },
+        {
+          "from": "in_progress",
+          "to": "failed",
+          "at": "2026-06-19T17:54:05.677615+00:00",
+          "by": "transition"
         }
       ]
     },
@@ -1314,20 +1350,32 @@
       "plan_file": "docs/plans/run-one-queue-bookkeeping-plan.md",
       "blocked_by": [],
       "blocks": [],
-      "status": "planned",
-      "state": "ready",
+      "status": "failed",
+      "state": "failed",
       "pending_blockers": 0,
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null,
+      "worktree": ".worktrees/run-one-queue-bookkeeping-plan",
+      "branch": "run-one-queue-bookkeeping-plan",
       "history": [
         {
           "from": null,
           "to": "planned",
           "at": "2026-06-19T17:23:21.882773+00:00",
           "by": "sync"
+        },
+        {
+          "from": "ready",
+          "to": "in_progress",
+          "at": "2026-06-19T17:54:02.231670+00:00",
+          "by": "transition"
+        },
+        {
+          "from": "in_progress",
+          "to": "failed",
+          "at": "2026-06-19T17:54:06.002463+00:00",
+          "by": "transition"
         }
       ]
     }
