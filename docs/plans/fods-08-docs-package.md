@@ -61,4 +61,5 @@ Docs-only and regenerated artifacts; revert the doc commits and re-run `make pac
 
 ---
 
-_Stage: reviewed_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
