@@ -10,18 +10,79 @@ from queue import append_history  # noqa: E402
 
 
 def _unquote_scalar(value: str) -> str:
-    """Strip matching surrounding quotes from a YAML scalar value."""
+    """Strip matching surrounding quotes from a YAML scalar value.
+
+    Does not process YAML escape sequences; the contract does not require them.
+    """
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
         return value[1:-1]
     return value
 
 
+def _parse_scalar(value: str) -> str:
+    """Parse a YAML scalar value after the colon.
+
+    Handles empty strings, bare words, and single/double-quoted strings.
+    The value passed in is everything after ``key:``.
+    """
+    return _unquote_scalar(value)
+
+
+def _parse_inline_list(value: str) -> list[str] | None:
+    """Parse an inline YAML list ``[a, 'b', "c"]``.
+
+    Returns a list of string items, or ``None`` if the syntax is malformed
+    (unclosed quotes, unmatched brackets, etc.).
+    """
+    value = value.strip()
+    if not (value.startswith("[") and value.endswith("]")):
+        return None
+    inner = value[1:-1]
+
+    items: list[str] = []
+    current: list[str] = []
+    in_single = False
+    in_double = False
+
+    for ch in inner:
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            current.append(ch)
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+            current.append(ch)
+        elif ch == "," and not in_single and not in_double:
+            item = "".join(current).strip()
+            if item:
+                items.append(_unquote_scalar(item))
+            current = []
+        else:
+            current.append(ch)
+
+    if in_single or in_double:
+        return None
+
+    item = "".join(current).strip()
+    if item:
+        items.append(_unquote_scalar(item))
+    return items
+
+
 def parse_frontmatter(path: Path) -> dict[str, Any]:
     """Parse the YAML frontmatter contract for a plan file.
 
-    Supported subset: top-level scalar keys and block-style string lists.
-    Returns an empty dict when no frontmatter is present.
+    Supported subset:
+
+      - Top-level scalar keys: ``key: value``
+      - Empty lists: ``key:`` or ``key: []``
+      - Inline string lists: ``key: [a, 'b', "c"]``
+      - Block string lists:
+        ``key:\n  - a\n  - b``
+
+    Returns an empty dict when no frontmatter is present. Values that cannot
+    be parsed cleanly are returned as raw strings so downstream validation can
+    reject them.
     """
     content = path.read_text(errors="ignore")
     if not content.startswith("---"):
@@ -32,30 +93,54 @@ def parse_frontmatter(path: Path) -> dict[str, Any]:
 
     data: dict[str, Any] = {}
     current_key: str | None = None
+    current_indent = 0
+
     for raw_line in parts[1].splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
 
-        if line.startswith("- "):
+        # A list item belongs to the most recent key if it is indented more
+        # than that key was, or if it is the immediate continuation of a block
+        # list we have already started.
+        if stripped.startswith("- "):
             if current_key is None:
                 continue
-            item = _unquote_scalar(line[2:])
+            # Accept block list items regardless of indentation; YAML allows
+            # any indentation under a key as long as it is consistent.
+            item = _parse_scalar(stripped[2:])
             if not isinstance(data.get(current_key), list):
                 data[current_key] = []
             data[current_key].append(item)
             continue
 
-        if ":" not in line:
+        if ":" not in stripped:
             continue
-        key, _, value = line.partition(":")
+
+        key, _, value = stripped.partition(":")
         key = key.strip()
         value = value.strip()
+
+        # Detect whether this line is actually a continuation value for an
+        # indented block scalar. The contract does not use block scalars, so
+        # any line that is more indented than the current key and does not
+        # start with ``-`` is ignored.
+        line_indent = len(raw_line) - len(raw_line.lstrip())
+        if current_key is not None and line_indent > current_indent and not stripped.startswith("-"):
+            continue
+
         current_key = key
-        if value:
-            data[key] = _unquote_scalar(value)
-        else:
+        current_indent = line_indent
+
+        if not value:
             data[key] = []
+        elif value == "[]":
+            data[key] = []
+        elif value.startswith("["):
+            parsed = _parse_inline_list(value)
+            data[key] = parsed if parsed is not None else value
+        else:
+            data[key] = _parse_scalar(value)
 
     if "blocked_by" not in data:
         data["blocked_by"] = []

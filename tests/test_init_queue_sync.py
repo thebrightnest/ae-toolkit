@@ -108,6 +108,87 @@ class TestFrontmatterParser(unittest.TestCase):
         data = plan_parser.parse_frontmatter(plan)
         self.assertEqual(data, {})
 
+    def test_parse_frontmatter_inline_list_with_quotes(self):
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "id: feat-001\n"
+            "size: M\n"
+            "blocked_by: ['feat-000', \"feat-999\", feat-998]\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["blocked_by"], ["feat-000", "feat-999", "feat-998"])
+
+    def test_parse_frontmatter_inline_list_with_comma_inside_quotes(self):
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "id: feat-001\n"
+            "size: M\n"
+            "blocked_by: ['feat-000, feat-999']\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["blocked_by"], ["feat-000, feat-999"])
+
+    def test_parse_frontmatter_scalar_with_colon_in_quotes(self):
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            '---\n'
+            'id: feat-001\n'
+            'size: M\n'
+            'title: "One: two"\n'
+            '---\n\n# One\n',
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["title"], "One: two")
+
+    def test_parse_frontmatter_rejects_unclosed_inline_list_quote(self):
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "id: feat-001\n"
+            "size: M\n"
+            "blocked_by: ['feat-000\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        # Malformed inline list falls back to raw string for validation to reject.
+        self.assertIsInstance(data["blocked_by"], str)
+
+    def test_parse_frontmatter_block_list(self):
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "id: feat-001\n"
+            "size: M\n"
+            "blocked_by:\n"
+            "  - feat-000\n"
+            "  - feat-999\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["blocked_by"], ["feat-000", "feat-999"])
+
+    def test_parse_frontmatter_empty_inline_list(self):
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "id: feat-001\n"
+            "size: M\n"
+            "blocked_by: []\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["blocked_by"], [])
+
 
 class TestFrontmatterIntake(unittest.TestCase):
     def setUp(self):
