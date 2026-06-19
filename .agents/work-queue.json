@@ -1137,61 +1137,6 @@
         }
       ],
       "merge_strategy": "squash"
-    },
-    {
-      "id": "fods-08-docs-package",
-      "title": "Plan: Cross-Cutting Docs Update & Repackage",
-      "plan_file": "docs/plans/fods-08-docs-package.md",
-      "blocked_by": [
-        "fods-04-stage-substate",
-        "fods-06-migration-reconcile",
-        "fods-07-live-settled-partition"
-      ],
-      "blocks": [],
-      "status": "in-progress",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": ".worktrees/fods-08-docs-package",
-      "branch": "fods-08-docs-package",
-      "state": "in_progress",
-      "history": [
-        {
-          "from": "planned",
-          "to": "in_progress",
-          "at": "2026-06-19T08:28:04.237943+00:00",
-          "by": "transition"
-        },
-        {
-          "from": null,
-          "to": "implemented",
-          "at": "2026-06-19T08:36:50.044717+00:00",
-          "by": "orch",
-          "evidence": {
-            "kind": "stage"
-          }
-        },
-        {
-          "from": "implemented",
-          "to": "qa-complete",
-          "at": "2026-06-19T08:38:35.808294+00:00",
-          "by": "orch",
-          "evidence": {
-            "kind": "stage"
-          }
-        },
-        {
-          "from": "qa-complete",
-          "to": "reviewed",
-          "at": "2026-06-19T08:41:28.542288+00:00",
-          "by": "orch",
-          "evidence": {
-            "kind": "stage"
-          }
-        }
-      ],
-      "stage": "reviewed",
-      "pending_blockers": 0
     }
   ]
 }
