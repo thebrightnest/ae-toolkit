@@ -1,3 +1,11 @@
+---
+id: aet-work-state-refactor-status-next-plan
+blocked_by:
+  - aet-work-state-refactor-derive-plan
+  - aet-work-state-refactor-sync-init-plan
+size: M
+---
+
 # Plan: Update `status`, `next`, and Orchestrator to Use Derived State
 
 ## Context

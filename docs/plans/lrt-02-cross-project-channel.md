@@ -1,3 +1,9 @@
+---
+id: lrt-02-cross-project-channel
+blocked_by: []
+size: M
+---
+
 # Plan: Cross-Project Feedback Channel and --toolkit Flag
 
 ## Context

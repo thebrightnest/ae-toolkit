@@ -1,3 +1,9 @@
+---
+id: clv-02-foundation-smoke-integration
+blocked_by: []
+size: M
+---
+
 # Plan: Foundation Smoke Checks, Gate Calibration, and Mock-Boundary Policy
 
 ## Context

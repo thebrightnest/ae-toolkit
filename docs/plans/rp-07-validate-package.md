@@ -1,3 +1,14 @@
+---
+id: rp-07-validate-package
+blocked_by:
+  - rp-02-write-bash-script
+  - rp-03-write-skill-core
+  - rp-04-write-references-examples
+  - rp-05-update-aet-ship-boundary
+  - rp-06-write-adr
+size: S
+---
+
 # Plan: Validate and Package aet-release-prep
 
 ## Context

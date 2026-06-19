@@ -1,3 +1,10 @@
+---
+id: ph-01-plan-template-merge-step
+blocked_by:
+  - ph-02-work-queue-drift-detection
+size: S
+---
+
 # Plan: Add Merge-to-Main Step to Plan Template
 
 ## Context

@@ -1,3 +1,10 @@
+---
+id: ts-02-aet-pipeline-plan-guardrail
+blocked_by:
+  - ts-01-aet-plan-guardrail
+size: S
+---
+
 # Plan: Add Task Size Guardrail Reference to aet-pipeline-plan
 
 ## Context

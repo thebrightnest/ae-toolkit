@@ -1,3 +1,9 @@
+---
+id: design-to-impl-hard-gate-systemic
+blocked_by: []
+size: S
+---
+
 # Plan: Systemic Design-to-Implementation Hard Gate
 
 ## Context

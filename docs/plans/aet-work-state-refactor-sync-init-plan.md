@@ -1,3 +1,10 @@
+---
+id: aet-work-state-refactor-sync-init-plan
+blocked_by:
+  - aet-work-state-refactor-status-next-plan
+size: M
+---
+
 # Plan: Simplify `sync` and Create `init-queue`
 
 ## Context

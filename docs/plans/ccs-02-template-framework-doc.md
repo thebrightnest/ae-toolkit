@@ -1,3 +1,9 @@
+---
+id: ccs-02-template-framework-doc
+blocked_by: []
+size: S
+---
+
 # Plan: CCS-02 — Plan Template Update + Framework ADR + aet-implement Validation
 
 ## Context

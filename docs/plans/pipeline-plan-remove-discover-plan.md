@@ -1,3 +1,9 @@
+---
+id: pipeline-plan-remove-discover-plan
+blocked_by: []
+size: S
+---
+
 # Plan: Remove aet-discover from aet-pipeline-plan
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: ui-01-scaffold-skill
+blocked_by: []
+size: M
+---
+
 # Plan: ui-01 — Scaffold aet-validate-ui Skill Structure
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: pqg-01-plan-self-consistency
+blocked_by: []
+size: M
+---
+
 # Plan: Plan Self-Consistency Lint, Implement Reconciliation, and Completeness Lens
 
 ## Context

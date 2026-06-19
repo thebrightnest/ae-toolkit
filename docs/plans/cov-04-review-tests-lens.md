@@ -1,3 +1,9 @@
+---
+id: cov-04-review-tests-lens
+blocked_by: []
+size: M
+---
+
 # Plan: aet-review — Tests Lens as Hard Coverage Check
 
 ## Context

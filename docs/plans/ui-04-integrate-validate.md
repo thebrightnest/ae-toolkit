@@ -1,3 +1,12 @@
+---
+id: ui-04-integrate-validate
+blocked_by:
+  - ui-01-scaffold-skill
+  - ui-02-write-skill-core
+  - ui-03-write-examples-references
+size: M
+---
+
 # Plan: ui-04 — Integrate aet-validate-ui into Toolkit + Validate & Package
 
 ## Context

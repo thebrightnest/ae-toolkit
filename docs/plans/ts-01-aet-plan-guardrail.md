@@ -1,3 +1,9 @@
+---
+id: ts-01-aet-plan-guardrail
+blocked_by: []
+size: S
+---
+
 # Plan: Add Task Size Guardrail to aet-plan
 
 ## Context

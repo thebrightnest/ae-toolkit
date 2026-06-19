@@ -1,3 +1,9 @@
+---
+id: mvr-01-remove-merge-verified-plan
+blocked_by: []
+size: M
+---
+
 # Plan: Remove `merge_verified` — Status as Single Source of Truth
 
 ## Context

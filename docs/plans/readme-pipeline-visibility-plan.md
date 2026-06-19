@@ -1,3 +1,9 @@
+---
+id: readme-pipeline-visibility-plan
+blocked_by: []
+size: M
+---
+
 # Plan: README Pipeline Visibility Upgrade
 
 ## Summary

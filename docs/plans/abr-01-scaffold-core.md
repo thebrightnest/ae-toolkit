@@ -1,3 +1,9 @@
+---
+id: abr-01-scaffold-core
+blocked_by: []
+size: M
+---
+
 # abr-01: Scaffold Skill Structure and Core Workflow
 
 ## Story
