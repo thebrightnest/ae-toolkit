@@ -659,8 +659,14 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     if not os.path.isabs(plan_file):
         plan_file = os.path.join(repo_root, plan_file)
 
-    # Check main hygiene before any worktree work.
-    if not enforce_main_hygiene(repo_root):
+    # When spawned by the batch orchestrator, the parent has already verified
+    # main hygiene and will dirty the working tree by updating the queue file
+    # between spawning tasks. Re-checking here would deadlock the pipeline.
+    spawned_by_batch = bool(os.environ.get("AET_TASK_ID"))
+
+    # Check main hygiene before any worktree work — but only for top-level
+    # run-one invocations. Batch children rely on the parent-level check.
+    if not spawned_by_batch and not enforce_main_hygiene(repo_root):
         end_time = telemetry.iso_now()
         telemetry.append_record(
             telemetry.run_summary_record(
@@ -690,7 +696,6 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # If this plan is tracked in the work queue and this is a top-level run-one
     # (not a child spawned by run_batch), transition the task to in-progress
     # and record branch/worktree so aet-state record-merge works after shipping.
-    spawned_by_batch = bool(os.environ.get("AET_TASK_ID"))
     queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
     queued_task = None
     if os.path.exists(queue_file) and not spawned_by_batch:
