@@ -202,7 +202,10 @@ get_commits_since() {
 determine_bump() {
   local has_breaking="" has_feature="" has_fix=""
 
-  while IFS=$'\t' read -r _hash _full ctype _subj; do
+  while IFS=$'\t' read -r _full subj body; do
+    [[ -z "$_full" ]] && continue
+    local ctype
+    ctype=$(classify_commit "$subj" "$body")
     case "$ctype" in
       breaking) has_breaking="1" ;;
       feature) has_feature="1" ;;
@@ -228,6 +231,9 @@ calculate_next_version() {
     printf '1.0.0\n'
     return
   fi
+
+  # Strip a leading "v" so git tags like v0.6.0 parse correctly.
+  current="${current#v}"
 
   # Handle versions like "1.0.0-beta3"
   if [[ "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.*)?$ ]]; then

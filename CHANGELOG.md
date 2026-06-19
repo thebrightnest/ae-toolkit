@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.7.0] — 2026-06-19
+
+### Added
+
+- **aet-work**: Forward-only deterministic work state. State is recorded forward through `aet-state transition`, stored in `state` with `history[]`, and terminal tasks are sealed to `.agents/work-history.jsonl`.
+- **aet-work**: Validated frontmatter contract for plans (`id`, `blocked_by`, `size`). Intake now fails closed on malformed or legacy plan files.
+- **aet-work**: `aet-state record-merge` resolves real squash-merge SHAs and records merge commits deterministically.
+- **aet-work**: `run-one` hardening with plan-presence guard, worktree/branch hygiene gate, and telemetry.
+- **aet-design-system-creation**: Commands section for design-system, design-review, and design-check workflows.
+- **aet-validate-scope**: Closure checks for planning and validation skills.
+
+### Changed
+
+- **aet-work**: `status`, `next`, and the orchestrator now read stored `state` with zero git calls; the old `derive` path becomes an explicit human-run `audit`.
+- **aet-work**: Pipeline stages are now recorded as `in_progress` sub-states instead of plan-footer breadcrumbs.
+- **aet-work**: `init-queue` and `sync` now consult `.agents/work-history.jsonl` to skip already-settled plans.
+- **aet-release-prep**: Fixed version-bump detection and `v`-prefix handling when tags are the version source.
+
+### Fixed
+
+- **aet-ship**: Stage-aware review/CSO gate.
+- **aet-work**: Orchestrator no longer enters a runaway spawn loop.
+- **aet-work**: Batch worktree is reused in single-task orchestrator subprocess.
+- **aet-work**: Task IDs are derived without the hard-coded `-plan.md` suffix.
+- **Build**: Skill packaging is now deterministic.
+
+### Documentation
+
+- Added deprecation and backward-compatibility inventory (`docs/audits/deprecation-inventory.md`).
+- Added upgrade guide for existing AET projects (`aet-work/references/upgrading-existing-project.md`).
+- Added ADR-011 documenting forward-only deterministic work state and settled-history semantics.
+
+---
+
 ## [0.6.0] — 2026-06-16
 
 ### Added
