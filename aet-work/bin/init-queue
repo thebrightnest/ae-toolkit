@@ -30,9 +30,9 @@ def parse_args() -> argparse.Namespace:
         help="Path to work-queue.json",
     )
     parser.add_argument(
-        "--archive-file",
-        default=".agents/work-archive.json",
-        help="Path to work-archive.json",
+        "--history-file",
+        default=".agents/work-history.jsonl",
+        help="Path to work-history.jsonl",
     )
     parser.add_argument(
         "--plans-dir",

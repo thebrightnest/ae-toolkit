@@ -283,12 +283,13 @@ def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
     return (True, "Transition is valid.")
 
 
-def _apply_transition(queue_path, queue, task, from_state, to_state, by, evidence=None, cwd=None):
+def _apply_transition(queue_path, queue, task, from_state, to_state, by, evidence=None, cwd=None, history_file=None):
     """Apply a validated state transition and propagate the forward frontier.
 
     This is the only function that assigns ``task["state"]``.  It validates the
     transition, appends history, promotes dependents after terminal transitions,
-    and writes the queue atomically.
+    writes the queue atomically, and seals terminal tasks to the settled history
+    log.
     """
     ok, msg = validate_transition(task, from_state, to_state, cwd=cwd)
     if not ok:
@@ -324,6 +325,12 @@ def _apply_transition(queue_path, queue, task, from_state, to_state, by, evidenc
                 queue_lib.append_history(dep, "blocked", "ready", "release")
 
     save_queue(queue_path, queue)
+
+    # Seal terminal tasks to the append-only settled history log.
+    if to_state in queue_lib.TERMINAL_STATES:
+        if history_file is None:
+            history_file = str(Path(queue_path).with_name("work-history.jsonl"))
+        queue_lib.seal_terminal(queue_path, history_file, task["id"])
 
 
 def update_plan_footer(plan_path, stage):
@@ -497,30 +504,38 @@ def cmd_record_merge(args):
 
 
 def cmd_archive(args):
-    """Archive terminal tasks from the queue into the archive file."""
-    # Read the queue *before* archiving so we can report skipped tasks.
+    """Deprecated alias for the automatic seal that happens at terminal transition.
+
+    Terminal transitions now seal tasks to ``work-history.jsonl`` immediately,
+    so manual archiving is no longer required. This command remains as a
+    migration helper: it seals any terminal tasks that are still present in the
+    live queue and reports what it did.
+    """
+    print("⚠️  aet-state archive is deprecated; terminal transitions seal automatically.")
+
     queue_before = queue_lib.read_queue(args.queue)
-    terminal_before = {
+    history_file = str(Path(args.queue).with_name("work-history.jsonl"))
+    terminal_ids = [
         t.get("id")
         for t in queue_before
-        if t.get("status", "") in queue_lib.TERMINAL_STATUSES
-        or t.get("status") == "merge_verified"
-    }
+        if queue_lib.current_state(t) in queue_lib.TERMINAL_STATES
+    ]
 
-    new_queue, archived = queue_lib.archive_tasks(args.queue, args.archive)
-    archived_ids = {t.get("id") for t in archived}
-    skipped = len(terminal_before - archived_ids)
+    sealed = []
+    for task_id in terminal_ids:
+        try:
+            queue_lib.seal_terminal(args.queue, history_file, task_id)
+            sealed.append(task_id)
+        except ValueError:
+            pass
 
-    if archived:
-        ids = ", ".join(t.get("id") for t in archived)
-        print(f"Archived {len(archived)} tasks: {ids}")
+    if sealed:
+        print(f"Sealed {len(sealed)} terminal task(s): {', '.join(sealed)}")
     else:
-        print("Archived 0 tasks")
+        print("No terminal tasks to seal")
 
-    if skipped:
-        print(f"Skipped {skipped} terminal tasks with active dependents")
-
-    print(f"Active queue: {len(new_queue)} tasks remaining")
+    active = queue_lib.read_queue(args.queue)
+    print(f"Active queue: {len(active)} tasks remaining")
     return 0
 
 

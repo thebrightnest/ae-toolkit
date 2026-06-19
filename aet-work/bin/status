@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """aet-work status — Show the current state of the work queue.
 
-Checks plan drift against both the active queue and the archive, reads the
-stored state, and reports counts, next tasks, failed tasks, and worktree health.
+Checks plan drift against the active queue and the settled history log, reads
+the stored state, and reports counts, next tasks, failed tasks, and worktree health.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import current_state, read_archive, read_queue, state_to_status  # noqa: E402
+from queue import current_state, read_history, read_queue, state_to_status  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,9 +26,9 @@ def parse_args() -> argparse.Namespace:
         help="Path to work-queue.json",
     )
     parser.add_argument(
-        "--archive-file",
-        default=".agents/work-archive.json",
-        help="Path to work-archive.json",
+        "--history-file",
+        default=".agents/work-history.jsonl",
+        help="Path to work-history.jsonl",
     )
     parser.add_argument(
         "--plans-dir",
@@ -46,17 +46,17 @@ def _display_category(task: dict) -> str:
 def main() -> int:
     args = parse_args()
     queue = read_queue(args.queue_file)
-    archive = read_archive(args.archive_file)
+    history = read_history(args.history_file)
     plans_dir = Path(args.plans_dir)
 
     queued_files = {t.get("plan_file") for t in queue if t.get("plan_file")}
-    archived_files = {t.get("plan_file") for t in archive if t.get("plan_file")}
+    settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
     plan_files = sorted(plans_dir.glob("*.md"))
 
     orphaned = [
         str(pf)
         for pf in plan_files
-        if str(pf) not in queued_files and str(pf) not in archived_files
+        if str(pf) not in queued_files and str(pf) not in settled_files
     ]
 
     if orphaned:

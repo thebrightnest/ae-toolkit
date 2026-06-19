@@ -450,11 +450,14 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
 
             with open(queue_file, encoding="utf-8") as f:
                 queue = json.load(f)
-            task = queue["tasks"][0]
-            self.assertEqual(task["status"], "merged")
-            self.assertEqual(task["state"], "merged")
-            self.assertIn("merge_commit", task)
-            self.assertIsNotNone(task["merge_commit"])
+            self.assertEqual(queue["tasks"], [])
+
+            history_file = os.path.join(repo_root, ".agents", "work-history.jsonl")
+            with open(history_file, encoding="utf-8") as f:
+                settled = json.loads(f.readline())
+            self.assertEqual(settled["state"], "merged")
+            self.assertIn("merge_commit", settled)
+            self.assertIsNotNone(settled["merge_commit"])
 
 
 class TestRunSummaryTelemetry(unittest.TestCase):
