@@ -3,20 +3,6 @@
   "source_prd": "docs/prds/forward-only-deterministic-work-state-prd.md",
   "tasks": [
     {
-      "id": "01-scaffold-skill-structure",
-      "title": "Ticket 1: Scaffold the aet-design-system-creation Skill Structure",
-      "plan_file": "docs/plans/01-scaffold-skill-structure.md",
-      "blocked_by": [],
-      "blocks": ["02-port-phases-0-2"],
-      "status": "merged",
-      "merge_commit": "79ad754feaea6d5c19af4d6e25eb7818b2132305",
-      "completed_at": null,
-      "merged_at": "2026-06-18T11:05:00+00:00",
-      "worktree": null,
-      "branch": "01-scaffold-skill-structure",
-      "merge_strategy": "squash"
-    },
-    {
       "id": "02-port-phases-0-2",
       "title": "Ticket 2: Port Phases 0\u20132 (Pre-checks, Context, Research)",
       "plan_file": "docs/plans/02-port-phases-0-2.md",
@@ -1084,59 +1070,6 @@
       "merged_at": null,
       "worktree": null,
       "branch": null
-    },
-    {
-      "id": "fods-02-state-spine",
-      "title": "Plan: Forward-Only State Spine \u2014 `state`, `history[]`, and `transition` as Sole Writer",
-      "plan_file": "docs/plans/fods-02-state-spine.md",
-      "blocked_by": [],
-      "blocks": ["fods-03-read-path-zero-git", "fods-05-frontmatter-intake"],
-      "status": "merged",
-      "merge_commit": "0fdf8cca7a0c194619ada68abf8e1a9e7c376486",
-      "completed_at": "2026-06-18T20:38:06.438823+00:00",
-      "merged_at": "2026-06-18T20:38:06.438823+00:00",
-      "worktree": null,
-      "branch": "fods-02-state-spine",
-      "merge_strategy": "squash"
-    },
-    {
-      "id": "fods-03-read-path-zero-git",
-      "title": "Plan: Read Path Reads Stored State (Zero Git); `derive` \u2192 `audit`",
-      "plan_file": "docs/plans/fods-03-read-path-zero-git.md",
-      "blocked_by": ["fods-02-state-spine"],
-      "blocks": ["fods-04-stage-substate", "fods-07-live-settled-partition"],
-      "status": "merged",
-      "merge_commit": "401f6a0bf8e4960c418a0451bd0a95674a37d35d",
-      "completed_at": "2026-06-18T23:39:28.925935+00:00",
-      "merged_at": "2026-06-18T23:39:28.925935+00:00",
-      "worktree": null,
-      "branch": null,
-      "state": "merged",
-      "history": [
-        {
-          "from": "planned",
-          "to": "in_progress",
-          "at": "2026-06-18T22:18:23.967866+00:00",
-          "by": "transition"
-        },
-        {
-          "from": "in_progress",
-          "to": "awaiting_merge",
-          "at": "2026-06-18T22:35:35.395749+00:00",
-          "by": "transition"
-        },
-        {
-          "from": "awaiting_merge",
-          "to": "merged",
-          "at": "2026-06-18T23:39:28.926319+00:00",
-          "by": "record-merge",
-          "evidence": {
-            "merge_commit": "401f6a0bf8e4960c418a0451bd0a95674a37d35d",
-            "merge_strategy": "squash"
-          }
-        }
-      ],
-      "merge_strategy": "squash"
     }
   ]
 }
