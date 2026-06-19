@@ -1,3 +1,10 @@
+---
+id: ph-02-work-queue-drift-detection
+blocked_by:
+  - ph-03-aet-review-removal-safety
+size: S
+---
+
 # Plan: Add Branch Drift Detection and Timestamps to aet-work
 
 ## Context

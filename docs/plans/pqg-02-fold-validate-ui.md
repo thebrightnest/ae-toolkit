@@ -1,3 +1,9 @@
+---
+id: pqg-02-fold-validate-ui
+blocked_by: []
+size: M
+---
+
 # Plan: Fold aet-validate-ui into aet-validate-scope
 
 ## Context

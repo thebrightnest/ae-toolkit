@@ -1,3 +1,10 @@
+---
+id: abr-02-references-examples
+blocked_by:
+  - abr-01-scaffold-core
+size: M
+---
+
 # abr-02: Write References and Examples
 
 ## Story

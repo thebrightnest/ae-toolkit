@@ -1,3 +1,10 @@
+---
+id: ui-03-write-examples-references
+blocked_by:
+  - ui-02-write-skill-core
+size: M
+---
+
 # Plan: ui-03 — Write examples/ and references/ for aet-validate-ui
 
 ## Context

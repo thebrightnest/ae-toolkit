@@ -1,3 +1,10 @@
+---
+id: 05-integration-polish
+blocked_by:
+  - 04-port-phase-5-preview
+size: M
+---
+
 # Ticket 5: AET Integration & Polish
 
 ## Parent

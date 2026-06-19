@@ -1,3 +1,10 @@
+---
+id: abr-03-validate-package
+blocked_by:
+  - abr-02-references-examples
+size: M
+---
+
 # abr-03: Validate and Package
 
 ## Story

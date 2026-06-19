@@ -1,3 +1,10 @@
+---
+id: waf-01-aet-work-queue-state
+blocked_by:
+  - waf-02-aet-work-worktree-hygiene
+size: S
+---
+
 # Plan: aet-work Queue State Hardening
 
 ## Context

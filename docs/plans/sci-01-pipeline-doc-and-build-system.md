@@ -1,3 +1,9 @@
+---
+id: sci-01-pipeline-doc-and-build-system
+blocked_by: []
+size: M
+---
+
 # Plan: Create docs/PIPELINE.md and Shared-Partials Build System
 
 ## Context

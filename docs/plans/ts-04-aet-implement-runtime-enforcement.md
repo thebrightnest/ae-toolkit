@@ -1,3 +1,10 @@
+---
+id: ts-04-aet-implement-runtime-enforcement
+blocked_by:
+  - ts-01-aet-plan-guardrail
+size: M
+---
+
 # Plan: Add Runtime Size Enforcement to aet-implement
 
 ## Context

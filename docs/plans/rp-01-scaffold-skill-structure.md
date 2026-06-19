@@ -1,3 +1,9 @@
+---
+id: rp-01-scaffold-skill-structure
+blocked_by: []
+size: S
+---
+
 # Plan: Scaffold aet-release-prep Skill Structure
 
 ## Context

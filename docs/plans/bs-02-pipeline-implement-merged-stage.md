@@ -1,3 +1,10 @@
+---
+id: bs-02-pipeline-implement-merged-stage
+blocked_by:
+  - bs-01-aet-ship-merge-verification
+size: S
+---
+
 # Plan: aet-pipeline-implement `merged` Stage
 
 ## Context

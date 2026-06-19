@@ -1,3 +1,9 @@
+---
+id: waf-04-pipeline-implement-terminal
+blocked_by: []
+size: M
+---
+
 # Plan: aet-pipeline-implement Terminal Resilience
 
 ## Context

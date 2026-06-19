@@ -1,3 +1,9 @@
+---
+id: aet-work-hybrid-orchestrator-core-plan
+blocked_by: []
+size: S
+---
+
 # Plan: aet-work Hybrid Orchestrator — Core Implementation
 
 ## Context

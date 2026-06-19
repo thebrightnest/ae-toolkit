@@ -1,3 +1,9 @@
+---
+id: bs-01-aet-ship-merge-verification
+blocked_by: []
+size: S
+---
+
 # Plan: aet-ship Merge Verification Gate
 
 ## Context

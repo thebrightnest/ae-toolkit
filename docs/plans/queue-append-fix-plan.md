@@ -1,3 +1,9 @@
+---
+id: queue-append-fix-plan
+blocked_by: []
+size: M
+---
+
 # Plan: Fix work-queue.json Overwrite in aet-plan
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: retro-stacked-pr-aet-ship-plan
+blocked_by: []
+size: M
+---
+
 # Plan: aet-ship — Stacked Branch Detection
 
 ## Context

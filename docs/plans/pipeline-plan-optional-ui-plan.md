@@ -1,3 +1,9 @@
+---
+id: pipeline-plan-optional-ui-plan
+blocked_by: []
+size: S
+---
+
 # Plan: Optional UI Validation in aet-pipeline-plan
 
 ## Context

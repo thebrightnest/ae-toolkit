@@ -1,3 +1,9 @@
+---
+id: unified-orchestrator-plan
+blocked_by: []
+size: M
+---
+
 # Plan: Unified Orchestrator with Session-Isolated Pipeline
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: planning-implementation-lockout-plan
+blocked_by: []
+size: M
+---
+
 # Plan: Planning Implementation Lockout
 
 ## Summary

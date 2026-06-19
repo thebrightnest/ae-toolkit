@@ -1,3 +1,10 @@
+---
+id: rp-05-update-aet-ship-boundary
+blocked_by:
+  - rp-03-write-skill-core
+size: S
+---
+
 # Plan: Update aet-ship Boundary Documentation
 
 ## Context

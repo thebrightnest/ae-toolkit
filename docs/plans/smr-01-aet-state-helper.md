@@ -1,3 +1,9 @@
+---
+id: smr-01-aet-state-helper
+blocked_by: []
+size: M
+---
+
 # Plan: Create aet-state Python Helper
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: waf-05-repo-hooks-deletion
+blocked_by: []
+size: M
+---
+
 # Plan: Repo Hooks — Pre-Push Deletion Short-Circuit
 
 ## Context

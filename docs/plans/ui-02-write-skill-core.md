@@ -1,3 +1,10 @@
+---
+id: ui-02-write-skill-core
+blocked_by:
+  - ui-01-scaffold-skill
+size: M
+---
+
 # Plan: ui-02 — Write aet-validate-ui SKILL.md
 
 ## Context

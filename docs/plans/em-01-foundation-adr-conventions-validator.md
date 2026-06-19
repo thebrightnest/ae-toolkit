@@ -1,3 +1,9 @@
+---
+id: em-01-foundation-adr-conventions-validator
+blocked_by: []
+size: S
+---
+
 # Plan: Execution Mode — Foundation (ADR, Conventions, Validator)
 
 ## Context

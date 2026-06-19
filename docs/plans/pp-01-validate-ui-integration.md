@@ -1,3 +1,9 @@
+---
+id: pp-01-validate-ui-integration
+blocked_by: []
+size: S
+---
+
 # Plan: pp-01 — Integrate aet-validate-ui into aet-pipeline-plan
 
 ## Context
