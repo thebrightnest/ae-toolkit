@@ -51,8 +51,13 @@ def _make_queue(tasks: list[dict]) -> str:
     return _write_json_file(tasks)
 
 
-def _make_archive(tasks: list[dict]) -> str:
-    return _write_json_file({"archived_at": "2026-01-01T00:00:00Z", "tasks": tasks})
+def _make_history(tasks: list[dict]) -> str:
+    path = Path(tempfile.mkstemp(suffix=".jsonl")[1])
+    with open(path, "w", encoding="utf-8") as f:
+        for task in tasks:
+            json.dump(task, f)
+            f.write("\n")
+    return str(path)
 
 
 def _make_plans_dir(plan_names: list[str]) -> tempfile.TemporaryDirectory:
@@ -108,7 +113,7 @@ class TestStatusReadPathNoGit(unittest.TestCase):
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
-        archive_file = _make_archive([])
+        history_file = _make_history([])
 
         no_git = _NoGitRun()
         stdout = io.StringIO()
@@ -117,7 +122,7 @@ class TestStatusReadPathNoGit(unittest.TestCase):
                 with patch.object(sys, "argv", [
                     "status",
                     "--queue-file", queue_file,
-                    "--archive-file", archive_file,
+                    "--history-file", history_file,
                     "--plans-dir", plans_dir,
                 ]):
                     rc = status.main()
@@ -138,7 +143,7 @@ class TestNextReadPathNoGit(unittest.TestCase):
         queue_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        archive_file = _make_archive([])
+        history_file = _make_history([])
 
         transition_calls = []
 
@@ -154,7 +159,7 @@ class TestNextReadPathNoGit(unittest.TestCase):
                 with patch.object(sys, "argv", [
                     "next",
                     "--queue-file", queue_file,
-                    "--archive-file", archive_file,
+                    "--history-file", history_file,
                     "--plans-dir", plans_dir,
                 ]):
                     rc = next_cmd.main()

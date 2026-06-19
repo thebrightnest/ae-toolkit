@@ -13,7 +13,7 @@ sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
 import plan_parser  # noqa: E402
 
 
-def run_script(script_name, cwd, queue_file, archive_file, plans_dir, prds_dir=None):
+def run_script(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=None):
     """Run a queue script in an isolated environment and return its result."""
     env = os.environ.copy()
     fake_bin = Path(cwd) / "fakebin"
@@ -37,8 +37,8 @@ def run_script(script_name, cwd, queue_file, archive_file, plans_dir, prds_dir=N
         str(REPO_ROOT / "aet-work" / "bin" / script_name),
         "--queue-file",
         str(queue_file),
-        "--archive-file",
-        str(archive_file),
+        "--history-file",
+        str(history_file),
         "--plans-dir",
         str(plans_dir),
     ]
@@ -116,7 +116,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         self.plans_dir = self.root / "plans"
         self.prds_dir = self.root / "prds"
         self.queue_file = self.root / "work-queue.json"
-        self.archive_file = self.root / "work-archive.json"
+        self.history_file = self.root / "work-history.jsonl"
         self.plans_dir.mkdir()
         self.prds_dir.mkdir()
 
@@ -130,7 +130,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         make_plan(self.plans_dir / "c.md", "C", blocked_by=["b"], size="S")
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -149,7 +149,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         make_plan(self.plans_dir / "good.md", "Good", size="S")
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("bad.md", result.stderr)
@@ -161,7 +161,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
         self.queue_file.write_text(json.dumps([]))
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("mismatched.md", result.stderr)
@@ -176,7 +176,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("duplicate id", result.stderr.lower())
@@ -188,7 +188,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unknown blocker", result.stderr)
@@ -204,7 +204,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("complexity limit", result.stderr)
@@ -221,7 +221,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         (self.plans_dir / "big.md").write_text(content, encoding="utf-8")
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("big", {t["id"] for t in read_tasks(self.queue_file)})
@@ -234,7 +234,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -260,7 +260,7 @@ class TestFrontmatterIntake(unittest.TestCase):
             "init-queue",
             self.root,
             self.queue_file,
-            self.archive_file,
+            self.history_file,
             self.plans_dir,
             self.prds_dir,
         )
@@ -278,7 +278,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.queue_file.exists())
@@ -291,7 +291,7 @@ class TestInitQueue(unittest.TestCase):
         self.plans_dir = self.root / "plans"
         self.prds_dir = self.root / "prds"
         self.queue_file = self.root / "work-queue.json"
-        self.archive_file = self.root / "work-archive.json"
+        self.history_file = self.root / "work-history.jsonl"
         self.plans_dir.mkdir()
         self.prds_dir.mkdir()
 
@@ -310,7 +310,7 @@ class TestInitQueue(unittest.TestCase):
             "init-queue",
             self.root,
             self.queue_file,
-            self.archive_file,
+            self.history_file,
             self.plans_dir,
             self.prds_dir,
         )
@@ -371,7 +371,7 @@ class TestInitQueue(unittest.TestCase):
             "init-queue",
             self.root,
             self.queue_file,
-            self.archive_file,
+            self.history_file,
             self.plans_dir,
             self.prds_dir,
         )
@@ -394,7 +394,7 @@ class TestInitQueue(unittest.TestCase):
             "init-queue",
             self.root,
             self.queue_file,
-            self.archive_file,
+            self.history_file,
             self.plans_dir,
             self.prds_dir,
         )
@@ -414,7 +414,7 @@ class TestSync(unittest.TestCase):
         self.plans_dir = self.root / "plans"
         self.prds_dir = self.root / "prds"
         self.queue_file = self.root / "work-queue.json"
-        self.archive_file = self.root / "work-archive.json"
+        self.history_file = self.root / "work-history.jsonl"
         self.plans_dir.mkdir()
         self.prds_dir.mkdir()
 
@@ -449,7 +449,7 @@ class TestSync(unittest.TestCase):
         make_plan(self.plans_dir / "new.md", "New task", blocked_by=["existing"])
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -488,7 +488,7 @@ class TestSync(unittest.TestCase):
         self.queue_file.write_text(json.dumps(initial))
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -520,7 +520,7 @@ class TestSync(unittest.TestCase):
         self.queue_file.write_text(json.dumps(initial))
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -531,7 +531,7 @@ class TestSync(unittest.TestCase):
         """sync must not invoke aet-state derive."""
         make_plan(self.plans_dir / "feat-001.md", "First task")
         result, log_file = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         derive_calls = []

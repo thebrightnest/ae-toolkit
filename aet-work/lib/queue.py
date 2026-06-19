@@ -7,8 +7,9 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-# Tracks wrapper metadata per queue file so write_queue can preserve it.
-_queue_wrappers: dict[str, dict[str, Any]] = {}
+# Tracks whether a queue file was read as a dict wrapper and, if so, its
+# non-task metadata so write_queue can preserve the envelope.
+_queue_wrappers: dict[str, dict[str, Any] | None] = {}
 
 # ---------------------------------------------------------------------------
 # Forward-only deterministic state model (ADR-011)
@@ -131,6 +132,7 @@ def read_queue(queue_file: str) -> list[dict[str, Any]]:
     if isinstance(data, dict):
         _queue_wrappers[queue_file] = {k: v for k, v in data.items() if k != "tasks"}
         return data.get("tasks", [])
+    _queue_wrappers[queue_file] = None
     return data
 
 
@@ -143,11 +145,12 @@ def write_queue(
     (e.g. to update ``source_prd`` or ``queue_updated_at``).
     """
     os.makedirs(os.path.dirname(queue_file), exist_ok=True)
-    stored = _queue_wrappers.pop(queue_file, {})
-    merged = {**stored}
+    stored = _queue_wrappers.pop(queue_file, None)
+    was_dict_wrapper = stored is not None
+    merged = {**stored} if stored else {}
     if wrapper:
         merged.update(wrapper)
-    if merged:
+    if merged or was_dict_wrapper:
         data = {**merged, "tasks": queue}
     else:
         data = queue
@@ -218,7 +221,60 @@ def record_task_meta(
 
 
 # ---------------------------------------------------------------------------
-# Archive helpers
+# Settled history helpers (append-only JSONL)
+# ---------------------------------------------------------------------------
+
+HISTORY_TERMINAL_STATES = {"merged", "abandoned"}
+
+
+def read_history(history_file: str) -> list[dict[str, Any]]:
+    """Read all settled task records from the append-only JSONL history log."""
+    if not os.path.exists(history_file):
+        return []
+    tasks: list[dict[str, Any]] = []
+    with open(history_file, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            tasks.append(json.loads(line))
+    return tasks
+
+
+def append_history_record(history_file: str, task: dict[str, Any]) -> None:
+    """Append a settled task record to the append-only JSONL history log."""
+    os.makedirs(os.path.dirname(history_file), exist_ok=True)
+    record = {**task, "settled_at": datetime.now(timezone.utc).isoformat()}
+    with open(history_file, "a", encoding="utf-8") as f:
+        json.dump(record, f)
+        f.write("\n")
+
+
+def seal_terminal(queue_file: str, history_file: str, task_id: str) -> dict[str, Any]:
+    """Move a terminal task from the live queue to the settled history log.
+
+    Reads the live queue, removes the task identified by ``task_id``, appends
+    the full task record (including its transition history) to
+    ``history_file`` as one JSONL line, and writes the reduced live queue back.
+
+    Raises ``ValueError`` if the task is not present in the live queue.
+
+    This helper does **not** promote dependents; the caller must already have
+    updated the forward frontier before sealing.
+    """
+    queue = read_queue(queue_file)
+    task = next((t for t in queue if t.get("id") == task_id), None)
+    if task is None:
+        raise ValueError(f"Task {task_id} not found in live queue {queue_file}")
+
+    live = [t for t in queue if t.get("id") != task_id]
+    append_history_record(history_file, task)
+    write_queue(queue_file, live)
+    return task
+
+
+# ---------------------------------------------------------------------------
+# Archive helpers (legacy, superseded by settled history)
 # ---------------------------------------------------------------------------
 
 TERMINAL_STATUSES = {"merged", "done", "abandoned"}
