@@ -43,8 +43,13 @@ def _make_queue(tasks: list[dict]) -> str:
     return _write_json_file(tasks)
 
 
-def _make_archive(tasks: list[dict]) -> str:
-    return _write_json_file({"archived_at": "2026-01-01T00:00:00Z", "tasks": tasks})
+def _make_history(tasks: list[dict]) -> str:
+    path = Path(tempfile.mkstemp(suffix=".jsonl")[1])
+    with open(path, "w", encoding="utf-8") as f:
+        for task in tasks:
+            json.dump(task, f)
+            f.write("\n")
+    return str(path)
 
 
 def _make_plans_dir(plan_names: list[str]) -> tempfile.TemporaryDirectory:
@@ -75,14 +80,14 @@ class TestStatusStoredState(unittest.TestCase):
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
-        archive_file = _make_archive([])
+        history_file = _make_history([])
 
         stdout = io.StringIO()
         with patch.object(sys, "stdout", stdout):
             with patch.object(sys, "argv", [
                 "status",
                 "--queue-file", queue_file,
-                "--archive-file", archive_file,
+                "--history-file", history_file,
                 "--plans-dir", plans_dir,
             ]):
                 rc = status.main()
@@ -99,14 +104,14 @@ class TestStatusStoredState(unittest.TestCase):
         queue_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "awaiting_merge", "title": "Done-ish", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        archive_file = _make_archive([])
+        history_file = _make_history([])
 
         stdout = io.StringIO()
         with patch.object(sys, "stdout", stdout):
             with patch.object(sys, "argv", [
                 "status",
                 "--queue-file", queue_file,
-                "--archive-file", archive_file,
+                "--history-file", history_file,
                 "--plans-dir", plans_dir,
             ]):
                 rc = status.main()
@@ -122,14 +127,14 @@ class TestStatusStoredState(unittest.TestCase):
         queue_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "failed", "title": "Broke", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        archive_file = _make_archive([])
+        history_file = _make_history([])
 
         stdout = io.StringIO()
         with patch.object(sys, "stdout", stdout):
             with patch.object(sys, "argv", [
                 "status",
                 "--queue-file", queue_file,
-                "--archive-file", archive_file,
+                "--history-file", history_file,
                 "--plans-dir", plans_dir,
             ]):
                 status.main()
@@ -146,14 +151,14 @@ class TestStatusStoredState(unittest.TestCase):
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
-        archive_file = _make_archive([])
+        history_file = _make_history([])
 
         stdout = io.StringIO()
         with patch.object(sys, "stdout", stdout):
             with patch.object(sys, "argv", [
                 "status",
                 "--queue-file", queue_file,
-                "--archive-file", archive_file,
+                "--history-file", history_file,
                 "--plans-dir", plans_dir,
             ]):
                 status.main()
@@ -170,14 +175,14 @@ class TestNextStoredState(unittest.TestCase):
     def test_refuses_on_plan_drift(self):
         """next exits non-zero when a plan file exists on disk but not in the queue."""
         queue_file = _make_queue([])
-        archive_file = _make_archive([])
+        history_file = _make_history([])
         plans_dir_tmp = _make_plans_dir(["orphan.md"])
         plans_dir = plans_dir_tmp.name
 
         with patch.object(sys, "argv", [
             "next",
             "--queue-file", queue_file,
-            "--archive-file", archive_file,
+            "--history-file", history_file,
             "--plans-dir", plans_dir,
         ]):
             rc = next_cmd.main()
@@ -192,7 +197,7 @@ class TestNextStoredState(unittest.TestCase):
             {"id": "t1", "state": "blocked", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "ready", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
-        archive_file = _make_archive([])
+        history_file = _make_history([])
 
         transition_calls = []
 
@@ -204,7 +209,7 @@ class TestNextStoredState(unittest.TestCase):
             with patch.object(sys, "argv", [
                 "next",
                 "--queue-file", queue_file,
-                "--archive-file", archive_file,
+                "--history-file", history_file,
                 "--plans-dir", plans_dir,
             ]):
                 rc = next_cmd.main()
@@ -223,7 +228,7 @@ class TestNextStoredState(unittest.TestCase):
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md", "blocked_by": []},
             {"id": "t2", "state": "ready", "title": "Two", "plan_file": "docs/plans/t2.md", "blocked_by": ["t1"]},
         ], plans_dir))
-        archive_file = _make_archive([])
+        history_file = _make_history([])
 
         transition_calls = []
 
@@ -235,7 +240,7 @@ class TestNextStoredState(unittest.TestCase):
             with patch.object(sys, "argv", [
                 "next",
                 "--queue-file", queue_file,
-                "--archive-file", archive_file,
+                "--history-file", history_file,
                 "--plans-dir", plans_dir,
             ]):
                 rc = next_cmd.main()

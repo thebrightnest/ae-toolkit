@@ -39,10 +39,10 @@ A stored status that ends a task’s lifecycle: `merged`, `abandoned`, or `faile
 _Avoid_: done.
 
 **Plan Drift**:
-A plan file exists on disk but is not represented in the active queue or archive.
+A plan file exists on disk but is not represented in the active queue or settled history.
 
-**Archive**:
-`.agents/work-archive.json`, which holds terminal tasks removed from the active queue.
+**Archive / Settled History**:
+`.agents/work-history.jsonl`, the append-only log of terminal tasks removed from the active queue.
 
 **Source PRD**:
 The product requirements document that generated the current queue, stored as wrapper metadata.
@@ -53,7 +53,7 @@ The product requirements document that generated the current queue, stored as wr
 - A **Task** may have zero or more **Blockers**.
 - A **Task** may be a **Blocker** for zero or more **Dependents**.
 - A **Dependent** is **Derived** as `unblocked` only when all its **Blockers** have a **Terminal Status**.
-- **Plan Drift** occurs when a **Plan File** is absent from both the **Work Queue** and the **Archive**.
+- **Plan Drift** occurs when a **Plan File** is absent from both the **Work Queue** and the **Archive / Settled History**.
 
 ## Example dialogue
 

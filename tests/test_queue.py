@@ -10,13 +10,16 @@ import tempfile
 import unittest
 
 from queue import (
+    append_history_record,
     get_next_unblocked,
     has_pending_tasks,
     mark_awaiting_merge,
     mark_completed,
     mark_status,
+    read_history,
     read_queue,
     record_task_meta,
+    seal_terminal,
     write_queue,
 )
 
@@ -121,6 +124,78 @@ class TestQueue(unittest.TestCase):
         record_task_meta(queue, "t1", "/path/to/wt", "feat-001")
         self.assertEqual(queue[0]["worktree"], "/path/to/wt")
         self.assertEqual(queue[0]["branch"], "feat-001")
+
+    def test_read_history_missing_file_returns_empty_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_file = Path(tmp) / "work-history.jsonl"
+            self.assertEqual(read_history(str(history_file)), [])
+
+    def test_read_history_skips_blank_lines_and_parses_jsonl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_file = Path(tmp) / "work-history.jsonl"
+            history_file.write_text(
+                '{"id": "t1", "state": "merged"}\n\n{"id": "t2", "state": "abandoned"}\n',
+                encoding="utf-8",
+            )
+            records = read_history(str(history_file))
+            self.assertEqual([r["id"] for r in records], ["t1", "t2"])
+
+    def test_terminal_seal_removes_from_live_and_appends_jsonl(self):
+        """Sealing a task moves it from the live queue to the settled history log."""
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_file = Path(tmp) / "work-queue.json"
+            history_file = Path(tmp) / "work-history.jsonl"
+            task = {"id": "t1", "state": "merged", "title": "Task one"}
+            write_queue(queue_file, [task])
+
+            seal_terminal(queue_file, history_file, "t1")
+
+            live = read_queue(queue_file)
+            self.assertEqual(live, [])
+            self.assertTrue(history_file.exists())
+            lines = history_file.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines), 1)
+            settled = json.loads(lines[0])
+            self.assertEqual(settled["id"], "t1")
+            self.assertEqual(settled["state"], "merged")
+
+    def test_no_id_in_both_live_and_settled(self):
+        """The same task id must never exist in both live and settled stores."""
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_file = Path(tmp) / "work-queue.json"
+            history_file = Path(tmp) / "work-history.jsonl"
+            write_queue(queue_file, [
+                {"id": "t1", "state": "merged"},
+                {"id": "t2", "state": "ready"},
+            ])
+
+            seal_terminal(queue_file, history_file, "t1")
+
+            live_ids = {t["id"] for t in read_queue(queue_file)}
+            settled_ids = {
+                json.loads(line)["id"]
+                for line in history_file.read_text(encoding="utf-8").strip().splitlines()
+            }
+            self.assertNotIn("t1", live_ids)
+            self.assertIn("t1", settled_ids)
+            self.assertFalse(live_ids & settled_ids)
+
+    def test_dependents_promoted_before_seal(self):
+        """seal_terminal must not re-walk or mutate dependent blockers."""
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_file = Path(tmp) / "work-queue.json"
+            history_file = Path(tmp) / "work-history.jsonl"
+            write_queue(queue_file, [
+                {"id": "t1", "state": "merged"},
+                {"id": "t2", "state": "blocked", "pending_blockers": 1},
+            ])
+
+            seal_terminal(queue_file, history_file, "t1")
+
+            live = read_queue(queue_file)
+            t2 = next(t for t in live if t["id"] == "t2")
+            self.assertEqual(t2["state"], "blocked")
+            self.assertEqual(t2["pending_blockers"], 1)
 
 
 if __name__ == "__main__":
