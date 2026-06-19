@@ -4,9 +4,9 @@ A modular skill suite for AI coding agents. Each skill is a self-contained packa
 
 ---
 
-## Current Version: 0.6.0
+## Current Version: 0.7.0
 
-Last updated: 2026-06-16
+Last updated: 2026-06-19
 
 ---
 
@@ -68,6 +68,15 @@ Keep projects and the toolkit itself healthy.
 ---
 
 ## What's New
+
+### What's New in v0.7.0
+
+- **Deterministic work state** — `aet-work` now records state forward through validated transitions, seals completed work to an append-only history log, and never re-derives status from git during normal reads.
+- **Validated plan intake** — every plan must declare `id`, `blocked_by`, and `size` in YAML frontmatter; malformed or legacy plans are rejected at intake.
+- **Reliable merge recording** — `aet-state record-merge` resolves the real squash-merge SHA automatically, so finished tasks never resurrect as unblocked.
+- **Safer single-task runs** — `aet-work run-one` now enforces branch/worktree hygiene, confirms the plan file exists before spawning, and emits telemetry.
+- **aet-design-system-creation commands** — new design-system, design-review, and design-check command workflows for design-driven projects.
+- **aet-validate-scope closure checks** — planning and validation skills now enforce closure discipline before work proceeds.
 
 ### What's New in v0.6.0
 
