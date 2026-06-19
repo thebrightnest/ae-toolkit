@@ -71,5 +71,4 @@ The migration runs against a branch; revert the branch to restore the prior `doc
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
