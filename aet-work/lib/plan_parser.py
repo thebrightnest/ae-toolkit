@@ -6,6 +6,62 @@ import re
 from pathlib import Path
 from typing import Any
 
+from queue import append_history  # noqa: E402
+
+
+def _unquote_scalar(value: str) -> str:
+    """Strip matching surrounding quotes from a YAML scalar value."""
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
+
+
+def parse_frontmatter(path: Path) -> dict[str, Any]:
+    """Parse the YAML frontmatter contract for a plan file.
+
+    Supported subset: top-level scalar keys and block-style string lists.
+    Returns an empty dict when no frontmatter is present.
+    """
+    content = path.read_text(errors="ignore")
+    if not content.startswith("---"):
+        return {}
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return {}
+
+    data: dict[str, Any] = {}
+    current_key: str | None = None
+    for raw_line in parts[1].splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("- "):
+            if current_key is None:
+                continue
+            item = _unquote_scalar(line[2:])
+            if not isinstance(data.get(current_key), list):
+                data[current_key] = []
+            data[current_key].append(item)
+            continue
+
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        current_key = key
+        if value:
+            data[key] = _unquote_scalar(value)
+        else:
+            data[key] = []
+
+    if "blocked_by" not in data:
+        data["blocked_by"] = []
+
+    return data
+
 
 def title_from_plan(path: Path) -> str:
     """Extract a plan's title from YAML frontmatter or the first H1."""
@@ -31,54 +87,6 @@ def stage_from_plan(path: Path) -> str | None:
     return None
 
 
-def blocked_by_from_plan(path: Path, ticket_map: dict[str, str] | None = None) -> list[str]:
-    """Parse the ## Blocked by section into a list of blocker task IDs."""
-    content = path.read_text(errors="ignore")
-    match = re.search(r"(?m)^##\s+Blocked by\s*\n(.*?)(?=\n## |\n---|\Z)", content, re.S)
-    if not match:
-        return []
-    section = match.group(1).strip()
-    if not section or re.search(r"(?im)^\s*none\b", section):
-        return []
-
-    ids: list[str] = []
-    for line in section.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        line = re.sub(r"^[\s\-\*\d\.\[\]xX]+", "", line).strip()
-        if not line:
-            continue
-
-        # Markdown link to another plan.
-        link_match = re.search(r"\[([^\]]*)\]\(([^)]+)\)", line)
-        if link_match:
-            target = link_match.group(2)
-            if target.endswith(".md"):
-                ids.append(Path(target).stem)
-            continue
-
-        # Plain filename reference.
-        if line.endswith(".md"):
-            ids.append(Path(line).stem)
-            continue
-
-        # Plain task ID.
-        if re.match(r"^[a-zA-Z0-9_-]+$", line):
-            ids.append(line)
-            continue
-
-        # "Ticket N" reference.
-        ticket_match = re.search(r"(?i)ticket\s+(\d+)", line)
-        if ticket_match and ticket_map is not None:
-            key = ticket_match.group(1).lstrip("0") or "0"
-            if key in ticket_map:
-                ids.append(ticket_map[key])
-            continue
-
-    return list(dict.fromkeys(ids))
-
-
 def references_other_plans(path: Path) -> bool:
     """Return True if the plan links to other plan files."""
     content = path.read_text(errors="ignore")
@@ -95,6 +103,12 @@ def has_multiple_phase_sections(path: Path) -> bool:
     """Return True if the plan contains more than one Phase heading."""
     content = path.read_text(errors="ignore")
     return len(re.findall(r"(?m)^#{1,3}\s+Phase", content)) > 1
+
+
+def has_legacy_dependency_section(path: Path) -> bool:
+    """Return True if the plan body contains a legacy dependency heading."""
+    content = path.read_text(errors="ignore")
+    return bool(re.search(r"(?mi)^##\s+(Blocked by|Dependencies)\b", content))
 
 
 def count_files_to_modify(path: Path) -> int:
@@ -133,23 +147,10 @@ def validate_size(path: Path) -> tuple[bool, str | None, bool]:
     files = count_files_to_modify(path)
     lines = task_list_line_count(path)
     oversized = files > 8 or lines > 300
-    has_warning = "⚠️ ATOMIC OVERSIZED" in path.read_text(errors="ignore")
+    has_warning = "\u26a0\ufe0f ATOMIC OVERSIZED" in path.read_text(errors="ignore")
     if oversized and not has_warning:
         return False, f"files={files}, task_list_lines={lines}", has_warning
     return True, None, has_warning
-
-
-def build_ticket_map(plan_files: list[Path]) -> dict[str, str]:
-    """Build a ticket-number -> task-id map from plan titles."""
-    ticket_map: dict[str, str] = {}
-    for pf in plan_files:
-        title = title_from_plan(pf)
-        for pattern in (r"(?i)ticket\s+(\d+)", r"(?i)#\s*(\d+)"):
-            match = re.search(pattern, title)
-            if match:
-                key = match.group(1).lstrip("0") or "0"
-                ticket_map[key] = pf.stem
-    return ticket_map
 
 
 def most_recent_prd(prds_dir: Path) -> Path | None:
@@ -162,21 +163,105 @@ def most_recent_prd(prds_dir: Path) -> Path | None:
 
 def new_task_from_plan(
     path: Path,
-    ticket_map: dict[str, str] | None = None,
     status: str = "planned",
 ) -> dict[str, Any]:
-    """Create a fresh queue task dict from a plan file."""
+    """Create a fresh queue task dict from a plan file using the frontmatter contract."""
+    data = parse_frontmatter(path)
+    blocked_by = data.get("blocked_by", [])
+    if not isinstance(blocked_by, list):
+        blocked_by = []
+    blocked_by = [b for b in blocked_by if isinstance(b, str)]
+
+    state = "ready" if not blocked_by else "blocked"
     task: dict[str, Any] = {
-        "id": path.stem,
+        "id": data.get("id", path.stem),
         "title": title_from_plan(path),
         "plan_file": str(path),
-        "blocked_by": blocked_by_from_plan(path, ticket_map),
+        "blocked_by": blocked_by,
         "blocks": [],
         "status": status,
+        "state": state,
+        "pending_blockers": len(blocked_by),
         "merge_commit": None,
         "completed_at": None,
         "merged_at": None,
         "worktree": None,
         "branch": None,
     }
+    append_history(task, None, "planned", "sync")
     return task
+
+
+def intake_validation_errors(
+    plan_files: list[Path],
+) -> list[tuple[Path, str]]:
+    """Validate every plan file for intake and return a list of fatal errors.
+
+    Checks the frontmatter contract (id, size, blocked_by), cross-plan blocker
+    references, multi-unit plan markers, atomic-complexity limits, and legacy
+    dependency sections that would silently drop blockers.
+    """
+    parsed: dict[Path, dict[str, Any]] = {}
+    ids: list[str] = []
+    for pf in plan_files:
+        data = parse_frontmatter(pf)
+        parsed[pf] = data
+        task_id = data.get("id")
+        if task_id:
+            ids.append(task_id)
+
+    duplicate_ids = {task_id for task_id in ids if ids.count(task_id) > 1}
+    known_ids = set(ids)
+
+    errors: list[tuple[Path, str]] = []
+    for pf in plan_files:
+        data = parsed[pf]
+        task_id = data.get("id")
+
+        if not task_id:
+            errors.append((pf, "missing id"))
+            continue
+        if task_id in duplicate_ids:
+            errors.append((pf, f"duplicate id: {task_id}"))
+            continue
+        if task_id != pf.stem:
+            errors.append((pf, f"id mismatch: {task_id} != {pf.stem}"))
+            continue
+
+        size = data.get("size")
+        if size not in {"S", "M", "L"}:
+            errors.append((pf, f"invalid size: {size}"))
+            continue
+
+        blocked_by = data.get("blocked_by", [])
+        if not isinstance(blocked_by, list) or not all(
+            isinstance(b, str) for b in blocked_by
+        ):
+            errors.append((pf, "blocked_by must be a list of ids"))
+            continue
+
+        unknown = [b for b in blocked_by if b not in known_ids]
+        if unknown:
+            errors.append((pf, f"unknown blockers: {', '.join(unknown)}"))
+            continue
+
+        if has_legacy_dependency_section(pf):
+            errors.append(
+                (pf, "legacy dependency section found; move blocked_by to frontmatter")
+            )
+            continue
+
+        if references_other_plans(pf):
+            errors.append((pf, "references other plan files"))
+            continue
+
+        if has_multiple_phase_sections(pf):
+            errors.append((pf, "contains multiple Phase sections"))
+            continue
+
+        ok, reason, has_warning = validate_size(pf)
+        if not ok and not has_warning:
+            errors.append((pf, f"exceeds complexity limit ({reason})"))
+            continue
+
+    return errors

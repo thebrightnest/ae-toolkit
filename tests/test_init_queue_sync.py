@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
+import plan_parser  # noqa: E402
 
 
 def run_script(script_name, cwd, queue_file, archive_file, plans_dir, prds_dir=None):
@@ -61,15 +63,225 @@ def read_tasks(queue_file):
     return data
 
 
-def make_plan(path, title, blocked_by=None, references=None):
-    """Write a minimal plan markdown file."""
-    content = f"---\ntitle: {title}\n---\n\n# {title}\n"
+def make_plan(path, title, blocked_by=None, size="M", extra_body=""):
+    """Write a minimal plan markdown file using the frontmatter contract."""
+    stem = path.stem
+    lines = ["---", f"id: {stem}", f"size: {size}"]
     if blocked_by:
-        content += "\n## Blocked by\n" + "\n".join(f"- {b}" for b in blocked_by) + "\n"
-    if references:
-        content += "\n## References\n" + "\n".join(f"- [{r}]({r})" for r in references) + "\n"
-    content += "\n---\n\n*Stage: plan-approved*\n"
-    path.write_text(content)
+        lines.append("blocked_by:")
+        for blocker in blocked_by:
+            lines.append(f"  - {blocker}")
+    lines.extend(["---", "", f"# {title}", ""])
+    if extra_body:
+        lines.extend([extra_body, ""])
+    lines.extend(["---", "", "*Stage: plan-approved*"])
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class TestFrontmatterParser(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_parse_frontmatter_extracts_id_blocked_by_size(self):
+        plan = self.root / "feat-001.md"
+        make_plan(plan, "One", blocked_by=["feat-000"], size="S")
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["id"], "feat-001")
+        self.assertEqual(data["blocked_by"], ["feat-000"])
+        self.assertEqual(data["size"], "S")
+
+    def test_parse_frontmatter_allows_empty_blocked_by(self):
+        plan = self.root / "feat-001.md"
+        make_plan(plan, "One")
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["id"], "feat-001")
+        self.assertEqual(data.get("blocked_by"), [])
+        self.assertEqual(data["size"], "M")
+
+    def test_parse_frontmatter_returns_empty_dict_without_frontmatter(self):
+        plan = self.root / "feat-001.md"
+        plan.write_text("# No frontmatter\n", encoding="utf-8")
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data, {})
+
+
+class TestFrontmatterIntake(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.plans_dir = self.root / "plans"
+        self.prds_dir = self.root / "prds"
+        self.queue_file = self.root / "work-queue.json"
+        self.archive_file = self.root / "work-archive.json"
+        self.plans_dir.mkdir()
+        self.prds_dir.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_valid_frontmatter_ingests_real_dag(self):
+        """A frontmatter-authored DAG is loaded with correct blocked_by and blocks."""
+        make_plan(self.plans_dir / "a.md", "A", size="S")
+        make_plan(self.plans_dir / "b.md", "B", blocked_by=["a"], size="S")
+        make_plan(self.plans_dir / "c.md", "C", blocked_by=["b"], size="S")
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertEqual(tasks["a"]["blocked_by"], [])
+        self.assertEqual(tasks["b"]["blocked_by"], ["a"])
+        self.assertEqual(tasks["c"]["blocked_by"], ["b"])
+        self.assertEqual(tasks["a"]["blocks"], ["b"])
+        self.assertEqual(tasks["b"]["blocks"], ["c"])
+        self.assertEqual(tasks["c"]["blocks"], [])
+
+    def test_reject_missing_or_mismatched_id(self):
+        """Plans without id or with mismatched id are rejected with a clear message."""
+        bad = self.plans_dir / "bad.md"
+        bad.write_text("---\nsize: M\n---\n\n# Bad\n", encoding="utf-8")
+        make_plan(self.plans_dir / "good.md", "Good", size="S")
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("bad.md", result.stderr)
+        self.assertIn("missing id", result.stderr)
+
+        mismatched = self.plans_dir / "mismatched.md"
+        mismatched.write_text(
+            "---\nid: other\nsize: S\n---\n\n# Mismatched\n", encoding="utf-8"
+        )
+        self.queue_file.write_text(json.dumps([]))
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("mismatched.md", result.stderr)
+        self.assertIn("id mismatch", result.stderr)
+
+    def test_reject_duplicate_id(self):
+        """Two plans declaring the same id are rejected."""
+        make_plan(self.plans_dir / "first.md", "First", size="S")
+        second = self.plans_dir / "second.md"
+        second.write_text(
+            "---\nid: first\nsize: S\n---\n\n# Second\n", encoding="utf-8"
+        )
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate id", result.stderr.lower())
+
+    def test_reject_unknown_blocker(self):
+        """A blocker id that does not name another plan is rejected."""
+        make_plan(
+            self.plans_dir / "feat-001.md", "One", blocked_by=["missing"], size="S"
+        )
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unknown blocker", result.stderr)
+
+    def test_reject_oversize_without_marker(self):
+        """A plan exceeding atomic complexity limits is rejected unless marked oversized."""
+        body_lines = ["## Task List"] + [f"{i}. task {i}" for i in range(302)]
+        make_plan(
+            self.plans_dir / "big.md",
+            "Big",
+            size="M",
+            extra_body="\n".join(body_lines),
+        )
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("complexity limit", result.stderr)
+
+    def test_oversize_with_marker_is_accepted(self):
+        """A marked oversized plan is accepted despite complexity limits."""
+        body_lines = ["## Task List"] + [f"{i}. task {i}" for i in range(302)]
+        content = (
+            "---\nid: big\nsize: L\n---\n\n# Big\n\n"
+            "\u26a0\ufe0f ATOMIC OVERSIZED\n\n"
+            + "\n".join(body_lines)
+            + "\n\n---\n\n*Stage: plan-approved*\n"
+        )
+        (self.plans_dir / "big.md").write_text(content, encoding="utf-8")
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("big", {t["id"] for t in read_tasks(self.queue_file)})
+
+    def test_emitted_task_has_state_pending_blockers_history(self):
+        """Intake emits the fods-02 schema: state, pending_blockers, history."""
+        make_plan(self.plans_dir / "ready.md", "Ready", size="S")
+        make_plan(
+            self.plans_dir / "blocked.md", "Blocked", blocked_by=["ready"], size="S"
+        )
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertEqual(tasks["ready"]["state"], "ready")
+        self.assertEqual(tasks["ready"]["pending_blockers"], 0)
+        self.assertEqual(tasks["blocked"]["state"], "blocked")
+        self.assertEqual(tasks["blocked"]["pending_blockers"], 1)
+
+        for task in tasks.values():
+            self.assertEqual(len(task["history"]), 1)
+            self.assertIsNone(task["history"][0]["from"])
+            self.assertEqual(task["history"][0]["to"], "planned")
+            self.assertEqual(task["history"][0]["by"], "sync")
+            self.assertIn("at", task["history"][0])
+
+    def test_init_queue_rejects_invalid_plan_identically(self):
+        """init-queue uses the same validation as sync and fails closed."""
+        bad = self.plans_dir / "bad.md"
+        bad.write_text("---\nsize: M\n---\n\n# Bad\n", encoding="utf-8")
+
+        result, _ = run_script(
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.archive_file,
+            self.plans_dir,
+            self.prds_dir,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing id", result.stderr)
+
+    def test_sync_does_not_emit_task_with_empty_blocked_by_from_unparsed_section(self):
+        """A plan with a legacy dependency section is rejected, not ingested as empty."""
+        plan = self.plans_dir / "legacy.md"
+        plan.write_text(
+            "---\nid: legacy\nsize: S\n---\n\n# Legacy\n\n"
+            "## Blocked by\n- missing-link\n\n"
+            "---\n\n*Stage: plan-approved*\n",
+            encoding="utf-8",
+        )
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.queue_file.exists())
 
 
 class TestInitQueue(unittest.TestCase):
@@ -89,11 +301,18 @@ class TestInitQueue(unittest.TestCase):
     def test_rebuilds_facts_with_planned_status_and_wrapper(self):
         """init-queue creates a wrapped queue of planned facts with blocks inverse."""
         make_plan(self.plans_dir / "feat-001.md", "First task")
-        make_plan(self.plans_dir / "feat-002.md", "Second task", blocked_by=["feat-001"])
+        make_plan(
+            self.plans_dir / "feat-002.md", "Second task", blocked_by=["feat-001"]
+        )
         (self.prds_dir / "latest.md").write_text("# Latest PRD\n")
 
         result, _ = run_script(
-            "init-queue", self.root, self.queue_file, self.archive_file, self.plans_dir, self.prds_dir
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.archive_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -149,7 +368,12 @@ class TestInitQueue(unittest.TestCase):
         self.queue_file.write_text(json.dumps(initial))
 
         result, _ = run_script(
-            "init-queue", self.root, self.queue_file, self.archive_file, self.plans_dir, self.prds_dir
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.archive_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -167,7 +391,12 @@ class TestInitQueue(unittest.TestCase):
         """init-queue must not invoke aet-state derive."""
         make_plan(self.plans_dir / "feat-001.md", "First task")
         result, log_file = run_script(
-            "init-queue", self.root, self.queue_file, self.archive_file, self.plans_dir, self.prds_dir
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.archive_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         derive_calls = []
