@@ -78,6 +78,19 @@ def title_from_plan(path: Path) -> str:
     return path.stem
 
 
+def build_ticket_map(plan_files: list[Path]) -> dict[str, str]:
+    """Build a ticket-number -> task-id map from plan titles."""
+    ticket_map: dict[str, str] = {}
+    for pf in plan_files:
+        title = title_from_plan(pf)
+        for pattern in (r"(?i)ticket\s+(\d+)", r"(?i)#\s*(\d+)"):
+            match = re.search(pattern, title)
+            if match:
+                key = match.group(1).lstrip("0") or "0"
+                ticket_map[key] = pf.stem
+    return ticket_map
+
+
 def stage_from_plan(path: Path) -> str | None:
     """Extract the *Stage:* footer value from a plan file."""
     content = path.read_text(errors="ignore")
