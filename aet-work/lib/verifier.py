@@ -49,14 +49,18 @@ def read_plan_stage(plan_file: str) -> str | None:
 
 
 def verify_stage_advancement(
-    plan_file: str,
+    recorded_stage: str | None,
     worktree_dir: str,
     expected_stage: str,
     retries: int = 1,
 ) -> tuple[bool, str]:
-    """Verify the plan advanced to the expected stage with optional retry."""
+    """Verify the recorded pipeline stage advanced to the expected stage.
+
+    ``read_plan_stage`` is kept only for the advisory footer breadcrumb; it
+    is no longer used to make scheduling decisions.
+    """
+    stage = recorded_stage
     for attempt in range(retries + 1):
-        stage = read_plan_stage(plan_file)
         if stage == expected_stage:
             ok, msg = verify_branch_has_commits(worktree_dir)
             if ok:

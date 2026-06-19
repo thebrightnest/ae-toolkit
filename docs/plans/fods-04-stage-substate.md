@@ -60,5 +60,4 @@ Revert `aet-state set-stage`, the orchestrator stage source, and `verifier.py`. 
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
