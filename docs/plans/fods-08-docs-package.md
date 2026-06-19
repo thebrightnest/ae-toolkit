@@ -61,5 +61,4 @@ Docs-only and regenerated artifacts; revert the doc commits and re-run `make pac
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
