@@ -71,4 +71,4 @@ The migration runs against a branch; revert the branch to restore the prior `doc
 
 ---
 
-_Stage: reviewed_
+_Stage: synced_
