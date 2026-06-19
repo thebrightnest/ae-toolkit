@@ -1,6 +1,6 @@
 {
-  "queue_updated_at": "2026-06-18T22:37:10.365160",
-  "source_prd": "docs/prds/forward-only-deterministic-work-state-prd.md",
+  "queue_updated_at": "2026-06-19T18:25:37.072016",
+  "source_prd": "docs/prds/aet-telemetry-learning-prd.md",
   "tasks": [
     {
       "id": "02-port-phases-0-2",
@@ -1070,6 +1070,266 @@
       "merged_at": null,
       "worktree": null,
       "branch": null
+    },
+    {
+      "id": "tele-01-enrich-telemetry-schema",
+      "title": "Enrich Telemetry Schema for Loops, Environment Issues & Test Runs",
+      "plan_file": "docs/plans/tele-01-enrich-telemetry-schema.md",
+      "blocked_by": [],
+      "blocks": [
+        "tele-05-cross-project-telemetry-archive",
+        "tele-06-validate-and-package"
+      ],
+      "status": "planned",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": null
+    },
+    {
+      "id": "tele-02-worktree-dependency-warmup",
+      "title": "Worktree Dependency Warmup",
+      "plan_file": "docs/plans/tele-02-worktree-dependency-warmup.md",
+      "blocked_by": [],
+      "blocks": ["tele-06-validate-and-package"],
+      "status": "planned",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": null
+    },
+    {
+      "id": "tele-03-stage-group-session-reuse",
+      "title": "Stage-Group Session Reuse for Standard Isolation",
+      "plan_file": "docs/plans/tele-03-stage-group-session-reuse.md",
+      "blocked_by": [],
+      "blocks": ["tele-06-validate-and-package"],
+      "status": "planned",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": null
+    },
+    {
+      "id": "tele-04-focused-tests-diff-scoping",
+      "title": "Focused Tests & Diff Scoping",
+      "plan_file": "docs/plans/tele-04-focused-tests-diff-scoping.md",
+      "blocked_by": [],
+      "blocks": ["tele-06-validate-and-package"],
+      "status": "planned",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": null
+    },
+    {
+      "id": "tele-05-cross-project-telemetry-archive",
+      "title": "Cross-Project Telemetry Archive",
+      "plan_file": "docs/plans/tele-05-cross-project-telemetry-archive.md",
+      "blocked_by": ["tele-01-enrich-telemetry-schema"],
+      "blocks": ["tele-06-validate-and-package"],
+      "status": "planned",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": null
+    },
+    {
+      "id": "tele-06-validate-and-package",
+      "title": "Validate & Package the Telemetry Learning Update",
+      "plan_file": "docs/plans/tele-06-validate-and-package.md",
+      "blocked_by": [
+        "tele-01-enrich-telemetry-schema",
+        "tele-02-worktree-dependency-warmup",
+        "tele-03-stage-group-session-reuse",
+        "tele-04-focused-tests-diff-scoping",
+        "tele-05-cross-project-telemetry-archive"
+      ],
+      "blocks": [],
+      "status": "planned",
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "merge_strategy": null
+    },
+    {
+      "id": "2026-06-18-orchestrator-run-one-hardening",
+      "title": "Plan: Harden `run-one` \u2014 main-hygiene gate, plan-presence guard, unmaskable run outcome",
+      "plan_file": "docs/plans/2026-06-18-orchestrator-run-one-hardening.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-06-19T17:23:21.877233+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "aet-validate-scope-closure-discipline-plan",
+      "title": "Plan: Add Closure Checks to Planning and Validation Skills",
+      "plan_file": "docs/plans/aet-validate-scope-closure-discipline-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-06-19T17:23:21.878541+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "aet-work-state-refactor-derive-plan",
+      "title": "Plan: Make `aet-state derive` Blocker-Aware",
+      "plan_file": "docs/plans/aet-work-state-refactor-derive-plan.md",
+      "blocked_by": ["aet-work-state-refactor-status-next-plan"],
+      "blocks": ["aet-work-state-refactor-status-next-plan"],
+      "status": "planned",
+      "state": "blocked",
+      "pending_blockers": 1,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-06-19T17:23:21.879220+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "aet-work-state-refactor-status-next-plan",
+      "title": "Plan: Update `status`, `next`, and Orchestrator to Use Derived State",
+      "plan_file": "docs/plans/aet-work-state-refactor-status-next-plan.md",
+      "blocked_by": [
+        "aet-work-state-refactor-derive-plan",
+        "aet-work-state-refactor-sync-init-plan"
+      ],
+      "blocks": [
+        "aet-work-state-refactor-derive-plan",
+        "aet-work-state-refactor-sync-init-plan"
+      ],
+      "status": "planned",
+      "state": "blocked",
+      "pending_blockers": 2,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-06-19T17:23:21.879907+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "aet-work-state-refactor-sync-init-plan",
+      "title": "Plan: Simplify `sync` and Create `init-queue`",
+      "plan_file": "docs/plans/aet-work-state-refactor-sync-init-plan.md",
+      "blocked_by": ["aet-work-state-refactor-status-next-plan"],
+      "blocks": ["aet-work-state-refactor-status-next-plan"],
+      "status": "planned",
+      "state": "blocked",
+      "pending_blockers": 1,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-06-19T17:23:21.880595+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "fods-01-record-merge",
+      "title": "Plan: Deterministic Merge Recording (`aet-state record-merge`)",
+      "plan_file": "docs/plans/fods-01-record-merge.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-06-19T17:23:21.881339+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "run-one-queue-bookkeeping-plan",
+      "title": "Plan: Make `run-one` update the work queue",
+      "plan_file": "docs/plans/run-one-queue-bookkeeping-plan.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-06-19T17:23:21.882773+00:00",
+          "by": "sync"
+        }
+      ]
     }
   ]
 }
