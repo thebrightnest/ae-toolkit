@@ -326,6 +326,57 @@ def _apply_transition(queue_path, queue, task, from_state, to_state, by, evidenc
     save_queue(queue_path, queue)
 
 
+def _set_stage(task, stage, by="orch"):
+    """Set the pipeline stage sub-state on a task that is in_progress.
+
+    This is the only function that assigns ``task["stage"]``.  It appends a
+    history entry and returns nothing.  The caller must ensure the task is
+    loaded from the latest queue and that the queue is saved afterwards.
+    """
+    current = queue_lib.current_state(task)
+    if current != "in_progress":
+        raise RuntimeError(
+            f"Cannot set stage: task state is '{current}', must be 'in_progress'."
+        )
+
+    previous_stage = task.get("stage")
+    task["stage"] = stage
+    queue_lib.append_history(task, previous_stage, stage, by, {"kind": "stage"})
+
+
+def cmd_set_stage(args):
+    """Set the pipeline stage sub-state for a task in the queue."""
+    queue = load_queue(args.queue)
+    task = find_task(queue, args.task_id)
+    if not task:
+        print(f"Task not found: {args.task_id}", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        current = queue_lib.current_state(task)
+        if current == "in_progress":
+            print(
+                f"[dry-run] Would set stage for {args.task_id}: "
+                f"{task.get('stage')} -> {args.stage}"
+            )
+            return 0
+        print(
+            f"Cannot set stage: task state is '{current}', must be 'in_progress'.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        _set_stage(task, args.stage, by="orch")
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    save_queue(args.queue, queue)
+    print(f"Set stage for {args.task_id}: {args.stage}")
+    return 0
+
+
 def update_plan_footer(plan_path, stage):
     """Atomically update the *Stage: ...* footer in a plan or PRD file."""
     path = Path(plan_path)
@@ -587,6 +638,14 @@ def main():
     sync_parser.add_argument("stage", help="Stage to set.")
     sync_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
 
+    # set-stage
+    set_stage_parser = subparsers.add_parser(
+        "set-stage", help="Set the pipeline stage sub-state for an in-progress task."
+    )
+    set_stage_parser.add_argument("task_id", help="Task ID.")
+    set_stage_parser.add_argument("stage", help="Pipeline stage to record.")
+    set_stage_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+
     # record-merge
     record_merge_parser = subparsers.add_parser(
         "record-merge", help="Resolve and record the merge commit for a task."
@@ -611,6 +670,8 @@ def main():
         return cmd_transition(args)
     if args.command == "sync-footers":
         return cmd_sync_footers(args)
+    if args.command == "set-stage":
+        return cmd_set_stage(args)
     if args.command == "record-merge":
         return cmd_record_merge(args)
     if args.command == "archive":
