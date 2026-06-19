@@ -189,6 +189,26 @@ class TestFrontmatterParser(unittest.TestCase):
         data = plan_parser.parse_frontmatter(plan)
         self.assertEqual(data["blocked_by"], [])
 
+    def test_explicit_frontmatter_blocked_by_detection(self):
+        """has_explicit_frontmatter_blocked_by is True only when the key is declared."""
+        with_frontmatter = self.root / "with.md"
+        with_frontmatter.write_text(
+            "---\nid: with\nsize: S\nblocked_by: []\n---\n\n# With\n",
+            encoding="utf-8",
+        )
+        self.assertTrue(plan_parser.has_explicit_frontmatter_blocked_by(with_frontmatter))
+
+        without_key = self.root / "without.md"
+        without_key.write_text(
+            "---\nid: without\nsize: S\n---\n\n# Without\n",
+            encoding="utf-8",
+        )
+        self.assertFalse(plan_parser.has_explicit_frontmatter_blocked_by(without_key))
+
+        no_frontmatter = self.root / "no_frontmatter.md"
+        no_frontmatter.write_text("# No frontmatter\n", encoding="utf-8")
+        self.assertFalse(plan_parser.has_explicit_frontmatter_blocked_by(no_frontmatter))
+
 
 class TestFrontmatterIntake(unittest.TestCase):
     def setUp(self):
@@ -670,6 +690,45 @@ class TestSync(unittest.TestCase):
         self.assertNotIn("settled", tasks)
         self.assertIn("active", tasks)
         self.assertIn("1 skipped (already settled)", result.stdout)
+
+    def test_sync_does_not_revalidate_existing_queued_plans(self):
+        """Append-only sync trusts existing queue entries and validates only candidates."""
+        existing = self.plans_dir / "existing.md"
+        existing.write_text(
+            "---\nid: existing\nsize: S\n---\n\n# Existing\n\n"
+            "## Blocked by\n- missing-link\n\n"
+            "---\n\n*Stage: plan-approved*\n",
+            encoding="utf-8",
+        )
+        initial = {
+            "tasks": [
+                {
+                    "id": "existing",
+                    "title": "Existing task",
+                    "plan_file": str(existing),
+                    "blocked_by": [],
+                    "blocks": [],
+                    "status": "planned",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                    "completed_at": None,
+                    "merged_at": None,
+                }
+            ]
+        }
+        self.queue_file.write_text(json.dumps(initial))
+
+        make_plan(self.plans_dir / "new.md", "New task", size="S")
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertIn("existing", tasks)
+        self.assertIn("new", tasks)
 
 
 if __name__ == "__main__":

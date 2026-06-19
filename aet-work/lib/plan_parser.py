@@ -69,6 +69,20 @@ def _parse_inline_list(value: str) -> list[str] | None:
     return items
 
 
+def _frontmatter_body(path: Path) -> str | None:
+    """Return the raw text between the leading ``---`` fences, or None.
+
+    Returns None when the file has no frontmatter or the fence is unclosed.
+    """
+    content = path.read_text(errors="ignore")
+    if not content.startswith("---"):
+        return None
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return None
+    return parts[1]
+
+
 def parse_frontmatter(path: Path) -> dict[str, Any]:
     """Parse the YAML frontmatter contract for a plan file.
 
@@ -84,18 +98,15 @@ def parse_frontmatter(path: Path) -> dict[str, Any]:
     be parsed cleanly are returned as raw strings so downstream validation can
     reject them.
     """
-    content = path.read_text(errors="ignore")
-    if not content.startswith("---"):
-        return {}
-    parts = content.split("---", 2)
-    if len(parts) < 3:
+    body = _frontmatter_body(path)
+    if body is None:
         return {}
 
     data: dict[str, Any] = {}
     current_key: str | None = None
     current_indent = 0
 
-    for raw_line in parts[1].splitlines():
+    for raw_line in body.splitlines():
         stripped = raw_line.strip()
         if not stripped or stripped.startswith("#"):
             continue
@@ -209,6 +220,14 @@ def has_legacy_dependency_section(path: Path) -> bool:
     return bool(re.search(r"(?mi)^##\s+(Blocked by|Dependencies)\b", content))
 
 
+def has_explicit_frontmatter_blocked_by(path: Path) -> bool:
+    """Return True when the frontmatter explicitly declares a blocked_by key."""
+    body = _frontmatter_body(path)
+    if body is None:
+        return False
+    return bool(re.search(r"^blocked_by\s*:", body, re.M))
+
+
 def count_files_to_modify(path: Path) -> int:
     """Count list items under ## Files to Modify or ## Files."""
     content = path.read_text(errors="ignore")
@@ -292,12 +311,17 @@ def new_task_from_plan(
 
 def intake_validation_errors(
     plan_files: list[Path],
+    limit_to: set[Path] | None = None,
 ) -> list[tuple[Path, str]]:
-    """Validate every plan file for intake and return a list of fatal errors.
+    """Validate plan files for intake and return a list of fatal errors.
 
     Checks the frontmatter contract (id, size, blocked_by), cross-plan blocker
     references, multi-unit plan markers, atomic-complexity limits, and legacy
     dependency sections that would silently drop blockers.
+
+    By default every file is validated. When ``limit_to`` is provided, only files
+    in that set produce validation errors, but every file is still parsed so that
+    cross-plan blocker references and duplicate-id detection remain accurate.
     """
     parsed: dict[Path, dict[str, Any]] = {}
     ids: list[str] = []
@@ -315,6 +339,9 @@ def intake_validation_errors(
     for pf in plan_files:
         data = parsed[pf]
         task_id = data.get("id")
+
+        if limit_to is not None and pf not in limit_to:
+            continue
 
         if not task_id:
             errors.append((pf, "missing id"))
@@ -343,7 +370,7 @@ def intake_validation_errors(
             errors.append((pf, f"unknown blockers: {', '.join(unknown)}"))
             continue
 
-        if has_legacy_dependency_section(pf):
+        if has_legacy_dependency_section(pf) and not has_explicit_frontmatter_blocked_by(pf):
             errors.append(
                 (pf, "legacy dependency section found; move blocked_by to frontmatter")
             )

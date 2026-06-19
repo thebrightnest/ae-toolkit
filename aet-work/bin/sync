@@ -73,7 +73,17 @@ def main() -> int:
 
     plan_files = sorted(plans_dir.glob("*.md"))
 
-    errors = intake_validation_errors(plan_files)
+    # Sync is append-only: only candidate plans (not already queued or settled)
+    # need to pass intake validation. Every plan is still parsed so that blocker
+    # references resolve against the full corpus.
+    candidate_files = {
+        pf
+        for pf in plan_files
+        if str(pf) not in existing_by_file
+        and str(pf) not in settled_files
+        and pf.stem not in settled_ids
+    }
+    errors = intake_validation_errors(plan_files, limit_to=candidate_files)
     if errors:
         for pf, reason in errors:
             print(f"❌ {pf.name}: {reason}", file=sys.stderr)

@@ -87,6 +87,7 @@ Append-only sync of `docs/plans/*.md` into the existing queue. Implemented by `a
 3. Scan `docs/plans/` for all `*.md` files.
 4. For each plan whose `plan_file` is not already in the queue:
    - **Settled-history deduplication:** skip if its `plan_file` or task ID is already settled.
+   - **Validate intake contract on candidates only:** run fail-closed intake validation (frontmatter, size, atomicity, legacy sections) only on plans that are actually candidates to be added. Already-queued plans are preserved as-is.
    - **Validate size:** skip plans that exceed the complexity limit unless they contain `⚠️ ATOMIC OVERSIZED` (set `oversized: true` if allowed).
    - **Validate atomicity:** skip plans that reference other plan files or contain multiple "Phase" sections.
    - Append a new task with `status: "planned"`.
