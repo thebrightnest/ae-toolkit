@@ -1,3 +1,10 @@
+---
+id: [plan-id]
+size: [S/M/L]
+blocked_by:
+  - [blocker-plan-id]
+---
+
 # Plan: [Feature Name]
 
 ## Context
@@ -9,7 +16,7 @@ Link to the PRD and any relevant prior decisions.
 - [ ] Confirmed this is a **feature or enhancement**, not a reproducible defect
 - [ ] If a reproducible defect was described, redirected to `aet-bug-report`
 
-## Tasks
+## Task List
 
 1. Task description — estimated size (S/M/L)
 2. Task description — estimated size (S/M/L)
@@ -30,9 +37,10 @@ If a task exceeds the agent session limit (≤ 4 hr / ≤ 8 files / ≤ 300 line
 - [ ] Add/update CSS styles for all custom `className` values
 - [ ] Verify no unstyled `className` references remain
 
-## Dependencies
+## Files to Modify
 
-- Task N blocks Task M
+- `path/to/file`
+- `path/to/file`
 
 ## Validation Steps
 
@@ -45,3 +53,7 @@ If a task exceeds the agent session limit (≤ 4 hr / ≤ 8 files / ≤ 300 line
 ## Rollback Plan
 
 How to undo this change if something goes wrong.
+
+---
+
+_Stage: plan-approved_

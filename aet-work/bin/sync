@@ -2,8 +2,9 @@
 """aet-work sync — Append-only sync of docs/plans/*.md into the work queue.
 
 Loads the existing queue and archive, appends only newly created plan files,
-validates atomicity and size, recomputes the dependency DAG, reports drift,
-and updates wrapper metadata. It does **not** derive status or promote tasks.
+validates the frontmatter contract and atomicity, recomputes the dependency
+DAG, reports drift, and updates wrapper metadata. It does **not** derive
+status or promote tasks.
 """
 
 from __future__ import annotations
@@ -19,10 +20,8 @@ _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
 from plan_parser import (  # noqa: E402
-    build_ticket_map,
-    has_multiple_phase_sections,
+    intake_validation_errors,
     new_task_from_plan,
-    references_other_plans,
     validate_size,
 )
 from queue import read_queue, read_archive, write_queue  # noqa: E402
@@ -73,12 +72,16 @@ def main() -> int:
     archived_ids = {t.get("id") for t in archive if t.get("id")}
 
     plan_files = sorted(plans_dir.glob("*.md"))
-    ticket_map = build_ticket_map(plan_files)
+
+    errors = intake_validation_errors(plan_files)
+    if errors:
+        for pf, reason in errors:
+            print(f"❌ {pf.name}: {reason}", file=sys.stderr)
+        return 1
 
     added = 0
     preserved = 0
     skipped_archive = 0
-    skipped_atomicity = 0
     skipped_size = 0
     new_tasks: list[dict] = []
 
@@ -95,25 +98,17 @@ def main() -> int:
             skipped_archive += 1
             continue
 
-        if references_other_plans(pf):
-            print(f"⚠️ Skipping {pf.name}: references other plan files")
-            skipped_atomicity += 1
-            continue
-
-        if has_multiple_phase_sections(pf):
-            print(f"⚠️ Skipping {pf.name}: contains multiple Phase sections")
-            skipped_atomicity += 1
-            continue
-
         ok, reason, oversized = validate_size(pf)
-        if not ok:
+        if not ok and not oversized:
+            # Defensive: validation above should already catch this.
             print(
-                f"⚠️ Skipping {pf.name}: exceeds complexity limit ({reason}). Split the plan."
+                f"⚠️ Skipping {pf.name}: exceeds complexity limit ({reason}). Split the plan.",
+                file=sys.stderr,
             )
             skipped_size += 1
             continue
 
-        task = new_task_from_plan(pf, ticket_map, status="planned")
+        task = new_task_from_plan(pf, status="planned")
         if oversized:
             task["oversized"] = True
         new_tasks.append(task)
@@ -157,8 +152,8 @@ def main() -> int:
 
     print(
         f"\n✅ Sync complete: {added} new tasks added, {preserved} existing tasks preserved, "
-        f"{skipped_archive} skipped (already archived), {skipped_atomicity} skipped (atomicity), "
-        f"{skipped_size} skipped (size), {drifted} drifted tasks reported."
+        f"{skipped_archive} skipped (already archived), {skipped_size} skipped (size), "
+        f"{drifted} drifted tasks reported."
     )
     return 0
 

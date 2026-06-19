@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """aet-work init-queue — Rebuild the work queue from docs/plans/*.md.
 
-Reads every atomic plan, rebuilds dependency facts, preserves terminal
-metadata from an existing queue, and writes a fresh `.agents/work-queue.json`.
+Reads every atomic plan, validates the frontmatter contract, rebuilds
+dependency facts, preserves terminal metadata from an existing queue, and
+writes a fresh `.agents/work-queue.json`.
 It does **not** derive actionable status or promote tasks.
 """
 
@@ -18,8 +19,8 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from plan_parser import build_ticket_map, most_recent_prd, new_task_from_plan, title_from_plan  # noqa: E402
-from queue import TERMINAL_STATUSES, read_queue, write_queue  # noqa: E402
+from plan_parser import intake_validation_errors, most_recent_prd, new_task_from_plan  # noqa: E402
+from queue import TERMINAL_STATUSES, read_queue, write_queue, status_to_state  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +53,7 @@ def preserve_task_metadata(existing: dict, fresh: dict) -> dict:
 
     Non-terminal stored statuses are normalized to ``planned``. Legacy
     ``merge_verified`` is treated as terminal and normalized to ``merged``.
+    State is kept consistent with the preserved status.
     """
     status = existing.get("status", "planned")
     if status == "merge_verified":
@@ -60,6 +62,7 @@ def preserve_task_metadata(existing: dict, fresh: dict) -> dict:
         status = "planned"
 
     fresh["status"] = status
+    fresh["state"] = status_to_state(status)
     for key in (
         "branch",
         "worktree",
@@ -68,6 +71,7 @@ def preserve_task_metadata(existing: dict, fresh: dict) -> dict:
         "completed_at",
         "merged_at",
         "failed_stage",
+        "history",
     ):
         if key in existing:
             fresh[key] = existing[key]
@@ -95,7 +99,12 @@ def main() -> int:
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
 
     plan_files = sorted(plans_dir.glob("*.md"))
-    ticket_map = build_ticket_map(plan_files)
+
+    errors = intake_validation_errors(plan_files)
+    if errors:
+        for pf, reason in errors:
+            print(f"❌ {pf.name}: {reason}", file=sys.stderr)
+        return 1
 
     preserved = 0
     added = 0
@@ -106,11 +115,11 @@ def main() -> int:
         pf_str = str(pf)
         if pf_str in existing_by_file:
             existing = existing_by_file[pf_str]
-            fresh = new_task_from_plan(pf, ticket_map, status="planned")
+            fresh = new_task_from_plan(pf, status="planned")
             task = preserve_task_metadata(existing, fresh)
             preserved += 1
         else:
-            task = new_task_from_plan(pf, ticket_map, status="planned")
+            task = new_task_from_plan(pf, status="planned")
             added += 1
 
         final_queue.append(task)

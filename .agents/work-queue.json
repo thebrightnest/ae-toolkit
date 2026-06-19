@@ -1175,12 +1175,21 @@
         "fods-07-live-settled-partition"
       ],
       "blocks": ["fods-08-docs-package"],
-      "status": "planned",
+      "status": "in-progress",
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null
+      "worktree": ".worktrees/fods-06-migration-reconcile",
+      "branch": "fods-06-migration-reconcile",
+      "state": "in_progress",
+      "history": [
+        {
+          "from": "planned",
+          "to": "in_progress",
+          "at": "2026-06-18T23:49:01.802474+00:00",
+          "by": "transition"
+        }
+      ]
     },
     {
       "id": "fods-07-live-settled-partition",
