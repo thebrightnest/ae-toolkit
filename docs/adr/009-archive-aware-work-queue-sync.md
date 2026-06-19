@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. Revised by ADR-011; the physical archive file is superseded by the append-only settled history log.
 
 ## Context
 
@@ -20,11 +20,15 @@ Make `aet-work sync` (and `init-queue`) archive-aware:
 
 The implementation is centralized in a new `aet-work/bin/sync` script. The skill instructions in `aet-work/SKILL.md` now include the archive-deduplication step for both `init-queue` and `sync`.
 
+## Revision (fods-07)
+
+ADR-011 replaces the dedup-on-sync archive with an automatic seal at terminal transition. Terminal tasks (`merged`/`abandoned`) are appended to `.agents/work-history.jsonl` and removed from `.agents/work-queue.json` immediately, so they are never in the live queue when `sync` or `init-queue` runs. `aet-work sync` and `init-queue` now consult the settled history log instead of `.agents/work-archive.json` to skip already-settled plans. The old `aet-state archive` command remains as a deprecated migration helper.
+
 ## Consequences
 
 - Completed work stays archived and does not reappear in the active queue.
-- `aet-work sync` is safe to run after queue resets or archive cleanups.
-- Re-activating an archived plan requires explicit action (e.g., remove it from the archive or move the plan file back into `docs/plans/` after clearing its archive entry).
+- `aet-work sync` is safe to run after queue resets or history log cleanups.
+- Re-activating a settled plan requires explicit action (e.g., remove its entry from the history log or move the plan file back into `docs/plans/` after clearing its history entry).
 
 ## Alternatives Considered
 

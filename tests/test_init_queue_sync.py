@@ -11,7 +11,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 
 
-def run_script(script_name, cwd, queue_file, archive_file, plans_dir, prds_dir=None):
+def run_script(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=None):
     """Run a queue script in an isolated environment and return its result."""
     env = os.environ.copy()
     fake_bin = Path(cwd) / "fakebin"
@@ -35,8 +35,8 @@ def run_script(script_name, cwd, queue_file, archive_file, plans_dir, prds_dir=N
         str(REPO_ROOT / "aet-work" / "bin" / script_name),
         "--queue-file",
         str(queue_file),
-        "--archive-file",
-        str(archive_file),
+        "--history-file",
+        str(history_file),
         "--plans-dir",
         str(plans_dir),
     ]
@@ -79,7 +79,7 @@ class TestInitQueue(unittest.TestCase):
         self.plans_dir = self.root / "plans"
         self.prds_dir = self.root / "prds"
         self.queue_file = self.root / "work-queue.json"
-        self.archive_file = self.root / "work-archive.json"
+        self.history_file = self.root / "work-history.jsonl"
         self.plans_dir.mkdir()
         self.prds_dir.mkdir()
 
@@ -93,7 +93,7 @@ class TestInitQueue(unittest.TestCase):
         (self.prds_dir / "latest.md").write_text("# Latest PRD\n")
 
         result, _ = run_script(
-            "init-queue", self.root, self.queue_file, self.archive_file, self.plans_dir, self.prds_dir
+            "init-queue", self.root, self.queue_file, self.history_file, self.plans_dir, self.prds_dir
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -149,7 +149,7 @@ class TestInitQueue(unittest.TestCase):
         self.queue_file.write_text(json.dumps(initial))
 
         result, _ = run_script(
-            "init-queue", self.root, self.queue_file, self.archive_file, self.plans_dir, self.prds_dir
+            "init-queue", self.root, self.queue_file, self.history_file, self.plans_dir, self.prds_dir
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -167,7 +167,7 @@ class TestInitQueue(unittest.TestCase):
         """init-queue must not invoke aet-state derive."""
         make_plan(self.plans_dir / "feat-001.md", "First task")
         result, log_file = run_script(
-            "init-queue", self.root, self.queue_file, self.archive_file, self.plans_dir, self.prds_dir
+            "init-queue", self.root, self.queue_file, self.history_file, self.plans_dir, self.prds_dir
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         derive_calls = []
@@ -185,7 +185,7 @@ class TestSync(unittest.TestCase):
         self.plans_dir = self.root / "plans"
         self.prds_dir = self.root / "prds"
         self.queue_file = self.root / "work-queue.json"
-        self.archive_file = self.root / "work-archive.json"
+        self.history_file = self.root / "work-history.jsonl"
         self.plans_dir.mkdir()
         self.prds_dir.mkdir()
 
@@ -220,7 +220,7 @@ class TestSync(unittest.TestCase):
         make_plan(self.plans_dir / "new.md", "New task", blocked_by=["existing"])
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -259,7 +259,7 @@ class TestSync(unittest.TestCase):
         self.queue_file.write_text(json.dumps(initial))
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -291,7 +291,7 @@ class TestSync(unittest.TestCase):
         self.queue_file.write_text(json.dumps(initial))
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -302,7 +302,7 @@ class TestSync(unittest.TestCase):
         """sync must not invoke aet-state derive."""
         make_plan(self.plans_dir / "feat-001.md", "First task")
         result, log_file = run_script(
-            "sync", self.root, self.queue_file, self.archive_file, self.plans_dir, None
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         derive_calls = []

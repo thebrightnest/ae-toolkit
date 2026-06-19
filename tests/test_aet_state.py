@@ -127,7 +127,9 @@ class TestAuditCommand(unittest.TestCase):
 
 class TestRecordMerge(unittest.TestCase):
     def setUp(self):
-        self.queue_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.queue_file_path = Path(self.tmpdir.name) / "work-queue.json"
+        self.history_file = str(self.queue_file_path.with_name("work-history.jsonl"))
         self.queue = {
             "tasks": [
                 {
@@ -138,19 +140,19 @@ class TestRecordMerge(unittest.TestCase):
                 }
             ]
         }
-        json.dump(self.queue, self.queue_file)
-        self.queue_file.close()
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
 
     def tearDown(self):
-        os.unlink(self.queue_file.name)
+        self.tmpdir.cleanup()
 
     def _load_task(self):
-        with open(self.queue_file.name, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data["tasks"][0]
+        with open(self.history_file, "r", encoding="utf-8") as f:
+            line = f.readline()
+        return json.loads(line)
 
     def test_regular_merge(self):
-        """A branch tip that is an ancestor of origin/main is recorded as regular."""
+        """A branch tip that is an ancestor of origin/main is recorded and sealed."""
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
@@ -160,7 +162,7 @@ class TestRecordMerge(unittest.TestCase):
         args = aet_state.argparse.Namespace(
             command="record-merge",
             task_id="t1",
-            queue=self.queue_file.name,
+            queue=str(self.queue_file_path),
             dry_run=False,
         )
 
@@ -169,13 +171,17 @@ class TestRecordMerge(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         task = self._load_task()
-        self.assertEqual(task["status"], "merged")
+        self.assertEqual(task["state"], "merged")
         self.assertEqual(task["merge_commit"], "abc1234")
         self.assertEqual(task["merge_strategy"], "regular")
         self.assertIn("merged_at", task)
 
+        with open(self.queue_file_path, "r", encoding="utf-8") as f:
+            live = json.load(f)
+        self.assertEqual(live["tasks"], [])
+
     def test_squash_merge_via_gh(self):
-        """A squash merge resolved via gh pr view is recorded."""
+        """A squash merge resolved via gh pr view is recorded and sealed."""
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
@@ -191,7 +197,7 @@ class TestRecordMerge(unittest.TestCase):
         args = aet_state.argparse.Namespace(
             command="record-merge",
             task_id="t1",
-            queue=self.queue_file.name,
+            queue=str(self.queue_file_path),
             dry_run=False,
         )
 
@@ -200,12 +206,16 @@ class TestRecordMerge(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         task = self._load_task()
-        self.assertEqual(task["status"], "merged")
+        self.assertEqual(task["state"], "merged")
         self.assertEqual(task["merge_commit"], "squash_sha")
         self.assertEqual(task["merge_strategy"], "squash")
 
+        with open(str(self.queue_file_path), "r", encoding="utf-8") as f:
+            live = json.load(f)
+        self.assertEqual(live["tasks"], [])
+
     def test_diff_fallback(self):
-        """When gh fails, a matching diff on origin/main is used."""
+        """When gh fails, a matching diff on origin/main is used and the task is sealed."""
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
@@ -226,7 +236,7 @@ class TestRecordMerge(unittest.TestCase):
         args = aet_state.argparse.Namespace(
             command="record-merge",
             task_id="t1",
-            queue=self.queue_file.name,
+            queue=str(self.queue_file_path),
             dry_run=False,
         )
 
@@ -235,9 +245,13 @@ class TestRecordMerge(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         task = self._load_task()
-        self.assertEqual(task["status"], "merged")
+        self.assertEqual(task["state"], "merged")
         self.assertEqual(task["merge_commit"], "squash_sha")
         self.assertEqual(task["merge_strategy"], "squash")
+
+        with open(str(self.queue_file_path), "r", encoding="utf-8") as f:
+            live = json.load(f)
+        self.assertEqual(live["tasks"], [])
 
     def test_unresolved_leaves_queue_unchanged(self):
         """If no merge commit can be resolved, the command fails without mutating the queue."""
@@ -255,7 +269,7 @@ class TestRecordMerge(unittest.TestCase):
         args = aet_state.argparse.Namespace(
             command="record-merge",
             task_id="t1",
-            queue=self.queue_file.name,
+            queue=str(self.queue_file_path),
             dry_run=False,
         )
 
@@ -263,7 +277,9 @@ class TestRecordMerge(unittest.TestCase):
             rc = aet_state.cmd_record_merge(args)
 
         self.assertEqual(rc, 1)
-        task = self._load_task()
+        with open(str(self.queue_file_path), "r", encoding="utf-8") as f:
+            live = json.load(f)
+        task = live["tasks"][0]
         self.assertEqual(task["status"], "awaiting_merge")
         self.assertNotIn("merge_commit", task)
 
@@ -533,8 +549,10 @@ class TestStateTransition(unittest.TestCase):
         self.assertIn("at", entry)
 
     def test_terminal_transition_promotes_dependent(self):
-        """A terminal transition decrements pending_blockers and promotes dependents."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        """A terminal transition promotes dependents, then seals the terminal task."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "work-queue.json"
+            history_file = queue_path.with_name("work-history.jsonl")
             queue = {
                 "tasks": [
                     {
@@ -550,36 +568,43 @@ class TestStateTransition(unittest.TestCase):
                     },
                 ]
             }
-            json.dump(queue, f)
-            queue_path = f.name
+            with open(queue_path, "w", encoding="utf-8") as f:
+                json.dump(queue, f)
 
-        args = aet_state.argparse.Namespace(
-            command="transition",
-            task_id="blocker",
-            from_stage="awaiting_merge",
-            to_stage="abandoned",
-            queue=queue_path,
-            dry_run=False,
-            reason="no longer needed",
-        )
+            args = aet_state.argparse.Namespace(
+                command="transition",
+                task_id="blocker",
+                from_stage="awaiting_merge",
+                to_stage="abandoned",
+                queue=str(queue_path),
+                dry_run=False,
+                reason="no longer needed",
+            )
 
-        rc = aet_state.cmd_transition(args)
-        self.assertEqual(rc, 0)
+            rc = aet_state.cmd_transition(args)
+            self.assertEqual(rc, 0)
 
-        with open(queue_path, "r", encoding="utf-8") as f:
-            after = json.load(f)
-        by_id = {t["id"]: t for t in after["tasks"]}
-        self.assertEqual(by_id["blocker"]["state"], "abandoned")
-        self.assertEqual(by_id["dependent"]["state"], "ready")
-        self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
-        release_entries = [h for h in by_id["dependent"]["history"] if h["by"] == "release"]
-        self.assertEqual(len(release_entries), 1)
-        self.assertEqual(release_entries[0]["from"], "blocked")
-        self.assertEqual(release_entries[0]["to"], "ready")
+            with open(queue_path, "r", encoding="utf-8") as f:
+                after = json.load(f)
+            by_id = {t["id"]: t for t in after["tasks"]}
+            self.assertNotIn("blocker", by_id)
+            self.assertEqual(by_id["dependent"]["state"], "ready")
+            self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
+            release_entries = [h for h in by_id["dependent"]["history"] if h["by"] == "release"]
+            self.assertEqual(len(release_entries), 1)
+            self.assertEqual(release_entries[0]["from"], "blocked")
+            self.assertEqual(release_entries[0]["to"], "ready")
+
+            with open(history_file, "r", encoding="utf-8") as f:
+                settled = json.loads(f.readline())
+            self.assertEqual(settled["id"], "blocker")
+            self.assertEqual(settled["state"], "abandoned")
 
     def test_record_merge_drives_merged_and_promotes(self):
-        """record-merge reaches merged through the sole writer and unblocks dependents."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        """record-merge reaches merged, seals the task, and unblocks dependents."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "work-queue.json"
+            history_file = queue_path.with_name("work-history.jsonl")
             queue = {
                 "tasks": [
                     {
@@ -596,36 +621,41 @@ class TestStateTransition(unittest.TestCase):
                     },
                 ]
             }
-            json.dump(queue, f)
-            queue_path = f.name
+            with open(queue_path, "w", encoding="utf-8") as f:
+                json.dump(queue, f)
 
-        responses = {
-            ("git", "fetch", "origin"): (0, "", ""),
-            ("git", "rev-parse", "feat-blocker"): (0, "abc1234\n", ""),
-            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
-        }
+            responses = {
+                ("git", "fetch", "origin"): (0, "", ""),
+                ("git", "rev-parse", "feat-blocker"): (0, "abc1234\n", ""),
+                ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+            }
 
-        args = aet_state.argparse.Namespace(
-            command="record-merge",
-            task_id="blocker",
-            queue=queue_path,
-            dry_run=False,
-        )
+            args = aet_state.argparse.Namespace(
+                command="record-merge",
+                task_id="blocker",
+                queue=str(queue_path),
+                dry_run=False,
+            )
 
-        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            rc = aet_state.cmd_record_merge(args)
+            with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+                rc = aet_state.cmd_record_merge(args)
 
-        self.assertEqual(rc, 0)
-        with open(queue_path, "r", encoding="utf-8") as f:
-            after = json.load(f)
-        by_id = {t["id"]: t for t in after["tasks"]}
-        self.assertEqual(by_id["blocker"]["state"], "merged")
-        self.assertEqual(by_id["blocker"]["merge_commit"], "abc1234")
-        self.assertEqual(by_id["dependent"]["state"], "ready")
-        self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
-        merge_entries = [h for h in by_id["blocker"]["history"] if h["by"] == "record-merge"]
-        self.assertEqual(len(merge_entries), 1)
-        self.assertEqual(merge_entries[0]["to"], "merged")
+            self.assertEqual(rc, 0)
+            with open(queue_path, "r", encoding="utf-8") as f:
+                after = json.load(f)
+            by_id = {t["id"]: t for t in after["tasks"]}
+            self.assertNotIn("blocker", by_id)
+            self.assertEqual(by_id["dependent"]["state"], "ready")
+            self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
+
+            with open(history_file, "r", encoding="utf-8") as f:
+                settled = json.loads(f.readline())
+            self.assertEqual(settled["id"], "blocker")
+            self.assertEqual(settled["state"], "merged")
+            self.assertEqual(settled["merge_commit"], "abc1234")
+            merge_entries = [h for h in settled["history"] if h["by"] == "record-merge"]
+            self.assertEqual(len(merge_entries), 1)
+            self.assertEqual(merge_entries[0]["to"], "merged")
 
 
 if __name__ == "__main__":
