@@ -6,17 +6,17 @@ You are upgrading an existing project that already has `.agents/work-queue.json`
 
 ## What Changes
 
-Before `aet-state`, the work queue stored status directly in JSON and skills mutated it by hand. After `aet-state`, the queue records state forward through validated transitions, and `aet-state audit` can reconcile stored state against git ground truth on demand.
+Before `aet-state`, the work queue stored `status` directly in JSON and skills mutated it by hand. After `aet-state`, the queue records `state` forward through validated transitions, and `aet-state audit` reconciles stored state against git ground truth on demand.
 
 ## One-Time Repair
 
-Run this on any existing queue to detect stale or invented statuses without mutating the queue:
+Run this on any existing queue to detect stale or invented states without mutating the queue:
 
 ```bash
 python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json
 ```
 
-This prints stored and derived statuses for every task. If a task is stored as `awaiting_merge` or `merged` but git says otherwise, inspect manually and use `aet-state transition` or `aet-work mark-terminal` to repair.
+This prints stored and expected statuses for every task. If a task is stored as `awaiting_merge` or `merged` but git says otherwise, inspect manually and use `aet-state transition` or `aet-work mark-terminal` to repair.
 
 To force a full repair:
 
@@ -33,15 +33,15 @@ aet-work status
 
 ## Common Stale States
 
-| Stored state     | Likely derived status | Cause                                  |
-| ---------------- | --------------------- | -------------------------------------- |
-| `merged`         | `in-progress`         | Branch not yet on `origin/main`        |
-| `awaiting_merge` | `in-progress`         | Pipeline finished but PR not merged    |
-| `merge_verified` | `merged`              | Legacy alias; normalized automatically |
-| `in_progress`    | `planned`             | Worktree removed, branch deleted       |
+| Stored state     | Likely expected status | Cause                                  |
+| ---------------- | ---------------------- | -------------------------------------- |
+| `merged`         | `in-progress`          | Branch not yet on `origin/main`        |
+| `awaiting_merge` | `in-progress`          | Pipeline finished but PR not merged    |
+| `merge_verified` | `merged`               | Legacy alias; normalized automatically |
+| `in_progress`    | `planned`              | Worktree removed, branch deleted       |
 
 ## Ongoing Maintenance
 
-- Run `aet-work audit` when you suspect stored state has drifted from git reality
+- Run `aet-state audit` when you suspect stored state has drifted from git reality
 - Never edit `.agents/work-queue.json` by hand; use `aet-state transition` or `aet-work mark-terminal`
 - If a task was abandoned with a `failure_reason`, clear the reason before transitioning it back to active
