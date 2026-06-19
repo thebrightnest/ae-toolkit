@@ -1139,73 +1139,6 @@
       "merge_strategy": "squash"
     },
     {
-      "id": "fods-04-stage-substate",
-      "title": "Plan: Pipeline Stage as `in_progress` Sub-State; Footer Becomes a Breadcrumb",
-      "plan_file": "docs/plans/fods-04-stage-substate.md",
-      "blocked_by": ["fods-03-read-path-zero-git"],
-      "blocks": ["fods-08-docs-package"],
-      "status": "planned",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "pending_blockers": 0
-    },
-    {
-      "id": "fods-05-frontmatter-intake",
-      "title": "Plan: Fail-Closed Intake on the Validated Frontmatter Contract",
-      "plan_file": "docs/plans/fods-05-frontmatter-intake.md",
-      "blocked_by": ["fods-02-state-spine"],
-      "blocks": ["fods-06-migration-reconcile"],
-      "status": "planned",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "oversized": true
-    },
-    {
-      "id": "fods-06-migration-reconcile",
-      "title": "Plan: One-Time Plan Migration, Queue Rebuild & Reconciliation Report",
-      "plan_file": "docs/plans/fods-06-migration-reconcile.md",
-      "blocked_by": [
-        "fods-05-frontmatter-intake",
-        "fods-07-live-settled-partition"
-      ],
-      "blocks": ["fods-08-docs-package"],
-      "status": "in-progress",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": ".worktrees/fods-06-migration-reconcile",
-      "branch": "fods-06-migration-reconcile",
-      "state": "in_progress",
-      "history": [
-        {
-          "from": "planned",
-          "to": "in_progress",
-          "at": "2026-06-18T23:49:01.802474+00:00",
-          "by": "transition"
-        }
-      ]
-    },
-    {
-      "id": "fods-07-live-settled-partition",
-      "title": "Plan: Live/Settled Partition \u2014 Terminal Transition Seals to History",
-      "plan_file": "docs/plans/fods-07-live-settled-partition.md",
-      "blocked_by": ["fods-03-read-path-zero-git"],
-      "blocks": ["fods-06-migration-reconcile", "fods-08-docs-package"],
-      "status": "planned",
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "pending_blockers": 0
-    },
-    {
       "id": "fods-08-docs-package",
       "title": "Plan: Cross-Cutting Docs Update & Repackage",
       "plan_file": "docs/plans/fods-08-docs-package.md",
@@ -1215,12 +1148,50 @@
         "fods-07-live-settled-partition"
       ],
       "blocks": [],
-      "status": "planned",
+      "status": "in-progress",
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null
+      "worktree": ".worktrees/fods-08-docs-package",
+      "branch": "fods-08-docs-package",
+      "state": "in_progress",
+      "history": [
+        {
+          "from": "planned",
+          "to": "in_progress",
+          "at": "2026-06-19T08:28:04.237943+00:00",
+          "by": "transition"
+        },
+        {
+          "from": null,
+          "to": "implemented",
+          "at": "2026-06-19T08:36:50.044717+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "implemented",
+          "to": "qa-complete",
+          "at": "2026-06-19T08:38:35.808294+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "qa-complete",
+          "to": "reviewed",
+          "at": "2026-06-19T08:41:28.542288+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        }
+      ],
+      "stage": "reviewed",
+      "pending_blockers": 0
     }
   ]
 }
