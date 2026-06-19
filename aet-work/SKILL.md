@@ -31,6 +31,15 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
+## Forward-Only State Model
+
+Workflow state is **recorded forward by code and trusted on read**.
+
+- **One writer.** `aet-state transition` is the only code path that mutates `tasks[].state`. It validates legality, atomically applies the change, appends a `{from, to, at, by, evidence}` history entry, and updates dependents.
+- **Audit off the hot path.** `aet-state audit` reconciles stored state against git ground truth on demand. It is never invoked by `status`, `next`, `run`, or the orchestrator during normal operation.
+- **Live / settled partition.** `.agents/work-queue.json` holds only non-terminal tasks. Terminal tasks (`merged`, `abandoned`) are sealed to `.agents/work-history.jsonl` automatically and are never loaded for scheduling.
+- **Stage as sub-state.** While a task is `in_progress`, its `stage` field records the pipeline stage (`tdd`, `implement`, `qa`, `review`, `cso`, `sync-docs`). The plan footer `*Stage:*` is a human breadcrumb, not a scheduler input.
+
 ## Commands
 
 ### Queue Terminal Statuses
@@ -215,15 +224,15 @@ Reconcile stored state against git ground truth without mutating the queue. `aud
 **Procedure:**
 
 1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json`
-2. For each task, the derived status is computed in order:
+2. For each task, compute the expected status from git ground truth in order:
    - `merged` — `branch` or `merge_commit` is an ancestor of `origin/main`
    - `in-progress` — local `branch` exists
    - `unblocked` — `plan_file` exists, no local branch, and every task in `blocked_by` is terminal (`merged` or `abandoned`)
    - `blocked` — `plan_file` exists, no local branch, and some blocker is not terminal
    - `drift` — `plan_file` is missing
-3. Compare stored `state` against the derived status for each task
-4. Report any discrepancies (e.g., `⚠️ Task {id} stored as awaiting_merge but derived as in-progress`)
-5. Return a JSON object showing `stored`, `derived`, and `discrepancy` for every task
+3. Compare stored `state` against the expected status for each task
+4. Report any discrepancies (e.g., `⚠️ Task {id} stored as awaiting_merge but expected in-progress from git`)
+5. Return a JSON object showing `stored`, `expected`, and `discrepancy` for every task
 
 **When to use:** When you suspect the stored queue state has drifted from git reality (e.g., after manual branch cleanup, a crash, or an external merge). Do not rely on `audit` during normal operation; `status`, `next`, and `run` read stored state directly.
 
@@ -342,7 +351,9 @@ Seal terminal tasks and remove their worktrees atomically. Repairs stale queue e
 - **OS-process isolation** — `run` invokes the unified orchestrator, which spawns fresh OS processes for each pipeline stage. See `references/context-isolation.md` for details.
 - **Agent-agnostic** — uses only git commands and generic session language; no tool-specific APIs.
 - **Queue file is the memory** — `.agents/work-queue.json` persists state across process boundaries by design.
-- **Stored state, explicit audit** — `status`, `next`, and `run` read the recorded `state` field directly. `aet-state audit` recomputes canonical status from git for human review, but never runs during normal operation.
+- **Stored state, explicit audit** — `status`, `next`, and `run` read the recorded `state` field directly. `aet-state audit` reconciles stored state against git for human review, but never runs during normal operation.
+- **Live / settled partition** — the live queue holds only non-terminal tasks; terminal tasks are sealed to `.agents/work-history.jsonl` automatically.
+- **Stage as sub-state** — pipeline progress is recorded in the task record's `stage` field while `state == in_progress`, not inferred from plan footers.
 - **Execution telemetry** — `.agents/execution.log.jsonl` is an append-only record of stage and run-summary events produced by the orchestrator. Use `aet-work report` to summarize it.
 - **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.
 - **Drain on failure** — running tasks finish, new spawns halt. Preserves in-progress work while stopping the pipeline.

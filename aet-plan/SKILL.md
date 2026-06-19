@@ -139,7 +139,22 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 4. **Apply task size guardrails**. Evaluate each story against the dual-limit model (≤ 2 days human time; ≤ 10 files / 500 diff lines AI-complexity). Auto-split oversized stories recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 5. Define blocking relationships between tickets (directed acyclic graph).
 6. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort, size label (S/M/L).
-7. **Queue handoff.** After all plan files are written, run `aet-work sync` to add them to `.agents/work-queue.json`. Do not write `.agents/work-queue.json` directly from this skill. Do not mark the command complete until the queue contains the new plan files.
+7. **Plan file frontmatter contract.** Every `docs/plans/{ticket-id}-plan.md` must begin with YAML frontmatter:
+
+   ```yaml
+   ---
+   id: { ticket-id }
+   size: S/M/L
+   blocked_by:
+     - { blocker-id }
+   ---
+   ```
+
+   - `id` must match the plan filename stem and must be unique within the PRD.
+   - `blocked_by` is a list of blocking task IDs; an empty list means no blockers.
+   - `size` is the S/M/L complexity label. `stage` lives only in the task record, never in frontmatter.
+
+8. **Queue handoff.** After all plan files are written, run `aet-work sync` to add them to `.agents/work-queue.json`. Do not write `.agents/work-queue.json` directly from this skill. Do not mark the command complete until the queue contains the new plan files.
 
 **Vertical slice rule:**
 
@@ -151,6 +166,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 - `aet-plan` produces `docs/plans/*.md` only
 - Queue management is owned by `aet-work`. After plan files are created, run `aet-work sync` to add them to the queue incrementally
 - This keeps queue format, merge logic, and state management in a single skill
+- See [references/work-queue-format.md](references/work-queue-format.md) for the task record schema
 
 ### `publish-issues`
 
