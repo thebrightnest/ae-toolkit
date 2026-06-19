@@ -5,10 +5,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
+import os
+import subprocess
 import tempfile
 import unittest
 
-from verifier import read_plan_stage
+from verifier import read_plan_stage, verify_stage_advancement
 
 
 class TestVerifier(unittest.TestCase):
@@ -30,6 +32,71 @@ class TestVerifier(unittest.TestCase):
 
     def test_read_plan_stage_no_file(self):
         self.assertIsNone(read_plan_stage("/nonexistent/path.md"))
+
+
+class TestVerifyStageAdvancement(unittest.TestCase):
+    def _init_git_repo(self, repo_root: str) -> None:
+        import subprocess
+
+        subprocess.run(["git", "init", "-q", repo_root], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.name", "Test User"],
+            check=True,
+        )
+        Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "initial"],
+            check=True,
+        )
+
+    def _commit_on_feature_branch(self, repo_root: str) -> None:
+        """Create a feature branch with one commit ahead of main."""
+        subprocess.run(
+            ["git", "-C", repo_root, "checkout", "-q", "-b", "feature"],
+            check=True,
+        )
+        Path(repo_root, "change.txt").write_text("x", encoding="utf-8")
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "change"],
+            check=True,
+        )
+
+    def test_verify_stage_advancement_uses_recorded_stage(self):
+        """Verification checks the recorded stage, not the plan footer."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_git_repo(repo_root)
+            self._commit_on_feature_branch(repo_root)
+
+            ok, msg = verify_stage_advancement("implemented", repo_root, "implemented")
+
+            self.assertTrue(ok, msg)
+
+    def test_verify_stage_advancement_fails_when_recorded_stage_mismatches(self):
+        """Verification fails when the recorded stage did not advance."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_git_repo(repo_root)
+            self._commit_on_feature_branch(repo_root)
+
+            ok, msg = verify_stage_advancement("plan-approved", repo_root, "implemented")
+
+            self.assertFalse(ok)
+            self.assertIn("did not advance", msg)
+
+    def test_verify_stage_advancement_requires_commits(self):
+        """Verification fails when the branch has no commits."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_git_repo(repo_root)
+
+            ok, msg = verify_stage_advancement("implemented", repo_root, "implemented")
+
+            self.assertFalse(ok)
+            self.assertIn("0 commits", msg)
 
 
 if __name__ == "__main__":

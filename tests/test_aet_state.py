@@ -454,6 +454,84 @@ class TestDeriveStatus(unittest.TestCase):
         self.assertTrue(derived["derived_status"].startswith("unblocked"))
 
 
+class TestSetStage(unittest.TestCase):
+    """Tests for the set-stage in_progress sub-state command (fods-04)."""
+
+    def _write_queue(self, tasks):
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        json.dump({"tasks": tasks}, f)
+        f.close()
+        return f.name
+
+    def _load_task(self, queue_path):
+        with open(queue_path, "r", encoding="utf-8") as f:
+            return json.load(f)["tasks"][0]
+
+    def test_set_stage_appends_history_and_requires_in_progress(self):
+        """set-stage writes stage + history only when state is in_progress."""
+        queue_path = self._write_queue(
+            [{"id": "t1", "state": "in_progress", "stage": "plan-approved"}]
+        )
+
+        args = aet_state.argparse.Namespace(
+            command="set-stage",
+            task_id="t1",
+            stage="implemented",
+            queue=queue_path,
+            dry_run=False,
+        )
+
+        rc = aet_state.cmd_set_stage(args)
+
+        self.assertEqual(rc, 0)
+        task = self._load_task(queue_path)
+        self.assertEqual(task["stage"], "implemented")
+        self.assertEqual(len(task["history"]), 1)
+        self.assertEqual(task["history"][0]["from"], "plan-approved")
+        self.assertEqual(task["history"][0]["to"], "implemented")
+        self.assertEqual(task["history"][0]["by"], "orch")
+
+    def test_set_stage_rejects_non_in_progress_state(self):
+        """set-stage is only legal while the task is in_progress."""
+        queue_path = self._write_queue([{"id": "t1", "state": "planned"}])
+
+        args = aet_state.argparse.Namespace(
+            command="set-stage",
+            task_id="t1",
+            stage="implemented",
+            queue=queue_path,
+            dry_run=False,
+        )
+
+        rc = aet_state.cmd_set_stage(args)
+
+        self.assertEqual(rc, 1)
+        task = self._load_task(queue_path)
+        self.assertNotIn("stage", task)
+        self.assertNotIn("history", task)
+
+    def test_set_stage_dry_run_does_not_mutate(self):
+        """dry-run reports the stage without writing it."""
+        queue_path = self._write_queue(
+            [{"id": "t1", "state": "in_progress", "stage": "plan-approved"}]
+        )
+
+        args = aet_state.argparse.Namespace(
+            command="set-stage",
+            task_id="t1",
+            stage="implemented",
+            queue=queue_path,
+            dry_run=True,
+        )
+
+        rc = aet_state.cmd_set_stage(args)
+
+        self.assertEqual(rc, 0)
+        task = self._load_task(queue_path)
+        self.assertEqual(task["stage"], "plan-approved")
+        self.assertNotIn("history", task)
+
+
 class TestStateTransition(unittest.TestCase):
     """Tests for the forward-only recorded state lifecycle (fods-02)."""
 
