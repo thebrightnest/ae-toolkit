@@ -1,3 +1,9 @@
+---
+id: aet-state-telemetry-foundation-plan
+blocked_by: []
+size: S
+---
+
 # Plan: aet-state and Telemetry Foundation
 
 ## Context

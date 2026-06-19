@@ -1,3 +1,9 @@
+---
+id: aet-validate-scope-closure-discipline-plan
+blocked_by: []
+size: M
+---
+
 # Plan: Add Closure Checks to Planning and Validation Skills
 
 ## Context

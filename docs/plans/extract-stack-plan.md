@@ -1,3 +1,9 @@
+---
+id: extract-stack-plan
+blocked_by: []
+size: M
+---
+
 # Plan: aet-extract-stack
 
 ## Context

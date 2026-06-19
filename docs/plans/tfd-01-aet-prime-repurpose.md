@@ -1,3 +1,9 @@
+---
+id: tfd-01-aet-prime-repurpose
+blocked_by: []
+size: M
+---
+
 # Plan: Repurpose aet-prime as Triage Front Door
 
 ## Context

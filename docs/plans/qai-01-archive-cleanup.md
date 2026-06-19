@@ -1,3 +1,9 @@
+---
+id: qai-01-archive-cleanup
+blocked_by: []
+size: S
+---
+
 # Plan: Archive Infrastructure and Cleanup Integration
 
 ## Context

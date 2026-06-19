@@ -1,3 +1,9 @@
+---
+id: aet-work-yaml-fix-plan
+blocked_by: []
+size: M
+---
+
 # Plan: Fix aet-work SKILL.md Invalid YAML Frontmatter
 
 ## Context

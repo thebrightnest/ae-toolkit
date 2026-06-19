@@ -1,3 +1,10 @@
+---
+id: 03-port-phases-3-4
+blocked_by:
+  - 02-port-phases-0-2
+size: M
+---
+
 # Ticket 3: Port Phases 3–4 (Proposal + DESIGN.md)
 
 ## Parent

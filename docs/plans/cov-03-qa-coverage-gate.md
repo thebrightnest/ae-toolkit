@@ -1,3 +1,9 @@
+---
+id: cov-03-qa-coverage-gate
+blocked_by: []
+size: M
+---
+
 # Plan: aet-qa — Coverage as a First-Class QA Gate
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: cov-02-tdd-coverage-gate
+blocked_by: []
+size: M
+---
+
 # Plan: aet-tdd — Coverage Completeness Gate + API Boundary Mandate
 
 ## Context

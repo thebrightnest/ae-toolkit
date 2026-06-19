@@ -1,3 +1,9 @@
+---
+id: tfd-02-routing-table-and-guards
+blocked_by: []
+size: M
+---
+
 # Plan: Work-Class Routing Table, Symmetric Guards, and Diff Budget
 
 ## Context

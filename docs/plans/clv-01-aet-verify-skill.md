@@ -1,3 +1,9 @@
+---
+id: clv-01-aet-verify-skill
+blocked_by: []
+size: M
+---
+
 # Plan: Create aet-verify Skill
 
 ## Context

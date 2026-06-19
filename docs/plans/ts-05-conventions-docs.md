@@ -1,3 +1,10 @@
+---
+id: ts-05-conventions-docs
+blocked_by:
+  - ts-01-aet-plan-guardrail
+size: S
+---
+
 # Plan: Document Task Size Conventions
 
 ## Context

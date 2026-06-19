@@ -1,3 +1,9 @@
+---
+id: aet-work-runtime-self-detection-plan
+blocked_by: []
+size: M
+---
+
 # Plan: Fix aet-work `run` Runtime Detection to Use Current Agent
 
 ## Context

@@ -1,3 +1,10 @@
+---
+id: wq-02-conventions-adr
+blocked_by:
+  - wq-01-skill-atomicity-updates
+size: S
+---
+
 # Plan: Conventions Update and ADR
 
 ## Context

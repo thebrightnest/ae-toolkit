@@ -1,3 +1,9 @@
+---
+id: sci-02-validator-and-contradictions
+blocked_by: []
+size: M
+---
+
 # Plan: Extend Validator and Fix Composition Contradictions
 
 ## Context

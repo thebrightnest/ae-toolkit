@@ -1,3 +1,10 @@
+---
+id: qai-03-active-status
+blocked_by:
+  - qai-01-archive-cleanup
+size: M
+---
+
 # Plan: Active-Only Status View
 
 ## Context

@@ -1,3 +1,9 @@
+---
+id: wq-01-skill-atomicity-updates
+blocked_by: []
+size: S
+---
+
 # Plan: Skill Atomicity Updates
 
 ## Context

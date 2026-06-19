@@ -1,3 +1,9 @@
+---
+id: 01-scaffold-skill-structure
+blocked_by: []
+size: M
+---
+
 # Ticket 1: Scaffold the aet-design-system-creation Skill Structure
 
 ## Parent

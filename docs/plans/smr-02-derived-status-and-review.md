@@ -1,3 +1,9 @@
+---
+id: smr-02-derived-status-and-review
+blocked_by: []
+size: M
+---
+
 # Plan: Integrate Derived Status with aet-work and Reviewer Independence
 
 ## Context

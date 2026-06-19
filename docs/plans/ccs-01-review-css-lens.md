@@ -1,3 +1,9 @@
+---
+id: ccs-01-review-css-lens
+blocked_by: []
+size: M
+---
+
 # Plan: CCS-01 — aet-review UI/CSS Completeness Lens
 
 ## Context

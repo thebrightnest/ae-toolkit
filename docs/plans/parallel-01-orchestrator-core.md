@@ -1,3 +1,10 @@
+---
+id: parallel-01-orchestrator-core
+blocked_by:
+  - parallel-02-skill-docs
+size: M
+---
+
 # Plan: Parallel Orchestrator Core
 
 ## Context
