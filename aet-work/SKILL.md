@@ -74,10 +74,10 @@ Append-only sync of `docs/plans/*.md` into the existing queue. Implemented by `a
 **Procedure:**
 
 1. Read `.agents/work-queue.json` if it exists; otherwise treat it as empty.
-2. Read `.agents/work-archive.json` and collect archived `plan_file` paths and task IDs.
+2. Read `.agents/work-history.jsonl` and collect settled `plan_file` paths and task IDs.
 3. Scan `docs/plans/` for all `*.md` files.
 4. For each plan whose `plan_file` is not already in the queue:
-   - **Archive deduplication:** skip if its `plan_file` or task ID is already archived.
+   - **Settled-history deduplication:** skip if its `plan_file` or task ID is already settled.
    - **Validate size:** skip plans that exceed the complexity limit unless they contain `⚠️ ATOMIC OVERSIZED` (set `oversized: true` if allowed).
    - **Validate atomicity:** skip plans that reference other plan files or contain multiple "Phase" sections.
    - Append a new task with `status: "planned"`.
@@ -94,18 +94,18 @@ Show the current state of the work queue.
 
 **Procedure:**
 
-Invoke the status helper, which runs an archive-aware `plan-drift` check, reads stored state, and prints the summary:
+Invoke the status helper, which runs a settled-history-aware `plan-drift` check, reads stored state, and prints the summary:
 
 ```bash
 python3 ~/.claude/skills/aet-work/bin/status \
   --queue-file .agents/work-queue.json \
-  --archive-file .agents/work-archive.json \
+  --history-file .agents/work-history.jsonl \
   --plans-dir docs/plans
 ```
 
 The helper reports:
 
-1. Any plan drift (plans on disk that are neither queued nor archived)
+1. Any plan drift (plans on disk that are neither queued nor settled)
 2. Active task counts: `planned`, `unblocked`, `blocked`, `in-progress`, `failed`, `done` (counts are a projection of stored `state`; `failed` is read from stored state)
 3. The stored `state` for each active task
 4. The next 3 tasks whose stored state is `ready`
@@ -250,16 +250,16 @@ Detect plan files that exist on disk but are not represented in the active work 
 **Procedure:**
 
 1. Read `.agents/work-queue.json` and collect all `plan_file` paths
-2. Read `.agents/work-archive.json` and collect all archived `plan_file` paths (archive uses dict-wrapper format `{"archived_at": "...", "tasks": [...]}`)
+2. Read `.agents/work-history.jsonl` and collect all settled `plan_file` paths
 3. List all `docs/plans/*.md` files. Only atomic plans in this directory are considered; roadmaps and audits stored elsewhere are ignored.
-4. Identify any plan files whose path is not found in the queue's `plan_file` set **and** not found in the archive's `plan_file` set
+4. Identify any plan files whose path is not found in the queue's `plan_file` set **and** not found in the settled history's `plan_file` set
 5. Compare the most recent modification time of any `docs/plans/*.md` against the `queue_updated_at` field (or the queue file's mtime as fallback)
 6. Report findings:
    - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Run init-queue to sync.`
    - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last init-queue). Run init-queue to sync.`
    - If none: print `✅ No plan drift detected. All plans are tracked in the queue.`
 
-`plan-drift` checks only the active queue. Archived tasks are ignored; their plan files may still exist on disk but are no longer tracked as active work.
+`plan-drift` checks only the active queue. Settled tasks are ignored; their plan files may still exist on disk but are no longer tracked as active work.
 
 ### `drift-check`
 
@@ -306,22 +306,22 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 
 ### `cleanup`
 
-Archive terminal tasks and remove their worktrees atomically. Repairs stale queue entries.
+Seal terminal tasks and remove their worktrees atomically. Repairs stale queue entries.
 
 **Procedure:**
 
 1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json` to reconcile stored state against git for active (non-terminal) tasks only.
 2. Read `.agents/work-queue.json`
 3. Identify terminal tasks: status is `merged`, `done`, or `abandoned`. Normalize any `merge_verified` statuses to `merged`.
-4. Archive terminal tasks without active dependents:
+4. Seal any legacy terminal tasks still present in the live queue:
 
    ```bash
-   python3 ~/.claude/skills/aet-work/bin/aet-state archive .agents/work-queue.json .agents/work-archive.json
+   python3 ~/.claude/skills/aet-work/bin/aet-state archive .agents/work-queue.json
    ```
 
-   This appends eligible terminal tasks to `.agents/work-archive.json` and removes them from `.agents/work-queue.json`.
+   Terminal transitions now seal tasks to `.agents/work-history.jsonl` automatically. The deprecated `archive` command remains as a migration helper that seals any remaining terminal tasks and reports what it did.
 
-5. **Atomicity:** If archiving fails, STOP. Do not remove any worktrees. Investigate the failure and re-run `cleanup`.
+5. **Atomicity:** If sealing fails, STOP. Do not remove any worktrees. Investigate the failure and re-run `cleanup`.
 6. Remove worktrees for archived tasks:
 
    ```bash

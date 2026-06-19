@@ -614,7 +614,7 @@ def main():
     # archive
     archive_parser = subparsers.add_parser("archive", help="Move terminal tasks from queue to archive.")
     archive_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
-    archive_parser.add_argument("archive", nargs="?", default=".agents/work-archive.json", help="Path to archive JSON.")
+    archive_parser.add_argument("archive", nargs="?", default=".agents/work-archive.json", help="Deprecated; ignored. History file is derived from the queue path.")
 
     args = parser.parse_args()
 
