@@ -406,6 +406,33 @@ class TestInitQueue(unittest.TestCase):
                     derive_calls.append(line)
         self.assertEqual(derive_calls, [])
 
+    def test_skips_settled_plans_from_history(self):
+        """init-queue does not re-add plans whose id or file is in work-history.jsonl."""
+        make_plan(self.plans_dir / "settled.md", "Settled task")
+        make_plan(self.plans_dir / "active.md", "Active task")
+
+        settled_record = {
+            "id": "settled",
+            "plan_file": str(self.plans_dir / "settled.md"),
+            "state": "merged",
+        }
+        self.history_file.write_text(json.dumps(settled_record) + "\n", encoding="utf-8")
+
+        result, _ = run_script(
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertNotIn("settled", tasks)
+        self.assertIn("active", tasks)
+        self.assertIn("1 settled tasks skipped", result.stdout)
+
 
 class TestSync(unittest.TestCase):
     def setUp(self):
@@ -540,6 +567,28 @@ class TestSync(unittest.TestCase):
                 if "derive" in line:
                     derive_calls.append(line)
         self.assertEqual(derive_calls, [])
+
+    def test_skips_settled_plans_from_history(self):
+        """sync does not add plans whose id or file is in work-history.jsonl."""
+        make_plan(self.plans_dir / "settled.md", "Settled task")
+        make_plan(self.plans_dir / "active.md", "Active task")
+
+        settled_record = {
+            "id": "settled",
+            "plan_file": str(self.plans_dir / "settled.md"),
+            "state": "merged",
+        }
+        self.history_file.write_text(json.dumps(settled_record) + "\n", encoding="utf-8")
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertNotIn("settled", tasks)
+        self.assertIn("active", tasks)
+        self.assertIn("1 skipped (already settled)", result.stdout)
 
 
 if __name__ == "__main__":

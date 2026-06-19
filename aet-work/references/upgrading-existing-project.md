@@ -121,19 +121,6 @@ make validate
 
 or, for non-toolkit projects, the equivalent lint/test command.
 
-## Known issue: `init-queue` ignores `--history-file`
-
-`init-queue` accepts a `--history-file` argument but does not currently consult `.agents/work-history.jsonl` when deciding whether to add a plan. This means running `init-queue` on a project that already has settled history can resurrect settled plans in the live queue.
-
-**Workaround:** after running `init-queue`, run `sync`:
-
-```bash
-python3 ~/.claude/skills/aet-work/bin/init-queue
-python3 ~/.claude/skills/aet-work/bin/sync
-```
-
-`sync` reads the history log and will skip any settled plans that `init-queue` re-added. Alternatively, manually remove settled tasks from the live queue before running `init-queue`.
-
 ## Ongoing maintenance
 
 - Never edit `.agents/work-queue.json` by hand.

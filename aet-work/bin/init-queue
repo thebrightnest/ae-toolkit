@@ -20,7 +20,7 @@ _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
 from plan_parser import intake_validation_errors, most_recent_prd, new_task_from_plan  # noqa: E402
-from queue import TERMINAL_STATUSES, read_queue, write_queue, status_to_state  # noqa: E402
+from queue import TERMINAL_STATUSES, read_history, read_queue, write_queue, status_to_state  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -96,7 +96,11 @@ def main() -> int:
     prds_dir = Path(args.prds_dir)
 
     queue = read_queue(queue_file)
+    history = read_history(args.history_file)
+
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
+    settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
+    settled_ids = {t.get("id") for t in history if t.get("id")}
 
     plan_files = sorted(plans_dir.glob("*.md"))
 
@@ -108,11 +112,18 @@ def main() -> int:
 
     preserved = 0
     added = 0
+    skipped_settled = 0
     final_queue: list[dict] = []
     seen_files = set()
 
     for pf in plan_files:
         pf_str = str(pf)
+        task_id = pf.stem
+
+        if task_id in settled_ids or pf_str in settled_files:
+            skipped_settled += 1
+            continue
+
         if pf_str in existing_by_file:
             existing = existing_by_file[pf_str]
             fresh = new_task_from_plan(pf, status="planned")
@@ -127,8 +138,13 @@ def main() -> int:
 
     # Retain any queue entries whose plan file is temporarily missing rather
     # than silently dropping them; drift is reported by ``status`` / ``sync``.
+    # Skip tasks that are already settled in history.
     for task in queue:
         pf = task.get("plan_file")
+        tid = task.get("id")
+        if tid in settled_ids or pf in settled_files:
+            skipped_settled += 1
+            continue
         if pf and pf not in seen_files:
             final_queue.append(task)
             seen_files.add(pf)
@@ -144,7 +160,7 @@ def main() -> int:
 
     print(
         f"✅ init-queue complete: {added} new tasks added, {preserved} existing tasks preserved, "
-        f"{len(final_queue)} total tasks."
+        f"{skipped_settled} settled tasks skipped, {len(final_queue)} total tasks."
     )
     return 0
 
