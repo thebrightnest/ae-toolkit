@@ -72,11 +72,35 @@ def git_merge_commit_for(task_id: str) -> str | None:
     return sha or None
 
 
+def plan_footer_stage(plan_file: str | Path) -> str | None:
+    """Read the human-authored footer stage from a plan file, if present.
+
+    Returns the raw stage string (e.g. ``merged``, ``awaiting_merge``,
+    ``implemented``) or ``None`` when no footer stage is found.
+    """
+    path = Path(plan_file)
+    if not path.is_file():
+        return None
+    # Footer stage lines look like: _Stage: plan-approved_ or _Stage: merged_
+    for line in path.read_text(errors="ignore").splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("_stage:") or stripped.lower().startswith("*stage:*"):
+            # Extract value after the colon, trimming markdown emphasis.
+            value = stripped.split(":", 1)[1].strip()
+            value = value.strip("_").strip("*").strip()
+            return value or None
+    return None
+
+
 def reconcile_terminal_state(
     task: dict,
     history_by_id: dict[str, dict],
+    plan_file: str | Path | None = None,
 ) -> bool:
-    """If a task is terminal in history or git, mark it terminal and return True."""
+    """If a task is terminal in history, git, or its plan footer, mark it terminal.
+
+    Returns True when the task should be removed from the live queue.
+    """
     tid = task.get("id")
     if not tid:
         return False
@@ -103,6 +127,13 @@ def reconcile_terminal_state(
         task["status"] = "merged"
         task["merge_commit"] = merge_commit
         task["merged_at"] = datetime.now().isoformat()
+        return True
+
+    # Reconcile against the human-authored plan footer stage.
+    footer = plan_footer_stage(plan_file) if plan_file else None
+    if footer in ("merged", "abandoned"):
+        task["state"] = footer
+        task["status"] = footer
         return True
 
     return False
@@ -244,7 +275,7 @@ def main() -> int:
             task = new_task_from_plan(pf, status="planned")
             added += 1
 
-        if reconcile_terminal_state(task, history_by_id):
+        if reconcile_terminal_state(task, history_by_id, pf):
             tid = task.get("id")
             if tid not in history_by_id:
                 append_history_record(args.history_file, task)
@@ -264,7 +295,7 @@ def main() -> int:
             skipped_settled += 1
             continue
         if pf and pf not in seen_files:
-            if reconcile_terminal_state(task, history_by_id):
+            if reconcile_terminal_state(task, history_by_id, pf):
                 if tid not in history_by_id:
                     append_history_record(args.history_file, task)
                 reconciled_terminal += 1

@@ -1,5 +1,5 @@
 {
-  "queue_updated_at": "2026-06-20T10:23:21.292547",
+  "queue_updated_at": "2026-06-20T10:38:34.550944",
   "source_prd": "docs/prds/aet-telemetry-learning-prd.md",
   "tasks": [
     {
@@ -180,117 +180,6 @@
       ]
     },
     {
-      "id": "abr-01-scaffold-core",
-      "title": "abr-01: Scaffold Skill Structure and Core Workflow",
-      "plan_file": "docs/plans/abr-01-scaffold-core.md",
-      "blocked_by": [],
-      "blocks": ["abr-02-references-examples"],
-      "status": "unblocked",
-      "state": "ready",
-      "pending_blockers": 0,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": ".worktrees/abr-01-scaffold-core",
-      "branch": "abr-01-scaffold-core",
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.768926+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "ready",
-          "at": "2026-06-20T08:22:51.861472+00:00",
-          "by": "state-migration"
-        },
-        {
-          "from": "ready",
-          "to": "in_progress",
-          "at": "2026-06-20T08:22:57.488875+00:00",
-          "by": "transition"
-        },
-        {
-          "from": "in_progress",
-          "to": "ready",
-          "at": "2026-06-20T08:23:05.251574+00:00",
-          "by": "reset-stale-in-progress"
-        },
-        {
-          "from": "ready",
-          "to": "ready",
-          "at": "2026-06-20T08:23:19.461703+00:00",
-          "by": "reset-stale-in-progress"
-        },
-        {
-          "from": "ready",
-          "to": "in_progress",
-          "at": "2026-06-20T08:23:44.512960+00:00",
-          "by": "transition"
-        }
-      ]
-    },
-    {
-      "id": "abr-02-references-examples",
-      "title": "abr-02: Write References and Examples",
-      "plan_file": "docs/plans/abr-02-references-examples.md",
-      "blocked_by": ["abr-01-scaffold-core"],
-      "blocks": ["abr-03-validate-package"],
-      "status": "blocked",
-      "state": "blocked",
-      "pending_blockers": 1,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.769180+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "blocked",
-          "at": "2026-06-20T08:22:51.861477+00:00",
-          "by": "state-migration"
-        }
-      ]
-    },
-    {
-      "id": "abr-03-validate-package",
-      "title": "abr-03: Validate and Package",
-      "plan_file": "docs/plans/abr-03-validate-package.md",
-      "blocked_by": ["abr-02-references-examples"],
-      "blocks": [],
-      "status": "blocked",
-      "state": "blocked",
-      "pending_blockers": 1,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.769429+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "blocked",
-          "at": "2026-06-20T08:22:51.861481+00:00",
-          "by": "state-migration"
-        }
-      ]
-    },
-    {
       "id": "abr-gate-01-fix-approval-gate",
       "title": "abr-gate-01: Add Fix Approval Gate to aet-bug-report",
       "plan_file": "docs/plans/abr-gate-01-fix-approval-gate.md",
@@ -339,76 +228,6 @@
           "from": "ready",
           "to": "in_progress",
           "at": "2026-06-20T08:23:46.904068+00:00",
-          "by": "transition"
-        }
-      ]
-    },
-    {
-      "id": "aet-work-run-unification-plan",
-      "title": "Plan: Unify aet-work `run` with OS-Process Isolation",
-      "plan_file": "docs/plans/aet-work-run-unification-plan.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "unblocked",
-      "state": "ready",
-      "pending_blockers": 0,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": ".worktrees/aet-work-run-unification-plan",
-      "branch": "aet-work-run-unification-plan",
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.778709+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "ready",
-          "at": "2026-06-20T08:22:51.861517+00:00",
-          "by": "state-migration"
-        },
-        {
-          "from": "ready",
-          "to": "in_progress",
-          "at": "2026-06-20T08:23:58.516516+00:00",
-          "by": "transition"
-        }
-      ]
-    },
-    {
-      "id": "aet-work-runtime-self-detection-plan",
-      "title": "Plan: Fix aet-work `run` Runtime Detection to Use Current Agent",
-      "plan_file": "docs/plans/aet-work-runtime-self-detection-plan.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "unblocked",
-      "state": "ready",
-      "pending_blockers": 0,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": ".worktrees/aet-work-runtime-self-detection-plan",
-      "branch": "aet-work-runtime-self-detection-plan",
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.778961+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "ready",
-          "at": "2026-06-20T08:22:51.861522+00:00",
-          "by": "state-migration"
-        },
-        {
-          "from": "ready",
-          "to": "in_progress",
-          "at": "2026-06-20T08:24:01.459515+00:00",
           "by": "transition"
         }
       ]
@@ -473,35 +292,6 @@
           "from": "planned",
           "to": "ready",
           "at": "2026-06-20T08:22:51.861562+00:00",
-          "by": "state-migration"
-        }
-      ]
-    },
-    {
-      "id": "ccs-02-template-framework-doc",
-      "title": "Plan: CCS-02 \u2014 Plan Template Update + Framework ADR + aet-implement Validation",
-      "plan_file": "docs/plans/ccs-02-template-framework-doc.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "unblocked",
-      "state": "ready",
-      "pending_blockers": 0,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.781631+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "ready",
-          "at": "2026-06-20T08:22:51.861569+00:00",
           "by": "state-migration"
         }
       ]
@@ -908,35 +698,6 @@
           "from": "planned",
           "to": "ready",
           "at": "2026-06-20T08:22:51.861659+00:00",
-          "by": "state-migration"
-        }
-      ]
-    },
-    {
-      "id": "pipeline-plan-remove-discover-plan",
-      "title": "Plan: Remove aet-discover from aet-pipeline-plan",
-      "plan_file": "docs/plans/pipeline-plan-remove-discover-plan.md",
-      "blocked_by": [],
-      "blocks": [],
-      "status": "unblocked",
-      "state": "ready",
-      "pending_blockers": 0,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.786999+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "ready",
-          "at": "2026-06-20T08:22:51.861668+00:00",
           "by": "state-migration"
         }
       ]
@@ -1995,99 +1756,6 @@
           "to": "planned",
           "at": "2026-06-20T09:21:22.723371+00:00",
           "by": "sync"
-        }
-      ]
-    },
-    {
-      "id": "waf-01-aet-work-queue-state",
-      "title": "Plan: aet-work Queue State Hardening",
-      "plan_file": "docs/plans/waf-01-aet-work-queue-state.md",
-      "blocked_by": ["waf-02-aet-work-worktree-hygiene"],
-      "blocks": ["waf-02-aet-work-worktree-hygiene"],
-      "status": "blocked",
-      "state": "blocked",
-      "pending_blockers": 1,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.814865+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "blocked",
-          "at": "2026-06-20T08:22:51.861855+00:00",
-          "by": "state-migration"
-        }
-      ]
-    },
-    {
-      "id": "waf-02-aet-work-worktree-hygiene",
-      "title": "Plan: aet-work Worktree Hygiene",
-      "plan_file": "docs/plans/waf-02-aet-work-worktree-hygiene.md",
-      "blocked_by": ["waf-01-aet-work-queue-state"],
-      "blocks": ["waf-01-aet-work-queue-state"],
-      "status": "blocked",
-      "state": "blocked",
-      "pending_blockers": 1,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.815037+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "blocked",
-          "at": "2026-06-20T08:22:51.861859+00:00",
-          "by": "state-migration"
-        }
-      ]
-    },
-    {
-      "id": "wq-02-conventions-adr",
-      "title": "Plan: Conventions Update and ADR",
-      "plan_file": "docs/plans/wq-02-conventions-adr.md",
-      "blocked_by": ["wq-01-skill-atomicity-updates"],
-      "blocks": [],
-      "status": "blocked",
-      "state": "blocked",
-      "pending_blockers": 1,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": null,
-      "branch": null,
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.816081+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "blocked",
-          "at": "2026-06-20T08:22:51.861887+00:00",
-          "by": "state-migration"
-        },
-        {
-          "from": "blocked",
-          "to": "ready",
-          "at": "2026-06-20T08:53:43.649417+00:00",
-          "by": "reconcile-from-git-squash"
         }
       ]
     }
