@@ -168,6 +168,51 @@ def run_stage(
     return result.returncode
 
 
+def build_stage_group_prompt(plan_file: str, stages: list[Stage]) -> str:
+    """Build a compound prompt for running multiple stages in one session.
+
+    Each stage block preserves the single-stage prompt format so the agent
+    can execute them sequentially, committing and updating the plan footer
+    between stages.
+    """
+    preamble = (
+        "Execute the following consecutive pipeline stages in order. "
+        "Complete each stage (including its commit and plan-footer update) "
+        "before starting the next. Do not proceed past the final stage listed."
+    )
+    blocks = [preamble]
+    for stage in stages:
+        next_stage = stage.next_stage or stage.name
+        skills_str = " → ".join(stage.skills)
+        blocks.append(
+            f"Run {skills_str} on {plan_file}\n"
+            f"Current stage: {stage.name}. Target stage: {next_stage}.\n"
+            f"Execute only this stage. Do not proceed to subsequent stages.\n"
+            f"Commit your work and update the plan footer to *Stage: {next_stage}* before exiting."
+        )
+    return "\n\n".join(blocks)
+
+
+def run_stage_group(
+    adapter,
+    repo_root: str,
+    plan_file: str,
+    worktree_dir: str,
+    stages: list[Stage],
+) -> int:
+    """Spawn one session that runs every stage in the group sequentially."""
+    prompt = build_stage_group_prompt(plan_file, stages)
+    cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
+
+    env = os.environ.copy()
+    env["AET_EXECUTION_MODE"] = "unattended"
+    env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+
+    print(f"   Invoking group: {' '.join(cmd)}")
+    result = subprocess.run(cmd, cwd=worktree_dir, env=env)
+    return result.returncode
+
+
 def process_task(
     task: dict,
     repo_root: str,
@@ -243,8 +288,83 @@ def process_task(
             print(f"   ⚠️  Shutdown requested, stopping task {task_id}")
             return False
 
+        # Find the first stage in this group that hasn't been completed yet.
+        start_idx = None
+        for i, stage in enumerate(group):
+            if stage.name == current_stage:
+                start_idx = i
+                break
+
+        if start_idx is None:
+            # All stages in this group are done; move to the next group.
+            continue
+
+        remaining = group[start_idx:]
+
+        # For standard isolation, try to run the remaining stages in one session.
+        if isolation == "standard":
+            runnable = [
+                s for s in remaining
+                if not s.conditional or s.conditional(plan_file, worktree_dir)
+            ]
+            if runnable and len(runnable) > 1:
+                expected_final = runnable[-1].next_stage or runnable[-1].name
+                print(
+                    f"   Stage group: {' → '.join(s.name for s in runnable)} → {expected_final}"
+                )
+
+                exit_code = run_stage_group(
+                    adapter, repo_root, plan_file, worktree_dir, runnable
+                )
+                if exit_code != 0:
+                    print(f"   ❌ Stage group failed with exit code {exit_code}")
+                    return False
+
+                # Verify the group session produced commits.
+                ok, msg = verify_branch_has_commits(worktree_dir)
+                if not ok:
+                    print(f"   ❌ Stage group verification failed: {msg}")
+                    return False
+
+                # Determine whether the agent reached the expected final stage.
+                actual_stage = read_plan_stage(plan_file)
+                if actual_stage == expected_final:
+                    if not _record_stage(task, expected_final, repo_root):
+                        print(f"   ❌ Could not record stage {expected_final} for {task_id}")
+                        return False
+
+                    ok, msg = verify_stage_advancement(
+                        task.get("stage"), worktree_dir, expected_final, retries=0
+                    )
+                    if not ok:
+                        print(f"   ❌ Stage group advancement verification failed: {msg}")
+                        return False
+
+                    print(f"   ✅ Stage group advanced to {expected_final}")
+                    current_stage = expected_final
+                    continue
+
+                print(
+                    f"   ⚠️  Stage group did not reach expected final stage "
+                    f"'{expected_final}' (actual: '{actual_stage}'). "
+                    f"Falling back to per-stage execution."
+                )
+                if actual_stage and any(s.name == actual_stage for s in remaining):
+                    current_stage = actual_stage
+                elif not actual_stage:
+                    # No usable footer breadcrumb; give up on this group.
+                    print("   ❌ Could not determine resume stage from plan footer")
+                    return False
+                # Otherwise current_stage stays where it was and we fall through.
+            elif not runnable:
+                # All remaining stages are conditional skips; jump to the end of the group.
+                current_stage = remaining[-1].next_stage or remaining[-1].name
+                continue
+
+        # Per-stage execution: used for minimal/full isolation, single-stage groups,
+        # and as a fallback when a standard group session does not advance.
         while True:
-            # Find the first stage in this group that hasn't been completed yet
+            # Find the first stage in this group that hasn't been completed yet.
             target_stage = None
             for stage in group:
                 if stage.name == current_stage:
@@ -252,10 +372,10 @@ def process_task(
                     break
 
             if not target_stage:
-                # All stages in this group are done; break to next group
+                # All stages in this group are done; break to next group.
                 break
 
-            # Check conditional stages
+            # Check conditional stages.
             if target_stage.conditional and not target_stage.conditional(plan_file, worktree_dir):
                 print(f"   ⏭️  Skipping conditional stage: {target_stage.name}")
                 current_stage = target_stage.next_stage or current_stage
@@ -265,7 +385,7 @@ def process_task(
             skills = target_stage.skills
 
             if not skills:
-                # Terminal stage (synced)
+                # Terminal stage (synced).
                 current_stage = next_stage_name
                 continue
 
