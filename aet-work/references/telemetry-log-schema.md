@@ -2,6 +2,8 @@
 
 The orchestrator writes execution telemetry to `.agents/execution.log.jsonl`. The log is append-only and newline-delimited JSON. Each line is a self-contained record.
 
+For instructions on enabling telemetry in a project, archiving it, and mining it across projects, see `../../docs/telemetry-guide.md`.
+
 ## Record Types
 
 ### `stage`
