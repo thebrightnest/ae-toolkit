@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""mine-learnings — Scan archived telemetry for recurring patterns."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Read and parse a JSONL file, skipping malformed lines."""
+    records: list[dict[str, Any]] = []
+    if not path.exists():
+        return records
+
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return records
+
+
+def mine_archive(archive_dir: Path) -> dict[str, Any]:
+    """Scan the archive and return aggregated pattern counts."""
+    archive_dir = archive_dir.expanduser()
+    counts: Counter = Counter()
+    files_scanned = 0
+    runs_scanned = 0
+
+    for project_dir in sorted(archive_dir.glob("*")):
+        if not project_dir.is_dir():
+            continue
+        for run_dir in sorted(project_dir.glob("*")):
+            if not run_dir.is_dir():
+                continue
+            runs_scanned += 1
+
+            exec_path = run_dir / "execution.log.jsonl"
+            records = read_jsonl(exec_path)
+            files_scanned += 1
+
+            work_history_path = run_dir / "work-history.jsonl"
+            records.extend(read_jsonl(work_history_path))
+            files_scanned += 1
+
+            for record in records:
+                rtype = record.get("type")
+                if rtype == "environment_issue":
+                    counts["dependency_issues"] += 1
+                elif rtype == "loop":
+                    if record.get("iteration", 1) > 1:
+                        counts["repeated_loops"] += 1
+                    if "review" in str(record.get("loop_type", "")):
+                        counts["review_noise"] += 1
+                elif rtype == "stage":
+                    if record.get("exit_code", 0) != 0:
+                        counts["stage_failures"] += 1
+                    if record.get("stage") == "review":
+                        counts["review_noise"] += 1
+
+    return {
+        "dependency_issues": counts.get("dependency_issues", 0),
+        "repeated_loops": counts.get("repeated_loops", 0),
+        "stage_failures": counts.get("stage_failures", 0),
+        "review_noise": counts.get("review_noise", 0),
+        "runs_scanned": runs_scanned,
+        "files_scanned": files_scanned,
+    }
+
+
+def format_report(patterns: dict[str, Any]) -> str:
+    """Format pattern counts as a ranked markdown report."""
+    lines = [
+        "# Telemetry Learning Report",
+        "",
+        f"Runs scanned: {patterns['runs_scanned']}",
+        f"Files scanned: {patterns['files_scanned']}",
+        "",
+        "## Recurring Patterns",
+        "",
+        f"- Dependency issues: {patterns['dependency_issues']}",
+        f"- Repeated loops: {patterns['repeated_loops']}",
+        f"- Stage failures: {patterns['stage_failures']}",
+        f"- Review noise: {patterns['review_noise']}",
+        "",
+        "## Ranked by Frequency",
+        "",
+    ]
+
+    ranked = sorted(
+        (
+            (k, v)
+            for k, v in patterns.items()
+            if k not in ("runs_scanned", "files_scanned")
+        ),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    for name, count in ranked:
+        label = name.replace("_", " ").title()
+        lines.append(f"1. {label}: {count}")
+
+    return "\n".join(lines) + "\n"
+
+
+def propose_edits(patterns: dict[str, Any]) -> str:
+    """Return suggested skill edits based on observed patterns."""
+    suggestions: list[str] = []
+
+    if patterns["dependency_issues"]:
+        suggestions.append(
+            "- aet-setup: add a dependency-warmup step that checks for `prettier`, "
+            "`markdownlint-cli2`, and `pytest` before starting work."
+        )
+    if patterns["repeated_loops"]:
+        suggestions.append(
+            "- aet-implement: add a 'run validation after every task' guardrail so "
+            "format-fix and test-retry loops are caught early."
+        )
+    if patterns["stage_failures"]:
+        suggestions.append(
+            "- aet-qa: add a stage-failure triage checklist so failed stages are "
+            "investigated before the next cycle."
+        )
+    if patterns["review_noise"]:
+        suggestions.append(
+            "- aet-review: tighten review scope to focus on plan deviations and "
+            "coverage gaps, reducing repeated review cycles."
+        )
+    if not suggestions:
+        suggestions.append(
+            "- No recurring patterns detected; no skill edits proposed."
+        )
+
+    return "\n".join(["## Proposed Skill Edits", ""] + suggestions) + "\n"
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point."""
+    parser = argparse.ArgumentParser(
+        description="Scan archived telemetry for recurring patterns."
+    )
+    parser.add_argument(
+        "--archive-dir",
+        type=Path,
+        default=None,
+        help="Telemetry archive root.",
+    )
+    parser.add_argument(
+        "--propose",
+        action="store_true",
+        help="Print suggested skill edits (never writes files).",
+    )
+    args = parser.parse_args(argv)
+
+    archive_dir = (
+        args.archive_dir
+        or Path(os.environ.get("AET_TELEMETRY_ARCHIVE_DIR") or DEFAULT_ARCHIVE_DIR)
+    ).expanduser()
+
+    patterns = mine_archive(archive_dir)
+    print(format_report(patterns))
+    if args.propose:
+        print(propose_edits(patterns))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
