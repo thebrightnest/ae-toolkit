@@ -218,6 +218,30 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 **When to use:** For one-off plans where you want the full pipeline but don't need a queue.
 
+### Worktree dependency warmup
+
+The orchestrator can automatically symlink heavy dependency directories from the main worktree into each new task worktree. This avoids reinstalling dependencies (e.g. `node_modules`, `vendor`) on every stage.
+
+Configure it in `.agents/aet-work.json`:
+
+```json
+{
+  "symlink_dependencies": [
+    {
+      "name": "node_modules",
+      "source": "app/node_modules",
+      "target": "app/node_modules"
+    },
+    { "name": "vendor", "source": "api/vendor", "target": "api/vendor" }
+  ]
+}
+```
+
+- `source` is relative to the repository root.
+- `target` is relative to the new worktree root.
+- Missing target parents are created automatically.
+- If the source is missing, the orchestrator emits an `environment_issue` telemetry event instead of failing the task.
+
 ### `audit`
 
 Reconcile stored state against git ground truth without mutating the queue. `audit` is a human-run diagnostic; it is never called during normal operation.

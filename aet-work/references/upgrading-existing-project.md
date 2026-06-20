@@ -121,6 +121,25 @@ make validate
 
 or, for non-toolkit projects, the equivalent lint/test command.
 
+## Worktree dependency warmup (optional)
+
+If your project has large dependency directories that are expensive to recreate in every worktree, you can declare them in `.agents/aet-work.json`:
+
+```json
+{
+  "symlink_dependencies": [
+    {
+      "name": "node_modules",
+      "source": "app/node_modules",
+      "target": "app/node_modules"
+    },
+    { "name": "vendor", "source": "api/vendor", "target": "api/vendor" }
+  ]
+}
+```
+
+The orchestrator symlinks each `source` (relative to the repo root) into `target` (relative to the new worktree) when a worktree is created. Missing sources are reported as `environment_issue` telemetry events rather than halting the pipeline.
+
 ## Ongoing maintenance
 
 - Never edit `.agents/work-queue.json` by hand.

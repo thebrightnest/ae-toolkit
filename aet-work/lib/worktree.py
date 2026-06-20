@@ -174,6 +174,98 @@ def dependency_warmup_required(repo_root: str, worktree_dir: str) -> list[dict]:
     return missing
 
 
+def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dict]:
+    """Create symlink dependencies inside a new worktree.
+
+    Reads ``.agents/aet-work.json`` for a ``symlink_dependencies`` array. Each
+    entry must have ``name``, ``source``, and ``target`` keys. The source is
+    resolved relative to ``repo_root`` and the target relative to
+    ``worktree_dir``. Missing parent directories are created automatically.
+
+    Returns a list of result dicts with keys ``name``, ``target``, ``status``
+    (``created``, ``skipped``, or ``failed``), and ``message``.
+    """
+    config_path = os.path.join(repo_root, ".agents", "aet-work.json")
+    if not os.path.isfile(config_path):
+        return []
+
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    dependencies = config.get("symlink_dependencies", [])
+    if not isinstance(dependencies, list):
+        return []
+
+    results: list[dict] = []
+    for dep in dependencies:
+        if not isinstance(dep, dict):
+            continue
+        name = dep.get("name")
+        source = dep.get("source")
+        target = dep.get("target")
+        if not name or not source or not target:
+            results.append(
+                {
+                    "name": name or "unknown",
+                    "target": target or "unknown",
+                    "status": "failed",
+                    "message": "missing name, source, or target field",
+                }
+            )
+            continue
+
+        source_path = os.path.join(repo_root, source)
+        target_path = os.path.join(worktree_dir, target)
+
+        if os.path.islink(target_path):
+            results.append(
+                {
+                    "name": name,
+                    "target": target,
+                    "status": "skipped",
+                    "message": "target already exists as symlink",
+                }
+            )
+            continue
+        if os.path.exists(target_path):
+            results.append(
+                {
+                    "name": name,
+                    "target": target,
+                    "status": "skipped",
+                    "message": "target already exists",
+                }
+            )
+            continue
+        if not os.path.exists(source_path):
+            results.append(
+                {
+                    "name": name,
+                    "target": target,
+                    "status": "failed",
+                    "message": f"source does not exist: {source}",
+                }
+            )
+            continue
+
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        rel_source = os.path.relpath(source_path, os.path.dirname(target_path))
+        os.symlink(rel_source, target_path)
+        results.append(
+            {
+                "name": name,
+                "target": target,
+                "status": "created",
+                "message": f"symlinked {source} -> {target}",
+            }
+        )
+
+    return results
+
+
 def check_main_hygiene(repo_root: str) -> tuple[bool, str]:
     """Check if main is clean and synced with origin."""
     # Check working tree

@@ -218,6 +218,72 @@ class TestRunSingleHygiene(unittest.TestCase):
             mock_process.assert_called_once()
 
 
+class TestDependencyWarmup(unittest.TestCase):
+    def test_process_task_creates_symlink_dependencies_in_worktree(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+            Path(repo_root, "app", "node_modules", "pkg").mkdir(parents=True, exist_ok=True)
+            Path(repo_root, ".agents", "aet-work.json").write_text(
+                json.dumps(
+                    {
+                        "symlink_dependencies": [
+                            {
+                                "name": "node_modules",
+                                "source": "app/node_modules",
+                                "target": "app/node_modules",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            log_path = os.path.join(repo_root, ".agents", "execution.log.jsonl")
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+
+            with patch.object(orchestrator, "run_stage", return_value=0):
+                with patch.object(
+                    orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                ):
+                    with patch.object(
+                        orchestrator,
+                        "verify_stage_advancement",
+                        return_value=(True, ""),
+                    ):
+                        result = orchestrator.process_task(
+                            task, repo_root, _FAKE_ADAPTER, "standard", run_id="r1"
+                        )
+
+            self.assertTrue(result)
+            worktree_dir = os.path.join(repo_root, ".worktrees", "demo")
+            node_link = Path(worktree_dir, "app", "node_modules")
+            self.assertTrue(node_link.is_symlink())
+            self.assertTrue(
+                node_link.resolve().samefile(Path(repo_root, "app", "node_modules"))
+            )
+
+            records = telemetry.read_log(log_path)
+            issues = [r for r in records if r.get("type") == "environment_issue"]
+            self.assertEqual(len(issues), 0)
+
+
 class TestEnvironmentIssueEmission(unittest.TestCase):
     def test_process_task_emits_environment_issue_for_missing_dependency(self):
         with tempfile.TemporaryDirectory() as repo_root:
