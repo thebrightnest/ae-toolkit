@@ -40,7 +40,11 @@ Scan the current branch diff for security issues.
 
 **Procedure:**
 
-1. Read the git diff for the current branch
+1. Read the git diff for the current branch scoped to the PR base:
+   - Determine the PR base: `origin/main` unless the branch was created from another branch, in which case use that parent branch.
+   - Compute it with `git merge-base HEAD origin/main` or `git merge-base HEAD <parent-branch>`.
+   - Review `git diff <base>..HEAD` (not `git diff` against the working tree).
+   - **Noise filtering:** ignore changes to `.gitignore` and `AGENTS.md` unless the task explicitly touches them. Treat them as project-level noise, not security signal.
 2. Check for secrets/credentials:
    - API keys, tokens, passwords in code or config files
    - Hardcoded database connection strings

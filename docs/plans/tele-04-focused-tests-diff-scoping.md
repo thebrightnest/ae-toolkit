@@ -50,5 +50,4 @@ Revert the skill markdown changes and re-run `make package`.
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_

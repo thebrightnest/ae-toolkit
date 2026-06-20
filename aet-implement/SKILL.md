@@ -132,6 +132,8 @@ Worktree mode puts each implementation on its own branch using standard git comm
 - Type checking must pass
 - Unit tests must pass
 - Integration tests must pass (if applicable)
+- **Focused test runs while iterating:** when the project has a large test suite, run only the tests that cover files you are touching (`pytest path/to/test.py`, `vitest run path/to/test.ts`, etc.). Use the diff or the plan's task list to pick the relevant subset.
+- **Full suite before final commit:** run the complete test suite at least once before committing, unless the plan explicitly says otherwise.
 - Manual verification steps must be checked
 - **Visual / CSS verification** — if the plan includes renderer/UI work, verify that all custom `className` values have corresponding CSS definitions before declaring implementation complete
 
