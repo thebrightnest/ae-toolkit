@@ -416,3 +416,36 @@ Your team has a mature codebase with documented domain language and ADRs. A new 
 **Skills used:** `aet-validate-scope`, `aet-plan`
 
 **Key principle:** Catching domain misalignment at planning time is 100x cheaper than catching it in code review or production.
+
+---
+
+## Scenario 10: Learning from Telemetry Across Projects
+
+You have multiple projects running `aet-work` and want the toolkit to learn from recurring inefficiencies.
+
+```
+# In each project, ensure telemetry is enabled
+/aet-work run-one docs/plans/some-plan.md
+  → Creates .agents/execution.log.jsonl automatically
+
+# Configure dependency warmup once per project
+edit .agents/aet-work.json
+  → symlink_dependencies for node_modules, vendor, etc.
+
+# After a milestone, archive the telemetry
+/aet-evolve ingest-telemetry
+  → Copies logs and reports to ~/.aet/telemetry/{project-slug}/{date}-{run_id}/
+
+# Mine the archive for systemic patterns
+/aet-evolve mine-learnings
+  → "Dependency warmup missing in 4 projects → add aet-setup check"
+  → "Repeated full-suite runs → tighten aet-implement validation strategy"
+
+/aet-evolve system-evolve
+  → Updates the skill that allowed the pattern
+  → Records the learning in .agents/learnings.jsonl
+```
+
+**Skills used:** `aet-work`, `aet-evolve`
+
+**Key principle:** Telemetry turns individual runs into training data for the AI layer. One rule update can save hours across every future project. See `telemetry-guide.md` for setup details.

@@ -95,6 +95,8 @@ Entries without a `trigger` field remain valid; matching falls back to recency.
 
 Archive raw telemetry from a project run so it can be mined for systemic improvements.
 
+See `../docs/telemetry-guide.md` for how to enable telemetry in a project, configure dependency warmup, and manage retention.
+
 **Procedure:**
 
 1. From a project repository, run `aet-evolve/bin/ingest-telemetry`.
@@ -105,6 +107,8 @@ Archive raw telemetry from a project run so it can be mined for systemic improve
 ### `mine-learnings`
 
 Scan the telemetry archive for recurring patterns and output a ranked report.
+
+See `../docs/telemetry-guide.md` for how to archive telemetry from projects first.
 
 **Procedure:**
 
