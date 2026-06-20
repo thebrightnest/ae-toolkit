@@ -10,6 +10,7 @@ It does **not** derive actionable status or promote tasks.
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,7 +21,15 @@ _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
 from plan_parser import intake_validation_errors, most_recent_prd, new_task_from_plan  # noqa: E402
-from queue import TERMINAL_STATUSES, read_history, read_queue, write_queue, status_to_state  # noqa: E402
+from queue import (  # noqa: E402
+    HISTORY_TERMINAL_STATES,
+    TERMINAL_STATUSES,
+    append_history_record,
+    read_history,
+    read_queue,
+    status_to_state,
+    write_queue,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,25 +57,121 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def preserve_task_metadata(existing: dict, fresh: dict) -> dict:
+def git_merge_commit_for(task_id: str) -> str | None:
+    """Return the latest commit on origin/main whose message mentions ``task_id``.
+
+    This is a best-effort reconciliation for squash-merged work: a task whose
+    id appears in a commit on origin/main is treated as merged with that SHA.
+    """
+    result = subprocess.run(
+        ["git", "log", "origin/main", "--format=%H", "--grep", task_id, "-n", "1"],
+        capture_output=True,
+        text=True,
+    )
+    sha = result.stdout.strip()
+    return sha or None
+
+
+def reconcile_terminal_state(
+    task: dict,
+    history_by_id: dict[str, dict],
+) -> bool:
+    """If a task is terminal in history or git, mark it terminal and return True."""
+    tid = task.get("id")
+    if not tid:
+        return False
+
+    # Already terminal in the live record.
+    if task.get("state") in HISTORY_TERMINAL_STATES:
+        return True
+
+    # Terminal in settled history.
+    hist = history_by_id.get(tid)
+    if hist and hist.get("state") in HISTORY_TERMINAL_STATES:
+        task["state"] = hist["state"]
+        task["status"] = hist["state"]
+        task["merge_commit"] = hist.get("merge_commit")
+        task["merged_at"] = hist.get("merged_at")
+        task["completed_at"] = hist.get("completed_at")
+        task["merge_strategy"] = hist.get("merge_strategy")
+        return True
+
+    # Terminal in git history on origin/main.
+    merge_commit = git_merge_commit_for(tid)
+    if merge_commit:
+        task["state"] = "merged"
+        task["status"] = "merged"
+        task["merge_commit"] = merge_commit
+        task["merged_at"] = datetime.now().isoformat()
+        return True
+
+    return False
+
+
+def preserve_task_metadata(
+    existing: dict,
+    fresh: dict,
+    history_by_id: dict[str, dict],
+) -> dict:
     """Preserve terminal status and metadata from an existing queue entry.
 
-    Non-terminal stored statuses are normalized to ``planned``. Legacy
-    ``merge_verified`` is treated as terminal and normalized to ``merged``.
+    Non-terminal stored statuses are derived from the fresh frontmatter
+    blockers, **unless** the task is already recorded as merged in the settled
+    history or its id appears in a commit on ``origin/main``. This prevents
+    completed work from being resurrected when the queue is rebuilt.
+
+    Legacy ``merge_verified`` is treated as terminal and normalized to ``merged``.
     State is kept consistent with the preserved status.
     """
     status = existing.get("status", "planned")
+    state = existing.get("state")
+    task_id = existing.get("id") or fresh.get("id")
+
+    # Terminal in the live record, settled history, or git -> keep terminal.
+    hist = history_by_id.get(task_id)
     if status == "merge_verified":
         status = "merged"
-    elif status not in TERMINAL_STATUSES:
-        status = "planned"
+        state = "merged"
+    elif status in TERMINAL_STATUSES or state in ("merged", "abandoned"):
+        state = state or status_to_state(status)
+        status = state
+    elif hist and hist.get("state") in ("merged", "abandoned"):
+        state = hist["state"]
+        status = state
+        fresh["merge_commit"] = hist.get("merge_commit")
+        fresh["merged_at"] = hist.get("merged_at")
+        fresh["completed_at"] = hist.get("completed_at")
+        fresh["merge_strategy"] = hist.get("merge_strategy")
+    else:
+        # Reconcile against git history on origin/main.
+        merge_commit = git_merge_commit_for(task_id)
+        if merge_commit:
+            state = "merged"
+            status = "merged"
+            fresh["merge_commit"] = merge_commit
+            fresh["merged_at"] = datetime.now().isoformat()
+        else:
+            # Preserve existing non-terminal state if it is actionable; otherwise
+            # use the fresh frontmatter blocker facts.
+            blockers = fresh.get("blocked_by", [])
+            pending = existing.get("pending_blockers")
+            if pending is None:
+                pending = len(blockers)
+            if state in ("ready", "blocked", "in_progress", "failed"):
+                pass
+            elif pending == 0:
+                state = "ready"
+                status = "unblocked"
+            else:
+                state = "blocked"
+                status = "blocked"
+            fresh["pending_blockers"] = pending
 
     fresh["status"] = status
-    fresh["state"] = status_to_state(status)
+    fresh["state"] = state
     for key in (
         "branch",
         "worktree",
-        "merge_commit",
         "merge_strategy",
         "completed_at",
         "merged_at",
@@ -75,6 +180,10 @@ def preserve_task_metadata(existing: dict, fresh: dict) -> dict:
     ):
         if key in existing:
             fresh[key] = existing[key]
+    # merge_commit may come from history/git above, so keep existing only if no
+    # reconciliation value was set.
+    if "merge_commit" not in fresh and "merge_commit" in existing:
+        fresh["merge_commit"] = existing["merge_commit"]
     return fresh
 
 
@@ -99,6 +208,7 @@ def main() -> int:
     history = read_history(args.history_file)
 
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
+    history_by_id = {t.get("id"): t for t in history if t.get("id")}
     settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
     settled_ids = {t.get("id") for t in history if t.get("id")}
 
@@ -113,6 +223,7 @@ def main() -> int:
     preserved = 0
     added = 0
     skipped_settled = 0
+    reconciled_terminal = 0
     final_queue: list[dict] = []
     seen_files = set()
 
@@ -127,11 +238,18 @@ def main() -> int:
         if pf_str in existing_by_file:
             existing = existing_by_file[pf_str]
             fresh = new_task_from_plan(pf, status="planned")
-            task = preserve_task_metadata(existing, fresh)
+            task = preserve_task_metadata(existing, fresh, history_by_id)
             preserved += 1
         else:
             task = new_task_from_plan(pf, status="planned")
             added += 1
+
+        if reconcile_terminal_state(task, history_by_id):
+            tid = task.get("id")
+            if tid not in history_by_id:
+                append_history_record(args.history_file, task)
+            reconciled_terminal += 1
+            continue
 
         final_queue.append(task)
         seen_files.add(pf_str)
@@ -146,6 +264,11 @@ def main() -> int:
             skipped_settled += 1
             continue
         if pf and pf not in seen_files:
+            if reconcile_terminal_state(task, history_by_id):
+                if tid not in history_by_id:
+                    append_history_record(args.history_file, task)
+                reconciled_terminal += 1
+                continue
             final_queue.append(task)
             seen_files.add(pf)
 
@@ -160,7 +283,8 @@ def main() -> int:
 
     print(
         f"✅ init-queue complete: {added} new tasks added, {preserved} existing tasks preserved, "
-        f"{skipped_settled} settled tasks skipped, {len(final_queue)} total tasks."
+        f"{skipped_settled} settled tasks skipped, {reconciled_terminal} reconciled as terminal, "
+        f"{len(final_queue)} active tasks."
     )
     return 0
 
