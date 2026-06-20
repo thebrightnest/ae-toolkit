@@ -60,6 +60,91 @@ class TestCopyUntrackedFiles(unittest.TestCase):
                 self.assertEqual(dest.read_text(encoding="utf-8"), "content")
 
 
+class TestPrepareWorktreeDependencies(unittest.TestCase):
+    def test_creates_relative_symlinks_for_configured_dependencies(self):
+        """Configured dependencies are symlinked from repo root into the worktree."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+            Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+            Path(repo_root, "app", "node_modules", "pkg").mkdir(parents=True, exist_ok=True)
+            Path(repo_root, "api", "vendor", "lib").mkdir(parents=True, exist_ok=True)
+
+            config = {
+                "symlink_dependencies": [
+                    {"name": "node_modules", "source": "app/node_modules", "target": "app/node_modules"},
+                    {"name": "vendor", "source": "api/vendor", "target": "api/vendor"},
+                ]
+            }
+            Path(repo_root, ".agents", "aet-work.json").write_text(
+                json.dumps(config), encoding="utf-8"
+            )
+
+            results = worktree.prepare_worktree_dependencies(repo_root, worktree_dir)
+
+            self.assertEqual(len(results), 2)
+            self.assertEqual(results[0]["status"], "created")
+            self.assertEqual(results[1]["status"], "created")
+
+            node_link = Path(worktree_dir, "app", "node_modules")
+            vendor_link = Path(worktree_dir, "api", "vendor")
+            self.assertTrue(node_link.is_symlink())
+            self.assertTrue(vendor_link.is_symlink())
+            self.assertTrue(node_link.resolve().samefile(Path(repo_root, "app", "node_modules")))
+            self.assertTrue(vendor_link.resolve().samefile(Path(repo_root, "api", "vendor")))
+
+            # Symlinks should be relative so they survive repo relocation.
+            self.assertFalse(os.path.isabs(os.readlink(node_link)))
+
+    def test_reports_missing_source_directories_as_failed(self):
+        """Missing source directories are reported, not silently ignored."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+            Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+            config = {
+                "symlink_dependencies": [
+                    {"name": "node_modules", "source": "app/node_modules", "target": "app/node_modules"},
+                ]
+            }
+            Path(repo_root, ".agents", "aet-work.json").write_text(
+                json.dumps(config), encoding="utf-8"
+            )
+
+            results = worktree.prepare_worktree_dependencies(repo_root, worktree_dir)
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["status"], "failed")
+            self.assertIn("source does not exist", results[0]["message"])
+
+    def test_skips_existing_targets(self):
+        """Existing directories or symlinks are left in place."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+            Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+            Path(repo_root, "app", "node_modules").mkdir(parents=True, exist_ok=True)
+            Path(worktree_dir, "app", "node_modules").mkdir(parents=True, exist_ok=True)
+
+            config = {
+                "symlink_dependencies": [
+                    {"name": "node_modules", "source": "app/node_modules", "target": "app/node_modules"},
+                ]
+            }
+            Path(repo_root, ".agents", "aet-work.json").write_text(
+                json.dumps(config), encoding="utf-8"
+            )
+
+            results = worktree.prepare_worktree_dependencies(repo_root, worktree_dir)
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["status"], "skipped")
+
+    def test_returns_empty_when_config_missing(self):
+        """No config means no action."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+            results = worktree.prepare_worktree_dependencies(repo_root, worktree_dir)
+            self.assertEqual(results, [])
+
+
 class TestDependencyWarmupRequired(unittest.TestCase):
     def test_returns_missing_dependencies_when_configured_but_absent(self):
         with tempfile.TemporaryDirectory() as repo_root:

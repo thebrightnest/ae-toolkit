@@ -43,8 +43,8 @@ from worktree import (
     check_main_hygiene,
     copy_untracked_files,
     create_worktree,
-    dependency_warmup_required,
     estimate_repo_size,
+    prepare_worktree_dependencies,
     remove_worktree,
 )
 
@@ -189,23 +189,33 @@ def process_task(
     if worktree_dir is None:
         worktree_dir = create_worktree(repo_root, task_id)
     copy_untracked_files(repo_root, worktree_dir)
+
+    # Warm up configured worktree dependencies.
+    warmup_results = prepare_worktree_dependencies(repo_root, worktree_dir)
+    for result in warmup_results:
+        name = result["name"]
+        if result["status"] == "created":
+            print(f"   🔗 Warmed dependency: {name}")
+        elif result["status"] == "skipped":
+            print(f"   ℹ️  Dependency skipped: {name} ({result['message']})")
+        elif result["status"] == "failed":
+            print(f"   ⚠️  Dependency warmup failed: {name} ({result['message']})")
     print(f"   Worktree: {worktree_dir}")
 
-    # Detect missing worktree dependencies and emit telemetry for learning.
+    # Emit telemetry for any failed dependency warmups.
     if run_id:
         log_path = _log_path(repo_root)
-        for missing in dependency_warmup_required(repo_root, worktree_dir):
-            print(
-                f"   ⚠️  Dependency warmup required: {missing.get('name', missing.get('target'))}"
-            )
+        for result in warmup_results:
+            if result["status"] != "failed":
+                continue
             telemetry.append_record(
                 telemetry.environment_issue_record(
                     run_id=run_id,
                     task_id=task_id,
                     plan_file=plan_file,
                     issue_type="missing_dependency",
-                    dependency=missing.get("target", missing.get("name", "unknown")),
-                    message=f"Missing dependency in worktree: {missing.get('name', missing.get('target'))}",
+                    dependency=result.get("target", result.get("name", "unknown")),
+                    message=f"Dependency warmup failed: {result['message']}",
                 ),
                 log_path=log_path,
             )

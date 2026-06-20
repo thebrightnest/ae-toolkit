@@ -46,5 +46,4 @@ Remove the warmup helper and its orchestrator call; worktrees revert to manual d
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
