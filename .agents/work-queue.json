@@ -1184,76 +1184,6 @@
       ]
     },
     {
-      "id": "tele-02-worktree-dependency-warmup",
-      "title": "Plan: Worktree Dependency Warmup",
-      "plan_file": "docs/plans/tele-02-worktree-dependency-warmup.md",
-      "blocked_by": [],
-      "blocks": ["tele-06-validate-and-package"],
-      "status": "awaiting_merge",
-      "state": "awaiting_merge",
-      "pending_blockers": 0,
-      "merge_commit": null,
-      "completed_at": null,
-      "merged_at": null,
-      "worktree": ".worktrees/tele-02-worktree-dependency-warmup",
-      "branch": "tele-02-worktree-dependency-warmup",
-      "history": [
-        {
-          "from": null,
-          "to": "planned",
-          "at": "2026-06-19T17:58:28.807550+00:00",
-          "by": "sync"
-        },
-        {
-          "from": "planned",
-          "to": "ready",
-          "at": "2026-06-20T08:22:51.861772+00:00",
-          "by": "state-migration"
-        },
-        {
-          "from": "ready",
-          "to": "in_progress",
-          "at": "2026-06-20T10:08:40.628822+00:00",
-          "by": "transition"
-        },
-        {
-          "from": null,
-          "to": "implemented",
-          "at": "2026-06-20T10:16:16.664143+00:00",
-          "by": "orch",
-          "evidence": {
-            "kind": "stage"
-          }
-        },
-        {
-          "from": "implemented",
-          "to": "qa-complete",
-          "at": "2026-06-20T10:19:42.915048+00:00",
-          "by": "orch",
-          "evidence": {
-            "kind": "stage"
-          }
-        },
-        {
-          "from": "qa-complete",
-          "to": "reviewed",
-          "at": "2026-06-20T10:23:05.732242+00:00",
-          "by": "orch",
-          "evidence": {
-            "kind": "stage"
-          }
-        },
-        {
-          "from": "in_progress",
-          "to": "awaiting_merge",
-          "at": "2026-06-20T10:23:05.936680+00:00",
-          "by": "transition"
-        }
-      ],
-      "merge_strategy": null,
-      "stage": "reviewed"
-    },
-    {
       "id": "tele-03-stage-group-session-reuse",
       "title": "Plan: Stage-Group Session Reuse for Standard Isolation",
       "plan_file": "docs/plans/tele-03-stage-group-session-reuse.md",
@@ -1363,7 +1293,7 @@
       "blocks": [],
       "status": "blocked",
       "state": "blocked",
-      "pending_blockers": 4,
+      "pending_blockers": 3,
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
