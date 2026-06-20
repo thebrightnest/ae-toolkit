@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -135,6 +136,42 @@ def estimate_repo_size(repo_root: str) -> int:
     if result.returncode == 0:
         return int(result.stdout.split()[0])
     return 0
+
+
+def dependency_warmup_required(repo_root: str, worktree_dir: str) -> list[dict]:
+    """Return configured dependencies that are missing inside the worktree.
+
+    Reads ``.agents/aet-work.json`` for a ``symlink_dependencies`` array. Each
+    entry is expected to have ``name``, ``source``, and ``target`` keys. Targets
+    are checked relative to ``worktree_dir``. An empty list means no warmup is
+    required (or no config exists).
+    """
+    config_path = os.path.join(repo_root, ".agents", "aet-work.json")
+    if not os.path.isfile(config_path):
+        return []
+
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    dependencies = config.get("symlink_dependencies", [])
+    if not isinstance(dependencies, list):
+        return []
+
+    missing: list[dict] = []
+    for dep in dependencies:
+        if not isinstance(dep, dict):
+            continue
+        target = dep.get("target")
+        if not target:
+            continue
+        target_path = os.path.join(worktree_dir, target)
+        if not os.path.exists(target_path):
+            missing.append(dep)
+
+    return missing
 
 
 def check_main_hygiene(repo_root: str) -> tuple[bool, str]:

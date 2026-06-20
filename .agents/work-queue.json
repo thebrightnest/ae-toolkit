@@ -1192,14 +1192,14 @@
         "tele-05-cross-project-telemetry-archive",
         "tele-06-validate-and-package"
       ],
-      "status": "unblocked",
-      "state": "ready",
+      "status": "awaiting_merge",
+      "state": "awaiting_merge",
       "pending_blockers": 0,
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null,
+      "worktree": ".worktrees/tele-01-enrich-telemetry-schema",
+      "branch": "tele-01-enrich-telemetry-schema",
       "history": [
         {
           "from": null,
@@ -1212,9 +1212,49 @@
           "to": "ready",
           "at": "2026-06-20T08:22:51.861768+00:00",
           "by": "state-migration"
+        },
+        {
+          "from": "ready",
+          "to": "in_progress",
+          "at": "2026-06-20T09:42:58.245806+00:00",
+          "by": "transition"
+        },
+        {
+          "from": null,
+          "to": "implemented",
+          "at": "2026-06-20T09:53:01.687799+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "implemented",
+          "to": "qa-complete",
+          "at": "2026-06-20T10:00:14.496965+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "qa-complete",
+          "to": "reviewed",
+          "at": "2026-06-20T10:06:39.537494+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "in_progress",
+          "to": "awaiting_merge",
+          "at": "2026-06-20T10:06:40.228050+00:00",
+          "by": "transition"
         }
       ],
-      "merge_strategy": null
+      "merge_strategy": null,
+      "stage": "reviewed"
     },
     {
       "id": "tele-02-worktree-dependency-warmup",

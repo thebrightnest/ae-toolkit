@@ -117,6 +117,120 @@ def run_summary_record(
     }
 
 
+def loop_record(
+    run_id: str,
+    task_id: str,
+    plan_file: str,
+    stage: str,
+    loop_type: str,
+    iteration: int,
+    start_time: str,
+    end_time: str,
+    exit_code: int,
+    detail: str | None = None,
+) -> dict[str, Any]:
+    """Build a loop telemetry record (e.g., test retry or format fix)."""
+    duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
+    return {
+        "type": "loop",
+        "run_id": run_id,
+        "task_id": task_id,
+        "plan_file": plan_file,
+        "stage": stage,
+        "loop_type": loop_type,
+        "iteration": iteration,
+        "start_time": start_time,
+        "end_time": end_time,
+        "duration_seconds": duration_seconds,
+        "exit_code": exit_code,
+        "result": "success" if exit_code == 0 else "failure",
+        "detail": detail,
+    }
+
+
+def environment_issue_record(
+    run_id: str,
+    task_id: str,
+    plan_file: str,
+    issue_type: str,
+    dependency: str,
+    resolved: bool = False,
+    message: str | None = None,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    """Build an environment/dependency issue telemetry record."""
+    return {
+        "type": "environment_issue",
+        "run_id": run_id,
+        "task_id": task_id,
+        "plan_file": plan_file,
+        "timestamp": timestamp or iso_now(),
+        "issue_type": issue_type,
+        "dependency": dependency,
+        "resolved": resolved,
+        "message": message,
+    }
+
+
+def test_run_record(
+    run_id: str,
+    task_id: str,
+    plan_file: str,
+    stage: str,
+    scope: str,
+    test_command: str,
+    start_time: str,
+    end_time: str,
+    exit_code: int,
+    tests_total: int | None = None,
+    tests_passed: int | None = None,
+    tests_failed: int | None = None,
+) -> dict[str, Any]:
+    """Build an individual test-run telemetry record."""
+    duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
+    return {
+        "type": "test_run",
+        "run_id": run_id,
+        "task_id": task_id,
+        "plan_file": plan_file,
+        "stage": stage,
+        "scope": scope,
+        "test_command": test_command,
+        "start_time": start_time,
+        "end_time": end_time,
+        "duration_seconds": duration_seconds,
+        "exit_code": exit_code,
+        "result": "success" if exit_code == 0 else "failure",
+        "tests_total": tests_total,
+        "tests_passed": tests_passed,
+        "tests_failed": tests_failed,
+    }
+
+
+def learning_candidate_record(
+    run_id: str,
+    task_id: str,
+    plan_file: str,
+    stage: str,
+    pattern_type: str,
+    description: str,
+    evidence: dict[str, Any] | None = None,
+    confidence: float | None = None,
+) -> dict[str, Any]:
+    """Build a learning-candidate telemetry record for aet-evolve mining."""
+    return {
+        "type": "learning_candidate",
+        "run_id": run_id,
+        "task_id": task_id,
+        "plan_file": plan_file,
+        "stage": stage,
+        "pattern_type": pattern_type,
+        "description": description,
+        "evidence": evidence or {},
+        "confidence": confidence,
+    }
+
+
 def read_log(log_path: str | Path = DEFAULT_LOG_PATH) -> list[dict[str, Any]]:
     """Read and parse the telemetry log, skipping malformed lines."""
     path = Path(log_path)
@@ -158,11 +272,16 @@ def report(log_path: str | Path = DEFAULT_LOG_PATH, since: str | None = None) ->
         records = [
             r
             for r in records
-            if _parse_iso(r.get("start_time", "1970-01-01T00:00:00Z")) >= since_dt
+            if _parse_iso(
+                r.get("start_time") or r.get("timestamp") or "1970-01-01T00:00:00Z"
+            )
+            >= since_dt
         ]
 
     summaries = [r for r in records if r.get("type") == "run_summary"]
     stages = [r for r in records if r.get("type") == "stage"]
+    loops = [r for r in records if r.get("type") == "loop"]
+    environment_issues = [r for r in records if r.get("type") == "environment_issue"]
 
     total_runs = len(summaries)
     total_wall = sum(r.get("wall_clock_seconds", 0.0) for r in summaries)
@@ -179,5 +298,7 @@ def report(log_path: str | Path = DEFAULT_LOG_PATH, since: str | None = None) ->
         f"Failed: {total_failed}",
         f"Wall-clock time: {total_wall:.1f}s",
         f"Average isolation level: {_average_isolation_level(stages)}",
+        f"Loops: {len(loops)}",
+        f"Environment issues: {len(environment_issues)}",
     ]
     return "\n".join(lines) + "\n"

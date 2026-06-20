@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -57,6 +58,51 @@ class TestCopyUntrackedFiles(unittest.TestCase):
                 dest = Path(worktree_dir, rel_path)
                 self.assertTrue(dest.exists(), f"Expected {rel_path} to be copied")
                 self.assertEqual(dest.read_text(encoding="utf-8"), "content")
+
+
+class TestDependencyWarmupRequired(unittest.TestCase):
+    def test_returns_missing_dependencies_when_configured_but_absent(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+            Path(worktree_dir).mkdir(parents=True, exist_ok=True)
+            Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+            config = {
+                "symlink_dependencies": [
+                    {"name": "node_modules", "source": "app/node_modules", "target": "app/node_modules"},
+                    {"name": "vendor", "source": "api/vendor", "target": "api/vendor"},
+                ]
+            }
+            Path(repo_root, ".agents", "aet-work.json").write_text(
+                json.dumps(config), encoding="utf-8"
+            )
+
+            missing = worktree.dependency_warmup_required(repo_root, worktree_dir)
+            self.assertEqual(len(missing), 2)
+            self.assertEqual(missing[0]["name"], "node_modules")
+            self.assertEqual(missing[0]["target"], "app/node_modules")
+
+    def test_returns_empty_when_dependencies_present(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+            Path(worktree_dir, "app", "node_modules").mkdir(parents=True, exist_ok=True)
+            Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+            config = {
+                "symlink_dependencies": [
+                    {"name": "node_modules", "source": "app/node_modules", "target": "app/node_modules"},
+                ]
+            }
+            Path(repo_root, ".agents", "aet-work.json").write_text(
+                json.dumps(config), encoding="utf-8"
+            )
+
+            missing = worktree.dependency_warmup_required(repo_root, worktree_dir)
+            self.assertEqual(missing, [])
+
+    def test_returns_empty_when_config_missing(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+            missing = worktree.dependency_warmup_required(repo_root, worktree_dir)
+            self.assertEqual(missing, [])
 
 
 if __name__ == "__main__":
