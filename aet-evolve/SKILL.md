@@ -113,9 +113,10 @@ See `../docs/telemetry-guide.md` for how to archive telemetry from projects firs
 **Procedure:**
 
 1. Run `aet-evolve/bin/mine-learnings`.
-2. The script scans archived runs for dependency issues, repeated loops, stage failures, and review noise.
-3. It prints a markdown report ranked by frequency.
-4. With `--propose`, it prints suggested skill edits (for example, tighten `aet-setup` dependency checks or `aet-implement` validation guardrails). It **never** writes edits directly.
+2. The script scans both structured JSONL records and narrative markdown reports (QA, review, CSO, verification reports) for: dependency issues, repeated loops, full-suite runs, stage failures, and review noise.
+3. It prints a markdown report ranked by frequency with example snippets.
+4. With `--archive-dir PATH`, point to a custom telemetry root (defaults to `~/.aet/telemetry/`).
+5. With `--propose`, it prints suggested skill edits (for example, tighten `aet-setup` dependency checks or `aet-implement` validation guardrails). It **never** writes edits directly.
 
 ## Key Principles
 
