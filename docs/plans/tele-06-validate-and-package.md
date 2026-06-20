@@ -45,5 +45,4 @@ Revert the commits for the individual plans and re-run `make package` from the p
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: secure_
