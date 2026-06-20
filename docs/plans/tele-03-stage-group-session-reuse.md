@@ -45,5 +45,4 @@ Revert the orchestrator changes; the per-stage execution path remains as the fal
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_

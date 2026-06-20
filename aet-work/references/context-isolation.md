@@ -90,6 +90,32 @@ The skill asks the currently running agent: "What CLI command and flags should t
 | ...    | 15k              | ✅ Sharp      |
 | 20     | 15k              | ✅ Sharp      |
 
+## Stage-Group Session Reuse (`standard` isolation)
+
+For `standard` isolation, the orchestrator groups consecutive pipeline stages that share the same `session_group` and runs them in a single agent session instead of spawning one session per stage.
+
+```
+Parent agent session (clean)
+  → invokes `bin/orchestrator --isolation standard`
+    → Orchestrator spawns Agent CLI process #1 (clean context)
+      → Stage group 1: aet-tdd → aet-implement, then aet-qa
+      → Commits and updates plan footer between stages
+    → Orchestrator spawns Agent CLI process #2 (clean context)
+      → Stage group 2: aet-review
+    → Orchestrator spawns Agent CLI process #3 (clean context)
+      → Stage group 3: aet-cso, then aet-sync-docs
+```
+
+**Why this helps:**
+
+- Reduces repeated file reads, test suite runs, and environment rediscovery within a group.
+- Keeps the same physical process boundary between groups, so context is still reset between unrelated work.
+- `minimal` and `full` isolation are unchanged.
+
+**Verification and fallback:**
+
+After a group session exits, the orchestrator verifies that the plan footer reached the expected final stage. If the group session did not advance far enough, the orchestrator falls back to the original per-stage execution for that group, resuming from the stage recorded in the plan footer.
+
 ## Parallel Execution Is Safe
 
 Parallel execution of independent tasks is safe because isolation is enforced at two independent layers:

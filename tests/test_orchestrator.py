@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import telemetry
 from cli_adapter import CLIAdapter
+from pipeline import Stage
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
@@ -669,6 +670,221 @@ class TestRunSummaryTelemetry(unittest.TestCase):
             self.assertEqual(len(summaries), 1)
             self.assertEqual(summaries[0]["exit_code"], 1)
             self.assertEqual(summaries[0]["outcome"], "failure")
+
+
+class TestRunStageGroup(unittest.TestCase):
+    def test_builds_compound_prompt_for_multiple_stages(self):
+        """run_stage_group builds a prompt containing every stage in the group."""
+        stages = [
+            Stage(name="plan-approved", skills=["aet-tdd", "aet-implement"], next_stage="implemented"),
+            Stage(name="implemented", skills=["aet-qa"], next_stage="qa-complete"),
+        ]
+        plan_file = "/work/docs/plans/demo.md"
+        adapter = CLIAdapter(
+            name="test",
+            bin="echo",
+            prompt_flag="-p",
+            workdir_flag=None,
+            headless_flag=None,
+        )
+
+        captured = {}
+
+        def fake_run(cmd, **_kwargs):
+            captured["cmd"] = cmd
+            return subprocess.CompletedProcess(cmd, 0)
+
+        with patch.object(orchestrator.subprocess, "run", side_effect=fake_run):
+            orchestrator.run_stage_group(
+                adapter, "/repo", plan_file, "/work", stages
+            )
+
+        # cmd == ["echo", "-p", prompt]
+        self.assertEqual(captured["cmd"][0], "echo")
+        prompt = captured["cmd"][2]
+        self.assertIn("plan-approved", prompt)
+        self.assertIn("implemented", prompt)
+        self.assertIn("aet-tdd", prompt)
+        self.assertIn("aet-implement", prompt)
+        self.assertIn("aet-qa", prompt)
+        self.assertIn("Target stage: implemented", prompt)
+        self.assertIn("Target stage: qa-complete", prompt)
+        self.assertIn("Commit your work and update the plan footer", prompt)
+
+    def test_returns_adapter_exit_code(self):
+        """run_stage_group returns the adapter subprocess exit code."""
+        stages = [
+            Stage(name="plan-approved", skills=["aet-tdd", "aet-implement"], next_stage="implemented"),
+        ]
+        adapter = CLIAdapter(
+            name="test",
+            bin="echo",
+            prompt_flag="-p",
+            workdir_flag=None,
+            headless_flag=None,
+        )
+
+        with patch.object(orchestrator.subprocess, "run", return_value=subprocess.CompletedProcess(["false"], 1)):
+            result = orchestrator.run_stage_group(
+                adapter, "/repo", "/work/plan.md", "/work", stages
+            )
+        self.assertEqual(result, 1)
+
+
+class TestStageGroupSessionReuse(unittest.TestCase):
+    def _setup_repo_with_plan(self, repo_root: str, stage: str = "plan-approved") -> str:
+        _init_git_repo(repo_root)
+        plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+        Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+        Path(plan_file).write_text(
+            f"---\nid: demo\n---\n\n# Demo\n\n_Stage: {stage}_\n",
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+        return plan_file
+
+    def test_standard_isolation_runs_group_session_for_two_stage_group(self):
+        """standard isolation spawns one session for a two-stage group."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+
+            read_calls = []
+
+            def staged_read_plan_stage(plan_file):
+                read_calls.append(plan_file)
+                # First call is intake; subsequent calls observe group-session result.
+                if len(read_calls) == 1:
+                    return "plan-approved"
+                return "qa-complete"
+
+            with patch.object(orchestrator, "run_stage_group", return_value=0) as mock_group:
+                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
+                    with patch.object(
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                    ):
+                        with patch.object(
+                            orchestrator, "read_plan_stage", side_effect=staged_read_plan_stage
+                        ):
+                            with patch.object(
+                                orchestrator,
+                                "verify_stage_advancement",
+                                return_value=(True, ""),
+                            ):
+                                result = orchestrator.process_task(
+                                    task, repo_root, _FAKE_ADAPTER, "standard"
+                                )
+
+            self.assertTrue(result)
+            mock_group.assert_called_once()
+            # Group 1 ran as a single session; group 2 (single stage) still uses run_stage.
+            self.assertEqual(mock_stage.call_count, 1)
+
+    def test_minimal_isolation_keeps_per_stage_execution(self):
+        """minimal isolation does not use run_stage_group."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+
+            with patch.object(orchestrator, "run_stage_group") as mock_group:
+                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
+                    with patch.object(
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                    ):
+                        with patch.object(
+                            orchestrator,
+                            "verify_stage_advancement",
+                            return_value=(True, ""),
+                        ):
+                            result = orchestrator.process_task(
+                                task, repo_root, _FAKE_ADAPTER, "minimal"
+                            )
+
+            self.assertTrue(result)
+            mock_group.assert_not_called()
+            mock_stage.assert_called()
+
+    def test_full_isolation_keeps_per_stage_execution(self):
+        """full isolation does not use run_stage_group."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+
+            with patch.object(orchestrator, "run_stage_group") as mock_group:
+                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
+                    with patch.object(
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                    ):
+                        with patch.object(
+                            orchestrator,
+                            "verify_stage_advancement",
+                            return_value=(True, ""),
+                        ):
+                            result = orchestrator.process_task(
+                                task, repo_root, _FAKE_ADAPTER, "full"
+                            )
+
+            self.assertTrue(result)
+            mock_group.assert_not_called()
+            mock_stage.assert_called()
+
+    def test_standard_fallback_to_per_stage_when_group_does_not_advance(self):
+        """standard isolation falls back to per-stage if group verification fails."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root, stage="plan-approved")
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+
+            read_calls = []
+
+            def staged_read_plan_stage(plan_file):
+                read_calls.append(plan_file)
+                # First call is intake; subsequent calls observe partial progress.
+                if len(read_calls) == 1:
+                    return "plan-approved"
+                return "implemented"
+
+            with patch.object(orchestrator, "run_stage_group", return_value=0) as mock_group:
+                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
+                    with patch.object(
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                    ):
+                        with patch.object(
+                            orchestrator, "read_plan_stage", side_effect=staged_read_plan_stage
+                        ):
+                            # Per-stage fallback for implemented and qa-complete succeeds.
+                            with patch.object(
+                                orchestrator,
+                                "verify_stage_advancement",
+                                side_effect=[(True, ""), (True, "")],
+                            ) as mock_verify:
+                                result = orchestrator.process_task(
+                                    task, repo_root, _FAKE_ADAPTER, "standard"
+                                )
+
+            self.assertTrue(result)
+            mock_group.assert_called_once()
+            mock_stage.assert_called()
+
+    def test_standard_group_failure_returns_false(self):
+        """standard isolation returns False when the group session fails."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+
+            with patch.object(orchestrator, "run_stage_group", return_value=1):
+                result = orchestrator.process_task(
+                    task, repo_root, _FAKE_ADAPTER, "standard"
+                )
+
+            self.assertFalse(result)
 
 
 if __name__ == "__main__":

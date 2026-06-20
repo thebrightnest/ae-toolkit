@@ -1189,14 +1189,14 @@
       "plan_file": "docs/plans/tele-03-stage-group-session-reuse.md",
       "blocked_by": [],
       "blocks": ["tele-06-validate-and-package"],
-      "status": "unblocked",
-      "state": "ready",
+      "status": "awaiting_merge",
+      "state": "awaiting_merge",
       "pending_blockers": 0,
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null,
+      "worktree": ".worktrees/tele-03-stage-group-session-reuse",
+      "branch": "tele-03-stage-group-session-reuse",
       "history": [
         {
           "from": null,
@@ -1209,9 +1209,49 @@
           "to": "ready",
           "at": "2026-06-20T08:22:51.861777+00:00",
           "by": "state-migration"
+        },
+        {
+          "from": "ready",
+          "to": "in_progress",
+          "at": "2026-06-20T10:24:00.759766+00:00",
+          "by": "transition"
+        },
+        {
+          "from": null,
+          "to": "implemented",
+          "at": "2026-06-20T10:37:22.162125+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "implemented",
+          "to": "qa-complete",
+          "at": "2026-06-20T10:40:33.563255+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "qa-complete",
+          "to": "reviewed",
+          "at": "2026-06-20T10:45:21.116489+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "in_progress",
+          "to": "awaiting_merge",
+          "at": "2026-06-20T10:45:21.331429+00:00",
+          "by": "transition"
         }
       ],
-      "merge_strategy": null
+      "merge_strategy": null,
+      "stage": "reviewed"
     },
     {
       "id": "tele-04-focused-tests-diff-scoping",
