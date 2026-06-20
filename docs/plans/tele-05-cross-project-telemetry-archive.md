@@ -53,5 +53,4 @@ Remove the new scripts and skill instruction updates; archived data can be left 
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_

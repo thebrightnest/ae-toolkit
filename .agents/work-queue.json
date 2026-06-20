@@ -1189,14 +1189,14 @@
       "plan_file": "docs/plans/tele-05-cross-project-telemetry-archive.md",
       "blocked_by": ["tele-01-enrich-telemetry-schema"],
       "blocks": ["tele-06-validate-and-package"],
-      "status": "unblocked",
-      "state": "ready",
+      "status": "awaiting_merge",
+      "state": "awaiting_merge",
       "pending_blockers": 0,
       "merge_commit": null,
       "completed_at": null,
       "merged_at": null,
-      "worktree": null,
-      "branch": null,
+      "worktree": ".worktrees/tele-05-cross-project-telemetry-archive",
+      "branch": "tele-05-cross-project-telemetry-archive",
       "history": [
         {
           "from": null,
@@ -1215,9 +1215,40 @@
           "to": "ready",
           "at": "2026-06-20T10:07:56.003710+00:00",
           "by": "blocker-resolved"
+        },
+        {
+          "from": "ready",
+          "to": "in_progress",
+          "at": "2026-06-20T10:53:36.622956+00:00",
+          "by": "transition"
+        },
+        {
+          "from": null,
+          "to": "qa-complete",
+          "at": "2026-06-20T11:05:58.050641+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "qa-complete",
+          "to": "reviewed",
+          "at": "2026-06-20T11:11:20.398572+00:00",
+          "by": "orch",
+          "evidence": {
+            "kind": "stage"
+          }
+        },
+        {
+          "from": "in_progress",
+          "to": "awaiting_merge",
+          "at": "2026-06-20T11:11:20.599813+00:00",
+          "by": "transition"
         }
       ],
-      "merge_strategy": null
+      "merge_strategy": null,
+      "stage": "reviewed"
     },
     {
       "id": "tele-06-validate-and-package",

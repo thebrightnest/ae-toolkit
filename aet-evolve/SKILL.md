@@ -91,6 +91,28 @@ Update the layer that allowed the issue so it doesn't happen again.
 
 Entries without a `trigger` field remain valid; matching falls back to recency.
 
+### `ingest-telemetry`
+
+Archive raw telemetry from a project run so it can be mined for systemic improvements.
+
+**Procedure:**
+
+1. From a project repository, run `aet-evolve/bin/ingest-telemetry`.
+2. The script copies `.agents/execution.log.jsonl`, `.agents/work-history.jsonl`, and `/tmp/aet-reports/{task-id}/*.md` into `~/.aet/telemetry/{project-slug}/{date}-{run_id}/`.
+3. Absolute repository and home paths are sanitized to `{REPO_ROOT}` and `{HOME}` placeholders.
+4. Markdown reports receive a YAML frontmatter header with `project_id` and `repo_slug`; a `manifest.json` records all archived files.
+
+### `mine-learnings`
+
+Scan the telemetry archive for recurring patterns and output a ranked report.
+
+**Procedure:**
+
+1. Run `aet-evolve/bin/mine-learnings`.
+2. The script scans archived runs for dependency issues, repeated loops, stage failures, and review noise.
+3. It prints a markdown report ranked by frequency.
+4. With `--propose`, it prints suggested skill edits (for example, tighten `aet-setup` dependency checks or `aet-implement` validation guardrails). It **never** writes edits directly.
+
 ## Key Principles
 
 - **Outer loop vs inner loop** — inner loop: chug through tickets. Outer loop: pause and improve the AI layer.
