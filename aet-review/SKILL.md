@@ -39,9 +39,14 @@ Staff-level diff review with multiple lenses.
 
 **Procedure:**
 
-1. Read the git diff for the current branch (or files specified by user)
+1. Read the git diff for the current branch scoped to the PR base:
+   - Determine the PR base: `origin/main` unless the branch was created from another branch, in which case use that parent branch.
+   - Compute it with `git merge-base HEAD origin/main` or `git merge-base HEAD <parent-branch>`.
+   - Review `git diff <base>..HEAD` (not `git diff` against the working tree).
+   - If the user explicitly specified files, review those files instead of the diff.
 2. Read the corresponding `docs/plans/{ticket}-plan.md` to compare implementation against plan
-3. Run through review lenses:
+3. **Noise filtering:** ignore changes to `.gitignore` and `AGENTS.md` unless the task explicitly touches them. Treat them as project-level noise, not review signal.
+4. Run through review lenses:
 
    - **Project Structure** — do new files/directories follow the same pattern as existing ones? If the project uses symlinks, are new entries created in the real location (symlink target) and linked correctly? Run `ls -la` on the parent directory for any path where new files were created.
    - **Architecture** — does the change fit the existing structure? Are modules deep or shallow?
@@ -56,13 +61,13 @@ Staff-level diff review with multiple lenses.
 
      A "new source file" is any file added by the diff that is not a test file, config file, migration, seed, or type-only definition. Apply judgment — a file exporting only interfaces does not require a test; a file containing business logic, a controller, an observer, or a job does. See `references/test-coverage-check.md` for the mechanical procedure.
 
-   - **Mock Boundaries** — does any test mock a first-party module (internal service, repository, use-case class, or utility)? System boundaries (network, external APIs, file system, timers) are acceptable to mock. First-party code is not. Flag every first-party mock as **fix-now** and require the test to exercise the real module or move to an integration boundary.
+   - **Mock Boundaries** — does any test mock a first-party module (internal service, repository, use-case class, or utility)? System boundaries (network, external APIs, file system, timers) are acceptable to mock. First-party code is not. However, if the project already has integration-boundary tests covering the same behavior, downgrade first-party mock concerns from **fix-now** to **flag-for-human** and note the missing integration coverage. If no integration boundary test exists, classify as **fix-now** and require the test to exercise the real module or move to an integration boundary.
 
    - **Removal Safety** — if the diff deletes symbols from bridge, API, registry, preload, or handler files, extract the deleted names and grep the codebase for remaining references. Flag any matches.
 
-4. For each issue found: classify as fix-now or flag-for-human
-5. Auto-fix obvious issues (typos, style, missing imports)
-6. Produce a review report:
+5. For each issue found: classify as fix-now or flag-for-human
+6. Auto-fix obvious issues (typos, style, missing imports)
+7. Produce a review report:
    - Determine the task ID from the active plan filename or branch name
    - Write the report to `/tmp/aet-reports/{task-id}/review-report.md`
    - Include: pass/fail status, issues found, auto-fixes applied, human flags
