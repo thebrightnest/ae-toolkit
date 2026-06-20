@@ -146,10 +146,11 @@ def preserve_task_metadata(
 ) -> dict:
     """Preserve terminal status and metadata from an existing queue entry.
 
-    Non-terminal stored statuses are derived from the fresh frontmatter
-    blockers, **unless** the task is already recorded as merged in the settled
-    history or its id appears in a commit on ``origin/main``. This prevents
-    completed work from being resurrected when the queue is rebuilt.
+    Terminal statuses (merged, abandoned, done, merge_verified) and terminal
+    history/git states are preserved so completed work is not resurrected when
+    the queue is rebuilt. Non-terminal stored statuses are reset to ``planned``,
+    with ``state`` derived from the fresh frontmatter blockers. This matches
+    ``init-queue``'s rebuild-from-plans semantics.
 
     Legacy ``merge_verified`` is treated as terminal and normalized to ``merged``.
     State is kept consistent with the preserved status.
@@ -182,20 +183,12 @@ def preserve_task_metadata(
             fresh["merge_commit"] = merge_commit
             fresh["merged_at"] = datetime.now().isoformat()
         else:
-            # Preserve existing non-terminal state if it is actionable; otherwise
-            # use the fresh frontmatter blocker facts.
+            # init-queue rebuilds the queue from plan frontmatter; non-terminal
+            # stored statuses are reset to planned, and state follows blockers.
             blockers = fresh.get("blocked_by", [])
-            pending = existing.get("pending_blockers")
-            if pending is None:
-                pending = len(blockers)
-            if state in ("ready", "blocked", "in_progress", "failed"):
-                pass
-            elif pending == 0:
-                state = "ready"
-                status = "unblocked"
-            else:
-                state = "blocked"
-                status = "blocked"
+            pending = len(blockers)
+            state = fresh.get("state", "ready")
+            status = fresh.get("status", "planned")
             fresh["pending_blockers"] = pending
 
     fresh["status"] = status

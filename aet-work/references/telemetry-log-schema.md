@@ -45,6 +45,80 @@ One record per orchestrator run.
 | `parallel_conflicts_detected` | integer | Potential parallel-worktree conflicts detected |
 | `concurrency_cap`             | integer | Maximum parallel tasks allowed                 |
 
+### `loop`
+
+One record per internal retry loop, such as a test retry or an auto-format fix.
+
+| Field              | Type    | Description                                            |
+| ------------------ | ------- | ------------------------------------------------------ |
+| `type`             | string  | `"loop"`                                               |
+| `run_id`           | string  | UUID of the parent orchestrator run                    |
+| `task_id`          | string  | Queue task identifier                                  |
+| `plan_file`        | string  | Path to the plan markdown file                         |
+| `stage`            | string  | Pipeline stage where the loop occurred                 |
+| `loop_type`        | string  | E.g. `test_retry`, `format_fix`                        |
+| `iteration`        | integer | Loop iteration number                                  |
+| `start_time`       | string  | ISO-8601 UTC timestamp                                 |
+| `end_time`         | string  | ISO-8601 UTC timestamp                                 |
+| `duration_seconds` | float   | Computed from `start_time` and `end_time`              |
+| `exit_code`        | integer | Process exit code for this iteration                   |
+| `result`           | string  | `"success"` if `exit_code == 0`, otherwise `"failure"` |
+| `detail`           | string  | Optional human-readable detail                         |
+
+### `environment_issue`
+
+One record per environment or dependency problem detected in the worktree, such as a missing dependency directory that requires warmup.
+
+| Field        | Type    | Description                                    |
+| ------------ | ------- | ---------------------------------------------- |
+| `type`       | string  | `"environment_issue"`                          |
+| `run_id`     | string  | UUID of the parent orchestrator run            |
+| `task_id`    | string  | Queue task identifier                          |
+| `plan_file`  | string  | Path to the plan markdown file                 |
+| `timestamp`  | string  | ISO-8601 UTC timestamp                         |
+| `issue_type` | string  | E.g. `missing_dependency`                      |
+| `dependency` | string  | Dependency path or identifier                  |
+| `resolved`   | boolean | Whether the issue was resolved during this run |
+| `message`    | string  | Optional human-readable description            |
+
+### `test_run`
+
+One record per test invocation, capturing command, scope, and outcome.
+
+| Field              | Type            | Description                                            |
+| ------------------ | --------------- | ------------------------------------------------------ |
+| `type`             | string          | `"test_run"`                                           |
+| `run_id`           | string          | UUID of the parent orchestrator run                    |
+| `task_id`          | string          | Queue task identifier                                  |
+| `plan_file`        | string          | Path to the plan markdown file                         |
+| `stage`            | string          | Pipeline stage where tests ran                         |
+| `scope`            | string          | E.g. `full`, `impact`                                  |
+| `test_command`     | string          | Shell command that was executed                        |
+| `start_time`       | string          | ISO-8601 UTC timestamp                                 |
+| `end_time`         | string          | ISO-8601 UTC timestamp                                 |
+| `duration_seconds` | float           | Computed from `start_time` and `end_time`              |
+| `exit_code`        | integer         | Process exit code from the test command                |
+| `result`           | string          | `"success"` if `exit_code == 0`, otherwise `"failure"` |
+| `tests_total`      | integer \| null | Total tests executed (optional)                        |
+| `tests_passed`     | integer \| null | Tests that passed (optional)                           |
+| `tests_failed`     | integer \| null | Tests that failed (optional)                           |
+
+### `learning_candidate`
+
+One record per pattern that `aet-evolve` may mine for toolkit-level learnings.
+
+| Field          | Type                   | Description                                   |
+| -------------- | ---------------------- | --------------------------------------------- |
+| `type`         | string                 | `"learning_candidate"`                        |
+| `run_id`       | string                 | UUID of the parent orchestrator run           |
+| `task_id`      | string                 | Queue task identifier                         |
+| `plan_file`    | string                 | Path to the plan markdown file                |
+| `stage`        | string                 | Pipeline stage where the pattern was observed |
+| `pattern_type` | string                 | E.g. `repeated_format_fix`, `slow_stage`      |
+| `description`  | string                 | Human-readable pattern description            |
+| `evidence`     | dict[str, Any] \| null | Supporting data for the pattern (optional)    |
+| `confidence`   | float \| null          | Confidence score from 0.0 to 1.0 (optional)   |
+
 ## Reading the Log
 
 Use the `aet-work report` command to print a text summary:

@@ -43,6 +43,7 @@ from worktree import (
     check_main_hygiene,
     copy_untracked_files,
     create_worktree,
+    dependency_warmup_required,
     estimate_repo_size,
     remove_worktree,
 )
@@ -173,6 +174,7 @@ def process_task(
     adapter,
     isolation: str,
     worktree_dir: str | None = None,
+    run_id: str | None = None,
 ) -> bool:
     """Process a single task through all its stage groups."""
     task_id = task["id"]
@@ -188,6 +190,25 @@ def process_task(
         worktree_dir = create_worktree(repo_root, task_id)
     copy_untracked_files(repo_root, worktree_dir)
     print(f"   Worktree: {worktree_dir}")
+
+    # Detect missing worktree dependencies and emit telemetry for learning.
+    if run_id:
+        log_path = _log_path(repo_root)
+        for missing in dependency_warmup_required(repo_root, worktree_dir):
+            print(
+                f"   ⚠️  Dependency warmup required: {missing.get('name', missing.get('target'))}"
+            )
+            telemetry.append_record(
+                telemetry.environment_issue_record(
+                    run_id=run_id,
+                    task_id=task_id,
+                    plan_file=plan_file,
+                    issue_type="missing_dependency",
+                    dependency=missing.get("target", missing.get("name", "unknown")),
+                    message=f"Missing dependency in worktree: {missing.get('name', missing.get('target'))}",
+                ),
+                log_path=log_path,
+            )
 
     # Use the worktree copy of the plan file for stages and verification.
     plan_file = os.path.join(worktree_dir, os.path.relpath(plan_file, repo_root))
@@ -716,7 +737,9 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         "plan_file": plan_file,
     }
 
-    success = process_task(task, repo_root, adapter, args.isolation, worktree_dir)
+    success = process_task(
+        task, repo_root, adapter, args.isolation, worktree_dir, run_id=run_id
+    )
     exit_code = 0 if success else 1
 
     # For top-level run-one on a queued task, mirror run_batch and transition

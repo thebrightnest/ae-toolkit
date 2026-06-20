@@ -47,5 +47,4 @@ Revert the telemetry library and reference doc changes; the orchestrator can sti
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
