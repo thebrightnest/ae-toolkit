@@ -1,7 +1,6 @@
 ---
 id: qai-03-active-status
-blocked_by:
-  - qai-01-archive-cleanup
+blocked_by: []
 size: M
 ---
 
@@ -10,7 +9,7 @@ size: M
 ## Context
 
 Parent PRD: `docs/prds/aet-work-queue-archival-incremental-sync-prd.md`
-Depends on: `qai-01-archive-cleanup` (archive file must exist to count archived tasks)
+Predecessor `qai-01-archive-cleanup` is sealed in work history (archive file exists).
 
 This plan updates `aet-work status` to display only active tasks by default, with a note about how many tasks are archived.
 
@@ -37,7 +36,7 @@ This plan updates `aet-work status` to display only active tasks by default, wit
 
 ## Dependencies
 
-- Blocked by `qai-01-archive-cleanup` — archive file must exist so the status command can reference it for the count note.
+- Predecessor `qai-01-archive-cleanup` is sealed in work history. The archive file exists so the status command can reference it for the count note.
 
 ## Validation Steps
 

@@ -1,7 +1,5 @@
 ---
 id: 05-integration-polish
-blocked_by:
-  - 04-port-phase-5-preview
 size: M
 ---
 
@@ -30,10 +28,6 @@ Final integration pass: add AET-specific integration points, ensure consistent v
 - [ ] `make package` succeeds and produces `aet-design-system-creation.skill`
 - [ ] Skill installs correctly via `make install-skills`
 - [ ] README.md workflow diagram updated to show `aet-design-system-creation` between `aet-plan` and `aet-validate-scope`
-
-## Blocked by
-
-- Ticket 4: Port Phase 5 (Preview)
 
 ## Technical Notes
 
