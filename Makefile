@@ -1,7 +1,8 @@
-.PHONY: help install-skills package add-skill clean lint format format-check validate install-hooks check-reproducible
+.PHONY: help install-skills install-binaries package add-skill clean lint format format-check validate install-hooks check-reproducible
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
 SKILLS_DIR ?= $(HOME)/.claude/skills
+BIN_DIR ?= $(HOME)/.local/bin
 REPO_DIR := $(shell pwd)
 SKILLS := $(filter-out README.md Makefile scripts .git .gitignore docs .agents content .claude, $(wildcard *))
 MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null || find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
@@ -9,7 +10,7 @@ MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null || find . -type f -nam
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install-skills: ## Symlink all skills from this repo to ~/.claude/skills/
+install-skills: ## Symlink all skills from this repo to ~/.claude/skills/ and put binaries on PATH
 	@for skill in $(SKILLS); do \
 		if [ -d "$$skill" ] && [ -f "$$skill/SKILL.md" ]; then \
 			if [ -L "$(SKILLS_DIR)/$$skill" ]; then \
@@ -22,6 +23,10 @@ install-skills: ## Symlink all skills from this repo to ~/.claude/skills/
 			fi; \
 		fi; \
 	done
+	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-setup/bin/install-aet-binaries
+
+install-binaries: ## Symlink skill binaries from installed skill dirs onto PATH
+	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-setup/bin/install-aet-binaries
 
 package: ## Package all skills into .skill files (assembles from templates first)
 	@for skill in $(SKILLS); do \

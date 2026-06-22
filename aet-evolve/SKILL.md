@@ -30,6 +30,10 @@ Before executing any command in this skill, collect the following context:
 
 Use this context to ground all recommendations. Do not ask the user to provide it manually.
 
+## Prerequisites
+
+`ingest-telemetry` and `mine-learnings` must be on `PATH`. Run `/aet-setup install-binaries` (or `~/.agents/skills/aet-setup/bin/install-aet-binaries`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+
 ## Commands
 
 ### `retro`
@@ -99,7 +103,7 @@ See `../docs/telemetry-guide.md` for how to enable telemetry in a project, confi
 
 **Procedure:**
 
-1. From a project repository, run `aet-evolve/bin/ingest-telemetry`.
+1. From a project repository, run `ingest-telemetry`.
 2. The script copies `.agents/execution.log.jsonl`, `.agents/work-history.jsonl`, and `/tmp/aet-reports/{task-id}/*.md` into `~/.aet/telemetry/{project-slug}/{date}-{run_id}/`.
 3. Absolute repository and home paths are sanitized to `{REPO_ROOT}` and `{HOME}` placeholders.
 4. Markdown reports receive a YAML frontmatter header with `project_id` and `repo_slug`; a `manifest.json` records all archived files.
@@ -112,7 +116,7 @@ See `../docs/telemetry-guide.md` for how to archive telemetry from projects firs
 
 **Procedure:**
 
-1. Run `aet-evolve/bin/mine-learnings`.
+1. Run `mine-learnings`.
 2. The script scans both structured JSONL records and narrative markdown reports (QA, review, CSO, verification reports) for: dependency issues, repeated loops, full-suite runs, stage failures, and review noise.
 3. It prints a markdown report ranked by frequency with example snippets.
 4. With `--archive-dir PATH`, point to a custom telemetry root (defaults to `~/.aet/telemetry/`).

@@ -199,7 +199,24 @@ Run the pre-merge validation gate.
 
 14. **Merge Verification** — after the PR is created and the user indicates it has been merged:
 
-    Run the deterministic merge recorder:
+    First, confirm the AET state helper is available:
+
+    ```bash
+    command -v aet-state
+    ```
+
+    If this fails, **STOP** and print:
+
+    ```
+    ⚠️  aet-state is not on PATH.
+        AET skill binaries must be installed before merge verification can update the work queue.
+        Install options:
+          - Run /aet-setup install-binaries
+          - From this repo: make install-skills
+          - Manually: add the skill bin directories (e.g. ~/.agents/skills/aet-work/bin) to PATH.
+    ```
+
+    Then run the deterministic merge recorder:
 
     ```bash
     aet-state record-merge <task_id>
@@ -214,7 +231,7 @@ Run the pre-merge validation gate.
     - On success, atomically writes `merge_commit`, `merge_strategy`, `status: merged`, and `merged_at` to `.agents/work-queue.json`.
     - On failure, exits non-zero without mutating the queue.
 
-    If `aet-state record-merge` fails:
+    If the merge recorder fails:
 
     - **STOP** and print:
 
@@ -233,7 +250,7 @@ Run the pre-merge validation gate.
     - Offer to open the PR in the browser for manual verification.
     - Exit with non-zero status.
 
-15. **Safe Branch Deletion** — only run if `aet-state record-merge` succeeded:
+15. **Safe Branch Deletion** — only run if the merge recorder succeeded:
     - Regular merge: `git branch -d <branch>`
     - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)
     - Delete the remote branch: `git push origin --delete <branch>`

@@ -29,6 +29,17 @@ Rules:
 - It is fine to document cross-skill patterns or authoring guidance in `.agents/reference/` and `docs/CONVENTIONS.md`, but the skill itself must repeat or link to any rule it actually enforces.
 - If a rule spans multiple skills, either duplicate the relevant portion in each skill or create a skill-level reference doc and link it from `SKILL.md`. Avoid cross-skill file references that would break when a skill is installed alone.
 
+## Skill Binaries
+
+Skills may include executable helpers in `<skill>/bin/`. These are packaged into `.skill` files and installed into the agent's skills directory by `npx skills`, but they are **not** automatically added to `PATH`.
+
+Rules:
+
+- Skill instructions must invoke helper binaries by command name (e.g. `aet-state record-merge`), not by hardcoded agent-specific paths.
+- Skills that depend on binaries must include a **Prerequisites** section telling the user how to install them onto `PATH`.
+- The canonical installer is owned by `aet-setup`: run `/aet-setup install-binaries` (or `~/.agents/skills/aet-setup/bin/install-aet-binaries`). It symlinks binaries from all installed skill directories into `~/.local/bin` (or `AET_BIN_DIR`).
+- `make install-skills` in this repo runs the installer automatically for the local development workflow.
+
 ## Planning Artifact Directories
 
 The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/`; all other planning artifacts belong in their designated directories.

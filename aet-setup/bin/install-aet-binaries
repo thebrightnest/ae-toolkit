@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Install AE Toolkit skill binaries onto PATH.
+#
+# Usage:
+#   aet-setup/bin/install-aet-binaries [BIN_DIR]
+#
+# Default BIN_DIR is ~/.local/bin. Override with the first argument or the
+# AET_BIN_DIR environment variable.
+#
+# The script searches common Agent Skills install directories and symlinks any
+# executable found at <skill>/bin/* into BIN_DIR. It is idempotent and safe to
+# re-run after installing or updating skills.
+
+set -euo pipefail
+
+BIN_DIR="${1:-${AET_BIN_DIR:-$HOME/.local/bin}}"
+
+# Search order (lowest priority first, highest priority last). The last root
+# processed wins, so its symlink remains in BIN_DIR.
+#   1. Agent-specific directories (lowest)
+#   2. Canonical npx skills directory
+#   3. Explicit AET_SKILLS_DIR (used by make install-skills for dev workflow; highest)
+SKILL_ROOTS=(
+  "$HOME/.claude/skills"
+  "$HOME/.kimi/skills"
+  "$HOME/.cursor/skills"
+  "$HOME/.codex/skills"
+  "$HOME/.windsurf/skills"
+  "$HOME/.kilocode/skills"
+  "$HOME/.agents/skills"
+)
+if [ -n "${AET_SKILLS_DIR:-}" ]; then
+  SKILL_ROOTS+=("$AET_SKILLS_DIR")
+fi
+
+mkdir -p "$BIN_DIR"
+
+echo "Installing AET skill binaries to $BIN_DIR ..."
+
+TRACK_DIR=$(mktemp -d)
+trap 'rm -rf "$TRACK_DIR"' EXIT
+
+installed=0
+updated=0
+skipped=0
+
+for root in "${SKILL_ROOTS[@]}"; do
+  if [ ! -d "$root" ]; then
+    continue
+  fi
+  for skill_dir in "$root"/*; do
+    if [ ! -d "$skill_dir" ]; then
+      continue
+    fi
+    bin_dir="$skill_dir/bin"
+    if [ ! -d "$bin_dir" ]; then
+      continue
+    fi
+    for executable in "$bin_dir"/*; do
+      if [ ! -f "$executable" ] || [ ! -x "$executable" ]; then
+        continue
+      fi
+      name=$(basename "$executable")
+      if [ "$name" = "__pycache__" ]; then
+        continue
+      fi
+
+      target="$BIN_DIR/$name"
+      track_file="$TRACK_DIR/$name"
+
+      if [ -e "$target" ] && [ ! -L "$target" ]; then
+        if [ ! -f "$track_file" ]; then
+          echo "  ⚠ $name exists in $BIN_DIR and is not a symlink. Skipping."
+          skipped=$((skipped + 1))
+          touch "$track_file"
+        fi
+        continue
+      fi
+
+      if [ -L "$target" ]; then
+        current=$(readlink "$target")
+        if [ "$current" = "$executable" ]; then
+          continue
+        fi
+        rm "$target"
+        if [ ! -f "$track_file" ]; then
+          updated=$((updated + 1))
+          touch "$track_file"
+        fi
+      else
+        if [ ! -f "$track_file" ]; then
+          installed=$((installed + 1))
+          touch "$track_file"
+        fi
+      fi
+      ln -s "$executable" "$target"
+      echo "  ✓ $name -> $executable"
+    done
+  done
+done
+
+if [ "$installed" -eq 0 ] && [ "$updated" -eq 0 ] && [ "$skipped" -eq 0 ]; then
+  echo "No AET skill binaries found in any of the searched directories:"
+  for root in "${SKILL_ROOTS[@]}"; do
+    echo "  - $root"
+  done
+  echo "Install skills first (e.g. 'npx skills add getatelier/ae-toolkit.git --all')."
+  exit 1
+fi
+
+echo "Linked $installed new binary(s), updated $updated existing symlink(s), skipped $skipped non-symlink collision(s)."
+
+if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+  echo ""
+  echo "⚠ $BIN_DIR is not on your PATH. Add it to your shell profile:"
+  echo "    export PATH=\"$BIN_DIR:\$PATH\""
+fi

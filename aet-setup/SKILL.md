@@ -34,6 +34,36 @@ Explicit stack declaration. Skips detection. Useful for new/empty repos.
 
 With optional flags to override sensible defaults.
 
+## Commands
+
+### `install-binaries`
+
+Put AET skill binaries on `PATH` so skills like `aet-work`, `aet-ship`, and `aet-evolve` can invoke their helpers (`aet-state`, `orchestrator`, `ingest-telemetry`, etc.).
+
+**Procedure:**
+
+1. Run the installer:
+
+   ```bash
+   ~/.agents/skills/aet-setup/bin/install-aet-binaries
+   ```
+
+   It symlinks every executable found in installed skill `bin/` directories into `~/.local/bin` (override with `AET_BIN_DIR`).
+
+2. Verify the helpers are available:
+
+   ```bash
+   command -v aet-state && command -v orchestrator
+   ```
+
+3. If `~/.local/bin` is not on `PATH`, tell the user to add it to their shell profile.
+
+**When to use:**
+
+- After installing skills via `npx skills`
+- When another AET skill reports that a helper binary is not on `PATH`
+- When setting up a new machine
+
 ## Philosophy
 
 **Research-driven, not template-driven.** This skill does not ship hardcoded config files for every possible stack. Instead it:
@@ -188,6 +218,8 @@ Create `.agents/` at project root as the agent-neutral home for workflows, templ
 `aet-setup` only scaffolds foundational infrastructure — not empty folders for skills that may never be invoked. Each skill creates its own `docs/` subdirectory on first use. Generate `.agents/reference/` docs as stubs and document in `AGENTS.md` that they are loaded on demand.
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
+
+**AET skill binaries:** If the project uses `aet-work`, `aet-ship`, or `aet-evolve`, ensure their helper binaries are on `PATH`. Run `/aet-setup install-binaries` (or `~/.agents/skills/aet-setup/bin/install-aet-binaries`; `make install-skills` from the toolkit repo runs it automatically). Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
 
 ### Type Safety
 
