@@ -31,6 +31,10 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
+## Prerequisites
+
+This skill invokes AET helper binaries (`aet-state`, `status`, `init-queue`, `sync`, `next`, `report`, `orchestrator`). They must be on `PATH`. Run `/aet-setup install-binaries` (or `~/.agents/skills/aet-setup/bin/install-aet-binaries`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+
 ## Forward-Only State Model
 
 Workflow state is **recorded forward by code and trusted on read**.
@@ -107,7 +111,7 @@ Show the current state of the work queue.
 Invoke the status helper, which runs a settled-history-aware `plan-drift` check, reads stored state, and prints the summary:
 
 ```bash
-python3 ~/.claude/skills/aet-work/bin/status \
+status \
   --queue-file .agents/work-queue.json \
   --history-file .agents/work-history.jsonl \
   --plans-dir docs/plans
@@ -133,7 +137,7 @@ Identify and output the next ready task.
 3. Find tasks whose stored `state` is `ready` (falling back to legacy `status` during migration)
 4. Pick the first in topological order (respecting the DAG)
 5. Output: task ID, title, plan_file path
-6. Transition to `in_progress` via `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_state> in_progress .agents/work-queue.json`, then record `branch: <task_id>` and `worktree: .worktrees/<task_id>`
+6. Transition to `in_progress` via `aet-state transition <task_id> <current_state> in_progress .agents/work-queue.json`, then record `branch: <task_id>` and `worktree: .worktrees/<task_id>`
 
 ### `run`
 
@@ -154,7 +158,7 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
 pipefail`:
 
    ```bash
-   ~/.claude/skills/aet-work/bin/orchestrator \
+   orchestrator \
      --queue-file .agents/work-queue.json \
      --repo-root . \
      --cli-bin $(which kimi) \
@@ -203,7 +207,7 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 2. Invoke the orchestrator in single-plan mode:
 
    ```bash
-   ~/.claude/skills/aet-work/bin/orchestrator \
+   orchestrator \
      --plan-file docs/plans/FEAT-001-plan.md \
      --repo-root . \
      --cli-bin $(which kimi) \
@@ -248,7 +252,7 @@ Reconcile stored state against git ground truth without mutating the queue. `aud
 
 **Procedure:**
 
-1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json`
+1. Run `aet-state audit .agents/work-queue.json`
 2. For each task, compute the expected status from git ground truth in order:
    - `merged` — `branch` or `merge_commit` is an ancestor of `origin/main`
    - `in-progress` — local `branch` exists
@@ -267,7 +271,7 @@ Print an execution telemetry summary from `.agents/execution.log.jsonl`.
 
 **Procedure:**
 
-1. Run `python3 ~/.claude/skills/aet-work/bin/report`
+1. Run `report`
 2. The helper reads `.agents/execution.log.jsonl` and prints:
    - Total runs
    - Tasks spawned, succeeded, and failed
@@ -323,12 +327,12 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 3. If the requested status is `merge_verified`:
    - STOP and print: `⛔ merge_verified is a legacy status. Use merged instead.`
 4. If setting to `merged`:
-   - Run `python3 ~/.claude/skills/aet-work/bin/aet-state validate <task_id> <current_status> merged .agents/work-queue.json`
+   - Run `aet-state validate <task_id> <current_status> merged .agents/work-queue.json`
    - If validation fails, STOP and print the error message
-   - If validation passes, run `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_status> merged .agents/work-queue.json`
+   - If validation passes, run `aet-state transition <task_id> <current_status> merged .agents/work-queue.json`
 5. If setting to `abandoned`:
    - Require a `reason` argument (non-empty string)
-   - Run `python3 ~/.claude/skills/aet-work/bin/aet-state transition <task_id> <current_status> abandoned .agents/work-queue.json --reason="<reason>"`
+   - Run `aet-state transition <task_id> <current_status> abandoned .agents/work-queue.json --reason="<reason>"`
    - Print: `⚠️ Task {id} marked abandoned. Reason: {reason}`
 
 **Rules:**
@@ -344,13 +348,13 @@ Seal terminal tasks and remove their worktrees atomically. Repairs stale queue e
 
 **Procedure:**
 
-1. Run `python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json` to reconcile stored state against git for active (non-terminal) tasks only.
+1. Run `aet-state audit .agents/work-queue.json` to reconcile stored state against git for active (non-terminal) tasks only.
 2. Read `.agents/work-queue.json`
 3. Identify terminal tasks: status is `merged`, `done`, or `abandoned`. Normalize any `merge_verified` statuses to `merged`.
 4. Seal any legacy terminal tasks still present in the live queue:
 
    ```bash
-   python3 ~/.claude/skills/aet-work/bin/aet-state archive .agents/work-queue.json
+   aet-state archive .agents/work-queue.json
    ```
 
    Terminal transitions now seal tasks to `.agents/work-history.jsonl` automatically. The deprecated `archive` command remains as a migration helper that seals any remaining terminal tasks and reports what it did.
