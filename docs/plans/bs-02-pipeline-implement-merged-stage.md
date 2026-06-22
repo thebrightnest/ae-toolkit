@@ -1,7 +1,6 @@
 ---
 id: bs-02-pipeline-implement-merged-stage
-blocked_by:
-  - bs-01-aet-ship-merge-verification
+blocked_by: []
 size: S
 ---
 
@@ -11,7 +10,7 @@ size: S
 
 PRD: `docs/prds/branch-safety-prd.md`
 Parent issue: GitHub #3
-Blocked by: `bs-01-aet-ship-merge-verification`
+Predecessor `bs-01-aet-ship-merge-verification` is sealed in work history.
 
 `aet-pipeline-implement` ends at stage `synced` with the message "Next step: run `aet-ship`". There is no stage representing "the code is actually on `origin/main`". This plan adds a `merged` stage and post-ship verification.
 
@@ -24,7 +23,7 @@ Blocked by: `bs-01-aet-ship-merge-verification`
 
 ## Dependencies
 
-- `bs-01-aet-ship-merge-verification` — the post-ship verification in this plan references the merge verification behavior added to `aet-ship`
+- Predecessor `bs-01-aet-ship-merge-verification` is sealed in work history. The post-ship verification in this plan references the merge verification behavior added to `aet-ship`.
 
 ## Validation Steps
 
