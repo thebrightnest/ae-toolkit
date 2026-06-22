@@ -4,9 +4,9 @@ A modular skill suite for AI coding agents. Each skill is a self-contained packa
 
 ---
 
-## Current Version: 0.7.0
+## Current Version: 0.8.0
 
-Last updated: 2026-06-19
+Last updated: 2026-06-22
 
 ---
 
@@ -53,21 +53,29 @@ Keep projects and the toolkit itself healthy.
 - **aet-setup** — Bootstrap or upgrade projects with best-practice documentation and AI guardrails.
 - **aet-upgrade** — Dependency and framework upgrade planning with breaking-change analysis.
 - **aet-bug-report** — Structured bug investigation and fixing.
-- **aet-evolve** — System evolution through retrospectives and rule updates.
+- **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns.
 
 ---
 
 ## Integrations
 
-| Name                  | Description                                                                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------- |
-| `.skill` packages     | Skills are distributed as plain zip archives of the skill directory, installable anywhere.               |
-| `make install-skills` | Symlinks all skills to `~/.claude/skills/` for local agent use.                                          |
-| Git                   | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required. |
+| Name                   | Description                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| `.skill` packages      | Skills are distributed as plain zip archives of the skill directory, installable anywhere.               |
+| `make install-skills`  | Symlinks all skills to `~/.claude/skills/` for local agent use.                                          |
+| `install-aet-binaries` | Installs skill executables such as `ingest-telemetry` and `mine-learnings` on `PATH`.                    |
+| Git                    | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required. |
 
 ---
 
 ## What's New
+
+### What's New in v0.8.0
+
+- **Telemetry learning system** — capture richer run data, warm worktree dependencies, reuse isolated stage sessions, scope tests to the diff, and archive findings across projects so the same lesson never has to be relearned.
+- **Centralized skill binaries** — `aet-setup` now installs skill executables on `PATH` consistently, starting with telemetry mining tools.
+- **Smarter queue intake** — `aet-work` reconciles terminal tasks from history and git automatically, and only validates new plans instead of re-scanning the entire queue.
+- **Reliable unattended runs** — orchestrator children skip redundant main-hygiene checks, and merge verification works from recorded merge commits without a local branch.
 
 ### What's New in v0.7.0
 

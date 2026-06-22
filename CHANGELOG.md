@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.8.0] — 2026-06-22
+
+### Added
+
+- **Telemetry learning system** — six-part update that enriches the telemetry schema, warms worktree dependencies, reuses stage-group sessions, scopes tests to the diff, archives learnings across projects, and packages the whole flow. See `docs/telemetry-guide.md`.
+- **aet-setup**: Centralized AET skill binary installation (`install-aet-binaries`) so skills expose their executables on `PATH` consistently.
+- **aet-evolve**: `mine-learnings` now parses narrative markdown reports (QA, review, CSO, verification) in addition to structured JSONL records.
+
+### Changed
+
+- **aet-work**: `init-queue` now reconciles terminal state from `.agents/work-history.jsonl` and git, and reconciles plan footer stages on intake.
+- **aet-work**: `sync` only validates candidate plans and tolerates legacy dependency sections in already-queued plans.
+- **aet-state**: `record-merge` and `derive` now accept merge verification by `merge_commit` alone, removing the requirement for a local branch.
+
+### Fixed
+
+- **aet-work**: Skip main-hygiene check in batch-spawned children so unattended orchestrator runs don't deadlock on already-pulled `origin/main`.
+- **Build**: `aet-work/bin/report` is now executable so the installer exposes it on `PATH`.
+
+### Documentation
+
+- Added `docs/telemetry-guide.md` with the telemetry ingestion, archive, and mining workflow plus cross-references from affected skills.
+
+---
+
 ## [0.7.0] — 2026-06-19
 
 ### Added
