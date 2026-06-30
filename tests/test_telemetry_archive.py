@@ -1,4 +1,4 @@
-"""Tests for the cross-project telemetry archive scripts."""
+"""Tests for the cross-project telemetry archive."""
 
 from __future__ import annotations
 
@@ -10,7 +10,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-BIN_DIR = Path(__file__).parent.parent / "aet-evolve" / "bin"
+EVOLVE_BIN_DIR = Path(__file__).parent.parent / "aet-evolve" / "bin"
+WORK_LIB_DIR = Path(__file__).parent.parent / "aet-work" / "lib"
+sys.path.insert(0, str(WORK_LIB_DIR))
+
+import telemetry  # noqa: E402
 
 
 def _load_module(module_name: str, script_path: Path):
@@ -25,12 +29,7 @@ def _load_module(module_name: str, script_path: Path):
     return module
 
 
-ingest_telemetry = _load_module(
-    "ingest_telemetry", BIN_DIR / "ingest-telemetry"
-)
-mine_learnings = _load_module(
-    "mine_learnings", BIN_DIR / "mine-learnings"
-)
+mine_learnings = _load_module("mine_learnings", EVOLVE_BIN_DIR / "mine-learnings")
 
 
 def _write_jsonl(path: Path, records: list[dict]) -> None:
@@ -40,102 +39,61 @@ def _write_jsonl(path: Path, records: list[dict]) -> None:
             f.write(json.dumps(record) + "\n")
 
 
-class TestIngestTelemetry(unittest.TestCase):
+class TestDirectArchive(unittest.TestCase):
     def setUp(self):
         self.project_dir = Path(tempfile.mkdtemp(prefix="aet-project-"))
         self.archive_dir = Path(tempfile.mkdtemp(prefix="aet-archive-"))
-        self.reports_dir = Path(tempfile.mkdtemp(prefix="aet-reports-"))
+        os.environ["AET_TELEMETRY_ARCHIVE_DIR"] = str(self.archive_dir)
 
     def tearDown(self):
         shutil = __import__("shutil")
         shutil.rmtree(self.project_dir, ignore_errors=True)
         shutil.rmtree(self.archive_dir, ignore_errors=True)
-        shutil.rmtree(self.reports_dir, ignore_errors=True)
+        os.environ.pop("AET_TELEMETRY_ARCHIVE_DIR", None)
 
-    def test_creates_archive_with_sanitized_paths_and_headers(self):
-        repo_path = str(self.project_dir)
-        execution_log = self.project_dir / ".agents" / "execution.log.jsonl"
-        _write_jsonl(
-            execution_log,
-            [
-                {
-                    "type": "stage",
-                    "run_id": "r1",
-                    "task_id": "t1",
-                    "plan_file": str(self.project_dir / "docs" / "plans" / "x.md"),
-                    "stage": "implemented",
-                    "exit_code": 0,
-                }
-            ],
+    def test_run_logger_creates_dated_run_directory(self):
+        logger = telemetry.RunLogger(
+            self.project_dir, run_id="run-001", date="2026-06-20"
+        )
+        self.assertTrue(logger.run_dir.exists())
+        self.assertIn("run-001", str(logger.run_dir))
+        self.assertIn("2026-06-20", str(logger.run_dir))
+
+    def test_run_logger_sanitizes_paths_at_write_time(self):
+        resolved = self.project_dir.resolve()
+        logger = telemetry.RunLogger(resolved, run_id="run-001")
+        logger.append_record(
+            {
+                "type": "stage",
+                "plan_file": str(resolved / "docs" / "plans" / "x.md"),
+            },
+            task_id="t1",
         )
 
-        work_history = self.project_dir / ".agents" / "work-history.jsonl"
-        _write_jsonl(
-            work_history,
-            [
-                {
-                    "id": "t1",
-                    "plan_file": str(self.project_dir / "docs" / "plans" / "x.md"),
-                }
-            ],
-        )
-
-        report_file = self.reports_dir / "t1" / "report.md"
-        report_file.parent.mkdir(parents=True, exist_ok=True)
-        report_file.write_text(
-            f"# Report\n\nRun completed in {self.project_dir / '.agents'}.\n",
-            encoding="utf-8",
-        )
-
-        archive_path = ingest_telemetry.ingest(
-            run_id="run-001",
-            project_id="demo-project",
-            repo_slug="demo/repo",
-            repo_root=self.project_dir,
-            archive_dir=self.archive_dir,
-            reports_dir=self.reports_dir,
-            date="2026-06-20",
-        )
-
-        self.assertTrue(archive_path.exists())
-        manifest_path = archive_path / "manifest.json"
-        self.assertTrue(manifest_path.exists())
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertEqual(manifest["project_id"], "demo-project")
-        self.assertEqual(manifest["repo_slug"], "demo/repo")
-        self.assertEqual(manifest["run_id"], "run-001")
-
-        dests = {entry["dest"] for entry in manifest["files"]}
-        self.assertIn("execution.log.jsonl", dests)
-        self.assertIn("t1/report.md", dests)
-
-        archived_execution = archive_path / "execution.log.jsonl"
-        self.assertTrue(archived_execution.exists())
-        archived_text = archived_execution.read_text(encoding="utf-8")
-        self.assertNotIn(repo_path, archived_text)
+        task_log = logger.task_log_path("t1")
+        self.assertTrue(task_log.exists())
+        archived_text = task_log.read_text(encoding="utf-8")
+        self.assertNotIn(str(resolved), archived_text)
         self.assertIn("{REPO_ROOT}", archived_text)
 
-        archived_report = archive_path / "t1" / "report.md"
-        self.assertTrue(archived_report.exists())
-        report_text = archived_report.read_text(encoding="utf-8")
-        self.assertIn("project_id: demo-project", report_text)
-        self.assertIn("repo_slug: demo/repo", report_text)
-        self.assertNotIn(repo_path, report_text)
-
-    def test_handles_missing_source_files_gracefully(self):
-        archive_path = ingest_telemetry.ingest(
-            run_id="run-empty",
-            project_id="empty-project",
-            repo_slug="empty/repo",
-            repo_root=self.project_dir,
-            archive_dir=self.archive_dir,
-            reports_dir=self.reports_dir,
-            date="2026-06-20",
+    def test_run_logger_writes_last_run_summary(self):
+        logger = telemetry.RunLogger(self.project_dir, run_id="run-001")
+        summary = telemetry.run_summary_record(
+            run_id="run-001",
+            start_time="2026-06-20T00:00:00Z",
+            end_time="2026-06-20T00:01:00Z",
+            tasks_spawned=1,
+            tasks_succeeded=1,
+            tasks_failed=0,
+            outcome="success",
+            exit_code=0,
+            task_ids=["t1"],
         )
+        logger.write_last_run(summary)
 
-        self.assertTrue(archive_path.exists())
-        manifest = json.loads((archive_path / "manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["files"], [])
+        last_run = logger.run_dir / "last-run.json"
+        self.assertTrue(last_run.exists())
+        self.assertEqual(json.loads(last_run.read_text())["outcome"], "success")
 
 
 class TestMineLearnings(unittest.TestCase):
@@ -146,18 +104,11 @@ class TestMineLearnings(unittest.TestCase):
         shutil = __import__("shutil")
         shutil.rmtree(self.archive_dir, ignore_errors=True)
 
-    def _seed_run(self, project_id: str, run_name: str, records: list[dict]) -> Path:
-        run_dir = self.archive_dir / project_id / run_name
+    def _seed_run(self, project_id: str, date: str, run_name: str, task_records: dict[str, list[dict]]) -> Path:
+        run_dir = self.archive_dir / project_id / date / run_name
         run_dir.mkdir(parents=True, exist_ok=True)
-        manifest = {
-            "project_id": project_id,
-            "repo_slug": f"{project_id}/repo",
-            "run_id": run_name,
-            "archived_at": "2026-06-20T00:00:00Z",
-            "files": [],
-        }
-        (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        _write_jsonl(run_dir / "execution.log.jsonl", records)
+        for task_id, records in task_records.items():
+            _write_jsonl(run_dir / f"{task_id}.jsonl", records)
         return run_dir
 
     def test_report_lists_recurring_patterns(self):
@@ -182,8 +133,8 @@ class TestMineLearnings(unittest.TestCase):
                 "exit_code": 1,
             },
         ]
-        self._seed_run("p1", "2026-06-20-r1", records)
-        self._seed_run("p2", "2026-06-20-r2", records)
+        self._seed_run("p1", "2026-06-20", "r1", {"t1": records})
+        self._seed_run("p2", "2026-06-20", "r2", {"t1": records})
 
         patterns = mine_learnings.mine_archive(self.archive_dir)
         report = mine_learnings.format_report(patterns)
@@ -209,7 +160,7 @@ class TestMineLearnings(unittest.TestCase):
                 "exit_code": 0,
             },
         ]
-        self._seed_run("p1", "2026-06-20-r1", records)
+        self._seed_run("p1", "2026-06-20", "r1", {"t1": records})
 
         patterns = mine_learnings.mine_archive(self.archive_dir)
         proposals = mine_learnings.propose_edits(patterns)

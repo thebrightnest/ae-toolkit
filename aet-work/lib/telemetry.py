@@ -1,19 +1,25 @@
 """Execution telemetry for the AE Toolkit orchestrator.
 
-Provides append-only JSONL logging for stage and run-summary records,
-null-safe handling of optional token/cost fields, and a simple text report.
+Provides append-only JSONL logging for stage and run-summary records.
+Logs are written directly to the user-level telemetry archive so they survive
+project worktree deletion. The old project-local ``.agents/execution.log.jsonl``
+path is no longer used.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
+import subprocess
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_LOG_PATH = ".agents/execution.log.jsonl"
+DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
+DEFAULT_DATE_FORMAT = "%Y-%m-%d"
 
 
 def iso_now() -> str:
@@ -26,22 +32,145 @@ def _parse_iso(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
-def _ensure_log_path(path: str | Path) -> Path:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
+def archive_dir() -> Path:
+    """Return the telemetry archive root, respecting ``AET_TELEMETRY_ARCHIVE_DIR``."""
+    env = os.environ.get("AET_TELEMETRY_ARCHIVE_DIR")
+    return Path(env).expanduser() if env else DEFAULT_ARCHIVE_DIR
 
 
-def append_record(record: dict[str, Any], log_path: str | Path = DEFAULT_LOG_PATH) -> None:
-    """Append a single JSON record to the telemetry log."""
-    path = _ensure_log_path(log_path)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, default=str) + "\n")
+def resolve_repo_root(repo_root: str | Path | None = None) -> Path:
+    """Resolve the repository root from args, env, git, or cwd."""
+    if repo_root is not None:
+        return Path(repo_root).resolve()
+
+    env_root = os.environ.get("AET_REPO_ROOT")
+    if env_root:
+        return Path(env_root).resolve()
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip()).resolve()
+    except FileNotFoundError:
+        pass
+
+    return Path.cwd().resolve()
+
+
+def derive_project_slug(repo_root: str | Path | None = None) -> str:
+    """Derive owner/repo slug from the origin remote or directory name."""
+    env_slug = os.environ.get("AET_PROJECT_ID") or os.environ.get("AET_REPO_SLUG")
+    if env_slug:
+        return env_slug
+
+    repo_root = resolve_repo_root(repo_root)
+
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            url = result.stdout.strip()
+            if url.endswith(".git"):
+                url = url[:-4]
+            if ":" in url and "//" not in url:
+                url = url.split(":", 1)[-1]
+            parts = url.rstrip("/").split("/")
+            return "/".join(parts[-2:])
+    except FileNotFoundError:
+        pass
+
+    return repo_root.name
+
+
+def _sanitize(value: Any, repo_root: Path) -> Any:
+    """Recursively replace absolute repo and home paths with placeholders."""
+    home = str(Path.home())
+    root = str(repo_root)
+
+    if isinstance(value, str):
+        text = re.sub(re.escape(root), "{REPO_ROOT}", value)
+        text = re.sub(re.escape(home), "{HOME}", text)
+        return text
+    if isinstance(value, list):
+        return [_sanitize(item, repo_root) for item in value]
+    if isinstance(value, dict):
+        return {key: _sanitize(item, repo_root) for key, item in value.items()}
+    return value
 
 
 def new_run_id() -> str:
     """Generate a unique run identifier."""
     return str(uuid.uuid4())
+
+
+class RunLogger:
+    """One logger per orchestrator run.
+
+    Writes per-task JSONL files directly into the telemetry archive so logs are
+    preserved independently of project worktrees.
+    """
+
+    def __init__(
+        self,
+        repo_root: str | Path,
+        run_id: str | None = None,
+        date: str | None = None,
+    ):
+        self.repo_root = resolve_repo_root(repo_root)
+        self.run_id = run_id or new_run_id()
+        self.date = date or datetime.now(timezone.utc).strftime(DEFAULT_DATE_FORMAT)
+        self.project_slug = derive_project_slug(self.repo_root)
+        self._run_dir = (
+            archive_dir() / self.project_slug / self.date / self.run_id
+        )
+        self._run_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def run_dir(self) -> Path:
+        """Return the archive directory for this run."""
+        return self._run_dir
+
+    def task_log_path(self, task_id: str) -> Path:
+        """Return the per-task JSONL path."""
+        return self._run_dir / f"{task_id}.jsonl"
+
+    def append_record(self, record: dict[str, Any], task_id: str) -> Path:
+        """Append a single sanitized record to the task's log file."""
+        path = self.task_log_path(task_id)
+        sanitized = _sanitize(record, self.repo_root)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(sanitized, default=str) + "\n")
+        return path
+
+    def write_last_run(self, record: dict[str, Any]) -> Path:
+        """Write the run completion summary as ``last-run.json``."""
+        path = self._run_dir / "last-run.json"
+        sanitized = _sanitize(record, self.repo_root)
+        path.write_text(
+            json.dumps(sanitized, indent=2, default=str) + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def copy_work_history(self, source: str | Path) -> Path | None:
+        """Optionally copy the project's work-history JSONL into the run archive."""
+        src = Path(source)
+        if not src.exists():
+            return None
+        dest = self._run_dir / "work-history.jsonl"
+        sanitized = _sanitize(src.read_text(encoding="utf-8"), self.repo_root)
+        dest.write_text(sanitized, encoding="utf-8")
+        return dest
 
 
 def stage_record(
@@ -231,9 +360,9 @@ def learning_candidate_record(
     }
 
 
-def read_log(log_path: str | Path = DEFAULT_LOG_PATH) -> list[dict[str, Any]]:
-    """Read and parse the telemetry log, skipping malformed lines."""
-    path = Path(log_path)
+def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
+    """Read and parse a JSONL file, skipping malformed lines."""
+    path = Path(path)
     if not path.exists():
         return []
 
@@ -263,9 +392,14 @@ def _average_isolation_level(stages: list[dict[str, Any]]) -> str:
     return min(level_values, key=lambda level: abs(level_values[level] - avg_value))
 
 
-def report(log_path: str | Path = DEFAULT_LOG_PATH, since: str | None = None) -> str:
-    """Generate a text summary of recorded executions."""
-    records = read_log(log_path)
+def _scan_records(root: Path, since: str | None = None) -> list[dict[str, Any]]:
+    """Read all task JSONL records under a directory tree."""
+    records: list[dict[str, Any]] = []
+    if not root.exists():
+        return records
+
+    for path in root.rglob("*.jsonl"):
+        records.extend(read_jsonl(path))
 
     if since:
         since_dt = _parse_iso(since)
@@ -278,11 +412,70 @@ def report(log_path: str | Path = DEFAULT_LOG_PATH, since: str | None = None) ->
             >= since_dt
         ]
 
+    return records
+
+
+def report(
+    target: str | Path | None = None,
+    since: str | None = None,
+    project_slug: str | None = None,
+) -> str:
+    """Generate a text summary of recorded executions.
+
+    ``target`` may be:
+    - a project slug (scans the whole project archive)
+    - a run directory path (scans that run)
+    - a single task JSONL file
+    - ``None`` (derives project slug from cwd and scans its archive)
+    """
+    root: Path
+
+    if target is not None:
+        path = Path(target).expanduser()
+        if path.is_file() and path.suffix == ".jsonl":
+            records = read_jsonl(path)
+            if since:
+                since_dt = _parse_iso(since)
+                records = [
+                    r
+                    for r in records
+                    if _parse_iso(
+                        r.get("start_time") or r.get("timestamp") or "1970-01-01T00:00:00Z"
+                    )
+                    >= since_dt
+                ]
+            summaries = [r for r in records if r.get("type") == "run_summary"]
+            stages = [r for r in records if r.get("type") == "stage"]
+            return _format_report(summaries, stages, [], [], 1 if records else 0)
+
+        if path.is_dir():
+            root = path
+        else:
+            root = archive_dir() / path
+    elif project_slug:
+        root = archive_dir() / project_slug
+    else:
+        root = archive_dir() / derive_project_slug()
+
+    records = _scan_records(root, since=since)
     summaries = [r for r in records if r.get("type") == "run_summary"]
     stages = [r for r in records if r.get("type") == "stage"]
     loops = [r for r in records if r.get("type") == "loop"]
     environment_issues = [r for r in records if r.get("type") == "environment_issue"]
 
+    runs_observed = len({r.get("run_id") for r in records if r.get("run_id")})
+    return _format_report(
+        summaries, stages, loops, environment_issues, runs_observed
+    )
+
+
+def _format_report(
+    summaries: list[dict[str, Any]],
+    stages: list[dict[str, Any]],
+    loops: list[dict[str, Any]],
+    environment_issues: list[dict[str, Any]],
+    runs_observed: int,
+) -> str:
     total_runs = len(summaries)
     total_wall = sum(r.get("wall_clock_seconds", 0.0) for r in summaries)
     total_spawned = sum(r.get("tasks_spawned", 0) for r in summaries)
@@ -293,6 +486,7 @@ def report(log_path: str | Path = DEFAULT_LOG_PATH, since: str | None = None) ->
         "AE Toolkit Execution Report",
         "=" * 40,
         f"Runs: {total_runs}",
+        f"Runs observed: {runs_observed}",
         f"Tasks spawned: {total_spawned}",
         f"Succeeded: {total_succeeded}",
         f"Failed: {total_failed}",

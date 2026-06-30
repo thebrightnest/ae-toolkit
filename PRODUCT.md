@@ -63,7 +63,7 @@ Keep projects and the toolkit itself healthy.
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
 | `.skill` packages      | Skills are distributed as plain zip archives of the skill directory, installable anywhere.               |
 | `make install-skills`  | Symlinks all skills to `~/.claude/skills/` for local agent use.                                          |
-| `install-aet-binaries` | Installs skill executables such as `ingest-telemetry` and `mine-learnings` on `PATH`.                    |
+| `install-aet-binaries` | Installs skill executables such as `mine-learnings` on `PATH`.                                           |
 | Git                    | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required. |
 
 ---

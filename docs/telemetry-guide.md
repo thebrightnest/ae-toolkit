@@ -1,21 +1,35 @@
 # Telemetry Guide for AET Projects
 
-This guide explains how to enable, archive, and use telemetry from projects that run the AE Toolkit (`aet-work`). The telemetry is **opt-in per project**, local-first, and designed to feed `aet-evolve` so the toolkit can learn from recurring loops, environment issues, and pipeline inefficiencies across projects.
+This guide explains how telemetry works in projects that run the AE Toolkit
+(`aet-work`). Telemetry is **local-first** and written directly to the user-level
+archive so it survives project worktree deletion. `aet-evolve mine-learnings`
+reads the archive when you want cross-project analysis.
 
 ## What gets recorded
 
-When `aet-work` runs a task, it writes three kinds of artifacts:
+When `aet-work` runs a task, the orchestrator writes directly to:
 
-- `.agents/execution.log.jsonl` — append-only events emitted by the orchestrator:
-  - stage start/end
-  - internal loops (test retries, format fixes, etc.)
-  - environment/dependency issues
-  - individual test runs
-  - learning candidates
-- `.agents/work-history.jsonl` — settled (merged or abandoned) tasks.
-- `/tmp/aet-reports/{task-id}/` — markdown reports from QA, review, CSO, and verification stages.
+```
+~/.aet/telemetry/{project-slug}/{date}/{run-id}/
+    ├── last-run.json
+    ├── {task-id}.jsonl
+    └── ...
+```
 
-No external service is used. Logs stay in the project until you explicitly archive them.
+Each task JSONL file contains:
+
+- stage start/end
+- internal loops (test retries, format fixes, etc.)
+- environment/dependency issues
+- individual test runs
+- learning candidates
+
+`last-run.json` records the run outcome, task counts, and wall-clock time.
+
+`.agents/work-history.jsonl` remains project-local for now. A copy is archived
+with each run so terminal task history is preserved alongside execution logs.
+
+No external service is used. Logs stay on your local filesystem.
 
 ## Enabling telemetry in a project
 
@@ -31,20 +45,17 @@ No external service is used. Logs stay in the project until you explicitly archi
    aet-work run-one docs/plans/some-plan.md
    ```
 
-   The orchestrator creates `.agents/execution.log.jsonl` automatically on first run.
+   The orchestrator creates the archive directory automatically on first run
+   and prints the path when it finishes.
 
-3. Add `.agents/execution.log.jsonl` and `/tmp/aet-reports/` to `.gitignore`:
-
-   ```gitignore
-   .agents/execution.log.jsonl
-   /tmp/aet-reports/
-   ```
-
-   Logs are not meant to be committed.
+3. Add `~/.aet/telemetry/` and `aet-work.log` to your personal ignore rules if
+   desired. These paths are outside the project, so no project `.gitignore`
+   changes are required for telemetry.
 
 ## Configuring worktree dependency warmup
 
-If new worktrees are missing dependency directories (`node_modules`, `vendor`, etc.), record the symlinks in `.agents/aet-work.json`:
+If new worktrees are missing dependency directories (`node_modules`, `vendor`,
+etc.), record the symlinks in `.agents/aet-work.json`:
 
 ```json
 {
@@ -55,37 +66,11 @@ If new worktrees are missing dependency directories (`node_modules`, `vendor`, e
 }
 ```
 
-The orchestrator creates these symlinks once per task, before any stage runs, and emits an `environment_issue` telemetry event so the pattern can be mined later.
+The orchestrator creates these symlinks once per task, before any stage runs,
+and emits an `environment_issue` telemetry event so the pattern can be mined
+later.
 
-## Archiving telemetry for cross-project learning
-
-To copy a project's telemetry into the user-level archive:
-
-```bash
-aet-evolve ingest-telemetry
-```
-
-By default this reads:
-
-- `.agents/execution.log.jsonl`
-- `.agents/work-history.jsonl`
-- `/tmp/aet-reports/**/*.md`
-
-and writes a sanitized copy to:
-
-```
-~/.aet/telemetry/{project-slug}/{date}-{run-id}/
-```
-
-Repository paths are hashed and a `project_id`/`repo_slug` header is added. Originals are left untouched.
-
-### When to archive
-
-- After a meaningful milestone.
-- Before deleting old reports or pruning `/tmp/aet-reports/`.
-- Whenever you want `aet-evolve mine-learnings` to include recent runs.
-
-## Mining archived runs
+## Mining telemetry for systemic patterns
 
 To surface recurring patterns across projects:
 
@@ -101,7 +86,8 @@ This scans `~/.aet/telemetry/` and produces a ranked markdown report of:
 - review/CSO noise classifications
 - stage failure patterns
 
-With `--propose`, it prints suggested edits to skill files but **never writes them directly**.
+With `--propose`, it prints suggested edits to skill files but **never writes
+them directly**.
 
 ## Reviewing a single run
 
@@ -110,6 +96,7 @@ For a quick text summary of recent runs:
 ```bash
 aet-work report
 aet-work report --since 2026-06-01
+aet-work report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
 ```
 
 This prints counts of stages, loops, environment issues, and wall-clock time.
@@ -117,15 +104,17 @@ This prints counts of stages, loops, environment issues, and wall-clock time.
 ## Privacy and retention
 
 - Telemetry is stored on the local filesystem only.
-- Absolute paths are hashed during ingest.
-- Secrets are not collected; if a secret appears in a report, treat the report as sensitive and delete it.
-- Retention is manual: delete old directories under `~/.aet/telemetry/` when no longer needed.
+- Absolute paths are sanitized to `{REPO_ROOT}` and `{HOME}` placeholders at
+  write time.
+- Secrets are not collected; if a secret appears in a log, treat the file as
+  sensitive and delete it.
+- Retention is manual: delete old directories under `~/.aet/telemetry/` when no
+  longer needed.
 
 ## Troubleshooting
 
-| Symptom                              | Fix                                                                     |
-| ------------------------------------ | ----------------------------------------------------------------------- |
-| `~/.aet/telemetry/` is empty         | Run `aet-evolve ingest-telemetry` from the project directory.           |
-| Reports are missing from the archive | Ensure `/tmp/aet-reports/` has not been cleaned yet.                    |
-| `mine-learnings` finds no patterns   | Archive more runs or extend the date range.                             |
-| Dependency warmup does not run       | Verify `.agents/aet-work.json` exists and the source paths are correct. |
+| Symptom                            | Fix                                                                     |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `~/.aet/telemetry/` is empty       | Run `aet-work run-one` or `aet-work run` at least once.                 |
+| `mine-learnings` finds no patterns | Run more tasks or extend the date range.                                |
+| Dependency warmup does not run     | Verify `.agents/aet-work.json` exists and the source paths are correct. |

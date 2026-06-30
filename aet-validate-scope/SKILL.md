@@ -60,12 +60,13 @@ Check the current plan/PRD against existing documentation and code. Surface cont
    - Vague or overloaded language that should be sharpened
    - Stated behavior that contradicts existing code
    - Architectural decisions that contradict existing ADRs
-6. **Closure Check** — before declaring scope validated, verify the handoff artifacts exist:
+6. **Pipeline field validation** — if a plan frontmatter contains `pipeline`, verify the value is one of `minimal`, `standard`, or `full`. Any other value is a validation failure. Warn if a high-risk change (auth, data models, API, dependencies) uses `minimal`.
+7. **Closure Check** — before declaring scope validated, verify the handoff artifacts exist:
    - At least one `docs/plans/*.md` file references the PRD (via Context or frontmatter).
    - Every such plan file is present in `.agents/work-queue.json`.
    - If either check fails, stop and redirect: do not update the PRD footer to `scope-validated`.
-7. Present findings as a concise list (not a 20-question interview)
-8. Ask **targeted questions** about the gaps found — one at a time
+8. Present findings as a concise list (not a 20-question interview)
+9. Ask **targeted questions** about the gaps found — one at a time
 
 **Rules:**
 

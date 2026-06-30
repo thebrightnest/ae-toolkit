@@ -1,8 +1,17 @@
 # Telemetry Log Schema
 
-The orchestrator writes execution telemetry to `.agents/execution.log.jsonl`. The log is append-only and newline-delimited JSON. Each line is a self-contained record.
+The orchestrator writes execution telemetry directly to the user-level archive:
 
-For instructions on enabling telemetry in a project, archiving it, and mining it across projects, see `../../docs/telemetry-guide.md`.
+```
+~/.aet/telemetry/{project-slug}/{date}/{run-id}/
+    ├── last-run.json
+    ├── {task-id}.jsonl
+    └── ...
+```
+
+Each `{task-id}.jsonl` file is append-only and newline-delimited JSON. Each line is a self-contained record. `last-run.json` is a single JSON object containing the run summary.
+
+For instructions on enabling telemetry and mining it across projects, see `../../docs/telemetry-guide.md`.
 
 ## Record Types
 
@@ -32,7 +41,7 @@ One record per pipeline stage executed for a task.
 
 ### `run_summary`
 
-One record per orchestrator run.
+One record per orchestrator run, stored as `last-run.json`.
 
 | Field                         | Type    | Description                                    |
 | ----------------------------- | ------- | ---------------------------------------------- |
@@ -128,15 +137,19 @@ Use the `aet-work report` command to print a text summary:
 ```bash
 python3 ~/.claude/skills/aet-work/bin/report
 python3 ~/.claude/skills/aet-work/bin/report --since 2026-06-15T00:00:00Z
+python3 ~/.claude/skills/aet-work/bin/report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
 ```
 
 Or read the log programmatically via `aet-work/lib/telemetry.py`:
 
 ```python
-from telemetry import read_log, report
+from telemetry import RunLogger, report
 
-records = read_log(".agents/execution.log.jsonl")
-print(report(".agents/execution.log.jsonl"))
+logger = RunLogger("/path/to/repo")
+logger.append_record({...}, task_id="FEAT-001")
+
+# Summarize the current project's archive
+print(report())
 ```
 
 ## Guarantees
@@ -144,3 +157,4 @@ print(report(".agents/execution.log.jsonl"))
 - Append-only: existing lines are never modified.
 - Null-safe: optional fields may be `null` but are always present in the schema.
 - Resilient: malformed lines are skipped when reading.
+- Per-task files: each task writes to its own JSONL file, eliminating concurrent-write races.

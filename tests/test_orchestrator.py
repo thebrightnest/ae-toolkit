@@ -13,6 +13,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+# Ensure the aet-work lib is on the path before importing telemetry.
+sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
+
 import telemetry
 from cli_adapter import CLIAdapter
 from pipeline import Stage
@@ -76,6 +79,14 @@ def _make_args(repo_root: str, plan_file: str) -> argparse.Namespace:
         isolation="standard",
         max_jobs=4,
     )
+
+
+def _archive_env(archive_dir: str) -> dict[str, str]:
+    """Return an environment overlay that sends telemetry to a temp archive."""
+    env = os.environ.copy()
+    env["AET_TELEMETRY_ARCHIVE_DIR"] = archive_dir
+    env["AET_RUN_ID"] = "run-test"
+    return env
 
 
 class TestEnforceMainHygiene(unittest.TestCase):
@@ -256,33 +267,36 @@ class TestDependencyWarmup(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            log_path = os.path.join(repo_root, ".agents", "execution.log.jsonl")
-            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as archive_dir:
+                env = _archive_env(archive_dir)
+                with patch.dict(os.environ, env, clear=False):
+                    logger = telemetry.RunLogger(repo_root, run_id="r1")
+                task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
-            with patch.object(orchestrator, "run_stage", return_value=0):
-                with patch.object(
-                    orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                ):
+                with patch.object(orchestrator, "run_stage", return_value=0):
                     with patch.object(
-                        orchestrator,
-                        "verify_stage_advancement",
-                        return_value=(True, ""),
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
                     ):
-                        result = orchestrator.process_task(
-                            task, repo_root, _FAKE_ADAPTER, "standard", run_id="r1"
-                        )
+                        with patch.object(
+                            orchestrator,
+                            "verify_stage_advancement",
+                            return_value=(True, ""),
+                        ):
+                            result = orchestrator.process_task(
+                                task, repo_root, _FAKE_ADAPTER, "standard", logger=logger
+                            )
 
-            self.assertTrue(result)
-            worktree_dir = os.path.join(repo_root, ".worktrees", "demo")
-            node_link = Path(worktree_dir, "app", "node_modules")
-            self.assertTrue(node_link.is_symlink())
-            self.assertTrue(
-                node_link.resolve().samefile(Path(repo_root, "app", "node_modules"))
-            )
+                self.assertTrue(result)
+                worktree_dir = os.path.join(repo_root, ".worktrees", "demo")
+                node_link = Path(worktree_dir, "app", "node_modules")
+                self.assertTrue(node_link.is_symlink())
+                self.assertTrue(
+                    node_link.resolve().samefile(Path(repo_root, "app", "node_modules"))
+                )
 
-            records = telemetry.read_log(log_path)
-            issues = [r for r in records if r.get("type") == "environment_issue"]
-            self.assertEqual(len(issues), 0)
+                records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                issues = [r for r in records if r.get("type") == "environment_issue"]
+                self.assertEqual(len(issues), 0)
 
 
 class TestEnvironmentIssueEmission(unittest.TestCase):
@@ -321,28 +335,31 @@ class TestEnvironmentIssueEmission(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            log_path = os.path.join(repo_root, ".agents", "execution.log.jsonl")
-            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as archive_dir:
+                env = _archive_env(archive_dir)
+                with patch.dict(os.environ, env, clear=False):
+                    logger = telemetry.RunLogger(repo_root, run_id="r1")
+                task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
-            with patch.object(orchestrator, "run_stage", return_value=0):
-                with patch.object(
-                    orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                ):
+                with patch.object(orchestrator, "run_stage", return_value=0):
                     with patch.object(
-                        orchestrator,
-                        "verify_stage_advancement",
-                        return_value=(True, ""),
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
                     ):
-                        result = orchestrator.process_task(
-                            task, repo_root, _FAKE_ADAPTER, "standard", run_id="r1"
-                        )
+                        with patch.object(
+                            orchestrator,
+                            "verify_stage_advancement",
+                            return_value=(True, ""),
+                        ):
+                            result = orchestrator.process_task(
+                                task, repo_root, _FAKE_ADAPTER, "standard", logger=logger
+                            )
 
-            self.assertTrue(result)
-            records = telemetry.read_log(log_path)
-            issues = [r for r in records if r.get("type") == "environment_issue"]
-            self.assertEqual(len(issues), 1)
-            self.assertEqual(issues[0]["run_id"], "r1")
-            self.assertEqual(issues[0]["task_id"], "demo")
+                self.assertTrue(result)
+                records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                issues = [r for r in records if r.get("type") == "environment_issue"]
+                self.assertEqual(len(issues), 1)
+                self.assertEqual(issues[0]["run_id"], "r1")
+                self.assertEqual(issues[0]["task_id"], "demo")
             self.assertEqual(issues[0]["dependency"], "app/node_modules")
             self.assertEqual(issues[0]["issue_type"], "missing_dependency")
 
@@ -610,66 +627,66 @@ class TestRunSummaryTelemetry(unittest.TestCase):
 
     def test_run_summary_written_on_success(self):
         with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            log_path = os.path.join(repo_root, ".agents", "execution.log.jsonl")
-            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
-            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
-            Path(plan_file).write_text(
-                "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
-                encoding="utf-8",
-            )
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
-                check=True,
-            )
-            # Refresh origin/main so hygiene passes.
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
+            with tempfile.TemporaryDirectory() as archive_dir:
+                _init_git_repo(repo_root)
+                plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+                Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+                Path(plan_file).write_text(
+                    "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                    encoding="utf-8",
+                )
+                subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                    check=True,
+                )
+                # Refresh origin/main so hygiene passes.
+                subprocess.run(
+                    ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                    check=True,
+                )
 
-            args = _make_args(repo_root, plan_file)
-            with patch.object(orchestrator, "process_task", return_value=True):
-                exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
-            self.assertEqual(exit_code, 0)
+                args = _make_args(repo_root, plan_file)
+                with patch.dict(os.environ, _archive_env(archive_dir), clear=False):
+                    with patch.object(orchestrator, "process_task", return_value=True):
+                        exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+                self.assertEqual(exit_code, 0)
 
-            records = telemetry.read_log(log_path)
-            summaries = [r for r in records if r.get("type") == "run_summary"]
-            self.assertEqual(len(summaries), 1)
-            self.assertEqual(summaries[0]["exit_code"], 0)
-            self.assertEqual(summaries[0]["outcome"], "success")
+                last_run = Path(archive_dir).glob("*/*/*/*/last-run.json")
+                summary = json.loads(next(iter(last_run)).read_text(encoding="utf-8"))
+                self.assertEqual(summary["exit_code"], 0)
+                self.assertEqual(summary["outcome"], "success")
 
     def test_run_summary_written_on_failure(self):
         with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            log_path = os.path.join(repo_root, ".agents", "execution.log.jsonl")
-            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
-            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
-            Path(plan_file).write_text(
-                "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
-                encoding="utf-8",
-            )
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
+            with tempfile.TemporaryDirectory() as archive_dir:
+                _init_git_repo(repo_root)
+                plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+                Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+                Path(plan_file).write_text(
+                    "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                    encoding="utf-8",
+                )
+                subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                    check=True,
+                )
 
-            args = _make_args(repo_root, plan_file)
-            with patch.object(orchestrator, "process_task", return_value=False):
-                exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
-            self.assertEqual(exit_code, 1)
+                args = _make_args(repo_root, plan_file)
+                with patch.dict(os.environ, _archive_env(archive_dir), clear=False):
+                    with patch.object(orchestrator, "process_task", return_value=False):
+                        exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+                self.assertEqual(exit_code, 1)
 
-            records = telemetry.read_log(log_path)
-            summaries = [r for r in records if r.get("type") == "run_summary"]
-            self.assertEqual(len(summaries), 1)
-            self.assertEqual(summaries[0]["exit_code"], 1)
-            self.assertEqual(summaries[0]["outcome"], "failure")
+                last_run = Path(archive_dir).glob("*/*/*/*/last-run.json")
+                summary = json.loads(next(iter(last_run)).read_text(encoding="utf-8"))
+                self.assertEqual(summary["exit_code"], 1)
+                self.assertEqual(summary["outcome"], "failure")
 
 
 class TestRunStageGroup(unittest.TestCase):
