@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.9.0] — 2026-06-30
+
+### Added
+
+- **Direct telemetry archive** — the orchestrator writes per-task JSONL logs directly to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/`, so telemetry survives project worktree deletion.
+- **Per-task telemetry files** — each task writes to its own JSONL file, eliminating concurrent-write races on a shared project log.
+- **Run completion status** — every orchestrator run writes a `last-run.json` summary with outcome, task counts, and wall-clock time.
+- **Plan-level pipeline override** — plans can declare `pipeline: minimal|standard|full` in YAML frontmatter to control orchestrator isolation per task.
+
+### Changed
+
+- **aet-evolve**: `mine-learnings` now reads the dated archive layout directly; `ingest-telemetry` is no longer required.
+- **aet-work**: `report` summarizes telemetry from the archive instead of `.agents/execution.log.jsonl`.
+- **aet-plan**: plan frontmatter now documents the optional `pipeline` field.
+- **aet-validate-scope**: validates `pipeline` frontmatter values when present.
+
+### Removed
+
+- **aet-evolve**: Removed `ingest-telemetry`; the orchestrator archives telemetry automatically at write time.
+- **aet-work**: No longer creates `.agents/execution.log.jsonl`.
+
+### Documentation
+
+- Updated `docs/telemetry-guide.md` for the direct-archive flow.
+- Added ADR-012 documenting the direct telemetry archive and per-task logs.
+
+---
+
 ## [0.8.0] — 2026-06-22
 
 ### Added

@@ -4,9 +4,9 @@ A modular skill suite for AI coding agents. Each skill is a self-contained packa
 
 ---
 
-## Current Version: 0.8.0
+## Current Version: 0.9.0
 
-Last updated: 2026-06-22
+Last updated: 2026-06-30
 
 ---
 
@@ -69,6 +69,13 @@ Keep projects and the toolkit itself healthy.
 ---
 
 ## What's New
+
+### What's New in v0.9.0
+
+- **Telemetry that never gets lost** — `aet-work` writes execution logs directly to the user-level archive, so background runs and deleted worktrees no longer lose telemetry before it can be mined.
+- **One-click cross-project learning** — `aet-evolve mine-learnings` reads the archive directly without a manual `ingest-telemetry` step.
+- **Right-sized isolation per task** — plans can declare `pipeline: minimal|standard|full` so low-risk tasks run faster and high-risk changes keep full stage isolation.
+- **Run health at a glance** — every orchestrator run produces a `last-run.json` summary with success/failure counts and total time.
 
 ### What's New in v0.8.0
 
