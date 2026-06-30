@@ -3,6 +3,7 @@ id: [plan-id]
 size: [S/M/L]
 blocked_by:
   - [blocker-plan-id]
+pipeline: standard
 ---
 
 # Plan: [Feature Name]
@@ -53,6 +54,20 @@ If a task exceeds the agent session limit (≤ 4 hr / ≤ 8 files / ≤ 300 line
 ## Rollback Plan
 
 How to undo this change if something goes wrong.
+
+## Pipeline
+
+`pipeline` controls how the orchestrator runs this plan. It is set in the
+frontmatter and is read by `aet-work run`/`run-one`.
+
+| Value      | Behavior                                            |
+| ---------- | --------------------------------------------------- |
+| `standard` | Default grouping (TDD→implement→QA, review, CSO)    |
+| `minimal`  | All stages in one session; fastest, least isolation |
+| `full`     | One session per stage; slowest, maximum isolation   |
+
+Only change this after considering task risk. Auth, data-model, API, and
+dependency changes should usually use `standard` or `full`.
 
 ---
 

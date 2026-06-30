@@ -38,7 +38,7 @@ With optional flags to override sensible defaults.
 
 ### `install-binaries`
 
-Put AET skill binaries on `PATH` so skills like `aet-work`, `aet-ship`, and `aet-evolve` can invoke their helpers (`aet-state`, `orchestrator`, `ingest-telemetry`, etc.).
+Put AET skill binaries on `PATH` so skills like `aet-work`, `aet-ship`, and `aet-evolve` can invoke their helpers (`aet-state`, `orchestrator`, `mine-learnings`, etc.).
 
 **Procedure:**
 
@@ -360,7 +360,7 @@ See `aet-setup/references/README.md` for the full artifact list. Key outputs inc
 When creating `.agents/`, ensure `.gitignore` excludes generated workflow artifacts:
 
 ```gitignore
-.agents/execution.log.jsonl
+.agents/work-history.jsonl
 aet-work.log
 aet-work-*.log
 ```

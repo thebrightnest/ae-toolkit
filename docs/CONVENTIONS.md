@@ -292,7 +292,7 @@ Every toolkit-relevant retro must contain:
 
 Run `aet-evolve --toolkit` periodically (monthly, or after every 5 retros) to scan `reports/*.md` files with `toolkit-relevant: true` and propose toolkit-level changes. See `aet-evolve/SKILL.md` for the full procedure.
 
-Run `aet-evolve/bin/ingest-telemetry` after significant project runs to archive `.agents/execution.log.jsonl`, `.agents/work-history.jsonl`, and `/tmp/aet-reports/{task-id}/*.md` under `~/.aet/telemetry/{project-slug}/{date}-{run_id}/`. Then run `aet-evolve/bin/mine-learnings` to scan the archive for recurring patterns (dependency issues, repeated loops, stage failures, review noise) and propose toolkit-level skill edits.
+The orchestrator writes execution telemetry directly to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/`. Run `aet-evolve/bin/mine-learnings` periodically to scan the archive for recurring patterns (dependency issues, repeated loops, stage failures, review noise) and propose toolkit-level skill edits.
 
 ## Build System
 

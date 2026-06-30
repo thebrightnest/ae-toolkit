@@ -147,12 +147,14 @@ Break the PRD into vertically-sliced, independently implementable tickets.
    size: S/M/L
    blocked_by:
      - { blocker-id }
+   pipeline: standard
    ---
    ```
 
    - `id` must match the plan filename stem and must be unique within the PRD.
    - `blocked_by` is a list of blocking task IDs; an empty list means no blockers.
    - `size` is the S/M/L complexity label. `stage` lives only in the task record, never in frontmatter.
+   - `pipeline` is optional and controls orchestrator isolation: `minimal` (all stages in one session), `standard` (default stage grouping), or `full` (one session per stage).
 
 8. **Queue handoff.** After all plan files are written, run `aet-work sync` to add them to `.agents/work-queue.json`. Do not write `.agents/work-queue.json` directly from this skill. Do not mark the command complete until the queue contains the new plan files.
 

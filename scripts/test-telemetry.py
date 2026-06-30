@@ -111,42 +111,54 @@ class TestRunSummaryRecord(unittest.TestCase):
         self.assertEqual(record["concurrency_cap"], 4)
 
 
-class TestAppendAndRead(unittest.TestCase):
-    def test_append_record_creates_log_and_writes_jsonl(self):
+class TestRunLogger(unittest.TestCase):
+    def test_run_logger_creates_archive_run_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = Path(tmpdir) / "execution.log.jsonl"
-            record = {"type": "stage", "task_id": "t1"}
-            telemetry.append_record(record, log_path)
+            logger = telemetry.RunLogger(tmpdir, run_id="run-1", date="2026-06-30")
+            self.assertTrue(logger.run_dir.exists())
+            self.assertIn("run-1", str(logger.run_dir))
+            self.assertIn("2026-06-30", str(logger.run_dir))
 
-            self.assertTrue(log_path.exists())
-            lines = log_path.read_text().strip().splitlines()
+    def test_append_record_writes_per_task_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            logger = telemetry.RunLogger(tmpdir, run_id="run-1")
+            record = {"type": "stage", "task_id": "t1"}
+            logger.append_record(record, task_id="t1")
+
+            task_log = logger.task_log_path("t1")
+            self.assertTrue(task_log.exists())
+            lines = task_log.read_text().strip().splitlines()
             self.assertEqual(len(lines), 1)
             self.assertEqual(json.loads(lines[0]), record)
 
-    def test_append_is_append_only(self):
+    def test_append_record_sanitizes_paths(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = Path(tmpdir) / "execution.log.jsonl"
-            telemetry.append_record({"type": "stage", "task_id": "t1"}, log_path)
-            telemetry.append_record({"type": "stage", "task_id": "t2"}, log_path)
+            resolved = Path(tmpdir).resolve()
+            logger = telemetry.RunLogger(resolved, run_id="run-1")
+            record = {"plan_file": str(resolved / "docs" / "plans" / "x.md")}
+            logger.append_record(record, task_id="t1")
 
-            lines = log_path.read_text().strip().splitlines()
-            self.assertEqual(len(lines), 2)
-            self.assertEqual(json.loads(lines[1])["task_id"], "t2")
+            task_log = logger.task_log_path("t1")
+            lines = task_log.read_text().strip().splitlines()
+            parsed = json.loads(lines[0])
+            self.assertEqual(parsed["plan_file"], "{REPO_ROOT}/docs/plans/x.md")
 
-    def test_read_log_skips_invalid_lines(self):
+    def test_write_last_run(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = Path(tmpdir) / "execution.log.jsonl"
-            log_path.write_text('{"type": "stage"}\nnot json\n{"type": "run_summary"}\n')
-            records = telemetry.read_log(log_path)
+            logger = telemetry.RunLogger(tmpdir, run_id="run-1")
+            summary = telemetry.run_summary_record(
+                run_id="run-1",
+                start_time="2026-06-15T14:51:53Z",
+                end_time="2026-06-15T14:55:13Z",
+                tasks_spawned=1,
+                tasks_succeeded=1,
+                tasks_failed=0,
+            )
+            logger.write_last_run(summary)
 
-            self.assertEqual(len(records), 2)
-            self.assertEqual(records[0]["type"], "stage")
-            self.assertEqual(records[1]["type"], "run_summary")
-
-    def test_read_log_missing_returns_empty(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = Path(tmpdir) / "missing.log.jsonl"
-            self.assertEqual(telemetry.read_log(log_path), [])
+            last_run = logger.run_dir / "last-run.json"
+            self.assertTrue(last_run.exists())
+            self.assertEqual(json.loads(last_run.read_text())["type"], "run_summary")
 
 
 class TestReport(unittest.TestCase):
@@ -196,11 +208,13 @@ class TestReport(unittest.TestCase):
 
     def test_report_summary(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = Path(tmpdir) / "execution.log.jsonl"
-            for record in self.sample_records():
-                telemetry.append_record(record, log_path)
+            logger = telemetry.RunLogger(tmpdir, run_id="run-1", date="2026-06-15")
+            for record in self.sample_records()[:3]:
+                logger.append_record(record, task_id="FEAT-001")
+            logger2 = telemetry.RunLogger(tmpdir, run_id="run-2", date="2026-06-16")
+            logger2.append_record(self.sample_records()[3], task_id="FEAT-003")
 
-            output = telemetry.report(log_path)
+            output = telemetry.report(logger.run_dir.parent.parent)
             self.assertIn("Runs: 2", output)
             self.assertIn("Tasks spawned: 3", output)
             self.assertIn("Succeeded: 2", output)
@@ -209,20 +223,22 @@ class TestReport(unittest.TestCase):
 
     def test_report_average_isolation(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = Path(tmpdir) / "execution.log.jsonl"
-            for record in self.sample_records():
-                telemetry.append_record(record, log_path)
+            logger = telemetry.RunLogger(tmpdir, run_id="run-1", date="2026-06-15")
+            for record in self.sample_records()[:3]:
+                logger.append_record(record, task_id="FEAT-001")
 
-            output = telemetry.report(log_path)
+            output = telemetry.report(logger.run_dir)
             self.assertIn("Average isolation level: minimal", output)
 
     def test_report_since_filters_records(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            log_path = Path(tmpdir) / "execution.log.jsonl"
-            for record in self.sample_records():
-                telemetry.append_record(record, log_path)
+            logger = telemetry.RunLogger(tmpdir, run_id="run-1", date="2026-06-15")
+            for record in self.sample_records()[:3]:
+                logger.append_record(record, task_id="FEAT-001")
+            logger2 = telemetry.RunLogger(tmpdir, run_id="run-2", date="2026-06-16")
+            logger2.append_record(self.sample_records()[3], task_id="FEAT-003")
 
-            output = telemetry.report(log_path, since="2026-06-16T00:00:00Z")
+            output = telemetry.report(logger.run_dir.parent.parent, since="2026-06-16T00:00:00Z")
             self.assertIn("Runs: 1", output)
             self.assertIn("Tasks spawned: 1", output)
             self.assertIn("Succeeded: 0", output)

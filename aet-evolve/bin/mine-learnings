@@ -3,6 +3,12 @@
 
 Reads both structured JSONL records and narrative markdown reports so it can
 surface patterns the toolkit authors did not explicitly instrument.
+
+Archive layout:
+    ~/.aet/telemetry/{project-slug}/{date}/{run-id}/
+        ├── last-run.json
+        ├── {task-id}.jsonl
+        └── ... reports and evidence
 """
 
 from __future__ import annotations
@@ -11,7 +17,6 @@ import argparse
 import json
 import os
 import re
-import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -127,6 +132,16 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def read_json(path: Path) -> dict[str, Any] | None:
+    """Read a single JSON object, returning None on error."""
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def read_markdown_reports(run_dir: Path) -> list[tuple[Path, str]]:
     """Read all markdown files under a run archive directory."""
     results: list[tuple[Path, str]] = []
@@ -179,42 +194,45 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
     for project_dir in sorted(archive_dir.glob("*")):
         if not project_dir.is_dir():
             continue
-        for run_dir in sorted(project_dir.glob("*")):
-            if not run_dir.is_dir():
+        for date_dir in sorted(project_dir.glob("*")):
+            if not date_dir.is_dir():
                 continue
-            runs_scanned += 1
+            for run_dir in sorted(date_dir.glob("*")):
+                if not run_dir.is_dir():
+                    continue
+                runs_scanned += 1
 
-            exec_path = run_dir / "execution.log.jsonl"
-            records = read_jsonl(exec_path)
-            files_scanned += 1
+                for task_log in sorted(run_dir.glob("*.jsonl")):
+                    records = read_jsonl(task_log)
+                    files_scanned += 1
 
-            work_history_path = run_dir / "work-history.jsonl"
-            records.extend(read_jsonl(work_history_path))
-            files_scanned += 1
+                    for record in records:
+                        rtype = record.get("type")
+                        if rtype == "environment_issue":
+                            counts["dependency_issues"] += 1
+                        elif rtype == "loop":
+                            if record.get("iteration", 1) > 1:
+                                counts["repeated_loops"] += 1
+                            if "review" in str(record.get("loop_type", "")):
+                                counts["review_noise"] += 1
+                        elif rtype == "stage":
+                            if record.get("exit_code", 0) != 0:
+                                counts["stage_failures"] += 1
+                            if record.get("stage") == "review":
+                                counts["review_noise"] += 1
 
-            for record in records:
-                rtype = record.get("type")
-                if rtype == "environment_issue":
-                    counts["dependency_issues"] += 1
-                elif rtype == "loop":
-                    if record.get("iteration", 1) > 1:
-                        counts["repeated_loops"] += 1
-                    if "review" in str(record.get("loop_type", "")):
-                        counts["review_noise"] += 1
-                elif rtype == "stage":
-                    if record.get("exit_code", 0) != 0:
-                        counts["stage_failures"] += 1
-                    if record.get("stage") == "review":
-                        counts["review_noise"] += 1
+                last_run = read_json(run_dir / "last-run.json")
+                if last_run:
+                    files_scanned += 1
 
-            # Mine narrative markdown reports for patterns that were never
-            # explicitly instrumented.
-            for _path, text in read_markdown_reports(run_dir):
-                reports_scanned += 1
-                buckets = mine_narrative(text)
-                for category, bucket in buckets.items():
-                    counts[category] += bucket.count
-                    examples[category].extend(bucket.examples)
+                # Mine narrative markdown reports for patterns that were never
+                # explicitly instrumented.
+                for _path, text in read_markdown_reports(run_dir):
+                    reports_scanned += 1
+                    buckets = mine_narrative(text)
+                    for category, bucket in buckets.items():
+                        counts[category] += bucket.count
+                        examples[category].extend(bucket.examples)
 
     return {
         "dependency_issues": counts.get("dependency_issues", 0),

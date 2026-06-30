@@ -424,17 +424,13 @@ Your team has a mature codebase with documented domain language and ADRs. A new 
 You have multiple projects running `aet-work` and want the toolkit to learn from recurring inefficiencies.
 
 ```
-# In each project, ensure telemetry is enabled
+# In each project, telemetry is written automatically
 /aet-work run-one docs/plans/some-plan.md
-  → Creates .agents/execution.log.jsonl automatically
+  → Writes per-task JSONL logs to ~/.aet/telemetry/{project-slug}/{date}/{run-id}/
 
 # Configure dependency warmup once per project
 edit .agents/aet-work.json
   → symlink_dependencies for node_modules, vendor, etc.
-
-# After a milestone, archive the telemetry
-/aet-evolve ingest-telemetry
-  → Copies logs and reports to ~/.aet/telemetry/{project-slug}/{date}-{run_id}/
 
 # Mine the archive for systemic patterns
 /aet-evolve mine-learnings

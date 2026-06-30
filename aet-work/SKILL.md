@@ -167,15 +167,19 @@ pipefail`:
      > aet-work.log 2>&1 &
    ```
 
-   The orchestrator handles CLI detection, worktree management, parallel execution, and stage advancement automatically.
+   The orchestrator handles CLI detection, worktree management, parallel execution, and stage advancement automatically. It prints the telemetry archive path when the run finishes.
 
-4. **Concurrency cap:**
+4. **Per-plan pipeline override:**
+
+   A plan's frontmatter may declare `pipeline: minimal|standard|full`. The orchestrator uses this value instead of the `--isolation` default for that task. See `.agents/templates/plan-template.md`.
+
+5. **Concurrency cap:**
 
    - Default: `4` jobs (override with `AET_WORK_JOBS` env var), hard cap at 8
    - Override: set `AET_WORK_JOBS` environment variable
    - The orchestrator never exceeds the cap to prevent resource exhaustion
 
-5. **Resume behavior:**
+6. **Resume behavior:**
    - Re-running `run` resumes from the current queue state
    - Already-done or in-progress tasks with existing worktrees are skipped automatically
 
@@ -216,7 +220,10 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
    ```
 
 3. The orchestrator advances the plan through all stage groups sequentially.
-4. On completion, the branch is ready for `aet-ship`.
+4. Telemetry is written to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/` and the path is printed on completion.
+5. On completion, the branch is ready for `aet-ship`.
+
+**Pipeline override:** The plan's frontmatter `pipeline: minimal|standard|full` overrides the `--isolation` default for this task.
 
 **Queue bookkeeping:** When the plan file corresponds to a task already tracked in `.agents/work-queue.json`, `run-one` records the task's `branch` and `worktree`, transitions it to `in_progress` at the start of the run, and transitions it to `awaiting_merge` on success. This lets `aet-state record-merge` resolve the merge commit automatically after the PR ships. If the plan is not in the queue, or if `run-one` was spawned by `run` (`AET_TASK_ID` is set), the queue is left unchanged.
 
@@ -267,17 +274,19 @@ Reconcile stored state against git ground truth without mutating the queue. `aud
 
 ### `report`
 
-Print an execution telemetry summary from `.agents/execution.log.jsonl`.
+Print an execution telemetry summary from the archive.
 
 **Procedure:**
 
 1. Run `report`
-2. The helper reads `.agents/execution.log.jsonl` and prints:
+2. The helper scans `~/.aet/telemetry/{project-slug}/` and prints:
    - Total runs
    - Tasks spawned, succeeded, and failed
    - Total wall-clock time
    - Average isolation level observed across stage records
 3. Use `--since <ISO-8601-timestamp>` to restrict the summary to recent runs
+4. Use `--run-dir <path>` to summarize a single run
+5. Use `--task-log <path>` to summarize a single task
 
 **When to use:** After one or more orchestrator runs to inspect throughput, failure rate, and resource usage.
 
@@ -385,6 +394,6 @@ For the full one-time upgrade procedure for older projects that predate the forw
 - **Stored state, explicit audit** — `status`, `next`, and `run` read the recorded `state` field directly. `aet-state audit` reconciles stored state against git for human review, but never runs during normal operation.
 - **Live / settled partition** — the live queue holds only non-terminal tasks; terminal tasks are sealed to `.agents/work-history.jsonl` automatically.
 - **Stage as sub-state** — pipeline progress is recorded in the task record's `stage` field while `state == in_progress`, not inferred from plan footers.
-- **Execution telemetry** — `.agents/execution.log.jsonl` is an append-only record of stage and run-summary events produced by the orchestrator. Use `aet-work report` to summarize it.
+- **Execution telemetry** — the orchestrator writes per-task JSONL logs directly to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/`. Use `aet-work report` to summarize them.
 - **Worktree isolation** — each task gets its own branch; branches persist for independent review and PR.
 - **Drain on failure** — running tasks finish, new spawns halt. Preserves in-progress work while stopping the pipeline.

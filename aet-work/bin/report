@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """aet-work report — Print an execution telemetry summary.
 
-Reads `.agents/execution.log.jsonl` (or a custom path) and prints a text
-summary: runs, success/failure counts, wall-clock time, and average
-isolation level.
+Scans the telemetry archive for the current project (or a given project/run)
+and prints a text summary: runs, success/failure counts, wall-clock time,
+and average isolation level.
 """
 
 from __future__ import annotations
@@ -24,9 +24,19 @@ def parse_args() -> argparse.Namespace:
         description="Print execution telemetry summary.",
     )
     parser.add_argument(
-        "--log",
-        default=".agents/execution.log.jsonl",
-        help="Path to execution log JSONL file",
+        "--project",
+        default=None,
+        help="Project slug (defaults to the current repository)",
+    )
+    parser.add_argument(
+        "--run-dir",
+        default=None,
+        help="Path to a specific run directory in the archive",
+    )
+    parser.add_argument(
+        "--task-log",
+        default=None,
+        help="Path to a single task JSONL file",
     )
     parser.add_argument(
         "--since",
@@ -38,7 +48,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    print(telemetry.report(args.log, since=args.since), end="")
+
+    target = args.task_log or args.run_dir or args.project
+    print(telemetry.report(target=target, since=args.since), end="")
     return 0
 
 

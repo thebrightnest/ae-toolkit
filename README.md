@@ -53,7 +53,7 @@ npx skills add getatelier/ae-toolkit.git --all
 
 Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
 
-AET skills ship with helper binaries (`aet-state`, `orchestrator`, `ingest-telemetry`, etc.). After installing skills, put them on `PATH`:
+AET skills ship with helper binaries (`aet-state`, `orchestrator`, `mine-learnings`, etc.). After installing skills, put them on `PATH`:
 
 ```bash
 /aet-setup install-binaries
