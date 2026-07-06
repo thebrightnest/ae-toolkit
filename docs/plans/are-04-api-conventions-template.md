@@ -43,5 +43,5 @@ Part of [aet-setup reference evolution PRD](../prds/aet-setup-reference-evolutio
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
