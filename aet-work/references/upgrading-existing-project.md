@@ -27,7 +27,7 @@ The boundary is the **validated frontmatter contract**. Anything outside that co
 
 ### 1. Install the latest AET skills
 
-Update the skills in `~/.claude/skills/` (or wherever they are installed). For this repo that is done with:
+Update the skills in `~/.agents/skills/` (or wherever they are installed). For this repo that is done with:
 
 ```bash
 make install-skills
@@ -66,7 +66,7 @@ size: S | M | L
 Run the deprecated migration helper once to move terminal tasks that predate the automatic seal:
 
 ```bash
-python3 ~/.claude/skills/aet-work/bin/aet-state archive .agents/work-queue.json
+python3 ~/.agents/skills/aet-work/bin/aet-state archive .agents/work-queue.json
 ```
 
 This appends terminal tasks to `.agents/work-history.jsonl` and removes them from the live queue. The command prints what it sealed.
@@ -74,7 +74,7 @@ This appends terminal tasks to `.agents/work-history.jsonl` and removes them fro
 ### 5. Rebuild the live queue from plans
 
 ```bash
-python3 ~/.claude/skills/aet-work/bin/init-queue
+python3 ~/.agents/skills/aet-work/bin/init-queue
 ```
 
 This re-ingests every `docs/plans/*.md` using the new frontmatter contract and normalizes legacy statuses.
@@ -84,7 +84,7 @@ This re-ingests every `docs/plans/*.md` using the new frontmatter contract and n
 For any task whose branch is already merged to `origin/main` but the queue still shows it as active:
 
 ```bash
-python3 ~/.claude/skills/aet-work/bin/aet-state record-merge <task-id> .agents/work-queue.json
+python3 ~/.agents/skills/aet-work/bin/aet-state record-merge <task-id> .agents/work-queue.json
 ```
 
 Repeat for each merged task. The command resolves the real squash-merge SHA via `gh` (or a diff-equivalence fallback) and seals the task to history automatically.
@@ -92,7 +92,7 @@ Repeat for each merged task. The command resolves the real squash-merge SHA via 
 ### 7. Audit and clean up
 
 ```bash
-python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json
+python3 ~/.agents/skills/aet-work/bin/aet-state audit .agents/work-queue.json
 ```
 
 Fix any discrepancies by transitioning tasks to the correct state or recording merges.

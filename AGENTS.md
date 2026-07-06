@@ -37,7 +37,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 | Command                 | What it runs                                        |
 | ----------------------- | --------------------------------------------------- |
 | `make help`             | Show all available targets                          |
-| `make install-skills`   | Symlink all skills to `~/.claude/skills/`           |
+| `make install-skills`   | Symlink all skills to `~/.agents/skills/`           |
 | `make package`          | Zip every `*/SKILL.md` into `.skill` files          |
 | `make add-skill NAME=x` | Scaffold a new skill directory                      |
 | `make lint`             | markdownlint all markdown files                     |

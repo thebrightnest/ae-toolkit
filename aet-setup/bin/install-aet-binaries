@@ -104,7 +104,7 @@ if [ "$installed" -eq 0 ] && [ "$updated" -eq 0 ] && [ "$skipped" -eq 0 ]; then
   for root in "${SKILL_ROOTS[@]}"; do
     echo "  - $root"
   done
-  echo "Install skills first (e.g. 'npx skills add getatelier/ae-toolkit.git --all')."
+  echo "Install skills first (e.g. 'npx skills add getatelier/ae-toolkit --all')."
   exit 1
 fi
 

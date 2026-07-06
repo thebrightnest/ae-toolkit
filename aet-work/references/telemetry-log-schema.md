@@ -135,9 +135,9 @@ One record per pattern that `aet-evolve` may mine for toolkit-level learnings.
 Use the `aet-work report` command to print a text summary:
 
 ```bash
-python3 ~/.claude/skills/aet-work/bin/report
-python3 ~/.claude/skills/aet-work/bin/report --since 2026-06-15T00:00:00Z
-python3 ~/.claude/skills/aet-work/bin/report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
+python3 ~/.agents/skills/aet-work/bin/report
+python3 ~/.agents/skills/aet-work/bin/report --since 2026-06-15T00:00:00Z
+python3 ~/.agents/skills/aet-work/bin/report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
 ```
 
 Or read the log programmatically via `aet-work/lib/telemetry.py`:

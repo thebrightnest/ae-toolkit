@@ -18,7 +18,7 @@ Run this before designing any solution that touches a `SKILL.md`:
       `ls -la <skills-parent-dir>` BEFORE `mkdir`. Check whether existing skills are
       real directories or symlinks. If symlinks, create the new skill in the symlink
       target (the real repo), then add a symlink from the skills directory.
-      Never `mkdir` a new skill directly into `~/.claude/skills/` — it will be outside
+      Never `mkdir` a new skill directly into `~/.agents/skills/` — it will be outside
       the git repo and silently untracked.
 - [ ] **Package-deliverable rules** — every rule, guardrail, or convention this skill
       enforces must live inside the skill's packaged files (`SKILL.md`, `references/`,
