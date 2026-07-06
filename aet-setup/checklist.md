@@ -67,7 +67,9 @@ Use this checklist during every `/aet-setup` invocation. Every topic must be exp
 
 - [ ] `docs/CONVENTIONS.md` exists with structure, naming, error handling?
 - [ ] `docs/references/` exists with load-on-demand reference docs?
+- [ ] Each reference doc is copied from the matching `aet-setup/examples/*.example` template?
 - [ ] `docs/references/README.md` explains how to use the reference docs?
+- [ ] Reference docs are focused and free of bloat so they stay load-on-demand?
 - [ ] Root agent-context file (`AGENTS.md`, `CLAUDE.md`, etc.) contains a table pointing to each `docs/references/*.md` file?
 - [ ] `docs/adr/README.md` exists explaining ADRs?
 - [ ] `docs/adr/000-template.md` exists?
