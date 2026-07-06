@@ -16,7 +16,8 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import current_state, read_history, read_queue, record_task_meta, write_queue  # noqa: E402
+from backends.factory import create_backend  # noqa: E402
+from queue import current_state, record_task_meta  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,16 +40,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def plan_drift_detected(queue: list[dict], history: list[dict], plans_dir: Path) -> bool:
-    queued_files = {t.get("plan_file") for t in queue if t.get("plan_file")}
-    settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
-    plan_files = sorted(plans_dir.glob("*.md"))
-
-    orphaned = [
-        str(pf)
-        for pf in plan_files
-        if str(pf) not in queued_files and str(pf) not in settled_files
-    ]
+def plan_drift_detected(backend, plans_dir: Path) -> bool:
+    orphaned = backend.plan_drift(plans_dir)
 
     if orphaned:
         print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")
@@ -89,7 +82,7 @@ def pick_next_ready(queue: list[dict]) -> dict | None:
     return None
 
 
-def transition_task(queue_file: str, task: dict) -> bool:
+def transition_task(backend, task: dict) -> bool:
     """Transition a task to in_progress and record branch/worktree metadata."""
     task_id = task.get("id", "")
     from_state = current_state(task) or "ready"
@@ -101,7 +94,7 @@ def transition_task(queue_file: str, task: dict) -> bool:
             task_id,
             from_state,
             "in_progress",
-            queue_file,
+            backend.queue_file,
         ],
         capture_output=True,
         text=True,
@@ -110,21 +103,25 @@ def transition_task(queue_file: str, task: dict) -> bool:
         print(result.stderr, file=sys.stderr)
         return False
 
-    queue = read_queue(queue_file)
+    data = backend.load()
+    queue = data["queue"]
     branch = task_id
     worktree = f".worktrees/{task_id}"
     record_task_meta(queue, task_id, worktree, branch)
-    write_queue(queue_file, queue)
+    backend.save(queue)
     return True
 
 
 def main() -> int:
     args = parse_args()
-    queue = read_queue(args.queue_file)
-    history = read_history(args.history_file)
+    backend = create_backend(
+        queue_file=args.queue_file, history_file=args.history_file
+    )
+    data = backend.load()
+    queue = data["queue"]
     plans_dir = Path(args.plans_dir)
 
-    if plan_drift_detected(queue, history, plans_dir):
+    if plan_drift_detected(backend, plans_dir):
         return 1
 
     task = pick_next_ready(queue)
@@ -138,7 +135,7 @@ def main() -> int:
     print(f"  Title: {task.get('title', '')}")
     print(f"  Plan: {task.get('plan_file', '')}")
 
-    if not transition_task(args.queue_file, task):
+    if not transition_task(backend, task):
         return 1
 
     print(f"Transitioned {task_id} to in-progress.")
