@@ -32,7 +32,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 ## Prerequisites
 
-`mine-learnings` must be on `PATH`. Run `/aet-setup install-binaries` (or `~/.agents/skills/aet-setup/bin/install-aet-binaries`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+`mine-learnings` must be on `PATH`. The installer lives in the `aet-setup` skill, so `aet-setup` must be installed. Run `install-aet-binaries` from the installed `aet-setup` skill (e.g., `~/.claude/skills/aet-setup/bin/install-aet-binaries` for Claude Code, `~/.kimi/skills/aet-setup/bin/install-aet-binaries` for Kimi Code CLI; adjust for your agent) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 The orchestrator writes telemetry directly to `~/.aet/telemetry/`; no manual ingestion step is required.
 
