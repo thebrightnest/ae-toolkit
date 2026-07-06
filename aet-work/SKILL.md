@@ -33,7 +33,7 @@ If a stage is found, print at the start of execution: `"📍 Current stage: {sta
 
 ## Prerequisites
 
-This skill invokes AET helper binaries (`aet-state`, `status`, `init-queue`, `sync`, `next`, `report`, `orchestrator`). They must be on `PATH`. The installer lives in the `aet-setup` skill, so `aet-setup` must be installed. Run `install-aet-binaries` from the installed `aet-setup` skill (e.g., `~/.claude/skills/aet-setup/bin/install-aet-binaries` for Claude Code, `~/.kimi/skills/aet-setup/bin/install-aet-binaries` for Kimi Code CLI; adjust for your agent) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+This skill invokes AET helper binaries (`aet-state`, `status`, `init-queue`, `sync`, `next`, `report`, `orchestrator`). They must be on `PATH`. The installer lives in the `aet-setup` skill, so `aet-setup` must be installed. Run `install-aet-binaries` from the installed `aet-setup` skill (`~/.agents/skills/aet-setup/bin/install-aet-binaries`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 ## Forward-Only State Model
 

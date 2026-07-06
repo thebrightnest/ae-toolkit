@@ -1,7 +1,7 @@
 .PHONY: help install-skills install-binaries package add-skill clean lint format format-check validate install-hooks check-reproducible
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
-SKILLS_DIR ?= $(HOME)/.claude/skills
+SKILLS_DIR ?= $(HOME)/.agents/skills
 BIN_DIR ?= $(HOME)/.local/bin
 REPO_DIR := $(shell pwd)
 SKILLS := $(filter-out README.md Makefile scripts .git .gitignore docs .agents content .claude, $(wildcard *))
@@ -10,7 +10,7 @@ MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null || find . -type f -nam
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install-skills: ## Symlink all skills from this repo to ~/.claude/skills/ and put binaries on PATH
+install-skills: ## Symlink all skills from this repo to ~/.agents/skills/ and put binaries on PATH
 	@for skill in $(SKILLS); do \
 		if [ -d "$$skill" ] && [ -f "$$skill/SKILL.md" ]; then \
 			if [ -L "$(SKILLS_DIR)/$$skill" ]; then \

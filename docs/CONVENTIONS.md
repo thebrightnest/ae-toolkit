@@ -37,7 +37,7 @@ Rules:
 
 - Skill instructions must invoke helper binaries by command name (e.g. `aet-state record-merge`), not by hardcoded agent-specific paths.
 - Skills that depend on binaries must include a **Prerequisites** section telling the user how to install them onto `PATH`.
-- The canonical installer is owned by `aet-setup`: run the `install-aet-binaries` helper from the installed `aet-setup` skill (e.g., `~/.claude/skills/aet-setup/bin/install-aet-binaries` for Claude Code, `~/.kimi/skills/aet-setup/bin/install-aet-binaries` for Kimi Code CLI; adjust for your agent). It symlinks binaries from all installed skill directories into `~/.local/bin` (or `AET_BIN_DIR`).
+- The canonical installer is owned by `aet-setup`: run the `install-aet-binaries` helper from the installed `aet-setup` skill (`~/.agents/skills/aet-setup/bin/install-aet-binaries`). It symlinks binaries from all installed skill directories into `~/.local/bin` (or `AET_BIN_DIR`).
 - `make install-skills` in this repo runs the installer automatically for the local development workflow.
 
 ## Planning Artifact Directories

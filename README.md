@@ -41,14 +41,14 @@ The open agent skills installer auto-detects your AI coding tool and works with 
 
 ```bash
 # Install one skill (add @aet-setup if you need helper binaries like orchestrator)
-npx skills add getatelier/ae-toolkit.git@<skill-name>
+npx skills add getatelier/ae-toolkit@<skill-name>
 
 # Target a specific agent explicitly
-npx skills add getatelier/ae-toolkit.git@<skill-name> -a claude-code
-npx skills add getatelier/ae-toolkit.git@<skill-name> -a vscode
+npx skills add getatelier/ae-toolkit@<skill-name> -a claude-code
+npx skills add getatelier/ae-toolkit@<skill-name> -a vscode
 
 # Install all AE Toolkit skills at once (recommended; includes aet-setup)
-npx skills add getatelier/ae-toolkit.git --all
+npx skills add getatelier/ae-toolkit --all
 ```
 
 Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
@@ -56,14 +56,7 @@ Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx sk
 AET skills ship with helper binaries (`aet-state`, `orchestrator`, `mine-learnings`, etc.). After installing skills, put them on `PATH` by running the installer from the `aet-setup` skill (install `@aet-setup` too if you installed skills individually):
 
 ```bash
-# Claude Code
-~/.claude/skills/aet-setup/bin/install-aet-binaries
-
-# Kimi Code CLI
-~/.kimi/skills/aet-setup/bin/install-aet-binaries
-
-# Other agents — use the path where `npx skills` installed the skill
-~/.<agent>/skills/aet-setup/bin/install-aet-binaries
+~/.agents/skills/aet-setup/bin/install-aet-binaries
 ```
 
 Or invoke via your agent's skill command (e.g., `/aet-setup install-binaries` in Claude Code). The installer symlinks every executable found in installed skill `bin/` directories into `~/.local/bin` (override with `AET_BIN_DIR`). If `~/.local/bin` is not on your `PATH`, add it to your shell profile.
@@ -75,11 +68,8 @@ If you cloned this repo and are developing skills locally, `make install-skills`
 Copy skill directories to your agent's skills folder, or paste the skill content directly into chat:
 
 ```bash
-# Kimi Code CLI
-cp -r aet-setup ~/.kimi/skills/
-
-# Claude Code
-cp -r aet-setup ~/.claude/skills/
+# Agent-neutral standard
+cp -r aet-setup ~/.agents/skills/
 
 # Or simply open any SKILL.md and paste it into your chat
 ```
@@ -104,7 +94,7 @@ All skills follow the same markdown-based format. The agent reads the YAML front
 Install any skill with:
 
 ```bash
-npx skills add getatelier/ae-toolkit.git@<skill-name>
+npx skills add getatelier/ae-toolkit@<skill-name>
 ```
 
 | Skill                                                      | Description                                                                                                                                                                               |
@@ -163,11 +153,11 @@ Read the full walkthroughs in [docs/use-cases.md](./docs/use-cases.md).
 This repo is the source of truth. All skills are symlinked from here to your agent's skills directory for active development.
 
 ```bash
-# Install all skills from this repo into ~/.claude/skills/
+# Install all skills from this repo into ~/.agents/skills/
 make install-skills
 
-# Install into a different agent's skills directory
-SKILLS_DIR=~/.kimi/skills make install-skills
+# Install into a different skills directory
+SKILLS_DIR=~/.claude/skills make install-skills
 SKILLS_DIR=~/.cursor/skills make install-skills
 
 # Package all skills into .skill files

@@ -13,7 +13,7 @@ Before `aet-state`, the work queue stored `status` directly in JSON and skills m
 Run this on any existing queue to detect stale or invented states without mutating the queue:
 
 ```bash
-python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json
+python3 ~/.agents/skills/aet-work/bin/aet-state audit .agents/work-queue.json
 ```
 
 This prints stored and expected statuses for every task. If a task is stored as `awaiting_merge` or `merged` but git says otherwise, inspect manually and use `aet-state transition` or `aet-work mark-terminal` to repair.
@@ -22,7 +22,7 @@ To force a full repair:
 
 ```bash
 # 1. Audit stored state against git ground truth
-python3 ~/.claude/skills/aet-work/bin/aet-state audit .agents/work-queue.json
+python3 ~/.agents/skills/aet-work/bin/aet-state audit .agents/work-queue.json
 
 # 2. Re-init the queue (preserves completed tasks, normalizes new ones)
 aet-work init-queue
