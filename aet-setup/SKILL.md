@@ -210,19 +210,18 @@ Create `.agents/` at project root as the agent-neutral home for workflows, templ
 └── .gitkeep
 ```
 
-Create `docs/references/` at project root for task-specific reference documents that are loaded on demand:
+Create `docs/references/` at project root for task-specific reference documents that are loaded on demand. Scaffold them from the templates in `aet-setup/examples/`:
 
-```
-docs/references/
-├── README.md                  # How to use reference docs
-├── api-conventions.md         # Loaded only for API work
-├── testing-strategy.md        # Loaded only for test work
-├── security-guidelines.md     # Loaded only for auth/data work
-├── ui-conventions.md          # Loaded only for UI work
-└── worktree-ship-hygiene.md   # Loaded before aet-work / aet-ship
-```
+| Source template (`aet-setup/examples/`) | Copied to target project as                |
+| --------------------------------------- | ------------------------------------------ |
+| `reference-README.md.example`           | `docs/references/README.md`                |
+| `testing-strategy.md.example`           | `docs/references/testing-strategy.md`      |
+| `api-conventions.md.example`            | `docs/references/api-conventions.md`       |
+| `security-guidelines.md.example`        | `docs/references/security-guidelines.md`   |
+| `ui-conventions.md.example`             | `docs/references/ui-conventions.md`        |
+| `worktree-ship-hygiene.md.example`      | `docs/references/worktree-ship-hygiene.md` |
 
-`aet-setup` only scaffolds foundational infrastructure — not empty folders for skills that may never be invoked. Each skill creates its own `docs/` subdirectory on first use. Generate `docs/references/` docs as stubs and document in `AGENTS.md` that they are loaded on demand. If the project uses a different root agent-context file (e.g., `CLAUDE.md` for Claude Code), place the same "Reference Docs (load on demand)" table there.
+`aet-setup` only scaffolds foundational infrastructure — not empty folders for skills that may never be invoked. Each skill creates its own `docs/` subdirectory on first use. Keep reference docs focused and free of bloat so they remain genuinely load-on-demand. Document in `AGENTS.md` that they are loaded on demand. If the project uses a different root agent-context file (e.g., `CLAUDE.md` for Claude Code), place the same "Reference Docs (load on demand)" table there.
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
@@ -362,7 +361,7 @@ Humans need conventions docs; AI needs guardrails:
 
 ## Generated Artifacts
 
-See `aet-setup/references/README.md` for the full artifact list. Key outputs include `AGENTS.md`, `docs/CONVENTIONS.md`, the `.agents/` directory, root orchestration (`Makefile`/`justfile`), and ADR templates.
+See `aet-setup/references/README.md` for the full artifact list. Key outputs include `AGENTS.md`, `docs/CONVENTIONS.md`, the `.agents/` directory, `docs/references/` (copied from the `aet-setup/examples/*.example` templates), root orchestration (`Makefile`/`justfile`), and ADR templates.
 
 When creating `.agents/`, ensure `.gitignore` excludes generated workflow artifacts:
 
