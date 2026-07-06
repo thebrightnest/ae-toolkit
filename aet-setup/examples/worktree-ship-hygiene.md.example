@@ -1,0 +1,57 @@
+# Worktree and Ship Hygiene
+
+> Load this before `aet-work run` or `aet-ship`.
+
+## Context
+
+`aet-work` runs tasks in isolated git worktrees. `aet-ship` opens PRs from those worktrees. If the worktree branch is not based on the current `origin/main`, the resulting PR can include unrelated commits.
+
+## Before `aet-work run`
+
+1. Ensure the parent session is on `main` and `origin/main` is up to date:
+
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+
+2. If local `main` is ahead of `origin/main`, push it first or expect to rebase shipped branches later.
+3. Verify the orchestrator creates worktrees from `origin/main`, not the current branch.
+
+## Before `aet-ship`
+
+1. Fetch latest `origin/main`:
+
+   ```bash
+   git fetch origin
+   ```
+
+2. Verify the branch merge-base:
+
+   ```bash
+   git merge-base HEAD origin/main
+   ```
+
+   For an independent PR, the merge-base should equal `origin/main`.
+
+3. If the branch is independent and the merge-base is behind `origin/main`, rebase:
+
+   ```bash
+   git rebase --onto origin/main <merge-base> <branch>
+   ```
+
+4. If the branch is stacked (depends on another open PR), target that branch as the PR base and rebase onto it instead.
+5. Inspect the PR diff before opening:
+
+   ```bash
+   git diff origin/main --name-only
+   ```
+
+   Unrelated files must be removed before shipping.
+
+## Red Flags
+
+- PR shows >50 changed files for a small task
+- PR includes `docs/plans/` or `docs/prds/` from other epics
+- PR includes `.agents/work-queue.json` changes unless the task is queue maintenance
+- `git merge-base HEAD origin/main` does not equal `origin/main` for an independent branch

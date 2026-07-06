@@ -1,0 +1,63 @@
+# API Conventions
+
+> Load this when editing API routes, adding/renaming fields, or syncing TypeScript types.
+
+## Auth & Session
+
+- Document the auth mechanism (session cookies, API tokens, OAuth, etc.)
+- Document how to obtain and refresh credentials in development
+- List public routes that do not require auth
+
+## Response Envelope
+
+**Success:**
+
+```json
+{ "data": { ... }, "meta": { ... } }
+```
+
+- Wrap single resources in `data`
+- Use `meta` for pagination, totals, or cursor tokens
+- Return `201 Created` for create operations; include relevant identifiers
+
+**Validation errors:**
+
+```json
+{ "message": "...", "issues": [...] }
+```
+
+**Other errors:**
+
+```json
+{ "message": "..." }
+```
+
+## URL Conventions
+
+- `/api/resources` — resource collection
+- `/api/resources/{id}` — single resource
+- `/api/resources/{id}/actions/run-checks` — action on resource
+
+## Request Validation
+
+- Validate all user-facing inputs before processing
+- Return consistent error shapes
+- Never pass user-controlled data directly to shell commands or raw SQL
+
+## Type Sync Sequence
+
+When adding or renaming a field, update in this order — do not skip steps:
+
+1. Database schema / migration
+2. Backend model
+3. API resource / serializer
+4. Frontend API client types
+5. Frontend component props
+
+## Query String Construction
+
+Never pass objects with `undefined` values directly to `URLSearchParams`; it stringifies `undefined` as the literal string `"undefined"`. Use a shared helper that strips undefined keys.
+
+## Internal Services
+
+If the project has internal services (e.g. Python service called by a PHP backend), document which layer is allowed to call which. Frontend code should never call internal services directly.

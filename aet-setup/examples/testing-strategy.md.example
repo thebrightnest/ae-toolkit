@@ -1,0 +1,100 @@
+# Testing Strategy
+
+> Load this when writing new tests, debugging flaky tests, or setting up test data.
+
+## Testing Pyramid
+
+| Layer | Scope | Rules |
+|-------|-------|-------|
+| **Unit** | Single function/class, no I/O | Mock external dependencies; use factories; assert on behavior, not implementation |
+| **Integration** | Boundaries: DB queries, API endpoints, external calls | Use real test DB or temporary directories; mock only external services |
+| **E2E** | Full user journey | Cover critical paths only; run in CI or before major releases |
+
+## Test Suites
+
+When the codebase has clear layers, split feature tests by concern so agents can run only the tests that exercise the modified layer during iterative work:
+
+| Suite | Path / files | Run when you change | Example command |
+|-------|--------------|--------------------:|-----------------|
+| `Feature-Http` | `tests/Feature/Http/*` | Blade views, CSS, JS, routes, web controllers | `make test-feature-http` |
+| `Feature-Api` | `tests/Feature/Api/*` | API controllers, request classes, API keys | `make test-feature-api` |
+| `Feature-Integration` | `tests/Feature/DatabaseConnectionTest.php` | Migrations, database config | `make test-feature-integration` |
+| `Unit` | `tests/Unit/*` | Services, models, utilities | `make test-unit` |
+
+A full sweep is still required before declaring a task complete:
+
+```bash
+make lint
+make type-check
+make test
+```
+
+## Avoid Overtesting
+
+Overtesting is expensive: it slows CI, bloats maintenance, and gives false confidence. Be deliberate.
+
+### Do not add tests for these
+
+- Purely presentational components with no logic (static logo link, styled header, layout wrapper)
+- One-to-one snapshots of markup or CSS classes
+- Third-party library behavior (shadcn/ui, Radix, React Router, etc.)
+- Trivial prop pass-through with no transformation
+
+### Add tests when there is real risk
+
+- Business logic, calculations, or data transformations
+- User interactions that change state, submit data, or trigger side effects
+- API clients, auth flows, and conditional routing
+- Regressions that have already happened once (write the failing test first)
+- File upload flows — non-negotiable (see below)
+
+## Validation by Change Type
+
+| Change type | Minimum validation |
+|-------------|-------------------:|
+| Pure UI / layout / copy tweak | `make test-smart` (or skip tests if no behavior changed) + lint + type-check + build |
+| Component with state or user interaction | Add/update tests for the behavior; run `make test-smart` to validate affected files |
+| API endpoint, data model, or auth | Full relevant test suite (unit + integration/feature) |
+| Bug fix | Add a regression test that fails before the fix and passes after |
+
+## File Upload Integration Tests
+
+Any endpoint that accepts file uploads **must** have a feature test that asserts:
+
+1. The request returns the expected success status (201/200).
+2. A database record is created with the correct metadata.
+3. **The file physically exists at the resolved absolute path**.
+
+Mocking the service layer hides storage config mismatches between where the controller stores files and where downstream code reads them.
+
+## Component Testing Rules
+
+### Mock APIs and stores, render real components
+
+When testing a parent component that renders children, **do not mock the children** unless the test environment literally cannot render them (e.g. Radix UI portals in jsdom).
+
+| Mock | Don't Mock |
+|------|-----------|
+| API clients | Child feature components |
+| State stores | Business logic inside child components |
+| Browser/Electron APIs | Parent-to-child prop passing |
+| UI primitives with portals | Non-portal UI primitives |
+
+### Stable mock references
+
+When mocking stores that return functions, create the mock functions **once** at describe scope and reuse them. Creating new mock function instances inside `mockImplementation` on every render breaks React's effect dependency equality and causes infinite loops.
+
+### API boundary normalization
+
+Unwrap response wrappers at the API layer, not in components. If the backend returns `{ success: true, comment }`, the API module must return `comment` so consumers receive the domain type directly.
+
+## Coverage Targets
+
+- Overall default: 80%
+- Auth/publish/render/critical paths: 100%
+
+Don't lower coverage targets to make tests "pass".
+
+## Tests must earn their keep
+
+Every test should answer: *"What would break in production if this assertion disappeared?"* If the answer is "nothing important" or "a linter would catch it", don't write the test.

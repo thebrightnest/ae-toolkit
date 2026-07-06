@@ -187,7 +187,7 @@ Before finishing:
 
 ### AI Context Files (`AGENTS.md`)
 
-Always generate `AGENTS.md` at project root and per-subproject. It must contain: project overview, stack, architecture, directory structure, tooling reference table, AI Guardrails (Forbidden + Mandatory), Context Budget, and Agentic Workflow Guardrails (PRD-first, plan-first, design-to-implementation hard gate). Keep it under 200 lines; detailed rules live in `.agents/reference/` and are loaded on demand. Generate guardrails from the project's actual patterns, not a template.
+Always generate `AGENTS.md` at project root and per-subproject. It must contain: project overview, stack, architecture, directory structure, tooling reference table, AI Guardrails (Forbidden + Mandatory), Context Budget, Agentic Workflow Guardrails (PRD-first, plan-first, design-to-implementation hard gate), and a "Reference Docs (load on demand)" table pointing to `docs/references/*.md`. Keep it under 200 lines; detailed rules live in `docs/references/` and are loaded on demand. Generate guardrails from the project's actual patterns, not a template.
 
 ### Agentic Workflow Infrastructure (`.agents/`)
 
@@ -198,11 +198,6 @@ Create `.agents/` at project root as the agent-neutral home for workflows, templ
 ├── commands/
 │   ├── README.md              # How to use command workflows
 │   └── approval-checkpoint.md # Hard gate between design and implementation
-├── reference/
-│   ├── api-conventions.md     # Loaded only for API work
-│   ├── testing-strategy.md    # Loaded only for test work
-│   ├── security-guidelines.md # Loaded only for auth/data work
-│   └── README.md              # How to use reference docs
 ├── smoke/                     # Session-level smoke checks
 │   ├── README.md              # How to run and extend smoke checks
 │   └── checks.sh              # Executable smoke suite (stack-specific)
@@ -215,7 +210,19 @@ Create `.agents/` at project root as the agent-neutral home for workflows, templ
 └── .gitkeep
 ```
 
-`aet-setup` only scaffolds foundational infrastructure — not empty folders for skills that may never be invoked. Each skill creates its own `docs/` subdirectory on first use. Generate `.agents/reference/` docs as stubs and document in `AGENTS.md` that they are loaded on demand.
+Create `docs/references/` at project root for task-specific reference documents that are loaded on demand:
+
+```
+docs/references/
+├── README.md                  # How to use reference docs
+├── api-conventions.md         # Loaded only for API work
+├── testing-strategy.md        # Loaded only for test work
+├── security-guidelines.md     # Loaded only for auth/data work
+├── ui-conventions.md          # Loaded only for UI work
+└── worktree-ship-hygiene.md   # Loaded before aet-work / aet-ship
+```
+
+`aet-setup` only scaffolds foundational infrastructure — not empty folders for skills that may never be invoked. Each skill creates its own `docs/` subdirectory on first use. Generate `docs/references/` docs as stubs and document in `AGENTS.md` that they are loaded on demand. If the project uses a different root agent-context file (e.g., `CLAUDE.md` for Claude Code), place the same "Reference Docs (load on demand)" table there.
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
@@ -361,6 +368,7 @@ When creating `.agents/`, ensure `.gitignore` excludes generated workflow artifa
 
 ```gitignore
 .agents/work-history.jsonl
+.agents/execution.log.jsonl
 aet-work.log
 aet-work-*.log
 ```
