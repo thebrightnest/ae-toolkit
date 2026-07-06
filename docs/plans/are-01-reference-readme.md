@@ -39,5 +39,5 @@ Part of [aet-setup reference evolution PRD](../prds/aet-setup-reference-evolutio
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
