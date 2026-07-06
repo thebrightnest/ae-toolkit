@@ -15,6 +15,17 @@ When building UI, always check for an existing primitive before writing a compon
 - Existing primitives and shadcn/ui give accessibility (ARIA, focus trap, keyboard nav), animations, and responsive behavior for free.
 - Custom-built modals, dropdowns, and overlays are a recurring source of bugs (focus bugs, z-index issues, missing escape-to-close).
 
+## Adding or Customizing shadcn/ui Components
+
+When no existing primitive covers the pattern and the project uses shadcn/ui:
+
+1. Search the shadcn/ui registry for the component.
+2. Install it with the project's shadcn CLI (`npx shadcn add <component>` or the project wrapper).
+3. Place the component in the project's shared component directory (commonly `components/ui/`).
+4. Do not edit installed shadcn files directly. Create a project-specific wrapper component for custom behavior, layout, or styling so registry updates remain easy to re-apply.
+5. Map the component's visual variables to the project's semantic design tokens instead of hardcoding values.
+6. Add a usage example to the component story or the nearest reference doc.
+
 ## Design Token Alignment
 
 Components should consume the project's semantic design tokens (`--popover`, `--muted`, `--border`, `--accent`, etc.) rather than hardcoding hex values. If the project does not have tokens yet, document the palette here.
