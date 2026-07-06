@@ -190,6 +190,10 @@ Edit `SKILL.md` following the [skill creator guide](https://docs.kimi.ai/skills)
 - Concise is key — only add context the AI doesn't already have
 - Use references/ for detailed docs, keep SKILL.md for procedural instructions
 
+## Upgrades
+
+See [docs/upgrades/README.md](./docs/upgrades/README.md) for version-specific upgrade guides.
+
 ## Packaging
 
 Skills are distributed as `.skill` files (zip archives):
