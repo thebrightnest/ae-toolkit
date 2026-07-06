@@ -57,17 +57,22 @@
 - Never plan and implement in the same session; clear context between phases
 - Use `docs/plans/` for plan.md files and `docs/prds/` for PRDs
 - Use sub-agents for research; keep main context clean
-- Load `.agents/reference/` docs only when working on the relevant task type
+- Load `docs/references/` docs only when working on the relevant task type
 
 ## Context Budget
-- Keep AGENTS.md under 200 lines; detailed rules live in `.agents/reference/`
+- Keep AGENTS.md under 200 lines; detailed rules live in `docs/references/`
 - Prime command: load only core files + recent commits, not the full codebase
 - Planning session: free-form conversation OK, but clear before implementing
 - Sub-agents: use for any research consuming >50k tokens
 - If context feels "full" (agent repeating itself, missing obvious things), clear and restart
 
-## Detailed Reference Docs
-Task-specific rules live in `.agents/reference/` and are loaded on demand:
-- `.agents/reference/api-conventions.md` — API patterns, error handling, auth
-- `.agents/reference/testing-strategy.md` — Test patterns, factory usage, coverage
-- `.agents/reference/security-guidelines.md` — Secrets handling, input validation, trust boundaries
+## Reference Docs (load on demand)
+Task-specific rules live in `docs/references/` and are loaded on demand:
+
+| Document | Load When |
+|----------|-----------|
+| `docs/references/testing-strategy.md` | Writing or modifying tests |
+| `docs/references/api-conventions.md` | Building or modifying API contracts |
+| `docs/references/security-guidelines.md` | Working on auth, data, secrets, or dependencies |
+| `docs/references/ui-conventions.md` | Building or modifying UI components |
+| `docs/references/worktree-ship-hygiene.md` | Before `aet-work run` or `aet-ship` |

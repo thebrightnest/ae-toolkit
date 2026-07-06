@@ -17,7 +17,7 @@ The most important file. Keep it under 200 lines. Contains:
 - **Agentic Workflow Guardrails** — PRD-first, plan-first, session separation rules
 - **Context Budget** — context window discipline for the project
 - Tooling reference (what runs where)
-- References to `.agents/reference/` docs for detailed rules
+- **Reference Docs (load on demand)** — table pointing to `docs/references/*.md`
 - Decision log (brief, high-level)
 
 ### 2. `docs/CONVENTIONS.md`
@@ -32,11 +32,10 @@ Human-readable patterns:
 
 ### 3. `.agents/` directory
 
-Agent-neutral home for workflows, templates, and state:
+Agent-neutral home for workflows, templates, and persistent state:
 
 - `.agents/commands/README.md` — how command workflows work
 - `.agents/commands/approval-checkpoint.md` — hard gate between design and implementation
-- `.agents/reference/*.md` — task-specific rules (loaded on demand)
 - `.agents/smoke/` — session-level smoke checks and last-run record
 - `.agents/templates/*.md` — PRD, plan, retro templates
 - `.agents/validation-commands.json` — authoritative validation commands (calibrated during setup)
@@ -49,11 +48,23 @@ Ensure `.gitignore` excludes generated agent workflow artifacts:
 
 ```gitignore
 .agents/work-history.jsonl
+.agents/execution.log.jsonl
 aet-work.log
 aet-work-*.log
 ```
 
-### 4. `docs/` subdirectories (created by individual skills)
+### 4. `docs/references/` directory
+
+Task-specific reference documents loaded on demand by the agent. Keep each focused and link to it from the root agent-context file (`AGENTS.md`, `CLAUDE.md`, etc.):
+
+- `docs/references/README.md` — how to use reference docs
+- `docs/references/api-conventions.md` — API patterns, error handling, auth
+- `docs/references/testing-strategy.md` — test patterns, factory usage, coverage
+- `docs/references/security-guidelines.md` — secrets handling, input validation, trust boundaries
+- `docs/references/ui-conventions.md` — UI component priorities and design-token alignment
+- `docs/references/worktree-ship-hygiene.md` — merge-base checks and PR scope red flags
+
+### 5. `docs/` subdirectories (created by individual skills)
 
 Each skill creates its own folder under `docs/` when it first produces an artifact:
 

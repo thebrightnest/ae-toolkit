@@ -4,9 +4,9 @@ A modular skill suite for AI coding agents. Each skill is a self-contained packa
 
 ---
 
-## Current Version: 0.9.0
+## Current Version: 0.9.1
 
-Last updated: 2026-06-30
+Last updated: 2026-07-06
 
 ---
 
@@ -69,6 +69,11 @@ Keep projects and the toolkit itself healthy.
 ---
 
 ## What's New
+
+### What's New in v0.9.1
+
+- **Correct installation URLs** — `README.md` now points to the right repository (`https://github.com/thebrightnest/ae-toolkit`), so `npx skills add` commands work out of the box.
+- **Clearer setup path** — installation examples use the standard `.agents/skills` directory and show the correct helper-binary setup step.
 
 ### What's New in v0.9.0
 

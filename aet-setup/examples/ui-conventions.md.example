@@ -1,0 +1,44 @@
+# UI Conventions
+
+> Load this when building or modifying UI components.
+
+## Component Source Priority
+
+When building UI, always check for an existing primitive before writing a component from scratch.
+
+1. **Priority 1 — existing project primitives**: Check the project's component directory.
+2. **Priority 2 — shadcn/ui registry**: If the project uses shadcn/ui, install from the registry.
+3. **Priority 3 — custom build**: Only when no existing primitive covers the pattern.
+
+## Rationale
+
+- Existing primitives and shadcn/ui give accessibility (ARIA, focus trap, keyboard nav), animations, and responsive behavior for free.
+- Custom-built modals, dropdowns, and overlays are a recurring source of bugs (focus bugs, z-index issues, missing escape-to-close).
+
+## Design Token Alignment
+
+Components should consume the project's semantic design tokens (`--popover`, `--muted`, `--border`, `--accent`, etc.) rather than hardcoding hex values. If the project does not have tokens yet, document the palette here.
+
+## CSS Debugging Discipline
+
+Never guess at CSS fixes without seeing computed styles. Theory-driven CSS debugging leads to "fix and hope" loops. Before proposing any CSS change, inspect the problematic element in browser dev tools and collect:
+
+- Computed width and height
+- Computed `max-width` and `min-width`
+- `overflow` value of the element and its ancestors (up to 3 levels)
+- Containing block width
+- Whether the element is wider than its containing block
+- Whether the element has `white-space: nowrap` or `white-space: pre`
+
+## Common CSS Fixes
+
+- Flex item overflowing its container → add `min-w-0` or `overflow-hidden` to the flex item
+- Grid track overflow → add `min-w-0` to the grid item
+- ScrollArea content wider than viewport → ensure no `min-width` or `white-space: nowrap` on scrollable content
+
+## Accessibility Minimums
+
+- Keyboard accessibility for interactive elements
+- Image alt text
+- Form labels
+- Semantic HTML

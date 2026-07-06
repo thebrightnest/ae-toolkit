@@ -66,6 +66,9 @@ Use this checklist during every `/aet-setup` invocation. Every topic must be exp
 ## 9. Documentation
 
 - [ ] `docs/CONVENTIONS.md` exists with structure, naming, error handling?
+- [ ] `docs/references/` exists with load-on-demand reference docs?
+- [ ] `docs/references/README.md` explains how to use the reference docs?
+- [ ] Root agent-context file (`AGENTS.md`, `CLAUDE.md`, etc.) contains a table pointing to each `docs/references/*.md` file?
 - [ ] `docs/adr/README.md` exists explaining ADRs?
 - [ ] `docs/adr/000-template.md` exists?
 - [ ] README quick-start is current and accurate?
@@ -102,7 +105,7 @@ Use this checklist during every `/aet-setup` invocation. Every topic must be exp
 - [ ] `.gitmessage` template for conventional commits?
 - [ ] Branch naming conventions documented?
 - [ ] Commitlint or equivalent configured (if easily supported)?
-- [ ] `.gitignore` excludes generated agent artifacts (`.agents/work-history.jsonl`, `aet-work.log`, `aet-work-*.log`)?
+- [ ] `.gitignore` excludes generated agent artifacts (`.agents/work-history.jsonl`, `.agents/execution.log.jsonl`, `aet-work.log`, `aet-work-*.log`)?
 
 ---
 

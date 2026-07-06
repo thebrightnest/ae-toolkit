@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.1] — 2026-07-06
+
+### Fixed
+
+- **README**: installation commands now point to the correct repository (`https://github.com/thebrightnest/ae-toolkit`).
+- **README**: `npx skills` examples use the `.agents/skills` standard path and omit `.git` from URLs.
+- **README**: corrected AET binary installation instructions.
+
+### Changed
+
+- Removed accidentally committed presentation files from the repository.
+
+---
+
 ## [0.9.0] — 2026-06-30
 
 ### Added

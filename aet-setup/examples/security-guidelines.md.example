@@ -1,0 +1,31 @@
+# Security Guidelines
+
+> Load this when touching auth, user data, secrets, or third-party integrations.
+
+## Threat Model
+
+- Malicious or malformed input from users
+- API key theft or abuse
+- Unauthorized provisioning of credentials
+- Dependency vulnerabilities
+- Secrets committed to the repository
+- Injection attacks (SQL, command, XSS)
+
+## Controls
+
+- All secrets live in environment variables or a credential manager — never hardcoded, never committed
+- Run dependency audits regularly (`npm audit`, `composer audit`, `pip-audit`, etc.)
+- Validate and sanitize all user-facing inputs
+- Use parameterized queries or the ORM — no raw string interpolation in SQL
+- Hash passwords with a strong, slow algorithm; never store plaintext
+- Log security events; never log PII, passwords, or tokens
+- Use CSP and sandboxed iframes when rendering untrusted content
+- Scan for secrets in pre-commit hooks
+
+## Forbidden Patterns
+
+- Committing `.env` files or API keys
+- Returning raw HTML from Markdown without sanitization
+- Storing plaintext credentials in logs or the database
+- Disabling security lint rules to make code pass
+- Trusting data from the client without server-side validation

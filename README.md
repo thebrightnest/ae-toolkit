@@ -41,14 +41,14 @@ The open agent skills installer auto-detects your AI coding tool and works with 
 
 ```bash
 # Install one skill (add @aet-setup if you need helper binaries like orchestrator)
-npx skills add getatelier/ae-toolkit@<skill-name>
+npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name>
 
 # Target a specific agent explicitly
-npx skills add getatelier/ae-toolkit@<skill-name> -a claude-code
-npx skills add getatelier/ae-toolkit@<skill-name> -a vscode
+npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name> -a claude-code
+npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name> -a vscode
 
 # Install all AE Toolkit skills at once (recommended; includes aet-setup)
-npx skills add getatelier/ae-toolkit --all
+npx skills add https://github.com/thebrightnest/ae-toolkit --all
 ```
 
 Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
@@ -94,7 +94,7 @@ All skills follow the same markdown-based format. The agent reads the YAML front
 Install any skill with:
 
 ```bash
-npx skills add getatelier/ae-toolkit@<skill-name>
+npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name>
 ```
 
 | Skill                                                      | Description                                                                                                                                                                               |

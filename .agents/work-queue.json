@@ -1,5 +1,190 @@
 {
-  "queue_updated_at": "2026-06-22T21:16:38.303309+00:00",
+  "queue_updated_at": "2026-07-06T17:27:14.345893",
   "source_prd": "docs/prds/aet-telemetry-learning-prd.md",
-  "tasks": []
+  "tasks": [
+    {
+      "id": "are-01-reference-readme",
+      "title": "Plan: Add `.agents/reference/README.md` default template",
+      "plan_file": "docs/plans/are-01-reference-readme.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-07-06T16:27:14.343455+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "are-02-update-agents-example",
+      "title": "Plan: Update `AGENTS.md.example` to list reference docs",
+      "plan_file": "docs/plans/are-02-update-agents-example.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-07-06T16:27:14.344016+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "are-03-testing-strategy-template",
+      "title": "Plan: Add `testing-strategy.md` default template",
+      "plan_file": "docs/plans/are-03-testing-strategy-template.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-07-06T16:27:14.344287+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "are-04-api-conventions-template",
+      "title": "Plan: Add `api-conventions.md` default template",
+      "plan_file": "docs/plans/are-04-api-conventions-template.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-07-06T16:27:14.344538+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "are-05-security-guidelines-template",
+      "title": "Plan: Add `security-guidelines.md` default template",
+      "plan_file": "docs/plans/are-05-security-guidelines-template.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-07-06T16:27:14.344783+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "are-06-ui-conventions-template",
+      "title": "Plan: Add `ui-conventions.md` default template",
+      "plan_file": "docs/plans/are-06-ui-conventions-template.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-07-06T16:27:14.345131+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "are-07-worktree-ship-hygiene-template",
+      "title": "Plan: Add `worktree-ship-hygiene.md` default template",
+      "plan_file": "docs/plans/are-07-worktree-ship-hygiene-template.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-07-06T16:27:14.345388+00:00",
+          "by": "sync"
+        }
+      ]
+    },
+    {
+      "id": "are-08-update-skill-and-checklist",
+      "title": "Plan: Update `aet-setup/SKILL.md` and `aet-setup/checklist.md`",
+      "plan_file": "docs/plans/are-08-update-skill-and-checklist.md",
+      "blocked_by": [],
+      "blocks": [],
+      "status": "planned",
+      "state": "ready",
+      "pending_blockers": 0,
+      "merge_commit": null,
+      "completed_at": null,
+      "merged_at": null,
+      "worktree": null,
+      "branch": null,
+      "history": [
+        {
+          "from": null,
+          "to": "planned",
+          "at": "2026-07-06T16:27:14.345652+00:00",
+          "by": "sync"
+        }
+      ]
+    }
+  ]
 }

@@ -1,0 +1,17 @@
+# Reference Docs
+
+Task-specific reference documents. **Load on demand only** — do not include these in your context unless actively working on the relevant topic.
+
+## Available References
+
+| Document | Load When |
+|----------|-----------|
+| `testing-strategy.md` | Writing or modifying tests |
+| `api-conventions.md` | Building or modifying API contracts |
+| `security-guidelines.md` | Working on auth, data models, API endpoints, or dependencies |
+| `ui-conventions.md` | Building or modifying UI components |
+| `worktree-ship-hygiene.md` | Before `aet-work run` or `aet-ship` |
+
+## Usage
+
+When starting work on a task, check this table and load only the references relevant to your current focus. This protects the context window from unnecessary bloat.
