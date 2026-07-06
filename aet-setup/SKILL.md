@@ -42,10 +42,17 @@ Put AET skill binaries on `PATH` so skills like `aet-work`, `aet-ship`, and `aet
 
 **Procedure:**
 
-1. Run the installer:
+1. Run the installer from the `aet-setup` skill directory. The exact path depends on your agent:
 
    ```bash
-   ~/.agents/skills/aet-setup/bin/install-aet-binaries
+   # Claude Code
+   ~/.claude/skills/aet-setup/bin/install-aet-binaries
+
+   # Kimi Code CLI
+   ~/.kimi/skills/aet-setup/bin/install-aet-binaries
+
+   # Other agents — use the path where `npx skills` installed the skill
+   ~/.<agent>/skills/aet-setup/bin/install-aet-binaries
    ```
 
    It symlinks every executable found in installed skill `bin/` directories into `~/.local/bin` (override with `AET_BIN_DIR`).
@@ -219,7 +226,7 @@ Create `.agents/` at project root as the agent-neutral home for workflows, templ
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
-**AET skill binaries:** If the project uses `aet-work`, `aet-ship`, or `aet-evolve`, ensure their helper binaries are on `PATH`. Run `/aet-setup install-binaries` (or `~/.agents/skills/aet-setup/bin/install-aet-binaries`; `make install-skills` from the toolkit repo runs it automatically). Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
+**AET skill binaries:** If the project uses `aet-work`, `aet-ship`, or `aet-evolve`, ensure their helper binaries are on `PATH`. Run the `install-aet-binaries` helper from the installed `aet-setup` skill (e.g., `~/.claude/skills/aet-setup/bin/install-aet-binaries` for Claude Code, `~/.kimi/skills/aet-setup/bin/install-aet-binaries` for Kimi Code CLI; adjust for your agent). `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
 
 ### Type Safety
 

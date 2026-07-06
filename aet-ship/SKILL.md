@@ -210,10 +210,14 @@ Run the pre-merge validation gate.
     ```
     ⚠️  aet-state is not on PATH.
         AET skill binaries must be installed before merge verification can update the work queue.
+        The installer lives in the aet-setup skill, so aet-setup must be installed.
         Install options:
-          - Run /aet-setup install-binaries
+          - Run install-aet-binaries from the installed aet-setup skill
+            (e.g. ~/.claude/skills/aet-setup/bin/install-aet-binaries for Claude Code,
+            ~/.kimi/skills/aet-setup/bin/install-aet-binaries for Kimi Code CLI;
+            adjust for your agent)
           - From this repo: make install-skills
-          - Manually: add the skill bin directories (e.g. ~/.agents/skills/aet-work/bin) to PATH.
+          - Manually: add the skill bin directories (e.g. ~/.claude/skills/aet-work/bin) to PATH.
     ```
 
     Then run the deterministic merge recorder:

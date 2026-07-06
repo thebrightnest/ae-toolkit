@@ -40,28 +40,35 @@ AE Toolkit fixes this by encoding the best agentic engineering patterns from YC,
 The open agent skills installer auto-detects your AI coding tool and works with 35+ agents:
 
 ```bash
-# Install one (any) skill
+# Install one skill (add @aet-setup if you need helper binaries like orchestrator)
 npx skills add getatelier/ae-toolkit.git@<skill-name>
 
 # Target a specific agent explicitly
 npx skills add getatelier/ae-toolkit.git@<skill-name> -a claude-code
 npx skills add getatelier/ae-toolkit.git@<skill-name> -a vscode
 
-# Install all AE Toolkit skills at once
+# Install all AE Toolkit skills at once (recommended; includes aet-setup)
 npx skills add getatelier/ae-toolkit.git --all
 ```
 
 Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
 
-AET skills ship with helper binaries (`aet-state`, `orchestrator`, `mine-learnings`, etc.). After installing skills, put them on `PATH`:
+AET skills ship with helper binaries (`aet-state`, `orchestrator`, `mine-learnings`, etc.). After installing skills, put them on `PATH` by running the installer from the `aet-setup` skill (install `@aet-setup` too if you installed skills individually):
 
 ```bash
-/aet-setup install-binaries
-# or directly:
-~/.agents/skills/aet-setup/bin/install-aet-binaries
+# Claude Code
+~/.claude/skills/aet-setup/bin/install-aet-binaries
+
+# Kimi Code CLI
+~/.kimi/skills/aet-setup/bin/install-aet-binaries
+
+# Other agents — use the path where `npx skills` installed the skill
+~/.<agent>/skills/aet-setup/bin/install-aet-binaries
 ```
 
-This is run automatically when you use `make install-skills` from this repo.
+Or invoke via your agent's skill command (e.g., `/aet-setup install-binaries` in Claude Code). The installer symlinks every executable found in installed skill `bin/` directories into `~/.local/bin` (override with `AET_BIN_DIR`). If `~/.local/bin` is not on your `PATH`, add it to your shell profile.
+
+If you cloned this repo and are developing skills locally, `make install-skills` runs the installer automatically.
 
 ### Option 2: Manual install
 
