@@ -446,7 +446,9 @@ def report(
                 ]
             summaries = [r for r in records if r.get("type") == "run_summary"]
             stages = [r for r in records if r.get("type") == "stage"]
-            return _format_report(summaries, stages, [], [], 1 if records else 0)
+            loops = [r for r in records if r.get("type") == "loop"]
+            environment_issues = [r for r in records if r.get("type") == "environment_issue"]
+            return _format_report(summaries, stages, loops, environment_issues, 1 if records else 0)
 
         if path.is_dir():
             root = path
