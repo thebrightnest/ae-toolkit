@@ -21,6 +21,17 @@ _queue_spec = importlib.util.spec_from_file_location("aet_queue", _QUEUE_PY)
 queue_lib = importlib.util.module_from_spec(_queue_spec)
 _queue_spec.loader.exec_module(queue_lib)
 
+# Make aet-work/lib importable so we can load the backend factory.
+_LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+from backends.factory import create_backend  # noqa: E402
+
+
+def make_backend(queue_path):
+    """Create a task backend for the given queue path."""
+    history_file = str(Path(queue_path).with_name("work-history.jsonl"))
+    return create_backend(queue_file=queue_path, history_file=history_file)
+
 
 def load_queue(path):
     with open(path, "r", encoding="utf-8") as f:
@@ -283,13 +294,13 @@ def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
     return (True, "Transition is valid.")
 
 
-def _apply_transition(queue_path, queue, task, from_state, to_state, by, evidence=None, cwd=None, history_file=None):
+def _apply_transition(backend, queue, task, from_state, to_state, by, evidence=None, cwd=None, history_file=None):
     """Apply a validated state transition and propagate the forward frontier.
 
     This is the only function that assigns ``task["state"]``.  It validates the
     transition, appends history, promotes dependents after terminal transitions,
-    writes the queue atomically, and seals terminal tasks to the settled history
-    log.
+    persists the queue through the configured backend, and seals terminal tasks
+    to the settled history log.
     """
     ok, msg = validate_transition(task, from_state, to_state, cwd=cwd)
     if not ok:
@@ -324,13 +335,15 @@ def _apply_transition(queue_path, queue, task, from_state, to_state, by, evidenc
                 dep["status"] = queue_lib.state_to_status("ready")
                 queue_lib.append_history(dep, "blocked", "ready", "release")
 
-    save_queue(queue_path, queue)
+    backend.save(queue)
+    backend.on_transition(task["id"], from_state, to_state, evidence)
 
     # Seal terminal tasks to the append-only settled history log.
     if to_state in queue_lib.TERMINAL_STATES:
         if history_file is None:
-            history_file = str(Path(queue_path).with_name("work-history.jsonl"))
-        queue_lib.seal_terminal(queue_path, history_file, task["id"])
+            history_file = str(Path(backend.queue_file).with_name("work-history.jsonl"))
+        queue_lib.seal_terminal(backend.queue_file, history_file, task["id"])
+        backend.close_task(task["id"], evidence)
 
 
 def _set_stage(task, stage, by="orch"):
@@ -415,10 +428,12 @@ def cmd_audit(args):
     derived from git. This is the old ``derive`` command repurposed as an
     explicit, human-run audit; it never runs during normal operation.
     """
-    queue = load_queue(args.queue)
+    backend = make_backend(args.queue)
+    data = backend.load()
+    queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    tasks = get_tasks(queue)
-    task_by_id = {t["id"]: t for t in tasks}
+    tasks = queue
+    task_by_id = {t["id"]: t for t in tasks if t.get("id")}
     derived = {}
 
     def blocker_status(task_id):
@@ -446,7 +461,9 @@ def cmd_audit(args):
 
 
 def cmd_validate(args):
-    queue = load_queue(args.queue)
+    backend = make_backend(args.queue)
+    data = backend.load()
+    queue = data["queue"]
     task = find_task(queue, args.task_id)
     if not task:
         print(f"Task not found: {args.task_id}", file=sys.stderr)
@@ -461,7 +478,9 @@ def cmd_validate(args):
 
 
 def cmd_transition(args):
-    queue = load_queue(args.queue)
+    backend = make_backend(args.queue)
+    data = backend.load()
+    queue = data["queue"]
     task = find_task(queue, args.task_id)
     if not task:
         print(f"Task not found: {args.task_id}", file=sys.stderr)
@@ -479,7 +498,7 @@ def cmd_transition(args):
     evidence = {"reason": args.reason} if args.reason else None
     try:
         _apply_transition(
-            args.queue, queue, task, args.from_stage, args.to_stage,
+            backend, queue, task, args.from_stage, args.to_stage,
             by="transition", evidence=evidence, cwd=cwd,
         )
     except RuntimeError as e:
@@ -492,7 +511,9 @@ def cmd_transition(args):
 
 def cmd_record_merge(args):
     """Resolve and record the merge commit for a task atomically."""
-    queue = load_queue(args.queue)
+    backend = make_backend(args.queue)
+    data = backend.load()
+    queue = data["queue"]
     task = find_task(queue, args.task_id)
     if not task:
         print(f"Task not found: {args.task_id}", file=sys.stderr)
@@ -541,7 +562,7 @@ def cmd_record_merge(args):
     evidence = {"merge_commit": merge_commit, "merge_strategy": merge_strategy}
     try:
         _apply_transition(
-            args.queue, queue, task, current_state, "merged",
+            backend, queue, task, current_state, "merged",
             by="record-merge", evidence=evidence, cwd=cwd,
         )
     except RuntimeError as e:
@@ -591,7 +612,9 @@ def cmd_archive(args):
 
 
 def cmd_sync_footers(args):
-    queue = load_queue(args.queue)
+    backend = make_backend(args.queue)
+    data = backend.load()
+    queue = data["queue"]
     plan_path = Path(args.plan)
     if not plan_path.exists():
         print(f"Plan file not found: {args.plan}", file=sys.stderr)
@@ -599,7 +622,7 @@ def cmd_sync_footers(args):
 
     # Find the task that references this plan file
     task = None
-    for t in get_tasks(queue):
+    for t in queue:
         if t.get("plan_file") == args.plan or Path(t.get("plan_file", "")).resolve() == plan_path.resolve():
             task = t
             break
@@ -615,7 +638,7 @@ def cmd_sync_footers(args):
 
     update_plan_footer(args.plan, args.stage)
     task["status"] = args.stage
-    save_queue(args.queue, queue)
+    backend.save(queue)
     print(f"Synced footers: {args.plan} -> {args.stage}")
     return 0
 

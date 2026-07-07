@@ -65,3 +65,27 @@ class TaskBackend(ABC):
         can create or update issues here; JSON-backed implementations can
         leave this as a no-op.
         """
+
+    def on_transition(
+        self,
+        task_id: str,
+        from_state: str | None,
+        to_state: str,
+        evidence: dict[str, Any] | None = None,
+    ) -> None:
+        """Optional hook called after a transition has been persisted.
+
+        Backends such as GitHub Issues can override this to update labels or
+        other external state. The default implementation does nothing.
+        """
+        return
+
+    def close_task(
+        self, task_id: str, evidence: dict[str, Any] | None = None
+    ) -> None:
+        """Optional hook called after a terminal task is sealed.
+
+        Backends such as GitHub Issues can override this to close the
+        corresponding external issue. The default implementation does nothing.
+        """
+        return

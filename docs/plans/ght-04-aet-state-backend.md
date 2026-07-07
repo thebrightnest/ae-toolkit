@@ -49,5 +49,5 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ---
 
-_Stage: tdd-complete_
-_Next step: run `aet-implement`_
+_Stage: implemented_
+_Next step: run `aet-qa`_

@@ -29,11 +29,28 @@ class FakeBackend:
 
     def load(self):
         self.calls.append(("load", {}))
+        path = Path(self.queue_file)
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {"queue": list(data.get("tasks", [])), "history": []}
+            return {"queue": list(data), "history": []}
         return {"queue": list(self._queue), "history": list(self._history)}
 
     def save(self, queue):
         self.calls.append(("save", {"queue": list(queue)}))
         self._queue = list(queue)
+        path = Path(self.queue_file)
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                data = []
+            if isinstance(data, dict):
+                data["tasks"] = list(queue)
+            else:
+                data = list(queue)
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     def transition(self, task_id, from_state, to_state, by="system", evidence=None):
         self.calls.append(
