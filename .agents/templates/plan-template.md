@@ -38,6 +38,16 @@ If a task exceeds the agent session limit (≤ 4 hr / ≤ 8 files / ≤ 300 line
 - [ ] Add/update CSS styles for all custom `className` values
 - [ ] Verify no unstyled `className` references remain
 
+### Batching Check
+
+Before finalizing this plan, confirm it should not be merged with related plans:
+
+- [ ] This is not one of several near-identical additions (templates, examples, docs).
+- [ ] The diff is expected to exceed 3 files or 50 lines.
+- [ ] The work cannot share a branch/PR with related tasks.
+
+If all boxes are unchecked, consider batching this work into a single plan.
+
 ## Files to Modify
 
 - `path/to/file`
