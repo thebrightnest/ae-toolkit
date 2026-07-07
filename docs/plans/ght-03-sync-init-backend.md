@@ -50,4 +50,5 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ---
 
-_Stage: reviewed_
+_Stage: secure_
+_Next step: run `aet-sync-docs` (if plan diverged), then `aet-ship`_
