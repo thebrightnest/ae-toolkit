@@ -19,14 +19,14 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ## Task List
 
-1. Create `aet-work/lib/backends/github_backend.py` implementing `TaskBackend` — M
-2. Implement `gh issue list` parsing to load open issues with `aet:*` labels into queue records — S
-3. Map AET states to/from GitHub labels (`aet:ready`, `aet:in-progress`, etc.) — S
-4. Implement label creation helper that ensures required `aet:*` labels exist in the repo — S
-5. Implement issue creation/update/close helpers for `save()` and `transition()` — M
-6. Add error handling for missing `gh` CLI or failed authentication — S
-7. Add unit tests using mocked `gh` subprocess calls — S
-8. Run `make validate` — S
+1. [x] Create `aet-work/lib/backends/github_backend.py` implementing `TaskBackend` — M
+2. [x] Implement `gh issue list` parsing to load open issues with `aet:*` labels into queue records — S
+3. [x] Map AET states to/from GitHub labels (`aet:ready`, `aet:in-progress`, etc.) — S
+4. [x] Implement label creation helper that ensures required `aet:*` labels exist in the repo — S
+5. [x] Implement issue creation/update/close helpers for `save()` and `transition()` — M
+6. [x] Add error handling for missing `gh` CLI or failed authentication — S
+7. [x] Add unit tests using mocked `gh` subprocess calls — S
+8. [x] Run `make validate` — S
 
 ## Files to Modify
 
@@ -36,13 +36,13 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ## Validation Steps
 
-- [ ] GitHub backend loads open issues and maps labels to states correctly in tests
-- [ ] Missing labels are created automatically on first load
-- [ ] `gh` CLI errors produce clear, actionable messages
-- [ ] `make lint` passes
-- [ ] `make format-check` passes
-- [ ] `make validate` passes
-- [ ] New backend tests pass
+- [x] GitHub backend loads open issues and maps labels to states correctly in tests
+- [x] Missing labels are created automatically on first load
+- [x] `gh` CLI errors produce clear, actionable messages
+- [x] `make lint` passes
+- [x] `make format-check` passes
+- [x] `make validate` passes
+- [x] New backend tests pass
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -53,5 +53,5 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
