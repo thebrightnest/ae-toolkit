@@ -9,7 +9,7 @@ pipeline: standard
 
 ## Context
 
-Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-ephemeral-sprint-board-prd.md). The work queue must stop being a tracked file so runtime sprint state no longer pollutes the working tree or blocks the orchestrator's hygiene check.
+Part of [PRD: aet-work Queue State Refactor](../prds/aet-work-queue-state-refactor-prd.md). The work queue must stop being a tracked file so runtime sprint state no longer pollutes the working tree or blocks the orchestrator's hygiene check.
 
 ## Intake Triage
 
