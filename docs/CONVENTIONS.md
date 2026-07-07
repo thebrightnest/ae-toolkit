@@ -158,6 +158,16 @@ When a task exceeds limits:
 3. **Max split depth = 3.** If a child still fails, mark it `⚠️ ATOMIC OVERSIZED` and surface for explicit user approval.
 4. Document splits with `Split from: {parent-id}` and suffix IDs (`01a`, `01b`).
 
+### Batching Rule
+
+The opposite mistake is also possible: splitting a coherent feature into plans that are each too small to justify their own branch, worktree, and PR overhead. Before creating a new plan, ask:
+
+- Is this change part of a set of near-identical additions (e.g., multiple example templates, multiple convention docs)?
+- Will each resulting diff be ≤ 3 files and ≤ 50 lines?
+- Do the changes share the same validation steps and rollout risk?
+
+If the answer is **yes** to any of these, batch the related work into a single plan/branch/PR and list every deliverable in the task list. Do not create one plan per file just because the PRD enumerated files separately.
+
 ## Recorded-Forward Work Queue State
 
 Workflow state is recorded at transition time and trusted on read.
