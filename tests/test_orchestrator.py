@@ -172,7 +172,9 @@ class TestRunSingleHygiene(unittest.TestCase):
                 check=True,
             )
             args = _make_args(repo_root, "docs/plans/demo.md")
-            with patch.dict(os.environ, {"AET_EXECUTION_MODE": ""}):
+            with patch.dict(
+                os.environ, {"AET_EXECUTION_MODE": ""}, clear=True
+            ):
                 with patch.object(orchestrator, "process_task") as mock_process:
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
             self.assertEqual(exit_code, 1)
@@ -192,7 +194,9 @@ class TestRunSingleHygiene(unittest.TestCase):
                 check=True,
             )
             args = _make_args(repo_root, "docs/plans/demo.md")
-            with patch.dict(os.environ, {"AET_EXECUTION_MODE": ""}):
+            with patch.dict(
+                os.environ, {"AET_EXECUTION_MODE": ""}, clear=True
+            ):
                 with patch.object(orchestrator, "process_task") as mock_process:
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
             self.assertEqual(exit_code, 1)
@@ -203,7 +207,9 @@ class TestRunSingleHygiene(unittest.TestCase):
             _init_git_repo(repo_root)
             Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
             args = _make_args(repo_root, "docs/plans/demo.md")
-            with patch.dict(os.environ, {"AET_EXECUTION_MODE": ""}):
+            with patch.dict(
+                os.environ, {"AET_EXECUTION_MODE": ""}, clear=True
+            ):
                 with patch.object(orchestrator, "process_task") as mock_process:
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
             self.assertEqual(exit_code, 1)
@@ -219,7 +225,9 @@ class TestRunSingleHygiene(unittest.TestCase):
                 check=True,
             )
             args = _make_args(repo_root, "docs/plans/demo.md")
-            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+            with patch.dict(
+                os.environ, {"AET_EXECUTION_MODE": "unattended"}, clear=True
+            ):
                 with patch.object(
                     orchestrator, "process_task", return_value=False
                 ) as mock_process:
@@ -428,7 +436,9 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             )
 
             args = _make_args(repo_root, plan_file)
-            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+            with patch.dict(
+                os.environ, {"AET_EXECUTION_MODE": "unattended"}, clear=True
+            ):
                 with patch.object(orchestrator, "process_task", return_value=True):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
@@ -474,7 +484,9 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             )
 
             args = _make_args(repo_root, plan_file)
-            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+            with patch.dict(
+                os.environ, {"AET_EXECUTION_MODE": "unattended"}, clear=True
+            ):
                 with patch.object(orchestrator, "process_task", return_value=True):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
@@ -519,7 +531,11 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             )
 
             args = _make_args(repo_root, plan_file)
-            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended", "AET_TASK_ID": "demo"}):
+            with patch.dict(
+                os.environ,
+                {"AET_EXECUTION_MODE": "unattended", "AET_TASK_ID": "demo"},
+                clear=True,
+            ):
                 with patch.object(orchestrator, "process_task", return_value=True):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
@@ -564,7 +580,9 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             )
 
             args = _make_args(repo_root, plan_file)
-            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+            with patch.dict(
+                os.environ, {"AET_EXECUTION_MODE": "unattended"}, clear=True
+            ):
                 with patch.object(orchestrator, "process_task", return_value=True):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
             self.assertEqual(exit_code, 0)
@@ -647,7 +665,9 @@ class TestRunSummaryTelemetry(unittest.TestCase):
                 )
 
                 args = _make_args(repo_root, plan_file)
-                with patch.dict(os.environ, _archive_env(archive_dir), clear=False):
+                with patch.dict(
+                    os.environ, _archive_env(archive_dir), clear=True
+                ):
                     with patch.object(orchestrator, "process_task", return_value=True):
                         exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
                 self.assertEqual(exit_code, 0)
@@ -678,7 +698,9 @@ class TestRunSummaryTelemetry(unittest.TestCase):
                 )
 
                 args = _make_args(repo_root, plan_file)
-                with patch.dict(os.environ, _archive_env(archive_dir), clear=False):
+                with patch.dict(
+                    os.environ, _archive_env(archive_dir), clear=True
+                ):
                     with patch.object(orchestrator, "process_task", return_value=False):
                         exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
                 self.assertEqual(exit_code, 1)
