@@ -267,14 +267,37 @@ def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dic
 
 
 def check_main_hygiene(repo_root: str) -> tuple[bool, str]:
-    """Check if main is clean and synced with origin."""
-    # Check working tree
+    """Check if main is clean and synced with origin.
+
+    Queue files are excluded from the dirty check because the orchestrator
+    mutates them as part of normal operation and they are gitignored in
+    projects using the toolkit.
+    """
+    ignored_paths = {
+        ".agents/work-queue.json",
+        ".agents/work-history.jsonl",
+    }
+
+    # Check working tree, ignoring queue-mutation artifacts. Use
+    # --untracked-files=all so untracked paths are listed individually rather
+    # than collapsed into parent directories.
     result = subprocess.run(
-        ["git", "-C", repo_root, "status", "--short"],
+        ["git", "-C", repo_root, "status", "--short", "--untracked-files=all"],
         capture_output=True,
         text=True,
     )
-    if result.stdout.strip():
+    dirty_lines = []
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split(maxsplit=1)
+        if len(parts) < 2:
+            continue
+        path = parts[1]
+        if path not in ignored_paths:
+            dirty_lines.append(line)
+    if dirty_lines:
         return False, "Working tree is dirty"
 
     # Check unpushed commits
