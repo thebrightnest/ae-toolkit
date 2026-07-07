@@ -36,13 +36,13 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ## Validation Steps
 
-- [ ] `aet-work status` still shows the current queue correctly with no backend config
-- [ ] `aet-work next` still picks the first ready task with no backend config
-- [ ] `make lint` passes
-- [ ] `make format-check` passes
-- [ ] `make validate` passes
-- [ ] New backend tests pass
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `aet-work status` still shows the current queue correctly with no backend config
+- [x] `aet-work next` still picks the first ready task with no backend config
+- [x] `make lint` passes
+- [x] `make format-check` passes
+- [x] `make validate` passes
+- [x] New backend tests pass
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (post-merge check)
 
 ## Rollback Plan
 
@@ -52,5 +52,4 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_

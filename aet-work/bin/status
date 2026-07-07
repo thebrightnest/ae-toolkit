@@ -15,7 +15,8 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import current_state, read_history, read_queue, state_to_status  # noqa: E402
+from backends.factory import create_backend  # noqa: E402
+from queue import current_state, state_to_status  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,19 +46,15 @@ def _display_category(task: dict) -> str:
 
 def main() -> int:
     args = parse_args()
-    queue = read_queue(args.queue_file)
-    history = read_history(args.history_file)
+    backend = create_backend(
+        queue_file=args.queue_file, history_file=args.history_file
+    )
+    data = backend.load()
+    queue = data["queue"]
+    history = data["history"]
     plans_dir = Path(args.plans_dir)
 
-    queued_files = {t.get("plan_file") for t in queue if t.get("plan_file")}
-    settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
-    plan_files = sorted(plans_dir.glob("*.md"))
-
-    orphaned = [
-        str(pf)
-        for pf in plan_files
-        if str(pf) not in queued_files and str(pf) not in settled_files
-    ]
+    orphaned = backend.plan_drift(plans_dir)
 
     if orphaned:
         print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")
