@@ -44,7 +44,7 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 - [ ] `make lint` passes
 - [ ] `make format-check` passes
 - [ ] `make validate` passes
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [ ] Merge verified: `git merge-base --is-ancestor origin/main HEAD`
 
 ## Rollback Plan
 
@@ -54,5 +54,5 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
