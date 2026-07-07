@@ -421,6 +421,42 @@ def update_plan_footer(plan_path, stage):
     path.write_text(new_content, encoding="utf-8")
 
 
+def update_plan_frontmatter_status(plan_path, status):
+    """Update the `status` key in a markdown file's YAML frontmatter.
+
+    If a `status` key already exists, its value is replaced. If not, the key
+    is appended to the frontmatter block. The file is rewritten in place.
+    """
+    path = Path(plan_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Plan file not found: {plan_path}")
+
+    content = path.read_text(encoding="utf-8")
+    match = re.match(r"^(---\n)(.*?)(\n---\n)", content, re.DOTALL)
+    if not match:
+        raise ValueError(f"No YAML frontmatter found in {plan_path}")
+
+    frontmatter = match.group(2)
+    if re.search(r"^status:\s*", frontmatter, re.MULTILINE):
+        new_frontmatter = re.sub(
+            r"^(status:\s*).*$",
+            r"\1" + status,
+            frontmatter,
+            flags=re.MULTILINE,
+        )
+    else:
+        new_frontmatter = frontmatter.rstrip() + f"\nstatus: {status}"
+
+    new_content = content[: match.start(2)] + new_frontmatter + content[match.end(2):]
+    path.write_text(new_content, encoding="utf-8")
+
+
+def update_plan_status(plan_path, status):
+    """Update both the frontmatter status and the footer stage."""
+    update_plan_frontmatter_status(plan_path, status)
+    update_plan_footer(plan_path, status)
+
+
 def cmd_audit(args):
     """Reconcile stored state against git ground truth without mutating.
 
@@ -571,6 +607,24 @@ def cmd_record_merge(args):
         print(str(e), file=sys.stderr)
         return 1
 
+    # Terminal truth lives in the plan file. Update both frontmatter status and
+    # footer stage when a plan path is provided or the task references an
+    # existing plan file.
+    explicit_plan = getattr(args, "plan", None)
+    plan_path = explicit_plan or task.get("plan_file")
+    if plan_path and Path(plan_path).exists():
+        try:
+            update_plan_status(plan_path, "merged")
+        except ValueError as e:
+            print(f"Merge recorded, but plan update failed: {e}", file=sys.stderr)
+            return 1
+    elif explicit_plan:
+        print(
+            f"Merge recorded, but explicit plan file not found: {explicit_plan}",
+            file=sys.stderr,
+        )
+        return 1
+
     print(f"Recorded merge for {args.task_id}: {merge_commit} ({merge_strategy})")
     return 0
 
@@ -691,6 +745,10 @@ def main():
     record_merge_parser.add_argument("task_id", help="Task ID.")
     record_merge_parser.add_argument(
         "queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON."
+    )
+    record_merge_parser.add_argument(
+        "--plan",
+        help="Path to the plan markdown file. If omitted, uses the task's plan_file.",
     )
 
     # archive
