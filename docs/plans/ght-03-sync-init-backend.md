@@ -50,5 +50,5 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs` (if plan diverged), then `aet-ship`_
+_Stage: synced_
+\_Next step: await merge, then run `aet-state record-merge ght-03-sync-init-backend` and safe branch deletion
