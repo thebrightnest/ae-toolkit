@@ -174,7 +174,7 @@ while IFS= read -r -d '' mdfile; do
       esac
       dir=$(dirname "$mdfile")
       target="$dir/$link"
-      target=$(cd "$REPO_ROOT" && realpath -m "$target" 2>/dev/null || echo "$target")
+      target=$(cd "$REPO_ROOT" && python3 -c "import os, sys; print(os.path.normpath(os.path.join(os.getcwd(), sys.argv[1])))" "$target" 2>/dev/null || echo "$target")
       if [ ! -e "$target" ]; then
         echo "❌ Broken link in $mdfile → $link"
         touch "$REPO_ROOT/.link-errors"
