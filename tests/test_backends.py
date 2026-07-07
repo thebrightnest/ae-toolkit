@@ -8,10 +8,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 import json
 import tempfile
 import unittest
+import unittest.mock
 from abc import ABC
 
 from backends.base import TaskBackend
 from backends.factory import create_backend
+from backends.github_backend import GitHubBackend
 from backends.json_backend import JsonBackend
 
 
@@ -168,6 +170,135 @@ class TestJsonBackend(unittest.TestCase):
         backend = JsonBackend(self.queue_file, self.history_file)
         backend.close()
 
+    def test_sync_task_is_safe_noop(self):
+        backend = JsonBackend(self.queue_file, self.history_file)
+        backend.sync_task({"id": "t1", "state": "ready"}, is_new=True)
+        backend.sync_task({"id": "t1", "state": "ready"}, is_new=False)
+
+
+class TestGithubBackend(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.queue_file = str(Path(self.tmp.name) / "work-queue.json")
+        self.history_file = str(Path(self.tmp.name) / "work-history.jsonl")
+        self.repo = "owner/repo"
+        self.backend = GitHubBackend(
+            queue_file=self.queue_file,
+            history_file=self.history_file,
+            repo=self.repo,
+        )
+        self.run_patcher = unittest.mock.patch("backends.github_backend.subprocess.run")
+        self.mock_run = self.run_patcher.start()
+
+    def tearDown(self):
+        self.run_patcher.stop()
+        self.tmp.cleanup()
+
+    def _make_result(self, stdout="", returncode=0):
+        result = unittest.mock.MagicMock()
+        result.returncode = returncode
+        result.stdout = stdout
+        result.stderr = ""
+        return result
+
+    def test_load_returns_empty_lists_for_missing_files(self):
+        data = self.backend.load()
+        self.assertEqual(data["queue"], [])
+        self.assertEqual(data["history"], [])
+
+    def test_save_writes_local_json_mirror(self):
+        queue = [{"id": "t1", "state": "ready"}]
+        self.backend.save(queue)
+
+        with open(self.queue_file, "r", encoding="utf-8") as f:
+            self.assertEqual(json.load(f), queue)
+
+    def test_sync_task_creates_issue_for_new_task(self):
+        self.mock_run.return_value = self._make_result(stdout="https://github.com/owner/repo/issues/42\n")
+        task = {
+            "id": "feat-001",
+            "title": "First task",
+            "state": "ready",
+            "plan_file": "docs/plans/feat-001.md",
+        }
+
+        self.backend.sync_task(task, is_new=True)
+
+        self.mock_run.assert_called_once()
+        call_args = self.mock_run.call_args[0][0]
+        self.assertIn("issue", call_args)
+        self.assertIn("create", call_args)
+        self.assertIn("--repo", call_args)
+        self.assertIn(self.repo, call_args)
+        self.assertIn("--label", call_args)
+        self.assertIn("aet:ready", call_args)
+        self.assertEqual(task["github_issue_number"], 42)
+        self.assertEqual(task["github_issue_url"], "https://github.com/owner/repo/issues/42")
+
+    def test_sync_task_updates_labels_for_existing_task(self):
+        self.mock_run.side_effect = [
+            self._make_result(stdout='{"labels": []}'),
+            self._make_result(stdout=""),
+        ]
+        task = {
+            "id": "feat-001",
+            "title": "First task",
+            "state": "ready",
+            "plan_file": "docs/plans/feat-001.md",
+            "github_issue_number": 42,
+        }
+
+        self.backend.sync_task(task, is_new=False)
+
+        self.assertEqual(self.mock_run.call_count, 2)
+        edit_call = self.mock_run.call_args_list[1][0][0]
+        self.assertIn("issue", edit_call)
+        self.assertIn("edit", edit_call)
+        self.assertIn("42", edit_call)
+        self.assertIn("--repo", edit_call)
+        self.assertIn(self.repo, edit_call)
+        self.assertIn("--add-label", edit_call)
+        self.assertIn("aet:ready", edit_call)
+
+    def test_sync_task_removes_stale_labels_for_existing_task(self):
+        self.mock_run.side_effect = [
+            self._make_result(
+                stdout='{"labels": [{"name": "aet:planned"}, {"name": "aet:blocked"}]}'
+            ),
+            self._make_result(stdout=""),
+        ]
+        task = {
+            "id": "feat-001",
+            "title": "First task",
+            "state": "ready",
+            "plan_file": "docs/plans/feat-001.md",
+            "github_issue_number": 42,
+        }
+
+        self.backend.sync_task(task, is_new=False)
+
+        self.assertEqual(self.mock_run.call_count, 2)
+        edit_call = self.mock_run.call_args_list[1][0][0]
+        self.assertIn("--remove-label", edit_call)
+        self.assertIn("aet:planned", edit_call)
+        self.assertIn("aet:blocked", edit_call)
+
+    def test_sync_task_raises_clear_error_when_gh_fails(self):
+        self.mock_run.return_value = self._make_result(stdout="", returncode=1)
+        self.mock_run.return_value.stderr = "gh not authenticated"
+        task = {
+            "id": "feat-001",
+            "title": "First task",
+            "state": "ready",
+            "plan_file": "docs/plans/feat-001.md",
+        }
+
+        with self.assertRaises(RuntimeError):
+            self.backend.sync_task(task, is_new=True)
+
+    def test_close_is_safe(self):
+        self.backend.close()
+
 
 class TestFactory(unittest.TestCase):
     def setUp(self):
@@ -197,16 +328,20 @@ class TestFactory(unittest.TestCase):
         )
         self.assertIsInstance(backend, JsonBackend)
 
-    def test_factory_raises_for_github_backend(self):
+    def test_factory_returns_github_backend_when_configured(self):
         config_path = Path(self.tmp.name) / "aet-work.json"
-        config_path.write_text('{"task_backend": "github"}', encoding="utf-8")
+        config_path.write_text(
+            '{"task_backend": "github", "github": {"repo": "owner/repo"}}',
+            encoding="utf-8",
+        )
 
-        with self.assertRaises(NotImplementedError):
-            create_backend(
-                config_path=str(config_path),
-                queue_file=self.queue_file,
-                history_file=self.history_file,
-            )
+        backend = create_backend(
+            config_path=str(config_path),
+            queue_file=self.queue_file,
+            history_file=self.history_file,
+        )
+        self.assertIsInstance(backend, GitHubBackend)
+        self.assertEqual(backend.repo, "owner/repo")
 
     def test_factory_raises_for_both_backend(self):
         config_path = Path(self.tmp.name) / "aet-work.json"
