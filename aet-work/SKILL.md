@@ -102,6 +102,47 @@ Append-only sync of `docs/plans/*.md` into the existing queue. Implemented by `a
 
 `sync` does **not** call `aet-state audit` or promote dependents.
 
+### `add`
+
+Add a single plan to the work queue.
+
+**Usage:**
+
+```bash
+add docs/plans/FEAT-001-plan.md
+add FEAT-001-plan
+```
+
+**Procedure:**
+
+1. Resolve the argument to a plan file in `docs/plans/`.
+2. Refuse if the plan footer stage is `merged` or `abandoned`.
+3. Load `.agents/work-queue.json` and `.agents/work-history.jsonl`.
+4. If the task is already active or settled, report it and exit cleanly.
+5. Append a new task with `state: "planned"` and write the queue.
+
+### `review`
+
+Print a human-readable backlog review grouped by pipeline stage.
+
+**Usage:**
+
+```bash
+review
+```
+
+**Procedure:**
+
+1. Scan `docs/plans/*.md`.
+2. Read each plan's footer `*Stage:*` value.
+3. Group plans into:
+   - **Approved:** `plan-approved`
+   - **Queued:** `synced`
+   - **In Progress:** `tdd-complete`, `implemented`, `qa-complete`, `reviewed`, `secure`, `synced-docs`
+   - **Awaiting Merge:** `awaiting_merge`
+   - **Closed:** `merged`, `abandoned`
+4. Print each group with task ID and title.
+
 ### `status`
 
 Show the current state of the work queue.
