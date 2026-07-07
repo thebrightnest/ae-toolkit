@@ -18,12 +18,12 @@ Part of [aet-setup reference evolution PRD](../prds/aet-setup-reference-evolutio
 
 ## Task List
 
-1. Create `aet-setup/examples/security-guidelines.md.example` with Shary-style format — S:
+1. [x] Create `aet-setup/examples/security-guidelines.md.example` with Shary-style format — S:
    - Threat Model
    - Controls
    - Forbidden Patterns
-2. Include starter threats relevant to most projects (secrets leakage, dependency CVEs, injection, auth bypass) — S
-3. Run `make validate` — S
+2. [x] Include starter threats relevant to most projects (secrets leakage, dependency CVEs, injection, auth bypass) — S
+3. [x] Run `make validate` — S
 
 ## Files to Modify
 
@@ -31,9 +31,9 @@ Part of [aet-setup reference evolution PRD](../prds/aet-setup-reference-evolutio
 
 ## Validation Steps
 
-- [ ] `make lint` passes
-- [ ] `make format-check` passes
-- [ ] Document includes threat model + controls + forbidden patterns
+- [x] `make lint` passes
+- [x] `make format-check` passes
+- [x] Document includes threat model + controls + forbidden patterns
 
 ## Rollback Plan
 
@@ -42,5 +42,4 @@ Part of [aet-setup reference evolution PRD](../prds/aet-setup-reference-evolutio
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
