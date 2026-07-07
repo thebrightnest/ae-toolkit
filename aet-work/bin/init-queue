@@ -10,6 +10,7 @@ It does **not** derive actionable status or promote tasks.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -225,11 +226,18 @@ def build_blocks(queue: list[dict]) -> None:
 def main() -> int:
     args = parse_args()
     queue_file = args.queue_file
+    history_file = args.history_file
     plans_dir = Path(args.plans_dir)
     prds_dir = Path(args.prds_dir)
 
+    # Ensure the append-only history log exists so commands recreate missing
+    # files on demand without waiting for a terminal record to be appended.
+    os.makedirs(os.path.dirname(history_file) or ".", exist_ok=True)
+    if not os.path.exists(history_file):
+        open(history_file, "a", encoding="utf-8").close()
+
     queue = read_queue(queue_file)
-    history = read_history(args.history_file)
+    history = read_history(history_file)
 
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
     history_by_id = {t.get("id"): t for t in history if t.get("id")}

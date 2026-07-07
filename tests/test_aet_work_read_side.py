@@ -169,6 +169,30 @@ class TestStatusStoredState(unittest.TestCase):
         ready_section = output.split("Next ready tasks:")[1].split("\n\n")[0]
         self.assertNotIn("Two", ready_section)
 
+    def test_works_when_queue_file_is_missing(self):
+        """status exits cleanly and reports an empty queue when files are missing."""
+        plans_dir_tmp = _make_plans_dir([])
+        plans_dir = plans_dir_tmp.name
+        queue_file = str(Path(tempfile.mkdtemp()) / "missing-queue.json")
+        history_file = str(Path(tempfile.mkdtemp()) / "missing-history.jsonl")
+
+        stdout = io.StringIO()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = status.main()
+
+        self.assertEqual(rc, 0)
+        output = stdout.getvalue()
+        self.assertIn("No plan drift detected", output)
+        self.assertIn("planned: 0", output)
+        self.assertIn("Next ready tasks:", output)
+        self.assertIn("None.", output)
+
 
 @unittest.skipIf(next_cmd is None, "next command not yet implemented")
 class TestNextStoredState(unittest.TestCase):
