@@ -10,3 +10,4 @@ __pycache__
 .agents/work-history.jsonl
 aet-work.log
 aet-work-*.log
+.agents/work-queue.json
