@@ -321,5 +321,20 @@ class TestBackendAwareValidate(unittest.TestCase):
         self.assertTrue(any(c[0] == "load" for c in backend.calls))
 
 
+class TestBackendDefaultHooks(unittest.TestCase):
+    def test_default_transition_hooks_are_safe(self):
+        """The base backend provides no-op on_transition and close_task hooks."""
+        from backends.json_backend import JsonBackend
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_file = str(Path(tmpdir) / "work-queue.json")
+            history_file = str(Path(tmpdir) / "work-history.jsonl")
+            backend = JsonBackend(queue_file, history_file)
+
+            # These should not raise and should not mutate the queue.
+            backend.on_transition("t1", "planned", "ready")
+            backend.close_task("t1")
+
+
 if __name__ == "__main__":
     unittest.main()
