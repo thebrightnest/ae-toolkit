@@ -40,17 +40,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def plan_drift_detected(backend, plans_dir: Path) -> bool:
+def report_plan_drift(backend, plans_dir: Path) -> None:
+    """Print an informational warning if plans exist that are not tracked."""
     orphaned = backend.plan_drift(plans_dir)
 
     if orphaned:
         print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")
         for pf in orphaned:
             print(f"  - {pf}")
-        print("Run init-queue to sync, then try again.")
-        return True
-
-    return False
+        print("Run init-queue to sync if you want these plans tracked.")
 
 
 def topological_sort(tasks: list[dict]) -> list[dict]:
@@ -121,8 +119,7 @@ def main() -> int:
     queue = data["queue"]
     plans_dir = Path(args.plans_dir)
 
-    if plan_drift_detected(backend, plans_dir):
-        return 1
+    report_plan_drift(backend, plans_dir)
 
     task = pick_next_ready(queue)
 

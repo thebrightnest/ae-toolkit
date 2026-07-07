@@ -160,6 +160,49 @@ class TestEnforceMainHygiene(unittest.TestCase):
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
                 self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
 
+    def test_enforce_main_hygiene_ignores_untracked_queue_file(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            Path(repo_root, ".agents").mkdir()
+            Path(repo_root, ".agents", "work-queue.json").write_text(
+                '{"tasks": []}', encoding="utf-8"
+            )
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("AET_EXECUTION_MODE", None)
+                self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+
+    def test_enforce_main_hygiene_ignores_modified_queue_files(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            Path(repo_root, ".agents").mkdir()
+            queue_file = Path(repo_root, ".agents", "work-queue.json")
+            queue_file.write_text('{"tasks": []}', encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add queue"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            queue_file.write_text('{"tasks": [{"id": "x"}]}', encoding="utf-8")
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("AET_EXECUTION_MODE", None)
+                self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+
+    def test_enforce_main_hygiene_still_halts_on_other_dirty_files(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            Path(repo_root, ".agents").mkdir()
+            Path(repo_root, ".agents", "work-queue.json").write_text(
+                '{"tasks": []}', encoding="utf-8"
+            )
+            Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("AET_EXECUTION_MODE", None)
+                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
+
 
 class TestRunSingleHygiene(unittest.TestCase):
     def test_run_single_halts_when_main_ahead(self):

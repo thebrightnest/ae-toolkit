@@ -60,7 +60,7 @@ def main() -> int:
         print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")
         for pf in orphaned:
             print(f"  - {pf}")
-        print("Run init-queue to sync, or acknowledge each plan manually.")
+        print("Run init-queue to sync if you want these plans tracked.")
     else:
         print("✅ No plan drift detected. All plans are tracked in the queue.")
 
