@@ -46,5 +46,5 @@ Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-epheme
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
