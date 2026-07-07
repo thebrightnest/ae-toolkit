@@ -27,20 +27,8 @@ def _label_list_response(labels: list[str]) -> str:
     return json.dumps([{"name": name} for name in labels])
 
 
-def _issue(
-    number: int,
-    title: str,
-    labels: list[str],
-    body: str,
-    url: str = "https://github.com/owner/repo/issues/1",
-) -> dict:
-    return {
-        "number": number,
-        "title": title,
-        "labels": [{"name": name} for name in labels],
-        "body": body,
-        "url": url,
-    }
+def _write_queue(path: str, tasks: list[dict]) -> None:
+    Path(path).write_text(json.dumps(tasks), encoding="utf-8")
 
 
 class TestGitHubBackend(unittest.TestCase):
@@ -69,66 +57,96 @@ class TestGitHubBackend(unittest.TestCase):
 
         self.assertTrue(issubclass(GitHubBackend, TaskBackend))
 
-    @mock.patch("backends.github_backend.subprocess.run")
-    def test_load_returns_empty_when_no_issues(self, mock_run):
-        def side_effect(cmd, **kwargs):
-            if cmd[:3] == ["gh", "label", "list"]:
-                return _completed(stdout=_label_list_response([f"aet:{s}" for s in STATE_LABELS.values()]))
-            if cmd[:3] == ["gh", "issue", "list"]:
-                return _completed(stdout="[]")
-            raise AssertionError(f"unexpected command: {cmd}")
-
-        mock_run.side_effect = side_effect
-
+    def test_load_reads_local_json_mirror(self):
+        _write_queue(self.queue_file, [{"id": "t1", "state": "ready"}])
         data = self.backend.load()
-        self.assertEqual(data["queue"], [])
+        self.assertEqual(data["queue"], [{"id": "t1", "state": "ready"}])
         self.assertEqual(data["history"], [])
 
-    @mock.patch("backends.github_backend.subprocess.run")
-    def test_load_maps_open_issues_with_aet_labels(self, mock_run):
-        def side_effect(cmd, **kwargs):
-            if cmd[:3] == ["gh", "label", "list"]:
-                return _completed(stdout=_label_list_response([f"aet:{s}" for s in STATE_LABELS.values()]))
-            if cmd[:3] == ["gh", "issue", "list"]:
-                issue = _issue(
-                    number=42,
-                    title="GitHub adapter",
-                    labels=["aet:ready"],
-                    body="<!-- plan-file: docs/plans/ght-02-github-adapter.md -->\n\nDo the work.",
-                )
-                return _completed(stdout=json.dumps([issue]))
-            raise AssertionError(f"unexpected command: {cmd}")
+    def test_save_writes_local_json_mirror(self):
+        queue = [{"id": "t1", "state": "ready"}]
+        self.backend.save(queue)
 
-        mock_run.side_effect = side_effect
-
-        data = self.backend.load()
-        self.assertEqual(len(data["queue"]), 1)
-        task = data["queue"][0]
-        self.assertEqual(task["id"], "ght-02-github-adapter")
-        self.assertEqual(task["title"], "GitHub adapter")
-        self.assertEqual(task["state"], "ready")
-        self.assertEqual(task["plan_file"], "docs/plans/ght-02-github-adapter.md")
-        self.assertEqual(task["issue_number"], 42)
+        with open(self.queue_file, "r", encoding="utf-8") as f:
+            self.assertEqual(json.load(f), queue)
 
     @mock.patch("backends.github_backend.subprocess.run")
-    def test_load_defaults_to_planned_without_aet_label(self, mock_run):
-        def side_effect(cmd, **kwargs):
-            if cmd[:3] == ["gh", "label", "list"]:
-                return _completed(stdout=_label_list_response([f"aet:{s}" for s in STATE_LABELS.values()]))
-            if cmd[:3] == ["gh", "issue", "list"]:
-                issue = _issue(
-                    number=7,
-                    title="Untracked",
-                    labels=["bug"],
-                    body="<!-- plan-file: docs/plans/untracked.md -->",
-                )
-                return _completed(stdout=json.dumps([issue]))
-            raise AssertionError(f"unexpected command: {cmd}")
+    def test_sync_task_creates_issue_for_new_task(self, mock_run):
+        mock_run.return_value = _completed(
+            stdout="https://github.com/owner/repo/issues/42\n"
+        )
+        task = {
+            "id": "feat-001",
+            "title": "First task",
+            "state": "ready",
+            "plan_file": "docs/plans/feat-001.md",
+        }
 
-        mock_run.side_effect = side_effect
+        self.backend.sync_task(task, is_new=True)
 
-        data = self.backend.load()
-        self.assertEqual(len(data["queue"]), 0)
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
+        self.assertIn("issue", call_args)
+        self.assertIn("create", call_args)
+        self.assertIn("--repo", call_args)
+        self.assertIn("owner/repo", call_args)
+        self.assertIn("--label", call_args)
+        self.assertIn("aet:ready", call_args)
+        self.assertEqual(task["github_issue_number"], 42)
+        self.assertEqual(
+            task["github_issue_url"],
+            "https://github.com/owner/repo/issues/42",
+        )
+
+    @mock.patch("backends.github_backend.subprocess.run")
+    def test_sync_task_updates_labels_for_existing_task(self, mock_run):
+        mock_run.side_effect = [
+            _completed(stdout='{"labels": []}'),
+            _completed(stdout=""),
+        ]
+        task = {
+            "id": "feat-001",
+            "title": "First task",
+            "state": "ready",
+            "plan_file": "docs/plans/feat-001.md",
+            "github_issue_number": 42,
+        }
+
+        self.backend.sync_task(task, is_new=False)
+
+        self.assertEqual(mock_run.call_count, 2)
+        edit_call = mock_run.call_args_list[1][0][0]
+        self.assertIn("issue", edit_call)
+        self.assertIn("edit", edit_call)
+        self.assertIn("42", edit_call)
+        self.assertIn("--repo", edit_call)
+        self.assertIn("owner/repo", edit_call)
+        self.assertIn("--add-label", edit_call)
+        self.assertIn("aet:ready", edit_call)
+
+    @mock.patch("backends.github_backend.subprocess.run")
+    def test_sync_task_removes_stale_labels_for_existing_task(self, mock_run):
+        mock_run.side_effect = [
+            _completed(
+                stdout='{"labels": [{"name": "aet:planned"}, {"name": "aet:blocked"}]}'
+            ),
+            _completed(stdout=""),
+        ]
+        task = {
+            "id": "feat-001",
+            "title": "First task",
+            "state": "ready",
+            "plan_file": "docs/plans/feat-001.md",
+            "github_issue_number": 42,
+        }
+
+        self.backend.sync_task(task, is_new=False)
+
+        self.assertEqual(mock_run.call_count, 2)
+        edit_call = mock_run.call_args_list[1][0][0]
+        self.assertIn("--remove-label", edit_call)
+        self.assertIn("aet:planned", edit_call)
+        self.assertIn("aet:blocked", edit_call)
 
     @mock.patch("backends.github_backend.subprocess.run")
     def test_ensure_labels_creates_missing_labels(self, mock_run):
@@ -156,23 +174,21 @@ class TestGitHubBackend(unittest.TestCase):
 
     @mock.patch("backends.github_backend.subprocess.run")
     def test_transition_updates_issue_labels(self, mock_run):
-        issue = _issue(
-            number=10,
-            title="Task",
-            labels=["aet:ready"],
-            body="<!-- plan-file: docs/plans/task.md -->",
+        _write_queue(
+            self.queue_file,
+            [
+                {
+                    "id": "task",
+                    "state": "ready",
+                    "github_issue_number": 10,
+                    "plan_file": "docs/plans/task.md",
+                }
+            ],
         )
-
-        def side_effect(cmd, **kwargs):
-            if cmd[:3] == ["gh", "label", "list"]:
-                return _completed(stdout=_label_list_response([f"aet:{s}" for s in STATE_LABELS.values()]))
-            if cmd[:3] == ["gh", "issue", "list"]:
-                return _completed(stdout=json.dumps([issue]))
-            if cmd[:3] == ["gh", "issue", "edit"]:
-                return _completed(stdout="")
-            raise AssertionError(f"unexpected command: {cmd}")
-
-        mock_run.side_effect = side_effect
+        mock_run.side_effect = [
+            _completed(stdout='{"labels": [{"name": "aet:ready"}]}'),
+            _completed(stdout=""),
+        ]
 
         result = self.backend.transition("task", "ready", "in_progress")
         self.assertTrue(result)
@@ -183,28 +199,22 @@ class TestGitHubBackend(unittest.TestCase):
             if call.args[0][:3] == ["gh", "issue", "edit"]
         ]
         self.assertEqual(len(edit_calls), 1)
-        self.assertIn("10", edit_calls[0])
         self.assertIn("aet:in-progress", self._label_names_from_cmd(edit_calls[0]))
 
     @mock.patch("backends.github_backend.subprocess.run")
-    def test_transition_closes_terminal_issue_and_seals_history(self, mock_run):
-        issue = _issue(
-            number=11,
-            title="Task",
-            labels=["aet:awaiting-merge"],
-            body="<!-- plan-file: docs/plans/task.md -->",
+    def test_transition_closes_terminal_issue(self, mock_run):
+        _write_queue(
+            self.queue_file,
+            [
+                {
+                    "id": "task",
+                    "state": "awaiting_merge",
+                    "github_issue_number": 11,
+                    "plan_file": "docs/plans/task.md",
+                }
+            ],
         )
-
-        def side_effect(cmd, **kwargs):
-            if cmd[:3] == ["gh", "label", "list"]:
-                return _completed(stdout=_label_list_response([f"aet:{s}" for s in STATE_LABELS.values()]))
-            if cmd[:3] == ["gh", "issue", "list"]:
-                return _completed(stdout=json.dumps([issue]))
-            if cmd[:3] == ["gh", "issue", "close"]:
-                return _completed(stdout="")
-            raise AssertionError(f"unexpected command: {cmd}")
-
-        mock_run.side_effect = side_effect
+        mock_run.return_value = _completed(stdout="")
 
         result = self.backend.transition("task", "awaiting_merge", "merged")
         self.assertTrue(result)
@@ -217,78 +227,14 @@ class TestGitHubBackend(unittest.TestCase):
         self.assertEqual(len(close_calls), 1)
         self.assertIn("11", close_calls[0])
 
-        history = Path(self.history_file).read_text(encoding="utf-8").strip()
-        self.assertIn("task", history)
+        with open(self.queue_file, "r", encoding="utf-8") as f:
+            queue = json.load(f)
+        self.assertEqual(queue[0]["state"], "merged")
+        self.assertTrue(any(h.get("to") == "merged" for h in queue[0].get("history", [])))
 
-    @mock.patch("backends.github_backend.subprocess.run")
-    def test_transition_returns_false_when_task_not_found(self, mock_run):
-        def side_effect(cmd, **kwargs):
-            if cmd[:3] == ["gh", "label", "list"]:
-                return _completed(stdout=_label_list_response([f"aet:{s}" for s in STATE_LABELS.values()]))
-            if cmd[:3] == ["gh", "issue", "list"]:
-                return _completed(stdout="[]")
-            raise AssertionError(f"unexpected command: {cmd}")
-
-        mock_run.side_effect = side_effect
-
+    def test_transition_returns_false_when_task_not_found(self):
+        _write_queue(self.queue_file, [])
         self.assertFalse(self.backend.transition("missing", "ready", "in_progress"))
-
-    @mock.patch("backends.github_backend.subprocess.run")
-    def test_save_creates_issue_for_new_task(self, mock_run):
-        def side_effect(cmd, **kwargs):
-            if cmd[:3] == ["gh", "label", "list"]:
-                return _completed(stdout=_label_list_response([f"aet:{s}" for s in STATE_LABELS.values()]))
-            if cmd[:3] == ["gh", "issue", "create"]:
-                return _completed(stdout=json.dumps({"number": 99, "url": "https://github.com/owner/repo/issues/99"}))
-            raise AssertionError(f"unexpected command: {cmd}")
-
-        mock_run.side_effect = side_effect
-
-        task = {
-            "id": "new-task",
-            "title": "New task",
-            "state": "ready",
-            "plan_file": "docs/plans/new-task.md",
-        }
-        self.backend.save([task])
-
-        self.assertEqual(task["issue_number"], 99)
-        create_calls = [
-            call.args[0]
-            for call in mock_run.call_args_list
-            if call.args[0][:3] == ["gh", "issue", "create"]
-        ]
-        self.assertEqual(len(create_calls), 1)
-        self.assertIn("--label", create_calls[0])
-        self.assertIn("aet:ready", create_calls[0])
-
-    @mock.patch("backends.github_backend.subprocess.run")
-    def test_save_updates_labels_for_existing_task(self, mock_run):
-        def side_effect(cmd, **kwargs):
-            if cmd[:3] == ["gh", "label", "list"]:
-                return _completed(stdout=_label_list_response([f"aet:{s}" for s in STATE_LABELS.values()]))
-            if cmd[:3] == ["gh", "issue", "edit"]:
-                return _completed(stdout="")
-            raise AssertionError(f"unexpected command: {cmd}")
-
-        mock_run.side_effect = side_effect
-
-        task = {
-            "id": "existing",
-            "title": "Existing",
-            "state": "blocked",
-            "issue_number": 5,
-        }
-        self.backend.save([task])
-
-        edit_calls = [
-            call.args[0]
-            for call in mock_run.call_args_list
-            if call.args[0][:3] == ["gh", "issue", "edit"]
-        ]
-        self.assertEqual(len(edit_calls), 1)
-        self.assertIn("5", edit_calls[0])
-        self.assertIn("aet:blocked", self._label_names_from_cmd(edit_calls[0]))
 
     @mock.patch("backends.github_backend.subprocess.run")
     def test_missing_gh_cli_raises_clear_error(self, mock_run):

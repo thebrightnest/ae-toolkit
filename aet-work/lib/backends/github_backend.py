@@ -78,11 +78,8 @@ class GitHubBackend(TaskBackend):
     def save(
         self, queue: list[dict[str, Any]], wrapper: dict[str, Any] | None = None
     ) -> None:
-        """Persist the queue locally, then mirror tasks to GitHub issues."""
+        """Persist the queue to the local JSON mirror."""
         write_queue(self.queue_file, queue, wrapper=wrapper)
-        self.ensure_labels()
-        for task in queue:
-            self.sync_task(task, is_new=False)
 
     def transition(
         self,
@@ -207,7 +204,6 @@ class GitHubBackend(TaskBackend):
     def _create_issue(self, task: dict[str, Any]) -> None:
         """Create a GitHub issue for ``task`` and record its URL/number."""
         title = task.get("title") or task.get("id", "task")
-        plan_file = task.get("plan_file", "")
         body = self._task_body(task)
         label = self._state_label(task.get("state"))
 
@@ -223,34 +219,61 @@ class GitHubBackend(TaskBackend):
                 body,
                 "--label",
                 label,
-                "--json",
-                "number,url",
             ]
         )
-        data = json.loads(result.stdout)
-        if isinstance(data, list):
-            data = data[0]
-        task["github_issue_number"] = int(data["number"])
-        task["github_issue_url"] = data["url"]
+        url = result.stdout.strip()
+        task["github_issue_url"] = url
+        task["github_issue_number"] = int(url.rstrip("/").split("/")[-1])
 
     def _close_issue(self, issue_number: int) -> None:
         self._run_gh(["issue", "close", str(issue_number), "--repo", self.repo])
 
-    def _set_issue_labels(self, issue_number: int, state: str) -> None:
-        current_label = self._state_label(state)
-        args = [
+    def _set_issue_labels(
+        self, issue_number: int, state: str, current_labels: list[str] | None = None
+    ) -> None:
+        """Ensure the issue has exactly the label for ``state``.
+
+        If ``current_labels`` is provided, it is used to compute the diff;
+        otherwise the issue is fetched first.
+        """
+        desired_label = self._state_label(state)
+        if current_labels is None:
+            result = self._run_gh(
+                [
+                    "issue",
+                    "view",
+                    str(issue_number),
+                    "--repo",
+                    self.repo,
+                    "--json",
+                    "labels",
+                ]
+            )
+            data = json.loads(result.stdout)
+            current_labels = [
+                label["name"]
+                for label in data.get("labels", [])
+                if label["name"].startswith(f"{self.label_prefix}:")
+            ]
+
+        labels_to_add = [desired_label] if desired_label not in current_labels else []
+        labels_to_remove = [label for label in current_labels if label != desired_label]
+
+        if not labels_to_add and not labels_to_remove:
+            return
+
+        cmd = [
             "issue",
             "edit",
             str(issue_number),
             "--repo",
             self.repo,
         ]
-        for _state, suffix in STATE_LABELS.items():
-            label = f"{self.label_prefix}:{suffix}"
-            if label != current_label:
-                args.extend(["--remove-label", label])
-        args.extend(["--add-label", current_label])
-        self._run_gh(args)
+        for label in labels_to_add:
+            cmd.extend(["--add-label", label])
+        for label in labels_to_remove:
+            cmd.extend(["--remove-label", label])
+        self._run_gh(cmd)
 
     def _update_issue_labels(self, task: dict[str, Any]) -> None:
         """Ensure the issue for ``task`` has exactly the label for its current state."""
