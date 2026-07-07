@@ -13,6 +13,18 @@
 {tree or description of key directories}
 ```
 
+## Agent-Neutral Workflow State
+
+`.agents/aet-work.json` configures the task backend for `aet-work`:
+
+```json
+{
+  "task_backend": "json"
+}
+```
+
+Valid backends are `json` (local queue, default) and `github` (GitHub Issues adapter). Choose the backend during `/aet-setup`; switching later is forward-only and does not migrate active tasks or settled history.
+
 ## Layer Rules
 
 {Describe architectural layers, dependency direction, and what belongs where.}

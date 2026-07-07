@@ -135,32 +135,44 @@ class TestConfigureTaskBackend(unittest.TestCase):
         fake_bin = Path(self.tmp.name) / "fake-bin"
         fake_bin.mkdir()
         fake_gh = fake_bin / "gh"
+        state_file = fake_bin / "labels.json"
         fake_gh.write_text(
-            '#!/usr/bin/env bash\n'
-            'set -euo pipefail\n'
-            'STATE_FILE="' + str(fake_bin / "labels.json") + '"\n'
-            'if [ "$1" = "auth" ] && [ "$2" = "status" ]; then\n'
-            '  exit 0\n'
-            'fi\n'
-            'if [ "$1" = "label" ] && [ "$2" = "create" ]; then\n'
-            '  shift 2\n'
-            '  name=""\n'
-            '  color=""\n'
-            '  desc=""\n'
-            '  while [ $# -gt 0 ]; do\n'
-            '    case "$1" in\n'
-            '      --name) name="$2"; shift 2;;\n'
-            '      --color) color="$2"; shift 2;;\n'
-            '      --description) desc="$2"; shift 2;;\n'
-            '      *) shift;;\n'
-            '    esac\n'
-            '  done\n'
-            '  if [ ! -f "$STATE_FILE" ]; then echo "[]" > "$STATE_FILE"; fi\n'
-            '  python3 -c "import json; data=json.load(open(\"$STATE_FILE\")); data.append({\"name\":\"$name\",\"color\":\"$color\",\"description\":\"$desc\"}); json.dump(data, open(\"$STATE_FILE\",\"w\"))"\n'
-            '  exit 0\n'
-            'fi\n'
-            'echo "fake-gh: unhandled $*" >&2\n'
-            'exit 1\n'
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            f"STATE_FILE = {repr(str(state_file))}\n"
+            "args = sys.argv[1:]\n"
+            "if args[:2] == ['auth', 'status']:\n"
+            "    sys.exit(0)\n"
+            "if args[:2] == ['label', 'list']:\n"
+            "    print('[]')\n"
+            "    sys.exit(0)\n"
+            "if args[:2] == ['label', 'create']:\n"
+            "    args = args[2:]\n"
+            "    name = args.pop(0)\n"
+            "    color = ''\n"
+            "    desc = ''\n"
+            "    i = 0\n"
+            "    while i < len(args):\n"
+            "        if args[i] == '--repo':\n"
+            "            i += 2\n"
+            "        elif args[i] == '--color':\n"
+            "            color = args[i + 1]\n"
+            "            i += 2\n"
+            "        elif args[i] == '--description':\n"
+            "            desc = args[i + 1]\n"
+            "            i += 2\n"
+            "        else:\n"
+            "            i += 1\n"
+            "    data = []\n"
+            "    try:\n"
+            "        data = json.load(open(STATE_FILE))\n"
+            "    except FileNotFoundError:\n"
+            "        pass\n"
+            "    data.append({'name': name, 'color': color, 'description': desc})\n"
+            "    json.dump(data, open(STATE_FILE, 'w'))\n"
+            "    sys.exit(0)\n"
+            "print(f'fake-gh: unhandled {{args}}', file=sys.stderr)\n"
+            "sys.exit(1)\n"
         )
         fake_gh.chmod(0o755)
         return fake_gh
