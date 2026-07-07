@@ -129,7 +129,6 @@ Run the pre-merge validation gate.
 
    Run `git diff "$pr_base" --name-only` and check for files that are unlikely to belong to this task:
 
-   - `.agents/work-queue.json`
    - `docs/plans/*.md` or `docs/prds/*.md` files that are not this task's own plan or associated PRD
 
    Build a `Scope audit` section for the PR body:
@@ -197,31 +196,31 @@ Run the pre-merge validation gate.
 
     > **Version bump is not handled here.** Release versioning is the responsibility of a future `aet-release` skill. Do not commit `chore(release)` or VERSION changes on feature branches.
 
-14. **Merge Verification** — after the PR is created and the user indicates it has been merged:
+14. **Merge Verification and Task Closure** — after the PR is created and the user indicates it has been merged:
 
-    First, confirm the AET state helper is available:
+    First, confirm the `ship` helper is available:
 
     ```bash
-    command -v aet-state
+    command -v ship
     ```
 
     If this fails, **STOP** and print:
 
     ```
-    ⚠️  aet-state is not on PATH.
-        AET skill binaries must be installed before merge verification can update the work queue.
+    ⚠️  ship is not on PATH.
+        AET skill binaries must be installed before merge verification can close the task.
         The installer lives in the aet-setup skill, so aet-setup must be installed.
         Install options:
           - Run install-aet-binaries from the installed aet-setup skill
             (~/.agents/skills/aet-setup/bin/install-aet-binaries)
           - From this repo: make install-skills
-          - Manually: add the skill bin directories (e.g. ~/.agents/skills/aet-work/bin) to PATH.
+          - Manually: add the skill bin directories (e.g. ~/.agents/skills/aet-ship/bin) to PATH.
     ```
 
-    Then run the deterministic merge recorder:
+    Then run the closure command:
 
     ```bash
-    aet-state record-merge <task_id>
+    ship <task_id> <plan_file>
     ```
 
     This command:
@@ -230,10 +229,15 @@ Run the pre-merge validation gate.
     - Detects a regular merge when the branch tip is an ancestor of `origin/main`.
     - Detects a squash merge via `gh pr view <branch> --json mergeCommit` and verifies the SHA is an ancestor of `origin/main`.
     - Falls back to diff-equivalence detection against recent `origin/main` commits (see [references/squash-merge-handling.md](references/squash-merge-handling.md)).
-    - On success, atomically writes `merge_commit`, `merge_strategy`, `status: merged`, and `merged_at` to `.agents/work-queue.json`.
-    - On failure, exits non-zero without mutating the queue.
+    - On success:
+      - Updates the plan file YAML frontmatter `status` to `merged`.
+      - Updates the plan file footer `*Stage:*` to `merged`.
+      - Records `merge_commit`, `merge_strategy`, `status: merged`, and `merged_at` in `.agents/work-queue.json`.
+      - Appends a closure record to `.agents/work-history.jsonl`.
+      - Removes the task from `.agents/work-queue.json`.
+    - On failure, exits non-zero without mutating the plan, queue, or history.
 
-    If the merge recorder fails:
+    If the closure command fails:
 
     - **STOP** and print:
 
@@ -252,7 +256,7 @@ Run the pre-merge validation gate.
     - Offer to open the PR in the browser for manual verification.
     - Exit with non-zero status.
 
-15. **Safe Branch Deletion** — only run if the merge recorder succeeded:
+15. **Safe Branch Deletion** — only run if the closure command succeeded:
     - Regular merge: `git branch -d <branch>`
     - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)
     - Delete the remote branch: `git push origin --delete <branch>`

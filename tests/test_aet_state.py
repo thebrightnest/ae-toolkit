@@ -283,6 +283,140 @@ class TestRecordMerge(unittest.TestCase):
         self.assertEqual(task["status"], "awaiting_merge")
         self.assertNotIn("merge_commit", task)
 
+    def test_record_merge_with_plan_updates_frontmatter_and_footer(self):
+        """record-merge --plan updates plan frontmatter status and footer stage."""
+        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        plan_path = plan_dir / "t1.md"
+        plan_path.write_text(
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "---\n\n"
+            "*Stage: awaiting_merge*\n",
+            encoding="utf-8",
+        )
+        self.queue["tasks"][0]["plan_file"] = str(plan_path)
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
+
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=str(self.queue_file_path),
+            dry_run=False,
+            plan=str(plan_path),
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 0)
+        content = plan_path.read_text(encoding="utf-8")
+        self.assertIn("status: merged", content)
+        self.assertIn("*Stage: merged*", content)
+
+        # Queue task should be sealed to history.
+        with open(self.queue_file_path, "r", encoding="utf-8") as f:
+            live = json.load(f)
+        self.assertEqual(live["tasks"], [])
+        task = self._load_task()
+        self.assertEqual(task["state"], "merged")
+
+    def test_record_merge_with_plan_dry_run_does_not_mutate_plan(self):
+        """record-merge --plan --dry-run reports without updating the plan."""
+        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        plan_path = plan_dir / "t1.md"
+        original_content = (
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "---\n\n"
+            "*Stage: awaiting_merge*\n"
+        )
+        plan_path.write_text(original_content, encoding="utf-8")
+        self.queue["tasks"][0]["plan_file"] = str(plan_path)
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
+
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=str(self.queue_file_path),
+            dry_run=True,
+            plan=str(plan_path),
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(plan_path.read_text(encoding="utf-8"), original_content)
+        with open(self.queue_file_path, "r", encoding="utf-8") as f:
+            live = json.load(f)
+        self.assertEqual(len(live["tasks"]), 1)
+
+    def test_record_merge_plan_update_skipped_when_merge_unverified(self):
+        """If merge verification fails, the plan file is not updated."""
+        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        plan_path = plan_dir / "t1.md"
+        original_content = (
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "---\n\n"
+            "*Stage: awaiting_merge*\n"
+        )
+        plan_path.write_text(original_content, encoding="utf-8")
+        self.queue["tasks"][0]["plan_file"] = str(plan_path)
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
+
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
+            ("git", "merge-base", "--is-ancestor", "branch_tip", "origin/main"): (1, "", ""),
+            ("gh", "pr", "view", "feat-001", "--json", "mergeCommit"): (1, "", "gh failed"),
+            ("git", "merge-base", "feat-001", "origin/main"): (0, "merge_base\n", ""),
+            ("git", "diff", "merge_base..feat-001"): (0, "branch diff\n", ""),
+            ("git", "rev-list", "--max-count", "20", "origin/main"): (0, "other_sha\n", ""),
+            ("git", "diff", "other_sha^..other_sha"): (0, "other diff\n", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=str(self.queue_file_path),
+            dry_run=False,
+            plan=str(plan_path),
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(plan_path.read_text(encoding="utf-8"), original_content)
+
 
 class TestDeriveStatus(unittest.TestCase):
     def test_unblocked_when_blockers_terminal(self):
