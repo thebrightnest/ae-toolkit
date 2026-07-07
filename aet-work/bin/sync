@@ -20,12 +20,12 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+from backends.factory import create_backend  # noqa: E402
 from plan_parser import (  # noqa: E402
     intake_validation_errors,
     new_task_from_plan,
     validate_size,
 )
-from queue import read_history, read_queue, write_queue  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,6 +44,11 @@ def parse_args() -> argparse.Namespace:
         "--plans-dir",
         default="docs/plans",
         help="Directory containing atomic plan markdown files",
+    )
+    parser.add_argument(
+        "--config",
+        default=".agents/aet-work.json",
+        help="Path to aet-work backend configuration",
     )
     return parser.parse_args()
 
@@ -65,14 +70,21 @@ def main() -> int:
     history_file = args.history_file
     plans_dir = Path(args.plans_dir)
 
+    backend = create_backend(
+        config_path=args.config,
+        queue_file=queue_file,
+        history_file=history_file,
+    )
+
     # Ensure the append-only history log exists so commands recreate missing
     # files on demand without waiting for a terminal record to be appended.
     os.makedirs(os.path.dirname(history_file) or ".", exist_ok=True)
     if not os.path.exists(history_file):
         open(history_file, "a", encoding="utf-8").close()
 
-    queue = read_queue(queue_file)
-    history = read_history(history_file)
+    data = backend.load()
+    queue = data["queue"]
+    history = data["history"]
 
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
     settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
@@ -100,6 +112,7 @@ def main() -> int:
     preserved = 0
     skipped_settled = 0
     skipped_size = 0
+    added_task_ids: set[str] = set()
     new_tasks: list[dict] = []
 
     for pf in plan_files:
@@ -129,6 +142,7 @@ def main() -> int:
         if oversized:
             task["oversized"] = True
         new_tasks.append(task)
+        added_task_ids.add(task_id)
         added += 1
 
     # Rebuild the queue in plan-file order, preserving existing entries.
@@ -161,17 +175,18 @@ def main() -> int:
             drifted += 1
             print(f"⚠️ Drift: {task.get('id')} -> {pf}")
 
-    write_queue(
-        queue_file,
-        final_queue,
-        wrapper={"queue_updated_at": datetime.now().isoformat()},
-    )
+    for task in final_queue:
+        task_id = task.get("id")
+        backend.sync_task(task, is_new=task_id in added_task_ids)
+
+    backend.save(final_queue, wrapper={"queue_updated_at": datetime.now().isoformat()})
 
     print(
         f"\n✅ Sync complete: {added} new tasks added, {preserved} existing tasks preserved, "
         f"{skipped_settled} skipped (already settled), {skipped_size} skipped (size), "
         f"{drifted} drifted tasks reported."
     )
+    backend.close()
     return 0
 
 

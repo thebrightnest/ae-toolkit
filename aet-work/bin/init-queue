@@ -21,15 +21,13 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+from backends.factory import create_backend  # noqa: E402
 from plan_parser import intake_validation_errors, most_recent_prd, new_task_from_plan  # noqa: E402
 from queue import (  # noqa: E402
     HISTORY_TERMINAL_STATES,
     TERMINAL_STATUSES,
     append_history_record,
-    read_history,
-    read_queue,
     status_to_state,
-    write_queue,
 )
 
 
@@ -54,6 +52,11 @@ def parse_args() -> argparse.Namespace:
         "--prds-dir",
         default="docs/prds",
         help="Directory containing PRD markdown files",
+    )
+    parser.add_argument(
+        "--config",
+        default=".agents/aet-work.json",
+        help="Path to aet-work backend configuration",
     )
     return parser.parse_args()
 
@@ -230,14 +233,21 @@ def main() -> int:
     plans_dir = Path(args.plans_dir)
     prds_dir = Path(args.prds_dir)
 
+    backend = create_backend(
+        config_path=args.config,
+        queue_file=queue_file,
+        history_file=history_file,
+    )
+
     # Ensure the append-only history log exists so commands recreate missing
     # files on demand without waiting for a terminal record to be appended.
     os.makedirs(os.path.dirname(history_file) or ".", exist_ok=True)
     if not os.path.exists(history_file):
         open(history_file, "a", encoding="utf-8").close()
 
-    queue = read_queue(queue_file)
-    history = read_history(history_file)
+    data = backend.load()
+    queue = data["queue"]
+    history = data["history"]
 
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
     history_by_id = {t.get("id"): t for t in history if t.get("id")}
@@ -311,13 +321,14 @@ def main() -> int:
     if source_prd is not None:
         wrapper["source_prd"] = str(source_prd)
 
-    write_queue(queue_file, final_queue, wrapper=wrapper)
+    backend.save(final_queue, wrapper=wrapper)
 
     print(
         f"✅ init-queue complete: {added} new tasks added, {preserved} existing tasks preserved, "
         f"{skipped_settled} settled tasks skipped, {reconciled_terminal} reconciled as terminal, "
         f"{len(final_queue)} active tasks."
     )
+    backend.close()
     return 0
 
 
