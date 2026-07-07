@@ -34,9 +34,11 @@ class JsonBackend(TaskBackend):
             "history": read_history(self.history_file),
         }
 
-    def save(self, queue: list[dict[str, Any]]) -> None:
+    def save(
+        self, queue: list[dict[str, Any]], wrapper: dict[str, Any] | None = None
+    ) -> None:
         """Persist the queue to the configured JSON file."""
-        write_queue(self.queue_file, queue)
+        write_queue(self.queue_file, queue, wrapper=wrapper)
 
     def transition(
         self,
@@ -83,4 +85,8 @@ class JsonBackend(TaskBackend):
 
     def close(self) -> None:
         """No-op for the JSON backend — files are closed after each operation."""
+        return
+
+    def sync_task(self, task: dict[str, Any], is_new: bool) -> None:
+        """No-op: JSON backend has no external task mirror to maintain."""
         return
