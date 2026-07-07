@@ -29,6 +29,18 @@ make type-check
 make test
 ```
 
+### Language runner examples
+
+These commands are representative; adapt the path and filter flags to your project layout.
+
+| Runner | Run one file | Run tests matching a name | Run the full suite |
+|--------|--------------|--------------------------:|--------------------|
+| **pytest** | `pytest tests/unit/test_orders.py` | `pytest -k test_cancel_order` | `pytest` |
+| **PHPUnit** | `php artisan test tests/Unit/OrderTest.php` | `php artisan test --filter=cancel_order` | `php artisan test` |
+| **Vitest** | `vitest run tests/unit/orders.test.ts` | `vitest run -t "cancels order"` | `vitest run` |
+
+Prefer the project's own `Makefile` targets when they exist; fall back to these runner commands only when no target covers the case.
+
 ## Avoid Overtesting
 
 Overtesting is expensive: it slows CI, bloats maintenance, and gives false confidence. Be deliberate.
