@@ -507,6 +507,30 @@ class TestInitQueue(unittest.TestCase):
                     derive_calls.append(line)
         self.assertEqual(derive_calls, [])
 
+    def test_creates_missing_queue_and_history_files(self):
+        """init-queue recreates missing queue and history files on demand."""
+        make_plan(self.plans_dir / "qes-rebuild-001.md", "Rebuild task")
+        self.assertFalse(self.queue_file.exists())
+        self.assertFalse(self.history_file.exists())
+
+        result, _ = run_script(
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(
+            self.queue_file.exists(),
+            "init-queue must create the queue file when it is missing",
+        )
+        self.assertTrue(
+            self.history_file.exists(),
+            "init-queue must create the history file when it is missing",
+        )
+
     def test_skips_settled_plans_from_history(self):
         """init-queue does not re-add plans whose id or file is in work-history.jsonl."""
         make_plan(self.plans_dir / "settled.md", "Settled task")
@@ -668,6 +692,20 @@ class TestSync(unittest.TestCase):
                 if "derive" in line:
                     derive_calls.append(line)
         self.assertEqual(derive_calls, [])
+
+    def test_creates_missing_queue_file(self):
+        """sync recreates a missing queue file on demand."""
+        make_plan(self.plans_dir / "qes-sync-001.md", "Sync task")
+        self.assertFalse(self.queue_file.exists())
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(
+            self.queue_file.exists(),
+            "sync must create the queue file when it is missing",
+        )
 
     def test_skips_settled_plans_from_history(self):
         """sync does not add plans whose id or file is in work-history.jsonl."""
