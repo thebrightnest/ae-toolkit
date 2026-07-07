@@ -56,6 +56,7 @@ class TestConfigureTaskBackend(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         config = self.read_config()
         self.assertEqual(config["task_backend"], "json")
+        self.assertNotIn("github", config)
 
     def test_github_backend_with_explicit_repo_creates_config(self):
         result = self.run_script(

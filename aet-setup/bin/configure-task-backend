@@ -112,18 +112,20 @@ config = {}
 if len(sys.argv) > 1 and sys.argv[1]:
     config = json.loads(sys.argv[1])
 config["task_backend"] = sys.argv[2]
-if len(sys.argv) > 3 and sys.argv[3]:
-    config.setdefault("github", {})
-    config["github"]["repo"] = sys.argv[3]
-if len(sys.argv) > 4 and sys.argv[4]:
-    config.setdefault("github", {})
-    config["github"]["label_prefix"] = sys.argv[4]
-if len(sys.argv) > 5 and sys.argv[5]:
-    config.setdefault("github", {})
-    config["github"]["labels_created"] = sys.argv[5] == "true"
-if len(sys.argv) > 6 and sys.argv[6]:
-    config.setdefault("github", {})
-    config["github"]["reason"] = sys.argv[6]
+# Only populate github-specific keys when the github backend is selected.
+if sys.argv[2] == "github":
+    if len(sys.argv) > 3 and sys.argv[3]:
+        config.setdefault("github", {})
+        config["github"]["repo"] = sys.argv[3]
+    if len(sys.argv) > 4 and sys.argv[4]:
+        config.setdefault("github", {})
+        config["github"]["label_prefix"] = sys.argv[4]
+    if len(sys.argv) > 5 and sys.argv[5]:
+        config.setdefault("github", {})
+        config["github"]["labels_created"] = sys.argv[5] == "true"
+    if len(sys.argv) > 6 and sys.argv[6]:
+        config.setdefault("github", {})
+        config["github"]["reason"] = sys.argv[6]
 if len(sys.argv) > 7 and sys.argv[7]:
     config["switch_warning"] = sys.argv[7]
 print(json.dumps(config, indent=2))
