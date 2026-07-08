@@ -182,7 +182,7 @@ Run `aet-setup/bin/configure-task-backend` to write `.agents/aet-work.json`:
 - If `gh` is missing or unauthenticated, warn and record the gap.
 - Backend switches are forward-only; history is not migrated.
 
-Schema: `task_backend`, optional `github.repo`, `github.label_prefix`, and `github.labels_created`.
+Schema: `task_backend`, optional `github.repo`, `github.label_prefix`, and `github.labels_created`. See `aet-work/references/github-backend.md` for the label contract, `gh` requirements, and sync behavior.
 
 ### Step 7: Validate
 

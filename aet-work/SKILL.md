@@ -64,6 +64,57 @@ This means:
 6. `aet-ship` verifies the merge commit is on `origin/main`.
 7. `aet-ship` sets plan `status: merged`, appends closure to `.agents/work-history.jsonl`, and removes the task from `.agents/work-queue.json`.
 
+## Task Backends
+
+`aet-work` routes queue I/O through a pluggable backend. The default JSON backend preserves today's behavior exactly; the optional GitHub Issues adapter mirrors tasks as issues for teams that want human-visible work tracking.
+
+### Configuration
+
+Backends are configured in `.agents/aet-work.json`:
+
+```json
+{
+  "task_backend": "json",
+  "github": {
+    "repo": "owner/repo",
+    "label_prefix": "aet"
+  }
+}
+```
+
+Valid values for `task_backend` are `json` (default) and `github`. The `github` key is only required when using the GitHub backend. Run `aet-setup` (or `configure-task-backend`) to write this file and create the required `aet:*` labels.
+
+### JSON backend
+
+The local JSON backend stores the active queue in `.agents/work-queue.json` and the optional execution log in `.agents/work-history.jsonl`. This is the default and requires no external tooling.
+
+### GitHub Issues backend
+
+The GitHub backend keeps the same local JSON queue as the scheduling source of truth and mirrors each task as a GitHub issue. AET states map to `aet:*` labels:
+
+| AET state        | GitHub label         |
+| ---------------- | -------------------- |
+| `planned`        | `aet:planned`        |
+| `ready`          | `aet:ready`          |
+| `blocked`        | `aet:blocked`        |
+| `in_progress`    | `aet:in-progress`    |
+| `awaiting_merge` | `aet:awaiting-merge` |
+| `merged`         | `aet:merged`         |
+| `abandoned`      | `aet:abandoned`      |
+| `failed`         | `aet:failed`         |
+
+`aet-work next` picks the next open issue labeled `aet:ready` when GitHub mode is enabled. `aet-work sync` reconciles open issues with local plan files and treats manually closed issues as `abandoned`.
+
+### Backend switching
+
+Only one backend is active at a time. Switching backends is forward-only:
+
+- Active tasks and settled history are **not** migrated.
+- Issues or JSON records created under the previous backend are left untouched.
+- The new backend only manages work created after the switch.
+
+See [`references/github-backend.md`](references/github-backend.md) for the full label contract, `gh` CLI requirements, issue body format, and sync behavior.
+
 ## Commands
 
 ### `add`
