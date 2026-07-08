@@ -4,6 +4,7 @@ size: S
 blocked_by:
   - qes-06-skill-docs
 pipeline: standard
+status: merged
 ---
 
 # Plan: Repackage Skills and Run Final Validation
@@ -42,5 +43,5 @@ Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-epheme
 
 ---
 
-_Stage: secure_
+_Stage: merged_
 _Next step: run `aet-sync-docs`, then `aet-ship`_
