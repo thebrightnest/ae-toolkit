@@ -398,25 +398,25 @@ def cmd_set_stage(args):
 
 
 def update_plan_footer(plan_path, stage):
-    """Atomically update the *Stage: ...* footer in a plan or PRD file."""
+    """Atomically update the _Stage: ..._ footer in a plan or PRD file."""
     path = Path(plan_path)
     if not path.exists():
         raise FileNotFoundError(f"Plan file not found: {plan_path}")
 
     content = path.read_text(encoding="utf-8")
-    # Replace existing stage line
+    # Replace existing stage line (underscore or asterisk style)
     new_content = re.sub(
-        r"\*Stage:.*\*",
-        f"*Stage: {stage}*",
+        r"(?m)^[_\*]Stage:.*[_\*]$",
+        f"_Stage: {stage}_",
         content,
     )
     # If no stage line exists, append it before the final separator or at the end
     if new_content == content:
         # Check if there's a trailing separator
         if content.rstrip().endswith("---"):
-            new_content = content.rstrip() + f"\n\n*Stage: {stage}*\n"
+            new_content = content.rstrip() + f"\n\n_Stage: {stage}_\n"
         else:
-            new_content = content.rstrip() + f"\n\n---\n\n*Stage: {stage}*\n"
+            new_content = content.rstrip() + f"\n\n---\n\n_Stage: {stage}_\n"
 
     path.write_text(new_content, encoding="utf-8")
 
