@@ -42,4 +42,5 @@ Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-epheme
 
 ---
 
-_Stage: reviewed_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
