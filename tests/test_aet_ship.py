@@ -113,7 +113,7 @@ class TestShipClosure(unittest.TestCase):
 
         content = self.plan_path.read_text(encoding="utf-8")
         self.assertIn("status: merged", content)
-        self.assertIn("*Stage: merged*", content)
+        self.assertIn("_Stage: merged_", content)
 
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))
         self.assertEqual(live["tasks"], [])
