@@ -2,7 +2,7 @@
 id: qes-08-state-auto-commit
 size: S
 pipeline: standard
-status: ready
+status: merged
 ---
 
 # Plan: Auto-commit plan closure updates in aet-state
@@ -33,5 +33,5 @@ status: ready
 
 ---
 
-_Stage: in-progress_
+_Stage: merged_
 _Next step: run validation_
