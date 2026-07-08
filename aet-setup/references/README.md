@@ -53,7 +53,30 @@ aet-work.log
 aet-work-*.log
 ```
 
-### 4. `docs/references/` directory
+### 4. `.agents/aet-work.json` (task backend config)
+
+Created by `configure-task-backend` during `aet-setup` Step 6. Chooses the backend used by `aet-work`:
+
+```json
+{
+  "task_backend": "json",
+  "github": {
+    "repo": "owner/repo",
+    "label_prefix": "aet",
+    "labels_created": true
+  }
+}
+```
+
+- `task_backend`: `json` (default) or `github`.
+- `github.repo`: repository for the GitHub Issues adapter, detected from `git remote origin`.
+- `github.label_prefix`: defaults to `aet`; all state labels use this prefix.
+- `github.labels_created`: `true` after `aet-setup` has confirmed the `aet:*` labels exist.
+- `switch_warning`: recorded when switching from one backend to another; switches are forward-only and do not migrate history.
+
+See `aet-work/references/github-backend.md` for the label contract, `gh` CLI requirements, issue body format, and GitHub-to-local sync behavior.
+
+### 5. `docs/references/` directory
 
 Task-specific reference documents loaded on demand by the agent. Keep each focused and link to it from the root agent-context file (`AGENTS.md`, `CLAUDE.md`, etc.):
 
@@ -64,7 +87,7 @@ Task-specific reference documents loaded on demand by the agent. Keep each focus
 - `docs/references/ui-conventions.md` — UI component priorities and design-token alignment
 - `docs/references/worktree-ship-hygiene.md` — merge-base checks and PR scope red flags
 
-### 5. `docs/` subdirectories (created by individual skills)
+### 6. `docs/` subdirectories (created by individual skills)
 
 Each skill creates its own folder under `docs/` when it first produces an artifact:
 
@@ -74,14 +97,14 @@ Each skill creates its own folder under `docs/` when it first produces an artifa
 
 `aet-setup` does **not** pre-create these. Skills own their own directories.
 
-### 5. Tool configs
+### 7. Tool configs
 
 Linter, formatter, type checker, security scanner configs tailored to the detected stack.
 
-### 6. Root orchestration
+### 8. Root orchestration
 
 `Makefile` or `justfile` with targets: install, dev, test, lint, format, type-check, security-audit, clean
 
-### 7. ADR template
+### 9. ADR template
 
 `docs/adr/000-template.md` and `docs/adr/README.md`
