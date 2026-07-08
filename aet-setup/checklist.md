@@ -109,6 +109,14 @@ Use this checklist during every `/aet-setup` invocation. Every topic must be exp
 - [ ] Commitlint or equivalent configured (if easily supported)?
 - [ ] `.gitignore` excludes generated agent artifacts (`.agents/work-history.jsonl`, `.agents/execution.log.jsonl`, `aet-work.log`, `aet-work-*.log`)?
 
+## 15. Task Backend Configuration
+
+- [ ] `.agents/aet-work.json` exists with a valid `task_backend` (`json` or `github`)?
+- [ ] When `github` is selected, `repo` is set to `owner/repo`?
+- [ ] When `github` is selected, `aet:ready` and other `aet:*` labels exist (or a retry gap is documented)?
+- [ ] `gh` availability and authentication are verified before label creation?
+- [ ] Switching backends is documented as forward-only (no history migration)?
+
 ---
 
 ## Post-Implementation Validation

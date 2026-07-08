@@ -173,7 +173,18 @@ Create/modify files. Always:
 - **Make minimal changes** — don't rewrite the project
 - **Ensure all hooks/tools are local** — no paid CI services
 
-### Step 6: Validate
+### Step 6: Configure Task Backend
+
+Run `aet-setup/bin/configure-task-backend` to write `.agents/aet-work.json`:
+
+- `task_backend`: `json` (default) or `github`.
+- For `github`, detect `repo` from `git remote origin` (or prompt), then create `aet:*` labels via `gh`.
+- If `gh` is missing or unauthenticated, warn and record the gap.
+- Backend switches are forward-only; history is not migrated.
+
+Schema: `task_backend`, optional `github.repo`, `github.label_prefix`, and `github.labels_created`.
+
+### Step 7: Validate
 
 Before finishing:
 
