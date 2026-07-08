@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""aet-ship — Close a task after merge verification.
+
+Usage:
+  ship <task_id> <plan_file> [queue_file]
+
+After a PR has been merged to origin/main, this command:
+
+- Verifies the merge via git ancestry (regular merge), gh pr view (squash),
+  or diff-equivalence fallback.
+- Updates the plan file YAML frontmatter `status` to `merged`.
+- Updates the plan file footer `*Stage:*` to `merged`.
+- Transitions the task to `merged` in the work queue.
+- Appends a closure record to `.agents/work-history.jsonl`.
+- Removes the task from `.agents/work-queue.json`.
+
+This is the executable closure step for the `aet-ship` skill. The full
+pre-merge gate (tests, review, CSO, scope audit, PR creation) still lives in
+`aet-ship/SKILL.md` and is executed by the agent before this command runs.
+"""
+
+import argparse
+import importlib.machinery
+import importlib.util
+import sys
+from pathlib import Path
+
+# Load aet-state as a module so we can reuse its merge-resolution and
+# queue-mutation logic rather than duplicating it.
+_AET_STATE_PY = (
+    Path(__file__).resolve().parent.parent.parent / "aet-work" / "bin" / "aet-state"
+)
+_spec = importlib.util.spec_from_loader(
+    "aet_state",
+    importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY)),
+)
+aet_state = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(aet_state)
+
+
+def cmd_ship(args):
+    """Run the post-merge closure for a task."""
+    ns = aet_state.argparse.Namespace(
+        command="record-merge",
+        task_id=args.task_id,
+        queue=args.queue,
+        dry_run=args.dry_run,
+        plan=args.plan,
+    )
+    return aet_state.cmd_record_merge(ns)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Close a task after merge verification."
+    )
+    parser.add_argument("task_id", help="Task ID to close.")
+    parser.add_argument("plan", help="Path to the plan markdown file.")
+    parser.add_argument(
+        "queue",
+        nargs="?",
+        default=".agents/work-queue.json",
+        help="Path to the work queue JSON file.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes.",
+    )
+    args = parser.parse_args()
+    return cmd_ship(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
