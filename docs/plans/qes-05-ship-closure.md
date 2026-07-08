@@ -5,6 +5,7 @@ blocked_by:
   - qes-01-gitignore-tracked-files
   - qes-02-plan-status-frontmatter
 pipeline: standard
+status: merged
 ---
 
 # Plan: Make aet-ship Own Task Closure After Merge Verification
@@ -20,7 +21,7 @@ Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-epheme
 
 ## Task List
 
-1. Extend `aet-ship/bin/ship` merge-verification step to update the plan file frontmatter `status` to `merged` and footer `*Stage:*` to `merged` — M
+1. Extend `aet-ship/bin/ship` merge-verification step to update the plan file frontmatter `status` to `merged` and footer `*Stage: merged*` to `merged` — M
 2. Append a closure event to `.agents/work-history.jsonl` with merge commit and timestamp — S
 3. Remove the task from `.agents/work-queue.json` after successful verification — S
 4. Remove `.agents/work-queue.json` from the scope-audit out-of-scope list — S
