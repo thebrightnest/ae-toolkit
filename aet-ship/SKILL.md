@@ -196,7 +196,7 @@ Run the pre-merge validation gate.
 
     > **Version bump is not handled here.** Release versioning is the responsibility of a future `aet-release` skill. Do not commit `chore(release)` or VERSION changes on feature branches.
 
-14. **Merge Verification and Task Closure** — after the PR is created and the user indicates it has been merged:
+14. **Merge Verification and Terminal Closure** — `aet-ship` is the single owner of task closure after merge verification. After the PR is created and the user indicates it has been merged:
 
     First, confirm the `ship` helper is available:
 
@@ -230,8 +230,8 @@ Run the pre-merge validation gate.
     - Detects a squash merge via `gh pr view <branch> --json mergeCommit` and verifies the SHA is an ancestor of `origin/main`.
     - Falls back to diff-equivalence detection against recent `origin/main` commits (see [references/squash-merge-handling.md](references/squash-merge-handling.md)).
     - On success:
-      - Updates the plan file YAML frontmatter `status` to `merged`.
-      - Updates the plan file footer `*Stage:*` to `merged`.
+      - Updates the plan file YAML frontmatter `status` to `merged` — the durable source of truth.
+      - Updates the plan file footer `*Stage:*` to `merged` and `*Next step:*` to `None`.
       - Records `merge_commit`, `merge_strategy`, `status: merged`, and `merged_at` in `.agents/work-queue.json`.
       - Appends a closure record to `.agents/work-history.jsonl`.
       - Removes the task from `.agents/work-queue.json`.
