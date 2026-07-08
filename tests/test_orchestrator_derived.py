@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 _ORCHESTRATOR_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
 _spec = importlib.util.spec_from_loader(
@@ -163,6 +163,11 @@ class TestRecordStage(unittest.TestCase):
 
 
 class TestMarkFailed(unittest.TestCase):
+    def _fake_backend(self, queue):
+        backend = MagicMock()
+        backend.load.return_value = {"queue": list(queue), "history": []}
+        return backend
+
     def test_mark_failed_updates_canonical_state(self):
         """_mark_failed writes the failed state through the transition writer."""
         queue = [{"id": "t1", "state": "in_progress", "title": "One"}]
@@ -183,7 +188,9 @@ class TestMarkFailed(unittest.TestCase):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch.object(subprocess, "run", side_effect=mock_run):
-            orchestrator._mark_failed(queue_file, "t1", "in_progress")
+            orchestrator._mark_failed(
+                self._fake_backend(queue), queue_file, "t1", "in_progress"
+            )
 
         with open(queue_file, "r", encoding="utf-8") as f:
             result = json.load(f)
@@ -208,7 +215,9 @@ class TestMarkFailed(unittest.TestCase):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch.object(subprocess, "run", side_effect=mock_run):
-            orchestrator._mark_failed(queue_file, "t1", "ready")
+            orchestrator._mark_failed(
+                self._fake_backend(queue), queue_file, "t1", "ready"
+            )
 
         with open(queue_file, "r", encoding="utf-8") as f:
             result = json.load(f)
