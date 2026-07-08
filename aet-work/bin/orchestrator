@@ -714,17 +714,21 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                         failures += 1
                     else:
                         successes += 1
+                # Re-read after aet-state/_mark_failed wrote the file so we
+                # don't overwrite the updated state with the stale in-memory
+                # queue snapshot.
+                queue = read_queue(queue_file)
             else:
                 print(f"   ❌ {task_id} failed (exit {ret})")
                 queue = read_queue(queue_file)
                 task = next((t for t in queue if t.get("id") == task_id), None)
                 from_state = current_state(task) if task else "in_progress"
                 _mark_failed(queue_file, task_id, from_state)
+                # Re-read after _mark_failed wrote the file.
                 queue = read_queue(queue_file)
                 stop_spawn = True
                 failures += 1
 
-            write_queue(queue_file, queue)
             remove_worktree(repo_root, task_id)
 
         if not finished:
