@@ -618,6 +618,23 @@ def cmd_record_merge(args):
         except ValueError as e:
             print(f"Merge recorded, but plan update failed: {e}", file=sys.stderr)
             return 1
+
+        # Commit the plan-file closure update so main stays clean after merges.
+        plan_abs = str(Path(plan_path).resolve())
+        rc, _, err = run_git("add", plan_abs, cwd=cwd)
+        if rc != 0:
+            print(f"Merge recorded, but git add failed: {err}", file=sys.stderr)
+            return 1
+        rc, _, err = run_git("diff", "--cached", "--quiet", cwd=cwd)
+        if rc == 1:
+            commit_msg = f"chore({args.task_id}): mark plan as merged after closure"
+            rc, _, err = run_git("commit", "-m", commit_msg, cwd=cwd)
+            if rc != 0:
+                print(f"Merge recorded, but git commit failed: {err}", file=sys.stderr)
+                return 1
+        elif rc != 0:
+            print(f"Merge recorded, but git diff failed: {err}", file=sys.stderr)
+            return 1
     elif explicit_plan:
         print(
             f"Merge recorded, but explicit plan file not found: {explicit_plan}",
