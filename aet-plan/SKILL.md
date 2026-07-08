@@ -156,7 +156,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
    - `size` is the S/M/L complexity label. `stage` lives only in the task record, never in frontmatter.
    - `pipeline` is optional and controls orchestrator isolation: `minimal` (all stages in one session), `standard` (default stage grouping), or `full` (one session per stage).
 
-8. **Queue handoff.** After all plan files are written, run `aet-work sync` to add them to `.agents/work-queue.json`. Do not write `.agents/work-queue.json` directly from this skill. Do not mark the command complete until the queue contains the new plan files.
+8. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. Instruct the user to add plans explicitly with `aet-work add`. Do not write `.agents/work-queue.json` directly from this skill.
 
 **Vertical slice rule:**
 
@@ -166,13 +166,13 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 **Work queue handoff:**
 
 - `aet-plan` produces `docs/plans/*.md` only
-- Queue management is owned by `aet-work`. After plan files are created, run `aet-work sync` to add them to the queue incrementally
+- Queue management is owned by `aet-work`. After plan files are created, the user curates the sprint with `aet-work add <plan-file>`
 - This keeps queue format, merge logic, and state management in a single skill
 - See [references/work-queue-format.md](references/work-queue-format.md) for the task record schema
 
 ### `publish-issues`
 
-Push locally-created stories to an external issue tracker (GitHub, GitLab, etc.). This is optional — local markdown tickets and `.agents/work-queue.json` remain the source of truth.
+Push locally-created stories to an external issue tracker (GitHub, GitLab, etc.). This is optional — local plan files remain the source of truth for intent and closure.
 
 **Procedure:**
 
