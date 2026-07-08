@@ -193,25 +193,68 @@ class TestStatusStoredState(unittest.TestCase):
         self.assertIn("Next ready tasks:", output)
         self.assertIn("None.", output)
 
+    def test_plan_drift_is_informational(self):
+        """status exits 0 and still reports active queue state when plan drift exists."""
+        plans_dir_tmp = _make_plans_dir(["orphan.md", "t1.md"])
+        plans_dir = plans_dir_tmp.name
+        queue_file = _make_queue(_resolve_plan_files([
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+        ], plans_dir))
+        history_file = _make_history([])
+
+        stdout = io.StringIO()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = status.main()
+
+        self.assertEqual(rc, 0)
+        output = stdout.getvalue()
+        self.assertIn("Plan drift detected", output)
+        self.assertIn("unblocked: 1", output)
+        self.assertIn("Next ready tasks:", output)
+        self.assertIn("One", output)
+
 
 @unittest.skipIf(next_cmd is None, "next command not yet implemented")
 class TestNextStoredState(unittest.TestCase):
-    def test_refuses_on_plan_drift(self):
-        """next exits non-zero when a plan file exists on disk but not in the queue."""
-        queue_file = _make_queue([])
-        history_file = _make_history([])
-        plans_dir_tmp = _make_plans_dir(["orphan.md"])
+    def test_warns_but_picks_ready_on_plan_drift(self):
+        """next warns about plan drift but still picks a stored-ready task."""
+        plans_dir_tmp = _make_plans_dir(["orphan.md", "t1.md"])
         plans_dir = plans_dir_tmp.name
+        queue_file = _make_queue(_resolve_plan_files([
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+        ], plans_dir))
+        history_file = _make_history([])
 
-        with patch.object(sys, "argv", [
-            "next",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
-            "--plans-dir", plans_dir,
-        ]):
-            rc = next_cmd.main()
+        transition_calls = []
 
-        self.assertEqual(rc, 1)
+        def mock_run(cmd, **_kwargs):
+            transition_calls.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        stdout = io.StringIO()
+        with patch.object(subprocess, "run", side_effect=mock_run):
+            with patch.object(sys, "stdout", stdout):
+                with patch.object(sys, "argv", [
+                    "next",
+                    "--queue-file", queue_file,
+                    "--history-file", history_file,
+                    "--plans-dir", plans_dir,
+                ]):
+                    rc = next_cmd.main()
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(
+            any("t1" in c and "transition" in c and "in_progress" in c for c in transition_calls),
+            f"Expected transition to in_progress for t1, got {transition_calls}",
+        )
+        output = stdout.getvalue()
+        self.assertIn("Plan drift detected", output)
 
     def test_picks_first_stored_ready_and_transitions(self):
         """next picks the first stored-ready task and transitions it to in_progress."""

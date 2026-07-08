@@ -160,8 +160,8 @@ status \
 
 The helper reports:
 
-1. Any plan drift (plans on disk that are neither queued nor settled)
-2. Active task counts: `planned`, `unblocked`, `blocked`, `in-progress`, `failed`, `done` (counts are a projection of stored `state`; `failed` is read from stored state)
+1. Any plan drift (plans on disk that are neither queued nor settled) — this is **informational only** and never blocks the command
+2. Active task counts: `planned`, `unblocked`, `blocked`, `in-progress`, `failed`, `awaiting_merge` (counts are a projection of stored `state`; `failed` is read from stored state)
 3. The stored `state` for each active task
 4. The next 3 tasks whose stored state is `ready`
 5. Any failed tasks (from stored state)
@@ -173,7 +173,7 @@ Identify and output the next ready task.
 
 **Procedure:**
 
-1. Run the `plan-drift` check. If drift is detected, refuse to pick a task and instruct the user to run `init-queue` first
+1. Run the `plan-drift` check and print an informational warning if drift is detected; do **not** refuse to pick a task
 2. Read `.agents/work-queue.json`
 3. Find tasks whose stored `state` is `ready` (falling back to legacy `status` during migration)
 4. Pick the first in topological order (respecting the DAG)
@@ -186,11 +186,11 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
 
 **Procedure:**
 
-1. **Plan-drift guard:** Run the `plan-drift` check. If drift is detected, refuse to start the AFK loop and instruct the user to run `init-queue` first
+1. **Plan-drift guard:** Run the `plan-drift` check and print an informational warning if drift is detected; do **not** refuse to start the AFK loop
 
 2. **Pre-branch git hygiene:**
 
-   Before spawning the first task, the orchestrator ensures `main` is clean and synchronized with `origin/main`. If `main` is dirty, ahead, or behind, the orchestrator prints actionable warnings and halts before creating any worktrees. In unattended mode, warnings are logged but the loop continues.
+   Before spawning the first task, the orchestrator ensures `main` is clean and synchronized with `origin/main`. If `main` is dirty, ahead, or behind, the orchestrator prints actionable warnings and halts before creating any worktrees. In unattended mode, warnings are logged but the loop continues. Mutations to `.agents/work-queue.json` and `.agents/work-history.jsonl` are ignored by the dirty check because the orchestrator writes them as part of normal operation.
 
 3. **Invoke the unified orchestrator:**
 
