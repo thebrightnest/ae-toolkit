@@ -116,15 +116,15 @@ class TestUpdatePlanFooter(unittest.TestCase):
             plan = Path(tmpdir) / "plan.md"
             plan.write_text("# Plan\n\n*Stage: plan-approved*\n")
             aet_state.update_plan_footer(str(plan), "implemented")
-            self.assertIn("*Stage: implemented*", plan.read_text())
-            self.assertNotIn("*Stage: plan-approved*", plan.read_text())
+            self.assertIn("_Stage: implemented_", plan.read_text())
+            self.assertNotIn("_Stage: plan-approved_", plan.read_text())
 
     def test_appends_stage_when_missing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             plan = Path(tmpdir) / "plan.md"
             plan.write_text("# Plan\n")
             aet_state.update_plan_footer(str(plan), "reviewed")
-            self.assertIn("*Stage: reviewed*", plan.read_text())
+            self.assertIn("_Stage: reviewed_", plan.read_text())
 
 
 if __name__ == "__main__":
