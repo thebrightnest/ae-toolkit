@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
@@ -143,8 +144,13 @@ def write_queue(
 
     If ``wrapper`` is supplied, its keys are merged into the stored wrapper
     (e.g. to update ``source_prd`` or ``queue_updated_at``).
+
+    The write is atomic: data is serialized to a temporary file in the same
+    directory and then renamed into place. This prevents concurrent readers
+    from seeing a partially-written or truncated file.
     """
-    os.makedirs(os.path.dirname(queue_file), exist_ok=True)
+    queue_dir = os.path.dirname(queue_file)
+    os.makedirs(queue_dir, exist_ok=True)
     stored = _queue_wrappers.pop(queue_file, None)
     was_dict_wrapper = stored is not None
     merged = {**stored} if stored else {}
@@ -154,9 +160,21 @@ def write_queue(
         data = {**merged, "tasks": queue}
     else:
         data = queue
-    with open(queue_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
+
+    fd, tmp_path = tempfile.mkstemp(dir=queue_dir, prefix=".queue-tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, queue_file)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def get_next_unblocked(queue: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -297,15 +315,32 @@ def read_archive(archive_file: str) -> list[dict[str, Any]]:
 
 
 def write_archive(archive_file: str, tasks: list[dict[str, Any]]) -> None:
-    """Write the archive back to JSON with an archived_at timestamp."""
-    os.makedirs(os.path.dirname(archive_file), exist_ok=True)
+    """Write the archive back to JSON with an archived_at timestamp.
+
+    Uses an atomic temp-file + rename so concurrent readers never see a
+    truncated archive.
+    """
+    archive_dir = os.path.dirname(archive_file)
+    os.makedirs(archive_dir, exist_ok=True)
     data = {
         "archived_at": datetime.now().isoformat(),
         "tasks": tasks,
     }
-    with open(archive_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
+
+    fd, tmp_path = tempfile.mkstemp(dir=archive_dir, prefix=".archive-tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, archive_file)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def archive_tasks(
