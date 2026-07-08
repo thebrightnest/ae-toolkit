@@ -377,6 +377,7 @@ See `aet-setup/references/README.md` for the full artifact list. Key outputs inc
 When creating `.agents/`, ensure `.gitignore` excludes generated workflow artifacts:
 
 ```gitignore
+.agents/work-queue.json
 .agents/work-history.jsonl
 .agents/execution.log.jsonl
 aet-work.log
