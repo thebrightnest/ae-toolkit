@@ -19,10 +19,10 @@ Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-epheme
 
 ## Task List
 
-1. Run `make package` to regenerate `.skill` archives — S
-2. Run `make validate` — S
-3. Verify no tracked `.agents/work-queue.json` or `.agents/work-history.jsonl` remain — S
-4. Merge branch to main and verify integration — S
+1. [x] Run `make package` to regenerate `.skill` archives — S
+2. [x] Run `make validate` — S
+3. [x] Verify no tracked `.agents/work-queue.json` or `.agents/work-history.jsonl` remain — S
+4. [ ] Merge branch to main and verify integration — S
 
 ## Files to Modify
 
@@ -31,9 +31,9 @@ Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-epheme
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] `git status --short` shows no unexpected tracked files
-- [ ] `git ls-files | grep -E 'work-queue|work-history'` returns nothing
+- [x] `make validate` passes
+- [x] `git status --short` shows no unexpected tracked files
+- [x] `git ls-files | grep -E 'work-queue|work-history'` returns nothing
 
 ## Rollback Plan
 
@@ -42,5 +42,5 @@ Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-epheme
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
