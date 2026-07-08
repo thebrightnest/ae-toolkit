@@ -23,15 +23,13 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+from backends.factory import create_backend
 from cli_adapter import resolve_cli_adapter
 from pipeline import STAGE_MAP, group_stages_by_session
 from queue import (
     current_state,
     get_next_unblocked,
     has_pending_tasks as queue_has_pending_tasks,
-    read_queue,
-    record_task_meta,
-    write_queue,
 )
 import telemetry
 from verifier import (
@@ -59,6 +57,16 @@ def _handle_signal(signum: int, _frame) -> None:
 
 signal.signal(signal.SIGINT, _handle_signal)
 signal.signal(signal.SIGTERM, _handle_signal)
+
+
+def _make_backend(queue_file: str):
+    """Create a task backend for the given queue file.
+
+    The history file is derived from the queue file path so the backend pair
+    stays consistent regardless of where the queue lives.
+    """
+    history_file = str(Path(queue_file).with_name("work-history.jsonl"))
+    return create_backend(queue_file=queue_file, history_file=history_file)
 
 
 def read_plan_pipeline(plan_file: str) -> str | None:
@@ -484,13 +492,16 @@ def has_pending_tasks(queue: list[dict]) -> bool:
     return queue_has_pending_tasks(queue)
 
 
-def _mark_failed(queue_file: str, task_id: str, from_state: str | None) -> None:
+def _mark_failed(
+    backend, queue_file: str, task_id: str, from_state: str | None
+) -> None:
     """Mark a task as failed, preferring the canonical state transition.
 
     Routes through ``aet-state transition`` so the stored ``state`` field is
     updated. If the transition cannot be applied (e.g., the task has already
-    moved to another state), re-read the queue and write the canonical
-    ``state`` field directly so reads never observe a stale effective state.
+    moved to another state), re-read the queue through the backend and persist
+    the canonical ``state`` field directly so reads never observe a stale
+    effective state.
     """
     if from_state is None:
         from_state = "in_progress"
@@ -510,13 +521,13 @@ def _mark_failed(queue_file: str, task_id: str, from_state: str | None) -> None:
     )
     if result.returncode != 0:
         print(f"   ⚠️  Could not transition {task_id} to failed: {result.stderr.strip()}")
-        queue = read_queue(queue_file)
+        queue = backend.load()["queue"]
         for task in queue:
             if task.get("id") == task_id:
                 task["state"] = "failed"
                 task["failed_stage"] = "pipeline"
                 break
-        write_queue(queue_file, queue)
+        backend.save(queue)
 
 
 def run_batch(args: argparse.Namespace, adapter) -> int:
@@ -524,12 +535,13 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     queue_file = args.queue_file
     repo_root = args.repo_root
     max_jobs = min(args.max_jobs, 8)
+    backend = _make_backend(queue_file)
 
     logger = telemetry.RunLogger(repo_root)
     start_time = telemetry.iso_now()
     task_ids: list[str] = []
 
-    queue = read_queue(queue_file)
+    queue = backend.load()["queue"]
     if not queue:
         print("✅ Queue is empty.")
         end_time = telemetry.iso_now()
@@ -582,7 +594,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
 
     while True:
         # Refresh stored state before each spawn pass.
-        queue = read_queue(queue_file)
+        queue = backend.load()["queue"]
 
         # Spawn tasks while slots available
         spawned_this_cycle: set[str] = set()
@@ -617,7 +629,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 print(
                     f"   ⚠️  Could not transition {task_id} to in_progress: {result.stderr.strip()}"
                 )
-                _mark_failed(queue_file, task_id, from_state)
+                _mark_failed(backend, queue_file, task_id, from_state)
                 failures += 1
                 stop_spawn = True
                 break
@@ -625,7 +637,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             # Re-read queue after transition and record branch/worktree so the
             # stored state reflects in_progress and does not spawn the same task
             # again on the next loop iteration.
-            queue = read_queue(queue_file)
+            queue = backend.load()["queue"]
             worktree_dir = create_worktree(repo_root, task_id)
             env = os.environ.copy()
             env["AET_TASK_ID"] = task_id
@@ -635,13 +647,12 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             env["AET_REPO_ROOT"] = repo_root
 
             # Store a repo-relative worktree path for portability.
-            record_task_meta(
-                queue,
-                task_id,
-                os.path.relpath(worktree_dir, repo_root),
-                task_id,
-            )
-            write_queue(queue_file, queue)
+            for qt in queue:
+                if qt.get("id") == task_id:
+                    qt["worktree"] = os.path.relpath(worktree_dir, repo_root)
+                    qt["branch"] = task_id
+                    break
+            backend.save(queue)
 
             # Build the orchestrator command for single-task mode
             cmd = [
@@ -665,7 +676,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
 
             # Refresh stored state so the next spawn pass respects the branch we
             # just recorded and does not pick the same task again.
-            queue = read_queue(queue_file)
+            queue = backend.load()["queue"]
 
         if not running:
             if stop_spawn or _shutdown_requested:
@@ -687,7 +698,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
 
             if ret == 0:
                 print(f"   ✅ {task_id} awaiting merge")
-                queue = read_queue(queue_file)
+                queue = backend.load()["queue"]
                 task = next((t for t in queue if t.get("id") == task_id), None)
                 from_state = current_state(task) if task else "in_progress"
                 aet_state_bin = str(_SCRIPT_DIR / "aet-state")
@@ -709,7 +720,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     )
                     if result.returncode != 0:
                         print(f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}")
-                        _mark_failed(queue_file, task_id, from_state)
+                        _mark_failed(backend, queue_file, task_id, from_state)
                         stop_spawn = True
                         failures += 1
                     else:
@@ -720,15 +731,17 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 queue = read_queue(queue_file)
             else:
                 print(f"   ❌ {task_id} failed (exit {ret})")
-                queue = read_queue(queue_file)
+                queue = backend.load()["queue"]
                 task = next((t for t in queue if t.get("id") == task_id), None)
                 from_state = current_state(task) if task else "in_progress"
-                _mark_failed(queue_file, task_id, from_state)
-                # Re-read after _mark_failed wrote the file.
-                queue = read_queue(queue_file)
+                _mark_failed(backend, queue_file, task_id, from_state)
+                # Re-read after _mark_failed wrote the file so we don't
+                # overwrite the updated state with the stale in-memory snapshot.
+                queue = backend.load()["queue"]
                 stop_spawn = True
                 failures += 1
 
+            backend.save(queue)
             remove_worktree(repo_root, task_id)
 
         if not finished:
@@ -790,6 +803,7 @@ def _find_queued_task(queue: list[dict], plan_file: str) -> dict | None:
 
 
 def _record_run_one_in_queue(
+    backend,
     queue_file: str,
     task_id: str,
     worktree: str,
@@ -798,12 +812,12 @@ def _record_run_one_in_queue(
     """Transition a queued task to in-progress and record branch/worktree.
 
     Uses ``aet-state transition`` to keep the queue's sole-writer rule intact,
-    then re-reads the queue and records worktree/branch metadata atomically.
-    Errors are logged but not raised so that a queue bookkeeping failure does
-    not block the underlying run.
+    then re-reads the queue through the backend and records worktree/branch
+    metadata atomically via ``backend.save``. Errors are logged but not raised
+    so that a queue bookkeeping failure does not block the underlying run.
     """
     try:
-        queue = read_queue(queue_file)
+        queue = backend.load()["queue"]
         task = next((t for t in queue if t.get("id") == task_id), None)
         if not task:
             print(f"   ⚠️  Task {task_id} disappeared from queue; skipping bookkeeping")
@@ -832,9 +846,13 @@ def _record_run_one_in_queue(
             return False
 
         # Re-read the latest queue and record branch/worktree.
-        queue = read_queue(queue_file)
-        record_task_meta(queue, task_id, worktree, branch)
-        write_queue(queue_file, queue)
+        queue = backend.load()["queue"]
+        for qt in queue:
+            if qt.get("id") == task_id:
+                qt["worktree"] = worktree
+                qt["branch"] = branch
+                break
+        backend.save(queue)
         print(f"   📝 Recorded {task_id} as in-progress (branch={branch}, worktree={worktree})")
         return True
     except Exception as exc:  # pragma: no cover - defensive logging
@@ -892,9 +910,10 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # (not a child spawned by run_batch), transition the task to in-progress
     # and record branch/worktree so aet-state record-merge works after shipping.
     queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    backend = _make_backend(queue_file)
     queued_task = None
     if os.path.exists(queue_file) and not spawned_by_batch:
-        queue = read_queue(queue_file)
+        queue = backend.load()["queue"]
         queued_task = _find_queued_task(queue, plan_file)
 
     if queued_task and not spawned_by_batch:
@@ -902,7 +921,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         # Ensure the worktree/branch exist before recording them.
         worktree_dir = create_worktree(repo_root, queued_task_id)
         worktree_rel = os.path.relpath(worktree_dir, repo_root)
-        _record_run_one_in_queue(queue_file, queued_task_id, worktree_rel, queued_task_id)
+        _record_run_one_in_queue(backend, queue_file, queued_task_id, worktree_rel, queued_task_id)
         task_id = queued_task_id
 
     task = {
@@ -921,7 +940,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # the task to awaiting_merge on success so aet-state record-merge can run.
     if success and queued_task and not spawned_by_batch:
         try:
-            queue = read_queue(queue_file)
+            queue = backend.load()["queue"]
             task = next((t for t in queue if t.get("id") == task_id), None)
             if task:
                 from_state = current_state(task) or "in_progress"
