@@ -6,6 +6,7 @@ blocked_by:
   - qes-04-status-next-run-hygiene
   - qes-05-ship-closure
 pipeline: standard
+status: merged
 ---
 
 # Plan: Update Skill Documentation for the Ephemeral Sprint Board Model
@@ -51,3 +52,7 @@ Part of [PRD: Ephemeral Sprint Board for aet-work](../prds/aet-work-queue-epheme
 
 _Stage: reviewed_
 _Next step: run `aet-sync-docs`_
+
+---
+
+_Stage: merged_
