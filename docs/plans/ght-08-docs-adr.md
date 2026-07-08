@@ -9,6 +9,7 @@ blocked_by:
   - ght-05-orchestrator-backend
   - ght-06-setup-backend-config
 pipeline: standard
+status: merged
 ---
 
 # Plan: Documentation and ADR for GitHub Issues Backend
@@ -58,4 +59,4 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
