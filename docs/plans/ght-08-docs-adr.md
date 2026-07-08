@@ -58,5 +58,4 @@ Part of [GitHub Issues Task Backend PRD](../prds/aet-github-issues-task-backend-
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
