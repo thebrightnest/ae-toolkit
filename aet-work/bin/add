@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""aet-work add — Add a plan to the work queue.
+
+Accepts a plan file path or a task ID. Inserts the task as ``planned``,
+preserving existing queue metadata and rejecting terminal plans.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+from backends.factory import create_backend  # noqa: E402
+from plan_parser import new_task_from_plan, stage_from_plan  # noqa: E402
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Add a plan to the work queue as planned."
+    )
+    parser.add_argument(
+        "target",
+        help="Plan file path or task ID to add",
+    )
+    parser.add_argument(
+        "--queue-file",
+        default=".agents/work-queue.json",
+        help="Path to work-queue.json",
+    )
+    parser.add_argument(
+        "--history-file",
+        default=".agents/work-history.jsonl",
+        help="Path to work-history.jsonl",
+    )
+    parser.add_argument(
+        "--plans-dir",
+        default="docs/plans",
+        help="Directory containing atomic plan markdown files",
+    )
+    parser.add_argument(
+        "--config",
+        default=".agents/aet-work.json",
+        help="Path to aet-work backend configuration",
+    )
+    return parser.parse_args(argv)
+
+
+def resolve_plan(target: str, plans_dir: Path) -> Path | None:
+    """Resolve ``target`` to a plan file path.
+
+    If ``target`` is an existing path, use it directly. Otherwise treat it as
+    a task ID and look for ``<target>.md`` in ``plans_dir``.
+    """
+    as_path = Path(target)
+    if as_path.is_file():
+        return as_path
+
+    candidate = plans_dir / f"{target}.md"
+    if candidate.is_file():
+        return candidate
+
+    return None
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    plans_dir = Path(args.plans_dir)
+    plan_file = resolve_plan(args.target, plans_dir)
+
+    if plan_file is None:
+        print(f"❌ No plan found for '{args.target}' in {plans_dir}", file=sys.stderr)
+        return 1
+
+    stage = stage_from_plan(plan_file)
+    if stage in ("merged", "abandoned"):
+        print(
+            f"⛔ Refusing to add {plan_file.name}: plan stage is '{stage}'.",
+            file=sys.stderr,
+        )
+        return 1
+
+    backend = create_backend(
+        config_path=args.config,
+        queue_file=args.queue_file,
+        history_file=args.history_file,
+    )
+    data = backend.load()
+    queue = data["queue"]
+    history = data["history"]
+
+    plan_str = str(plan_file)
+    existing = next(
+        (t for t in queue if t.get("plan_file") == plan_str or t.get("id") == plan_file.stem),
+        None,
+    )
+    if existing is not None:
+        print(f"✓ {plan_file.name} is already in the queue ({existing.get('state', 'planned')}).")
+        backend.close()
+        return 0
+
+    settled_ids = {t.get("id") for t in history if t.get("id")}
+    if plan_file.stem in settled_ids:
+        print(
+            f"⛔ Refusing to add {plan_file.name}: task is already settled in history.",
+            file=sys.stderr,
+        )
+        backend.close()
+        return 1
+
+    task = new_task_from_plan(plan_file, status="planned")
+    task["state"] = "planned"
+    queue.append(task)
+    backend.save(queue)
+    print(f"✓ Added {plan_file.name} to the queue as planned.")
+    backend.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

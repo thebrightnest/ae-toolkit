@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""aet-work review — Print a human-readable backlog review.
+
+Scans ``docs/plans/*.md``, reads the footer stage, and groups plans into:
+approved, queued, in-progress, awaiting-merge, and closed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+from plan_parser import stage_from_plan, title_from_plan  # noqa: E402
+
+
+# Map footer stage strings to review categories.
+CATEGORY_BUCKETS: dict[str, str] = {
+    "plan-approved": "approved",
+    "approved": "approved",
+    "synced": "queued",
+    "queued": "queued",
+    "tdd-complete": "in-progress",
+    "implemented": "in-progress",
+    "qa-complete": "in-progress",
+    "reviewed": "in-progress",
+    "secure": "in-progress",
+    "synced-docs": "in-progress",
+    "in-progress": "in-progress",
+    "awaiting_merge": "awaiting-merge",
+    "merged": "closed",
+    "abandoned": "closed",
+}
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Review plans grouped by pipeline stage."
+    )
+    parser.add_argument(
+        "--plans-dir",
+        default="docs/plans",
+        help="Directory containing atomic plan markdown files",
+    )
+    return parser.parse_args(argv)
+
+
+def category_for_stage(stage: str | None) -> str:
+    """Return the review category for a footer stage value."""
+    if not stage:
+        return "approved"
+    return CATEGORY_BUCKETS.get(stage, "in-progress")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    plans_dir = Path(args.plans_dir)
+
+    if not plans_dir.is_dir():
+        print(f"❌ Plans directory not found: {plans_dir}", file=sys.stderr)
+        return 1
+
+    plan_files = sorted(plans_dir.glob("*.md"))
+
+    categories: dict[str, list[tuple[str, str]]] = {
+        "approved": [],
+        "queued": [],
+        "in-progress": [],
+        "awaiting-merge": [],
+        "closed": [],
+    }
+
+    for pf in plan_files:
+        stage = stage_from_plan(pf)
+        category = category_for_stage(stage)
+        categories[category].append((pf.stem, title_from_plan(pf)))
+
+    for category in categories:
+        print(f"\n{category.replace('-', ' ').title()} ({len(categories[category])}):")
+        if categories[category]:
+            for task_id, title in categories[category]:
+                print(f"  - {task_id}: {title}")
+        else:
+            print("  None.")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
