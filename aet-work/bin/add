@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         backend.close()
         return 1
 
-    task = new_task_from_plan(plan_file, status="planned")
+    task = new_task_from_plan(plan_file)
     queue.append(task)
     build_blocks(queue)
     backend.save(queue)
