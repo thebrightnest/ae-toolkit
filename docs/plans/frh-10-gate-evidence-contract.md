@@ -64,5 +64,5 @@ Revert the merge commit. Evidence files are additive artifacts outside the repo;
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_

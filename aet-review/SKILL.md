@@ -73,6 +73,30 @@ Staff-level diff review with multiple lenses.
    - Include: pass/fail status, issues found, auto-fixes applied, human flags
    - Do NOT write `.review-report.md` to the repository root
 
+**Evidence verdict (writer contract):**
+
+Before updating the plan.md footer, write a JSON verdict record so the orchestrator can gate the stage machine-checkably. The footer remains a human breadcrumb only.
+
+1. Build a verdict record matching the `review` schema:
+
+   ```json
+   {
+     "task_id": "{task-id}",
+     "stage": "reviewed",
+     "skill": "aet-review",
+     "verdict": "pass" | "fail",
+     "summary": "One-line outcome",
+     "generated_at": "{ISO-8601 timestamp}",
+     "findings": []
+   }
+   ```
+
+2. Determine the output path:
+   - If `$AET_EVIDENCE_PATH` is set, write to that file.
+   - Otherwise, write to `~/.aet/reports/{project-slug}/{task-id}/review.json`.
+3. Use `aet-work/lib/evidence.py` (`write_verdict`) when available; otherwise write equivalent JSON to the resolved path.
+4. Only update the plan.md footer to `*Stage: reviewed*` after the verdict file is written.
+
 ### `codex-review`
 
 Cross-model adversarial review. If another AI model is available, run an independent review and compare findings.

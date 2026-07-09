@@ -94,6 +94,33 @@ Run tiered automated validation.
      - **Triage section:** stage-failure evidence, if any stage failed
    - Do NOT write `.qa-report.md` to the repository root
 
+**Evidence verdict (writer contract):**
+
+Before updating the plan.md footer, write a JSON verdict record so the orchestrator can gate the stage machine-checkably. The footer remains a human breadcrumb only.
+
+1. Build a verdict record matching the `qa` schema:
+
+   ```json
+   {
+     "task_id": "{task-id}",
+     "stage": "qa-complete",
+     "skill": "aet-qa",
+     "verdict": "pass" | "fail",
+     "summary": "One-line outcome",
+     "generated_at": "{ISO-8601 timestamp}",
+     "test_command": "{command that was run}",
+     "tests_total": 0,
+     "tests_passed": 0,
+     "tests_failed": 0
+   }
+   ```
+
+2. Determine the output path:
+   - If `$AET_EVIDENCE_PATH` is set, write to that file.
+   - Otherwise, write to `~/.aet/reports/{project-slug}/{task-id}/qa.json`.
+3. Use `aet-work/lib/evidence.py` (`write_verdict`) when available; otherwise write equivalent JSON to the resolved path.
+4. Only update the plan.md footer to `*Stage: qa-complete*` after the verdict file is written.
+
 **Browser tooling preference:**
 
 - Prefer a compiled CLI browser tool (e.g., Playwright CLI) over MCP-based browser automation
