@@ -86,7 +86,12 @@ Optional, gitignored `.agents/work-history.jsonl` containing transitions and clo
 **Audit**:
 Explicit human-run reconciliation of stored state against git; replaces implicit derive-on-read.
 
+**Gate Evidence (Verdict)**:
+A schema-validated JSON verdict written by a checking skill (qa, review, cso, sync-docs) to `~/.aet/reports/{project-slug}/{task-id}/`, consumed fail-closed by the orchestrator's stage gates (ADR-019). The plan footer `*Stage:*` remains a human breadcrumb; gating decisions read evidence, never the footer.
+_Avoid_: treating a footer stage string as proof a stage passed.
+
 ## Flagged ambiguities
 
 - “status” was used to mean both stored state and derived state. Resolved: `state` is the canonical stored value for active tasks; plan frontmatter `status` is the source of truth for lifecycle closure.
+- The legacy queue-record `status` key (coexistence shim from fods-02..05) is retired by frh-06/frh-07 (2026-07-09): task records carry `state` only, legacy records are normalized on read, and plan-frontmatter `status` is unaffected.
 - “done” was used interchangeably with `merged`. Resolved: `merged` is the canonical terminal state; `done` is legacy.
