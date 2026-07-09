@@ -23,8 +23,10 @@ _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
 from queue import (  # noqa: E402
+    LEGAL_TRANSITIONS,
     current_state,
     get_next_unblocked,
+    queue_lock,
 )
 from queue import (  # noqa: E402
     has_pending_tasks as queue_has_pending_tasks,
@@ -512,10 +514,11 @@ def _mark_failed(
     """Mark a task as failed, preferring the canonical state transition.
 
     Routes through ``aet-state transition`` so the stored ``state`` field is
-    updated. If the transition cannot be applied (e.g., the task has already
-    moved to another state), re-read the queue through the backend and persist
-    the canonical ``state`` field directly so reads never observe a stale
-    effective state.
+    updated. If the transition cannot be applied because the task has already
+    moved, the queue is re-read under ``queue_lock`` and the transition is
+    retried from the current state. No direct ``task["state"]`` assignment is
+    ever performed; if no legal transition to ``failed`` exists (e.g. the task
+    is already terminal), the state is left untouched and the failure is logged.
     """
     if from_state is None:
         from_state = "in_progress"
@@ -535,13 +538,87 @@ def _mark_failed(
     )
     if result.returncode != 0:
         print(f"   ⚠️  Could not transition {task_id} to failed: {result.stderr.strip()}")
+        with queue_lock(queue_file):
+            data = backend.load()
+            queue = data["queue"]
+            task = next((t for t in queue if t.get("id") == task_id), None)
+            if task is None:
+                print(f"   ⚠️  Task {task_id} disappeared from queue; not marking failed")
+                return
+            current = current_state(task)
+            if current == "failed":
+                return
+            if current is None or "failed" not in LEGAL_TRANSITIONS.get(current, set()):
+                print(
+                    f"   🚫  Cannot mark {task_id} as failed from state '{current}' "
+                    "(no legal transition); leaving state untouched"
+                )
+                return
+            retry = subprocess.run(
+                [
+                    sys.executable,
+                    aet_state_bin,
+                    "transition",
+                    task_id,
+                    current,
+                    "failed",
+                    queue_file,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if retry.returncode != 0:
+                print(
+                    f"   🚫  Could not retry transition {task_id} {current} -> failed: "
+                    f"{retry.stderr.strip()}; leaving state untouched"
+                )
+
+
+def _finalize_task(
+    backend, queue_file: str, task_id: str, ret: int
+) -> dict[str, int | bool]:
+    """Finalize a single task after its child process exits.
+
+    All state changes go through ``aet-state transition``; the orchestrator
+    never performs a blind ``backend.save`` here. Removing the unmutated save
+    closes the lost-update window where a concurrent ``set-stage`` between a
+    load and a save would silently revert the child's stage record.
+    """
+    aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+    if ret == 0:
+        print(f"   ✅ {task_id} awaiting merge")
         queue = backend.load()["queue"]
-        for task in queue:
-            if task.get("id") == task_id:
-                task["state"] = "failed"
-                task["failed_stage"] = "pipeline"
-                break
-        backend.save(queue)
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        from_state = current_state(task) if task else "in_progress"
+        if from_state == "awaiting_merge":
+            return {"successes": 1, "failures": 0, "stop_spawn": False}
+        result = subprocess.run(
+            [
+                sys.executable,
+                aet_state_bin,
+                "transition",
+                task_id,
+                from_state,
+                "awaiting_merge",
+                queue_file,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(
+                f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}"
+            )
+            _mark_failed(backend, queue_file, task_id, from_state)
+            return {"successes": 0, "failures": 1, "stop_spawn": True}
+        return {"successes": 1, "failures": 0, "stop_spawn": False}
+    else:
+        print(f"   ❌ {task_id} failed (exit {ret})")
+        queue = backend.load()["queue"]
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        from_state = current_state(task) if task else "in_progress"
+        _mark_failed(backend, queue_file, task_id, from_state)
+        return {"successes": 0, "failures": 1, "stop_spawn": True}
 
 
 def run_batch(args: argparse.Namespace, adapter) -> int:
@@ -638,52 +715,15 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         print(f"   Failed:    {failures}")
         print(f"   Telemetry: {logger.run_dir}")
 
-    def _finalize_task(task_id: str, ret: int) -> None:
+    def _cleanup_task(task_id: str, ret: int) -> None:
         nonlocal successes, failures, stop_spawn
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
-
-        if ret == 0:
-            print(f"   ✅ {task_id} awaiting merge")
-            queue = backend.load()["queue"]
-            task = next((t for t in queue if t.get("id") == task_id), None)
-            from_state = current_state(task) if task else "in_progress"
-            aet_state_bin = str(_SCRIPT_DIR / "aet-state")
-            if from_state == "awaiting_merge":
-                successes += 1
-            else:
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        aet_state_bin,
-                        "transition",
-                        task_id,
-                        from_state,
-                        "awaiting_merge",
-                        queue_file,
-                    ],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode != 0:
-                    print(f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}")
-                    _mark_failed(backend, queue_file, task_id, from_state)
-                    stop_spawn = True
-                    failures += 1
-                else:
-                    successes += 1
-            queue = backend.load()["queue"]
-        else:
-            print(f"   ❌ {task_id} failed (exit {ret})")
-            queue = backend.load()["queue"]
-            task = next((t for t in queue if t.get("id") == task_id), None)
-            from_state = current_state(task) if task else "in_progress"
-            _mark_failed(backend, queue_file, task_id, from_state)
-            queue = backend.load()["queue"]
+        deltas = _finalize_task(backend, queue_file, task_id, ret)
+        successes += deltas["successes"]
+        failures += deltas["failures"]
+        if deltas["stop_spawn"]:
             stop_spawn = True
-            failures += 1
-
-        backend.save(queue)
         remove_worktree(repo_root, task_id)
 
     try:
@@ -732,7 +772,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # Re-read queue after transition and record branch/worktree so the
                 # stored state reflects in_progress and does not spawn the same task
                 # again on the next loop iteration.
-                queue = backend.load()["queue"]
                 worktree_dir = create_worktree(repo_root, task_id)
                 env = os.environ.copy()
                 env["AET_TASK_ID"] = task_id
@@ -741,13 +780,15 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 env["AET_RUN_ID"] = logger.run_id
                 env["AET_REPO_ROOT"] = repo_root
 
-                # Store a repo-relative worktree path for portability.
-                for qt in queue:
-                    if qt.get("id") == task_id:
-                        qt["worktree"] = os.path.relpath(worktree_dir, repo_root)
-                        qt["branch"] = task_id
-                        break
-                backend.save(queue)
+                # Store a repo-relative worktree path for portability under lock.
+                with queue_lock(queue_file):
+                    queue = backend.load()["queue"]
+                    for qt in queue:
+                        if qt.get("id") == task_id:
+                            qt["worktree"] = os.path.relpath(worktree_dir, repo_root)
+                            qt["branch"] = task_id
+                            break
+                    backend.save(queue)
 
                 # Build the orchestrator command for single-task mode
                 cmd = [
@@ -800,7 +841,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     finished.append((task_id, -9))
 
             for task_id, ret in finished:
-                _finalize_task(task_id, ret)
+                _cleanup_task(task_id, ret)
 
             # Heartbeat
             if now - last_heartbeat > heartbeat_interval:
@@ -824,7 +865,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
-            _finalize_task(task_id, -1)
+            _cleanup_task(task_id, -1)
 
         exit_code = 1 if failures > 0 else 0
         outcome = "success" if exit_code == 0 else "failure"
@@ -905,14 +946,15 @@ def _record_run_one_in_queue(
             print(f"   ⚠️  Could not transition {task_id} to in_progress: {result.stderr.strip()}")
             return False
 
-        # Re-read the latest queue and record branch/worktree.
-        queue = backend.load()["queue"]
-        for qt in queue:
-            if qt.get("id") == task_id:
-                qt["worktree"] = worktree
-                qt["branch"] = branch
-                break
-        backend.save(queue)
+        # Re-read the latest queue under lock and record branch/worktree.
+        with queue_lock(queue_file):
+            queue = backend.load()["queue"]
+            for qt in queue:
+                if qt.get("id") == task_id:
+                    qt["worktree"] = worktree
+                    qt["branch"] = branch
+                    break
+            backend.save(queue)
         print(f"   📝 Recorded {task_id} as in-progress (branch={branch}, worktree={worktree})")
         return True
     except Exception as exc:  # pragma: no cover - defensive logging
@@ -1001,9 +1043,9 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     if success and queued_task and not spawned_by_batch:
         try:
             queue = backend.load()["queue"]
-            task = next((t for t in queue if t.get("id") == task_id), None)
-            if task:
-                from_state = current_state(task) or "in_progress"
+            queue_task = next((t for t in queue if t.get("id") == task_id), None)
+            if queue_task:
+                from_state = current_state(queue_task) or "in_progress"
                 aet_state_bin = str(_SCRIPT_DIR / "aet-state")
                 result = subprocess.run(
                     [
@@ -1027,7 +1069,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
     end_time = telemetry.iso_now()
 
-    # Read the final stage from the task record; the footer is only a breadcrumb.
+    # Read the final stage from the synthetic task record; the footer is only a breadcrumb.
     final_stage = task.get("stage") or read_plan_stage(plan_file) or "plan-approved"
 
     logger.write_last_run(
