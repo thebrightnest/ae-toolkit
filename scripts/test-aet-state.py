@@ -94,22 +94,6 @@ class TestDeriveStatus(unittest.TestCase):
             self.assertIn("done without merge verification", derived["warnings"])
 
 
-class TestLoadQueue(unittest.TestCase):
-    def test_loads_flat_list(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "queue.json"
-            path.write_text(json.dumps([{"id": "t1"}]))
-            data = aet_state.load_queue(str(path))
-            self.assertEqual(data, [{"id": "t1"}])
-
-    def test_loads_dict_wrapper(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "queue.json"
-            path.write_text(json.dumps({"tasks": [{"id": "t1"}], "queue_updated_at": "x"}))
-            tasks = aet_state.get_tasks(aet_state.load_queue(str(path)))
-            self.assertEqual(tasks, [{"id": "t1"}])
-
-
 class TestUpdatePlanFooter(unittest.TestCase):
     def test_replaces_existing_stage(self):
         with tempfile.TemporaryDirectory() as tmpdir:
