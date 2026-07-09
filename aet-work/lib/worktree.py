@@ -9,54 +9,106 @@ import subprocess
 
 
 def create_worktree(repo_root: str, task_id: str) -> str:
-    """Create a git worktree for the task. Return the worktree path.
+    """Create or refresh a git worktree for the task. Return the worktree path.
 
     New branches are always based on ``origin/main`` so that worktrees do not
     accidentally inherit commits from the parent session's current branch.
+    Existing worktrees are refreshed: ``origin/main`` is fetched and the branch
+    is rebased onto it when it has advanced.
     """
     worktree_dir = os.path.join(repo_root, ".worktrees", task_id)
     branch_name = task_id
+    base = "origin/main"
 
-    if os.path.isdir(worktree_dir):
-        return worktree_dir
-
-    # Ensure origin/main is up to date; failures are non-fatal.
+    # Always refresh origin/main before creating or reusing a worktree.
     subprocess.run(
         ["git", "-C", repo_root, "fetch", "origin", "main"],
         capture_output=True,
     )
-    base = "origin/main"
+
+    base_oid = subprocess.run(
+        ["git", "-C", repo_root, "rev-parse", base],
+        capture_output=True,
+        text=True,
+    )
+    base_sha = base_oid.stdout.strip() if base_oid.returncode == 0 else ""
 
     # Check if branch already exists
     result = subprocess.run(
         ["git", "-C", repo_root, "show-ref", "--verify", f"refs/heads/{branch_name}"],
         capture_output=True,
     )
-    if result.returncode == 0:
-        # If the existing branch is not based on origin/main, recreate it so the
-        # worktree starts from a clean base.
+    branch_exists = result.returncode == 0
+
+    if branch_exists and base_sha:
         mb_result = subprocess.run(
             ["git", "-C", repo_root, "merge-base", branch_name, base],
             capture_output=True,
             text=True,
         )
-        base_oid = subprocess.run(
-            ["git", "-C", repo_root, "rev-parse", base],
-            capture_output=True,
-            text=True,
-        )
-        if mb_result.returncode != 0 or mb_result.stdout.strip() != base_oid.stdout.strip():
+        branch_base_sha = mb_result.stdout.strip() if mb_result.returncode == 0 else ""
+        if branch_base_sha != base_sha:
+            # The branch is not based on the current origin/main. If it has not
+            # diverged, rebase it; otherwise recreate it from origin/main.
+            diverged = subprocess.run(
+                ["git", "-C", repo_root, "rev-list", "--count", f"{base}..{branch_name}"],
+                capture_output=True,
+                text=True,
+            )
+            diverged_count = int(diverged.stdout.strip() or 0) if diverged.returncode == 0 else 0
+            if diverged_count == 0:
+                # No local commits: reset the branch to the new origin/main.
+                subprocess.run(
+                    ["git", "-C", repo_root, "branch", "-f", branch_name, base],
+                    check=True,
+                    capture_output=True,
+                )
+            else:
+                # Has local commits: try to rebase onto the new origin/main.
+                rebase = subprocess.run(
+                    ["git", "-C", repo_root, "rebase", "--onto", base, branch_base_sha, branch_name],
+                    capture_output=True,
+                    text=True,
+                )
+                if rebase.returncode != 0:
+                    subprocess.run(
+                        ["git", "-C", repo_root, "rebase", "--abort"],
+                        capture_output=True,
+                    )
+                    subprocess.run(
+                        ["git", "-C", repo_root, "branch", "-D", branch_name],
+                        check=True,
+                        capture_output=True,
+                    )
+                    branch_exists = False
+
+    if os.path.isdir(worktree_dir):
+        # An existing worktree may have a stale origin/main ref. Fetch inside the
+        # worktree and rebase if the local branch is behind.
+        if base_sha:
             subprocess.run(
-                ["git", "-C", repo_root, "branch", "-D", branch_name],
-                check=True,
+                ["git", "-C", worktree_dir, "fetch", "origin", "main"],
                 capture_output=True,
             )
-        else:
-            subprocess.run(
-                ["git", "-C", repo_root, "worktree", "add", worktree_dir, branch_name],
-                check=True,
+            local_oid = subprocess.run(
+                ["git", "-C", worktree_dir, "rev-parse", branch_name],
+                capture_output=True,
+                text=True,
             )
-            return worktree_dir
+            local_sha = local_oid.stdout.strip() if local_oid.returncode == 0 else ""
+            if local_sha and local_sha != base_sha:
+                subprocess.run(
+                    ["git", "-C", worktree_dir, "rebase", base],
+                    capture_output=True,
+                )
+        return worktree_dir
+
+    if branch_exists:
+        subprocess.run(
+            ["git", "-C", repo_root, "worktree", "add", worktree_dir, branch_name],
+            check=True,
+        )
+        return worktree_dir
 
     subprocess.run(
         ["git", "-C", repo_root, "worktree", "add", worktree_dir, "-b", branch_name, base],
