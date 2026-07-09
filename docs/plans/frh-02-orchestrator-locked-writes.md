@@ -4,6 +4,7 @@ size: M
 blocked_by:
   - frh-01-locked-atomic-state-writes
 pipeline: standard
+status: merged
 ---
 
 # Plan: Orchestrator Queue Mutations Under Lock; One Validated Failure Path
@@ -59,5 +60,5 @@ Revert the merge commit; no data format changes.
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
