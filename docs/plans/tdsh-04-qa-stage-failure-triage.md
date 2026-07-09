@@ -41,5 +41,5 @@ Part of [Telemetry-Driven Skill Hardening](../prds/telemetry-driven-skill-harden
 
 ---
 
-_Stage: plan-approved_
-\_Next step: run `aet-work`
+_Stage: qa-complete_
+_Next step: run `aet-review`_
