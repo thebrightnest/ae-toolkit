@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""aet-retro — Generate a retro from recent AET telemetry.
+
+Distinguishes findings that should improve the current project from findings
+that should improve the AET toolkit itself.
+
+Reads:
+- ~/.aet/telemetry/{project-slug}/ via mine-learnings --propose
+- .agents/execution.log.jsonl in the current directory (if present)
+
+Writes a markdown retro to docs/retros/ by default.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
+EXECUTION_LOG = Path(".agents/execution.log.jsonl")
+
+# Heuristic signals that a finding belongs to the AET toolkit rather than the
+# project being built. Keep this list small and project-agnostic.
+AET_PATH_PATTERNS = [
+    r"\baet-",
+    r"\.agents/",
+    r"\borchestrator\b",
+    r"\bworktree\b",
+    r"\bwork-queue\b",
+    r"\bmine-learnings\b",
+    r"\bskill\b",
+    r"\bAGENTS\.md\b",
+]
+
+
+def is_aet_level(text: str) -> bool:
+    """Return True if the finding text points at the AET toolkit."""
+    return any(re.search(p, text, re.IGNORECASE) for p in AET_PATH_PATTERNS)
+
+
+def run_mine_learnings(archive_dir: Path) -> str:
+    """Run mine-learnings --propose against the telemetry archive."""
+    cmd = ["mine-learnings", "--propose"]
+    env = os.environ.copy()
+    env["AET_TELEMETRY_ARCHIVE_DIR"] = str(archive_dir)
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    if result.returncode != 0:
+        return f"mine-learnings failed (exit {result.returncode}): {result.stderr.strip()}"
+    return result.stdout
+
+
+def read_local_execution_log(path: Path) -> list[dict]:
+    """Read the local orchestrator execution log, skipping malformed lines."""
+    records: list[dict] = []
+    if not path.exists():
+        return records
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return records
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return records
+
+
+def extract_message(record: dict) -> str:
+    """Best-effort extraction of a human-readable message from a log record."""
+    if isinstance(record, dict):
+        for key in ("message", "error", "summary", "stage", "detail", "note"):
+            value = record.get(key)
+            if value is not None:
+                return str(value)
+    return str(record)
+
+
+def categorize_records(records: list[dict]) -> tuple[list[str], list[str]]:
+    """Split execution-log records into AET-level and project-level findings."""
+    aet: list[str] = []
+    project: list[str] = []
+    seen: set[str] = set()
+    for record in records:
+        msg = extract_message(record)
+        if not msg or msg in seen:
+            continue
+        seen.add(msg)
+        if is_aet_level(msg):
+            aet.append(msg)
+        else:
+            project.append(msg)
+    return aet, project
+
+
+def format_section(title: str, items: list[str]) -> list[str]:
+    """Format a retro subsection with deduplicated bullets."""
+    lines = [f"### {title}", ""]
+    if not items:
+        lines.append("- No findings.")
+    else:
+        for item in items[:20]:
+            lines.append(f"- {item}")
+    lines.append("")
+    return lines
+
+
+def generate_retro(
+    project_findings: list[str],
+    aet_findings: list[str],
+    telemetry_report: str,
+) -> str:
+    """Render the retro markdown."""
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    lines = [
+        f"# Retro: AET run review ({date})",
+        "",
+        "## Telemetry Summary",
+        "",
+        "```",
+        telemetry_report.rstrip(),
+        "```",
+        "",
+        "## Findings",
+        "",
+        "Findings are split by where the fix should land:",
+        "",
+        "- **Project-level** — fix in the current codebase.",
+        "- **AET-level** — fix in the AET toolkit (skills, orchestrator, commands, templates).",
+        "",
+    ]
+    lines.extend(format_section("Project-level findings", project_findings))
+    lines.extend(format_section("AET-level findings", aet_findings))
+    lines.extend(
+        [
+            "## Action Items",
+            "",
+            "- [ ] Review project-level findings and create/queue fixes in the current project.",
+            "- [ ] Review AET-level findings and update the toolkit via `aet-evolve system-evolve`.",
+            "- [ ] Append the highest-impact finding to `.agents/learnings.jsonl`.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point."""
+    parser = argparse.ArgumentParser(
+        description="Generate a retro from AET telemetry, split by project-level and AET-level fixes."
+    )
+    parser.add_argument(
+        "--archive-dir",
+        type=Path,
+        default=DEFAULT_ARCHIVE_DIR,
+        help="Telemetry archive root (default: ~/.aet/telemetry).",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Retro output path (default: docs/retros/YYYY-MM-DD-aet-retro.md).",
+    )
+    parser.add_argument(
+        "--no-mine",
+        action="store_true",
+        help="Skip mine-learnings and only use the local execution log.",
+    )
+    args = parser.parse_args(argv)
+
+    local_records = read_local_execution_log(EXECUTION_LOG)
+    aet_findings, project_findings = categorize_records(local_records)
+
+    telemetry_report = "Skipped mine-learnings (--no-mine)."
+    if not args.no_mine:
+        telemetry_report = run_mine_learnings(args.archive_dir)
+
+    if args.output is None:
+        output_dir = Path("docs/retros")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        args.output = output_dir / f"{date}-aet-retro.md"
+
+    retro = generate_retro(project_findings, aet_findings, telemetry_report)
+    args.output.write_text(retro, encoding="utf-8")
+    print(f"Wrote retro to {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

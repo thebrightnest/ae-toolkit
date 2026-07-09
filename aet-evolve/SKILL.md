@@ -97,6 +97,20 @@ Update the layer that allowed the issue so it doesn't happen again.
 
 Entries without a `trigger` field remain valid; matching falls back to recency.
 
+### `aet-retro`
+
+One-shot retro generation from telemetry. Run this after an `aet-work` batch or any session where AET tooling misbehaved. It runs `mine-learnings --propose`, reads `.agents/execution.log.jsonl`, and writes a retro that separates **project-level** findings (fix the codebase being built) from **AET-level** findings (fix the toolkit).
+
+**Procedure:**
+
+1. Ensure `mine-learnings` is on `PATH`.
+2. Run `aet-retro`.
+3. Review `docs/retros/YYYY-MM-DD-aet-retro.md`.
+4. Route project-level findings into the current project's queue.
+5. Route AET-level findings through `system-evolve` and append a learning.
+
+See `.agents/commands/aet-retro.md` for full usage and flags.
+
 ### `mine-learnings`
 
 Scan the telemetry archive for recurring patterns and output a ranked report.
