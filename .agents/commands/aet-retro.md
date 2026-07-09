@@ -1,0 +1,41 @@
+# `aet-retro`
+
+Run after an `aet-work` batch, a completed plan, or any session where AET tooling misbehaved. Generates a retro that splits findings into:
+
+- **Project-level fixes** — changes to the codebase being built.
+- **AET-level fixes** — changes to the toolkit itself (skills, orchestrator, commands, templates).
+
+## When to Run
+
+- End of a multi-task `aet-work run`.
+- After manually fixing multiple AET-related issues in one session.
+- When you suspect the same AET failure is recurring across projects.
+
+## Steps
+
+1. Ensure `mine-learnings` is on `PATH` (run `make install-skills` if developing in this repo).
+2. Run:
+
+   ```bash
+   aet-retro
+   ```
+
+3. The command writes `docs/retros/YYYY-MM-DD-aet-retro.md`.
+4. Review the split between project-level and AET-level findings.
+5. For AET-level findings, run `aet-evolve system-evolve` and append a learning to `.agents/learnings.jsonl`.
+6. For project-level findings, create or queue fixes in the current project.
+
+## Options
+
+- `--archive-dir PATH` — use a custom telemetry archive root.
+- `--output PATH` — write the retro to a specific file.
+- `--no-mine` — skip `mine-learnings` and only use `.agents/execution.log.jsonl`.
+
+## Expected Output
+
+A retro markdown file with:
+
+- Telemetry summary from `mine-learnings --propose`.
+- Project-level findings from the local execution log.
+- AET-level findings from the local execution log.
+- Action items for both layers.
