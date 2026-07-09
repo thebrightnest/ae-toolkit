@@ -37,23 +37,21 @@ AE Toolkit fixes this by encoding the best agentic engineering patterns from YC,
 
 ### Option 1: Install with `npx skills` (recommended)
 
-The open agent skills installer auto-detects your AI coding tool and works with 35+ agents:
+AE Toolkit is a single system, not a menu of independent skills. The pipeline skills are designed to work together — installing only one leaves you with broken handoffs and missing helper binaries. Install the whole toolkit:
 
 ```bash
-# Install one skill (add @aet-setup if you need helper binaries like orchestrator)
-npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name>
-
-# Target a specific agent explicitly
-npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name> -a claude-code
-npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name> -a vscode
-
-# Install all AE Toolkit skills at once (recommended; includes aet-setup)
 npx skills add https://github.com/thebrightnest/ae-toolkit --all
+```
+
+Target a specific agent if needed:
+
+```bash
+npx skills add https://github.com/thebrightnest/ae-toolkit --all -a claude-code
 ```
 
 Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
 
-AET skills ship with helper binaries (`aet-state`, `orchestrator`, `mine-learnings`, etc.). After installing skills, put them on `PATH` by running the installer from the `aet-setup` skill (install `@aet-setup` too if you installed skills individually):
+AET skills ship with helper binaries (`aet-state`, `orchestrator`, `mine-learnings`, etc.). After installing skills, put them on `PATH` by running the installer from the `aet-setup` skill:
 
 ```bash
 ~/.agents/skills/aet-setup/bin/install-aet-binaries
@@ -91,11 +89,7 @@ All skills follow the same markdown-based format. The agent reads the YAML front
 
 ## Skills
 
-Install any skill with:
-
-```bash
-npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name>
-```
+These are the components of the AE Toolkit system. They are installed together; the pipeline only works when all of them are present.
 
 | Skill                                                      | Description                                                                                                                                                                               |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -122,7 +116,7 @@ npx skills add https://github.com/thebrightnest/ae-toolkit@<skill-name>
 
 ### Pipelines
 
-These skills chain multiple individual skills into complete end-to-end flows:
+These skills orchestrate the full toolkit workflow:
 
 | Skill                                    | Description                                                                                           |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -196,13 +190,7 @@ See [docs/upgrades/README.md](./docs/upgrades/README.md) for version-specific up
 
 ## Packaging
 
-Skills are distributed as `.skill` files (zip archives):
-
-```bash
-make package
-```
-
-This produces `aet-setup.skill` (and any other skill `.skill` files) in the repo root.
+`make package` produces `.skill` files (zip archives) for each skill directory. These are build artifacts for manual installs and distribution mirrors. The recommended install path is `npx skills add ... --all`, which consumes this repository directly.
 
 ## License
 

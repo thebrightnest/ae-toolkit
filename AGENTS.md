@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolkit)** — a modular skill suite for AI coding agents. Skills are self-contained directories with a `SKILL.md` file (YAML frontmatter + markdown instructions). They are distributed as `.skill` files (zip archives).
+This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolkit)** — an integrated system of agentic engineering skills. Skills are directories with a `SKILL.md` file (YAML frontmatter + markdown instructions). They are designed to be installed together; the pipeline only works when the whole system is present.
 
 ## Stack
 
@@ -34,17 +34,17 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 ## Tooling Reference
 
-| Command                 | What it runs                                        |
-| ----------------------- | --------------------------------------------------- |
-| `make help`             | Show all available targets                          |
-| `make install-skills`   | Symlink all skills to `~/.agents/skills/`           |
-| `make package`          | Zip every `*/SKILL.md` into `.skill` files          |
-| `make add-skill NAME=x` | Scaffold a new skill directory                      |
-| `make lint`             | markdownlint all markdown files                     |
-| `make format`           | Prettier format all markdown files                  |
-| `make format-check`     | Prettier check (CI mode)                            |
-| `make validate`         | Run lint + format-check + skill-structure validator |
-| `make install-hooks`    | Install pre-commit hooks                            |
+| Command                 | What it runs                                         |
+| ----------------------- | ---------------------------------------------------- |
+| `make help`             | Show all available targets                           |
+| `make install-skills`   | Symlink all skills to `~/.agents/skills/`            |
+| `make package`          | Build `.skill` zip artifacts for manual distribution |
+| `make add-skill NAME=x` | Scaffold a new skill directory                       |
+| `make lint`             | markdownlint all markdown files                      |
+| `make format`           | Prettier format all markdown files                   |
+| `make format-check`     | Prettier check (CI mode)                             |
+| `make validate`         | Run lint + format-check + skill-structure validator  |
+| `make install-hooks`    | Install pre-commit hooks                             |
 
 ## Skill Structure Validator
 
@@ -81,7 +81,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 - Always produce a PRD before writing code for any feature >1 day of work
 - Always review the plan.md before implementation; never skip human validation
-- Always branch worktrees from `origin/main` and rebase independent branches onto `origin/main` before shipping; never let a stale or ahead local `main` leak into a PR diff; and keep every rule a skill enforces package-deliverable inside the skill itself (see `docs/CONVENTIONS.md` Package-Deliverable Rules)
+- Always branch worktrees from `origin/main` and rebase independent branches onto `origin/main` before shipping; never let a stale or ahead local `main` leak into a PR diff
 - **Design-to-implementation hard gate** — Free-form design conversations are not implementation approval. After the user approves a design proposal ("yes", "sounds good", "go ahead", or similar), STOP and confirm scope before writing files: _"This will modify [N files]: [list]. Approve to proceed?"_ Do not begin editing until the user explicitly confirms.
 - **Analysis-to-action discipline** — When your own analysis identifies a violation of a documented principle (ADR, convention, guardrail), state the conclusion and propose the fix. Do not present options that preserve a pattern you have proven wrong. The user chooses between valid implementations of the correct direction, not whether to keep a known error.
 - Always run self-validation (`make validate`) before declaring a task complete
@@ -102,6 +102,6 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 ## Decision Log
 
 - **Markdown-only repo:** No package.json, requirements.txt, etc. Quality tools are installed via pre-commit or system package manager.
-- **Zip packaging:** `.skill` files are plain zip archives of the skill directory, no custom format.
+- **Zip packaging:** `.skill` files are plain zip archives of the skill directory, produced as build artifacts for manual distribution. The recommended install path is `npx skills add ... --all`.
 - **No CI:** All gates local via pre-commit + Make. Keeps the repo portable and free of vendor lock-in.
 - **Trimmed tooling:** Dropped cspell, lychee, and detect-secrets. A skills library's quality surface is structure and formatting, not runtime security or external link graphs.

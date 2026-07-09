@@ -17,21 +17,22 @@ Each skill lives in its own directory at the repository root:
     └── README.md
 ```
 
-Skill directories are packaged into `.skill` files (zip archives) via `make package`.
+Skill directories are packaged into `.skill` files (zip archives) via `make package`. These artifacts are for manual distribution; the recommended install path is `npx skills add ... --all`, which installs the AE Toolkit as a single system.
 
 ## Package-Deliverable Rules
 
-A skill must be self-contained. Every rule, guardrail, convention, or hygiene check that the skill enforces at runtime must live inside the skill's packaged files (`SKILL.md`, `references/`, `examples/`, or executable scripts inside the skill directory).
+AE Toolkit is installed together, not à la carte. Skills may reference shared conventions, cross-skill rules, and toolkit-level docs because the whole system is present at runtime.
 
 Rules:
 
-- Do not put runtime skill behavior rules in `.agents/reference/`, `AGENTS.md`, `docs/CONVENTIONS.md`, or other toolkit-internal documents. Those files are not packaged with the skill and are invisible to projects that install it.
-- It is fine to document cross-skill patterns or authoring guidance in `.agents/reference/` and `docs/CONVENTIONS.md`, but the skill itself must repeat or link to any rule it actually enforces.
-- If a rule spans multiple skills, either duplicate the relevant portion in each skill or create a skill-level reference doc and link it from `SKILL.md`. Avoid cross-skill file references that would break when a skill is installed alone.
+- Put rules that are specific to one skill inside that skill's files (`SKILL.md`, `references/`, `examples/`, or scripts in `<skill>/bin/`).
+- Put cross-cutting rules in shared partials (`scripts/partials/`) or toolkit-level docs (`.agents/reference/`, `AGENTS.md`, `docs/CONVENTIONS.md`). `make package` assembles shared partials into each `SKILL.md` at build time.
+- It is fine for a skill to reference another skill or a shared convention by name (e.g., "run `aet-validate-scope` next"). Do not rely on hardcoded paths that assume a specific install location.
+- If a rule must be visible to an agent that reads only the skill file (e.g., when a skill is pasted into chat), include the essential version of that rule directly in `SKILL.md` or link to a skill-level reference doc.
 
 ## Skill Binaries
 
-Skills may include executable helpers in `<skill>/bin/`. These are packaged into `.skill` files and installed into the agent's skills directory by `npx skills`, but they are **not** automatically added to `PATH`.
+Skills may include executable helpers in `<skill>/bin/`. These are installed into the agent's skills directory when the toolkit is installed with `npx skills ... --all`, but they are **not** automatically added to `PATH`.
 
 Rules:
 
@@ -328,7 +329,7 @@ make package
 
 ### Editing a Skill
 
-Edit the **template** or the **partial**, not the generated `SKILL.md`. Run `make package` after any change to regenerate the self-contained skill files.
+Edit the **template** or the **partial**, not the generated `SKILL.md`. Run `make package` after any change to regenerate the assembled `SKILL.md` files.
 
 ## Versioning
 
