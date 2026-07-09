@@ -75,7 +75,13 @@ Run tiered automated validation.
    - Fix the bug in source
    - Generate a regression test that would have caught it
    - Commit the fix and test atomically
-7. Produce a QA report:
+7. **Stage-failure triage:** If any validation stage fails, gather the following evidence before retrying or escalating to a human. Append the triage block to the QA report; do not write it to the repository.
+   - Failing command and full output
+   - Files touched by the current diff
+   - Last successful stage
+   - Relevant environment variables (`AET_*`)
+   - Whether the failure reproduces outside the orchestrator (run the same command manually in the worktree)
+8. Produce a QA report:
    - Determine the task ID from the active plan filename or branch name
    - Write the report to `/tmp/aet-reports/{task-id}/qa-report.md`
    - Include:
@@ -85,6 +91,7 @@ Run tiered automated validation.
      - screenshot diffs (if browser mode used)
      - coverage delta
      - **Coverage section:** list files checked, their coverage %, and which (if any) failed the 0% gate
+     - **Triage section:** stage-failure evidence, if any stage failed
    - Do NOT write `.qa-report.md` to the repository root
 
 **Browser tooling preference:**

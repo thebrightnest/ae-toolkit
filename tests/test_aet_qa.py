@@ -50,5 +50,41 @@ class TestAetQaImpactScopedDefaults(unittest.TestCase):
             )
 
 
+class TestAetQaStageFailureTriage(unittest.TestCase):
+    """Regression tests for stage-failure triage checklist in aet-qa."""
+
+    def setUp(self):
+        self.content = SKILL_MD.read_text(encoding="utf-8")
+
+    def test_skill_includes_stage_failure_triage_heading(self):
+        self.assertIn(
+            "Stage-failure triage",
+            self.content,
+            "SKILL.md should include a stage-failure triage checklist",
+        )
+
+    def test_triage_includes_required_evidence_fields(self):
+        for field in (
+            "command",
+            "output",
+            "files touched",
+            "last successful stage",
+            "environment variables",
+            "reproduces outside",
+        ):
+            self.assertIn(
+                field,
+                self.content.lower(),
+                f"Triage checklist should mention '{field}'",
+            )
+
+    def test_triage_report_goes_to_qa_report(self):
+        self.assertIn(
+            "QA report",
+            self.content,
+            "Triage evidence should be appended to the QA report",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
