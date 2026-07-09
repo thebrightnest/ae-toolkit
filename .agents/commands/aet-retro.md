@@ -29,7 +29,7 @@ Run after an `aet-work` batch, a completed plan, or any session where AET toolin
 
 - `--archive-dir PATH` — use a custom telemetry archive root.
 - `--output PATH` — write the retro to a specific file.
-- `--no-mine` — skip `mine-learnings` and only use `.agents/execution.log.jsonl`.
+- `--no-mine` — skip `mine-learnings` and only use the current project's recent telemetry.
 
 ## Expected Output
 

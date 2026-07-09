@@ -99,7 +99,7 @@ Entries without a `trigger` field remain valid; matching falls back to recency.
 
 ### `aet-retro`
 
-One-shot retro generation from telemetry. Run this after an `aet-work` batch or any session where AET tooling misbehaved. It runs `mine-learnings --propose`, reads `.agents/execution.log.jsonl`, and writes a retro that separates **project-level** findings (fix the codebase being built) from **AET-level** findings (fix the toolkit).
+One-shot retro generation from telemetry. Run this after an `aet-work` batch or any session where AET tooling misbehaved. It runs `mine-learnings --propose`, reads the current project's per-task JSONL telemetry from `~/.aet/telemetry/{project-slug}/` (ADR-012), and writes a retro that separates **project-level** findings (fix the codebase being built) from **AET-level** findings (fix the toolkit).
 
 **Procedure:**
 
