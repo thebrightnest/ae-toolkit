@@ -43,5 +43,4 @@ The `aet-implement/SKILL.md` `implement` procedure already states in step 7 that
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
