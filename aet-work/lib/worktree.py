@@ -8,23 +8,27 @@ import shutil
 import subprocess
 
 
-def create_worktree(repo_root: str, task_id: str) -> str:
+def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/main") -> str:
     """Create or refresh a git worktree for the task. Return the worktree path.
 
-    New branches are always based on ``origin/main`` so that worktrees do not
-    accidentally inherit commits from the parent session's current branch.
-    Existing worktrees are refreshed: ``origin/main`` is fetched and the branch
-    is rebased onto it when it has advanced.
+    New branches are based on ``base_branch`` (default ``origin/main``) so that
+    worktrees do not accidentally inherit commits from the parent session's
+    current branch. Existing worktrees are refreshed: ``base_branch`` is fetched
+    and the branch is rebased onto it when it has advanced.
     """
     worktree_dir = os.path.join(repo_root, ".worktrees", task_id)
     branch_name = task_id
-    base = "origin/main"
+    base = base_branch
 
-    # Always refresh origin/main before creating or reusing a worktree.
-    subprocess.run(
-        ["git", "-C", repo_root, "fetch", "origin", "main"],
-        capture_output=True,
-    )
+    # Always refresh the base branch before creating or reusing a worktree.
+    fetch_remote = fetch_ref = ""
+    if "/" in base:
+        fetch_remote, _, fetch_ref = base.partition("/")
+    if fetch_remote and fetch_ref:
+        subprocess.run(
+            ["git", "-C", repo_root, "fetch", fetch_remote, fetch_ref],
+            capture_output=True,
+        )
 
     base_oid = subprocess.run(
         ["git", "-C", repo_root, "rev-parse", base],
@@ -83,11 +87,11 @@ def create_worktree(repo_root: str, task_id: str) -> str:
                     branch_exists = False
 
     if os.path.isdir(worktree_dir):
-        # An existing worktree may have a stale origin/main ref. Fetch inside the
+        # An existing worktree may have a stale base ref. Fetch inside the
         # worktree and rebase if the local branch is behind.
-        if base_sha:
+        if base_sha and fetch_remote and fetch_ref:
             subprocess.run(
-                ["git", "-C", worktree_dir, "fetch", "origin", "main"],
+                ["git", "-C", worktree_dir, "fetch", fetch_remote, fetch_ref],
                 capture_output=True,
             )
             local_oid = subprocess.run(
