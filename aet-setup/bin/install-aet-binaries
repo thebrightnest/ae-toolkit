@@ -10,10 +10,27 @@
 # The script searches common Agent Skills install directories and symlinks any
 # executable found at <skill>/bin/* into BIN_DIR. It is idempotent and safe to
 # re-run after installing or updating skills.
+#
+# Linking policy:
+#   - Link binaries whose name starts with `aet-`.
+#   - Link the explicit allowlist: configure-task-backend, install-aet-binaries,
+#     mine-learnings.
+#   - Prune stale symlinks in BIN_DIR that point into any searched skill
+#     directory but are no longer part of the install set.
+#   - Preserve foreign symlinks and regular files.
 
 set -euo pipefail
 
 BIN_DIR="${1:-${AET_BIN_DIR:-$HOME/.local/bin}}"
+
+# Names that do not start with `aet-` but are still part of the toolkit and
+# should be exposed on PATH.
+ALLOWLIST=(
+  "configure-task-backend"
+  "install-aet-binaries"
+  "mine-learnings"
+  "orchestrator"
+)
 
 # Search order (lowest priority first, highest priority last). The last root
 # processed wins, so its symlink remains in BIN_DIR.
@@ -42,7 +59,71 @@ trap 'rm -rf "$TRACK_DIR"' EXIT
 
 installed=0
 updated=0
+pruned=0
 skipped=0
+
+# Build a newline-separated list of all skill directories for the prune check.
+SKILL_DIRS_FILE="$TRACK_DIR/skill_dirs"
+: > "$SKILL_DIRS_FILE"
+for root in "${SKILL_ROOTS[@]}"; do
+  if [ ! -d "$root" ]; then
+    continue
+  fi
+  for skill_dir in "$root"/*; do
+    if [ -d "$skill_dir" ]; then
+      printf '%s\n' "$skill_dir" >> "$SKILL_DIRS_FILE"
+    fi
+  done
+done
+
+_is_allowed_name() {
+  local name="$1"
+  if [[ "$name" == aet-* ]]; then
+    return 0
+  fi
+  for allowed in "${ALLOWLIST[@]}"; do
+    if [ "$name" = "$allowed" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+_points_into_skill_dir() {
+  local target="$1"
+  if [ ! -L "$target" ]; then
+    return 1
+  fi
+  local link_target
+  link_target=$(readlink "$target")
+  # Resolve relative links against BIN_DIR.
+  case "$link_target" in
+    /*) ;;
+    *) link_target="$BIN_DIR/$link_target" ;;
+  esac
+  local skill_dir
+  while IFS= read -r skill_dir; do
+    if [[ "$link_target" == "$skill_dir"/* ]]; then
+      return 0
+    fi
+  done < "$SKILL_DIRS_FILE"
+  return 1
+}
+
+# Prune stale AET-managed symlinks before linking.
+for target in "$BIN_DIR"/*; do
+  if [ ! -L "$target" ]; then
+    continue
+  fi
+  name=$(basename "$target")
+  if _points_into_skill_dir "$target"; then
+    if ! _is_allowed_name "$name"; then
+      rm "$target"
+      pruned=$((pruned + 1))
+      echo "  ✗ $name (pruned bare-name AET symlink)"
+    fi
+  fi
+done
 
 for root in "${SKILL_ROOTS[@]}"; do
   if [ ! -d "$root" ]; then
@@ -62,6 +143,10 @@ for root in "${SKILL_ROOTS[@]}"; do
       fi
       name=$(basename "$executable")
       if [ "$name" = "__pycache__" ]; then
+        continue
+      fi
+
+      if ! _is_allowed_name "$name"; then
         continue
       fi
 
@@ -99,7 +184,7 @@ for root in "${SKILL_ROOTS[@]}"; do
   done
 done
 
-if [ "$installed" -eq 0 ] && [ "$updated" -eq 0 ] && [ "$skipped" -eq 0 ]; then
+if [ "$installed" -eq 0 ] && [ "$updated" -eq 0 ] && [ "$pruned" -eq 0 ] && [ "$skipped" -eq 0 ]; then
   echo "No AET skill binaries found in any of the searched directories:"
   for root in "${SKILL_ROOTS[@]}"; do
     echo "  - $root"
@@ -108,7 +193,7 @@ if [ "$installed" -eq 0 ] && [ "$updated" -eq 0 ] && [ "$skipped" -eq 0 ]; then
   exit 1
 fi
 
-echo "Linked $installed new binary(s), updated $updated existing symlink(s), skipped $skipped non-symlink collision(s)."
+echo "Linked $installed new binary(s), updated $updated existing symlink(s), pruned $pruned stale symlink(s), skipped $skipped non-symlink collision(s)."
 
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
   echo ""
