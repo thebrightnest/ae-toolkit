@@ -3,6 +3,7 @@ id: tdsh-03-qa-impact-scoped-tests
 size: S
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: Verify impact-scoped test defaults in aet-qa
@@ -43,5 +44,5 @@ The `aet-qa/SKILL.md` `qa` procedure already defaults to impact-scoped tests and
 
 ---
 
-_Stage: qa-complete_
+_Stage: merged_
 _Next step: run `aet-review`_
