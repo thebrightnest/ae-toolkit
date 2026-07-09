@@ -32,6 +32,20 @@ class TestVerifier(unittest.TestCase):
     def test_read_plan_stage_no_file(self):
         self.assertIsNone(read_plan_stage("/nonexistent/path.md"))
 
+    def test_read_plan_stage_prefers_footer_over_body_mentions(self):
+        """Body text may mention other stages; only the footer stage counts."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(
+                "# Plan\n\n"
+                "1. Set `other-plan.md` footer to *Stage: superseded*.\n\n"
+                "---\n\n"
+                "_Stage: plan-approved_\n"
+            )
+            path = f.name
+
+        stage = read_plan_stage(path)
+        self.assertEqual(stage, "plan-approved")
+
 
 class TestVerifyStageAdvancement(unittest.TestCase):
     def _init_git_repo(self, repo_root: str) -> None:
