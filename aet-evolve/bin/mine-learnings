@@ -221,6 +221,11 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
                                 counts["stage_failures"] += 1
                             if record.get("stage") == "review":
                                 counts["review_noise"] += 1
+                        elif rtype == "learning_candidate":
+                            counts["learning_candidates"] += 1
+                            description = record.get("description")
+                            if description:
+                                examples["learning_candidates"].append(str(description))
 
                 last_run = read_json(run_dir / "last-run.json")
                 if last_run:
@@ -241,6 +246,7 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
         "full_suite_runs": counts.get("full_suite_runs", 0),
         "stage_failures": counts.get("stage_failures", 0),
         "review_noise": counts.get("review_noise", 0),
+        "learning_candidates": counts.get("learning_candidates", 0),
         "runs_scanned": runs_scanned,
         "files_scanned": files_scanned,
         "reports_scanned": reports_scanned,
