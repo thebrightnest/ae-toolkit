@@ -53,5 +53,5 @@ Revert the merge commit; the archive is append-only JSONL, unknown types are ski
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
