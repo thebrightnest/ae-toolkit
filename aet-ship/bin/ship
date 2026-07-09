@@ -46,6 +46,8 @@ def cmd_ship(args):
         queue=args.queue,
         dry_run=args.dry_run,
         plan=args.plan,
+        branch=getattr(args, "branch", None),
+        merge_commit=getattr(args, "merge_commit", None),
     )
     return aet_state.cmd_record_merge(ns)
 
@@ -61,6 +63,14 @@ def main():
         nargs="?",
         default=".agents/work-queue.json",
         help="Path to the work queue JSON file.",
+    )
+    parser.add_argument(
+        "--branch",
+        help="Branch name to use for merge verification. Overrides the task's branch field.",
+    )
+    parser.add_argument(
+        "--merge-commit",
+        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
     )
     parser.add_argument(
         "--dry-run",
