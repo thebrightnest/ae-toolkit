@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """aet-work add — Add a plan to the work queue.
 
-Accepts a plan file path or a task ID. Inserts the task as ``planned``,
-preserving existing queue metadata and rejecting terminal plans.
+Accepts a plan file path or a task ID. Inserts the task as ``ready`` (no
+blockers) or ``blocked`` (pending blockers), rebuilds reverse ``blocks``
+edges, preserves existing queue metadata, and rejects terminal plans.
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ from pathlib import Path
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
+
+from queue import build_blocks  # noqa: E402
 
 from backends.factory import create_backend  # noqa: E402
 from plan_parser import new_task_from_plan, stage_from_plan  # noqa: E402
@@ -113,10 +116,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     task = new_task_from_plan(plan_file, status="planned")
-    task["state"] = "planned"
     queue.append(task)
+    build_blocks(queue)
     backend.save(queue)
-    print(f"✓ Added {plan_file.name} to the queue as planned.")
+    print(f"✓ Added {plan_file.name} to the queue as {task['state']}.")
     backend.close()
     return 0
 

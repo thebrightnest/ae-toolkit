@@ -304,7 +304,7 @@ def new_task_from_plan(
         "worktree": None,
         "branch": None,
     }
-    append_history(task, None, "planned", "sync")
+    append_history(task, None, state, "sync")
     return task
 
 

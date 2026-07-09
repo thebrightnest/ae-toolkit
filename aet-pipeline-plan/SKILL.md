@@ -114,20 +114,21 @@ If the user's request contains implementation directives (e.g., "make", "change"
 4. Update CONTEXT.md and propose ADRs as needed
 5. Update plan footers to `scope-validated` / `plan-approved`
 
-**Step 3 — aet-work sync:**
+**Step 3 — aet-work add + sync:**
 
-1. Run `aet-work sync` to incrementally add the newly created `docs/plans/*.md` files to `.agents/work-queue.json`. Only atomic plans from `docs/plans/` are synced; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
-2. Preserve all existing queue entries and their statuses
-3. Run `aet-work status` and verify:
+1. Run `aet-work add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. Only explicitly added plans enter `.agents/work-queue.json`; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
+2. Run `aet-work sync` to reconcile existing queue entries, recompute reverse `blocks` edges, and report plan drift. Sync never auto-adds new plans.
+3. Preserve all existing queue entries and their states
+4. Run `aet-work status` and verify:
    - No plan drift is reported.
    - At least one newly created task appears in the queue summary.
-4. If drift, orphaned entries, or missing tasks are surfaced, resolve them before declaring the pipeline complete
+5. If drift, orphaned entries, or missing tasks are surfaced, resolve them before declaring the pipeline complete
 
 **Output:**
 
 - `docs/prds/{feature}-prd.md` — stage: `scope-validated`
 - `docs/plans/*.md` — stage: `plan-approved`
-- `.agents/work-queue.json` — synced via `aet-work sync`, ready for `aet-work`
+- `.agents/work-queue.json` — curated via `aet-work add` and reconciled via `aet-work sync`, ready for `aet-work`
 
 ## Completion Protocol
 
