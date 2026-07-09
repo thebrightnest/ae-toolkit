@@ -728,7 +728,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # Re-read after aet-state/_mark_failed wrote the file so we
                 # don't overwrite the updated state with the stale in-memory
                 # queue snapshot.
-                queue = read_queue(queue_file)
+                queue = backend.load()["queue"]
             else:
                 print(f"   ❌ {task_id} failed (exit {ret})")
                 queue = backend.load()["queue"]
