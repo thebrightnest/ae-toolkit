@@ -36,6 +36,6 @@ Run after an `aet-work` batch, a completed plan, or any session where AET toolin
 A retro markdown file with:
 
 - Telemetry summary from `mine-learnings --propose`.
-- Project-level findings from the local execution log.
-- AET-level findings from the local execution log.
+- Project-level findings from the current project's recent per-task telemetry.
+- AET-level findings from the current project's recent per-task telemetry.
 - Action items for both layers.
