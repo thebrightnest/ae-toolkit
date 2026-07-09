@@ -133,7 +133,7 @@ class TestRecordMerge(unittest.TestCase):
             "tasks": [
                 {
                     "id": "t1",
-                    "status": "awaiting_merge",
+                    "state": "awaiting_merge",
                     "branch": "feat-001",
                     "plan_file": "docs/plans/t1.md",
                 }
@@ -279,7 +279,8 @@ class TestRecordMerge(unittest.TestCase):
         with open(str(self.queue_file_path), "r", encoding="utf-8") as f:
             live = json.load(f)
         task = live["tasks"][0]
-        self.assertEqual(task["status"], "awaiting_merge")
+        self.assertEqual(task["state"], "awaiting_merge")
+        self.assertNotIn("status", task)
         self.assertNotIn("merge_commit", task)
 
     def test_record_merge_with_plan_updates_frontmatter_and_footer(self):
@@ -585,8 +586,8 @@ class TestDeriveStatus(unittest.TestCase):
         self.assertEqual(derived["derived_status"], "drift")
         self.assertEqual(derived["drift"], "plan_file missing")
 
-    def test_done_without_merge_verification_warning(self):
-        """The legacy done-without-merge warning is preserved during transition."""
+    def test_awaiting_merge_without_merge_verification_warning(self):
+        """An awaiting_merge task without merge verification is flagged."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("# Plan\n")
             plan_path = f.name
@@ -595,7 +596,7 @@ class TestDeriveStatus(unittest.TestCase):
             "id": "t1",
             "plan_file": plan_path,
             "branch": None,
-            "status": "done",
+            "state": "awaiting_merge",
         }
 
         responses = {
@@ -605,7 +606,7 @@ class TestDeriveStatus(unittest.TestCase):
         with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
             derived = aet_state.derive_status(task)
 
-        self.assertIn("done without merge verification", derived["warnings"][0])
+        self.assertIn("awaiting_merge without merge verification", derived["warnings"][0])
         self.assertTrue(derived["derived_status"].startswith("unblocked"))
 
 

@@ -15,7 +15,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import current_state, state_to_status  # noqa: E402
+from queue import current_state  # noqa: E402
 
 from backends.factory import create_backend  # noqa: E402
 
@@ -41,8 +41,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def _display_category(task: dict) -> str:
-    """Return the human-readable category for a task's stored state."""
-    return state_to_status(current_state(task))
+    """Return the canonical state for summary counting."""
+    return current_state(task) or "unknown"
 
 
 def main() -> int:
@@ -64,15 +64,22 @@ def main() -> int:
     else:
         print("✅ No plan drift detected. All plans are tracked in the queue.")
 
-    counts = {"planned": 0, "unblocked": 0, "blocked": 0, "in-progress": 0, "awaiting_merge": 0, "failed": 0, "done": 0}
+    counts = {
+        "planned": 0,
+        "ready": 0,
+        "blocked": 0,
+        "in_progress": 0,
+        "awaiting_merge": 0,
+        "failed": 0,
+    }
     for task in queue:
         category = _display_category(task)
         if category in counts:
             counts[category] += 1
 
     print("\nQueue summary (active tasks only):")
-    for status, count in counts.items():
-        print(f"  {status}: {count}")
+    for state, count in counts.items():
+        print(f"  {state}: {count}")
 
     terminal = {"merged", "abandoned"}
     print(f"\n{'ID':<40} {'State':<20}")

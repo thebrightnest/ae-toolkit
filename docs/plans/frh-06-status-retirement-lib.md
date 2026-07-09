@@ -51,12 +51,12 @@ Retirement mechanism: **normalize-on-read, never write.** `read_queue` upgrades 
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] Named tests (in `tests/test_aet_work_read_side.py`):
+- [x] `make validate` passes; full suite passes
+- [x] Named tests (in `tests/test_aet_work_read_side.py`):
   - `test_read_queue_normalizes_legacy_status_records` (status-only record gains `state`, loses `status`)
   - `test_write_queue_never_emits_status_key`
   - `test_status_binary_displays_canonical_state`
-- [ ] Grep gate: `grep -rn "state_to_status\|status_to_state\|mark_completed\|mark_awaiting_merge\|mark_status" aet-work/lib aet-work/bin` — only hits allowed after this plan are in `aet-work/bin/aet-state` and `aet-work/bin/init-queue` (removed by frh-07)
+- [x] Grep gate: `grep -rn "state_to_status\|status_to_state\|mark_completed\|mark_awaiting_merge\|mark_status" aet-work/lib aet-work/bin` returns no hits
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -65,5 +65,5 @@ Revert the merge commit. Normalize-on-read makes no destructive file changes unt
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_

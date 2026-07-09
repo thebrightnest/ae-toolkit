@@ -159,11 +159,6 @@ def main() -> int:
             final_queue.append(task)
             seen_files.add(pf)
 
-    # Normalize legacy statuses.
-    for task in final_queue:
-        if task.get("status") == "merge_verified":
-            task["status"] = "merged"
-
     build_blocks(final_queue)
 
     # Report plan drift without mutating stored status.
