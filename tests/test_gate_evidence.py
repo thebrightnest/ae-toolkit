@@ -94,6 +94,26 @@ class TestValidateVerdict(unittest.TestCase):
         with self.assertRaises(evidence.VerdictValidationError):
             evidence.validate_verdict(record, "qa")
 
+    def test_invalid_verdict_value_fails_validation(self):
+        record = {
+            "task_id": "frh-10",
+            "stage": "qa-complete",
+            "skill": "aet-qa",
+            "verdict": "maybe",
+            "summary": "Invalid verdict value",
+            "generated_at": "2026-07-09T20:00:00Z",
+            "test_command": "pytest",
+            "tests_total": 1,
+            "tests_passed": 1,
+            "tests_failed": 0,
+        }
+        with self.assertRaises(evidence.VerdictValueError):
+            evidence.validate_verdict(record, "qa")
+
+    def test_unknown_kind_fails_validation(self):
+        with self.assertRaises(evidence.VerdictValidationError):
+            evidence.validate_verdict({"task_id": "frh-10"}, "unknown-kind")
+
 
 class TestWriteThenReadVerdict(unittest.TestCase):
     def test_write_then_read_verdict_roundtrip(self):
