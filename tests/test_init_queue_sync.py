@@ -592,6 +592,56 @@ class TestInitQueue(unittest.TestCase):
         # Non-terminal task reset based on frontmatter blockers (ready for no blockers).
         self.assertEqual(tasks["stale"]["state"], "ready")
 
+    def test_init_queue_preserves_state_only_metadata(self):
+        """init-queue emits tasks with canonical state and no legacy status key."""
+        make_plan(self.plans_dir / "old.md", "Old task")
+        make_plan(self.plans_dir / "new.md", "New task")
+        initial = {
+            "tasks": [
+                {
+                    "id": "old",
+                    "title": "Old task",
+                    "plan_file": str(self.plans_dir / "old.md"),
+                    "blocked_by": [],
+                    "blocks": [],
+                    "state": "merged",
+                    "merge_commit": "abc1234",
+                    "merge_strategy": "squash",
+                    "branch": "feat-old",
+                    "worktree": "/worktrees/old",
+                }
+            ]
+        }
+        self.queue_file.write_text(json.dumps(initial))
+
+        result, _ = run_script(
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        history = {
+            json.loads(line)["id"]: json.loads(line)
+            for line in self.history_file.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        }
+        # Terminal task is sealed to history with metadata preserved.
+        self.assertEqual(history["old"]["state"], "merged")
+        self.assertEqual(history["old"]["merge_commit"], "abc1234")
+        self.assertEqual(history["old"]["merge_strategy"], "squash")
+        self.assertEqual(history["old"]["branch"], "feat-old")
+        self.assertEqual(history["old"]["worktree"], "/worktrees/old")
+        self.assertNotIn("status", history["old"])
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertNotIn("old", tasks)
+        self.assertEqual(tasks["new"]["state"], "ready")
+        self.assertNotIn("status", tasks["new"])
+
     def test_does_not_call_derive(self):
         """init-queue must not invoke aet-state derive."""
         make_plan(self.plans_dir / "feat-001.md", "First task")
