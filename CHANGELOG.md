@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.10.0] — 2026-07-09
+
+### Added
+
+- **aet-retro command** — `aet-evolve` now includes an automated run-review command that reads per-task telemetry archives and narrative reports to surface errors, performance issues, and actionable improvements after every `aet-work run`.
+- **GitHub Issues task backend** — `aet-work` can now use GitHub Issues as the queue backend instead of local JSON files. Plans pushed to the queue become GitHub issues with labels, and state transitions sync bidirectionally.
+- **Impact-scoped QA tests** — `aet-qa` defaults to tests that touch the changed files, with an exact fallback to the full suite when the scoped run does not cover every modified path.
+- **Stage-failure triage checklist** — `aet-qa` adds a structured triage checklist for failures during plan, review, QA, or ship stages.
+- **Review scope noise filter** — `aet-review` tightens its scope lens and adds a project-level noise filter so reviewers focus on the current change instead of unrelated project patterns.
+- **Manual merge closure** — `aet-ship` and `aet-state` can close a task from a CLI-supplied branch or merge commit when a PR is merged outside the orchestrator.
+- **Queue self-heal audit** — `aet-state heal` reconciles queued tasks against git ground truth and can repair stale state.
+- **Testing strategy template** — `aet-setup` scaffolds a `docs/references/testing-strategy.md` example for new projects.
+
+### Changed
+
+- **aet-work orchestrator reliability** — per-task wall-clock timeout, inner heartbeat, and guaranteed cleanup/summary reporting replace the single outer-shell timeout.
+- **Worktree freshness** — `aet-work` refreshes `origin/main` before creating or reusing a worktree, and rebases existing worktrees in place when `origin/main` advances.
+- **Hygiene noise reduction** — queue mutations detected during hygiene checks are now informational instead of blocking, and plan-drift warnings are logged without halting the run.
+- **aet-setup scaffolding** — `docs/references/` now includes a reference-README example, and the skill/checklist guide projects through the new docs scaffolding.
+
+### Fixed
+
+- **aet-work orchestrator crash** — eliminated `NameError: read_queue` by using the configured backend to load queue state.
+- **Stale queue writes** — `aet-work` re-reads queue state after `aet-state` transitions to avoid overwriting concurrent updates.
+- **Plan closure commits** — `aet-state record-merge` now auto-commits plan footer updates after merge verification.
+- **Merged footer formatting** — plan merged footers use consistent underscore emphasis.
+- **aet-retro telemetry source** — `aet-retro` reads per-task telemetry archives instead of the removed single `.agents/execution.log.jsonl`.
+- **aet-evolve mine-learnings** — restored missing `sys` import.
+
+### Removed
+
+- **aet-discover skill** removed from the toolkit. Discovery workflows remain possible with `aet-plan` and manual product-definition artifacts.
+
+### Documentation
+
+- Added ADR-013 and the QES plan suite documenting the ephemeral sprint-board model.
+- Added GitHub Issues task backend PRD and implementation plans.
+- Updated `docs/CONVENTIONS.md` and skill guidance to describe the toolkit as a distributed system rather than individual skills.
+- Added upgrade guides index and linked it from `README.md`.
+- Documented retro learnings from the telemetry-driven skill hardening run.
+
+---
+
 ## [0.9.1] — 2026-07-06
 
 ### Fixed
