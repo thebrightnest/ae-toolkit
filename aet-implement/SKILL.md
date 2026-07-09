@@ -80,7 +80,7 @@ Execute a plan.md from start to finish with self-validation.
    - Flag for human judgment or replanning
 5. Create a feature branch if not already on one
 6. Execute tasks in the order specified in the plan
-7. After each task, run the relevant validation from the plan's self-validation strategy
+7. After each task, run the relevant validation from the plan's self-validation strategy. **If validation fails, stop immediately, report the failing task and the failure, and do not start the next task until it passes.**
 8. Compare implementation against the plan — flag any deviation
 9. Commit with a message that references the ticket/plan
 10. Summarize what was built, what validation passed, and any deviations
