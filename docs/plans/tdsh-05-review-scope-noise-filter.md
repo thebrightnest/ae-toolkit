@@ -3,6 +3,7 @@ id: tdsh-05-review-scope-noise-filter
 size: S
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: Verify aet-review scope and project-level noise filter
@@ -44,5 +45,5 @@ The `aet-review/SKILL.md` `review` procedure already scopes the diff to the PR b
 
 ---
 
-_Stage: qa-complete_
+_Stage: merged_
 _Next step: run `aet-review`_
