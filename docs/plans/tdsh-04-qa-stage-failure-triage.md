@@ -3,6 +3,7 @@ id: tdsh-04-qa-stage-failure-triage
 size: S
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: Add stage-failure triage checklist to aet-qa
@@ -41,5 +42,5 @@ Part of [Telemetry-Driven Skill Hardening](../prds/telemetry-driven-skill-harden
 
 ---
 
-_Stage: qa-complete_
+_Stage: merged_
 _Next step: run `aet-review`_
