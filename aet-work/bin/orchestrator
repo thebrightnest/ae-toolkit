@@ -35,7 +35,7 @@ from queue import (  # noqa: E402
 import telemetry  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 from cli_adapter import resolve_cli_adapter  # noqa: E402
-from pipeline import group_stages_by_session  # noqa: E402
+from pipeline import STAGE_MAP, group_stages_by_session  # noqa: E402
 from verifier import (  # noqa: E402
     read_plan_stage,
     verify_branch_has_commits,
@@ -342,6 +342,14 @@ def process_task(
     # Determine current stage from the task record; footer is only a breadcrumb.
     current_stage = get_current_stage(task, plan_file)
 
+    # A terminal or unknown stage with no commits means the plan footer (or a
+    # stale worktree) is lying. Fail loudly instead of marking the task done.
+    if current_stage not in STAGE_MAP:
+        ok, msg = verify_branch_has_commits(worktree_dir)
+        if not ok:
+            print(f"   ❌ Stage '{current_stage}' is not a runnable pipeline stage and {msg}")
+            return False
+
     # Allow the plan frontmatter to override the CLI isolation default.
     task_isolation = effective_isolation(plan_file, isolation)
     if task_isolation != isolation:
@@ -349,6 +357,7 @@ def process_task(
 
     # Group stages by isolation level
     groups = group_stages_by_session(task_isolation)
+    agent_invoked = False
 
     for group in groups:
         if _shutdown_requested:
@@ -383,6 +392,7 @@ def process_task(
                 exit_code = run_stage_group(
                     adapter, repo_root, plan_file, worktree_dir, runnable
                 )
+                agent_invoked = True
                 if exit_code != 0:
                     print(f"   ❌ Stage group failed with exit code {exit_code}")
                     return False
@@ -467,6 +477,7 @@ def process_task(
                 target_stage.name,
                 next_stage_name,
             )
+            agent_invoked = True
 
             if exit_code != 0:
                 print(f"   ❌ Stage failed with exit code {exit_code}")
@@ -493,6 +504,16 @@ def process_task(
 
             print(f"   ✅ Stage advanced to {next_stage_name}")
             current_stage = next_stage_name
+
+    # If the orchestrator never actually invoked an agent, the only legitimate
+    # success is a task whose branch already contains work (e.g. a resumed
+    # terminal stage). An empty branch here means a stale footer or corrupt
+    # worktree fooled us into skipping all stages.
+    if not agent_invoked:
+        ok, msg = verify_branch_has_commits(worktree_dir)
+        if not ok:
+            print(f"   ❌ Task completed without running any stage and {msg}")
+            return False
 
     print(f"   ✅ Task complete: {task_id}")
     return True
@@ -575,7 +596,7 @@ def _mark_failed(
 
 
 def _finalize_task(
-    backend, queue_file: str, task_id: str, ret: int
+    backend, queue_file: str, task_id: str, ret: int, repo_root: str | None = None
 ) -> dict[str, int | bool]:
     """Finalize a single task after its child process exits.
 
@@ -585,10 +606,21 @@ def _finalize_task(
     load and a save would silently revert the child's stage record.
     """
     aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+    repo_root = repo_root or os.path.dirname(os.path.dirname(queue_file))
     if ret == 0:
-        print(f"   ✅ {task_id} awaiting merge")
         queue = backend.load()["queue"]
         task = next((t for t in queue if t.get("id") == task_id), None)
+        # A successful child that produced no commits is a false completion.
+        # Fail the task rather than promoting an empty branch to awaiting_merge.
+        if task:
+            worktree_rel = task.get("worktree")
+            if worktree_rel:
+                ok, msg = verify_branch_has_commits(os.path.join(repo_root, worktree_rel))
+                if not ok:
+                    print(f"   ❌ {task_id} succeeded but produced no commits: {msg}")
+                    _mark_failed(backend, queue_file, task_id, current_state(task))
+                    return {"successes": 0, "failures": 1, "stop_spawn": True}
+        print(f"   ✅ {task_id} awaiting merge")
         from_state = current_state(task) if task else "in_progress"
         if from_state == "awaiting_merge":
             return {"successes": 1, "failures": 0, "stop_spawn": False}
@@ -719,7 +751,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         nonlocal successes, failures, stop_spawn
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
-        deltas = _finalize_task(backend, queue_file, task_id, ret)
+        deltas = _finalize_task(backend, queue_file, task_id, ret, repo_root=repo_root)
         successes += deltas["successes"]
         failures += deltas["failures"]
         if deltas["stop_spawn"]:
@@ -779,6 +811,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 env["AET_WORKTREE"] = worktree_dir
                 env["AET_RUN_ID"] = logger.run_id
                 env["AET_REPO_ROOT"] = repo_root
+                env["AET_STAGE"] = task.get("stage") or ""
 
                 # Store a repo-relative worktree path for portability under lock.
                 with queue_lock(queue_file):
@@ -1030,6 +1063,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         "id": task_id,
         "title": task_id,
         "plan_file": plan_file,
+        "stage": os.environ.get("AET_STAGE") or None,
     }
 
     print(f"📁 Telemetry: {logger.run_dir}")
@@ -1046,24 +1080,34 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             queue_task = next((t for t in queue if t.get("id") == task_id), None)
             if queue_task:
                 from_state = current_state(queue_task) or "in_progress"
-                aet_state_bin = str(_SCRIPT_DIR / "aet-state")
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        aet_state_bin,
-                        "transition",
-                        task_id,
-                        from_state,
-                        "awaiting_merge",
-                        queue_file,
-                    ],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode == 0:
-                    print(f"   ✅ Task {task_id} awaiting merge")
-                else:
-                    print(f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}")
+                worktree_rel = queue_task.get("worktree")
+                if worktree_rel:
+                    ok, msg = verify_branch_has_commits(
+                        os.path.join(repo_root, worktree_rel)
+                    )
+                    if not ok:
+                        print(f"   ❌ Task {task_id} succeeded but produced no commits: {msg}")
+                        _mark_failed(backend, queue_file, task_id, from_state)
+                        exit_code = 1
+                    else:
+                        aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+                        result = subprocess.run(
+                            [
+                                sys.executable,
+                                aet_state_bin,
+                                "transition",
+                                task_id,
+                                from_state,
+                                "awaiting_merge",
+                                queue_file,
+                            ],
+                            capture_output=True,
+                            text=True,
+                        )
+                        if result.returncode == 0:
+                            print(f"   ✅ Task {task_id} awaiting merge")
+                        else:
+                            print(f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}")
         except Exception as exc:  # pragma: no cover - defensive logging
             print(f"   ⚠️  Could not mark {task_id} awaiting merge: {exc}")
 
