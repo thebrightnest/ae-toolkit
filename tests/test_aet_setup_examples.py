@@ -3,7 +3,6 @@
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).parent.parent
 EXAMPLES_DIR = REPO_ROOT / "aet-setup" / "examples"
 

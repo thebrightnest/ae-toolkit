@@ -26,7 +26,6 @@ _spec.loader.exec_module(orchestrator)
 
 from cli_adapter import CLIAdapter  # noqa: E402
 
-
 _FAKE_ADAPTER = CLIAdapter(
     name="test",
     bin="echo",

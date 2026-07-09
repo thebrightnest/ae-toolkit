@@ -5,7 +5,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
-import os
 import subprocess
 import tempfile
 import unittest

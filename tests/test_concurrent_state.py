@@ -9,12 +9,11 @@ import importlib.machinery
 import importlib.util
 import json
 import multiprocessing
+import queue as queue_lib
 import tempfile
 import time
 import unittest
 from pathlib import Path
-
-import queue as queue_lib
 
 _AET_STATE_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
 _spec = importlib.util.spec_from_loader(

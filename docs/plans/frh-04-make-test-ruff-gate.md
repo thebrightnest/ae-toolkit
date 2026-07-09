@@ -57,5 +57,5 @@ Revert the merge commit; `validate` returns to markdown-only checks.
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_

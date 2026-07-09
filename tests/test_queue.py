@@ -8,9 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 import json
 import tempfile
 import unittest
-
 from queue import (
-    append_history_record,
     get_next_unblocked,
     has_pending_tasks,
     mark_awaiting_merge,
