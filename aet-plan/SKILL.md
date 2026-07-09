@@ -16,8 +16,6 @@ Planning and alignment for agentic engineering. The #1 failure mode is starting 
 
 ## Before You Start
 
-If you have an **unvalidated idea** — no paying users, no observed behavior, no evidence beyond "this seems useful" — run `aet-discover` first. `aet-plan` assumes the problem is real and the user is known. `aet-discover` validates both before any planning begins.
-
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
