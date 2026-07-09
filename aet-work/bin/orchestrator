@@ -30,7 +30,6 @@ from queue import (
     current_state,
     get_next_unblocked,
     has_pending_tasks as queue_has_pending_tasks,
-    read_queue,
 )
 import telemetry
 from verifier import (
