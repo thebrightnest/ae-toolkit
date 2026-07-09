@@ -44,8 +44,13 @@ Run tiered automated validation.
    - **Standard** — + medium priority flows: error handling, edge cases, data validation
    - **Exhaustive** — + all states/cosmetic: responsive layouts, loading states, empty states
 2. Run automated test suite:
-   - **Impact-scoped tests first:** identify files touched by the current diff (`git diff --name-only <pr-base>..HEAD`) and run only the tests that cover them. For Python use `pytest path/to/test.py`; for JS/TS use `vitest run path/to/test.ts` or `jest path/to/test.ts`.
-   - **Full suite gate:** run the complete test suite only when the diff touches core framework files (test harness, config, shared fixtures, dependency lockfiles, or files imported by many tests). Otherwise, the impact-scoped test run is sufficient.
+   - **Default to impact-scoped tests.** Use `git diff --name-only <pr-base>..HEAD` to identify changed files, map them to test files via project conventions or heuristics, and run only the tests that cover them. For Python use `pytest path/to/test.py`; for JS/TS use `vitest run path/to/test.ts` or `jest path/to/test.ts`.
+   - **Full-suite fallback.** Run the complete test suite only when the diff touches any of the following. Otherwise, the impact-scoped test run is sufficient.
+     - test harness
+     - config
+     - shared fixtures
+     - dependency lockfiles
+     - files imported by many tests
    - Unit tests
    - Integration tests
    - Type checking
