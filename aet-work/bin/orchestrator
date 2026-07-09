@@ -63,6 +63,32 @@ signal.signal(signal.SIGINT, _handle_signal)
 signal.signal(signal.SIGTERM, _handle_signal)
 
 
+def _killpg(pid: int, sig: int) -> None:
+    """Send a signal to the process group led by pid, ignoring stale targets."""
+    try:
+        pgid = os.getpgid(pid)
+        os.killpg(pgid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _terminate_process_group(proc: subprocess.Popen, timeout: float = 10) -> None:
+    """Escalate from SIGTERM to SIGKILL for a process group."""
+    if proc.poll() is not None:
+        return
+    _killpg(proc.pid, signal.SIGTERM)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            return
+        time.sleep(0.1)
+    _killpg(proc.pid, signal.SIGKILL)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def _make_backend(queue_file: str):
     """Create a task backend for the given queue file.
 
@@ -837,7 +863,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     args.isolation,
                 ]
 
-                proc = subprocess.Popen(cmd, env=env)
+                proc = subprocess.Popen(cmd, env=env, start_new_session=True)
                 running[task_id] = proc
                 spawn_times[task_id] = time.monotonic()
                 spawned_this_cycle.add(task_id)
@@ -865,12 +891,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     finished.append((task_id, ret))
                 elif now - spawn_times[task_id] > task_timeout:
                     print(f"   ⏱️  {task_id} timed out after {args.task_timeout}s")
-                    proc.terminate()
-                    try:
-                        proc.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait()
+                    _terminate_process_group(proc, timeout=10)
                     finished.append((task_id, -9))
 
             for task_id, ret in finished:
@@ -884,6 +905,10 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 )
                 last_heartbeat = now
 
+            if _shutdown_requested:
+                print("   ⚠️  Shutdown requested, stopping batch loop")
+                break
+
             if not finished:
                 time.sleep(0.2)
 
@@ -892,12 +917,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         for task_id, proc in list(running.items()):
             if proc.poll() is None:
                 print(f"   ⚠️  Terminating leftover task {task_id}")
-                proc.terminate()
-                try:
-                    proc.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.wait()
+                _terminate_process_group(proc, timeout=10)
             _cleanup_task(task_id, -1)
 
         exit_code = 1 if failures > 0 else 0
