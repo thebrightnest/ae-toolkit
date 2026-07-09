@@ -4,6 +4,7 @@ size: M
 blocked_by:
   - frh-01-locked-atomic-state-writes
 pipeline: standard
+status: merged
 ---
 
 # Plan: Retire the Legacy `status` Vocabulary — Queue Library and Read Side
@@ -65,4 +66,4 @@ Revert the merge commit. Normalize-on-read makes no destructive file changes unt
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
