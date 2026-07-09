@@ -667,6 +667,175 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             self.assertIsNotNone(settled["merge_commit"])
 
 
+class _SpyBackend:
+    """Wrapper around a real backend that records save calls."""
+
+    def __init__(self, backend):
+        self._backend = backend
+        self.save_calls = []
+
+    def load(self):
+        return self._backend.load()
+
+    def save(self, queue, wrapper=None):
+        self.save_calls.append(json.loads(json.dumps(queue)))
+        return self._backend.save(queue, wrapper=wrapper)
+
+    @property
+    def queue_file(self):
+        return self._backend.queue_file
+
+    @property
+    def history_file(self):
+        return self._backend.history_file
+
+
+class TestOrchestratorLockedWrites(unittest.TestCase):
+    """Regression tests for orchestrator queue mutation races (frh-02)."""
+
+    def test_finalize_preserves_concurrent_stage_write(self):
+        """_finalize_task must not overwrite a stage set while the task ran."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            queue_file = _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo-plan.md",
+                        "blocked_by": [],
+                        "state": "in_progress",
+                        "stage": "implemented",
+                    }
+                ],
+            )
+            backend = _SpyBackend(orchestrator._make_backend(queue_file))
+            aet_state_bin = str(Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state")
+            real_subprocess_run = subprocess.run
+
+            def fake_run(cmd, **kwargs):
+                # Delegate transition calls to the real aet-state so the queue is
+                # mutated through the canonical writer, but count saves via the spy.
+                if aet_state_bin in cmd and "transition" in cmd:
+                    return real_subprocess_run(cmd, **kwargs)
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+
+            with patch.object(orchestrator.subprocess, "run", side_effect=fake_run):
+                result = orchestrator._finalize_task(backend, queue_file, "demo", 0)
+
+            self.assertEqual(result["failures"], 0)
+            data = backend.load()
+            task = next((t for t in data["queue"] if t.get("id") == "demo"), None)
+            self.assertIsNotNone(task)
+            self.assertEqual(task["state"], "awaiting_merge")
+            self.assertEqual(task["stage"], "implemented")
+            # _finalize_task itself must not re-save an unmutated queue. The
+            # aet-state transition persists through its own backend instance,
+            # so the spy only observes saves made directly by the orchestrator.
+            self.assertEqual(len(backend.save_calls), 0)
+
+    def test_mark_failed_fallback_never_writes_illegal_state(self):
+        """_mark_failed must leave an already-terminal task untouched."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            queue_file = _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "state": "merged",
+                    }
+                ],
+            )
+            backend = _SpyBackend(orchestrator._make_backend(queue_file))
+
+            orchestrator._mark_failed(backend, queue_file, "demo", "in_progress")
+
+            data = backend.load()
+            task = next((t for t in data["queue"] if t.get("id") == "demo"), None)
+            self.assertIsNotNone(task)
+            self.assertEqual(task["state"], "merged")
+            self.assertEqual(len(backend.save_calls), 0)
+
+    def test_run_single_survives_task_sealed_mid_run(self):
+        """run_single must not crash when the queued task is sealed mid-run."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                _init_git_repo(repo_root)
+                plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
+                Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+                Path(plan_file).write_text(
+                    "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                    encoding="utf-8",
+                )
+                subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                    check=True,
+                )
+
+                queue_file = _write_queue(
+                    repo_root,
+                    [
+                        {
+                            "id": "demo",
+                            "title": "Demo",
+                            "plan_file": "docs/plans/demo-plan.md",
+                            "blocked_by": [],
+                            "state": "planned",
+                        }
+                    ],
+                )
+
+                aet_state_bin = str(
+                    Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
+                )
+
+                def seal_task_and_succeed(*_args, **_kwargs):
+                    # Simulate an external actor sealing the task while it runs.
+                    # Transitioning to a terminal state also removes the task
+                    # from the live queue via seal_terminal.
+                    subprocess.run(
+                        [sys.executable, aet_state_bin, "transition", "demo", "in_progress", "abandoned", queue_file],
+                        check=True,
+                        capture_output=True,
+                    )
+                    return True
+
+                args = _make_args(repo_root, plan_file)
+                env = _archive_env(archive_dir)
+                env.pop("AET_TASK_ID", None)
+                with patch.dict(os.environ, env, clear=True):
+                    with patch.object(
+                        orchestrator, "process_task", side_effect=seal_task_and_succeed
+                    ):
+                        exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+
+                self.assertEqual(exit_code, 0)
+
+
 class TestRunSummaryTelemetry(unittest.TestCase):
     def test_run_summary_record_includes_new_fields(self):
         record = telemetry.run_summary_record(
