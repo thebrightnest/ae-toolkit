@@ -61,5 +61,5 @@ Revert the merge commit. The lock file is a sidecar (`.agents/work-queue.json.lo
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
