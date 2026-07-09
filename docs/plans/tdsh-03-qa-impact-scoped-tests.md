@@ -43,5 +43,5 @@ The `aet-qa/SKILL.md` `qa` procedure already defaults to impact-scoped tests and
 
 ---
 
-_Stage: plan-approved_
-\_Next step: run `aet-work`
+_Stage: qa-complete_
+_Next step: run `aet-review`_
