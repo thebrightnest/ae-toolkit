@@ -26,6 +26,25 @@ _LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 from backends.factory import create_backend  # noqa: E402
 
+# Local helpers for the remaining legacy display strings produced by
+# ``derive_status``. These are kept private to aet-state and will be removed
+# when the derive/heal vocabulary is fully canonicalized (frh-07).
+_DERIVED_STATUS_TO_STATE: dict[str | None, str] = {
+    None: "planned",
+    "unknown": "planned",
+    "planned": "planned",
+    "unblocked": "ready",
+    "in-progress": "in_progress",
+    "blocked": "blocked",
+    "merged": "merged",
+    "drift": "planned",
+}
+
+
+def _derived_display_to_state(display: str | None) -> str:
+    """Map a legacy derived-display string to a canonical state."""
+    return _DERIVED_STATUS_TO_STATE.get(display, display or "planned")
+
 
 def make_backend(queue_path):
     """Create a task backend for the given queue path."""
@@ -224,12 +243,12 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
         derived["drift"] = "plan_file missing"
 
     # Warnings
-    current_status = task.get("status", "")
+    current_status = queue_lib.current_state(task) or ""
     warnings = []
-    if current_status == "done" and not merge_commit and not on_main:
-        warnings.append("done without merge verification")
+    if current_status == "awaiting_merge" and not merge_commit and not on_main:
+        warnings.append("awaiting_merge without merge verification")
     if current_status == "merged" and not on_main:
-        warnings.append("merged status but not ancestor of origin/main")
+        warnings.append("merged state but not ancestor of origin/main")
     if warnings:
         derived["warnings"] = warnings
         status = f"{status} (warning: {'; '.join(warnings)})"
@@ -291,8 +310,6 @@ def _apply_transition(backend, queue, task, from_state, to_state, by, evidence=N
     now = datetime.now(timezone.utc).isoformat()
 
     task["state"] = to_state
-    # Keep legacy status in sync during the coexistence period (fods-02..fods-05).
-    task["status"] = queue_lib.state_to_status(to_state)
 
     if to_state == "merged":
         task["merged_at"] = now
@@ -314,7 +331,6 @@ def _apply_transition(backend, queue, task, from_state, to_state, by, evidence=N
                 dep["pending_blockers"] = pb
             if pb == 0 and queue_lib.current_state(dep) == "blocked":
                 dep["state"] = "ready"
-                dep["status"] = queue_lib.state_to_status("ready")
                 queue_lib.append_history(dep, "blocked", "ready", "release")
 
     backend.save(queue)
@@ -481,12 +497,12 @@ def cmd_audit(args):
     for task in queue:
         task_id = task["id"]
         stored_state = queue_lib.current_state(task)
-        stored_display = queue_lib.state_to_status(stored_state)
         derived_display = derived[task_id]["derived_status"].split(" (warning")[0]
+        derived_state = _derived_display_to_state(derived_display)
         results[task_id] = {
             "stored": stored_state,
             "derived": derived[task_id]["derived_status"],
-            "discrepancy": stored_display != derived_display,
+            "discrepancy": stored_state != derived_state,
         }
 
     print(json.dumps(results, indent=2))
@@ -514,7 +530,7 @@ def cmd_heal(args):
         task_id = task["id"]
         stored_state = queue_lib.current_state(task)
         derived_display = derived[task_id]["derived_status"].split(" (warning")[0]
-        derived_state = queue_lib.status_to_state(derived_display)
+        derived_state = _derived_display_to_state(derived_display)
 
         if stored_state == derived_state:
             continue
@@ -528,11 +544,11 @@ def cmd_heal(args):
                 "reason": "branch/merge_commit is ancestor of origin/main",
                 "branch": task.get("branch"),
             })
-        elif derived_state == "unblocked" and stored_state in ("failed", "blocked", "planned"):
+        elif derived_state == "ready" and stored_state in ("failed", "blocked", "planned"):
             changes.append({
                 "task_id": task_id,
                 "from": stored_state,
-                "to": "unblocked",
+                "to": "ready",
                 "reason": "plan exists and blockers are terminal",
             })
         elif derived_state == "failed" and stored_state == "in_progress":

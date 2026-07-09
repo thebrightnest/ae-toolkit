@@ -12,3 +12,4 @@ __pycache__
 aet-work.log
 aet-work-*.log
 *.skill
+.agents/work-archive.json

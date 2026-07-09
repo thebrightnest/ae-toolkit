@@ -452,8 +452,8 @@ class TestInitQueue(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_rebuilds_facts_with_planned_status_and_wrapper(self):
-        """init-queue creates a wrapped queue of planned facts with blocks inverse."""
+    def test_rebuilds_facts_with_state_and_wrapper(self):
+        """init-queue creates a wrapped queue of state facts with blocks inverse."""
         make_plan(self.plans_dir / "feat-001.md", "First task")
         make_plan(
             self.plans_dir / "feat-002.md", "Second task", blocked_by=["feat-001"]
@@ -476,8 +476,8 @@ class TestInitQueue(unittest.TestCase):
         self.assertEqual(data.get("source_prd"), str(self.prds_dir / "latest.md"))
 
         tasks = {t["id"]: t for t in data["tasks"]}
-        self.assertEqual(tasks["feat-001"]["status"], "planned")
-        self.assertEqual(tasks["feat-002"]["status"], "planned")
+        self.assertEqual(tasks["feat-001"]["state"], "ready")
+        self.assertEqual(tasks["feat-002"]["state"], "blocked")
         self.assertEqual(tasks["feat-002"]["blocked_by"], ["feat-001"])
         self.assertEqual(tasks["feat-001"]["blocks"], ["feat-002"])
 
@@ -532,14 +532,20 @@ class TestInitQueue(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
         tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
-        # Terminal task preserved.
-        self.assertEqual(tasks["old"]["status"], "merged")
-        self.assertEqual(tasks["old"]["merge_commit"], "abc1234")
-        self.assertEqual(tasks["old"]["merge_strategy"], "squash")
-        self.assertEqual(tasks["old"]["branch"], "feat-old")
-        self.assertEqual(tasks["old"]["worktree"], "/worktrees/old")
-        # Non-terminal task normalized to planned.
-        self.assertEqual(tasks["stale"]["status"], "planned")
+        history = {
+            json.loads(line)["id"]: json.loads(line)
+            for line in self.history_file.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        }
+        # Terminal task sealed to history with metadata preserved.
+        self.assertNotIn("old", tasks)
+        self.assertEqual(history["old"]["state"], "merged")
+        self.assertEqual(history["old"]["merge_commit"], "abc1234")
+        self.assertEqual(history["old"]["merge_strategy"], "squash")
+        self.assertEqual(history["old"]["branch"], "feat-old")
+        self.assertEqual(history["old"]["worktree"], "/worktrees/old")
+        # Non-terminal task reset based on frontmatter blockers (ready for no blockers).
+        self.assertEqual(tasks["stale"]["state"], "ready")
 
     def test_does_not_call_derive(self):
         """init-queue must not invoke aet-state derive."""
@@ -663,10 +669,10 @@ class TestSync(unittest.TestCase):
         tasks = {t["id"]: t for t in data["tasks"]}
 
         # Existing task preserved.
-        self.assertEqual(tasks["existing"]["status"], "in-progress")
+        self.assertEqual(tasks["existing"]["state"], "in_progress")
         self.assertEqual(tasks["existing"]["branch"], "feat-existing")
-        # New task appended as planned.
-        self.assertEqual(tasks["new"]["status"], "planned")
+        # New task state follows frontmatter blockers.
+        self.assertEqual(tasks["new"]["state"], "blocked")
         self.assertEqual(tasks["new"]["blocked_by"], ["existing"])
         # blocks inverse recomputed for the whole queue.
         self.assertEqual(tasks["existing"]["blocks"], ["new"])
@@ -698,7 +704,7 @@ class TestSync(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
         tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
-        self.assertEqual(tasks["missing"]["status"], "in-progress")
+        self.assertEqual(tasks["missing"]["state"], "in_progress")
         self.assertIn("drift", result.stdout.lower())
 
     def test_normalizes_merge_verified_to_merged(self):
@@ -730,7 +736,7 @@ class TestSync(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
         tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
-        self.assertEqual(tasks["legacy"]["status"], "merged")
+        self.assertEqual(tasks["legacy"]["state"], "merged")
 
     def test_does_not_call_derive(self):
         """sync must not invoke aet-state derive."""

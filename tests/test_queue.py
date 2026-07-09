@@ -11,9 +11,6 @@ import unittest
 from queue import (
     get_next_unblocked,
     has_pending_tasks,
-    mark_awaiting_merge,
-    mark_completed,
-    mark_status,
     read_history,
     read_queue,
     record_task_meta,
@@ -27,7 +24,7 @@ class TestQueue(unittest.TestCase):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             path = f.name
 
-        queue = [{"id": "t1", "status": "unblocked"}]
+        queue = [{"id": "t1", "state": "ready"}]
         write_queue(path, queue)
         read_back = read_queue(path)
         self.assertEqual(read_back, queue)
@@ -35,7 +32,7 @@ class TestQueue(unittest.TestCase):
     def test_read_queue_nested(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             path = f.name
-            json.dump({"tasks": [{"id": "t1", "status": "blocked"}]}, f)
+            json.dump({"tasks": [{"id": "t1", "state": "blocked"}]}, f)
 
         read_back = read_queue(path)
         self.assertEqual(read_back[0]["id"], "t1")
@@ -56,12 +53,12 @@ class TestQueue(unittest.TestCase):
             original = {
                 "source_prd": "docs/prds/test.md",
                 "queue_updated_at": "2026-01-01T00:00:00Z",
-                "tasks": [{"id": "t1", "status": "unblocked"}],
+                "tasks": [{"id": "t1", "state": "ready"}],
             }
             json.dump(original, f)
 
         queue = read_queue(path)
-        mark_status(queue, "t1", "in-progress")
+        queue[0]["state"] = "in_progress"
         write_queue(path, queue)
 
         with open(path, "r") as f:
@@ -70,7 +67,8 @@ class TestQueue(unittest.TestCase):
         self.assertIsInstance(data, dict)
         self.assertEqual(data.get("source_prd"), "docs/prds/test.md")
         self.assertEqual(data.get("queue_updated_at"), "2026-01-01T00:00:00Z")
-        self.assertEqual(data["tasks"][0]["status"], "in-progress")
+        self.assertEqual(data["tasks"][0]["state"], "in_progress")
+        self.assertNotIn("status", data["tasks"][0])
 
     def test_get_next_unblocked(self):
         queue = [
@@ -95,23 +93,38 @@ class TestQueue(unittest.TestCase):
         ]
         self.assertFalse(has_pending_tasks(queue))
 
-    def test_mark_status(self):
-        queue = [{"id": "t1", "status": "unblocked"}]
-        mark_status(queue, "t1", "failed", "pipeline")
-        self.assertEqual(queue[0]["status"], "failed")
-        self.assertEqual(queue[0]["failed_stage"], "pipeline")
+    def test_read_queue_normalizes_legacy_status_records(self):
+        """A status-only legacy record gains state and loses status on read."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            path = f.name
+            json.dump([{"id": "t1", "status": "unblocked"}], f)
 
-    def test_mark_completed(self):
-        queue = [{"id": "t1", "status": "in-progress"}]
-        mark_completed(queue, "t1")
-        self.assertEqual(queue[0]["status"], "done")
-        self.assertIn("completed_at", queue[0])
+        queue = read_queue(path)
+        self.assertEqual(queue[0]["state"], "ready")
+        self.assertNotIn("status", queue[0])
 
-    def test_mark_awaiting_merge(self):
-        queue = [{"id": "t1", "status": "in-progress"}]
-        mark_awaiting_merge(queue, "t1")
-        self.assertEqual(queue[0]["status"], "awaiting_merge")
-        self.assertIn("completed_at", queue[0])
+    def test_read_queue_keeps_state_when_present(self):
+        """Modern records with state are returned unchanged and status stripped."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            path = f.name
+            json.dump([{"id": "t1", "state": "ready", "status": "unblocked"}], f)
+
+        queue = read_queue(path)
+        self.assertEqual(queue[0]["state"], "ready")
+        self.assertNotIn("status", queue[0])
+
+    def test_write_queue_never_emits_status_key(self):
+        """write_queue strips any status key before serializing tasks."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            path = f.name
+
+        write_queue(path, [{"id": "t1", "state": "ready", "status": "unblocked"}])
+
+        with open(path, "r") as f:
+            data = json.load(f)
+
+        self.assertEqual(data[0]["state"], "ready")
+        self.assertNotIn("status", data[0])
 
     def test_has_pending_tasks_awaiting_merge(self):
         queue = [{"id": "t1", "state": "awaiting_merge"}]

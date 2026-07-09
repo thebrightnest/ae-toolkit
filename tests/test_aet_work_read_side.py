@@ -94,7 +94,7 @@ class TestStatusStoredState(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         output = stdout.getvalue()
-        self.assertIn("unblocked: 1", output)
+        self.assertIn("ready: 1", output)
         self.assertIn("blocked: 1", output)
 
     def test_counts_include_awaiting_merge(self):
@@ -215,9 +215,38 @@ class TestStatusStoredState(unittest.TestCase):
         self.assertEqual(rc, 0)
         output = stdout.getvalue()
         self.assertIn("Plan drift detected", output)
-        self.assertIn("unblocked: 1", output)
+        self.assertIn("ready: 1", output)
         self.assertIn("Next ready tasks:", output)
         self.assertIn("One", output)
+
+    def test_status_binary_displays_canonical_state(self):
+        """status summary uses canonical state labels, not legacy status strings."""
+        plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md", "t3.md"])
+        plans_dir = plans_dir_tmp.name
+        queue_file = _make_queue(_resolve_plan_files([
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+            {"id": "t2", "state": "in_progress", "title": "Two", "plan_file": "docs/plans/t2.md"},
+            {"id": "t3", "state": "blocked", "title": "Three", "plan_file": "docs/plans/t3.md"},
+        ], plans_dir))
+        history_file = _make_history([])
+
+        stdout = io.StringIO()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = status.main()
+
+        self.assertEqual(rc, 0)
+        output = stdout.getvalue()
+        self.assertIn("ready: 1", output)
+        self.assertIn("in_progress: 1", output)
+        self.assertIn("blocked: 1", output)
+        self.assertNotIn("unblocked: 1", output)
+        self.assertNotIn("in-progress: 1", output)
 
 
 @unittest.skipIf(next_cmd is None, "next command not yet implemented")

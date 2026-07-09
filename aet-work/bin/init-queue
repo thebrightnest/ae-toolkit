@@ -23,9 +23,7 @@ sys.path.insert(0, str(_LIB_DIR))
 
 from queue import (  # noqa: E402
     HISTORY_TERMINAL_STATES,
-    TERMINAL_STATUSES,
     append_history_record,
-    status_to_state,
 )
 
 from backends.factory import create_backend  # noqa: E402
@@ -122,7 +120,6 @@ def reconcile_terminal_state(
     hist = history_by_id.get(tid)
     if hist and hist.get("state") in HISTORY_TERMINAL_STATES:
         task["state"] = hist["state"]
-        task["status"] = hist["state"]
         task["merge_commit"] = hist.get("merge_commit")
         task["merged_at"] = hist.get("merged_at")
         task["completed_at"] = hist.get("completed_at")
@@ -133,7 +130,6 @@ def reconcile_terminal_state(
     merge_commit = git_merge_commit_for(tid)
     if merge_commit:
         task["state"] = "merged"
-        task["status"] = "merged"
         task["merge_commit"] = merge_commit
         task["merged_at"] = datetime.now().isoformat()
         return True
@@ -142,7 +138,6 @@ def reconcile_terminal_state(
     footer = plan_footer_stage(plan_file) if plan_file else None
     if footer in ("merged", "abandoned"):
         task["state"] = footer
-        task["status"] = footer
         return True
 
     return False
@@ -153,32 +148,24 @@ def preserve_task_metadata(
     fresh: dict,
     history_by_id: dict[str, dict],
 ) -> dict:
-    """Preserve terminal status and metadata from an existing queue entry.
+    """Preserve terminal state and metadata from an existing queue entry.
 
-    Terminal statuses (merged, abandoned, done, merge_verified) and terminal
-    history/git states are preserved so completed work is not resurrected when
-    the queue is rebuilt. Non-terminal stored statuses are reset to ``planned``,
-    with ``state`` derived from the fresh frontmatter blockers. This matches
-    ``init-queue``'s rebuild-from-plans semantics.
-
-    Legacy ``merge_verified`` is treated as terminal and normalized to ``merged``.
-    State is kept consistent with the preserved status.
+    Terminal states (merged, abandoned) and terminal history/git states are
+    preserved so completed work is not resurrected when the queue is rebuilt.
+    Non-terminal stored states are reset based on the fresh frontmatter
+    blockers. This matches ``init-queue``'s rebuild-from-plans semantics.
     """
-    status = existing.get("status", "planned")
     state = existing.get("state")
     task_id = existing.get("id") or fresh.get("id")
 
     # Terminal in the live record, settled history, or git -> keep terminal.
     hist = history_by_id.get(task_id)
-    if status == "merge_verified":
-        status = "merged"
+    if state == "merge_verified":
         state = "merged"
-    elif status in TERMINAL_STATUSES or state in ("merged", "abandoned"):
-        state = state or status_to_state(status)
-        status = state
+    elif state in ("merged", "abandoned"):
+        pass
     elif hist and hist.get("state") in ("merged", "abandoned"):
         state = hist["state"]
-        status = state
         fresh["merge_commit"] = hist.get("merge_commit")
         fresh["merged_at"] = hist.get("merged_at")
         fresh["completed_at"] = hist.get("completed_at")
@@ -188,19 +175,16 @@ def preserve_task_metadata(
         merge_commit = git_merge_commit_for(task_id)
         if merge_commit:
             state = "merged"
-            status = "merged"
             fresh["merge_commit"] = merge_commit
             fresh["merged_at"] = datetime.now().isoformat()
         else:
             # init-queue rebuilds the queue from plan frontmatter; non-terminal
-            # stored statuses are reset to planned, and state follows blockers.
+            # stored states follow blockers.
             blockers = fresh.get("blocked_by", [])
             pending = len(blockers)
             state = fresh.get("state", "ready")
-            status = fresh.get("status", "planned")
             fresh["pending_blockers"] = pending
 
-    fresh["status"] = status
     fresh["state"] = state
     for key in (
         "branch",
