@@ -260,9 +260,12 @@ class TestRunSingleBackend(unittest.TestCase):
             ):
                 with patch.object(orchestrator, "process_task", return_value=True):
                     with patch.object(
-                        orchestrator, "create_backend", return_value=backend
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
                     ):
-                        exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+                        with patch.object(
+                            orchestrator, "create_backend", return_value=backend
+                        ):
+                            exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
             save_calls = [c for c in backend.calls if c[0] == "save"]

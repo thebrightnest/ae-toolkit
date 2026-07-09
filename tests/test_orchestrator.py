@@ -483,7 +483,10 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                 os.environ, {"AET_EXECUTION_MODE": "unattended"}, clear=True
             ):
                 with patch.object(orchestrator, "process_task", return_value=True):
-                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+                    with patch.object(
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                    ):
+                        exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
             with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
@@ -629,7 +632,10 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                 os.environ, {"AET_EXECUTION_MODE": "unattended"}, clear=True
             ):
                 with patch.object(orchestrator, "process_task", return_value=True):
-                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+                    with patch.object(
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                    ):
+                        exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
             self.assertEqual(exit_code, 0)
 
             # Simulate the branch being merged into origin/main by fast-forwarding
@@ -1138,6 +1144,126 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                 )
 
             self.assertFalse(result)
+
+
+class TestProcessTaskCompletionGuards(unittest.TestCase):
+    def test_process_task_fails_when_footer_is_terminal_but_branch_empty(self):
+        """A stale terminal footer must not mark an empty branch as complete."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: synced_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            result = orchestrator.process_task(
+                task, repo_root, _FAKE_ADAPTER, "standard"
+            )
+            self.assertFalse(result)
+
+
+class TestFinalizeTaskGuards(unittest.TestCase):
+    def test_finalize_task_fails_when_branch_has_no_commits(self):
+        """A child exit 0 with an empty branch must be treated as a failure."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            queue_file = _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo.md",
+                        "blocked_by": [],
+                        "state": "in_progress",
+                        "worktree": ".worktrees/demo",
+                        "branch": "demo",
+                    }
+                ],
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "worktree", "add",
+                 os.path.join(repo_root, ".worktrees", "demo"), "-b", "demo"],
+                check=True,
+                capture_output=True,
+            )
+            backend = orchestrator._make_backend(queue_file)
+            deltas = orchestrator._finalize_task(
+                backend, queue_file, "demo", 0, repo_root=repo_root
+            )
+            self.assertEqual(deltas["failures"], 1)
+            data = backend.load()
+            task = next((t for t in data["queue"] if t.get("id") == "demo"), None)
+            self.assertIsNotNone(task)
+            self.assertEqual(task["state"], "failed")
+
+
+class TestBatchStageEnv(unittest.TestCase):
+    def test_run_single_uses_stage_env_over_footer(self):
+        """Batch children pass their stored stage so stale footers are ignored."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: synced_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo-plan.md",
+                        "blocked_by": [],
+                        "state": "planned",
+                    }
+                ],
+            )
+
+            captured = {}
+
+            def capture_process(task, *args, **kwargs):
+                captured["stage"] = task.get("stage")
+                return True
+
+            args = _make_args(repo_root, plan_file)
+            with patch.dict(
+                os.environ,
+                {"AET_EXECUTION_MODE": "unattended", "AET_STAGE": "plan-approved"},
+                clear=True,
+            ):
+                with patch.object(
+                    orchestrator, "process_task", side_effect=capture_process
+                ):
+                    with patch.object(
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                    ):
+                        exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(captured["stage"], "plan-approved")
 
 
 if __name__ == "__main__":
