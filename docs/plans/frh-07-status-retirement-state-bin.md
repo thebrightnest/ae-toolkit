@@ -67,5 +67,4 @@ Revert the merge commit; restore `.agents/work-archive.json` from git history if
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
