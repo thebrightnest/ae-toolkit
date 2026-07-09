@@ -57,5 +57,5 @@ Revert the merge commit; `validate` returns to markdown-only checks.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
