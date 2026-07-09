@@ -45,7 +45,7 @@ Staff-level diff review with multiple lenses.
    - Review `git diff <base>..HEAD` (not `git diff` against the working tree).
    - If the user explicitly specified files, review those files instead of the diff.
 2. Read the corresponding `docs/plans/{ticket}-plan.md` to compare implementation against plan
-3. **Noise filtering:** ignore changes to `.gitignore` and `AGENTS.md` unless the task explicitly touches them. Treat them as project-level noise, not review signal.
+3. **Noise filtering:** ignore changes to project-level noise files — `.gitignore`, `AGENTS.md`, `docs/CONVENTIONS.md`, and similar project-level documentation — unless the task explicitly modifies them. Treat them as noise, not review signal. A noise file is considered in-scope only when the task's acceptance criteria or plan explicitly names it; otherwise skip it.
 4. Run through review lenses:
 
    - **Project Structure** — do new files/directories follow the same pattern as existing ones? If the project uses symlinks, are new entries created in the real location (symlink target) and linked correctly? Run `ls -la` on the parent directory for any path where new files were created.
