@@ -48,7 +48,6 @@ Ensure `.gitignore` excludes generated agent workflow artifacts:
 
 ```gitignore
 .agents/work-history.jsonl
-.agents/execution.log.jsonl
 aet-work.log
 aet-work-*.log
 ```
