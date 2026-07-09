@@ -25,7 +25,6 @@ sys.path.insert(0, str(_LIB_DIR))
 
 from plan_parser import build_ticket_map, title_from_plan  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

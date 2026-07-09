@@ -8,7 +8,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 - **Content format:** Markdown with YAML frontmatter
 - **Build / packaging:** GNU Make + `zip`
-- **Quality:** prettier, markdownlint, custom skill-structure validator
+- **Quality:** prettier, markdownlint, ruff, pytest, custom skill-structure validator
 
 ## Directory Structure
 
@@ -33,16 +33,18 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 ## Tooling Reference
 
-| Command                 | What it runs                                        |
-| ----------------------- | --------------------------------------------------- |
-| `make help`             | Show all available targets                          |
-| `make install-skills`   | Symlink all skills to `~/.agents/skills/`           |
-| `make add-skill NAME=x` | Scaffold a new skill directory                      |
-| `make lint`             | markdownlint all markdown files                     |
-| `make format`           | Prettier format all markdown files                  |
-| `make format-check`     | Prettier check (CI mode)                            |
-| `make validate`         | Run lint + format-check + skill-structure validator |
-| `make install-hooks`    | Install pre-commit hooks                            |
+| Command                 | What it runs                                                         |
+| ----------------------- | -------------------------------------------------------------------- |
+| `make help`             | Show all available targets                                           |
+| `make install-skills`   | Symlink all skills to `~/.agents/skills/`                            |
+| `make add-skill NAME=x` | Scaffold a new skill directory                                       |
+| `make lint`             | markdownlint all markdown files                                      |
+| `make format`           | Prettier format all markdown files                                   |
+| `make format-check`     | Prettier check (CI mode)                                             |
+| `make lint-py`          | Run ruff on Python files                                             |
+| `make test`             | Run pytest suite                                                     |
+| `make validate`         | Run lint + format-check + lint-py + test + skill-structure validator |
+| `make install-hooks`    | Install pre-commit hooks                                             |
 
 ## Skill Structure Validator
 

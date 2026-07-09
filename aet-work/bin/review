@@ -17,7 +17,6 @@ sys.path.insert(0, str(_LIB_DIR))
 
 from plan_parser import stage_from_plan, title_from_plan  # noqa: E402
 
-
 # Map footer stage strings to review categories.
 CATEGORY_BUCKETS: dict[str, str] = {
     "plan-approved": "approved",

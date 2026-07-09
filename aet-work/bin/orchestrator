@@ -9,7 +9,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import signal
@@ -23,21 +22,24 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from backends.factory import create_backend
-from cli_adapter import resolve_cli_adapter
-from pipeline import STAGE_MAP, group_stages_by_session
-from queue import (
+from queue import (  # noqa: E402
     current_state,
     get_next_unblocked,
+)
+from queue import (  # noqa: E402
     has_pending_tasks as queue_has_pending_tasks,
 )
-import telemetry
-from verifier import (
+
+import telemetry  # noqa: E402
+from backends.factory import create_backend  # noqa: E402
+from cli_adapter import resolve_cli_adapter  # noqa: E402
+from pipeline import group_stages_by_session  # noqa: E402
+from verifier import (  # noqa: E402
     read_plan_stage,
     verify_branch_has_commits,
     verify_stage_advancement,
 )
-from worktree import (
+from worktree import (  # noqa: E402
     check_main_hygiene,
     copy_untracked_files,
     create_worktree,
@@ -574,7 +576,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         print(f"   📁 Telemetry: {logger.run_dir}")
         return 0
 
-    print(f"🚀 Batch orchestrator starting")
+    print("🚀 Batch orchestrator starting")
     print(f"   Queue: {queue_file}")
     print(f"   Concurrency: {max_jobs}")
     print(f"   Telemetry: {logger.run_dir}")
@@ -631,7 +633,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         )
         logger.copy_work_history(os.path.join(repo_root, ".agents", "work-history.jsonl"))
         print()
-        print(f"🏁 Orchestrator finished.")
+        print("🏁 Orchestrator finished.")
         print(f"   Succeeded: {successes}")
         print(f"   Failed:    {failures}")
         print(f"   Telemetry: {logger.run_dir}")

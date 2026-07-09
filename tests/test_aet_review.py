@@ -3,7 +3,6 @@
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).parent.parent
 SKILL_MD = REPO_ROOT / "aet-review" / "SKILL.md"
 
