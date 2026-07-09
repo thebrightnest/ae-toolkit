@@ -7,7 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).parent.parent
 SCRIPT = REPO_ROOT / "aet-setup" / "bin" / "configure-task-backend"
 

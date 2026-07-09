@@ -6,7 +6,6 @@ import importlib.machinery
 import importlib.util
 import io
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -60,11 +59,12 @@ def _make_plan(
     blocked_by: list[str] | None = None,
 ) -> Path:
     path = plans_dir / name
+    blocked_lines = "".join(f"  - {b}\n" for b in (blocked_by or []))
     body = f"""---
 id: {Path(name).stem}
 size: M
 blocked_by:
-{''.join(f'  - {b}\n' for b in (blocked_by or []))}---
+{blocked_lines}---
 
 # Plan: {name}
 

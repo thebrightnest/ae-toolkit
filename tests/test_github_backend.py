@@ -2,16 +2,15 @@
 
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-import sys
-
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
-from backends.github_backend import GitHubBackend, STATE_LABELS
+from backends.github_backend import STATE_LABELS, GitHubBackend
 
 
 def _completed(stdout: str = "", returncode: int = 0, stderr: str = ""):

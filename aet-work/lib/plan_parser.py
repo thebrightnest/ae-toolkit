@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
-
 from queue import append_history  # noqa: E402
+from typing import Any
 
 
 def _unquote_scalar(value: str) -> str:
@@ -239,7 +238,7 @@ def count_files_to_modify(path: Path) -> int:
     if not match:
         return 0
     return len(
-        [l for l in match.group(2).splitlines() if re.match(r"^\s*[\-\*\d]", l.strip())]
+        [line for line in match.group(2).splitlines() if re.match(r"^\s*[\-\*\d]", line.strip())]
     )
 
 
@@ -253,7 +252,7 @@ def task_list_line_count(path: Path) -> int:
     )
     if not match:
         return 0
-    return len([l for l in match.group(1).splitlines() if l.strip()])
+    return len([line for line in match.group(1).splitlines() if line.strip()])
 
 
 def validate_size(path: Path) -> tuple[bool, str | None, bool]:

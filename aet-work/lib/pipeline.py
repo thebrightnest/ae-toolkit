@@ -126,7 +126,6 @@ def _security_sensitive(worktree_dir: str) -> bool:
 def _divergences_found(plan_file: str, worktree_dir: str) -> bool:
     """Check if review or cso reports note divergences."""
     import os
-
     import subprocess
 
     try:

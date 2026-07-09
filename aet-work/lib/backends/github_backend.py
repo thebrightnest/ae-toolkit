@@ -5,9 +5,6 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import Any
-
-from backends.base import TaskBackend
 from queue import (
     LEGAL_TRANSITIONS,
     append_history,
@@ -16,6 +13,9 @@ from queue import (
     read_queue,
     write_queue,
 )
+from typing import Any
+
+from backends.base import TaskBackend
 
 DEFAULT_LABEL_PREFIX = "aet"
 

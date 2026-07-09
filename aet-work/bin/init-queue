@@ -21,13 +21,18 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from backends.factory import create_backend  # noqa: E402
-from plan_parser import intake_validation_errors, most_recent_prd, new_task_from_plan  # noqa: E402
 from queue import (  # noqa: E402
     HISTORY_TERMINAL_STATES,
     TERMINAL_STATUSES,
     append_history_record,
     status_to_state,
+)
+
+from backends.factory import create_backend  # noqa: E402
+from plan_parser import (  # noqa: E402
+    intake_validation_errors,
+    most_recent_prd,
+    new_task_from_plan,
 )
 
 

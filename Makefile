@@ -1,4 +1,4 @@
-.PHONY: help install-skills install-binaries add-skill lint format format-check validate install-hooks
+.PHONY: help install-skills install-binaries add-skill lint format format-check validate install-hooks test lint-py
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
 SKILLS_DIR ?= $(HOME)/.agents/skills
@@ -63,9 +63,20 @@ format-check: ## Check markdown formatting (CI mode)
 	@npx prettier@3.1.0 --check $(MARKDOWN_FILES)
 	@echo "✓ Format check passed"
 
-validate: ## Run all quality checks (lint + format-check + skill-structure)
+lint-py: ## Run ruff on Python files
+	@command -v ruff >/dev/null 2>&1 || { echo "ruff not installed. Install it: pip install ruff"; exit 1; }
+	@ruff check .
+	@echo "✓ Python lint passed"
+
+test: ## Run pytest suite
+	@python3 -m pytest tests/ -q
+	@echo "✓ Tests passed"
+
+validate: ## Run all quality checks (lint + format-check + lint-py + test + skill-structure)
 	@$(MAKE) lint
 	@$(MAKE) format-check
+	@$(MAKE) lint-py
+	@$(MAKE) test
 	@./scripts/validate-skills.sh
 	@echo "✓ All validation checks passed"
 

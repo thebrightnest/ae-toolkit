@@ -15,8 +15,9 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from backends.factory import create_backend  # noqa: E402
 from queue import current_state, state_to_status  # noqa: E402
+
+from backends.factory import create_backend  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,7 +52,6 @@ def main() -> int:
     )
     data = backend.load()
     queue = data["queue"]
-    history = data["history"]
     plans_dir = Path(args.plans_dir)
 
     orphaned = backend.plan_drift(plans_dir)

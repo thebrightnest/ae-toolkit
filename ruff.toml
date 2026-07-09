@@ -1,0 +1,16 @@
+target-version = "py310"
+line-length = 120
+lint.select = ["E", "F", "I"]
+exclude = [
+    "content/",
+    "docs/",
+    ".agents/",
+]
+extend-include = ["*/bin/*"]
+extend-exclude = ["aet-setup/bin/*"]
+
+[lint.per-file-ignores]
+# F821: Stage is referenced via a future annotation; the real import lands via the frh-02 chain.
+"aet-work/bin/orchestrator" = ["F821"]
+# F841: repo_root is assigned but unused; _divergences_found is rewritten by frh-11.
+"aet-work/lib/pipeline.py" = ["F841"]
