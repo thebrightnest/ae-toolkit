@@ -946,7 +946,7 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                                 orchestrator,
                                 "verify_stage_advancement",
                                 side_effect=[(True, ""), (True, "")],
-                            ) as mock_verify:
+                            ):
                                 result = orchestrator.process_task(
                                     task, repo_root, _FAKE_ADAPTER, "standard"
                                 )

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Tests for aet-work/bin/aet-state — standard-library only."""
 
-import importlib.util
 import json
-import os
 import tempfile
 import unittest
 from importlib.machinery import SourceFileLoader
