@@ -43,5 +43,5 @@ The `aet-implement/SKILL.md` `implement` procedure already states in step 7 that
 
 ---
 
-_Stage: plan-approved_
-\_Next step: run `aet-work`
+_Stage: implemented_
+_Next step: run `aet-qa`_
