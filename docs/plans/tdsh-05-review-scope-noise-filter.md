@@ -44,5 +44,5 @@ The `aet-review/SKILL.md` `review` procedure already scopes the diff to the PR b
 
 ---
 
-_Stage: plan-approved_
-\_Next step: run `aet-work`
+_Stage: qa-complete_
+_Next step: run `aet-review`_
