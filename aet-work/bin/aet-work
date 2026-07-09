@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""aet-work multicall dispatcher.
+
+Maps the user-facing ``aet-work`` command to the underlying AET binaries so
+the orchestrator and queue commands can be invoked through a single entry
+point.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+# Subcommands that map 1:1 to sibling binaries.
+DIRECT_COMMANDS = {
+    "add",
+    "review",
+    "status",
+    "next",
+    "sync",
+    "report",
+    "init-queue",
+}
+
+
+def _script_dir() -> Path:
+    """Return the directory containing this dispatcher."""
+    return Path(__file__).resolve().parent
+
+
+def _usage() -> str:
+    return (
+        "usage: aet-work add|review|status|next|sync|report|init-queue [args...]\n"
+        "       aet-work run [--max-jobs N] [--isolation minimal|standard|full]\n"
+        "                    [--task-timeout SECONDS] [--cli-bin PATH]\n"
+        "       aet-work run-one <plan-file> [--max-jobs N] [--isolation minimal|standard|full]\n"
+        "                                    [--task-timeout SECONDS] [--cli-bin PATH]"
+    )
+
+
+def _parse_run_args(args: list[str]) -> list[str]:
+    """Build orchestrator flags from user-provided ``run``/``run-one`` args."""
+    max_jobs = "4"
+    isolation = "standard"
+    task_timeout: str | None = None
+    cli_bin: str | None = None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("--max-jobs",):
+            if i + 1 >= len(args):
+                print(f"error: {arg} requires a value", file=sys.stderr)
+                sys.exit(2)
+            max_jobs = args[i + 1]
+            i += 2
+        elif arg in ("--isolation",):
+            if i + 1 >= len(args):
+                print(f"error: {arg} requires a value", file=sys.stderr)
+                sys.exit(2)
+            isolation = args[i + 1]
+            i += 2
+        elif arg in ("--task-timeout",):
+            if i + 1 >= len(args):
+                print(f"error: {arg} requires a value", file=sys.stderr)
+                sys.exit(2)
+            task_timeout = args[i + 1]
+            i += 2
+        elif arg in ("--cli-bin",):
+            if i + 1 >= len(args):
+                print(f"error: {arg} requires a value", file=sys.stderr)
+                sys.exit(2)
+            cli_bin = args[i + 1]
+            i += 2
+        else:
+            print(f"error: unknown flag {arg}", file=sys.stderr)
+            sys.exit(2)
+
+    out = ["--max-jobs", max_jobs, "--isolation", isolation]
+    if task_timeout is not None:
+        out.extend(["--task-timeout", task_timeout])
+    if cli_bin is not None:
+        out.extend(["--cli-bin", cli_bin])
+    return out
+
+
+def main() -> int:
+    """Dispatch to the appropriate AET binary."""
+    argv = sys.argv
+    if len(argv) < 2:
+        print(_usage(), file=sys.stderr)
+        return 2
+
+    subcommand = argv[1]
+    script_dir = _script_dir()
+
+    if subcommand in DIRECT_COMMANDS:
+        binary = script_dir / subcommand
+        try:
+            os.execvp(str(binary), [subcommand, *argv[2:]])
+        except SystemExit as exc:
+            return exc.code if isinstance(exc.code, int) else 0
+
+    if subcommand == "run":
+        flags = _parse_run_args(argv[2:])
+        binary = script_dir / "orchestrator"
+        try:
+            os.execvp(
+                str(binary),
+                ["orchestrator", "--queue-file", ".agents/work-queue.json", *flags],
+            )
+        except SystemExit as exc:
+            return exc.code if isinstance(exc.code, int) else 0
+
+    if subcommand == "run-one":
+        if len(argv) < 3 or argv[2].startswith("-"):
+            print("error: run-one requires a plan file", file=sys.stderr)
+            print(_usage(), file=sys.stderr)
+            return 2
+        plan_file = argv[2]
+        flags = _parse_run_args(argv[3:])
+        binary = script_dir / "orchestrator"
+        try:
+            os.execvp(
+                str(binary),
+                ["orchestrator", "--plan-file", plan_file, *flags],
+            )
+        except SystemExit as exc:
+            return exc.code if isinstance(exc.code, int) else 0
+
+    print(f"error: unknown subcommand '{subcommand}'", file=sys.stderr)
+    print(_usage(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
