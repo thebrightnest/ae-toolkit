@@ -539,6 +539,7 @@ def cmd_heal(args):
                 "from": stored_state,
                 "to": "merged",
                 "reason": "branch/merge_commit is ancestor of origin/main",
+                "branch": task.get("branch"),
             })
         elif derived_state == "unblocked" and stored_state in ("failed", "blocked", "planned"):
             changes.append({
@@ -571,13 +572,26 @@ def cmd_heal(args):
     failed = 0
     for change in changes:
         task_id = change["task_id"]
-        task = task_by_id[task_id]
-        from_state = change["from"]
+
+        # Re-load the queue before each change; previous changes (especially
+        # record-merge sealing a task) mutate the stored queue.
+        data = backend.load()
+        queue = data["queue"]
+        task = find_task(queue, task_id)
+        if not task:
+            # Task was already sealed by a previous heal step.
+            applied += 1
+            continue
+
+        from_state = queue_lib.current_state(task)
         to_state = change["to"]
+        if from_state == to_state:
+            applied += 1
+            continue
 
         if to_state == "merged":
             # Prefer resolving via record-merge so merge_commit is captured.
-            branch = task.get("branch")
+            branch = task.get("branch") or change.get("branch")
             if branch:
                 merge_ns = argparse.Namespace(
                     command="record-merge",
