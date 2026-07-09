@@ -284,7 +284,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         make_plan(self.plans_dir / "c.md", "C", blocked_by=["b"], size="S")
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -303,7 +308,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         make_plan(self.plans_dir / "good.md", "Good", size="S")
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("bad.md", result.stderr)
@@ -315,7 +325,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
         self.queue_file.write_text(json.dumps([]))
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("mismatched.md", result.stderr)
@@ -330,7 +345,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("duplicate id", result.stderr.lower())
@@ -342,7 +362,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unknown blocker", result.stderr)
@@ -358,7 +383,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("complexity limit", result.stderr)
@@ -375,7 +405,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         (self.plans_dir / "big.md").write_text(content, encoding="utf-8")
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("big", {t["id"] for t in read_tasks(self.queue_file)})
@@ -388,7 +423,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -401,7 +441,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         for task in tasks.values():
             self.assertEqual(len(task["history"]), 1)
             self.assertIsNone(task["history"][0]["from"])
-            self.assertEqual(task["history"][0]["to"], "planned")
+            self.assertEqual(task["history"][0]["to"], task["state"])
             self.assertEqual(task["history"][0]["by"], "sync")
             self.assertIn("at", task["history"][0])
 
@@ -432,7 +472,12 @@ class TestFrontmatterIntake(unittest.TestCase):
         )
 
         result, _ = run_script(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.queue_file.exists())
@@ -632,8 +677,8 @@ class TestSync(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_appends_only_new_plan_and_preserves_existing(self):
-        """sync is append-only and leaves existing task statuses untouched."""
+    def test_preserves_existing_and_does_not_auto_add(self):
+        """sync reconciles existing entries and never auto-adds new plans."""
         existing_plan = self.plans_dir / "existing.md"
         make_plan(existing_plan, "Existing task")
         initial = {
@@ -646,7 +691,7 @@ class TestSync(unittest.TestCase):
                     "plan_file": str(existing_plan),
                     "blocked_by": [],
                     "blocks": [],
-                    "status": "in-progress",
+                    "state": "in_progress",
                     "merge_commit": None,
                     "branch": "feat-existing",
                     "worktree": "/worktrees/existing",
@@ -671,11 +716,11 @@ class TestSync(unittest.TestCase):
         # Existing task preserved.
         self.assertEqual(tasks["existing"]["state"], "in_progress")
         self.assertEqual(tasks["existing"]["branch"], "feat-existing")
-        # New task state follows frontmatter blockers.
-        self.assertEqual(tasks["new"]["state"], "blocked")
-        self.assertEqual(tasks["new"]["blocked_by"], ["existing"])
+        # New plan was not auto-added.
+        self.assertNotIn("new", tasks)
         # blocks inverse recomputed for the whole queue.
-        self.assertEqual(tasks["existing"]["blocks"], ["new"])
+        self.assertEqual(tasks["existing"]["blocks"], [])
+        self.assertIn("0 new tasks added", result.stdout)
 
     def test_reports_drift_without_mutating_status(self):
         """Missing plan files are reported as drift; stored status is not changed."""
@@ -687,7 +732,7 @@ class TestSync(unittest.TestCase):
                     "plan_file": "docs/plans/missing.md",
                     "blocked_by": [],
                     "blocks": [],
-                    "status": "in-progress",
+                    "state": "in_progress",
                     "merge_commit": None,
                     "branch": "feat-missing",
                     "worktree": None,
@@ -740,7 +785,7 @@ class TestSync(unittest.TestCase):
 
     def test_does_not_call_derive(self):
         """sync must not invoke aet-state derive."""
-        make_plan(self.plans_dir / "feat-001.md", "First task")
+        self.queue_file.write_text(json.dumps({"tasks": []}))
         result, log_file = run_script(
             "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
@@ -754,7 +799,6 @@ class TestSync(unittest.TestCase):
 
     def test_creates_missing_queue_file(self):
         """sync recreates a missing queue file on demand."""
-        make_plan(self.plans_dir / "qes-sync-001.md", "Sync task")
         self.assertFalse(self.queue_file.exists())
 
         result, _ = run_script(
@@ -769,7 +813,6 @@ class TestSync(unittest.TestCase):
     def test_skips_settled_plans_from_history(self):
         """sync does not add plans whose id or file is in work-history.jsonl."""
         make_plan(self.plans_dir / "settled.md", "Settled task")
-        make_plan(self.plans_dir / "active.md", "Active task")
 
         settled_record = {
             "id": "settled",
@@ -777,6 +820,8 @@ class TestSync(unittest.TestCase):
             "state": "merged",
         }
         self.history_file.write_text(json.dumps(settled_record) + "\n", encoding="utf-8")
+        # Seed queue with a settled task so sync has something to skip.
+        self.queue_file.write_text(json.dumps({"tasks": [settled_record]}))
 
         result, _ = run_script(
             "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
@@ -785,11 +830,10 @@ class TestSync(unittest.TestCase):
 
         tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
         self.assertNotIn("settled", tasks)
-        self.assertIn("active", tasks)
         self.assertIn("1 skipped (already settled)", result.stdout)
 
     def test_sync_does_not_revalidate_existing_queued_plans(self):
-        """Append-only sync trusts existing queue entries and validates only candidates."""
+        """sync trusts existing queue entries and does not add new plans."""
         existing = self.plans_dir / "existing.md"
         existing.write_text(
             "---\nid: existing\nsize: S\n---\n\n# Existing\n\n"
@@ -805,7 +849,7 @@ class TestSync(unittest.TestCase):
                     "plan_file": str(existing),
                     "blocked_by": [],
                     "blocks": [],
-                    "status": "planned",
+                    "state": "planned",
                     "merge_commit": None,
                     "branch": None,
                     "worktree": None,
@@ -825,7 +869,7 @@ class TestSync(unittest.TestCase):
 
         tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
         self.assertIn("existing", tasks)
-        self.assertIn("new", tasks)
+        self.assertNotIn("new", tasks)
 
 
 class TestSyncBackendAware(unittest.TestCase):
@@ -849,8 +893,8 @@ class TestSyncBackendAware(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_sync_creates_github_issue_for_new_task(self):
-        """When GitHub backend is active, sync creates an issue for a new task."""
+    def test_sync_does_not_create_github_issue_for_new_plan(self):
+        """sync never creates issues for plans not explicitly added to the queue."""
         make_plan(self.plans_dir / "feat-001.md", "First task", size="S")
 
         result, _python_log, gh_log = run_script_with_backend(
@@ -858,12 +902,9 @@ class TestSyncBackendAware(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        self.assertTrue(gh_log.exists())
-        calls = gh_log.read_text(encoding="utf-8").strip().splitlines()
-        self.assertTrue(any("issue" in c and "create" in c for c in calls), calls)
-
-        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
-        self.assertEqual(tasks["feat-001"].get("github_issue_number"), 99)
+        self.assertFalse(gh_log.exists())
+        tasks = read_tasks(self.queue_file)
+        self.assertEqual(tasks, [])
 
     def test_sync_updates_github_label_for_existing_task(self):
         """When GitHub backend is active, sync updates labels for existing tasks."""

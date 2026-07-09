@@ -82,8 +82,8 @@ _Next step: run `aet-work`_
 
 
 class TestAddCommand(unittest.TestCase):
-    def test_add_plan_file_adds_task_as_planned(self):
-        """add accepts a plan file path and inserts the task as planned."""
+    def test_add_plan_file_adds_task_as_ready(self):
+        """add accepts a plan file path and inserts a zero-blocker task as ready."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plans_dir = tmp_path / "plans"
@@ -104,10 +104,45 @@ class TestAddCommand(unittest.TestCase):
                 queue = json.load(f)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-001")
-            self.assertEqual(queue[0]["state"], "planned")
+            self.assertEqual(queue[0]["state"], "ready")
             self.assertEqual(queue[0]["plan_file"], str(plan))
 
-    def test_add_task_id_adds_task_as_planned(self):
+    def test_add_blocked_plan_adds_task_as_blocked(self):
+        """add inserts a task with blockers as blocked and records the actual state."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            plans_dir = tmp_path / "plans"
+            plans_dir.mkdir()
+            blocker = _make_plan(plans_dir, "feat-000.md")
+            plan = _make_plan(plans_dir, "feat-001.md", blocked_by=["feat-000"])
+            queue_file = _write_json_file([])
+            history_file = _make_history([])
+
+            rc = add.main([
+                str(blocker),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
+            self.assertEqual(rc, 0)
+
+            rc = add.main([
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
+            self.assertEqual(rc, 0)
+
+            with open(queue_file, "r", encoding="utf-8") as f:
+                queue = json.load(f)
+            tasks = {t["id"]: t for t in queue}
+            self.assertEqual(tasks["feat-001"]["state"], "blocked")
+            self.assertEqual(tasks["feat-001"]["pending_blockers"], 1)
+            self.assertEqual(tasks["feat-000"]["blocks"], ["feat-001"])
+            self.assertEqual(tasks["feat-001"]["history"][0]["to"], "blocked")
+
+    def test_add_task_id_adds_task(self):
         """add accepts a task ID and resolves it to the plan file."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -129,6 +164,7 @@ class TestAddCommand(unittest.TestCase):
                 queue = json.load(f)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-002")
+            self.assertEqual(queue[0]["state"], "ready")
 
     def test_add_rejects_merged_plan(self):
         """add refuses to queue a plan whose footer stage is merged."""

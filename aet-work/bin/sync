@@ -20,12 +20,9 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+from queue import build_blocks  # noqa: E402
+
 from backends.factory import create_backend  # noqa: E402
-from plan_parser import (  # noqa: E402
-    intake_validation_errors,
-    new_task_from_plan,
-    validate_size,
-)
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,17 +50,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_blocks(queue: list[dict]) -> None:
-    """Recompute ``blocks`` as the inverse of ``blocked_by`` for the whole queue."""
-    task_by_id = {t["id"]: t for t in queue if t.get("id")}
-    for task in queue:
-        task["blocks"] = []
-    for task in queue:
-        for blocker in task.get("blocked_by", []):
-            if blocker in task_by_id:
-                task_by_id[blocker].setdefault("blocks", []).append(task["id"])
-
-
 def main() -> int:
     args = parse_args()
     queue_file = args.queue_file
@@ -86,83 +72,30 @@ def main() -> int:
     queue = data["queue"]
     history = data["history"]
 
-    existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
     settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
     settled_ids = {t.get("id") for t in history if t.get("id")}
 
     plan_files = sorted(plans_dir.glob("*.md"))
+    plan_file_set = {str(pf) for pf in plan_files}
 
-    # Sync is append-only: only candidate plans (not already queued or settled)
-    # need to pass intake validation. Every plan is still parsed so that blocker
-    # references resolve against the full corpus.
-    candidate_files = {
-        pf
-        for pf in plan_files
-        if str(pf) not in existing_by_file
-        and str(pf) not in settled_files
-        and pf.stem not in settled_ids
-    }
-    errors = intake_validation_errors(plan_files, limit_to=candidate_files)
-    if errors:
-        for pf, reason in errors:
-            print(f"❌ {pf.name}: {reason}", file=sys.stderr)
-        return 1
-
-    added = 0
+    # Curated intake: only plans already in the queue are reconciled. New plans
+    # must be explicitly added via ``aet-work add``; sync never auto-adds them.
+    final_queue: list[dict] = []
     preserved = 0
     skipped_settled = 0
-    skipped_size = 0
-    added_task_ids: set[str] = set()
-    new_tasks: list[dict] = []
-
-    for pf in plan_files:
-        pf_str = str(pf)
-
-        if pf_str in existing_by_file:
-            new_tasks.append(existing_by_file[pf_str])
-            preserved += 1
-            continue
-
-        task_id = pf.stem
-        if task_id in settled_ids or pf_str in settled_files:
-            skipped_settled += 1
-            continue
-
-        ok, reason, oversized = validate_size(pf)
-        if not ok and not oversized:
-            # Defensive: validation above should already catch this.
-            print(
-                f"⚠️ Skipping {pf.name}: exceeds complexity limit ({reason}). Split the plan.",
-                file=sys.stderr,
-            )
-            skipped_size += 1
-            continue
-
-        task = new_task_from_plan(pf, status="planned")
-        if oversized:
-            task["oversized"] = True
-        new_tasks.append(task)
-        added_task_ids.add(task_id)
-        added += 1
-
-    # Rebuild the queue in plan-file order, preserving existing entries.
-    final_queue: list[dict] = []
-    seen_files = set()
     for task in queue:
         pf = task.get("plan_file")
+        task_id = task.get("id")
+        if task_id in settled_ids or pf in settled_files:
+            skipped_settled += 1
+            continue
         final_queue.append(task)
         if pf:
-            seen_files.add(pf)
-    for task in new_tasks:
-        pf = task.get("plan_file")
-        if pf and pf not in seen_files:
-            final_queue.append(task)
-            seen_files.add(pf)
+            preserved += 1
 
     build_blocks(final_queue)
 
-    # Report plan drift without mutating stored status.
-    plan_file_set = {str(pf) for pf in plan_files}
+    # Report plan drift without mutating stored state.
     drifted = 0
     for task in final_queue:
         pf = task.get("plan_file")
@@ -171,15 +104,13 @@ def main() -> int:
             print(f"⚠️ Drift: {task.get('id')} -> {pf}")
 
     for task in final_queue:
-        task_id = task.get("id")
-        backend.sync_task(task, is_new=task_id in added_task_ids)
+        backend.sync_task(task, is_new=False)
 
     backend.save(final_queue, wrapper={"queue_updated_at": datetime.now().isoformat()})
 
     print(
-        f"\n✅ Sync complete: {added} new tasks added, {preserved} existing tasks preserved, "
-        f"{skipped_settled} skipped (already settled), {skipped_size} skipped (size), "
-        f"{drifted} drifted tasks reported."
+        f"\n✅ Sync complete: 0 new tasks added, {preserved} existing tasks preserved, "
+        f"{skipped_settled} skipped (already settled), {drifted} drifted tasks reported."
     )
     backend.close()
     return 0

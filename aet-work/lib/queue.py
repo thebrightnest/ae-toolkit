@@ -169,6 +169,17 @@ def pending_blockers(task: dict[str, Any]) -> int:
     return len(task.get("blocked_by", []))
 
 
+def build_blocks(queue: list[dict[str, Any]]) -> None:
+    """Recompute ``blocks`` as the inverse of ``blocked_by`` for the whole queue."""
+    task_by_id = {t["id"]: t for t in queue if t.get("id")}
+    for task in queue:
+        task["blocks"] = []
+    for task in queue:
+        for blocker in task.get("blocked_by", []):
+            if blocker in task_by_id:
+                task_by_id[blocker].setdefault("blocks", []).append(task["id"])
+
+
 def read_queue(queue_file: str) -> list[dict[str, Any]]:
     """Read the queue from JSON and normalize legacy records.
 
