@@ -3,6 +3,7 @@ id: frh-01-locked-atomic-state-writes
 size: M
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: Locked, Atomic Queue Writes in the State Layer
@@ -61,4 +62,4 @@ Revert the merge commit. The lock file is a sidecar (`.agents/work-queue.json.lo
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
