@@ -3,6 +3,7 @@ id: frh-10-gate-evidence-contract
 size: M
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: Structured Gate Evidence — Schemas, Home, and Writer Contract
@@ -64,5 +65,5 @@ Revert the merge commit. Evidence files are additive artifacts outside the repo;
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
