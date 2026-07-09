@@ -1,6 +1,6 @@
 # AE Toolkit
 
-A modular skill suite for AI coding agents. Each skill is a self-contained package of instructions, examples, and reference material that guides an agent through a specific phase of agentic engineering — from discovery and planning to implementation, review, security, shipping, and release.
+An integrated agentic engineering system. Skills are directories of instructions, examples, and reference material that guide an agent through each phase of the workflow — from discovery and planning to implementation, review, security, shipping, and release. They are designed to be installed together; the pipeline only works when the whole system is present.
 
 ---
 
@@ -60,7 +60,6 @@ Keep projects and the toolkit itself healthy.
 
 | Name                   | Description                                                                                              |
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
-| `.skill` packages      | Skills are distributed as plain zip archives of the skill directory, installable anywhere.               |
 | `make install-skills`  | Symlinks all skills to `~/.agents/skills/` for local agent use.                                          |
 | `install-aet-binaries` | Installs skill executables such as `mine-learnings` on `PATH`.                                           |
 | Git                    | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required. |

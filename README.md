@@ -152,9 +152,6 @@ make install-skills
 SKILLS_DIR=~/.claude/skills make install-skills
 SKILLS_DIR=~/.cursor/skills make install-skills
 
-# Package all skills into .skill files
-make package
-
 # Scaffold a new skill
 make add-skill NAME=my-new-skill
 ```
@@ -185,10 +182,6 @@ Edit `SKILL.md` following the [skill creator guide](https://docs.kimi.ai/skills)
 ## Upgrades
 
 See [docs/upgrades/README.md](./docs/upgrades/README.md) for version-specific upgrade guides.
-
-## Packaging
-
-`make package` produces `.skill` files (zip archives) for each skill directory. These are build artifacts for manual installs and distribution mirrors. The recommended install path is `npx skills add ... --all`, which consumes this repository directly.
 
 ## License
 

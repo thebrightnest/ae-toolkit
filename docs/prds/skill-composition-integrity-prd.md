@@ -1,5 +1,7 @@
 # PRD: Skill Composition Integrity and Build System
 
+> **Status: Superseded.** The shared-partials build system described here was rejected in ADR-018. The `.skill` packaging pipeline and `scripts/build-skills.py` / `scripts/partials/` scaffolding have been removed. Composition checks (next-step graph, trigger uniqueness) are still performed by `scripts/validate-skills.sh`.
+
 ## Overview
 
 The skills contradict each other. `aet-pipeline-implement` institutionalizes the exact horizontal-slicing anti-pattern `aet-tdd` forbids in bold. README says Implement → Review → QA; the pipeline runs QA → Review. `aet-plan` and `aet-pipeline-plan` share identical triggers, causing ambiguous routing. And the Shared Preamble is copy-pasted into ~15 skills and already drifted.
