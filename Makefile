@@ -1,11 +1,11 @@
-.PHONY: help install-skills install-binaries package add-skill clean lint format format-check validate install-hooks check-reproducible
+.PHONY: help install-skills install-binaries add-skill lint format format-check validate install-hooks
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
 SKILLS_DIR ?= $(HOME)/.agents/skills
 BIN_DIR ?= $(HOME)/.local/bin
 REPO_DIR := $(shell pwd)
 SKILLS := $(filter-out README.md Makefile scripts .git .gitignore docs .agents content .claude, $(wildcard *))
-MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null || find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
+MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null | while read -r f; do [ -f "$$f" ] && printf '%s ' "$$f"; done || find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -27,23 +27,6 @@ install-skills: ## Symlink all skills from this repo to ~/.agents/skills/ and pu
 
 install-binaries: ## Symlink skill binaries from installed skill dirs onto PATH
 	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-setup/bin/install-aet-binaries
-
-package: ## Package all skills into .skill files (assembles from templates first)
-	@for skill in $(SKILLS); do \
-		if [ -d "$$skill" ] && [ -f "$$skill/SKILL.md" ]; then \
-			if [ -f "$$skill/SKILL.md.template" ]; then \
-				python3 scripts/build-skills.py \
-					--template "$$skill/SKILL.md.template" \
-					--partials-dir scripts/partials \
-					--output "$$skill/SKILL.md" \
-					--skill-name "$$skill" \
-					--next-step ""; \
-			fi; \
-			find "$$skill" -exec touch -t 198001010000 {} +; \
-			zip -X -r "$$skill.skill" "$$skill" -x "*.git*" -x "*node_modules*" -x "*.DS_Store" -x "*__pycache__*" -x "*.pyc"; \
-			echo "✓ Packaged $$skill.skill"; \
-		fi; \
-	done
 
 add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 	@if [ -z "$(NAME)" ]; then \
@@ -68,10 +51,6 @@ add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 	@echo "✓ Created skill: $(NAME)"
 	@echo "✓ Edit $(NAME)/SKILL.md to add your skill logic"
 
-clean: ## Remove all .skill packages
-	@rm -f *.skill
-	@echo "✓ Cleaned .skill files"
-
 lint: ## Run markdownlint on all markdown files
 	@npx markdownlint-cli2 --config .markdownlint.yaml $(MARKDOWN_FILES)
 	@echo "✓ Lint passed"
@@ -84,14 +63,10 @@ format-check: ## Check markdown formatting (CI mode)
 	@npx prettier@3.1.0 --check $(MARKDOWN_FILES)
 	@echo "✓ Format check passed"
 
-check-reproducible: ## Verify .skill packaging is byte-reproducible across runs
-	@./scripts/check-reproducible-package.sh
-
-validate: ## Run all quality checks (lint + format-check + skill-structure + reproducible package)
+validate: ## Run all quality checks (lint + format-check + skill-structure)
 	@$(MAKE) lint
 	@$(MAKE) format-check
 	@./scripts/validate-skills.sh
-	@$(MAKE) check-reproducible
 	@echo "✓ All validation checks passed"
 
 install-hooks: ## Install pre-commit hooks

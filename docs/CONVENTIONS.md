@@ -17,7 +17,7 @@ Each skill lives in its own directory at the repository root:
     └── README.md
 ```
 
-Skill directories are packaged into `.skill` files (zip archives) via `make package`. These artifacts are for manual distribution; the recommended install path is `npx skills add ... --all`, which installs the AE Toolkit as a single system.
+Skills are installed together from this repository via `npx skills add ... --all`. The pipeline only works when the whole system is present.
 
 ## Package-Deliverable Rules
 
@@ -26,7 +26,7 @@ AE Toolkit is installed together, not à la carte. Skills may reference shared c
 Rules:
 
 - Put rules that are specific to one skill inside that skill's files (`SKILL.md`, `references/`, `examples/`, or scripts in `<skill>/bin/`).
-- Put cross-cutting rules in shared partials (`scripts/partials/`) or toolkit-level docs (`.agents/reference/`, `AGENTS.md`, `docs/CONVENTIONS.md`). `make package` assembles shared partials into each `SKILL.md` at build time.
+- Put cross-cutting rules in toolkit-level docs (`.agents/reference/`, `AGENTS.md`, `docs/CONVENTIONS.md`).
 - It is fine for a skill to reference another skill or a shared convention by name (e.g., "run `aet-validate-scope` next"). Do not rely on hardcoded paths that assume a specific install location.
 - If a rule must be visible to an agent that reads only the skill file (e.g., when a skill is pasted into chat), include the essential version of that rule directly in `SKILL.md` or link to a skill-level reference doc.
 
@@ -305,32 +305,6 @@ Run `aet-evolve --toolkit` periodically (monthly, or after every 5 retros) to sc
 
 The orchestrator writes execution telemetry directly to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/`. Run `aet-evolve/bin/mine-learnings` periodically to scan the archive for recurring patterns (dependency issues, repeated loops, stage failures, review noise) and propose toolkit-level skill edits.
 
-## Build System
-
-Skills are built from shared partials rather than hand-maintained as 21 separate copies. The canonical preamble, guardrail blocks, and stage tables live in `scripts/partials/` and are assembled into each `SKILL.md` at build time.
-
-### Shared Partials
-
-| Partial                           | Purpose                                              |
-| --------------------------------- | ---------------------------------------------------- |
-| `scripts/partials/preamble.md`    | Canonical Shared Preamble (context collection rules) |
-| `scripts/partials/guardrails.md`  | Hard constraints replicated across all skills        |
-| `scripts/partials/stage-table.md` | Stage state machine and completion protocols         |
-
-### Assembly
-
-```bash
-make package
-```
-
-1. Substitutes partials into skill templates
-2. Validates: no trigger collisions, consistent next-step graph, matching preamble
-3. Produces `.skill` zip archives
-
-### Editing a Skill
-
-Edit the **template** or the **partial**, not the generated `SKILL.md`. Run `make package` after any change to regenerate the assembled `SKILL.md` files.
-
 ## Versioning
 
-Skills are versioned implicitly by git commit. The `.skill` package is a snapshot. No separate version field in frontmatter.
+Skills are versioned implicitly by git commit. No separate version field in frontmatter.

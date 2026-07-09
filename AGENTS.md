@@ -28,23 +28,21 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 │   ├── learnings.jsonl
 │   └── work-queue.json
 ├── scripts/                # Validation and utility scripts
-├── Makefile                # Dev orchestration
-└── *.skill                 # Packaged skill artifacts (generated)
+└── Makefile                # Dev orchestration
 ```
 
 ## Tooling Reference
 
-| Command                 | What it runs                                         |
-| ----------------------- | ---------------------------------------------------- |
-| `make help`             | Show all available targets                           |
-| `make install-skills`   | Symlink all skills to `~/.agents/skills/`            |
-| `make package`          | Build `.skill` zip artifacts for manual distribution |
-| `make add-skill NAME=x` | Scaffold a new skill directory                       |
-| `make lint`             | markdownlint all markdown files                      |
-| `make format`           | Prettier format all markdown files                   |
-| `make format-check`     | Prettier check (CI mode)                             |
-| `make validate`         | Run lint + format-check + skill-structure validator  |
-| `make install-hooks`    | Install pre-commit hooks                             |
+| Command                 | What it runs                                        |
+| ----------------------- | --------------------------------------------------- |
+| `make help`             | Show all available targets                          |
+| `make install-skills`   | Symlink all skills to `~/.agents/skills/`           |
+| `make add-skill NAME=x` | Scaffold a new skill directory                      |
+| `make lint`             | markdownlint all markdown files                     |
+| `make format`           | Prettier format all markdown files                  |
+| `make format-check`     | Prettier check (CI mode)                            |
+| `make validate`         | Run lint + format-check + skill-structure validator |
+| `make install-hooks`    | Install pre-commit hooks                            |
 
 ## Skill Structure Validator
 
@@ -60,7 +58,6 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 ### Forbidden
 
-- Never modify a `.skill` file by hand — always run `make package` after editing a skill directory
 - Never delete or rename a skill directory without updating README.md skill table
 - Never commit the `content/` directory (it is gitignored; used for local scratch)
 - Never add a new skill without `examples/` and `references/` subdirectories
@@ -74,7 +71,6 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - Always keep `SKILL.md` under 400 lines; move deep detail to `references/`
 - Always use YAML frontmatter with `name` and `description` in every new SKILL.md
 - Always ensure `description` explicitly states when to trigger the skill
-- Always run `make package` after editing skills to regenerate `.skill` files
 - Always add an ADR in `docs/adr/` for structural changes to the toolkit itself
 
 ### Agentic Workflow Guardrails
@@ -102,6 +98,6 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 ## Decision Log
 
 - **Markdown-only repo:** No package.json, requirements.txt, etc. Quality tools are installed via pre-commit or system package manager.
-- **Zip packaging:** `.skill` files are plain zip archives of the skill directory, produced as build artifacts for manual distribution. The recommended install path is `npx skills add ... --all`.
+- **Directory-based distribution:** Skills are installed together from this repo via `npx skills add ... --all`. Individual `.skill` zip artifacts are no longer produced or tracked.
 - **No CI:** All gates local via pre-commit + Make. Keeps the repo portable and free of vendor lock-in.
 - **Trimmed tooling:** Dropped cspell, lychee, and detect-secrets. A skills library's quality surface is structure and formatting, not runtime security or external link graphs.
