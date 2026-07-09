@@ -3,6 +3,7 @@ id: frh-12-retro-learning-candidates
 size: S
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: aet-retro Emits Learning-Candidate Telemetry
@@ -53,5 +54,5 @@ Revert the merge commit; the archive is append-only JSONL, unknown types are ski
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
