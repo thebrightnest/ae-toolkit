@@ -3,6 +3,7 @@ id: tdsh-02-implement-validation-guardrail
 size: S
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: Verify validation-after-every-task guardrail in aet-implement
@@ -43,4 +44,4 @@ The `aet-implement/SKILL.md` `implement` procedure already states in step 7 that
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
