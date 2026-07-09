@@ -457,6 +457,26 @@ def update_plan_status(plan_path, status):
     update_plan_footer(plan_path, status)
 
 
+def _derive_all_states(queue, cwd):
+    """Return (task_by_id, derived) for every task in the queue."""
+    tasks = queue
+    task_by_id = {t["id"]: t for t in tasks if t.get("id")}
+    derived = {}
+
+    def blocker_status(task_id):
+        if task_id not in derived and task_id in task_by_id:
+            derived[task_id] = derive_status(task_by_id[task_id], blocker_status, cwd=cwd)
+        status = derived.get(task_id, {}).get("derived_status", "unknown")
+        return status.split(" (warning")[0]
+
+    for task in tasks:
+        task_id = task["id"]
+        if task_id not in derived:
+            derived[task_id] = derive_status(task, blocker_status, cwd=cwd)
+
+    return task_by_id, derived
+
+
 def cmd_audit(args):
     """Reconcile stored state against git ground truth without mutating.
 
@@ -468,32 +488,125 @@ def cmd_audit(args):
     data = backend.load()
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    tasks = queue
-    task_by_id = {t["id"]: t for t in tasks if t.get("id")}
-    derived = {}
-
-    def blocker_status(task_id):
-        """Return the clean derived status of a blocker, deriving it if needed."""
-        if task_id not in derived and task_id in task_by_id:
-            derived[task_id] = derive_status(task_by_id[task_id], blocker_status, cwd=cwd)
-        status = derived.get(task_id, {}).get("derived_status", "unknown")
-        return status.split(" (warning")[0]
+    task_by_id, derived = _derive_all_states(queue, cwd)
 
     results = {}
-    for task in tasks:
+    for task in queue:
         task_id = task["id"]
         stored_state = queue_lib.current_state(task)
         stored_display = queue_lib.state_to_status(stored_state)
-        derived_info = derive_status(task, blocker_status, cwd=cwd)
-        derived_display = derived_info["derived_status"].split(" (warning")[0]
+        derived_display = derived[task_id]["derived_status"].split(" (warning")[0]
         results[task_id] = {
             "stored": stored_state,
-            "derived": derived_info["derived_status"],
+            "derived": derived[task_id]["derived_status"],
             "discrepancy": stored_display != derived_display,
         }
 
     print(json.dumps(results, indent=2))
     return 0
+
+
+def cmd_heal(args):
+    """Reconcile stored state against git ground truth and apply safe fixes.
+
+    Safe fixes:
+      - merged: task branch or merge_commit is an ancestor of origin/main.
+      - failed -> unblocked: plan exists, no branch, and blockers are terminal.
+
+    With ``--apply``, transitions are applied; otherwise the command prints a
+    dry-run report.
+    """
+    backend = make_backend(args.queue)
+    data = backend.load()
+    queue = data["queue"]
+    cwd = os.path.dirname(args.queue) if args.queue else "."
+    task_by_id, derived = _derive_all_states(queue, cwd)
+
+    changes: list[dict] = []
+    for task in queue:
+        task_id = task["id"]
+        stored_state = queue_lib.current_state(task)
+        derived_display = derived[task_id]["derived_status"].split(" (warning")[0]
+        derived_state = queue_lib.status_to_state(derived_display)
+
+        if stored_state == derived_state:
+            continue
+
+        # Only heal toward terminal/ready states; never move a merged task backward.
+        if derived_state == "merged" and stored_state != "merged":
+            changes.append({
+                "task_id": task_id,
+                "from": stored_state,
+                "to": "merged",
+                "reason": "branch/merge_commit is ancestor of origin/main",
+            })
+        elif derived_state == "unblocked" and stored_state in ("failed", "blocked", "planned"):
+            changes.append({
+                "task_id": task_id,
+                "from": stored_state,
+                "to": "unblocked",
+                "reason": "plan exists and blockers are terminal",
+            })
+        elif derived_state == "failed" and stored_state == "in_progress":
+            changes.append({
+                "task_id": task_id,
+                "from": stored_state,
+                "to": "failed",
+                "reason": "branch does not exist and plan is missing or blocked",
+            })
+
+    if not changes:
+        print("No healable discrepancies found.")
+        return 0
+
+    print("Proposed changes:")
+    for change in changes:
+        print(f"  {change['task_id']}: {change['from']} -> {change['to']} ({change['reason']})")
+
+    if not args.apply:
+        print("\nRun with --apply to apply these changes.")
+        return 0
+
+    applied = 0
+    failed = 0
+    for change in changes:
+        task_id = change["task_id"]
+        task = task_by_id[task_id]
+        from_state = change["from"]
+        to_state = change["to"]
+
+        if to_state == "merged":
+            # Prefer resolving via record-merge so merge_commit is captured.
+            branch = task.get("branch")
+            if branch:
+                merge_ns = argparse.Namespace(
+                    command="record-merge",
+                    task_id=task_id,
+                    queue=args.queue,
+                    dry_run=False,
+                    plan=None,
+                    branch=branch,
+                    merge_commit=task.get("merge_commit"),
+                )
+                rc = cmd_record_merge(merge_ns)
+                if rc == 0:
+                    applied += 1
+                else:
+                    failed += 1
+                continue
+
+        try:
+            _apply_transition(
+                backend, queue, task, from_state, to_state,
+                by="heal", evidence={"reason": change["reason"]}, cwd=cwd,
+            )
+            applied += 1
+        except RuntimeError as e:
+            print(f"  Could not heal {task_id}: {e}", file=sys.stderr)
+            failed += 1
+
+    print(f"\nHealed {applied} task(s); {failed} failed.")
+    return 1 if failed > 0 else 0
 
 
 def cmd_validate(args):
@@ -556,9 +669,11 @@ def cmd_record_merge(args):
         return 1
 
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    branch = task.get("branch")
-    if not branch:
-        print(f"Task {args.task_id} has no branch.", file=sys.stderr)
+    branch = getattr(args, "branch", None) or task.get("branch")
+    cli_merge_commit = getattr(args, "merge_commit", None)
+
+    if not branch and not cli_merge_commit:
+        print(f"Task {args.task_id} has no branch. Use --branch or --merge-commit.", file=sys.stderr)
         return 1
 
     # Fetch origin first.
@@ -567,7 +682,19 @@ def cmd_record_merge(args):
         print(f"git fetch origin failed: {err}", file=sys.stderr)
         return 1
 
-    merge_commit, merge_strategy = resolve_merge_commit(branch, cwd=cwd)
+    if cli_merge_commit:
+        # Validate the user-supplied merge commit is on origin/main.
+        if not is_ancestor_of_main(cli_merge_commit, cwd=cwd):
+            print(
+                f"Merge verification failed: {cli_merge_commit} is not an ancestor of origin/main.",
+                file=sys.stderr,
+            )
+            return 1
+        merge_commit = cli_merge_commit
+        merge_strategy = "manual"
+    else:
+        merge_commit, merge_strategy = resolve_merge_commit(branch, cwd=cwd)
+
     if not merge_commit:
         print(
             "Merge verification failed: could not determine merge commit on origin/main.",
@@ -579,8 +706,11 @@ def cmd_record_merge(args):
     # Stash any existing merge_commit so we can revert on validation failure.
     previous_merge_commit = task.get("merge_commit")
     previous_merge_strategy = task.get("merge_strategy")
+    previous_branch = task.get("branch")
     task["merge_commit"] = merge_commit
     task["merge_strategy"] = merge_strategy
+    if branch and task.get("branch") != branch:
+        task["branch"] = branch
 
     if args.dry_run:
         ok, msg = validate_transition(task, current_state, "merged", cwd=cwd)
@@ -592,6 +722,7 @@ def cmd_record_merge(args):
             return 0
         task["merge_commit"] = previous_merge_commit
         task["merge_strategy"] = previous_merge_strategy
+        task["branch"] = previous_branch
         print(msg, file=sys.stderr)
         return 1
 
@@ -604,6 +735,7 @@ def cmd_record_merge(args):
     except RuntimeError as e:
         task["merge_commit"] = previous_merge_commit
         task["merge_strategy"] = previous_merge_strategy
+        task["branch"] = previous_branch
         print(str(e), file=sys.stderr)
         return 1
 
@@ -726,6 +858,11 @@ def main():
     audit_parser = subparsers.add_parser("audit", help="Reconcile stored state against git without mutating.")
     audit_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
 
+    # heal
+    heal_parser = subparsers.add_parser("heal", help="Reconcile stored state against git and apply safe fixes.")
+    heal_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+    heal_parser.add_argument("--apply", action="store_true", help="Apply proposed changes; otherwise dry-run.")
+
     # validate
     validate_parser = subparsers.add_parser("validate", help="Check if a transition is legal.")
     validate_parser.add_argument("task_id", help="Task ID.")
@@ -764,6 +901,14 @@ def main():
         "queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON."
     )
     record_merge_parser.add_argument(
+        "--branch",
+        help="Branch name to use for merge verification. Overrides the task's branch field.",
+    )
+    record_merge_parser.add_argument(
+        "--merge-commit",
+        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
+    )
+    record_merge_parser.add_argument(
         "--plan",
         help="Path to the plan markdown file. If omitted, uses the task's plan_file.",
     )
@@ -777,6 +922,8 @@ def main():
 
     if args.command == "audit":
         return cmd_audit(args)
+    if args.command == "heal":
+        return cmd_heal(args)
     if args.command == "validate":
         return cmd_validate(args)
     if args.command == "transition":
