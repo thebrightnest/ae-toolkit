@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -90,6 +91,95 @@ def read_jsonl(path: Path) -> list[dict]:
         except json.JSONDecodeError:
             continue
     return records
+
+
+def learning_candidate_record(
+    run_id: str,
+    task_id: str,
+    plan_file: str,
+    stage: str,
+    pattern_type: str,
+    description: str,
+    evidence: dict | None = None,
+    confidence: float | None = None,
+) -> dict:
+    """Build a learning-candidate telemetry record for aet-evolve mining."""
+    return {
+        "type": "learning_candidate",
+        "run_id": run_id,
+        "task_id": task_id,
+        "plan_file": plan_file,
+        "stage": stage,
+        "pattern_type": pattern_type,
+        "description": description,
+        "evidence": evidence or {},
+        "confidence": confidence,
+    }
+
+
+def archive_task_log_path(
+    archive_dir: Path,
+    project_slug: str,
+    run_id: str,
+    task_id: str,
+) -> Path:
+    """Return the task JSONL path for the current date, creating parents."""
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    path = archive_dir.expanduser() / project_slug / date / run_id / f"{task_id}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def append_jsonl(path: Path, records: list[dict]) -> None:
+    """Append records to a JSONL file, creating it if necessary."""
+    if not records:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        for record in records:
+            f.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def emit_learning_candidates(
+    archive_dir: Path,
+    project_slug: str,
+    run_id: str,
+    task_id: str,
+    plan_file: str,
+    project_findings: list[str],
+    aet_findings: list[str],
+) -> Path:
+    """Append one learning_candidate record per retro finding."""
+    records: list[dict] = []
+    for description in project_findings:
+        records.append(
+            learning_candidate_record(
+                run_id=run_id,
+                task_id=task_id,
+                plan_file=plan_file,
+                stage="retro",
+                pattern_type="project_finding",
+                description=description,
+                evidence={"source": "project_finding"},
+                confidence=0.5,
+            )
+        )
+    for description in aet_findings:
+        records.append(
+            learning_candidate_record(
+                run_id=run_id,
+                task_id=task_id,
+                plan_file=plan_file,
+                stage="retro",
+                pattern_type="aet_finding",
+                description=description,
+                evidence={"source": "aet_finding"},
+                confidence=0.5,
+            )
+        )
+    log_path = archive_task_log_path(archive_dir, project_slug, run_id, task_id)
+    append_jsonl(log_path, records)
+    return log_path
 
 
 def recent_project_records(
@@ -278,6 +368,20 @@ def main(argv: list[str] | None = None) -> int:
         project_slug, project_findings, aet_findings, telemetry_report
     )
     args.output.write_text(retro, encoding="utf-8")
+
+    run_id = os.environ.get("AET_RUN_ID") or uuid.uuid4().hex
+    task_id = os.environ.get("AET_TASK_ID") or "aet-retro"
+    plan_file = os.environ.get("AET_PLAN_FILE") or "aet-retro"
+    emit_learning_candidates(
+        archive_dir=args.archive_dir,
+        project_slug=project_slug,
+        run_id=run_id,
+        task_id=task_id,
+        plan_file=plan_file,
+        project_findings=project_findings,
+        aet_findings=aet_findings,
+    )
+
     print(f"Wrote retro to {args.output}")
     return 0
 

@@ -22,7 +22,7 @@ Each task JSONL file contains:
 - internal loops (test retries, format fixes, etc.)
 - environment/dependency issues
 - individual test runs
-- learning candidates
+- learning candidates (emitted by `aet-retro`)
 
 `last-run.json` records the run outcome, task counts, and wall-clock time.
 
