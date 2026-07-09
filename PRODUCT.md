@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 0.9.1
+## Current Version: 0.10.0
 
-Last updated: 2026-07-06
+Last updated: 2026-07-09
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees; optionally backed by GitHub Issues for team-wide visibility.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -34,7 +34,7 @@ Verify code before it ships.
 
 - **aet-review** — Staff-level code review with multi-lens checks.
 - **aet-cso** — Diff-focused security audit.
-- **aet-qa** — Automated QA with tiered validation.
+- **aet-qa** — Automated QA with tiered validation. Defaults to impact-scoped tests and falls back to the full suite when needed.
 - **aet-verify** — Conditional live verification with evidence capture.
 
 ### Shipping and Release Skills
@@ -52,7 +52,7 @@ Keep projects and the toolkit itself healthy.
 - **aet-setup** — Bootstrap or upgrade projects with best-practice documentation and AI guardrails.
 - **aet-upgrade** — Dependency and framework upgrade planning with breaking-change analysis.
 - **aet-bug-report** — Structured bug investigation and fixing.
-- **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns.
+- **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
 
 ---
 
@@ -62,11 +62,20 @@ Keep projects and the toolkit itself healthy.
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
 | `make install-skills`  | Symlinks all skills to `~/.agents/skills/` for local agent use.                                          |
 | `install-aet-binaries` | Installs skill executables such as `mine-learnings` on `PATH`.                                           |
+| GitHub Issues          | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                      |
 | Git                    | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required. |
 
 ---
 
 ## What's New
+
+### What's New in v0.10.0
+
+- **Automated run review with `aet-retro`** — after every `aet-work run`, `aet-evolve` can surface errors, timeouts, and improvement opportunities from telemetry archives and narrative reports.
+- **GitHub Issues as a task backend** — `aet-work` can mirror the queue to GitHub Issues, so task state is visible to the whole team and survives local worktree cleanup.
+- **Faster, quieter QA** — `aet-qa` now runs only the tests that touch changed files by default, falling back to the full suite when coverage requires it.
+- **More resilient unattended runs** — the orchestrator uses per-task timeouts and inner heartbeats, refreshes worktrees from `origin/main`, and guarantees a final summary even when a task crashes.
+- **Cleaner review focus** — `aet-review` filters out project-level noise so reviewers stay focused on the actual diff.
 
 ### What's New in v0.9.1
 
