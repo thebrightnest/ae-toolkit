@@ -6,7 +6,8 @@ that should improve the AET toolkit itself.
 
 Reads:
 - ~/.aet/telemetry/{project-slug}/ via mine-learnings --propose
-- .agents/execution.log.jsonl in the current directory (if present)
+- ~/.aet/telemetry/{project-slug}/{date}/{run-id}/{task-id}.jsonl for the
+  current project (per-task structured telemetry, as decided in ADR-012)
 
 Writes a markdown retro to docs/retros/ by default.
 """
@@ -19,11 +20,11 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
-EXECUTION_LOG = Path(".agents/execution.log.jsonl")
+DEFAULT_LOOKBACK_DAYS = 7
 
 # Heuristic signals that a finding belongs to the AET toolkit rather than the
 # project being built. Keep this list small and project-agnostic.
@@ -44,19 +45,35 @@ def is_aet_level(text: str) -> bool:
     return any(re.search(p, text, re.IGNORECASE) for p in AET_PATH_PATTERNS)
 
 
-def run_mine_learnings(archive_dir: Path) -> str:
-    """Run mine-learnings --propose against the telemetry archive."""
-    cmd = ["mine-learnings", "--propose"]
-    env = os.environ.copy()
-    env["AET_TELEMETRY_ARCHIVE_DIR"] = str(archive_dir)
-    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    if result.returncode != 0:
-        return f"mine-learnings failed (exit {result.returncode}): {result.stderr.strip()}"
-    return result.stdout
+def derive_project_slug() -> str:
+    """Derive owner/repo slug from the origin remote or directory name."""
+    env_slug = os.environ.get("AET_PROJECT_ID") or os.environ.get("AET_REPO_SLUG")
+    if env_slug:
+        return env_slug
+
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            url = result.stdout.strip()
+            if url.endswith(".git"):
+                url = url[:-4]
+            if ":" in url and "//" not in url:
+                url = url.split(":", 1)[-1]
+            parts = url.rstrip("/").split("/")
+            return "/".join(parts[-2:])
+    except FileNotFoundError:
+        pass
+
+    return Path.cwd().name
 
 
-def read_local_execution_log(path: Path) -> list[dict]:
-    """Read the local orchestrator execution log, skipping malformed lines."""
+def read_jsonl(path: Path) -> list[dict]:
+    """Read and parse a JSONL file, skipping malformed lines."""
     records: list[dict] = []
     if not path.exists():
         return records
@@ -75,10 +92,59 @@ def read_local_execution_log(path: Path) -> list[dict]:
     return records
 
 
+def recent_project_records(
+    archive_dir: Path,
+    project_slug: str,
+    lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+) -> list[dict]:
+    """Read all telemetry records for the project within the lookback window.
+
+    The archive layout is:
+        ~/.aet/telemetry/{project-slug}/{date}/{run-id}/{task-id}.jsonl
+    """
+    project_dir = archive_dir.expanduser() / project_slug
+    if not project_dir.is_dir():
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    records: list[dict] = []
+
+    for date_dir in sorted(project_dir.glob("*")):
+        if not date_dir.is_dir():
+            continue
+        try:
+            date = datetime.strptime(date_dir.name, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+        except ValueError:
+            continue
+        if date < cutoff:
+            continue
+
+        for run_dir in sorted(date_dir.glob("*")):
+            if not run_dir.is_dir():
+                continue
+            for task_log in sorted(run_dir.glob("*.jsonl")):
+                records.extend(read_jsonl(task_log))
+
+    return records
+
+
+def run_mine_learnings(archive_dir: Path) -> str:
+    """Run mine-learnings --propose against the telemetry archive."""
+    cmd = ["mine-learnings", "--propose"]
+    env = os.environ.copy()
+    env["AET_TELEMETRY_ARCHIVE_DIR"] = str(archive_dir)
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    if result.returncode != 0:
+        return f"mine-learnings failed (exit {result.returncode}): {result.stderr.strip()}"
+    return result.stdout
+
+
 def extract_message(record: dict) -> str:
     """Best-effort extraction of a human-readable message from a log record."""
     if isinstance(record, dict):
-        for key in ("message", "error", "summary", "stage", "detail", "note"):
+        for key in ("message", "error", "summary", "stage", "detail", "note", "description"):
             value = record.get(key)
             if value is not None:
                 return str(value)
@@ -86,7 +152,7 @@ def extract_message(record: dict) -> str:
 
 
 def categorize_records(records: list[dict]) -> tuple[list[str], list[str]]:
-    """Split execution-log records into AET-level and project-level findings."""
+    """Split telemetry records into AET-level and project-level findings."""
     aet: list[str] = []
     project: list[str] = []
     seen: set[str] = set()
@@ -115,6 +181,7 @@ def format_section(title: str, items: list[str]) -> list[str]:
 
 
 def generate_retro(
+    project_slug: str,
     project_findings: list[str],
     aet_findings: list[str],
     telemetry_report: str,
@@ -123,6 +190,8 @@ def generate_retro(
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     lines = [
         f"# Retro: AET run review ({date})",
+        "",
+        f"Project: `{project_slug}`",
         "",
         "## Telemetry Summary",
         "",
@@ -165,6 +234,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Telemetry archive root (default: ~/.aet/telemetry).",
     )
     parser.add_argument(
+        "--project-slug",
+        type=str,
+        default=None,
+        help="Project slug in the telemetry archive (default: derived from git origin or cwd).",
+    )
+    parser.add_argument(
+        "--lookback-days",
+        type=int,
+        default=DEFAULT_LOOKBACK_DAYS,
+        help="How many days of telemetry to read for the current project (default: 7).",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -173,11 +254,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-mine",
         action="store_true",
-        help="Skip mine-learnings and only use the local execution log.",
+        help="Skip mine-learnings and only use the current project's recent telemetry.",
     )
     args = parser.parse_args(argv)
 
-    local_records = read_local_execution_log(EXECUTION_LOG)
+    project_slug = args.project_slug or derive_project_slug()
+    local_records = recent_project_records(
+        args.archive_dir, project_slug, lookback_days=args.lookback_days
+    )
     aet_findings, project_findings = categorize_records(local_records)
 
     telemetry_report = "Skipped mine-learnings (--no-mine)."
@@ -190,7 +274,9 @@ def main(argv: list[str] | None = None) -> int:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         args.output = output_dir / f"{date}-aet-retro.md"
 
-    retro = generate_retro(project_findings, aet_findings, telemetry_report)
+    retro = generate_retro(
+        project_slug, project_findings, aet_findings, telemetry_report
+    )
     args.output.write_text(retro, encoding="utf-8")
     print(f"Wrote retro to {args.output}")
     return 0
