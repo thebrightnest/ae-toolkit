@@ -3,6 +3,7 @@ id: frh-05-aet-work-dispatcher
 size: M
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: `aet-work` Multicall Dispatcher and Installer Hygiene
@@ -64,5 +65,5 @@ Revert the merge commit and re-run `make install-binaries` — the old installer
 
 ---
 
-_Stage: tdd-complete_
+_Stage: merged_
 \_Next step: run `aet-implement`
