@@ -91,7 +91,6 @@ Task-specific reference documents loaded on demand by the agent. Keep each focus
 
 Each skill creates its own folder under `docs/` when it first produces an artifact:
 
-- `aet-discover` → `docs/product-briefs/`
 - `aet-plan` → `docs/prds/` and `docs/plans/`
 - `aet-evolve` → `docs/retros/`
 

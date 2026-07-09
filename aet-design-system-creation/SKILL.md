@@ -30,8 +30,6 @@ Design that tries to be memorable for everything is memorable for nothing. This 
 
 ## Before You Start
 
-If you have an **unvalidated idea** — no PRD, no product context — run `aet-discover` first, then `aet-plan`. This skill assumes the problem is real and the user is known.
-
 ## Shared Preamble
 
 Before executing any command in this skill, collect the following context:
@@ -353,7 +351,7 @@ Procedure:
 This skill sits between `aet-plan` and `aet-validate-scope` in the AET workflow:
 
 ```
-aet-discover → aet-plan → aet-design-system-creation → aet-validate-scope → aet-implement
+aet-plan → aet-design-system-creation → aet-validate-scope → aet-implement
 ```
 
 **aet-plan (input):**

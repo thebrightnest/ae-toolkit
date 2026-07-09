@@ -16,7 +16,6 @@ Last updated: 2026-07-06
 
 Turn ideas into actionable, validated plans.
 
-- **aet-discover** — Product-definition diagnostic with forcing questions to validate demand and narrow the wedge.
 - **aet-plan** — PRD creation, goal clarification, and atomic `plan.md` generation.
 - **aet-pipeline-plan** — End-to-end planning pipeline that runs discovery, planning, and scope validation in sequence.
 - **aet-validate-scope** — Stress-test plans against the existing domain model, terminology, and documented decisions.

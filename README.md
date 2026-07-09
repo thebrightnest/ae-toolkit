@@ -6,14 +6,13 @@ Most AI coding sessions start strong and end in drift. The agent builds what it 
 
 AE Toolkit fixes this by encoding the best agentic engineering patterns from YC, Garry Tan (GStack), Matt Pocock, and the AI Transformation Workshop into a modular skill suite. Every request is classified by **work class** (trivial / normal / critical) before any skill runs, so a typo fix doesn't endure full PRD ceremony and an auth rewrite doesn't slip through with mocked tests alone:
 
-**Triage → Discover → Plan → Design → Validate → Prime → Implement → QA → Review → Ship → Evolve**
+**Triage → Plan → Design → Validate → Prime → Implement → QA → Review → Ship → Evolve**
 
-`/aet-prime` classifies the request and routes it to the appropriate pipeline. Trivial tasks ship in minutes. Normal tasks get lightweight plans. Critical tasks (auth, data, infrastructure, upgrades) run the full sequence including `/aet-verify` — observed evidence that the system actually works before merge. `/aet-discover` validates demand before any planning begins. `/aet-plan` writes a PRD. `/aet-design-system-creation` produces DESIGN.md — your design source of truth. `/aet-validate-scope` checks the plan and design against your existing domain model and documented decisions before a single line of code is written. `/aet-implement` reads the plan — with `/aet-tdd` optionally guiding test-first development. `/aet-review` catches what `/aet-implement` missed. `/aet-qa` verifies the fix. `/aet-ship` gates the merge. `/aet-evolve` updates the rules so the bug never repeats. Nothing falls through the cracks because every step knows what came before it.
+`/aet-prime` classifies the request and routes it to the appropriate pipeline. Trivial tasks ship in minutes. Normal tasks get lightweight plans. Critical tasks (auth, data, infrastructure, upgrades) run the full sequence including `/aet-verify` — observed evidence that the system actually works before merge. `/aet-plan` writes a PRD. `/aet-design-system-creation` produces DESIGN.md — your design source of truth. `/aet-validate-scope` checks the plan and design against your existing domain model and documented decisions before a single line of code is written. `/aet-implement` reads the plan — with `/aet-tdd` optionally guiding test-first development. `/aet-review` catches what `/aet-implement` missed. `/aet-qa` verifies the fix. `/aet-ship` gates the merge. `/aet-evolve` updates the rules so the bug never repeats. Nothing falls through the cracks because every step knows what came before it.
 
 ## What you get
 
 - **Proportionate ceremony** — `aet-prime` classifies every request into trivial, normal, or critical work. A typo ships in minutes; auth changes run the full pipeline
-- **Validate before you plan** — `aet-discover` stress-tests ideas with YC-style forcing questions so you don't build something no one needs
 - **Shared understanding before code** — `clarify-goal` builds shared understanding through targeted questions until the agent actually gets it
 - **Validate against reality before you build** — `aet-validate-scope` catches terminology conflicts, code contradictions, and architectural misalignment while they're still cheap to fix
 - **Observed evidence for critical work** — `aet-verify` exercises the running system and captures proof (HTTP response, screenshot, CLI output) before merge
@@ -95,7 +94,6 @@ These are the components of the AE Toolkit system. They are installed together; 
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [aet-setup](./aet-setup)                                   | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. |
 | [aet-extract-stack](./aet-extract-stack)                   | Extract proven infrastructure, DevOps, and automation setup from an existing project into a reusable, sanitized scaffold. Inverse of aet-setup.                                           |
-| [aet-discover](./aet-discover)                             | Product-definition diagnostic with YC-style forcing questions. Validates demand, narrows the wedge, and produces a product brief — not a PRD. Hard gate: no code.                         |
 | [aet-plan](./aet-plan)                                     | PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Prevents misalignment before any code is written.                           |
 | [aet-design-system-creation](./aet-design-system-creation) | Complete design system creation: aesthetic direction, typography, color, layout, motion. Produces DESIGN.md as the project's design source of truth. Opinionated and research-driven.     |
 | [aet-validate-scope](./aet-validate-scope)                 | Validate a plan against the existing domain model, terminology, and documented decisions. Includes UI/UX coverage lens. Post-PRD alignment gate before implementation.                    |
@@ -120,7 +118,7 @@ These skills orchestrate the full toolkit workflow:
 
 | Skill                                    | Description                                                                                           |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| [aet-pipeline-plan](./aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → discover → plan → validate-scope with hard human gates.   |
+| [aet-pipeline-plan](./aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → plan → validate-scope with hard human gates.              |
 | [aet-work](./aet-work)                   | Work queue management with unified orchestrator. Runs plans in parallel with session-isolated stages. |
 
 ---
