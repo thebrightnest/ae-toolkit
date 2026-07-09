@@ -33,26 +33,8 @@ def make_backend(queue_path):
     return create_backend(queue_file=queue_path, history_file=history_file)
 
 
-def load_queue(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def get_tasks(queue):
-    """Extract the tasks list from either a wrapper dict or a plain list."""
-    if isinstance(queue, dict):
-        return queue.get("tasks", [])
-    return queue
-
-
-def save_queue(path, queue):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(queue, f, indent=2)
-        f.write("\n")
-
-
 def find_task(queue, task_id):
-    for task in get_tasks(queue):
+    for task in queue:
         if task.get("id") == task_id:
             return task
     return None
@@ -366,33 +348,38 @@ def _set_stage(task, stage, by="orch"):
 
 def cmd_set_stage(args):
     """Set the pipeline stage sub-state for a task in the queue."""
-    queue = load_queue(args.queue)
-    task = find_task(queue, args.task_id)
-    if not task:
-        print(f"Task not found: {args.task_id}", file=sys.stderr)
-        return 1
+    backend = make_backend(args.queue)
 
-    if args.dry_run:
-        current = queue_lib.current_state(task)
-        if current == "in_progress":
+    with queue_lib.queue_lock(args.queue):
+        data = backend.load()
+        queue = data["queue"]
+        task = find_task(queue, args.task_id)
+        if not task:
+            print(f"Task not found: {args.task_id}", file=sys.stderr)
+            return 1
+
+        if args.dry_run:
+            current = queue_lib.current_state(task)
+            if current == "in_progress":
+                print(
+                    f"[dry-run] Would set stage for {args.task_id}: "
+                    f"{task.get('stage')} -> {args.stage}"
+                )
+                return 0
             print(
-                f"[dry-run] Would set stage for {args.task_id}: "
-                f"{task.get('stage')} -> {args.stage}"
+                f"Cannot set stage: task state is '{current}', must be 'in_progress'.",
+                file=sys.stderr,
             )
-            return 0
-        print(
-            f"Cannot set stage: task state is '{current}', must be 'in_progress'.",
-            file=sys.stderr,
-        )
-        return 1
+            return 1
 
-    try:
-        _set_stage(task, args.stage, by="orch")
-    except RuntimeError as e:
-        print(str(e), file=sys.stderr)
-        return 1
+        try:
+            _set_stage(task, args.stage, by="orch")
+        except RuntimeError as e:
+            print(str(e), file=sys.stderr)
+            return 1
 
-    save_queue(args.queue, queue)
+        backend.save(queue)
+
     print(f"Set stage for {args.task_id}: {args.stage}")
     return 0
 
@@ -573,51 +560,54 @@ def cmd_heal(args):
     for change in changes:
         task_id = change["task_id"]
 
-        # Re-load the queue before each change; previous changes (especially
-        # record-merge sealing a task) mutate the stored queue.
-        data = backend.load()
-        queue = data["queue"]
-        task = find_task(queue, task_id)
-        if not task:
-            # Task was already sealed by a previous heal step.
-            applied += 1
-            continue
-
-        from_state = queue_lib.current_state(task)
-        to_state = change["to"]
-        if from_state == to_state:
-            applied += 1
-            continue
-
-        if to_state == "merged":
-            # Prefer resolving via record-merge so merge_commit is captured.
-            branch = task.get("branch") or change.get("branch")
-            if branch:
-                merge_ns = argparse.Namespace(
-                    command="record-merge",
-                    task_id=task_id,
-                    queue=args.queue,
-                    dry_run=False,
-                    plan=None,
-                    branch=branch,
-                    merge_commit=task.get("merge_commit"),
-                )
-                rc = cmd_record_merge(merge_ns)
-                if rc == 0:
-                    applied += 1
-                else:
-                    failed += 1
+        # Each change is a full read-modify-write cycle on the queue; hold the
+        # lock for the duration so concurrent writers cannot interleave.
+        with queue_lib.queue_lock(args.queue):
+            # Re-load the queue before each change; previous changes (especially
+            # record-merge sealing a task) mutate the stored queue.
+            data = backend.load()
+            queue = data["queue"]
+            task = find_task(queue, task_id)
+            if not task:
+                # Task was already sealed by a previous heal step.
+                applied += 1
                 continue
 
-        try:
-            _apply_transition(
-                backend, queue, task, from_state, to_state,
-                by="heal", evidence={"reason": change["reason"]}, cwd=cwd,
-            )
-            applied += 1
-        except RuntimeError as e:
-            print(f"  Could not heal {task_id}: {e}", file=sys.stderr)
-            failed += 1
+            from_state = queue_lib.current_state(task)
+            to_state = change["to"]
+            if from_state == to_state:
+                applied += 1
+                continue
+
+            if to_state == "merged":
+                # Prefer resolving via record-merge so merge_commit is captured.
+                branch = task.get("branch") or change.get("branch")
+                if branch:
+                    merge_ns = argparse.Namespace(
+                        command="record-merge",
+                        task_id=task_id,
+                        queue=args.queue,
+                        dry_run=False,
+                        plan=None,
+                        branch=branch,
+                        merge_commit=task.get("merge_commit"),
+                    )
+                    rc = cmd_record_merge(merge_ns)
+                    if rc == 0:
+                        applied += 1
+                    else:
+                        failed += 1
+                    continue
+
+            try:
+                _apply_transition(
+                    backend, queue, task, from_state, to_state,
+                    by="heal", evidence={"reason": change["reason"]}, cwd=cwd,
+                )
+                applied += 1
+            except RuntimeError as e:
+                print(f"  Could not heal {task_id}: {e}", file=sys.stderr)
+                failed += 1
 
     print(f"\nHealed {applied} task(s); {failed} failed.")
     return 1 if failed > 0 else 0
@@ -642,31 +632,33 @@ def cmd_validate(args):
 
 def cmd_transition(args):
     backend = make_backend(args.queue)
-    data = backend.load()
-    queue = data["queue"]
-    task = find_task(queue, args.task_id)
-    if not task:
-        print(f"Task not found: {args.task_id}", file=sys.stderr)
-        return 1
     cwd = os.path.dirname(args.queue) if args.queue else "."
 
-    if args.dry_run:
-        ok, msg = validate_transition(task, args.from_stage, args.to_stage, args.reason, cwd=cwd)
-        if ok:
-            print(f"[dry-run] Would transition {args.task_id} {args.from_stage} -> {args.to_stage}")
-            return 0
-        print(msg, file=sys.stderr)
-        return 1
+    with queue_lib.queue_lock(args.queue):
+        data = backend.load()
+        queue = data["queue"]
+        task = find_task(queue, args.task_id)
+        if not task:
+            print(f"Task not found: {args.task_id}", file=sys.stderr)
+            return 1
 
-    evidence = {"reason": args.reason} if args.reason else None
-    try:
-        _apply_transition(
-            backend, queue, task, args.from_stage, args.to_stage,
-            by="transition", evidence=evidence, cwd=cwd,
-        )
-    except RuntimeError as e:
-        print(str(e), file=sys.stderr)
-        return 1
+        if args.dry_run:
+            ok, msg = validate_transition(task, args.from_stage, args.to_stage, args.reason, cwd=cwd)
+            if ok:
+                print(f"[dry-run] Would transition {args.task_id} {args.from_stage} -> {args.to_stage}")
+                return 0
+            print(msg, file=sys.stderr)
+            return 1
+
+        evidence = {"reason": args.reason} if args.reason else None
+        try:
+            _apply_transition(
+                backend, queue, task, args.from_stage, args.to_stage,
+                by="transition", evidence=evidence, cwd=cwd,
+            )
+        except RuntimeError as e:
+            print(str(e), file=sys.stderr)
+            return 1
 
     print(f"Transitioned {args.task_id}: {args.from_stage} -> {args.to_stage}")
     return 0
@@ -675,20 +667,11 @@ def cmd_transition(args):
 def cmd_record_merge(args):
     """Resolve and record the merge commit for a task atomically."""
     backend = make_backend(args.queue)
-    data = backend.load()
-    queue = data["queue"]
-    task = find_task(queue, args.task_id)
-    if not task:
-        print(f"Task not found: {args.task_id}", file=sys.stderr)
-        return 1
-
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    branch = getattr(args, "branch", None) or task.get("branch")
-    cli_merge_commit = getattr(args, "merge_commit", None)
 
-    if not branch and not cli_merge_commit:
-        print(f"Task {args.task_id} has no branch. Use --branch or --merge-commit.", file=sys.stderr)
-        return 1
+    # Resolve the merge commit against git before touching the queue.
+    branch = getattr(args, "branch", None)
+    cli_merge_commit = getattr(args, "merge_commit", None)
 
     # Fetch origin first.
     rc, _, err = run_git("fetch", "origin", cwd=cwd)
@@ -697,7 +680,6 @@ def cmd_record_merge(args):
         return 1
 
     if cli_merge_commit:
-        # Validate the user-supplied merge commit is on origin/main.
         if not is_ancestor_of_main(cli_merge_commit, cwd=cwd):
             print(
                 f"Merge verification failed: {cli_merge_commit} is not an ancestor of origin/main.",
@@ -707,6 +689,21 @@ def cmd_record_merge(args):
         merge_commit = cli_merge_commit
         merge_strategy = "manual"
     else:
+        # Reload task inside the lock, but resolve the merge commit outside it
+        # so long git operations do not block other queue writers.
+        with queue_lib.queue_lock(args.queue):
+            data = backend.load()
+            queue = data["queue"]
+            task = find_task(queue, args.task_id)
+            if not task:
+                print(f"Task not found: {args.task_id}", file=sys.stderr)
+                return 1
+            branch = branch or task.get("branch")
+
+        if not branch:
+            print(f"Task {args.task_id} has no branch. Use --branch or --merge-commit.", file=sys.stderr)
+            return 1
+
         merge_commit, merge_strategy = resolve_merge_commit(branch, cwd=cwd)
 
     if not merge_commit:
@@ -716,42 +713,49 @@ def cmd_record_merge(args):
         )
         return 1
 
-    current_state = queue_lib.current_state(task)
-    # Stash any existing merge_commit so we can revert on validation failure.
-    previous_merge_commit = task.get("merge_commit")
-    previous_merge_strategy = task.get("merge_strategy")
-    previous_branch = task.get("branch")
-    task["merge_commit"] = merge_commit
-    task["merge_strategy"] = merge_strategy
-    if branch and task.get("branch") != branch:
-        task["branch"] = branch
+    with queue_lib.queue_lock(args.queue):
+        data = backend.load()
+        queue = data["queue"]
+        task = find_task(queue, args.task_id)
+        if not task:
+            print(f"Task not found: {args.task_id}", file=sys.stderr)
+            return 1
 
-    if args.dry_run:
-        ok, msg = validate_transition(task, current_state, "merged", cwd=cwd)
-        if ok:
-            print(
-                f"[dry-run] Would record merge for {args.task_id}: "
-                f"{merge_commit} ({merge_strategy})"
+        current_state = queue_lib.current_state(task)
+        previous_merge_commit = task.get("merge_commit")
+        previous_merge_strategy = task.get("merge_strategy")
+        previous_branch = task.get("branch")
+        task["merge_commit"] = merge_commit
+        task["merge_strategy"] = merge_strategy
+        if branch and task.get("branch") != branch:
+            task["branch"] = branch
+
+        if args.dry_run:
+            ok, msg = validate_transition(task, current_state, "merged", cwd=cwd)
+            if ok:
+                print(
+                    f"[dry-run] Would record merge for {args.task_id}: "
+                    f"{merge_commit} ({merge_strategy})"
+                )
+                return 0
+            task["merge_commit"] = previous_merge_commit
+            task["merge_strategy"] = previous_merge_strategy
+            task["branch"] = previous_branch
+            print(msg, file=sys.stderr)
+            return 1
+
+        evidence = {"merge_commit": merge_commit, "merge_strategy": merge_strategy}
+        try:
+            _apply_transition(
+                backend, queue, task, current_state, "merged",
+                by="record-merge", evidence=evidence, cwd=cwd,
             )
-            return 0
-        task["merge_commit"] = previous_merge_commit
-        task["merge_strategy"] = previous_merge_strategy
-        task["branch"] = previous_branch
-        print(msg, file=sys.stderr)
-        return 1
-
-    evidence = {"merge_commit": merge_commit, "merge_strategy": merge_strategy}
-    try:
-        _apply_transition(
-            backend, queue, task, current_state, "merged",
-            by="record-merge", evidence=evidence, cwd=cwd,
-        )
-    except RuntimeError as e:
-        task["merge_commit"] = previous_merge_commit
-        task["merge_strategy"] = previous_merge_strategy
-        task["branch"] = previous_branch
-        print(str(e), file=sys.stderr)
-        return 1
+        except RuntimeError as e:
+            task["merge_commit"] = previous_merge_commit
+            task["merge_strategy"] = previous_merge_strategy
+            task["branch"] = previous_branch
+            print(str(e), file=sys.stderr)
+            return 1
 
     # Terminal truth lives in the plan file. Update both frontmatter status and
     # footer stage when a plan path is provided or the task references an
@@ -802,60 +806,66 @@ def cmd_archive(args):
     """
     print("⚠️  aet-state archive is deprecated; terminal transitions seal automatically.")
 
-    queue_before = queue_lib.read_queue(args.queue)
     history_file = str(Path(args.queue).with_name("work-history.jsonl"))
-    terminal_ids = [
-        t.get("id")
-        for t in queue_before
-        if queue_lib.current_state(t) in queue_lib.TERMINAL_STATES
-    ]
 
-    sealed = []
-    for task_id in terminal_ids:
-        try:
-            queue_lib.seal_terminal(args.queue, history_file, task_id)
-            sealed.append(task_id)
-        except ValueError:
-            pass
+    with queue_lib.queue_lock(args.queue):
+        queue_before = queue_lib.read_queue(args.queue)
+        terminal_ids = [
+            t.get("id")
+            for t in queue_before
+            if queue_lib.current_state(t) in queue_lib.TERMINAL_STATES
+        ]
 
-    if sealed:
-        print(f"Sealed {len(sealed)} terminal task(s): {', '.join(sealed)}")
-    else:
-        print("No terminal tasks to seal")
+        sealed = []
+        for task_id in terminal_ids:
+            try:
+                queue_lib.seal_terminal(args.queue, history_file, task_id)
+                sealed.append(task_id)
+            except ValueError:
+                pass
 
-    active = queue_lib.read_queue(args.queue)
+        if sealed:
+            print(f"Sealed {len(sealed)} terminal task(s): {', '.join(sealed)}")
+        else:
+            print("No terminal tasks to seal")
+
+        active = queue_lib.read_queue(args.queue)
+
     print(f"Active queue: {len(active)} tasks remaining")
     return 0
 
 
 def cmd_sync_footers(args):
     backend = make_backend(args.queue)
-    data = backend.load()
-    queue = data["queue"]
     plan_path = Path(args.plan)
     if not plan_path.exists():
         print(f"Plan file not found: {args.plan}", file=sys.stderr)
         return 1
 
-    # Find the task that references this plan file
-    task = None
-    for t in queue:
-        if t.get("plan_file") == args.plan or Path(t.get("plan_file", "")).resolve() == plan_path.resolve():
-            task = t
-            break
+    with queue_lib.queue_lock(args.queue):
+        data = backend.load()
+        queue = data["queue"]
 
-    if not task:
-        print(f"No queue entry references plan: {args.plan}", file=sys.stderr)
-        return 1
+        # Find the task that references this plan file
+        task = None
+        for t in queue:
+            if t.get("plan_file") == args.plan or Path(t.get("plan_file", "")).resolve() == plan_path.resolve():
+                task = t
+                break
 
-    if args.dry_run:
-        print(f"[dry-run] Would update footer of {args.plan} to *Stage: {args.stage}*")
-        print(f"[dry-run] Would update queue task {task['id']} status to {args.stage}")
-        return 0
+        if not task:
+            print(f"No queue entry references plan: {args.plan}", file=sys.stderr)
+            return 1
 
-    update_plan_footer(args.plan, args.stage)
-    task["status"] = args.stage
-    backend.save(queue)
+        if args.dry_run:
+            print(f"[dry-run] Would update footer of {args.plan} to *Stage: {args.stage}*")
+            print(f"[dry-run] Would update queue task {task['id']} status to {args.stage}")
+            return 0
+
+        update_plan_footer(args.plan, args.stage)
+        task["status"] = args.stage
+        backend.save(queue)
+
     print(f"Synced footers: {args.plan} -> {args.stage}")
     return 0
 
