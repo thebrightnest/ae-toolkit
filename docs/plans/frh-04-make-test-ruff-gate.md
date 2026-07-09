@@ -3,6 +3,7 @@ id: frh-04-make-test-ruff-gate
 size: M
 blocked_by: []
 pipeline: standard
+status: merged
 ---
 
 # Plan: Wire pytest and ruff into `make validate`
@@ -57,5 +58,5 @@ Revert the merge commit; `validate` returns to markdown-only checks.
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-cso`_
