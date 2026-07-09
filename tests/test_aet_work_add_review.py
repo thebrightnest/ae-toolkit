@@ -305,7 +305,7 @@ class TestStatusEmptyQueue(unittest.TestCase):
             self.assertEqual(rc, 0)
             output = stdout.getvalue()
             self.assertIn("planned: 0", output)
-            self.assertIn("unblocked: 0", output)
+            self.assertIn("ready: 0", output)
             self.assertIn("blocked: 0", output)
 
 

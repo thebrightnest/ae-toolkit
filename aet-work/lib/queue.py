@@ -98,46 +98,45 @@ LEGAL_TRANSITIONS: dict[str | None, set[str]] = {
     "failed": {"in_progress", "ready", "blocked", "abandoned"},
 }
 
-# Coexistence shim: map between the new ``state`` field and the legacy
-# ``status`` field until the migration in fods-06 retires ``status``.
-_STATE_TO_STATUS: dict[str | None, str] = {
+# Legacy status -> canonical state mapping used only on read. New code and
+# new queue files must use ``state`` exclusively.
+_LEGACY_STATUS_TO_STATE: dict[str | None, str] = {
     None: "planned",
-    "ready": "unblocked",
-    "in_progress": "in-progress",
-}
-
-_STATUS_TO_STATE: dict[str | None, str] = {
-    None: "planned",
+    "planned": "planned",
     "unblocked": "ready",
     "in-progress": "in_progress",
+    "blocked": "blocked",
     "done": "awaiting_merge",
-    "merge_verified": "awaiting_merge",
+    "awaiting_merge": "awaiting_merge",
+    "merge_verified": "merged",
+    "merged": "merged",
+    "abandoned": "abandoned",
+    "failed": "failed",
 }
 
 
-def state_to_status(state: str | None) -> str:
-    """Return the legacy status that corresponds to ``state``."""
-    return _STATE_TO_STATUS.get(state, state or "planned")
+def _normalize_task(task: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a legacy task record to the canonical ``state`` vocabulary.
 
+    If the task only carries a legacy ``status`` key, derive ``state`` from
+    the private literal mapping and remove ``status``. Modern records that
+    already have ``state`` are returned with ``status`` stripped.
 
-def status_to_state(status: str | None) -> str:
-    """Return the canonical state that corresponds to legacy ``status``."""
-    return _STATUS_TO_STATE.get(status, status or "planned")
+    The returned dict is the same object, mutated in place.
+    """
+    state = task.get("state")
+    status = task.pop("status", None)
+    if state is None and status is not None:
+        task["state"] = _LEGACY_STATUS_TO_STATE.get(status, status)
+    return task
 
 
 def current_state(task: dict[str, Any]) -> str | None:
-    """Return the task's recorded state, falling back to legacy status.
+    """Return the task's recorded canonical state.
 
-    Returns ``None`` only when neither ``state`` nor ``status`` is set
-    (pre-intake).
+    Returns ``None`` only when ``state`` is not set (pre-intake).
     """
-    state = task.get("state")
-    if state is not None:
-        return state
-    status = task.get("status")
-    if status is not None:
-        return status_to_state(status)
-    return None
+    return task.get("state")
 
 
 def append_history(
@@ -171,11 +170,14 @@ def pending_blockers(task: dict[str, Any]) -> int:
 
 
 def read_queue(queue_file: str) -> list[dict[str, Any]]:
-    """Read the queue from JSON.
+    """Read the queue from JSON and normalize legacy records.
 
     Supports both flat list and dict-wrapper formats (e.g.
     {"source_prd": "...", "tasks": [...], "queue_updated_at": "..."}).
     Wrapper metadata is stored so write_queue can restore it.
+
+    Legacy ``status``-only records are upgraded in memory to the canonical
+    ``state`` vocabulary; the ``status`` key is dropped.
     """
     _queue_wrappers.pop(queue_file, None)
     if not os.path.exists(queue_file):
@@ -184,9 +186,11 @@ def read_queue(queue_file: str) -> list[dict[str, Any]]:
         data = json.load(f)
     if isinstance(data, dict):
         _queue_wrappers[queue_file] = {k: v for k, v in data.items() if k != "tasks"}
-        return data.get("tasks", [])
-    _queue_wrappers[queue_file] = None
-    return data
+        tasks = data.get("tasks", [])
+    else:
+        _queue_wrappers[queue_file] = None
+        tasks = data
+    return [_normalize_task(task) for task in tasks]
 
 
 def write_queue(
@@ -196,6 +200,9 @@ def write_queue(
 
     If ``wrapper`` is supplied, its keys are merged into the stored wrapper
     (e.g. to update ``source_prd`` or ``queue_updated_at``).
+
+    The legacy ``status`` key is never written. Any task that still carries
+    one has it stripped before serialization.
 
     The write is atomic: data is serialized to a temporary file in the same
     directory and then renamed into place. This prevents concurrent readers
@@ -208,10 +215,17 @@ def write_queue(
     merged = {**stored} if stored else {}
     if wrapper:
         merged.update(wrapper)
+
+    cleaned = []
+    for task in queue:
+        copy = dict(task)
+        copy.pop("status", None)
+        cleaned.append(copy)
+
     if merged or was_dict_wrapper:
-        data = {**merged, "tasks": queue}
+        data = {**merged, "tasks": cleaned}
     else:
-        data = queue
+        data = cleaned
 
     fd, tmp_path = tempfile.mkstemp(dir=queue_dir, prefix=".queue-tmp-")
     try:
@@ -245,36 +259,6 @@ def has_pending_tasks(queue: list[dict[str, Any]]) -> bool:
         if state is not None and state not in terminal:
             return True
     return False
-
-
-def mark_status(
-    queue: list[dict[str, Any]],
-    task_id: str,
-    status: str,
-    stage: str | None = None,
-) -> None:
-    """Update a task's status and optional failed stage."""
-    for task in queue:
-        if task.get("id") == task_id:
-            task["status"] = status
-            if stage:
-                task["failed_stage"] = stage
-
-
-def mark_completed(queue: list[dict[str, Any]], task_id: str) -> None:
-    """Mark a task as completed with timestamp."""
-    for task in queue:
-        if task.get("id") == task_id:
-            task["status"] = "done"
-            task["completed_at"] = datetime.now().isoformat()
-
-
-def mark_awaiting_merge(queue: list[dict[str, Any]], task_id: str) -> None:
-    """Mark a finished-but-unmerged task as awaiting merge."""
-    for task in queue:
-        if task.get("id") == task_id:
-            task["status"] = "awaiting_merge"
-            task["completed_at"] = datetime.now().isoformat()
 
 
 def record_task_meta(
@@ -345,104 +329,3 @@ def seal_terminal(queue_file: str, history_file: str, task_id: str) -> dict[str,
         append_history_record(history_file, task)
         write_queue(queue_file, live)
     return task
-
-
-# ---------------------------------------------------------------------------
-# Archive helpers (legacy, superseded by settled history)
-# ---------------------------------------------------------------------------
-
-TERMINAL_STATUSES = {"merged", "done", "abandoned"}
-
-
-def read_archive(archive_file: str) -> list[dict[str, Any]]:
-    """Read the archive from JSON.
-
-    Returns an empty list if the archive file does not exist. The archive
-    uses the same dict-wrapper format as the queue:
-    {"archived_at": "...", "tasks": [...]}.
-    """
-    if not os.path.exists(archive_file):
-        return []
-    with open(archive_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if isinstance(data, dict):
-        return data.get("tasks", [])
-    return data
-
-
-def write_archive(archive_file: str, tasks: list[dict[str, Any]]) -> None:
-    """Write the archive back to JSON with an archived_at timestamp.
-
-    Uses an atomic temp-file + rename so concurrent readers never see a
-    truncated archive.
-    """
-    archive_dir = os.path.dirname(archive_file)
-    os.makedirs(archive_dir, exist_ok=True)
-    data = {
-        "archived_at": datetime.now().isoformat(),
-        "tasks": tasks,
-    }
-
-    fd, tmp_path = tempfile.mkstemp(dir=archive_dir, prefix=".archive-tmp-")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-            f.write("\n")
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, archive_file)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-def archive_tasks(
-    queue_file: str, archive_file: str
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Move terminal tasks from the queue to the archive.
-
-    Terminal tasks that have active dependents (tasks in the queue whose
-    ``blocked_by`` list includes the terminal task's id) are kept in the
-    queue so that derived blocker-aware state remains resolvable.
-
-    Legacy ``merge_verified`` statuses are normalized to ``merged`` before
-    archiving.
-
-    Returns ``(new_queue, archived_tasks)``. The queue file and archive file
-    are both updated atomically (queue is read and written once; archive is
-    read and written once).
-    """
-    queue = read_queue(queue_file)
-    archive = read_archive(archive_file)
-
-    # Collect ids of all tasks still in the queue to detect active dependents.
-    queue_ids = {t.get("id") for t in queue if t.get("id")}
-    depended_on = set()
-    for task in queue:
-        for blocker in task.get("blocked_by", []):
-            if blocker in queue_ids:
-                depended_on.add(blocker)
-
-    new_queue: list[dict[str, Any]] = []
-    archived: list[dict[str, Any]] = []
-
-    for task in queue:
-        task_id = task.get("id")
-        status = task.get("status", "")
-
-        # Normalize legacy status before any further checks.
-        if status == "merge_verified":
-            task["status"] = "merged"
-            status = "merged"
-
-        if status in TERMINAL_STATUSES and task_id not in depended_on:
-            archived.append(task)
-        else:
-            new_queue.append(task)
-
-    write_queue(queue_file, new_queue)
-    write_archive(archive_file, archive + archived)
-    return new_queue, archived

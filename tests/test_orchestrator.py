@@ -473,7 +473,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                         "title": "Demo",
                         "plan_file": "docs/plans/demo-plan.md",
                         "blocked_by": [],
-                        "status": "planned",
+                        "state": "planned",
                     }
                 ],
             )
@@ -489,8 +489,8 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
                 queue = json.load(f)
             task = queue["tasks"][0]
-            self.assertEqual(task["status"], "awaiting_merge")
             self.assertEqual(task["state"], "awaiting_merge")
+            self.assertNotIn("status", task)
             self.assertEqual(task["branch"], "demo")
             self.assertEqual(task["worktree"], ".worktrees/demo")
 
@@ -521,7 +521,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                         "title": "Demo",
                         "plan_file": "docs/plans/demo-plan.md",
                         "blocked_by": [],
-                        "status": "planned",
+                        "state": "planned",
                     }
                 ],
             )
@@ -537,7 +537,8 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
                 queue = json.load(f)
             task = queue["tasks"][0]
-            self.assertEqual(task["status"], "planned")
+            self.assertEqual(task["state"], "planned")
+            self.assertNotIn("status", task)
             self.assertEqual(task.get("branch"), None)
             self.assertEqual(task.get("worktree"), None)
 
@@ -568,7 +569,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                         "title": "Demo",
                         "plan_file": "docs/plans/demo-plan.md",
                         "blocked_by": [],
-                        "status": "planned",
+                        "state": "planned",
                     }
                 ],
             )
@@ -586,7 +587,8 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
                 queue = json.load(f)
             task = queue["tasks"][0]
-            self.assertEqual(task["status"], "planned")
+            self.assertEqual(task["state"], "planned")
+            self.assertNotIn("status", task)
             self.assertEqual(task.get("branch"), None)
             self.assertEqual(task.get("worktree"), None)
 
@@ -617,7 +619,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                         "title": "Demo",
                         "plan_file": "docs/plans/demo-plan.md",
                         "blocked_by": [],
-                        "status": "planned",
+                        "state": "planned",
                     }
                 ],
             )

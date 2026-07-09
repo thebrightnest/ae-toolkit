@@ -129,7 +129,7 @@ class TestStatusReadPathNoGit(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         output = stdout.getvalue()
-        self.assertIn("unblocked: 1", output)
+        self.assertIn("ready: 1", output)
         self.assertIn("blocked: 1", output)
         self.assertIn("t1", output)
         self.assertIn("t2", output)
