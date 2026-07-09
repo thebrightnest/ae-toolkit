@@ -302,10 +302,14 @@ class TestRecordMerge(unittest.TestCase):
         with open(self.queue_file_path, "w", encoding="utf-8") as f:
             json.dump(self.queue, f)
 
+        plan_abs = str(plan_path.resolve())
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+            ("git", "add", plan_abs): (0, "", ""),
+            ("git", "diff", "--cached", "--quiet"): (1, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan as merged after closure"): (0, "", ""),
         }
 
         args = aet_state.argparse.Namespace(
@@ -314,6 +318,8 @@ class TestRecordMerge(unittest.TestCase):
             queue=str(self.queue_file_path),
             dry_run=False,
             plan=str(plan_path),
+            branch=None,
+            merge_commit=None,
         )
 
         with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
