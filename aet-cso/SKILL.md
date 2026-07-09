@@ -75,6 +75,30 @@ Scan the current branch diff for security issues.
    - Include: severity classification (Critical / High / Medium / Low / Info), description of each finding, recommended fix, pass/fail gate recommendation
    - Do NOT write `.security-audit.md` or `.security-*.md` to the repository root
 
+**Evidence verdict (writer contract):**
+
+Before updating the plan.md footer, write a JSON verdict record so the orchestrator can gate the stage machine-checkably. The footer remains a human breadcrumb only.
+
+1. Build a verdict record matching the `cso` schema:
+
+   ```json
+   {
+     "task_id": "{task-id}",
+     "stage": "secure",
+     "skill": "aet-cso",
+     "verdict": "pass" | "fail",
+     "summary": "One-line outcome",
+     "generated_at": "{ISO-8601 timestamp}",
+     "findings": []
+   }
+   ```
+
+2. Determine the output path:
+   - If `$AET_EVIDENCE_PATH` is set, write to that file.
+   - Otherwise, write to `~/.aet/reports/{project-slug}/{task-id}/cso.json`.
+3. Use `aet-work/lib/evidence.py` (`write_verdict`) when available; otherwise write equivalent JSON to the resolved path.
+4. Only update the plan.md footer to `*Stage: secure*` after the verdict file is written.
+
 **Pass/fail gate:**
 
 - **Pass** — no Critical or High findings; Medium findings have documented mitigations
