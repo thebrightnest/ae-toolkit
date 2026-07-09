@@ -2,15 +2,67 @@
 
 from __future__ import annotations
 
+import fcntl
+import hashlib
 import json
 import os
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterator
 
 # Tracks whether a queue file was read as a dict wrapper and, if so, its
 # non-task metadata so write_queue can preserve the envelope.
 _queue_wrappers: dict[str, dict[str, Any] | None] = {}
+
+# Reentrant file-lock state keyed by absolute queue path. These are kept at
+# module scope so nested ``queue_lock`` contexts in the same process reuse the
+# same open file description and therefore the same fcntl lock.
+_lock_files: dict[str, Any] = {}
+_lock_counters: dict[str, int] = {}
+
+
+@contextmanager
+def queue_lock(queue_file: str) -> Iterator[None]:
+    """Acquire an exclusive advisory lock on a sidecar ``<queue_file>.lock``.
+
+    The lock is blocking and reentrant within the same process. It protects
+    the read-modify-write cycles in ``aet-state`` so concurrent children (for
+    example the aet-work orchestrator's batch mode) cannot interleave queue
+    updates and lose writes.
+    """
+    queue_abs = os.path.abspath(queue_file)
+    lock_path = f"{queue_abs}.lock"
+    lock_dir = os.path.dirname(lock_path)
+    if lock_dir:
+        try:
+            os.makedirs(lock_dir, exist_ok=True)
+        except OSError:
+            # The queue directory may not be writable or even exist (e.g.
+            # tests using fake paths). Fall back to a deterministic temp
+            # lock file so locking still works within the same process tree.
+            digest = hashlib.sha256(queue_abs.encode()).hexdigest()[:16]
+            lock_path = os.path.join(tempfile.gettempdir(), f"aet-queue-lock-{digest}.lock")
+
+    key = queue_abs
+
+    if key not in _lock_files:
+        _lock_files[key] = open(lock_path, "w", encoding="utf-8")
+        _lock_counters[key] = 0
+
+    if _lock_counters[key] == 0:
+        fcntl.flock(_lock_files[key].fileno(), fcntl.LOCK_EX)
+
+    _lock_counters[key] += 1
+    try:
+        yield
+    finally:
+        _lock_counters[key] -= 1
+        if _lock_counters[key] == 0:
+            fcntl.flock(_lock_files[key].fileno(), fcntl.LOCK_UN)
+            _lock_files[key].close()
+            del _lock_files[key]
+            del _lock_counters[key]
 
 # ---------------------------------------------------------------------------
 # Forward-only deterministic state model (ADR-011)
@@ -279,15 +331,19 @@ def seal_terminal(queue_file: str, history_file: str, task_id: str) -> dict[str,
 
     This helper does **not** promote dependents; the caller must already have
     updated the forward frontier before sealing.
-    """
-    queue = read_queue(queue_file)
-    task = next((t for t in queue if t.get("id") == task_id), None)
-    if task is None:
-        raise ValueError(f"Task {task_id} not found in live queue {queue_file}")
 
-    live = [t for t in queue if t.get("id") != task_id]
-    append_history_record(history_file, task)
-    write_queue(queue_file, live)
+    The seal is performed under ``queue_lock`` so concurrent callers cannot
+    race on the queue file.
+    """
+    with queue_lock(queue_file):
+        queue = read_queue(queue_file)
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found in live queue {queue_file}")
+
+        live = [t for t in queue if t.get("id") != task_id]
+        append_history_record(history_file, task)
+        write_queue(queue_file, live)
     return task
 
 
