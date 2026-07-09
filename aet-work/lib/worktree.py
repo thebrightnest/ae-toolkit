@@ -54,6 +54,17 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
             )
             local_sha = local_oid.stdout.strip() if local_oid.returncode == 0 else ""
             if local_sha and local_sha != base_sha:
+                # If the worktree has uncommitted changes, leave it as-is for the
+                # agent to handle. Rebase refuses to run with a dirty worktree,
+                # and removing it would discard in-progress work.
+                dirty = _run_git(
+                    ["-C", worktree_dir, "status", "--porcelain"],
+                    capture_output=True,
+                    text=True,
+                )
+                if dirty.stdout.strip():
+                    return worktree_dir
+
                 rebase = _run_git(
                     ["-C", worktree_dir, "rebase", base],
                     capture_output=True,
@@ -65,6 +76,9 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
                     remove_worktree(repo_root, task_id)
                 else:
                     return worktree_dir
+            else:
+                # Worktree is already on the current base; nothing to refresh.
+                return worktree_dir
         else:
             return worktree_dir
 
