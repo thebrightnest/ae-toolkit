@@ -6,9 +6,11 @@ import argparse
 import importlib.util
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -17,7 +19,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
 import telemetry
-from cli_adapter import CLIAdapter
+from cli_adapter import CLIAdapter, resolve_cli_adapter
 from pipeline import Stage
 
 # Load the orchestrator script (no .py extension) as a module.
@@ -1264,6 +1266,153 @@ class TestBatchStageEnv(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             self.assertEqual(captured["stage"], "plan-approved")
+
+class TestProcessGroupKill(unittest.TestCase):
+    """Integration tests for process-group killing on timeout and shutdown."""
+
+    def _write_fake_cli(self, repo_root: str, marker: str) -> str:
+        """Create a fake agent CLI that spawns a long-lived grandchild."""
+        bin_dir = Path(repo_root) / "bin"
+        bin_dir.mkdir()
+        fake_kimi = bin_dir / "kimi"
+        fake_kimi.write_text(
+            "#!/usr/bin/env bash\n"
+            "# ignore prompt flag and prompt\n"
+            f"python3 -c \"import time; MARKER='{marker}'; time.sleep(300)\" &\n"
+            f"exec python3 -c \"import time; MARKER='{marker}'; time.sleep(300)\"\n",
+            encoding="utf-8",
+        )
+        fake_kimi.chmod(0o755)
+        return str(fake_kimi)
+
+    def _wait_for_marker(self, marker: str, timeout: float = 15) -> None:
+        """Poll until a process with the marker appears."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            result = subprocess.run(
+                ["pgrep", "-f", marker], capture_output=True, text=True
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return
+            time.sleep(0.2)
+        self.fail(f"Marker process {marker} did not start")
+
+    def _wait_no_marker(self, marker: str, timeout: float = 15) -> None:
+        """Poll until no process with the marker remains."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            result = subprocess.run(
+                ["pgrep", "-f", marker], capture_output=True, text=True
+            )
+            if result.returncode != 0 or not result.stdout.strip():
+                return
+            time.sleep(0.2)
+        self.fail(f"Marker process {marker} still alive")
+
+    def _setup_plan_and_queue(self, repo_root: str, task_id: str) -> str:
+        """Commit a plan file, update origin/main, and return the queue file path."""
+        plan_file = os.path.join(repo_root, "docs", "plans", f"{task_id}.md")
+        Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+        Path(plan_file).write_text(
+            f"---\nid: {task_id}\n---\n\n# Demo\n\n_Stage: plan-approved_\n",
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+        return _write_queue(
+            repo_root,
+            [
+                {
+                    "id": task_id,
+                    "title": task_id,
+                    "plan_file": f"docs/plans/{task_id}.md",
+                    "blocked_by": [],
+                    "state": "ready",
+                }
+            ],
+        )
+
+    def test_timeout_kills_grandchild_process_group(self):
+        """A timed-out batch child must not leave its grandchild alive."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            task_id = "frh-03-timeout"
+            marker = f"pg-timeout-{os.getpid()}"
+            fake_kimi = self._write_fake_cli(repo_root, marker)
+            queue_file = self._setup_plan_and_queue(repo_root, task_id)
+
+            adapter = resolve_cli_adapter(fake_kimi)
+            args = argparse.Namespace(
+                queue_file=queue_file,
+                plan_file=None,
+                repo_root=repo_root,
+                cli_bin=fake_kimi,
+                isolation="minimal",
+                max_jobs=1,
+                task_timeout=2,
+                heartbeat_interval=999,
+            )
+            # The task times out, so the orchestrator reports failure.
+            exit_code = orchestrator.run_batch(args, adapter)
+            self.assertEqual(exit_code, 1)
+
+            self._wait_no_marker(marker)
+            self.assertFalse(os.path.isdir(os.path.join(repo_root, ".worktrees", task_id)))
+
+    def test_cleanup_kills_process_groups_on_shutdown(self):
+        """A graceful orchestrator shutdown must kill running process groups."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            task_id = "frh-03-shutdown"
+            marker = f"pg-shutdown-{os.getpid()}"
+            fake_kimi = self._write_fake_cli(repo_root, marker)
+            queue_file = self._setup_plan_and_queue(repo_root, task_id)
+
+            env = os.environ.copy()
+            env["PATH"] = str(Path(fake_kimi).parent) + os.pathsep + env["PATH"]
+            cmd = [
+                sys.executable,
+                str(_ORCHESTRATOR_BIN),
+                "--queue-file",
+                queue_file,
+                "--repo-root",
+                repo_root,
+                "--cli-bin",
+                fake_kimi,
+                "--isolation",
+                "minimal",
+                "--max-jobs",
+                "1",
+                "--task-timeout",
+                "600",
+                "--heartbeat-interval",
+                "999",
+            ]
+            proc = subprocess.Popen(cmd, env=env)
+            try:
+                self._wait_for_marker(marker)
+                proc.send_signal(signal.SIGTERM)
+                try:
+                    proc.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+                    self.fail("Orchestrator did not shut down after SIGTERM")
+
+                self._wait_no_marker(marker)
+                self.assertFalse(
+                    os.path.isdir(os.path.join(repo_root, ".worktrees", task_id))
+                )
+            except Exception:
+                proc.kill()
+                raise
 
 
 if __name__ == "__main__":
