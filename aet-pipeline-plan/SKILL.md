@@ -92,6 +92,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
 1. Follow the `aet-plan` → `clarify-goal` + `create-prd` + `create-stories` + `plan` procedures
    - `create-stories` and `plan` enforce task size guardrails automatically (dual-limit model, auto-split, `⚠️ ATOMIC OVERSIZED` marking)
+   - R-trace discipline (numbered R-ids carried brief → PRD → plan task, with a coverage lint) is enforced by `aet-plan` here and demonstrated at the P0 exit gate, ahead of Phase 4's mechanized `aet plan validate`
 2. Produce: `docs/prds/{feature}-prd.md`, `docs/plans/*.md` files, `.agents/work-queue.json`
 3. **Queue preservation guardrail:** When `aet-plan` produces `.agents/work-queue.json`, it must merge new tickets into the existing queue rather than replacing it. Existing tasks must survive the planning session unchanged.
 4. **HARD GATE:** Present PRD to user for review. Ask:

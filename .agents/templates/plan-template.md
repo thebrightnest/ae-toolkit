@@ -4,7 +4,11 @@ size: [S/M/L]
 blocked_by:
   - [blocker-plan-id]
 pipeline: standard
+status: draft
 ---
+
+<!-- `status` is the plan lifecycle value (CONTEXT.md): one of `draft`,
+`approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, `abandoned`. -->
 
 # Plan: [Feature Name]
 
@@ -19,9 +23,9 @@ Link to the PRD and any relevant prior decisions.
 
 ## Task List
 
-1. Task description — estimated size (S/M/L)
-2. Task description — estimated size (S/M/L)
-3. Task description — estimated size (S/M/L)
+1. Task description — S (traces: R-1)
+2. Task description — M (traces: R-2)
+3. Task description — S (traces: R-1, R-3)
 4. Merge branch to main and verify integration — S
 
 **Size definitions:**
@@ -48,6 +52,15 @@ Before finalizing this plan, confirm it should not be merged with related plans:
 
 If all boxes are unchecked, consider batching this work into a single plan.
 
+## Rejected Alternatives
+
+Record each alternative that was seriously considered for this plan and the
+reason it was not chosen, so settled decisions do not silently re-open.
+
+- **[Alternative A]** — rejected: [reason — e.g., duplicates a later phase;
+  higher cost for no added signal; contradicts ADR-NNN.]
+- **[Alternative B]** — rejected: [reason.]
+
 ## Files to Modify
 
 - `path/to/file`
@@ -57,6 +70,7 @@ If all boxes are unchecked, consider batching this work into a single plan.
 
 - [ ] Lint passes
 - [ ] Tests pass
+- [ ] R-trace coverage: every in-scope R-id is covered by ≥ 1 task or explicitly deferred with a reason; no task cites an unknown R-id
 - [ ] For each new source file introduced by this plan, name the test that will cover it
 - [ ] Distinguish test types: unit tests (single layer), integration tests (cross-layer), API boundary tests (frontend ↔ backend contract)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
