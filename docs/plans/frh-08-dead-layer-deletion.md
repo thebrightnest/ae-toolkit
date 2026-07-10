@@ -64,5 +64,5 @@ Revert the merge commit; all deletions restore cleanly from git history.
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
