@@ -15,7 +15,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import current_state  # noqa: E402
+from queue import QueueIntegrityError, current_state, read_queue  # noqa: E402
 
 from backends.factory import create_backend  # noqa: E402
 
@@ -50,11 +50,20 @@ def main() -> int:
     backend = create_backend(
         queue_file=args.queue_file, history_file=args.history_file
     )
-    data = backend.load()
-    queue = data["queue"]
+    try:
+        data = backend.load()
+        queue = data["queue"]
+        integrity_failed = False
+    except QueueIntegrityError as exc:
+        print(
+            f"⚠️  {exc}; read-only status continues with unverified data.",
+            file=sys.stderr,
+        )
+        queue = read_queue(args.queue_file, verify=False)
+        integrity_failed = True
     plans_dir = Path(args.plans_dir)
 
-    orphaned = backend.plan_drift(plans_dir)
+    orphaned = [] if integrity_failed else backend.plan_drift(plans_dir)
 
     if orphaned:
         print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")

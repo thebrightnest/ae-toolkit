@@ -24,6 +24,7 @@ sys.path.insert(0, str(_LIB_DIR))
 from queue import (  # noqa: E402
     HISTORY_TERMINAL_STATES,
     append_history_record,
+    lease_guard,
 )
 
 from backends.factory import create_backend  # noqa: E402
@@ -60,6 +61,11 @@ def parse_args() -> argparse.Namespace:
         "--config",
         default=".agents/aet-work.json",
         help="Path to aet-work backend configuration",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
     )
     return parser.parse_args()
 
@@ -307,6 +313,10 @@ def main() -> int:
     wrapper: dict = {"queue_updated_at": datetime.now().isoformat()}
     if source_prd is not None:
         wrapper["source_prd"] = str(source_prd)
+
+    if not lease_guard(queue_file, force=args.force):
+        backend.close()
+        return 1
 
     backend.save(final_queue, wrapper=wrapper)
 
