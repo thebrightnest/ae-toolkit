@@ -5,6 +5,7 @@ blocked_by:
   - frh-09-stage-telemetry-emission
   - frh-10-gate-evidence-contract
 pipeline: standard
+status: merged
 ---
 
 # Plan: Orchestrator Gates Consume Evidence; Derive Test-Run Telemetry
@@ -65,5 +66,5 @@ Revert the merge commit; gates fall back to footer-based behavior. Evidence file
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
