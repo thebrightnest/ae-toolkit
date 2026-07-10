@@ -4,6 +4,7 @@ size: S
 blocked_by:
   - frh-02-orchestrator-locked-writes
 pipeline: standard
+status: merged
 ---
 
 # Plan: Process-Group Spawning and killpg on Timeout
@@ -51,5 +52,5 @@ Revert the merge commit. Behavior falls back to child-only kill; no data changes
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
