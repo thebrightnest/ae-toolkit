@@ -2,7 +2,7 @@
 # Configure the aet-work task backend and ensure GitHub labels exist.
 #
 # Usage:
-#   configure-task-backend [--backend json|github] [--repo owner/repo]
+#   configure-task-backend [--backend json|github|git-refs] [--repo owner/repo]
 #                          [--non-interactive] [--help]
 #
 # In interactive mode (default), the script prompts for the backend and repo.
@@ -35,7 +35,9 @@ Usage: configure-task-backend [options]
 Configure the task backend for aet-work.
 
 Options:
-  --backend json|github   Choose the task backend.
+  --backend json|github|git-refs
+                          Choose the task backend. git-refs is a prototype,
+                          opt-in backend that stores live tasks as git refs.
   --repo owner/repo       GitHub repository (required for github backend;
                           detected from git remote origin if omitted).
   --non-interactive       Fail if a required value is missing instead of prompting.
@@ -44,6 +46,7 @@ Options:
 Examples:
   configure-task-backend --backend json --non-interactive
   configure-task-backend --backend github --repo acme/widget --non-interactive
+  configure-task-backend --backend git-refs --non-interactive
 EOF
 }
 
@@ -84,12 +87,12 @@ if [ -z "$BACKEND" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then
     error "--backend is required in non-interactive mode"
   fi
-  read -rp "Choose task backend (json or github): " BACKEND
+  read -rp "Choose task backend (json, github, or git-refs): " BACKEND
 fi
 
 case "$BACKEND" in
-  json|github) ;;
-  *) error "Invalid backend '$BACKEND'. Choose 'json' or 'github'." ;;
+  json|github|git-refs) ;;
+  *) error "Invalid backend '$BACKEND'. Choose 'json', 'github', or 'git-refs'." ;;
 esac
 
 mkdir -p "$CONFIG_DIR"
@@ -135,6 +138,10 @@ PY
 LABEL_PREFIX="aet"
 LABELS_CREATED="false"
 REASON=""
+
+if [ "$BACKEND" = "git-refs" ]; then
+  log "NOTE: git-refs is a prototype, opt-in backend. Live tasks are stored as local git refs (refs/aet/tasks/*); it is not the default and is not recommended for production queues yet."
+fi
 
 if [ "$BACKEND" = "github" ]; then
   if [ -z "$REPO" ]; then

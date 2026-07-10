@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from backends.base import TaskBackend
+from backends.git_refs_backend import GitRefsBackend
 from backends.github_backend import GitHubBackend
 from backends.json_backend import JsonBackend
 
@@ -21,8 +22,9 @@ def create_backend(
     """Instantiate a task backend based on ``.agents/aet-work.json``.
 
     The configuration key ``task_backend`` selects the implementation:
-    ``json`` (default), ``github``, or ``both``. Unsupported or missing values
-    fall back to the JSON backend for local-only operation.
+    ``json`` (default), ``git-refs`` (prototype, opt-in), ``github``, or
+    ``both``. Unsupported or missing values fall back to the JSON backend for
+    local-only operation.
     """
     config_path = config_path or DEFAULT_CONFIG_PATH
     config = _read_config(config_path)
@@ -30,6 +32,8 @@ def create_backend(
 
     if backend_type == "json":
         return JsonBackend(queue_file=queue_file, history_file=history_file)
+    if backend_type == "git-refs":
+        return GitRefsBackend(queue_file=queue_file, history_file=history_file)
     if backend_type == "github":
         github_config = config.get("github", {})
         repo = github_config.get("repo", "")

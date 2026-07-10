@@ -118,6 +118,19 @@ class GitRefsBackend(TaskBackend):
             return str(path)
         return str(Path(self.repo_root) / path)
 
+    def _resolve_history(self, history_file: str) -> str:
+        """Resolve a caller-supplied history path against the repo root.
+
+        ``aet-state`` hands ``seal`` the backend's own ``history_file``, which
+        may be relative to the repo root (the default) or absolute (for example
+        a second worktree). Git plumbing always runs from ``repo_root``, so a
+        relative path must be anchored there rather than to the process cwd.
+        """
+        path = Path(history_file)
+        if path.is_absolute():
+            return str(path)
+        return str(Path(self.repo_root) / path)
+
     # -- TaskBackend interface ------------------------------------------------
 
     def load(self) -> dict[str, Any]:
@@ -204,6 +217,39 @@ class GitRefsBackend(TaskBackend):
     def sync_task(self, task: dict[str, Any], is_new: bool) -> None:
         """No-op: the git-refs backend has no external task mirror."""
         return
+
+    def seal(self, task_id: str, history_file: str) -> dict[str, Any]:
+        """Drop the task's ref and append its record to the history JSONL.
+
+        Mirrors ``queue.seal_terminal`` for the refs store: the task leaves the
+        live queue (its ``refs/aet/tasks/<id>`` ref is deleted) and the full
+        record — including transition history — is appended to the shared
+        append-only history JSONL that both backends read. Dependents are not
+        promoted here; ``aet-state`` advances the forward frontier before
+        sealing.
+
+        Like the default file-based ``seal``, this does not re-acquire the queue
+        lock: ``aet-state`` already holds it, and a nested lock from the
+        re-imported ``queue`` module would self-deadlock (see ``base.py``).
+        Ref mutation is still atomic under git's own ref locks.
+        """
+        from queue import append_history_record
+
+        data = self.load()
+        task = next(
+            (t for t in data["queue"] if t.get("id") == task_id), None
+        )
+        if task is None:
+            raise ValueError(
+                f"Task {task_id} not found in live queue {self.queue_file}"
+            )
+
+        ref = TASKS_REF_PREFIX + task_id
+        self._git("update-ref", "-d", ref).check_returncode()
+        self._loaded_shas.pop(task_id, None)
+
+        append_history_record(self._resolve_history(history_file), task)
+        return task
 
     # -- envelope -------------------------------------------------------------
 
