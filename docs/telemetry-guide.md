@@ -28,9 +28,12 @@ Each task JSONL file contains:
 
 `last-run.json` records the run outcome, task counts, and wall-clock time.
 
-The orchestrator does not emit per-loop or per-test-run records; those are
-derived by other skills (for example, `aet-qa` writes a QA verdict and
-`aet-retro` emits learning candidates).
+When a checking stage passes, the orchestrator gates on the structured verdict
+and, for a passing `aet-qa` verdict, derives an individual `test_run` record
+from its fields (`test_command`, `tests_total`, `tests_passed`,
+`tests_failed`). Beyond that derived record, the orchestrator does not emit
+per-loop or per-test-run records; those are produced by other skills (for
+example, `aet-retro` emits learning candidates).
 
 `.agents/work-history.jsonl` remains project-local for now. A copy is archived
 with each run so terminal task history is preserved alongside execution logs.

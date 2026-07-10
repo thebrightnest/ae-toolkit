@@ -143,5 +143,53 @@ class TestWriteThenReadVerdict(unittest.TestCase):
             self.assertEqual(loaded["verdict"], "pass")
 
 
+class TestCheckingVerdictShapes(unittest.TestCase):
+    """Round-trip shapes consumed by the orchestrator's evidence gates."""
+
+    def test_review_verdict_with_findings_roundtrips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            record = {
+                "task_id": "frh-11",
+                "stage": "reviewed",
+                "skill": "aet-review",
+                "verdict": "fail",
+                "summary": "Findings present",
+                "generated_at": "2026-07-09T20:00:00Z",
+                "findings": [{"file": "x.py", "note": "issue"}],
+            }
+            path = evidence.write_verdict(
+                task_id="frh-11",
+                kind="review",
+                record=record,
+                project_slug="owner/repo",
+                reports_root=base,
+            )
+            loaded = evidence.read_verdict(path)
+            self.assertEqual(len(loaded["findings"]), 1)
+
+    def test_sync_docs_verdict_with_divergences_roundtrips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            record = {
+                "task_id": "frh-11",
+                "stage": "synced",
+                "skill": "aet-sync-docs",
+                "verdict": "fail",
+                "summary": "Divergences present",
+                "generated_at": "2026-07-09T20:00:00Z",
+                "divergences": [{"plan": "t1", "note": "drift"}],
+            }
+            path = evidence.write_verdict(
+                task_id="frh-11",
+                kind="sync-docs",
+                record=record,
+                project_slug="owner/repo",
+                reports_root=base,
+            )
+            loaded = evidence.read_verdict(path)
+            self.assertEqual(len(loaded["divergences"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
