@@ -1,9 +1,11 @@
-# `aet-retro`
+# aet-retro
 
-Run after an `aet-work` batch, a completed plan, or any session where AET tooling misbehaved. Generates a retro that splits findings into:
+One-shot retro generation from telemetry. Run after an `aet-work` batch, a completed plan, or any session where AET tooling misbehaved. Generates a retro that splits findings into:
 
 - **Project-level fixes** — changes to the codebase being built.
 - **AET-level fixes** — changes to the toolkit itself (skills, orchestrator, commands, templates).
+
+The script lives at `aet-evolve/bin/aet-retro` and is installed onto `PATH` by `install-aet-binaries` (run via `make install-skills` when developing in this repo).
 
 ## When to Run
 
@@ -27,7 +29,9 @@ Run after an `aet-work` batch, a completed plan, or any session where AET toolin
 
 ## Options
 
-- `--archive-dir PATH` — use a custom telemetry archive root.
+- `--archive-dir PATH` — use a custom telemetry archive root (default: `~/.aet/telemetry`).
+- `--project-slug SLUG` — override the project slug (default: derived from git origin or cwd).
+- `--lookback-days N` — days of per-task telemetry to read for the current project (default: 7).
 - `--output PATH` — write the retro to a specific file.
 - `--no-mine` — skip `mine-learnings` and only use the current project's recent telemetry.
 
@@ -39,3 +43,5 @@ A retro markdown file with:
 - Project-level findings from the current project's recent per-task telemetry.
 - AET-level findings from the current project's recent per-task telemetry.
 - Action items for both layers.
+
+It also appends one `learning_candidate` telemetry record per finding, so the next `mine-learnings --propose` run can surface recurring patterns.

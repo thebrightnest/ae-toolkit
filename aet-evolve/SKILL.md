@@ -109,7 +109,7 @@ One-shot retro generation from telemetry. Run this after an `aet-work` batch or 
 4. Route project-level findings into the current project's queue.
 5. Route AET-level findings through `system-evolve` and append a learning.
 
-See `.agents/commands/aet-retro.md` for full usage and flags.
+See `references/aet-retro.md` for full usage and flags.
 
 ### `mine-learnings`
 
