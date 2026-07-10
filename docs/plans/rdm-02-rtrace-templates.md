@@ -63,5 +63,5 @@ Revert the merge commit. Templates are additive/structural; no downstream code p
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
