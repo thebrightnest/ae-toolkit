@@ -76,5 +76,5 @@ Revert the merge commit; delete any leftover `.agents/work-queue.lease`. Stamped
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-cso`_
+_Stage: synced_
+_Next step: run `aet-ship`_
