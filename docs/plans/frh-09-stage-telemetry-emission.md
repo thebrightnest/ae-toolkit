@@ -67,5 +67,5 @@ Revert the merge commit; telemetry returns to run-summary-only. Archive files ar
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
