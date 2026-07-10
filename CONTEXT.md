@@ -90,8 +90,17 @@ Explicit human-run reconciliation of stored state against git; replaces implicit
 A schema-validated JSON verdict written by a checking skill (qa, review, cso, sync-docs) to `~/.aet/reports/{project-slug}/{task-id}/`, consumed fail-closed by the orchestrator's stage gates (ADR-019). The plan footer `*Stage:*` remains a human breadcrumb; gating decisions read evidence, never the footer.
 _Avoid_: treating a footer stage string as proof a stage passed.
 
+**Workflow**:
+A named, versioned data file defining one linear stage sequence with its skill and evidence bindings (packaged default `aet-work/workflows/<name>.json`, overridable per repo in `.agents/workflows/`). Selected by the plan frontmatter key `workflow:` (default `software`). Stage vocabulary comes from the workflow; lifecycle **State** stays frozen in code.
+_Avoid_: calling lifecycle states "workflow state"; using "work class" for a workflow name (work class = the Trivial/Normal/Critical intake tiers in `docs/PIPELINE.md`).
+
+**Stage Routing Key**:
+Plan frontmatter (`security_review`, `docs_sync`: `required`/`skipped`, with a reason required when skipped) deciding at plan time whether a gated stage runs. Policy input authored at triage — part of the plan's machine contract, not runtime judgment and not state.
+_Avoid_: runtime heuristics deciding whether a gate runs.
+
 ## Flagged ambiguities
 
 - “status” was used to mean both stored state and derived state. Resolved: `state` is the canonical stored value for active tasks; plan frontmatter `status` is the source of truth for lifecycle closure.
 - The legacy queue-record `status` key (coexistence shim from fods-02..05) is retired by frh-06/frh-07 (2026-07-09): task records carry `state` only, legacy records are normalized on read, and plan-frontmatter `status` is unaffected.
 - “done” was used interchangeably with `merged`. Resolved: `merged` is the canonical terminal state; `done` is legacy.
+- “workflow” was used loosely for the lifecycle state machine (e.g. “canonical workflow state”). Resolved (2026-07-11, roadmap Phase 1): **Workflow** is the named stage-sequence data file; lifecycle states are just **State**. Where older text says “workflow state,” read “lifecycle state.”
