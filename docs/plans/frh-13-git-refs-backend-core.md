@@ -64,5 +64,5 @@ Revert the merge commit. Until frh-14 wires the factory, nothing instantiates th
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
