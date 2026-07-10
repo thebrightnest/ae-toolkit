@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import json
 import os
+import sys
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -20,6 +21,36 @@ _queue_wrappers: dict[str, dict[str, Any] | None] = {}
 # same open file description and therefore the same fcntl lock.
 _lock_files: dict[str, Any] = {}
 _lock_counters: dict[str, int] = {}
+
+
+class QueueIntegrityError(Exception):
+    """Raised when a stamped queue's content hash no longer matches its tasks.
+
+    This indicates the queue file was modified outside ``aet-state`` (for
+    example hand-edited JSON). Mutating callers must fail closed; read-only
+    callers may warn and continue.
+    """
+
+
+class LeaseHeldError(Exception):
+    """Raised when a live run lease is held by a different run."""
+
+    def __init__(self, run_id: str | None) -> None:
+        self.run_id = run_id
+        super().__init__(
+            f"queue is owned by run {run_id!r}; re-run after the batch "
+            f"finishes or pass --force to override"
+        )
+
+
+def _canonical_tasks_dump(tasks: list[dict[str, Any]]) -> str:
+    """Return a stable serialization of the tasks list for hashing."""
+    return json.dumps(tasks, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _content_hash(tasks: list[dict[str, Any]]) -> str:
+    """sha256 over the canonical tasks dump."""
+    return hashlib.sha256(_canonical_tasks_dump(tasks).encode("utf-8")).hexdigest()
 
 
 @contextmanager
@@ -63,6 +94,162 @@ def queue_lock(queue_file: str) -> Iterator[None]:
             _lock_files[key].close()
             del _lock_files[key]
             del _lock_counters[key]
+
+
+# ---------------------------------------------------------------------------
+# Run lease (mutation guard)
+# ---------------------------------------------------------------------------
+
+LEASE_FILENAME = "work-queue.lease"
+
+
+def lease_path(queue_file: str) -> str:
+    """Return the lease sidecar path for a given queue file."""
+    queue_abs = os.path.abspath(queue_file)
+    return os.path.join(os.path.dirname(queue_abs), LEASE_FILENAME)
+
+
+def _pid_alive(pid: Any) -> bool:
+    """Return True if ``pid`` refers to a live process."""
+    if not isinstance(pid, int):
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def read_lease(queue_file: str) -> dict[str, Any] | None:
+    """Read the lease JSON, or ``None`` if it is missing or malformed."""
+    path = lease_path(queue_file)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def acquire_lease(queue_file: str, run_id: str) -> dict[str, Any]:
+    """Declare that ``run_id`` owns the queue by writing the lease sidecar.
+
+    The lease records ``run_id``, the acquiring ``pid``, and ``started_at``.
+    Acquisition is serialized under ``queue_lock`` and written atomically so a
+    concurrent orchestrator cannot observe a partial lease.
+    """
+    path = lease_path(queue_file)
+    lease = {
+        "run_id": run_id,
+        "pid": os.getpid(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with queue_lock(queue_file):
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=os.path.dirname(path) or ".", prefix=".lease-tmp-"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(lease, f, indent=2)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
+            raise
+    return lease
+
+
+def release_lease(queue_file: str, run_id: str) -> None:
+    """Release the lease if it is currently held by ``run_id``.
+
+    A lease held by a different run is left untouched so a crashing or
+    misrouted run cannot delete another orchestrator's ownership marker.
+    """
+    path = lease_path(queue_file)
+    with queue_lock(queue_file):
+        current = read_lease(queue_file)
+        if current is None:
+            return
+        if current.get("run_id") != run_id:
+            return
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+
+def check_lease(queue_file: str) -> None:
+    """Refuse mutation when a live lease is held by a different run.
+
+    Rules:
+      - no lease                         -> allowed
+      - lease whose PID is dead          -> stale: reclaim with a warning, allowed
+      - live lease, caller's AET_RUN_ID matches ``run_id`` -> allowed
+      - live lease, otherwise            -> raise ``LeaseHeldError``
+    """
+    lease = read_lease(queue_file)
+    if lease is None:
+        return
+
+    run_id = lease.get("run_id")
+    pid = lease.get("pid")
+
+    if not _pid_alive(pid):
+        print(
+            f"⚠️  Reclaiming stale run lease left by run {run_id!r} "
+            f"(pid {pid} is no longer alive).",
+            file=sys.stderr,
+        )
+        try:
+            os.unlink(lease_path(queue_file))
+        except FileNotFoundError:
+            pass
+        return
+
+    caller = os.environ.get("AET_RUN_ID")
+    if caller is not None and caller == run_id:
+        return
+
+    raise LeaseHeldError(run_id)
+
+
+def lease_guard(queue_file: str, force: bool = False) -> bool:
+    """Check the run lease for a mutating entry point.
+
+    Returns ``True`` when the mutation may proceed. When a live lease is held
+    by a different run, a refusal is printed (``force`` false) or an override
+    warning is printed (``force`` true) and the matching boolean is returned.
+    """
+    try:
+        check_lease(queue_file)
+    except LeaseHeldError as exc:
+        if force:
+            print(
+                f"⚠️  --force overriding run lease held by run {exc.run_id}; "
+                f"mutating the queue during a live batch can corrupt it.",
+                file=sys.stderr,
+            )
+            return True
+        print(
+            f"⛔ Refusing to mutate the queue: owned by run {exc.run_id}. "
+            f"Re-run after the batch finishes, or pass --force to override.",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
 
 # ---------------------------------------------------------------------------
 # Forward-only deterministic state model (ADR-011)
@@ -180,12 +367,18 @@ def build_blocks(queue: list[dict[str, Any]]) -> None:
                 task_by_id[blocker].setdefault("blocks", []).append(task["id"])
 
 
-def read_queue(queue_file: str) -> list[dict[str, Any]]:
+def read_queue(queue_file: str, verify: bool = True) -> list[dict[str, Any]]:
     """Read the queue from JSON and normalize legacy records.
 
     Supports both flat list and dict-wrapper formats (e.g.
     {"source_prd": "...", "tasks": [...], "queue_updated_at": "..."}).
     Wrapper metadata is stored so write_queue can restore it.
+
+    When the wrapper carries a ``content_hash`` stamp (written by
+    ``write_queue``) and ``verify`` is true, the tasks are re-hashed and
+    compared against the stamp; a mismatch raises ``QueueIntegrityError`` so
+    mutating callers fail closed on state the system did not write. Read-only
+    callers may pass ``verify=False`` to warn and continue instead.
 
     Legacy ``status``-only records are upgraded in memory to the canonical
     ``state`` vocabulary; the ``status`` key is dropped.
@@ -196,6 +389,13 @@ def read_queue(queue_file: str) -> list[dict[str, Any]]:
     with open(queue_file, "r", encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict):
+        if verify and "content_hash" in data:
+            stored_hash = data.get("content_hash")
+            tasks_for_hash = data.get("tasks", [])
+            if _content_hash(tasks_for_hash) != stored_hash:
+                raise QueueIntegrityError(
+                    "queue modified outside aet-state — run `aet-state audit`"
+                )
         _queue_wrappers[queue_file] = {k: v for k, v in data.items() if k != "tasks"}
         tasks = data.get("tasks", [])
     else:
@@ -218,6 +418,11 @@ def write_queue(
     The write is atomic: data is serialized to a temporary file in the same
     directory and then renamed into place. This prevents concurrent readers
     from seeing a partially-written or truncated file.
+
+    Wrapper writes (queues that carry metadata) are stamped with a monotonic
+    ``revision`` and a ``content_hash`` over the canonical tasks dump so
+    readers can detect edits made outside ``aet-state``. Flat-list queues are
+    left unstamped for backward compatibility.
     """
     queue_dir = os.path.dirname(queue_file)
     os.makedirs(queue_dir, exist_ok=True)
@@ -234,6 +439,14 @@ def write_queue(
         cleaned.append(copy)
 
     if merged or was_dict_wrapper:
+        # Tamper-evident envelope: a monotonic revision plus a content hash
+        # over the canonical tasks dump. Readers fail closed when a stamped
+        # queue no longer matches its tasks (see read_queue).
+        prev_revision = merged.get("revision")
+        if not isinstance(prev_revision, int):
+            prev_revision = 0
+        merged["revision"] = prev_revision + 1
+        merged["content_hash"] = _content_hash(cleaned)
         data = {**merged, "tasks": cleaned}
     else:
         data = cleaned
