@@ -5,6 +5,7 @@ blocked_by:
   - frh-15-curated-flow-intake
   - frh-16-live-frontier-batch-exit
 pipeline: standard
+status: merged
 ---
 
 # Plan: Queue Mutation Guard — Run Lease and Tamper-Evident Writes
@@ -76,5 +77,5 @@ Revert the merge commit; delete any leftover `.agents/work-queue.lease`. Stamped
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
