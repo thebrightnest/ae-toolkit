@@ -63,5 +63,5 @@ Revert the merge commit. The frontier reverts to blocked-only promotion; the bat
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
