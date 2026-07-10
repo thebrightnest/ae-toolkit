@@ -293,7 +293,10 @@ def _apply_transition(backend, queue, task, from_state, to_state, by, evidence=N
 
     queue_lib.append_history(task, from_state, to_state, by, evidence)
 
-    # Forward frontier: terminal transitions unblock dependents.
+    # Forward frontier: terminal transitions unblock dependents. A dependent is
+    # promoted once its last blocker clears, whether it was curated as
+    # ``blocked`` or is still sitting at ``planned`` (pre-frh-15 intake). The
+    # release history entry records the actual from-state.
     if to_state in queue_lib.TERMINAL_STATES:
         for dep_id in task.get("blocks", []):
             dep = find_task(queue, dep_id)
@@ -303,9 +306,10 @@ def _apply_transition(backend, queue, task, from_state, to_state, by, evidence=N
             if pb > 0:
                 pb -= 1
                 dep["pending_blockers"] = pb
-            if pb == 0 and queue_lib.current_state(dep) == "blocked":
+            dep_state = queue_lib.current_state(dep)
+            if pb == 0 and dep_state in ("blocked", "planned"):
                 dep["state"] = "ready"
-                queue_lib.append_history(dep, "blocked", "ready", "release")
+                queue_lib.append_history(dep, dep_state, "ready", "release")
 
     backend.save(queue)
     backend.on_transition(task["id"], from_state, to_state, evidence)
