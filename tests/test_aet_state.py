@@ -945,6 +945,67 @@ class TestStateTransition(unittest.TestCase):
             self.assertEqual(len(merge_entries), 1)
             self.assertEqual(merge_entries[0]["to"], "merged")
 
+    def test_frontier_promotes_planned_dependent_on_merge(self):
+        """record-merge promotes a dependent still at ``planned`` (frh-16).
+
+        Dependents curated before frh-15 sit at ``planned`` rather than
+        ``blocked``. Once their last blocker merges, the forward frontier must
+        still promote them to ``ready`` and record the actual from-state in the
+        release history entry.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "work-queue.json"
+            queue = {
+                "tasks": [
+                    {
+                        "id": "blocker",
+                        "state": "awaiting_merge",
+                        "branch": "feat-blocker",
+                        "blocks": ["dependent"],
+                    },
+                    {
+                        "id": "dependent",
+                        "state": "planned",
+                        "blocked_by": ["blocker"],
+                        "pending_blockers": 1,
+                    },
+                ]
+            }
+            with open(queue_path, "w", encoding="utf-8") as f:
+                json.dump(queue, f)
+
+            responses = {
+                ("git", "fetch", "origin"): (0, "", ""),
+                ("git", "rev-parse", "feat-blocker"): (0, "abc1234\n", ""),
+                ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+            }
+
+            args = aet_state.argparse.Namespace(
+                command="record-merge",
+                task_id="blocker",
+                queue=str(queue_path),
+                dry_run=False,
+            )
+
+            with patch.object(
+                aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)
+            ):
+                rc = aet_state.cmd_record_merge(args)
+
+            self.assertEqual(rc, 0)
+            with open(queue_path, "r", encoding="utf-8") as f:
+                after = json.load(f)
+            by_id = {t["id"]: t for t in after["tasks"]}
+            self.assertNotIn("blocker", by_id)
+            self.assertEqual(by_id["dependent"]["state"], "ready")
+            self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
+            release_entries = [
+                h for h in by_id["dependent"]["history"] if h["by"] == "release"
+            ]
+            self.assertEqual(len(release_entries), 1)
+            self.assertEqual(release_entries[0]["from"], "planned")
+            self.assertEqual(release_entries[0]["to"], "ready")
+
 
 if __name__ == "__main__":
     unittest.main()
