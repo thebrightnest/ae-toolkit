@@ -160,9 +160,7 @@ def preserve_task_metadata(
 
     # Terminal in the live record, settled history, or git -> keep terminal.
     hist = history_by_id.get(task_id)
-    if state == "merge_verified":
-        state = "merged"
-    elif state in ("merged", "abandoned"):
+    if state in ("merged", "abandoned"):
         pass
     elif hist and hist.get("state") in ("merged", "abandoned"):
         state = hist["state"]
@@ -268,11 +266,11 @@ def main() -> int:
 
         if pf_str in existing_by_file:
             existing = existing_by_file[pf_str]
-            fresh = new_task_from_plan(pf, status="planned")
+            fresh = new_task_from_plan(pf)
             task = preserve_task_metadata(existing, fresh, history_by_id)
             preserved += 1
         else:
-            task = new_task_from_plan(pf, status="planned")
+            task = new_task_from_plan(pf)
             added += 1
 
         if reconcile_terminal_state(task, history_by_id, pf):

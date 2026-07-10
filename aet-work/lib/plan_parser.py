@@ -277,10 +277,7 @@ def most_recent_prd(prds_dir: Path) -> Path | None:
     return prds[0] if prds else None
 
 
-def new_task_from_plan(
-    path: Path,
-    status: str = "planned",
-) -> dict[str, Any]:
+def new_task_from_plan(path: Path) -> dict[str, Any]:
     """Create a fresh queue task dict from a plan file using the frontmatter contract."""
     data = parse_frontmatter(path)
     blocked_by = data.get("blocked_by", [])
@@ -295,7 +292,6 @@ def new_task_from_plan(
         "plan_file": str(path),
         "blocked_by": blocked_by,
         "blocks": [],
-        "status": status,
         "state": state,
         "pending_blockers": len(blocked_by),
         "merge_commit": None,

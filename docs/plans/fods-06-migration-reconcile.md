@@ -71,4 +71,6 @@ The migration runs against a branch; revert the branch to restore the prior `doc
 
 ---
 
-_Stage: synced_
+_Stage: superseded_
+
+Superseded by `docs/plans/frh-07-status-retirement-state-bin.md`: the empty queue + shipped partition made the corpus migration moot; owner decision 2026-07-09.

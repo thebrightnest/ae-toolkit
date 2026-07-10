@@ -426,7 +426,7 @@ class TestRecordMerge(unittest.TestCase):
 
 class TestDeriveStatus(unittest.TestCase):
     def test_unblocked_when_blockers_terminal(self):
-        """A task with no branch and all blockers merged/abandoned is unblocked."""
+        """A task with no branch and all blockers merged/abandoned is ready."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("# Plan\n")
             plan_path = f.name
@@ -448,7 +448,7 @@ class TestDeriveStatus(unittest.TestCase):
         with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
             derived = aet_state.derive_status(task, blocker_status)
 
-        self.assertEqual(derived["derived_status"], "unblocked")
+        self.assertEqual(derived["derived_status"], "ready")
 
     def test_blocked_when_blockers_not_terminal(self):
         """A task with no branch and a non-terminal blocker is blocked."""
@@ -476,7 +476,7 @@ class TestDeriveStatus(unittest.TestCase):
         self.assertEqual(derived["derived_status"], "blocked")
 
     def test_unblocked_when_blocker_abandoned(self):
-        """An abandoned blocker is terminal, so the dependent is unblocked."""
+        """An abandoned blocker is terminal, so the dependent is ready."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("# Plan\n")
             plan_path = f.name
@@ -498,10 +498,10 @@ class TestDeriveStatus(unittest.TestCase):
         with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
             derived = aet_state.derive_status(task, blocker_status)
 
-        self.assertEqual(derived["derived_status"], "unblocked")
+        self.assertEqual(derived["derived_status"], "ready")
 
     def test_in_progress_when_branch_exists(self):
-        """A local branch takes precedence over blocker-aware statuses."""
+        """A local branch takes precedence over blocker-aware states."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("# Plan\n")
             plan_path = f.name
@@ -521,7 +521,7 @@ class TestDeriveStatus(unittest.TestCase):
         with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
             derived = aet_state.derive_status(task)
 
-        self.assertEqual(derived["derived_status"], "in-progress")
+        self.assertEqual(derived["derived_status"], "in_progress")
 
     def test_merged_when_branch_on_main(self):
         """A branch that is an ancestor of origin/main is merged."""
@@ -607,7 +607,7 @@ class TestDeriveStatus(unittest.TestCase):
             derived = aet_state.derive_status(task)
 
         self.assertIn("awaiting_merge without merge verification", derived["warnings"][0])
-        self.assertTrue(derived["derived_status"].startswith("unblocked"))
+        self.assertTrue(derived["derived_status"].startswith("ready"))
 
 
 class TestSetStage(unittest.TestCase):
@@ -690,6 +690,76 @@ class TestSetStage(unittest.TestCase):
 
 class TestStateTransition(unittest.TestCase):
     """Tests for the forward-only recorded state lifecycle (fods-02)."""
+
+    def test_apply_transition_writes_no_status_key(self):
+        """_apply_transition mutates state but never writes a legacy status key."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "work-queue.json"
+            history_file = queue_path.with_name("work-history.jsonl")
+            queue = [{"id": "t1", "state": "planned"}]
+            queue_path.write_text(json.dumps({"tasks": queue}), encoding="utf-8")
+
+            backend = aet_state.make_backend(str(queue_path))
+            task = queue[0]
+            aet_state._apply_transition(
+                backend, queue, task, "planned", "ready",
+                by="test", history_file=str(history_file),
+            )
+
+            self.assertEqual(task["state"], "ready")
+            self.assertNotIn("status", task)
+
+    def test_sync_footers_command_removed(self):
+        """The deprecated sync-footers subcommand is no longer registered."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"tasks": []}, f)
+            queue_path = f.name
+
+        with patch.object(sys, "argv", ["aet-state", "sync-footers", "docs/plans/t1.md", "implemented", queue_path]):
+            with self.assertRaises(SystemExit) as cm:
+                aet_state.main()
+        self.assertEqual(cm.exception.code, 2)
+
+    def test_audit_and_heal_speak_canonical_states(self):
+        """audit and heal compare stored state against canonical derived states."""
+        import io
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plan_path = Path(tmpdir) / "plans" / "t1.md"
+            plan_path.parent.mkdir(parents=True)
+            plan_path.write_text("# Plan\n")
+            queue_path = Path(tmpdir) / "work-queue.json"
+            queue = {
+                "tasks": [
+                    {
+                        "id": "t1",
+                        "state": "planned",
+                        "plan_file": str(plan_path),
+                        "branch": None,
+                    }
+                ]
+            }
+            queue_path.write_text(json.dumps(queue), encoding="utf-8")
+
+            responses = {
+                ("show-ref", "--verify", "--quiet", "refs/heads/None"): (1, "", ""),
+            }
+
+            args = aet_state.argparse.Namespace(
+                command="audit",
+                queue=str(queue_path),
+                dry_run=False,
+            )
+
+            stdout_capture = io.StringIO()
+            with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
+                with patch.object(sys, "stdout", stdout_capture):
+                    rc = aet_state.cmd_audit(args)
+
+            self.assertEqual(rc, 0)
+            results = json.loads(stdout_capture.getvalue())
+            self.assertEqual(results["t1"]["derived"], "ready")
+            self.assertTrue(results["t1"]["discrepancy"])
 
     def test_legal_transition_matrix(self):
         """Every legal lifecycle transition is accepted by validate_transition."""
