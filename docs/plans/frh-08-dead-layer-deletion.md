@@ -64,5 +64,5 @@ Revert the merge commit; all deletions restore cleanly from git history.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: merge — review completed in-session after the aet-review child hit a transient provider connection error; objective gates green (`make validate`: 309 tests, lint, format, skill structure)_
