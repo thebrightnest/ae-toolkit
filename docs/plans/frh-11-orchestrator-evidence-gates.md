@@ -65,5 +65,5 @@ Revert the merge commit; gates fall back to footer-based behavior. Evidence file
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
