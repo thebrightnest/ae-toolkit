@@ -24,27 +24,7 @@ _queue_spec.loader.exec_module(queue_lib)
 # Make aet-work/lib importable so we can load the backend factory.
 _LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
-from backends.factory import create_backend  # noqa: E402
-
-# Local helpers for the remaining legacy display strings produced by
-# ``derive_status``. These are kept private to aet-state and will be removed
-# when the derive/heal vocabulary is fully canonicalized (frh-07).
-_DERIVED_STATUS_TO_STATE: dict[str | None, str] = {
-    None: "planned",
-    "unknown": "planned",
-    "planned": "planned",
-    "unblocked": "ready",
-    "in-progress": "in_progress",
-    "blocked": "blocked",
-    "merged": "merged",
-    "drift": "planned",
-}
-
-
-def _derived_display_to_state(display: str | None) -> str:
-    """Map a legacy derived-display string to a canonical state."""
-    return _DERIVED_STATUS_TO_STATE.get(display, display or "planned")
-
+from backends.factory import create_backend  # noqa: E402, I001
 
 def make_backend(queue_path):
     """Create a task backend for the given queue path."""
@@ -170,16 +150,16 @@ def resolve_by_diff(branch, cwd=None, max_commits=20):
 
 
 def derive_status(task, blocker_status_fn=None, cwd=None):
-    """Derive status from ground truth.
+    """Derive canonical state from ground truth.
 
     Derivation rules, applied in order:
       1. merged   — branch or merge_commit is an ancestor of origin/main.
-      2. in-progress — local branch exists.
-      3. unblocked — plan exists, no branch, and all blockers are terminal
+      2. in_progress — local branch exists.
+      3. ready    — plan exists, no branch, and all blockers are terminal
                    (including the case of no blockers).
       4. blocked  — plan exists, no branch, and some blocker is not terminal.
       5. drift    — plan file is missing.
-      6. planned  — plan exists, no branch, no blockers (legacy compatibility).
+      6. planned  — plan exists, no branch, no blockers.
     """
     plan_file = task.get("plan_file")
     branch = task.get("branch")
@@ -220,24 +200,24 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
     else:
         derived["merge_verified"] = False
 
-    # Determine actionable status.
+    # Determine actionable canonical state.
     status = "unknown"
     if on_main:
         status = "merged"
     elif derived["branch_exists"]:
-        status = "in-progress"
+        status = "in_progress"
     elif derived["plan_exists"]:
         blockers = task.get("blocked_by", [])
         if blockers and blocker_status_fn:
             terminal = {"merged", "abandoned"}
             all_terminal = all(blocker_status_fn(b) in terminal for b in blockers)
-            status = "unblocked" if all_terminal else "blocked"
+            status = "ready" if all_terminal else "blocked"
         elif blockers and not blocker_status_fn:
             # Blockers exist but we cannot resolve them; fall back to planned.
             status = "planned"
         else:
             # No blockers means the task is actionable.
-            status = "unblocked"
+            status = "ready"
     else:
         status = "drift"
         derived["drift"] = "plan_file missing"
@@ -257,7 +237,7 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
     return derived
 
 
-def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
+def validate_transition(task, from_stage, to_stage, cwd=None):
     """Return (ok, message). ok=True means the state transition is legal.
 
     Validates the recorded-forward lifecycle (ADR-011).  ``from_stage`` and
@@ -266,7 +246,6 @@ def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
     current_state = queue_lib.current_state(task)
     branch = task.get("branch")
     merge_commit = task.get("merge_commit")
-    failure_reason = task.get("failure_reason")
 
     # Basic: from_stage should match current state
     if from_stage != current_state:
@@ -286,11 +265,6 @@ def validate_transition(task, from_stage, to_stage, reason=None, cwd=None):
             on_main = on_main or is_ancestor_of_main(merge_commit, cwd=cwd)
         if not on_main:
             return (False, "Cannot set merged: branch/merge_commit is not ancestor of origin/main.")
-
-    # Cannot transition from abandoned without explicit reason clear
-    if from_stage == "abandoned":
-        if failure_reason:
-            return (False, "Cannot transition from abandoned: failure_reason must be cleared first.")
 
     return (True, "Transition is valid.")
 
@@ -497,8 +471,7 @@ def cmd_audit(args):
     for task in queue:
         task_id = task["id"]
         stored_state = queue_lib.current_state(task)
-        derived_display = derived[task_id]["derived_status"].split(" (warning")[0]
-        derived_state = _derived_display_to_state(derived_display)
+        derived_state = derived[task_id]["derived_status"].split(" (warning")[0]
         results[task_id] = {
             "stored": stored_state,
             "derived": derived[task_id]["derived_status"],
@@ -514,7 +487,7 @@ def cmd_heal(args):
 
     Safe fixes:
       - merged: task branch or merge_commit is an ancestor of origin/main.
-      - failed -> unblocked: plan exists, no branch, and blockers are terminal.
+      - failed -> ready: plan exists, no branch, and blockers are terminal.
 
     With ``--apply``, transitions are applied; otherwise the command prints a
     dry-run report.
@@ -529,8 +502,7 @@ def cmd_heal(args):
     for task in queue:
         task_id = task["id"]
         stored_state = queue_lib.current_state(task)
-        derived_display = derived[task_id]["derived_status"].split(" (warning")[0]
-        derived_state = _derived_display_to_state(derived_display)
+        derived_state = derived[task_id]["derived_status"].split(" (warning")[0]
 
         if stored_state == derived_state:
             continue
@@ -638,7 +610,7 @@ def cmd_validate(args):
         print(f"Task not found: {args.task_id}", file=sys.stderr)
         return 1
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    ok, msg = validate_transition(task, args.from_stage, args.to_stage, getattr(args, "reason", None), cwd=cwd)
+    ok, msg = validate_transition(task, args.from_stage, args.to_stage, cwd=cwd)
     if ok:
         print(msg)
         return 0
@@ -659,7 +631,7 @@ def cmd_transition(args):
             return 1
 
         if args.dry_run:
-            ok, msg = validate_transition(task, args.from_stage, args.to_stage, args.reason, cwd=cwd)
+            ok, msg = validate_transition(task, args.from_stage, args.to_stage, cwd=cwd)
             if ok:
                 print(f"[dry-run] Would transition {args.task_id} {args.from_stage} -> {args.to_stage}")
                 return 0
@@ -812,80 +784,6 @@ def cmd_record_merge(args):
     return 0
 
 
-def cmd_archive(args):
-    """Deprecated alias for the automatic seal that happens at terminal transition.
-
-    Terminal transitions now seal tasks to ``work-history.jsonl`` immediately,
-    so manual archiving is no longer required. This command remains as a
-    migration helper: it seals any terminal tasks that are still present in the
-    live queue and reports what it did.
-    """
-    print("⚠️  aet-state archive is deprecated; terminal transitions seal automatically.")
-
-    history_file = str(Path(args.queue).with_name("work-history.jsonl"))
-
-    with queue_lib.queue_lock(args.queue):
-        queue_before = queue_lib.read_queue(args.queue)
-        terminal_ids = [
-            t.get("id")
-            for t in queue_before
-            if queue_lib.current_state(t) in queue_lib.TERMINAL_STATES
-        ]
-
-        sealed = []
-        for task_id in terminal_ids:
-            try:
-                queue_lib.seal_terminal(args.queue, history_file, task_id)
-                sealed.append(task_id)
-            except ValueError:
-                pass
-
-        if sealed:
-            print(f"Sealed {len(sealed)} terminal task(s): {', '.join(sealed)}")
-        else:
-            print("No terminal tasks to seal")
-
-        active = queue_lib.read_queue(args.queue)
-
-    print(f"Active queue: {len(active)} tasks remaining")
-    return 0
-
-
-def cmd_sync_footers(args):
-    backend = make_backend(args.queue)
-    plan_path = Path(args.plan)
-    if not plan_path.exists():
-        print(f"Plan file not found: {args.plan}", file=sys.stderr)
-        return 1
-
-    with queue_lib.queue_lock(args.queue):
-        data = backend.load()
-        queue = data["queue"]
-
-        # Find the task that references this plan file
-        task = None
-        for t in queue:
-            if t.get("plan_file") == args.plan or Path(t.get("plan_file", "")).resolve() == plan_path.resolve():
-                task = t
-                break
-
-        if not task:
-            print(f"No queue entry references plan: {args.plan}", file=sys.stderr)
-            return 1
-
-        if args.dry_run:
-            print(f"[dry-run] Would update footer of {args.plan} to *Stage: {args.stage}*")
-            print(f"[dry-run] Would update queue task {task['id']} status to {args.stage}")
-            return 0
-
-        update_plan_footer(args.plan, args.stage)
-        task["status"] = args.stage
-        backend.save(queue)
-
-    print(f"Synced footers: {args.plan} -> {args.stage}")
-    return 0
-
-
 def main():
     parser = argparse.ArgumentParser(
         prog="aet-state",
@@ -916,13 +814,7 @@ def main():
     transition_parser.add_argument("from_stage", help="Current stage.")
     transition_parser.add_argument("to_stage", help="Target stage.")
     transition_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
-    transition_parser.add_argument("--reason", help="Reason for transition (used when leaving abandoned).")
-
-    # sync-footers
-    sync_parser = subparsers.add_parser("sync-footers", help="Atomically update plan/PRD footers and queue JSON.")
-    sync_parser.add_argument("plan", help="Path to plan markdown file.")
-    sync_parser.add_argument("stage", help="Stage to set.")
-    sync_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
+    transition_parser.add_argument("--reason", help="Reason for transition (used as history evidence).")
 
     # set-stage
     set_stage_parser = subparsers.add_parser(
@@ -953,16 +845,6 @@ def main():
         help="Path to the plan markdown file. If omitted, uses the task's plan_file.",
     )
 
-    # archive
-    archive_parser = subparsers.add_parser("archive", help="Move terminal tasks from queue to archive.")
-    archive_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
-    archive_parser.add_argument(
-        "archive",
-        nargs="?",
-        default=".agents/work-archive.json",
-        help="Deprecated; ignored. History file is derived from the queue path.",
-    )
-
     args = parser.parse_args()
 
     if args.command == "audit":
@@ -973,14 +855,10 @@ def main():
         return cmd_validate(args)
     if args.command == "transition":
         return cmd_transition(args)
-    if args.command == "sync-footers":
-        return cmd_sync_footers(args)
     if args.command == "set-stage":
         return cmd_set_stage(args)
     if args.command == "record-merge":
         return cmd_record_merge(args)
-    if args.command == "archive":
-        return cmd_archive(args)
 
     return 1
 
