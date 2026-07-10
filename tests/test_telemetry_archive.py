@@ -120,21 +120,22 @@ class TestMineLearnings(unittest.TestCase):
                 "dependency": "prettier",
             },
             {
-                "type": "loop",
-                "run_id": "r1",
-                "loop_type": "format_fix",
-                "iteration": 2,
-                "exit_code": 0,
-            },
-            {
                 "type": "stage",
                 "run_id": "r1",
                 "stage": "review",
                 "exit_code": 1,
             },
         ]
-        self._seed_run("p1", "2026-06-20", "r1", {"t1": records})
-        self._seed_run("p2", "2026-06-20", "r2", {"t1": records})
+        run1 = self._seed_run("p1", "2026-06-20", "r1", {"t1": records})
+        run2 = self._seed_run("p2", "2026-06-20", "r2", {"t1": records})
+        # Loop records were removed (frh-09); the repeated-loops signal is now
+        # mined from narrative report text rather than JSONL loop records.
+        (run1 / "qa-report.md").write_text(
+            "The agent had to retry once.", encoding="utf-8"
+        )
+        (run2 / "qa-report.md").write_text(
+            "The agent had to retry once.", encoding="utf-8"
+        )
 
         patterns = mine_learnings.mine_archive(self.archive_dir)
         report = mine_learnings.format_report(patterns)
@@ -152,15 +153,13 @@ class TestMineLearnings(unittest.TestCase):
                 "issue_type": "missing_dependency",
                 "dependency": "prettier",
             },
-            {
-                "type": "loop",
-                "run_id": "r1",
-                "loop_type": "format_fix",
-                "iteration": 2,
-                "exit_code": 0,
-            },
         ]
-        self._seed_run("p1", "2026-06-20", "r1", {"t1": records})
+        run_dir = self._seed_run("p1", "2026-06-20", "r1", {"t1": records})
+        # Surface a repeated-loop signal via narrative mining; loop JSONL records
+        # are no longer emitted, so they cannot drive the aet-implement proposal.
+        (run_dir / "qa-report.md").write_text(
+            "The agent had to retry once.", encoding="utf-8"
+        )
 
         patterns = mine_learnings.mine_archive(self.archive_dir)
         proposals = mine_learnings.propose_edits(patterns)
