@@ -4,6 +4,7 @@ size: M
 blocked_by:
   - frh-08-dead-layer-deletion
 pipeline: standard
+status: merged
 ---
 
 # Plan: Deterministic Stage Telemetry — Emit What the Guide Promises
@@ -67,5 +68,5 @@ Revert the merge commit; telemetry returns to run-summary-only. Archive files ar
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-cso`_
