@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -1908,6 +1911,253 @@ class TestEvidenceGates(unittest.TestCase):
                     self.assertTrue(
                         pipeline._divergences_found(plan_file, repo_root)
                     )
+
+
+class _InstantProc:
+    """A subprocess.Popen stand-in that has already exited successfully."""
+
+    pid = 99999
+
+    def poll(self):
+        return 0
+
+    def wait(self, timeout=None):
+        return 0
+
+
+class TestBatchLivePickupAndExit(unittest.TestCase):
+    """run_batch frontier pickup and exit-when-idle behavior (frh-16)."""
+
+    def _init_batch_repo(self, repo_root: str, tasks: list[dict]) -> str:
+        """Init a repo, commit any referenced plan files, and write the queue."""
+        _init_git_repo(repo_root)
+        for task in tasks:
+            plan_file = task.get("plan_file")
+            if not plan_file:
+                continue
+            abs_plan = os.path.join(repo_root, plan_file)
+            Path(abs_plan).parent.mkdir(parents=True, exist_ok=True)
+            Path(abs_plan).write_text(
+                f"---\nid: {task['id']}\n---\n\n# {task['id']}\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "add plans"], check=True
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+        return _write_queue(repo_root, tasks)
+
+    def _merge_external_blocker(self, repo_root: str, branch: str) -> None:
+        """Create ``branch`` with a commit that is an ancestor of origin/main."""
+        subprocess.run(
+            ["git", "-C", repo_root, "checkout", "-q", "-b", branch], check=True
+        )
+        Path(repo_root, f"{branch}.txt").write_text("x", encoding="utf-8")
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", f"{branch} work"],
+            check=True,
+        )
+        subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "merge", "--ff-only", branch],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+
+    def _run_batch(self, args, adapter, timeout: float = 10):
+        """Run run_batch in a thread; return (rc, stdout, timed_out)."""
+        result = {"rc": None, "out": ""}
+        orchestrator._shutdown_requested = False
+
+        def target():
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                result["rc"] = orchestrator.run_batch(args, adapter)
+            result["out"] = buf.getvalue()
+
+        thread = threading.Thread(target=target)
+        thread.start()
+        thread.join(timeout)
+        if thread.is_alive():
+            orchestrator._shutdown_requested = True
+            thread.join(2)
+            return None, result["out"], True
+        return result["rc"], result["out"], False
+
+    @staticmethod
+    def _patch_child_spawn(side_effect=None):
+        """Patch only the long-running child spawn in run_batch.
+
+        run_batch spawns each task's child orchestrator with
+        ``start_new_session=True``; every other subprocess goes through
+        ``subprocess.run`` (aet-state transitions, git) and must stay real so
+        the queue and worktrees are actually mutated. We therefore delegate any
+        non-session call to the real ``subprocess.Popen``.
+        """
+        real_popen = subprocess.Popen
+
+        def fake_popen(*a, **kw):
+            if kw.get("start_new_session"):
+                if side_effect is not None:
+                    return side_effect(*a, **kw)
+                return _InstantProc()
+            return real_popen(*a, **kw)
+
+        return patch.object(orchestrator.subprocess, "Popen", side_effect=fake_popen)
+
+    def _make_args(self, repo_root: str, queue_file: str, max_jobs: int):
+        return argparse.Namespace(
+            queue_file=queue_file,
+            plan_file=None,
+            repo_root=repo_root,
+            cli_bin="echo",
+            isolation="minimal",
+            max_jobs=max_jobs,
+            task_timeout=60,
+            heartbeat_interval=999,
+        )
+
+    def test_batch_exits_with_report_when_only_awaiting_merge_remains(self):
+        """A batch with only awaiting_merge tasks exits 0 with a leftover report.
+
+        Without the exit-when-idle condition the loop spins forever on
+        ``time.sleep(0.2)`` because ``awaiting_merge`` is non-terminal.
+        """
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "alpha",
+                        "title": "alpha",
+                        "plan_file": "docs/plans/alpha.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=1)
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn():
+                        with patch.object(
+                            orchestrator,
+                            "verify_branch_has_commits",
+                            return_value=(True, ""),
+                        ):
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+
+                self.assertFalse(
+                    timed_out, "run_batch spun instead of exiting when idle"
+                )
+                self.assertEqual(rc, 0)
+                self.assertIn("awaiting merge", out)
+
+                with open(queue_file, encoding="utf-8") as f:
+                    queue = json.load(f)
+                task = next(t for t in queue["tasks"] if t["id"] == "alpha")
+                self.assertEqual(task["state"], "awaiting_merge")
+
+    def test_batch_spawns_task_promoted_mid_run(self):
+        """A dependent promoted to ready while the batch runs is spawned.
+
+        An external actor (here, the merge of an already-merged blocker) drives
+        the forward frontier. A dependent still at ``planned`` must be promoted
+        by the frontier and then picked up by the spawn loop on a later pass.
+        """
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "alpha",
+                        "title": "alpha",
+                        "plan_file": "docs/plans/alpha.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    },
+                    {
+                        "id": "blocker",
+                        "title": "blocker",
+                        "state": "awaiting_merge",
+                        "branch": "blocker-branch",
+                        "blocks": ["dependent"],
+                    },
+                    {
+                        "id": "dependent",
+                        "title": "dependent",
+                        "plan_file": "docs/plans/dependent.md",
+                        "blocked_by": ["blocker"],
+                        "pending_blockers": 1,
+                        "state": "planned",
+                    },
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                self._merge_external_blocker(repo_root, "blocker-branch")
+
+                aet_state_bin = str(
+                    Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
+                )
+
+                def fake_popen(cmd, **kwargs):
+                    if "--plan-file" in cmd:
+                        plan = cmd[cmd.index("--plan-file") + 1]
+                        if os.path.basename(plan) == "alpha.md":
+                            # Simulate the blocker being merge-verified while
+                            # the batch is alive; the frontier promotes the
+                            # dependent through the real aet-state code path.
+                            subprocess.run(
+                                [
+                                    sys.executable,
+                                    aet_state_bin,
+                                    "record-merge",
+                                    "blocker",
+                                    queue_file,
+                                ],
+                                cwd=repo_root,
+                                check=True,
+                                capture_output=True,
+                            )
+                    return _InstantProc()
+
+                args = self._make_args(repo_root, queue_file, max_jobs=2)
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn(side_effect=fake_popen):
+                        with patch.object(
+                            orchestrator,
+                            "verify_branch_has_commits",
+                            return_value=(True, ""),
+                        ):
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+
+                self.assertFalse(timed_out, "run_batch spun instead of exiting")
+                self.assertEqual(rc, 0)
+
+                with open(queue_file, encoding="utf-8") as f:
+                    queue = json.load(f)
+                by_id = {t["id"]: t for t in queue["tasks"]}
+                # The blocker was sealed to history by record-merge.
+                self.assertNotIn("blocker", by_id)
+                self.assertEqual(by_id["alpha"]["state"], "awaiting_merge")
+                # Dependent reached awaiting_merge only by being promoted to
+                # ready mid-batch and then spawned by the loop.
+                self.assertEqual(by_id["dependent"]["state"], "awaiting_merge")
+                self.assertIn("awaiting merge", out)
 
 
 if __name__ == "__main__":

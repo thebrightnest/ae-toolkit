@@ -792,6 +792,50 @@ def has_pending_tasks(queue: list[dict]) -> bool:
     return queue_has_pending_tasks(queue)
 
 
+# States that can still make progress on their own inside the batch loop: a
+# ``ready`` task will be spawned on the next pass, and an ``in_progress`` task
+# has a live child. Anything else non-terminal (awaiting_merge/blocked/planned/
+# failed) is stranded until an external actor (record-merge, curation, a human)
+# moves it, so the batch must exit instead of spinning.
+_BATCH_ACTIONABLE_STATES = frozenset({"ready", "in_progress"})
+
+# Stranded non-terminal states, in the order they should appear in the leftover
+# report. Terminal states (merged/abandoned) are excluded: a fully terminal
+# queue is a clean completion, not a leftover.
+_BATCH_LEFTOVER_STATES = ("awaiting_merge", "blocked", "planned", "failed")
+_BATCH_LEFTOVER_LABELS = {
+    "awaiting_merge": "awaiting merge",
+    "blocked": "blocked",
+    "planned": "planned",
+    "failed": "failed",
+}
+
+
+def has_actionable_tasks(queue: list[dict]) -> bool:
+    """Return True if any stored task is ``ready`` or ``in_progress``."""
+    return any(current_state(task) in _BATCH_ACTIONABLE_STATES for task in queue)
+
+
+def leftover_counts(queue: list[dict]) -> dict[str, int]:
+    """Count stranded non-terminal tasks by state (zero counts omitted)."""
+    counts = {state: 0 for state in _BATCH_LEFTOVER_STATES}
+    for task in queue:
+        state = current_state(task)
+        if state in counts:
+            counts[state] += 1
+    return {state: counts[state] for state in _BATCH_LEFTOVER_STATES if counts[state]}
+
+
+def format_leftover_report(counts: dict[str, int]) -> str:
+    """Render leftover counts as ``N awaiting merge, M blocked, ...``."""
+    parts = [
+        f"{counts[state]} {_BATCH_LEFTOVER_LABELS[state]}"
+        for state in _BATCH_LEFTOVER_STATES
+        if state in counts
+    ]
+    return ", ".join(parts)
+
+
 def _mark_failed(
     backend, queue_file: str, task_id: str, from_state: str | None
 ) -> None:
@@ -980,6 +1024,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     stop_spawn = False
     last_heartbeat = time.monotonic()
     summary_written = False
+    leftover_report: dict[str, int] = {}
     task_timeout = getattr(args, "task_timeout", 3600)
     heartbeat_interval = getattr(args, "heartbeat_interval", 60)
 
@@ -1001,6 +1046,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 exit_code=exit_code,
                 task_ids=task_ids,
                 final_stage=None,
+                leftover=leftover_report or None,
             )
         )
         logger.copy_work_history(os.path.join(repo_root, ".agents", "work-history.jsonl"))
@@ -1008,6 +1054,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         print("🏁 Orchestrator finished.")
         print(f"   Succeeded: {successes}")
         print(f"   Failed:    {failures}")
+        if leftover_report:
+            print(f"   Leftover:  {format_leftover_report(leftover_report)}")
         print(f"   Telemetry: {logger.run_dir}")
 
     def _cleanup_task(task_id: str, ret: int) -> None:
@@ -1114,10 +1162,15 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             if not running:
                 if stop_spawn or _shutdown_requested:
                     break
-                if not has_pending_tasks(queue):
-                    break
-                time.sleep(0.2)
-                continue
+                if has_actionable_tasks(queue):
+                    time.sleep(0.2)
+                    continue
+                # Nothing running and nothing that can still make progress on its
+                # own (a ready/in_progress task). Whatever remains is stranded
+                # until an external actor moves it, so exit with a leftover
+                # report instead of spinning forever on the sleep.
+                leftover_report.update(leftover_counts(queue))
+                break
 
             # Poll for finished or timed-out processes
             now = time.monotonic()
