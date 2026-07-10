@@ -5,6 +5,7 @@ blocked_by:
   - frh-11-orchestrator-evidence-gates
   - frh-14-git-refs-wiring-parity
 pipeline: standard
+status: merged
 ---
 
 # Plan: Widen the Promotion Frontier; Replace the Batch's Silent Spin with Exit-When-Idle
@@ -63,5 +64,5 @@ Revert the merge commit. The frontier reverts to blocked-only promotion; the bat
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
