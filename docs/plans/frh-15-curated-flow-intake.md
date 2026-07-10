@@ -53,15 +53,15 @@ Skill-text rider (mandatory, else this creates a new reality gap): `aet-pipeline
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] Named tests:
+- [x] `make validate` passes; full suite passes (338 passed)
+- [x] Named tests:
   - `test_add_parks_ready_when_unblocked` (in `tests/test_aet_work_add_review.py`)
   - `test_add_parks_blocked_with_pending_blockers_and_builds_edges`
   - `test_intake_history_records_actual_initial_state`
   - `test_sync_never_adds_new_plans` (in `tests/test_init_queue_sync.py`)
   - `test_sync_still_reports_drift_and_rebuilds_edges`
-- [ ] Grep gate: `grep -rn "new_task_from_plan" aet-work/bin/sync` returns nothing
-- [ ] Skill-structure check passes with both SKILL.md edits
+- [x] Grep gate: `grep -rn "new_task_from_plan" aet-work/bin/sync` returns nothing
+- [x] Skill-structure check passes with both SKILL.md edits
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -70,5 +70,5 @@ Revert the merge commit. Queues created in the interim carry `ready`/`blocked` s
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
