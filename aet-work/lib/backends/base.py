@@ -34,21 +34,6 @@ class TaskBackend(ABC):
         """
 
     @abstractmethod
-    def transition(
-        self,
-        task_id: str,
-        from_state: str | None,
-        to_state: str,
-        by: str = "system",
-        evidence: dict[str, Any] | None = None,
-    ) -> bool:
-        """Transition a task from ``from_state`` to ``to_state``.
-
-        The transition is validated against the recorded-forward lifecycle.
-        Returns ``True`` if the transition was applied, ``False`` otherwise.
-        """
-
-    @abstractmethod
     def plan_drift(self, plans_dir: str | Path) -> list[str]:
         """Return a list of plan files that are not tracked in queue or history."""
 
