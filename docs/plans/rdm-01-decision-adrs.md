@@ -76,5 +76,5 @@ Revert the merge commit; ADRs are additive documents with no code dependencies.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
