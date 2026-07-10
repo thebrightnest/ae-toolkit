@@ -54,6 +54,14 @@ This means:
 | `.agents/work-queue.json`    | Ephemeral sprint board: active tasks only               | No (gitignored) |
 | `.agents/work-history.jsonl` | Optional execution log for transitions and timing       | No (gitignored) |
 
+### Mutation guard
+
+While a batch or `run-one` is live, the orchestrator writes a run lease to `.agents/work-queue.lease` (gitignored). Mutating commands — `add`, `sync`, `init-queue`, and the `aet-state` writers — refuse to run while another run holds a live lease, naming the owning run id. A lease whose process has exited is reclaimed as stale automatically.
+
+Use `--force` only to deliberately override a lease you know is stale, or to make an urgent manual edit during a batch. It prints a loud warning and can corrupt a live run, so prefer re-running after the batch finishes.
+
+Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails closed on read. Run `aet-state audit` to reconcile, and read-only commands like `status` warn and continue.
+
 ### Queue lifecycle
 
 1. Plan is authored with `status: approved`.

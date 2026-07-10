@@ -9,6 +9,7 @@ node_modules/
 __pycache__
 .agents/work-queue.json
 .agents/work-queue.json.lock
+.agents/work-queue.lease
 .agents/work-history.jsonl
 aet-work.log
 aet-work-*.log

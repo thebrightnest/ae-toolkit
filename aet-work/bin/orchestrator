@@ -24,9 +24,11 @@ sys.path.insert(0, str(_LIB_DIR))
 
 from queue import (  # noqa: E402
     LEGAL_TRANSITIONS,
+    acquire_lease,
     current_state,
     get_next_unblocked,
     queue_lock,
+    release_lease,
 )
 from queue import (  # noqa: E402
     has_pending_tasks as queue_has_pending_tasks,
@@ -1017,6 +1019,10 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         )
         return 1
 
+    # Declare that this run owns the queue so out-of-band mutators refuse, and
+    # ensure every subprocess inherits the run id for the lease check.
+    os.environ["AET_RUN_ID"] = logger.run_id
+
     running: dict[str, subprocess.Popen] = {}
     spawn_times: dict[str, float] = {}
     successes = 0
@@ -1070,6 +1076,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         remove_worktree(repo_root, task_id)
 
     try:
+        acquire_lease(queue_file, logger.run_id)
         while True:
             # Refresh stored state before each spawn pass.
             queue = backend.load()["queue"]
@@ -1213,6 +1220,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         exit_code = 1 if failures > 0 else 0
         outcome = "success" if exit_code == 0 else "failure"
         _write_summary(outcome, exit_code)
+        release_lease(queue_file, logger.run_id)
 
     return exit_code
 
@@ -1312,6 +1320,10 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
     run_id = os.environ.get("AET_RUN_ID")
     logger = telemetry.RunLogger(repo_root, run_id=run_id)
+    # Ensure every subprocess (aet-state calls and stage sessions) inherits this
+    # run id so their queue mutations pass the lease check.
+    os.environ["AET_RUN_ID"] = logger.run_id
+    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
     start_time = telemetry.iso_now()
 
     if not os.path.isabs(plan_file):
@@ -1343,106 +1355,120 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         print(f"   📁 Telemetry: {logger.run_dir}")
         return 1
 
-    # Create a synthetic task. Prefer the batch-provided task ID/worktree so
-    # parent and child agree on worktree/branch names (e.g. "*-plan" suffixes).
-    base_name = os.path.splitext(os.path.basename(plan_file))[0]
-    task_id = os.environ.get("AET_TASK_ID") or base_name.removesuffix("-plan")
-    worktree_dir = os.environ.get("AET_WORKTREE")
-    if worktree_dir and not os.path.isabs(worktree_dir):
-        worktree_dir = os.path.join(repo_root, worktree_dir)
+    # For a top-level run-one, declare that this run owns the queue so
+    # out-of-band mutators refuse. Batch children share the parent's lease via
+    # AET_RUN_ID and must not acquire/release their own.
+    owns_lease = False
+    try:
+        if not spawned_by_batch:
+            acquire_lease(queue_file, logger.run_id)
+            owns_lease = True
 
-    # If this plan is tracked in the work queue and this is a top-level run-one
-    # (not a child spawned by run_batch), transition the task to in-progress
-    # and record branch/worktree so aet-state record-merge works after shipping.
-    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
-    backend = _make_backend(queue_file)
-    queued_task = None
-    if os.path.exists(queue_file) and not spawned_by_batch:
-        queue = backend.load()["queue"]
-        queued_task = _find_queued_task(queue, plan_file)
+        # Create a synthetic task. Prefer the batch-provided task ID/worktree so
+        # parent and child agree on worktree/branch names (e.g. "*-plan" suffixes).
+        base_name = os.path.splitext(os.path.basename(plan_file))[0]
+        task_id = os.environ.get("AET_TASK_ID") or base_name.removesuffix("-plan")
+        worktree_dir = os.environ.get("AET_WORKTREE")
+        if worktree_dir and not os.path.isabs(worktree_dir):
+            worktree_dir = os.path.join(repo_root, worktree_dir)
 
-    if queued_task and not spawned_by_batch:
-        queued_task_id = queued_task.get("id", task_id)
-        # Ensure the worktree/branch exist before recording them.
-        worktree_dir = create_worktree(repo_root, queued_task_id)
-        worktree_rel = os.path.relpath(worktree_dir, repo_root)
-        _record_run_one_in_queue(backend, queue_file, queued_task_id, worktree_rel, queued_task_id)
-        task_id = queued_task_id
-
-    task = {
-        "id": task_id,
-        "title": task_id,
-        "plan_file": plan_file,
-        "stage": os.environ.get("AET_STAGE") or None,
-    }
-
-    print(f"📁 Telemetry: {logger.run_dir}")
-    success = process_task(
-        task, repo_root, adapter, args.isolation, logger=logger, worktree_dir=worktree_dir
-    )
-    exit_code = 0 if success else 1
-
-    # For top-level run-one on a queued task, mirror run_batch and transition
-    # the task to awaiting_merge on success so aet-state record-merge can run.
-    if success and queued_task and not spawned_by_batch:
-        try:
+        # If this plan is tracked in the work queue and this is a top-level run-one
+        # (not a child spawned by run_batch), transition the task to in-progress
+        # and record branch/worktree so aet-state record-merge works after shipping.
+        backend = _make_backend(queue_file)
+        queued_task = None
+        if os.path.exists(queue_file) and not spawned_by_batch:
             queue = backend.load()["queue"]
-            queue_task = next((t for t in queue if t.get("id") == task_id), None)
-            if queue_task:
-                from_state = current_state(queue_task) or "in_progress"
-                worktree_rel = queue_task.get("worktree")
-                if worktree_rel:
-                    ok, msg = verify_branch_has_commits(
-                        os.path.join(repo_root, worktree_rel)
-                    )
-                    if not ok:
-                        print(f"   ❌ Task {task_id} succeeded but produced no commits: {msg}")
-                        _mark_failed(backend, queue_file, task_id, from_state)
-                        exit_code = 1
-                    else:
-                        aet_state_bin = str(_SCRIPT_DIR / "aet-state")
-                        result = subprocess.run(
-                            [
-                                sys.executable,
-                                aet_state_bin,
-                                "transition",
-                                task_id,
-                                from_state,
-                                "awaiting_merge",
-                                queue_file,
-                            ],
-                            capture_output=True,
-                            text=True,
-                        )
-                        if result.returncode == 0:
-                            print(f"   ✅ Task {task_id} awaiting merge")
-                        else:
-                            print(f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}")
-        except Exception as exc:  # pragma: no cover - defensive logging
-            print(f"   ⚠️  Could not mark {task_id} awaiting merge: {exc}")
+            queued_task = _find_queued_task(queue, plan_file)
 
-    end_time = telemetry.iso_now()
+        if queued_task and not spawned_by_batch:
+            queued_task_id = queued_task.get("id", task_id)
+            # Ensure the worktree/branch exist before recording them.
+            worktree_dir = create_worktree(repo_root, queued_task_id)
+            worktree_rel = os.path.relpath(worktree_dir, repo_root)
+            _record_run_one_in_queue(backend, queue_file, queued_task_id, worktree_rel, queued_task_id)
+            task_id = queued_task_id
 
-    # Read the final stage from the synthetic task record; the footer is only a breadcrumb.
-    final_stage = task.get("stage") or read_plan_stage(plan_file) or "plan-approved"
+        task = {
+            "id": task_id,
+            "title": task_id,
+            "plan_file": plan_file,
+            "stage": os.environ.get("AET_STAGE") or None,
+        }
 
-    logger.write_last_run(
-        telemetry.run_summary_record(
-            run_id=logger.run_id,
-            start_time=start_time,
-            end_time=end_time,
-            tasks_spawned=1,
-            tasks_succeeded=1 if success else 0,
-            tasks_failed=0 if success else 1,
-            outcome="success" if success else "failure",
-            exit_code=exit_code,
-            task_ids=[task_id],
-            final_stage=final_stage,
+        print(f"📁 Telemetry: {logger.run_dir}")
+        success = process_task(
+            task, repo_root, adapter, args.isolation, logger=logger, worktree_dir=worktree_dir
         )
-    )
-    if not spawned_by_batch:
-        logger.copy_work_history(os.path.join(repo_root, ".agents", "work-history.jsonl"))
-    return exit_code
+        exit_code = 0 if success else 1
+
+        # For top-level run-one on a queued task, mirror run_batch and transition
+        # the task to awaiting_merge on success so aet-state record-merge can run.
+        if success and queued_task and not spawned_by_batch:
+            try:
+                queue = backend.load()["queue"]
+                queue_task = next((t for t in queue if t.get("id") == task_id), None)
+                if queue_task:
+                    from_state = current_state(queue_task) or "in_progress"
+                    worktree_rel = queue_task.get("worktree")
+                    if worktree_rel:
+                        ok, msg = verify_branch_has_commits(
+                            os.path.join(repo_root, worktree_rel)
+                        )
+                        if not ok:
+                            print(f"   ❌ Task {task_id} succeeded but produced no commits: {msg}")
+                            _mark_failed(backend, queue_file, task_id, from_state)
+                            exit_code = 1
+                        else:
+                            aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+                            result = subprocess.run(
+                                [
+                                    sys.executable,
+                                    aet_state_bin,
+                                    "transition",
+                                    task_id,
+                                    from_state,
+                                    "awaiting_merge",
+                                    queue_file,
+                                ],
+                                capture_output=True,
+                                text=True,
+                            )
+                            if result.returncode == 0:
+                                print(f"   ✅ Task {task_id} awaiting merge")
+                            else:
+                                print(
+                                    f"   ⚠️  Could not transition {task_id} to "
+                                    f"awaiting_merge: {result.stderr.strip()}"
+                                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                print(f"   ⚠️  Could not mark {task_id} awaiting merge: {exc}")
+
+        end_time = telemetry.iso_now()
+
+        # Read the final stage from the synthetic task record; the footer is only a breadcrumb.
+        final_stage = task.get("stage") or read_plan_stage(plan_file) or "plan-approved"
+
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=1,
+                tasks_succeeded=1 if success else 0,
+                tasks_failed=0 if success else 1,
+                outcome="success" if success else "failure",
+                exit_code=exit_code,
+                task_ids=[task_id],
+                final_stage=final_stage,
+            )
+        )
+        if not spawned_by_batch:
+            logger.copy_work_history(os.path.join(repo_root, ".agents", "work-history.jsonl"))
+        return exit_code
+    finally:
+        if owns_lease:
+            release_lease(queue_file, logger.run_id)
 
 
 def main() -> int:

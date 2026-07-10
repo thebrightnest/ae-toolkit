@@ -16,7 +16,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import build_blocks  # noqa: E402
+from queue import build_blocks, lease_guard  # noqa: E402
 
 from backends.factory import create_backend  # noqa: E402
 from plan_parser import new_task_from_plan, stage_from_plan  # noqa: E402
@@ -49,6 +49,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--config",
         default=".agents/aet-work.json",
         help="Path to aet-work backend configuration",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
     )
     return parser.parse_args(argv)
 
@@ -118,6 +123,9 @@ def main(argv: list[str] | None = None) -> int:
     task = new_task_from_plan(plan_file)
     queue.append(task)
     build_blocks(queue)
+    if not lease_guard(args.queue_file, force=args.force):
+        backend.close()
+        return 1
     backend.save(queue)
     print(f"✓ Added {plan_file.name} to the queue as {task['state']}.")
     backend.close()
