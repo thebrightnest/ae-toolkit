@@ -921,6 +921,106 @@ class TestSync(unittest.TestCase):
         self.assertIn("existing", tasks)
         self.assertNotIn("new", tasks)
 
+    def test_sync_never_adds_new_plans(self):
+        """sync reconciles existing entries and never auto-adds plans from disk."""
+        existing_plan = self.plans_dir / "existing.md"
+        make_plan(existing_plan, "Existing task")
+        initial = {
+            "tasks": [
+                {
+                    "id": "existing",
+                    "title": "Existing task",
+                    "plan_file": str(existing_plan),
+                    "blocked_by": [],
+                    "blocks": [],
+                    "state": "in_progress",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                    "completed_at": None,
+                    "merged_at": None,
+                }
+            ]
+        }
+        self.queue_file.write_text(json.dumps(initial))
+        # A second plan exists on disk but was never explicitly added via `add`.
+        make_plan(self.plans_dir / "new.md", "New task", size="S")
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertIn("existing", tasks)
+        self.assertNotIn("new", tasks)
+        self.assertIn("0 new tasks added", result.stdout)
+
+    def test_sync_still_reports_drift_and_rebuilds_edges(self):
+        """sync recomputes reverse blocks edges and reports drift for missing plan files."""
+        plan_a = self.plans_dir / "a.md"
+        plan_b = self.plans_dir / "b.md"
+        make_plan(plan_a, "Task A", size="S")
+        make_plan(plan_b, "Task B", blocked_by=["a"], size="S")
+        initial = {
+            "tasks": [
+                {
+                    "id": "a",
+                    "title": "Task A",
+                    "plan_file": str(plan_a),
+                    "blocked_by": [],
+                    "blocks": [],  # stale; build_blocks must rebuild to ["b"]
+                    "state": "ready",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                    "completed_at": None,
+                    "merged_at": None,
+                },
+                {
+                    "id": "b",
+                    "title": "Task B",
+                    "plan_file": str(plan_b),
+                    "blocked_by": ["a"],
+                    "blocks": [],
+                    "state": "blocked",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                    "completed_at": None,
+                    "merged_at": None,
+                },
+                {
+                    "id": "ghost",
+                    "title": "Ghost task",
+                    "plan_file": "docs/plans/ghost.md",  # missing on disk -> drift
+                    "blocked_by": [],
+                    "blocks": [],
+                    "state": "in_progress",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                    "completed_at": None,
+                    "merged_at": None,
+                },
+            ]
+        }
+        self.queue_file.write_text(json.dumps(initial))
+
+        result, _ = run_script(
+            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        # Reverse edges rebuilt for the whole queue.
+        self.assertEqual(tasks["a"]["blocks"], ["b"])
+        self.assertEqual(tasks["b"]["blocks"], [])
+        # Drift reported for the missing plan file; stored state is not mutated.
+        self.assertIn("drift", result.stdout.lower())
+        self.assertIn("ghost", result.stdout)
+        self.assertEqual(tasks["ghost"]["state"], "in_progress")
+
 
 class TestSyncBackendAware(unittest.TestCase):
     def setUp(self):
