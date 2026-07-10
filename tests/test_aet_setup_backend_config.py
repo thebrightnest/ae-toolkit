@@ -57,6 +57,17 @@ class TestConfigureTaskBackend(unittest.TestCase):
         self.assertEqual(config["task_backend"], "json")
         self.assertNotIn("github", config)
 
+    def test_git_refs_backend_creates_config_and_notes_prototype(self):
+        result = self.run_script(["--backend", "git-refs", "--non-interactive"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = self.read_config()
+        self.assertEqual(config["task_backend"], "git-refs")
+        # git-refs is local-only; no github mirror is configured.
+        self.assertNotIn("github", config)
+        # The opt-in path surfaces a prototype warning so users know it is not
+        # the default, production recommendation.
+        self.assertIn("prototype", result.stderr.lower())
+
     def test_github_backend_with_explicit_repo_creates_config(self):
         result = self.run_script(
             ["--backend", "github", "--repo", "acme/widget", "--non-interactive"]

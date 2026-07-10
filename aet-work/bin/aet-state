@@ -310,11 +310,15 @@ def _apply_transition(backend, queue, task, from_state, to_state, by, evidence=N
     backend.save(queue)
     backend.on_transition(task["id"], from_state, to_state, evidence)
 
-    # Seal terminal tasks to the append-only settled history log.
+    # Seal terminal tasks to the append-only settled history log. Routing
+    # through the backend keeps the file-path assumption out of aet-state so
+    # non-file backends (e.g. git refs) can drop their own live record first.
     if to_state in queue_lib.TERMINAL_STATES:
         if history_file is None:
-            history_file = str(Path(backend.queue_file).with_name("work-history.jsonl"))
-        queue_lib.seal_terminal(backend.queue_file, history_file, task["id"])
+            history_file = getattr(backend, "history_file", None) or str(
+                Path(backend.queue_file).with_name("work-history.jsonl")
+            )
+        backend.seal(task["id"], history_file)
         backend.close_task(task["id"], evidence)
 
 

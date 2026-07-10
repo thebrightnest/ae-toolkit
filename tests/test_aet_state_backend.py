@@ -3,8 +3,10 @@
 import importlib.machinery
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -90,6 +92,28 @@ class FakeBackend:
         self.calls.append(
             ("close_task", {"task_id": task_id, "evidence": evidence})
         )
+
+    def seal(self, task_id, history_file):
+        """Mirror queue.seal_terminal against the fake's file-backed queue."""
+        self.calls.append(("seal", {"task_id": task_id, "history_file": history_file}))
+        path = Path(self.queue_file)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        tasks = data.get("tasks", data) if isinstance(data, dict) else data
+        task = next((t for t in tasks if t.get("id") == task_id), None)
+        if task is None:
+            raise ValueError(f"Task {task_id} not found in live queue {self.queue_file}")
+        live = [t for t in tasks if t.get("id") != task_id]
+        record = {**task, "settled_at": datetime.now(timezone.utc).isoformat()}
+        os.makedirs(os.path.dirname(history_file), exist_ok=True)
+        with open(history_file, "a", encoding="utf-8") as f:
+            json.dump(record, f)
+            f.write("\n")
+        if isinstance(data, dict):
+            data["tasks"] = live
+        else:
+            data = live
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return task
 
 
 class MockResult:

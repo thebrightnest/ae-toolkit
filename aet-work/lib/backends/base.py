@@ -74,3 +74,35 @@ class TaskBackend(ABC):
         corresponding external issue. The default implementation does nothing.
         """
         return
+
+    def seal(self, task_id: str, history_file: str) -> dict[str, Any]:
+        """Move a terminal task from the live queue to the settled history log.
+
+        The default implementation targets the local JSON files (``queue_file``
+        and ``history_file``) and mirrors ``queue.seal_terminal``: it removes
+        the task from the live queue and appends the full record (including its
+        transition history) to ``history_file`` as one JSONL line.
+
+        Backends that store live tasks elsewhere (for example git refs) override
+        this to drop their per-task record before appending to the shared
+        history JSONL, so ``aet-state`` can route sealing through the backend
+        interface instead of assuming a file-backed queue.
+
+        The caller (``aet-state``) already holds the queue lock, so this method
+        does not re-acquire it: the queue module is loaded twice in-process
+        (as ``aet_queue`` by ``aet-state`` and as ``queue`` by the backends),
+        and a second independent ``flock`` file descriptor to the same lock file
+        would self-deadlock under POSIX ``flock`` semantics.
+        """
+        from queue import append_history_record, read_queue, write_queue
+
+        queue = read_queue(self.queue_file)
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        if task is None:
+            raise ValueError(
+                f"Task {task_id} not found in live queue {self.queue_file}"
+            )
+        live = [t for t in queue if t.get("id") != task_id]
+        append_history_record(history_file, task)
+        write_queue(self.queue_file, live)
+        return task

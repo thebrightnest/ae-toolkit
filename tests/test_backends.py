@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
 import json
+import subprocess
 import tempfile
 import unittest
 import unittest.mock
@@ -13,6 +14,7 @@ from abc import ABC
 
 from backends.base import TaskBackend
 from backends.factory import create_backend
+from backends.git_refs_backend import GitRefsBackend
 from backends.github_backend import GitHubBackend
 from backends.json_backend import JsonBackend
 
@@ -292,6 +294,19 @@ class TestFactory(unittest.TestCase):
             history_file=self.history_file,
         )
         self.assertIsInstance(backend, JsonBackend)
+
+    def test_factory_returns_git_refs_backend_when_configured(self):
+        config_path = Path(self.tmp.name) / "aet-work.json"
+        config_path.write_text('{"task_backend": "git-refs"}', encoding="utf-8")
+        # GitRefsBackend requires the queue path to live inside a git repo.
+        subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
+
+        backend = create_backend(
+            config_path=str(config_path),
+            queue_file=self.queue_file,
+            history_file=self.history_file,
+        )
+        self.assertIsInstance(backend, GitRefsBackend)
 
     def test_factory_returns_github_backend_when_configured(self):
         config_path = Path(self.tmp.name) / "aet-work.json"
