@@ -188,8 +188,14 @@ def stage_record(
     worktree_size_bytes: int | None = None,
     token_count: int | None = None,
     cost_estimate: float | None = None,
+    stages: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Build a per-stage telemetry record."""
+    """Build a per-stage telemetry record.
+
+    ``stage`` is the target stage of the spawned session. For group sessions
+    (standard isolation) ``stages`` carries the ordered list of stage names the
+    single session spanned; it is ``None`` for exact per-stage sessions.
+    """
     duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
     return {
         "type": "stage",
@@ -197,6 +203,7 @@ def stage_record(
         "task_id": task_id,
         "plan_file": plan_file,
         "stage": stage,
+        "stages": stages,
         "agent_cli": agent_cli,
         "isolation_level": isolation_level,
         "start_time": start_time,
@@ -243,37 +250,6 @@ def run_summary_record(
         "exit_code": exit_code,
         "task_ids": task_ids or [],
         "final_stage": final_stage,
-    }
-
-
-def loop_record(
-    run_id: str,
-    task_id: str,
-    plan_file: str,
-    stage: str,
-    loop_type: str,
-    iteration: int,
-    start_time: str,
-    end_time: str,
-    exit_code: int,
-    detail: str | None = None,
-) -> dict[str, Any]:
-    """Build a loop telemetry record (e.g., test retry or format fix)."""
-    duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
-    return {
-        "type": "loop",
-        "run_id": run_id,
-        "task_id": task_id,
-        "plan_file": plan_file,
-        "stage": stage,
-        "loop_type": loop_type,
-        "iteration": iteration,
-        "start_time": start_time,
-        "end_time": end_time,
-        "duration_seconds": duration_seconds,
-        "exit_code": exit_code,
-        "result": "success" if exit_code == 0 else "failure",
-        "detail": detail,
     }
 
 
@@ -446,9 +422,8 @@ def report(
                 ]
             summaries = [r for r in records if r.get("type") == "run_summary"]
             stages = [r for r in records if r.get("type") == "stage"]
-            loops = [r for r in records if r.get("type") == "loop"]
             environment_issues = [r for r in records if r.get("type") == "environment_issue"]
-            return _format_report(summaries, stages, loops, environment_issues, 1 if records else 0)
+            return _format_report(summaries, stages, environment_issues, 1 if records else 0)
 
         if path.is_dir():
             root = path
@@ -462,19 +437,17 @@ def report(
     records = _scan_records(root, since=since)
     summaries = [r for r in records if r.get("type") == "run_summary"]
     stages = [r for r in records if r.get("type") == "stage"]
-    loops = [r for r in records if r.get("type") == "loop"]
     environment_issues = [r for r in records if r.get("type") == "environment_issue"]
 
     runs_observed = len({r.get("run_id") for r in records if r.get("run_id")})
     return _format_report(
-        summaries, stages, loops, environment_issues, runs_observed
+        summaries, stages, environment_issues, runs_observed
     )
 
 
 def _format_report(
     summaries: list[dict[str, Any]],
     stages: list[dict[str, Any]],
-    loops: list[dict[str, Any]],
     environment_issues: list[dict[str, Any]],
     runs_observed: int,
 ) -> str:
@@ -494,7 +467,6 @@ def _format_report(
         f"Failed: {total_failed}",
         f"Wall-clock time: {total_wall:.1f}s",
         f"Average isolation level: {_average_isolation_level(stages)}",
-        f"Loops: {len(loops)}",
         f"Environment issues: {len(environment_issues)}",
     ]
     return "\n".join(lines) + "\n"
