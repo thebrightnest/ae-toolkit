@@ -232,6 +232,7 @@ def run_summary_record(
     exit_code: int | None = None,
     task_ids: list[str] | None = None,
     final_stage: str | None = None,
+    leftover: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Build a per-run summary telemetry record."""
     wall_clock_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
@@ -250,6 +251,7 @@ def run_summary_record(
         "exit_code": exit_code,
         "task_ids": task_ids or [],
         "final_stage": final_stage,
+        "leftover": leftover or {},
     }
 
 
