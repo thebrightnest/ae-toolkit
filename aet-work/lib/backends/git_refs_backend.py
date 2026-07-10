@@ -1,0 +1,218 @@
+"""Git-refs backend for the aet-work queue.
+
+Each live task record is stored as a JSON blob addressed by a git ref under
+``refs/aet/tasks/<task-id>``. Queue envelope metadata (``source_prd``,
+``queue_updated_at``, …) lives at ``refs/aet/meta/queue``. Settled history is
+left in the append-only ``work-history.jsonl`` file, exactly as the JSON backend
+does — this backend is storage-only; state legality stays in ``aet-state``.
+
+Ref updates are atomic under git's own ref locks. A multi-task ``save`` writes
+per-task refs and skips tasks whose blob is unchanged versus what was loaded, so
+concurrent writers touching *different* tasks never clobber each other. Nothing
+here pushes ``refs/aet/*``: the backend is local-only by default.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+from queue import read_history
+from typing import Any
+
+from backends.base import TaskBackend
+
+TASKS_REF_PREFIX = "refs/aet/tasks/"
+ENVELOPE_REF = "refs/aet/meta/queue"
+
+# Git's null object id: used as the ``oldvalue`` of a compare-and-swap create
+# so a fresh task ref is only written when it does not already exist.
+_NULL_OID = "0" * 40
+
+
+def _canonical_json(value: Any) -> bytes:
+    """Serialize ``value`` to stable UTF-8 JSON bytes for content addressing."""
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+
+
+class GitRefsBackend(TaskBackend):
+    """Git-native implementation of the task backend interface."""
+
+    def __init__(
+        self,
+        queue_file: str = ".agents/work-queue.json",
+        history_file: str = ".agents/work-history.jsonl",
+    ) -> None:
+        self.queue_file = queue_file
+        self.history_file = history_file
+        queue_dir = Path(queue_file).resolve().parent
+        self.repo_root = self._discover_repo_root(queue_dir)
+        # Blob SHAs observed at the most recent ``load`` (or last successful
+        # ``save``), keyed by task id. Drives the skip-unchanged optimization and
+        # the compare-and-swap ``update-ref`` that makes disjoint concurrent
+        # writers safe.
+        self._loaded_shas: dict[str, str] = {}
+        self._envelope: dict[str, Any] = {}
+
+    @staticmethod
+    def _discover_repo_root(queue_dir: Path) -> str:
+        """Return the git work-tree root containing ``queue_dir``.
+
+        Raises ``RuntimeError`` when ``queue_dir`` is not inside a git
+        repository (or git is unavailable), so misconfiguration fails fast and
+        loudly rather than writing refs into the wrong place.
+        """
+        result = subprocess.run(
+            ["git", "-C", str(queue_dir), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                "GitRefsBackend requires the queue path to live inside a git "
+                f"repository; {queue_dir} is not inside a git repository"
+            )
+        return result.stdout.strip()
+
+    # -- git plumbing helpers -------------------------------------------------
+
+    def _git(
+        self, *args: str, input: bytes | None = None
+    ) -> subprocess.CompletedProcess:
+        """Run git in the repo root and return the completed (binary) process."""
+        return subprocess.run(
+            ["git", "-C", self.repo_root, *args],
+            input=input,
+            capture_output=True,
+        )
+
+    def _write_blob(self, data: bytes) -> str:
+        result = self._git("hash-object", "-w", "--stdin", input=data)
+        result.check_returncode()
+        return result.stdout.decode().strip()
+
+    def _read_blob(self, sha: str) -> bytes:
+        result = self._git("cat-file", "-p", sha)
+        result.check_returncode()
+        return result.stdout
+
+    def _ref_sha(self, ref: str) -> str | None:
+        """Return the object id ``ref`` points to, or ``None`` if it is absent."""
+        result = self._git("rev-parse", "--verify", "-q", ref)
+        if result.returncode != 0:
+            return None
+        return result.stdout.decode().strip()
+
+    def _list_task_refs(self) -> list[str]:
+        result = self._git(
+            "for-each-ref", "--format=%(refname)", TASKS_REF_PREFIX
+        )
+        result.check_returncode()
+        return [line for line in result.stdout.decode().splitlines() if line]
+
+    def _history_path(self) -> str:
+        path = Path(self.history_file)
+        if path.is_absolute():
+            return str(path)
+        return str(Path(self.repo_root) / path)
+
+    # -- TaskBackend interface ------------------------------------------------
+
+    def load(self) -> dict[str, Any]:
+        """Return queue (from refs) and settled history (from JSONL)."""
+        queue: list[dict[str, Any]] = []
+        loaded_shas: dict[str, str] = {}
+        for ref in self._list_task_refs():
+            sha = self._ref_sha(ref)
+            if sha is None:
+                continue
+            task_id = ref[len(TASKS_REF_PREFIX) :]
+            try:
+                task = json.loads(self._read_blob(sha))
+            except (json.JSONDecodeError, subprocess.CalledProcessError):
+                # A corrupt or partial blob must not crash the load; skip it.
+                continue
+            if isinstance(task, dict):
+                queue.append(task)
+                loaded_shas[task_id] = sha
+        self._loaded_shas = loaded_shas
+        self._envelope = self._read_envelope()
+        return {"queue": queue, "history": read_history(self._history_path())}
+
+    def save(
+        self, queue: list[dict[str, Any]], wrapper: dict[str, Any] | None = None
+    ) -> None:
+        """Persist ``queue`` as per-task refs, pruning tasks that left the queue."""
+        if wrapper:
+            self._envelope = {**self._envelope, **wrapper}
+
+        seen: set[str] = set()
+        for task in queue:
+            task_id = task.get("id")
+            if not task_id:
+                # Without an id there is no ref to address; skip defensively.
+                continue
+            seen.add(task_id)
+            new_sha = self._write_blob(_canonical_json(task))
+            if self._loaded_shas.get(task_id) == new_sha:
+                continue  # unchanged versus what we loaded -> nothing to write
+            ref = TASKS_REF_PREFIX + task_id
+            expected = self._loaded_shas.get(task_id) or _NULL_OID
+            result = self._git("update-ref", ref, new_sha, expected)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"concurrent update detected for task {task_id}: {ref} "
+                    "changed since last load"
+                )
+            self._loaded_shas[task_id] = new_sha
+
+        # Prune refs for tasks that are no longer in the live queue (sealed or
+        # removed). Deleting an already-absent ref is a harmless no-op.
+        for ref in self._list_task_refs():
+            task_id = ref[len(TASKS_REF_PREFIX) :]
+            if task_id not in seen:
+                self._git("update-ref", "-d", ref).check_returncode()
+                self._loaded_shas.pop(task_id, None)
+
+        if self._envelope:
+            envelope_sha = self._write_blob(_canonical_json(self._envelope))
+            if self._ref_sha(ENVELOPE_REF) != envelope_sha:
+                self._git("update-ref", ENVELOPE_REF, envelope_sha).check_returncode()
+
+    def plan_drift(self, plans_dir: str | Path) -> list[str]:
+        """Return plan files that are not present in queue or history."""
+        data = self.load()
+        queued_files = {
+            t.get("plan_file") for t in data["queue"] if t.get("plan_file")
+        }
+        settled_files = {
+            t.get("plan_file") for t in data["history"] if t.get("plan_file")
+        }
+        plan_files = sorted(Path(plans_dir).glob("*.md"))
+        return [
+            str(pf)
+            for pf in plan_files
+            if str(pf) not in queued_files and str(pf) not in settled_files
+        ]
+
+    def close(self) -> None:
+        """No-op: every git invocation is self-contained."""
+        return
+
+    def sync_task(self, task: dict[str, Any], is_new: bool) -> None:
+        """No-op: the git-refs backend has no external task mirror."""
+        return
+
+    # -- envelope -------------------------------------------------------------
+
+    def _read_envelope(self) -> dict[str, Any]:
+        sha = self._ref_sha(ENVELOPE_REF)
+        if sha is None:
+            return {}
+        try:
+            data = json.loads(self._read_blob(sha))
+        except (json.JSONDecodeError, subprocess.CalledProcessError):
+            return {}
+        return data if isinstance(data, dict) else {}
