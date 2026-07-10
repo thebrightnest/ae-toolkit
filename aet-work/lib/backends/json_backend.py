@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from queue import (
-    LEGAL_TRANSITIONS,
-    append_history,
-    current_state,
     read_history,
     read_queue,
     write_queue,
@@ -39,33 +36,6 @@ class JsonBackend(TaskBackend):
     ) -> None:
         """Persist the queue to the configured JSON file."""
         write_queue(self.queue_file, queue, wrapper=wrapper)
-
-    def transition(
-        self,
-        task_id: str,
-        from_state: str | None,
-        to_state: str,
-        by: str = "system",
-        evidence: dict[str, Any] | None = None,
-    ) -> bool:
-        """Apply a validated state transition to a task in the JSON queue."""
-        queue = read_queue(self.queue_file)
-        task = next((t for t in queue if t.get("id") == task_id), None)
-        if task is None:
-            return False
-
-        recorded_state = current_state(task)
-        if recorded_state != from_state:
-            return False
-
-        legal = LEGAL_TRANSITIONS.get(from_state, set())
-        if to_state not in legal:
-            return False
-
-        task["state"] = to_state
-        append_history(task, from_state, to_state, by, evidence)
-        write_queue(self.queue_file, queue)
-        return True
 
     def plan_drift(self, plans_dir: str | Path) -> list[str]:
         """Return plan files that are not present in queue or history."""

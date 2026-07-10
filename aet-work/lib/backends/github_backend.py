@@ -6,9 +6,6 @@ import json
 import subprocess
 from pathlib import Path
 from queue import (
-    LEGAL_TRANSITIONS,
-    append_history,
-    current_state,
     read_history,
     read_queue,
     write_queue,
@@ -81,39 +78,35 @@ class GitHubBackend(TaskBackend):
         """Persist the queue to the local JSON mirror."""
         write_queue(self.queue_file, queue, wrapper=wrapper)
 
-    def transition(
+    def on_transition(
         self,
         task_id: str,
         from_state: str | None,
         to_state: str,
-        by: str = "system",
         evidence: dict[str, Any] | None = None,
-    ) -> bool:
-        """Apply a validated state transition and update the issue label."""
-        queue = read_queue(self.queue_file)
-        task = next((t for t in queue if t.get("id") == task_id), None)
-        if task is None:
-            return False
+    ) -> None:
+        """Mirror a non-terminal transition to the GitHub issue labels.
 
-        recorded_state = current_state(task)
-        if recorded_state != from_state:
-            return False
-
-        legal = LEGAL_TRANSITIONS.get(from_state, set())
-        if to_state not in legal:
-            return False
-
-        task["state"] = to_state
-        append_history(task, from_state, to_state, by, evidence)
-        write_queue(self.queue_file, queue)
-
+        Terminal states (``merged``/``abandoned``) are handled by
+        ``close_task`` so the issue is closed rather than relabelled.
+        """
         if to_state in {"merged", "abandoned"}:
-            issue_number = task.get("github_issue_number")
-            if issue_number is not None:
-                self._close_issue(issue_number)
-        else:
-            self._update_issue_labels(task)
-        return True
+            return
+        task = self._find_task(task_id)
+        if task is None:
+            return
+        self._update_issue_labels(task)
+
+    def close_task(
+        self, task_id: str, evidence: dict[str, Any] | None = None
+    ) -> None:
+        """Close the GitHub issue for a terminal task, if one exists."""
+        task = self._find_task(task_id)
+        if task is None:
+            return
+        issue_number = task.get("github_issue_number")
+        if issue_number is not None:
+            self._close_issue(issue_number)
 
     def plan_drift(self, plans_dir: str | Path) -> list[str]:
         """Return plan files that are not present in queue or history."""
@@ -287,6 +280,11 @@ class GitHubBackend(TaskBackend):
             task["github_issue_number"] = issue_number
 
         self._set_issue_labels(issue_number, task.get("state"))
+
+    def _find_task(self, task_id: str) -> dict[str, Any] | None:
+        """Return the queue entry for ``task_id`` from the local mirror, or None."""
+        queue = read_queue(self.queue_file)
+        return next((t for t in queue if t.get("id") == task_id), None)
 
     def _find_issue_by_title(self, title: str) -> int | None:
         """Find an open issue by title and return its number."""
