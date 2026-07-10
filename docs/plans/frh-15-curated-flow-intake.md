@@ -4,6 +4,7 @@ size: M
 blocked_by:
   - frh-07-status-retirement-state-bin
 pipeline: standard
+status: merged
 ---
 
 # Plan: Curated Flow — add Parks Runnable State, sync Stops Auto-Adding
@@ -76,5 +77,5 @@ This plan scoped an 8-file curated-intake implementation. The production semanti
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
