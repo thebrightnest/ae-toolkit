@@ -62,5 +62,5 @@ Revert the merge commit; `task_backend: "git-refs"` configs fail loudly back to 
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
