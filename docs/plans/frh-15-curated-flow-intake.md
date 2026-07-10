@@ -68,7 +68,13 @@ Skill-text rider (mandatory, else this creates a new reality gap): `aet-pipeline
 
 Revert the merge commit. Queues created in the interim carry `ready`/`blocked` states that the old code also understands; no data migration in either direction.
 
+## Implementation Note
+
+_Recorded by `aet-sync-docs` on 2026-07-10 — branch `frh-15-curated-flow-intake`._
+
+This plan scoped an 8-file curated-intake implementation. The production semantics for **tasks 1–5** (`build_blocks` in `aet-work/lib/queue.py`, `add` parking at `ready`/`blocked` and rebuilding edges, `plan_parser` recording the real initial state, `sync` no longer auto-adding, and the explicit `aet-work add` handoff in both skill texts) were verified already present on `origin/main`, landed earlier via commit `a85ab7b` ("curated sprint intake"). This branch therefore delivered **task 6** — the regression contract (`test_add_parks_ready_when_unblocked`, `test_add_parks_blocked_with_pending_blockers_and_builds_edges`, `test_intake_history_records_actual_initial_state`, `test_sync_never_adds_new_plans`, `test_sync_still_reports_drift_and_rebuilds_edges`) — plus plan-footer bookkeeping. Feature behavior matches the plan; only the implementation locus differs (upstream commit rather than this branch). Task 7 (merge + verify) is owned by `aet-ship`.
+
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+_Stage: synced_
+_Next step: run `aet-ship`_
