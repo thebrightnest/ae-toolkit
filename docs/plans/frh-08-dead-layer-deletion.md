@@ -5,6 +5,7 @@ blocked_by:
   - frh-03-process-group-kill
   - frh-07-status-retirement-state-bin
 pipeline: standard
+status: merged
 ---
 
 # Plan: Delete the Dead Layer — Backend `transition`, Verifier Retries, `estimate_repo_size`
@@ -64,5 +65,5 @@ Revert the merge commit; all deletions restore cleanly from git history.
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: merge — review completed in-session after the aet-review child hit a transient provider connection error; objective gates green (`make validate`: 309 tests, lint, format, skill structure)_
