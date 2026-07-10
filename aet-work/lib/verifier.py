@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-import time
 
 
 def verify_branch_has_commits(worktree_dir: str) -> tuple[bool, str]:
@@ -57,22 +56,22 @@ def verify_stage_advancement(
     recorded_stage: str | None,
     worktree_dir: str,
     expected_stage: str,
-    retries: int = 1,
 ) -> tuple[bool, str]:
     """Verify the recorded pipeline stage advanced to the expected stage.
 
-    ``read_plan_stage`` is kept only for the advisory footer breadcrumb; it
-    is no longer used to make scheduling decisions.
+    Performs a single comparison of the recorded stage against the expected
+    stage, then confirms the branch has commits. ``read_plan_stage`` is kept
+    only for the advisory footer breadcrumb; it is not used to make scheduling
+    decisions.
     """
-    stage = recorded_stage
-    for attempt in range(retries + 1):
-        if stage == expected_stage:
-            ok, msg = verify_branch_has_commits(worktree_dir)
-            if ok:
-                return True, ""
-            return False, msg
+    if recorded_stage != expected_stage:
+        return (
+            False,
+            f"Stage did not advance: expected '{expected_stage}',"
+            f" got '{recorded_stage}'",
+        )
 
-        if attempt < retries:
-            time.sleep(2)
-
-    return False, f"Stage did not advance: expected '{expected_stage}', got '{stage}'"
+    ok, msg = verify_branch_has_commits(worktree_dir)
+    if ok:
+        return True, ""
+    return False, msg

@@ -204,18 +204,6 @@ def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
         shutil.copy2(src, dest)
 
 
-def estimate_repo_size(repo_root: str) -> int:
-    """Estimate repo size in bytes using du."""
-    result = subprocess.run(
-        ["du", "-sb", repo_root],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        return int(result.stdout.split()[0])
-    return 0
-
-
 def dependency_warmup_required(repo_root: str, worktree_dir: str) -> list[dict]:
     """Return configured dependencies that are missing inside the worktree.
 

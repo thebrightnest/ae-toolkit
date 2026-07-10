@@ -172,70 +172,6 @@ class TestGitHubBackend(unittest.TestCase):
         self.assertEqual(created_names, missing)
 
     @mock.patch("backends.github_backend.subprocess.run")
-    def test_transition_updates_issue_labels(self, mock_run):
-        _write_queue(
-            self.queue_file,
-            [
-                {
-                    "id": "task",
-                    "state": "ready",
-                    "github_issue_number": 10,
-                    "plan_file": "docs/plans/task.md",
-                }
-            ],
-        )
-        mock_run.side_effect = [
-            _completed(stdout='{"labels": [{"name": "aet:ready"}]}'),
-            _completed(stdout=""),
-        ]
-
-        result = self.backend.transition("task", "ready", "in_progress")
-        self.assertTrue(result)
-
-        edit_calls = [
-            call.args[0]
-            for call in mock_run.call_args_list
-            if call.args[0][:3] == ["gh", "issue", "edit"]
-        ]
-        self.assertEqual(len(edit_calls), 1)
-        self.assertIn("aet:in-progress", self._label_names_from_cmd(edit_calls[0]))
-
-    @mock.patch("backends.github_backend.subprocess.run")
-    def test_transition_closes_terminal_issue(self, mock_run):
-        _write_queue(
-            self.queue_file,
-            [
-                {
-                    "id": "task",
-                    "state": "awaiting_merge",
-                    "github_issue_number": 11,
-                    "plan_file": "docs/plans/task.md",
-                }
-            ],
-        )
-        mock_run.return_value = _completed(stdout="")
-
-        result = self.backend.transition("task", "awaiting_merge", "merged")
-        self.assertTrue(result)
-
-        close_calls = [
-            call.args[0]
-            for call in mock_run.call_args_list
-            if call.args[0][:3] == ["gh", "issue", "close"]
-        ]
-        self.assertEqual(len(close_calls), 1)
-        self.assertIn("11", close_calls[0])
-
-        with open(self.queue_file, "r", encoding="utf-8") as f:
-            queue = json.load(f)
-        self.assertEqual(queue[0]["state"], "merged")
-        self.assertTrue(any(h.get("to") == "merged" for h in queue[0].get("history", [])))
-
-    def test_transition_returns_false_when_task_not_found(self):
-        _write_queue(self.queue_file, [])
-        self.assertFalse(self.backend.transition("missing", "ready", "in_progress"))
-
-    @mock.patch("backends.github_backend.subprocess.run")
     def test_missing_gh_cli_raises_clear_error(self, mock_run):
         mock_run.side_effect = FileNotFoundError("No such file or directory: 'gh'")
 
@@ -255,6 +191,82 @@ class TestGitHubBackend(unittest.TestCase):
             self.backend.ensure_labels()
 
         self.assertIn("Bad credentials", str(ctx.exception))
+
+    @mock.patch("backends.github_backend.subprocess.run")
+    def test_on_transition_updates_issue_labels(self, mock_run):
+        _write_queue(
+            self.queue_file,
+            [
+                {
+                    "id": "task",
+                    "state": "in_progress",
+                    "github_issue_number": 10,
+                    "plan_file": "docs/plans/task.md",
+                }
+            ],
+        )
+        mock_run.side_effect = [
+            _completed(stdout='{"labels": [{"name": "aet:ready"}]}'),
+            _completed(stdout=""),
+        ]
+
+        self.backend.on_transition("task", "ready", "in_progress")
+
+        edit_calls = [
+            call.args[0]
+            for call in mock_run.call_args_list
+            if call.args[0][:3] == ["gh", "issue", "edit"]
+        ]
+        self.assertEqual(len(edit_calls), 1)
+        self.assertIn("aet:in-progress", self._label_names_from_cmd(edit_calls[0]))
+
+    @mock.patch("backends.github_backend.subprocess.run")
+    def test_on_transition_skips_terminal_states(self, mock_run):
+        _write_queue(
+            self.queue_file,
+            [
+                {
+                    "id": "task",
+                    "state": "merged",
+                    "github_issue_number": 10,
+                    "plan_file": "docs/plans/task.md",
+                }
+            ],
+        )
+
+        self.backend.on_transition("task", "awaiting_merge", "merged")
+
+        mock_run.assert_not_called()
+
+    @mock.patch("backends.github_backend.subprocess.run")
+    def test_close_task_closes_terminal_issue(self, mock_run):
+        _write_queue(
+            self.queue_file,
+            [
+                {
+                    "id": "task",
+                    "state": "merged",
+                    "github_issue_number": 11,
+                    "plan_file": "docs/plans/task.md",
+                }
+            ],
+        )
+        mock_run.return_value = _completed(stdout="")
+
+        self.backend.close_task("task")
+
+        close_calls = [
+            call.args[0]
+            for call in mock_run.call_args_list
+            if call.args[0][:3] == ["gh", "issue", "close"]
+        ]
+        self.assertEqual(len(close_calls), 1)
+        self.assertIn("11", close_calls[0])
+
+    def test_close_task_is_noop_when_task_missing(self):
+        _write_queue(self.queue_file, [])
+        # Should not raise and should not call gh.
+        self.backend.close_task("missing")
 
 
 class TestFactoryGitHub(unittest.TestCase):
