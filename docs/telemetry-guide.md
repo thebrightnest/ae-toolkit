@@ -18,13 +18,19 @@ When `aet-work` runs a task, the orchestrator writes directly to:
 
 Each task JSONL file contains:
 
-- stage start/end
-- internal loops (test retries, format fixes, etc.)
-- environment/dependency issues
-- individual test runs
-- learning candidates (emitted by `aet-retro`)
+- one stage record per spawned agent session — start/end timestamps, exit code,
+  files modified, and commits created. The deterministic unit is the **session**:
+  under `standard` isolation a single session may span several stages, so the
+  record carries the session's target `stage` plus a `stages` list capturing the
+  span. `full` and `minimal` isolation yield exact per-stage records (`stages`
+  is `null`).
+- environment/dependency issues raised during worktree warmup
 
 `last-run.json` records the run outcome, task counts, and wall-clock time.
+
+The orchestrator does not emit per-loop or per-test-run records; those are
+derived by other skills (for example, `aet-qa` writes a QA verdict and
+`aet-retro` emits learning candidates).
 
 `.agents/work-history.jsonl` remains project-local for now. A copy is archived
 with each run so terminal task history is preserved alongside execution logs.
@@ -60,8 +66,12 @@ etc.), record the symlinks in `.agents/aet-work.json`:
 ```json
 {
   "symlink_dependencies": [
-    { "from": "app/node_modules", "to": "../app/node_modules" },
-    { "from": "api/vendor", "to": "../api/vendor" }
+    {
+      "name": "app-node_modules",
+      "source": "app/node_modules",
+      "target": "app/node_modules"
+    },
+    { "name": "api-vendor", "source": "api/vendor", "target": "api/vendor" }
   ]
 }
 ```
@@ -99,7 +109,8 @@ aet-work report --since 2026-06-01
 aet-work report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
 ```
 
-This prints counts of stages, loops, environment issues, and wall-clock time.
+This prints run and task counts, wall-clock time, the average isolation level,
+and environment issues.
 
 ## Privacy and retention
 

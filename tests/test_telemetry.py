@@ -10,41 +10,40 @@ import unittest
 import telemetry
 
 
-class TestLoopRecord(unittest.TestCase):
-    def test_loop_record_computes_duration_and_result(self):
-        record = telemetry.loop_record(
+class TestStageRecord(unittest.TestCase):
+    def test_stage_record_stages_defaults_to_none(self):
+        record = telemetry.stage_record(
             run_id="r1",
             task_id="t1",
             plan_file="docs/plans/demo.md",
             stage="implemented",
-            loop_type="test_retry",
-            iteration=2,
+            agent_cli="kimi",
+            isolation_level="full",
             start_time="2026-06-18T00:00:00Z",
             end_time="2026-06-18T00:00:05Z",
             exit_code=0,
         )
-        self.assertEqual(record["type"], "loop")
-        self.assertEqual(record["run_id"], "r1")
-        self.assertEqual(record["task_id"], "t1")
+        self.assertEqual(record["type"], "stage")
         self.assertEqual(record["stage"], "implemented")
-        self.assertEqual(record["loop_type"], "test_retry")
-        self.assertEqual(record["iteration"], 2)
-        self.assertEqual(record["duration_seconds"], 5.0)
+        self.assertIsNone(record["stages"])
         self.assertEqual(record["result"], "success")
+        self.assertEqual(record["duration_seconds"], 5.0)
 
-    def test_loop_record_failure_result(self):
-        record = telemetry.loop_record(
+    def test_stage_record_carries_stage_span_for_group_session(self):
+        record = telemetry.stage_record(
             run_id="r1",
             task_id="t1",
             plan_file="docs/plans/demo.md",
-            stage="implemented",
-            loop_type="format_fix",
-            iteration=1,
+            stage="qa-complete",
+            agent_cli="kimi",
+            isolation_level="standard",
             start_time="2026-06-18T00:00:00Z",
-            end_time="2026-06-18T00:00:01Z",
-            exit_code=1,
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+            stages=["plan-approved", "implemented"],
         )
-        self.assertEqual(record["result"], "failure")
+        self.assertEqual(record["stage"], "qa-complete")
+        self.assertEqual(record["stages"], ["plan-approved", "implemented"])
 
 
 class TestEnvironmentIssueRecord(unittest.TestCase):
@@ -110,7 +109,7 @@ class TestLearningCandidateRecord(unittest.TestCase):
 
 
 class TestReport(unittest.TestCase):
-    def test_report_includes_loop_and_environment_issue_counts(self):
+    def test_report_includes_environment_issue_count(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             log_path = f.name
             f.write(
@@ -128,14 +127,37 @@ class TestReport(unittest.TestCase):
             )
             f.write(
                 json.dumps(
-                    telemetry.loop_record(
+                    telemetry.environment_issue_record(
+                        run_id="r1",
+                        task_id="t1",
+                        plan_file="docs/plans/demo.md",
+                        issue_type="missing_dependency",
+                        dependency="app/node_modules",
+                        timestamp="2026-06-18T00:00:01Z",
+                    )
+                )
+                + "\n"
+            )
+
+        try:
+            output = telemetry.report(log_path)
+            self.assertIn("Environment issues: 1", output)
+        finally:
+            os.unlink(log_path)
+
+    def test_report_has_no_loop_line(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            log_path = f.name
+            f.write(
+                json.dumps(
+                    telemetry.stage_record(
                         run_id="r1",
                         task_id="t1",
                         plan_file="docs/plans/demo.md",
                         stage="implemented",
-                        loop_type="test_retry",
-                        iteration=1,
-                        start_time="2026-06-18T00:00:05Z",
+                        agent_cli="kimi",
+                        isolation_level="full",
+                        start_time="2026-06-18T00:00:00Z",
                         end_time="2026-06-18T00:00:10Z",
                         exit_code=0,
                     )
@@ -158,8 +180,7 @@ class TestReport(unittest.TestCase):
 
         try:
             output = telemetry.report(log_path)
-            self.assertIn("Loops: 1", output)
-            self.assertIn("Environment issues: 1", output)
+            self.assertNotIn("Loops", output)
         finally:
             os.unlink(log_path)
 

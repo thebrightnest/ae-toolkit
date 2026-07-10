@@ -234,6 +234,73 @@ def build_prompt(skills: list[str], plan_file: str, current_stage: str, next_sta
     )
 
 
+def _session_diff_stats(worktree_dir: str) -> tuple[list[str], int]:
+    """Return (files_modified, commits_created) for a worktree relative to main.
+
+    Best-effort: any git failure yields an empty/zero result so telemetry
+    emission never blocks a run.
+    """
+    files_modified: list[str] = []
+    commits_created = 0
+
+    diff = subprocess.run(
+        ["git", "-C", worktree_dir, "diff", "--name-only", "main...HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if diff.returncode == 0:
+        files_modified = [line for line in diff.stdout.splitlines() if line]
+
+    rev = subprocess.run(
+        ["git", "-C", worktree_dir, "rev-list", "--count", "main..HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rev.returncode == 0:
+        try:
+            commits_created = int(rev.stdout.strip() or 0)
+        except ValueError:
+            commits_created = 0
+
+    return files_modified, commits_created
+
+
+def _emit_stage_session(
+    logger: telemetry.RunLogger,
+    task_id: str,
+    plan_file: str,
+    agent_cli: str,
+    isolation_level: str,
+    stage: str,
+    stages: list[str] | None,
+    worktree_dir: str,
+    start_time: str,
+    end_time: str,
+    exit_code: int,
+) -> None:
+    """Emit one stage telemetry record for a completed agent session."""
+    files_modified, commits_created = _session_diff_stats(worktree_dir)
+    logger.append_record(
+        telemetry.stage_record(
+            run_id=logger.run_id,
+            task_id=task_id,
+            plan_file=plan_file,
+            stage=stage,
+            agent_cli=agent_cli,
+            isolation_level=isolation_level,
+            start_time=start_time,
+            end_time=end_time,
+            exit_code=exit_code,
+            files_modified=files_modified,
+            commits_created=commits_created,
+            stages=stages,
+        ),
+        task_id=task_id,
+    )
+
+
 def run_stage(
     adapter,
     repo_root: str,
@@ -411,12 +478,28 @@ def process_task(
             ]
             if runnable and len(runnable) > 1:
                 expected_final = runnable[-1].next_stage or runnable[-1].name
+                stage_span = [s.name for s in runnable]
                 print(
-                    f"   Stage group: {' → '.join(s.name for s in runnable)} → {expected_final}"
+                    f"   Stage group: {' → '.join(stage_span)} → {expected_final}"
                 )
 
+                start_time = telemetry.iso_now()
                 exit_code = run_stage_group(
                     adapter, repo_root, plan_file, worktree_dir, runnable
+                )
+                end_time = telemetry.iso_now()
+                _emit_stage_session(
+                    logger,
+                    task_id,
+                    plan_file,
+                    adapter.name,
+                    task_isolation,
+                    expected_final,
+                    stage_span,
+                    worktree_dir,
+                    start_time,
+                    end_time,
+                    exit_code,
                 )
                 agent_invoked = True
                 if exit_code != 0:
@@ -494,6 +577,7 @@ def process_task(
 
             print(f"   Stage: {target_stage.name} → {next_stage_name} ({' → '.join(skills)})")
 
+            start_time = telemetry.iso_now()
             exit_code = run_stage(
                 adapter,
                 repo_root,
@@ -502,6 +586,20 @@ def process_task(
                 skills,
                 target_stage.name,
                 next_stage_name,
+            )
+            end_time = telemetry.iso_now()
+            _emit_stage_session(
+                logger,
+                task_id,
+                plan_file,
+                adapter.name,
+                task_isolation,
+                next_stage_name,
+                None,
+                worktree_dir,
+                start_time,
+                end_time,
+                exit_code,
             )
             agent_invoked = True
 

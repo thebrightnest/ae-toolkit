@@ -211,11 +211,6 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
                         rtype = record.get("type")
                         if rtype == "environment_issue":
                             counts["dependency_issues"] += 1
-                        elif rtype == "loop":
-                            if record.get("iteration", 1) > 1:
-                                counts["repeated_loops"] += 1
-                            if "review" in str(record.get("loop_type", "")):
-                                counts["review_noise"] += 1
                         elif rtype == "stage":
                             if record.get("exit_code", 0) != 0:
                                 counts["stage_failures"] += 1
