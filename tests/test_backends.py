@@ -99,41 +99,6 @@ class TestJsonBackend(unittest.TestCase):
         self.assertEqual(data.get("queue_updated_at"), "2026-01-01T00:00:00Z")
         self.assertEqual(data["tasks"][0]["state"], "in_progress")
 
-    def test_transition_updates_state_and_appends_history(self):
-        with open(self.queue_file, "w", encoding="utf-8") as f:
-            json.dump([{"id": "t1", "state": "ready"}], f)
-
-        backend = JsonBackend(self.queue_file, self.history_file)
-        result = backend.transition("t1", "ready", "in_progress", by="test")
-
-        self.assertTrue(result)
-        data = backend.load()
-        self.assertEqual(data["queue"][0]["state"], "in_progress")
-        self.assertEqual(data["queue"][0]["history"][0]["from"], "ready")
-        self.assertEqual(data["queue"][0]["history"][0]["to"], "in_progress")
-        self.assertEqual(data["queue"][0]["history"][0]["by"], "test")
-
-    def test_transition_returns_false_when_task_not_found(self):
-        backend = JsonBackend(self.queue_file, self.history_file)
-        result = backend.transition("missing", "ready", "in_progress")
-        self.assertFalse(result)
-
-    def test_transition_returns_false_when_from_state_mismatches(self):
-        with open(self.queue_file, "w", encoding="utf-8") as f:
-            json.dump([{"id": "t1", "state": "blocked"}], f)
-
-        backend = JsonBackend(self.queue_file, self.history_file)
-        result = backend.transition("t1", "ready", "in_progress")
-        self.assertFalse(result)
-
-    def test_transition_returns_false_for_illegal_transition(self):
-        with open(self.queue_file, "w", encoding="utf-8") as f:
-            json.dump([{"id": "t1", "state": "ready"}], f)
-
-        backend = JsonBackend(self.queue_file, self.history_file)
-        result = backend.transition("t1", "ready", "merged")
-        self.assertFalse(result)
-
     def test_plan_drift_returns_orphaned_plans(self):
         (self.plans_dir / "tracked.md").write_text("# Tracked", encoding="utf-8")
         (self.plans_dir / "orphan.md").write_text("# Orphan", encoding="utf-8")

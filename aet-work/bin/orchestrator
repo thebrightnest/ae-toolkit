@@ -437,7 +437,7 @@ def process_task(
                         return False
 
                     ok, msg = verify_stage_advancement(
-                        task.get("stage"), worktree_dir, expected_final, retries=0
+                        task.get("stage"), worktree_dir, expected_final
                     )
                     if not ok:
                         print(f"   ❌ Stage group advancement verification failed: {msg}")
@@ -522,7 +522,7 @@ def process_task(
 
             # Confirm the recorded stage matches the expected target.
             ok, msg = verify_stage_advancement(
-                task.get("stage"), worktree_dir, next_stage_name, retries=0
+                task.get("stage"), worktree_dir, next_stage_name
             )
             if not ok:
                 print(f"   ❌ Stage verification failed: {msg}")

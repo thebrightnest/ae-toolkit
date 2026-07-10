@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from verifier import read_plan_stage, verify_stage_advancement
 
@@ -110,6 +111,28 @@ class TestVerifyStageAdvancement(unittest.TestCase):
 
             self.assertFalse(ok)
             self.assertIn("0 commits", msg)
+
+    def test_verify_stage_advancement_does_not_retry(self):
+        """A mismatched stage fails immediately without sleeping or retrying."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_git_repo(repo_root)
+            self._commit_on_feature_branch(repo_root)
+
+            with mock.patch("verifier.time", create=True) as mock_time:
+                ok, msg = verify_stage_advancement(
+                    "plan-approved", repo_root, "implemented"
+                )
+
+            self.assertFalse(ok)
+            self.assertIn("did not advance", msg)
+            mock_time.sleep.assert_not_called()
+
+    def test_verify_stage_advancement_has_no_retries_parameter(self):
+        """The retry knob is gone; the signature is a single comparison + commit check."""
+        import inspect
+
+        params = inspect.signature(verify_stage_advancement).parameters
+        self.assertNotIn("retries", params)
 
 
 if __name__ == "__main__":
