@@ -4,6 +4,7 @@ size: M
 blocked_by:
   - frh-13-git-refs-backend-core
 pipeline: standard
+status: merged
 ---
 
 # Plan: GitRefsBackend Wiring, Sealing Hook, Parity Suite, and A/B Findings
@@ -62,5 +63,5 @@ Revert the merge commit; `task_backend: "git-refs"` configs fail loudly back to 
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
