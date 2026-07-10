@@ -64,5 +64,5 @@ Revert the merge commit. Until frh-14 wires the factory, nothing instantiates th
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
