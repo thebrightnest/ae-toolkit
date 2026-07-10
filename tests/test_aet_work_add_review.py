@@ -263,6 +263,85 @@ class TestAddCommand(unittest.TestCase):
                 queue = json.load(f)
             self.assertEqual(len(queue), 1)
 
+    def test_add_parks_ready_when_unblocked(self):
+        """add parks a zero-blocker task at ready, never planned (curated intake)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            plans_dir = Path(tmp) / "plans"
+            plans_dir.mkdir()
+            plan = _make_plan(plans_dir, "feat-100.md")
+            queue_file = _write_json_file([])
+            history_file = _make_history([])
+
+            rc = add.main([
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
+
+            self.assertEqual(rc, 0)
+            with open(queue_file, "r", encoding="utf-8") as f:
+                queue = json.load(f)
+            self.assertEqual(len(queue), 1)
+            self.assertEqual(queue[0]["state"], "ready")
+            self.assertEqual(queue[0]["pending_blockers"], 0)
+            # Guard against the historical inversion: add used to overwrite with planned.
+            self.assertNotEqual(queue[0]["state"], "planned")
+
+    def test_add_parks_blocked_with_pending_blockers_and_builds_edges(self):
+        """add parks a blocked task and rebuilds reverse blocks edges on the queue."""
+        with tempfile.TemporaryDirectory() as tmp:
+            plans_dir = Path(tmp) / "plans"
+            plans_dir.mkdir()
+            blocker = _make_plan(plans_dir, "feat-200.md")
+            dependent = _make_plan(plans_dir, "feat-201.md", blocked_by=["feat-200"])
+            queue_file = _write_json_file([])
+            history_file = _make_history([])
+
+            self.assertEqual(add.main([
+                str(blocker), "--queue-file", queue_file,
+                "--history-file", history_file, "--plans-dir", str(plans_dir),
+            ]), 0)
+            self.assertEqual(add.main([
+                str(dependent), "--queue-file", queue_file,
+                "--history-file", history_file, "--plans-dir", str(plans_dir),
+            ]), 0)
+
+            with open(queue_file, "r", encoding="utf-8") as f:
+                queue = json.load(f)
+            tasks = {t["id"]: t for t in queue}
+            self.assertEqual(tasks["feat-201"]["state"], "blocked")
+            self.assertEqual(tasks["feat-201"]["pending_blockers"], 1)
+            # Reverse edge rebuilt by add's build_blocks call (not only by sync).
+            self.assertIn("feat-201", tasks["feat-200"]["blocks"])
+
+    def test_intake_history_records_actual_initial_state(self):
+        """The intake history entry records the real initial state, not a hardcoded planned."""
+        with tempfile.TemporaryDirectory() as tmp:
+            plans_dir = Path(tmp) / "plans"
+            plans_dir.mkdir()
+            ready_plan = _make_plan(plans_dir, "feat-300.md")
+            blocker = _make_plan(plans_dir, "feat-301.md")
+            blocked_plan = _make_plan(plans_dir, "feat-302.md", blocked_by=["feat-301"])
+            queue_file = _write_json_file([])
+            history_file = _make_history([])
+
+            for p in (ready_plan, blocker, blocked_plan):
+                self.assertEqual(add.main([
+                    str(p), "--queue-file", queue_file,
+                    "--history-file", history_file, "--plans-dir", str(plans_dir),
+                ]), 0)
+
+            with open(queue_file, "r", encoding="utf-8") as f:
+                queue = json.load(f)
+            tasks = {t["id"]: t for t in queue}
+            self.assertIsNone(tasks["feat-300"]["history"][0]["from"])
+            self.assertEqual(tasks["feat-300"]["history"][0]["to"], "ready")
+            self.assertEqual(tasks["feat-302"]["history"][0]["to"], "blocked")
+            # Guard against the historical bug: intake used to log None -> planned.
+            self.assertNotEqual(tasks["feat-300"]["history"][0]["to"], "planned")
+            self.assertNotEqual(tasks["feat-302"]["history"][0]["to"], "planned")
+
 
 class TestReviewCommand(unittest.TestCase):
     def test_review_categorizes_plans_by_footer_stage(self):

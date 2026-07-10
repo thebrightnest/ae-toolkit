@@ -101,6 +101,14 @@ Dependency rationale: one serialized chain (frh-01→02→03→…→08→09→1
 2. **Evidence retention** — proposal: no pruning this sprint; revisit when the review desk consumes evidence.
 3. **frh-12 split line** — expected split: `frh-12a` backend core (refs read/write + notes history) and `frh-12b` config wiring + parity test suite. Confirmed at create-stories time against the dual-limit model.
 
+## Divergence Summary
+
+_Recorded: 2026-07-10 — Branch: frh-15-curated-flow-intake_
+
+### Changed from plan (frh-15)
+
+- **Implementation locus (tasks 1–5):** frh-15 scoped an 8-file curated-intake implementation, but the production semantics (`build_blocks` in `aet-work/lib/queue.py`, `add` parking at `ready`/`blocked` and rebuilding edges, `plan_parser` recording the real initial state, `sync` no longer auto-adding, and the explicit `aet-work add` handoff in both skill texts) were already present on `origin/main` via the earlier commit `a85ab7b` ("curated sprint intake") before this branch was cut. The frh-15 branch therefore narrowed to **task 6 — the regression contract** (the five named behavior tests) plus plan-footer bookkeeping. Feature behavior matches the story map; only where the code lives differs (upstream commit, not the frh-15 branch). Task 7 (merge + verify) remains owned by `aet-ship`.
+
 ---
 
 _Stage: scope-validated_
