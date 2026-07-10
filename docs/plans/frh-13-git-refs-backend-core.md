@@ -4,6 +4,7 @@ size: M
 blocked_by:
   - frh-08-dead-layer-deletion
 pipeline: standard
+status: merged
 ---
 
 # Plan: GitRefsBackend Core — Git-Native Task Storage
@@ -64,5 +65,5 @@ Revert the merge commit. Until frh-14 wires the factory, nothing instantiates th
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
