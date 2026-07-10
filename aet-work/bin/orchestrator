@@ -32,10 +32,11 @@ from queue import (  # noqa: E402
     has_pending_tasks as queue_has_pending_tasks,
 )
 
+import evidence  # noqa: E402
 import telemetry  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 from cli_adapter import resolve_cli_adapter  # noqa: E402
-from pipeline import STAGE_MAP, group_stages_by_session  # noqa: E402
+from pipeline import STAGE_MAP, Stage, group_stages_by_session  # noqa: E402
 from verifier import (  # noqa: E402
     read_plan_stage,
     verify_branch_has_commits,
@@ -301,6 +302,108 @@ def _emit_stage_session(
     )
 
 
+CHECKING_SKILL_TO_VERDICT: dict[str, str] = {
+    "aet-qa": "qa",
+    "aet-review": "review",
+    "aet-cso": "cso",
+    "aet-sync-docs": "sync-docs",
+}
+
+
+def verdict_kind_for_stage(stage: Stage) -> str | None:
+    """Return the evidence verdict kind for a checking stage, or ``None``.
+
+    Non-checking stages (for example ``aet-tdd``/``aet-implement``) do not
+    produce verdicts and return ``None``.
+    """
+    for skill in stage.skills:
+        kind = CHECKING_SKILL_TO_VERDICT.get(skill)
+        if kind is not None:
+            return kind
+    return None
+
+
+def _load_checking_verdict(task_id: str, kind: str, repo_root: str) -> dict:
+    """Read and schema-validate a checking verdict from the evidence home.
+
+    Raises ``FileNotFoundError`` when the verdict is absent and
+    ``evidence.VerdictValidationError`` / ``VerdictValueError`` when it is
+    malformed.
+    """
+    path = evidence.evidence_path(
+        task_id=task_id,
+        kind=kind,
+        project_slug=telemetry.derive_project_slug(repo_root),
+    )
+    record = evidence.read_verdict(path)
+    evidence.validate_verdict(record, kind)
+    return record
+
+
+def _emit_test_run_from_verdict(
+    logger: telemetry.RunLogger,
+    record: dict,
+    task_id: str,
+    plan_file: str,
+    stage: str,
+) -> None:
+    """Derive a ``test_run`` telemetry record from a passing qa verdict."""
+    generated_at = record.get("generated_at") or telemetry.iso_now()
+    logger.append_record(
+        telemetry.test_run_record(
+            run_id=logger.run_id,
+            task_id=task_id,
+            plan_file=plan_file,
+            stage=stage,
+            scope="full-suite",
+            test_command=record.get("test_command", ""),
+            start_time=generated_at,
+            end_time=generated_at,
+            exit_code=0,
+            tests_total=record.get("tests_total"),
+            tests_passed=record.get("tests_passed"),
+            tests_failed=record.get("tests_failed"),
+        ),
+        task_id=task_id,
+    )
+
+
+def _require_passing_verdict(
+    task_id: str,
+    kind: str,
+    repo_root: str,
+    plan_file: str,
+    stage: str,
+    logger: telemetry.RunLogger,
+) -> bool:
+    """Fail-closed evidence gate for a checking stage.
+
+    Returns ``True`` only when a schema-valid verdict with ``verdict: "pass"``
+    exists. A missing, malformed, or failing verdict returns ``False`` so the
+    caller takes the same failure path as a non-zero session exit. On a passing
+    ``qa`` verdict a derived ``test_run`` telemetry record is emitted.
+    """
+    try:
+        record = _load_checking_verdict(task_id, kind, repo_root)
+    except FileNotFoundError:
+        print(f"   ❌ Gate fail-closed: missing {kind} verdict for {task_id}")
+        return False
+    except (evidence.VerdictValidationError, evidence.VerdictValueError) as exc:
+        print(f"   ❌ Gate fail-closed: invalid {kind} verdict for {task_id}: {exc}")
+        return False
+
+    if record.get("verdict") != "pass":
+        print(
+            f"   ❌ Gate fail-closed: {kind} verdict is "
+            f"{record.get('verdict')!r} for {task_id}"
+        )
+        return False
+
+    if kind == "qa":
+        _emit_test_run_from_verdict(logger, record, task_id, plan_file, stage)
+    return True
+
+
 def run_stage(
     adapter,
     repo_root: str,
@@ -309,6 +412,9 @@ def run_stage(
     skills: list[str],
     current_stage: str,
     next_stage: str,
+    task_id: str | None = None,
+    run_id: str | None = None,
+    verdict_kind: str | None = None,
 ) -> int:
     """Spawn a single stage session and return exit code."""
     prompt = build_prompt(skills, plan_file, current_stage, next_stage)
@@ -317,6 +423,18 @@ def run_stage(
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    if task_id is not None:
+        env["AET_TASK_ID"] = task_id
+    if run_id is not None:
+        env["AET_RUN_ID"] = run_id
+    if task_id is not None and verdict_kind is not None:
+        env["AET_EVIDENCE_PATH"] = str(
+            evidence.evidence_path(
+                task_id=task_id,
+                kind=verdict_kind,
+                project_slug=telemetry.derive_project_slug(repo_root),
+            )
+        )
 
     print(f"   Invoking: {' '.join(cmd)}")
     result = subprocess.run(cmd, cwd=worktree_dir, env=env)
@@ -354,6 +472,8 @@ def run_stage_group(
     plan_file: str,
     worktree_dir: str,
     stages: list[Stage],
+    task_id: str | None = None,
+    run_id: str | None = None,
 ) -> int:
     """Spawn one session that runs every stage in the group sequentially."""
     prompt = build_stage_group_prompt(plan_file, stages)
@@ -362,6 +482,10 @@ def run_stage_group(
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    if task_id is not None:
+        env["AET_TASK_ID"] = task_id
+    if run_id is not None:
+        env["AET_RUN_ID"] = run_id
 
     print(f"   Invoking group: {' '.join(cmd)}")
     result = subprocess.run(cmd, cwd=worktree_dir, env=env)
@@ -485,7 +609,13 @@ def process_task(
 
                 start_time = telemetry.iso_now()
                 exit_code = run_stage_group(
-                    adapter, repo_root, plan_file, worktree_dir, runnable
+                    adapter,
+                    repo_root,
+                    plan_file,
+                    worktree_dir,
+                    runnable,
+                    task_id=task_id,
+                    run_id=logger.run_id,
                 )
                 end_time = telemetry.iso_now()
                 _emit_stage_session(
@@ -512,43 +642,42 @@ def process_task(
                     print(f"   ❌ Stage group verification failed: {msg}")
                     return False
 
-                # Determine whether the agent reached the expected final stage.
-                actual_stage = read_plan_stage(plan_file)
-                if actual_stage == expected_final:
-                    if not _record_stage(task, expected_final, repo_root):
-                        print(f"   ❌ Could not record stage {expected_final} for {task_id}")
+                # Fail-closed evidence gates: every checking stage in the group
+                # span must have a schema-valid passing verdict. Group
+                # advancement is determined by evidence, not the plan footer
+                # (which is a breadcrumb only).
+                for stage in runnable:
+                    kind = verdict_kind_for_stage(stage)
+                    if kind is None:
+                        continue
+                    target = stage.next_stage or stage.name
+                    if not _require_passing_verdict(
+                        task_id, kind, repo_root, plan_file, target, logger
+                    ):
                         return False
 
-                    ok, msg = verify_stage_advancement(
-                        task.get("stage"), worktree_dir, expected_final
-                    )
-                    if not ok:
-                        print(f"   ❌ Stage group advancement verification failed: {msg}")
-                        return False
-
-                    print(f"   ✅ Stage group advanced to {expected_final}")
-                    current_stage = expected_final
-                    continue
-
-                print(
-                    f"   ⚠️  Stage group did not reach expected final stage "
-                    f"'{expected_final}' (actual: '{actual_stage}'). "
-                    f"Falling back to per-stage execution."
-                )
-                if actual_stage and any(s.name == actual_stage for s in remaining):
-                    current_stage = actual_stage
-                elif not actual_stage:
-                    # No usable footer breadcrumb; give up on this group.
-                    print("   ❌ Could not determine resume stage from plan footer")
+                if not _record_stage(task, expected_final, repo_root):
+                    print(f"   ❌ Could not record stage {expected_final} for {task_id}")
                     return False
-                # Otherwise current_stage stays where it was and we fall through.
+
+                ok, msg = verify_stage_advancement(
+                    task.get("stage"), worktree_dir, expected_final
+                )
+                if not ok:
+                    print(f"   ❌ Stage group advancement verification failed: {msg}")
+                    return False
+
+                print(f"   ✅ Stage group advanced to {expected_final}")
+                current_stage = expected_final
+                continue
             elif not runnable:
                 # All remaining stages are conditional skips; jump to the end of the group.
                 current_stage = remaining[-1].next_stage or remaining[-1].name
                 continue
 
-        # Per-stage execution: used for minimal/full isolation, single-stage groups,
-        # and as a fallback when a standard group session does not advance.
+        # Per-stage execution: used for minimal/full isolation and for single-stage
+        # groups. Standard multi-stage groups fail closed on missing evidence
+        # rather than falling back here.
         while True:
             # Find the first stage in this group that hasn't been completed yet.
             target_stage = None
@@ -577,6 +706,7 @@ def process_task(
 
             print(f"   Stage: {target_stage.name} → {next_stage_name} ({' → '.join(skills)})")
 
+            kind = verdict_kind_for_stage(target_stage)
             start_time = telemetry.iso_now()
             exit_code = run_stage(
                 adapter,
@@ -586,6 +716,9 @@ def process_task(
                 skills,
                 target_stage.name,
                 next_stage_name,
+                task_id=task_id,
+                run_id=logger.run_id,
+                verdict_kind=kind,
             )
             end_time = telemetry.iso_now()
             _emit_stage_session(
@@ -611,6 +744,12 @@ def process_task(
             ok, msg = verify_branch_has_commits(worktree_dir)
             if not ok:
                 print(f"   ❌ Stage verification failed: {msg}")
+                return False
+
+            # Fail-closed evidence gate for checking stages (qa/review/cso/sync-docs).
+            if kind is not None and not _require_passing_verdict(
+                task_id, kind, repo_root, plan_file, next_stage_name, logger
+            ):
                 return False
 
             # Record the advanced stage in the task record.
