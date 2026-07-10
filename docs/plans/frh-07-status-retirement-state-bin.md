@@ -4,6 +4,7 @@ size: M
 blocked_by:
   - frh-06-status-retirement-lib
 pipeline: standard
+status: merged
 ---
 
 # Plan: Retire `status` in aet-state and init-queue; Supersede fods-06
@@ -67,4 +68,4 @@ Revert the merge commit; restore `.agents/work-archive.json` from git history if
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
