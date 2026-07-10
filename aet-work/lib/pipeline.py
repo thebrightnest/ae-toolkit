@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
+
+import evidence
+import telemetry
 
 
 @dataclass(frozen=True)
@@ -124,25 +128,42 @@ def _security_sensitive(worktree_dir: str) -> bool:
 
 
 def _divergences_found(plan_file: str, worktree_dir: str) -> bool:
-    """Check if review or cso reports note divergences."""
-    import os
-    import subprocess
+    """Return True when review/cso/sync-docs verdicts report findings.
+
+    Reads the structured evidence verdicts from the evidence home rather than
+    the legacy on-disk markdown reports. A non-empty ``findings`` list
+    (review/cso) or ``divergences`` list (sync-docs) means the sync-docs stage
+    should run.
+    """
+    task_id = Path(plan_file).stem.removesuffix("-plan")
+    project_slug = telemetry.derive_project_slug(worktree_dir)
+
+    for kind in ("review", "cso"):
+        try:
+            path = evidence.evidence_path(
+                task_id=task_id, kind=kind, project_slug=project_slug
+            )
+            record = evidence.read_verdict(path)
+            evidence.validate_verdict(record, kind)
+        except (
+            FileNotFoundError,
+            evidence.VerdictValidationError,
+            evidence.VerdictValueError,
+        ):
+            continue
+        if record.get("findings"):
+            return True
 
     try:
-        result = subprocess.run(
-            ["git", "-C", worktree_dir, "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=True,
+        path = evidence.evidence_path(
+            task_id=task_id, kind="sync-docs", project_slug=project_slug
         )
-        repo_root = result.stdout.strip()
-        task_id = os.path.basename(plan_file).replace("-plan.md", "")
-        report_dir = f"/tmp/aet-reports/{task_id}"
-        if os.path.isdir(report_dir):
-            return any(
-                f.endswith(".md")
-                for f in os.listdir(report_dir)
-            )
+        record = evidence.read_verdict(path)
+        evidence.validate_verdict(record, "sync-docs")
+    except (
+        FileNotFoundError,
+        evidence.VerdictValidationError,
+        evidence.VerdictValueError,
+    ):
         return False
-    except subprocess.CalledProcessError:
-        return False
+    return bool(record.get("divergences"))

@@ -18,6 +18,8 @@ from unittest.mock import patch
 # Ensure the aet-work lib is on the path before importing telemetry.
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
+import evidence
+import pipeline
 import telemetry
 from cli_adapter import CLIAdapter, resolve_cli_adapter
 from pipeline import Stage
@@ -89,6 +91,65 @@ def _archive_env(archive_dir: str) -> dict[str, str]:
     env["AET_TELEMETRY_ARCHIVE_DIR"] = archive_dir
     env["AET_RUN_ID"] = "run-test"
     return env
+
+
+def _gate_env(reports_dir: str, archive_dir: str) -> dict[str, str]:
+    """Env overlay routing evidence verdicts and telemetry to temp dirs."""
+    env = os.environ.copy()
+    env["AET_REPORTS_DIR"] = reports_dir
+    env["AET_PROJECT_ID"] = "demo/project"
+    env["AET_TELEMETRY_ARCHIVE_DIR"] = archive_dir
+    env["AET_RUN_ID"] = "run-test"
+    return env
+
+
+def _verdict_record(kind: str, verdict: str = "pass", **overrides) -> dict:
+    """Build a schema-valid verdict record for ``kind``."""
+    record = {
+        "task_id": overrides.pop("task_id", "demo"),
+        "stage": overrides.pop("stage", f"{kind}-stage"),
+        "skill": overrides.pop("skill", f"aet-{kind}"),
+        "verdict": verdict,
+        "summary": overrides.pop("summary", "ok"),
+        "generated_at": overrides.pop("generated_at", "2026-07-09T20:00:00Z"),
+    }
+    if kind == "qa":
+        record.update(
+            {
+                "test_command": overrides.pop("test_command", "pytest"),
+                "tests_total": overrides.pop("tests_total", 3),
+                "tests_passed": overrides.pop("tests_passed", 3),
+                "tests_failed": overrides.pop("tests_failed", 0),
+            }
+        )
+    elif kind in ("review", "cso"):
+        record["findings"] = overrides.pop("findings", [])
+    elif kind == "sync-docs":
+        record["divergences"] = overrides.pop("divergences", [])
+    return record
+
+
+def _write_verdict(
+    reports_dir: str,
+    kind: str,
+    verdict: str = "pass",
+    task_id: str = "demo",
+    **overrides,
+) -> None:
+    """Write a verdict for ``kind`` to the evidence home."""
+    evidence.write_verdict(
+        task_id=task_id,
+        kind=kind,
+        record=_verdict_record(kind, verdict, task_id=task_id, **overrides),
+        project_slug="demo/project",
+        reports_root=reports_dir,
+    )
+
+
+def _write_passing(reports_dir: str, *kinds: str, task_id: str = "demo") -> None:
+    """Write passing verdicts for ``kinds`` to the evidence home."""
+    for kind in kinds:
+        _write_verdict(reports_dir, kind, "pass", task_id=task_id)
 
 
 class TestEnforceMainHygiene(unittest.TestCase):
@@ -321,35 +382,41 @@ class TestDependencyWarmup(unittest.TestCase):
             )
 
             with tempfile.TemporaryDirectory() as archive_dir:
-                env = _archive_env(archive_dir)
-                with patch.dict(os.environ, env, clear=False):
-                    logger = telemetry.RunLogger(repo_root, run_id="r1")
-                task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="r1")
+                        task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        _write_passing(reports_dir, "qa", "review")
 
-                with patch.object(orchestrator, "run_stage", return_value=0):
-                    with patch.object(
-                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                    ):
-                        with patch.object(
-                            orchestrator,
-                            "verify_stage_advancement",
-                            return_value=(True, ""),
-                        ):
-                            result = orchestrator.process_task(
-                                task, repo_root, _FAKE_ADAPTER, "standard", logger=logger
-                            )
+                        with patch.object(orchestrator, "run_stage", return_value=0):
+                            with patch.object(
+                                orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_stage_advancement",
+                                    return_value=(True, ""),
+                                ):
+                                    result = orchestrator.process_task(
+                                        task,
+                                        repo_root,
+                                        _FAKE_ADAPTER,
+                                        "standard",
+                                        logger=logger,
+                                    )
 
-                self.assertTrue(result)
-                worktree_dir = os.path.join(repo_root, ".worktrees", "demo")
-                node_link = Path(worktree_dir, "app", "node_modules")
-                self.assertTrue(node_link.is_symlink())
-                self.assertTrue(
-                    node_link.resolve().samefile(Path(repo_root, "app", "node_modules"))
-                )
+                        self.assertTrue(result)
+                        worktree_dir = os.path.join(repo_root, ".worktrees", "demo")
+                        node_link = Path(worktree_dir, "app", "node_modules")
+                        self.assertTrue(node_link.is_symlink())
+                        self.assertTrue(
+                            node_link.resolve().samefile(Path(repo_root, "app", "node_modules"))
+                        )
 
-                records = telemetry.read_jsonl(logger.task_log_path("demo"))
-                issues = [r for r in records if r.get("type") == "environment_issue"]
-                self.assertEqual(len(issues), 0)
+                        records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                        issues = [r for r in records if r.get("type") == "environment_issue"]
+                        self.assertEqual(len(issues), 0)
 
 
 class TestEnvironmentIssueEmission(unittest.TestCase):
@@ -389,32 +456,38 @@ class TestEnvironmentIssueEmission(unittest.TestCase):
             )
 
             with tempfile.TemporaryDirectory() as archive_dir:
-                env = _archive_env(archive_dir)
-                with patch.dict(os.environ, env, clear=False):
-                    logger = telemetry.RunLogger(repo_root, run_id="r1")
-                task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="r1")
+                        task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        _write_passing(reports_dir, "qa", "review")
 
-                with patch.object(orchestrator, "run_stage", return_value=0):
-                    with patch.object(
-                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                    ):
-                        with patch.object(
-                            orchestrator,
-                            "verify_stage_advancement",
-                            return_value=(True, ""),
-                        ):
-                            result = orchestrator.process_task(
-                                task, repo_root, _FAKE_ADAPTER, "standard", logger=logger
-                            )
+                        with patch.object(orchestrator, "run_stage", return_value=0):
+                            with patch.object(
+                                orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_stage_advancement",
+                                    return_value=(True, ""),
+                                ):
+                                    result = orchestrator.process_task(
+                                        task,
+                                        repo_root,
+                                        _FAKE_ADAPTER,
+                                        "standard",
+                                        logger=logger,
+                                    )
 
-                self.assertTrue(result)
-                records = telemetry.read_jsonl(logger.task_log_path("demo"))
-                issues = [r for r in records if r.get("type") == "environment_issue"]
-                self.assertEqual(len(issues), 1)
-                self.assertEqual(issues[0]["run_id"], "r1")
-                self.assertEqual(issues[0]["task_id"], "demo")
-            self.assertEqual(issues[0]["dependency"], "app/node_modules")
-            self.assertEqual(issues[0]["issue_type"], "missing_dependency")
+                        self.assertTrue(result)
+                        records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                        issues = [r for r in records if r.get("type") == "environment_issue"]
+                        self.assertEqual(len(issues), 1)
+                        self.assertEqual(issues[0]["run_id"], "r1")
+                        self.assertEqual(issues[0]["task_id"], "demo")
+                        self.assertEqual(issues[0]["dependency"], "app/node_modules")
+                        self.assertEqual(issues[0]["issue_type"], "missing_dependency")
 
 
 class TestProcessTaskPlanPresence(unittest.TestCase):
@@ -1022,32 +1095,45 @@ class TestStageGroupSessionReuse(unittest.TestCase):
 
             def staged_read_plan_stage(plan_file):
                 read_calls.append(plan_file)
-                # First call is intake; subsequent calls observe group-session result.
-                if len(read_calls) == 1:
-                    return "plan-approved"
-                return "qa-complete"
+                # Intake consults the footer breadcrumb; gating no longer does.
+                return "plan-approved"
 
-            with patch.object(orchestrator, "run_stage_group", return_value=0) as mock_group:
-                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
+            with tempfile.TemporaryDirectory() as reports_dir:
+                _write_passing(reports_dir, "qa", "review")
+                with patch.dict(
+                    os.environ,
+                    {"AET_REPORTS_DIR": reports_dir, "AET_PROJECT_ID": "demo/project"},
+                    clear=False,
+                ):
                     with patch.object(
-                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                    ):
+                        orchestrator, "run_stage_group", return_value=0
+                    ) as mock_group:
                         with patch.object(
-                            orchestrator, "read_plan_stage", side_effect=staged_read_plan_stage
-                        ):
+                            orchestrator, "run_stage", return_value=0
+                        ) as mock_stage:
                             with patch.object(
                                 orchestrator,
-                                "verify_stage_advancement",
+                                "verify_branch_has_commits",
                                 return_value=(True, ""),
                             ):
-                                result = orchestrator.process_task(
-                                    task, repo_root, _FAKE_ADAPTER, "standard"
-                                )
+                                with patch.object(
+                                    orchestrator,
+                                    "read_plan_stage",
+                                    side_effect=staged_read_plan_stage,
+                                ):
+                                    with patch.object(
+                                        orchestrator,
+                                        "verify_stage_advancement",
+                                        return_value=(True, ""),
+                                    ):
+                                        result = orchestrator.process_task(
+                                            task, repo_root, _FAKE_ADAPTER, "standard"
+                                        )
 
-            self.assertTrue(result)
-            mock_group.assert_called_once()
-            # Group 1 ran as a single session; group 2 (single stage) still uses run_stage.
-            self.assertEqual(mock_stage.call_count, 1)
+                self.assertTrue(result)
+                mock_group.assert_called_once()
+                # Group 1 ran as a single session; group 2 (single stage) still uses run_stage.
+                self.assertEqual(mock_stage.call_count, 1)
 
     def test_minimal_isolation_keeps_per_stage_execution(self):
         """minimal isolation does not use run_stage_group."""
@@ -1055,23 +1141,34 @@ class TestStageGroupSessionReuse(unittest.TestCase):
             plan_file = self._setup_repo_with_plan(repo_root)
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
-            with patch.object(orchestrator, "run_stage_group") as mock_group:
-                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
-                    with patch.object(
-                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                    ):
+            with tempfile.TemporaryDirectory() as reports_dir:
+                _write_passing(reports_dir, "qa", "review")
+                with patch.dict(
+                    os.environ,
+                    {"AET_REPORTS_DIR": reports_dir, "AET_PROJECT_ID": "demo/project"},
+                    clear=False,
+                ):
+                    with patch.object(orchestrator, "run_stage_group") as mock_group:
                         with patch.object(
-                            orchestrator,
-                            "verify_stage_advancement",
-                            return_value=(True, ""),
-                        ):
-                            result = orchestrator.process_task(
-                                task, repo_root, _FAKE_ADAPTER, "minimal"
-                            )
+                            orchestrator, "run_stage", return_value=0
+                        ) as mock_stage:
+                            with patch.object(
+                                orchestrator,
+                                "verify_branch_has_commits",
+                                return_value=(True, ""),
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_stage_advancement",
+                                    return_value=(True, ""),
+                                ):
+                                    result = orchestrator.process_task(
+                                        task, repo_root, _FAKE_ADAPTER, "minimal"
+                                    )
 
-            self.assertTrue(result)
-            mock_group.assert_not_called()
-            mock_stage.assert_called()
+                self.assertTrue(result)
+                mock_group.assert_not_called()
+                mock_stage.assert_called()
 
     def test_full_isolation_keeps_per_stage_execution(self):
         """full isolation does not use run_stage_group."""
@@ -1079,60 +1176,66 @@ class TestStageGroupSessionReuse(unittest.TestCase):
             plan_file = self._setup_repo_with_plan(repo_root)
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
-            with patch.object(orchestrator, "run_stage_group") as mock_group:
-                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
-                    with patch.object(
-                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                    ):
+            with tempfile.TemporaryDirectory() as reports_dir:
+                _write_passing(reports_dir, "qa", "review")
+                with patch.dict(
+                    os.environ,
+                    {"AET_REPORTS_DIR": reports_dir, "AET_PROJECT_ID": "demo/project"},
+                    clear=False,
+                ):
+                    with patch.object(orchestrator, "run_stage_group") as mock_group:
                         with patch.object(
-                            orchestrator,
-                            "verify_stage_advancement",
-                            return_value=(True, ""),
-                        ):
-                            result = orchestrator.process_task(
-                                task, repo_root, _FAKE_ADAPTER, "full"
-                            )
+                            orchestrator, "run_stage", return_value=0
+                        ) as mock_stage:
+                            with patch.object(
+                                orchestrator,
+                                "verify_branch_has_commits",
+                                return_value=(True, ""),
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_stage_advancement",
+                                    return_value=(True, ""),
+                                ):
+                                    result = orchestrator.process_task(
+                                        task, repo_root, _FAKE_ADAPTER, "full"
+                                    )
 
-            self.assertTrue(result)
-            mock_group.assert_not_called()
-            mock_stage.assert_called()
+                self.assertTrue(result)
+                mock_group.assert_not_called()
+                mock_stage.assert_called()
 
-    def test_standard_fallback_to_per_stage_when_group_does_not_advance(self):
-        """standard isolation falls back to per-stage if group verification fails."""
+    def test_gate_fails_closed_on_missing_verdict(self):
+        """A group session that exits 0 but leaves no qa verdict fails closed.
+
+        The footer breadcrumb must not rescue the run: advancement is gated on
+        evidence, not the footer.
+        """
         with tempfile.TemporaryDirectory() as repo_root:
             plan_file = self._setup_repo_with_plan(repo_root, stage="plan-approved")
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
-            read_calls = []
-
-            def staged_read_plan_stage(plan_file):
-                read_calls.append(plan_file)
-                # First call is intake; subsequent calls observe partial progress.
-                if len(read_calls) == 1:
-                    return "plan-approved"
-                return "implemented"
-
-            with patch.object(orchestrator, "run_stage_group", return_value=0) as mock_group:
-                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with patch.dict(
+                    os.environ,
+                    {"AET_REPORTS_DIR": reports_dir, "AET_PROJECT_ID": "demo/project"},
+                    clear=False,
+                ):
                     with patch.object(
-                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                    ):
-                        with patch.object(
-                            orchestrator, "read_plan_stage", side_effect=staged_read_plan_stage
-                        ):
-                            # Per-stage fallback for implemented and qa-complete succeeds.
+                        orchestrator, "run_stage_group", return_value=0
+                    ) as mock_group:
+                        with patch.object(orchestrator, "run_stage", return_value=0):
                             with patch.object(
                                 orchestrator,
-                                "verify_stage_advancement",
-                                side_effect=[(True, ""), (True, "")],
+                                "verify_branch_has_commits",
+                                return_value=(True, ""),
                             ):
                                 result = orchestrator.process_task(
                                     task, repo_root, _FAKE_ADAPTER, "standard"
                                 )
 
-            self.assertTrue(result)
-            mock_group.assert_called_once()
-            mock_stage.assert_called()
+                self.assertFalse(result)
+                mock_group.assert_called_once()
 
     def test_standard_group_failure_returns_false(self):
         """standard isolation returns False when the group session fails."""
@@ -1449,58 +1552,20 @@ class TestStageTelemetry(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             plan_file = self._setup_repo_with_plan(repo_root, "qa-complete")
             with tempfile.TemporaryDirectory() as archive_dir:
-                env = _archive_env(archive_dir)
-                with patch.dict(os.environ, env, clear=False):
-                    logger = telemetry.RunLogger(repo_root, run_id="r1")
-                task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="r1")
+                        task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        _write_passing(reports_dir, "review")
 
-                with patch.object(orchestrator, "run_stage", return_value=0) as mock_stage:
-                    with patch.object(
-                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                    ):
                         with patch.object(
-                            orchestrator, "verify_stage_advancement", return_value=(True, "")
-                        ):
-                            result = orchestrator.process_task(
-                                task, repo_root, _FAKE_ADAPTER, "full", logger=logger
-                            )
-
-                self.assertTrue(result)
-                mock_stage.assert_called_once()
-                records = self._stage_records(logger)
-                self.assertEqual(len(records), 1)
-                self.assertEqual(records[0]["stage"], "reviewed")
-                self.assertIsNone(records[0]["stages"])
-                self.assertEqual(records[0]["result"], "success")
-                self.assertEqual(records[0]["isolation_level"], "full")
-                self.assertEqual(records[0]["task_id"], "demo")
-
-    def test_group_session_record_carries_stage_span(self):
-        """A standard-isolation group session records the stage span it covered."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            plan_file = self._setup_repo_with_plan(repo_root, "plan-approved")
-            with tempfile.TemporaryDirectory() as archive_dir:
-                env = _archive_env(archive_dir)
-                with patch.dict(os.environ, env, clear=False):
-                    logger = telemetry.RunLogger(repo_root, run_id="r1")
-                task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
-
-                read_calls = []
-
-                def staged_read_plan_stage(_plan_file):
-                    read_calls.append(_plan_file)
-                    if len(read_calls) == 1:
-                        return "plan-approved"
-                    return "qa-complete"
-
-                with patch.object(orchestrator, "run_stage_group", return_value=0):
-                    with patch.object(orchestrator, "run_stage", return_value=0):
-                        with patch.object(
-                            orchestrator, "verify_branch_has_commits", return_value=(True, "")
-                        ):
+                            orchestrator, "run_stage", return_value=0
+                        ) as mock_stage:
                             with patch.object(
-                                orchestrator, "read_plan_stage",
-                                side_effect=staged_read_plan_stage,
+                                orchestrator,
+                                "verify_branch_has_commits",
+                                return_value=(True, ""),
                             ):
                                 with patch.object(
                                     orchestrator,
@@ -1508,18 +1573,65 @@ class TestStageTelemetry(unittest.TestCase):
                                     return_value=(True, ""),
                                 ):
                                     result = orchestrator.process_task(
-                                        task, repo_root, _FAKE_ADAPTER,
-                                        "standard", logger=logger,
+                                        task,
+                                        repo_root,
+                                        _FAKE_ADAPTER,
+                                        "full",
+                                        logger=logger,
                                     )
 
-                self.assertTrue(result)
-                group_records = [r for r in self._stage_records(logger) if r.get("stages")]
-                self.assertEqual(len(group_records), 1)
-                self.assertEqual(group_records[0]["stage"], "qa-complete")
-                self.assertEqual(
-                    group_records[0]["stages"], ["plan-approved", "implemented"]
-                )
-                self.assertEqual(group_records[0]["isolation_level"], "standard")
+                        self.assertTrue(result)
+                        mock_stage.assert_called_once()
+                        records = self._stage_records(logger)
+                        self.assertEqual(len(records), 1)
+                        self.assertEqual(records[0]["stage"], "reviewed")
+                        self.assertIsNone(records[0]["stages"])
+                        self.assertEqual(records[0]["result"], "success")
+                        self.assertEqual(records[0]["isolation_level"], "full")
+                        self.assertEqual(records[0]["task_id"], "demo")
+
+    def test_group_session_record_carries_stage_span(self):
+        """A standard-isolation group session records the stage span it covered."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root, "plan-approved")
+            with tempfile.TemporaryDirectory() as archive_dir:
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="r1")
+                        task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        _write_passing(reports_dir, "qa", "review")
+
+                        with patch.object(orchestrator, "run_stage_group", return_value=0):
+                            with patch.object(orchestrator, "run_stage", return_value=0):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_branch_has_commits",
+                                    return_value=(True, ""),
+                                ):
+                                    with patch.object(
+                                        orchestrator,
+                                        "verify_stage_advancement",
+                                        return_value=(True, ""),
+                                    ):
+                                        result = orchestrator.process_task(
+                                            task,
+                                            repo_root,
+                                            _FAKE_ADAPTER,
+                                            "standard",
+                                            logger=logger,
+                                        )
+
+                        self.assertTrue(result)
+                        group_records = [
+                            r for r in self._stage_records(logger) if r.get("stages")
+                        ]
+                        self.assertEqual(len(group_records), 1)
+                        self.assertEqual(group_records[0]["stage"], "qa-complete")
+                        self.assertEqual(
+                            group_records[0]["stages"], ["plan-approved", "implemented"]
+                        )
+                        self.assertEqual(group_records[0]["isolation_level"], "standard")
 
     def test_failed_session_emits_failure_stage_record(self):
         """A failing session still emits a stage record marked as failure."""
@@ -1548,44 +1660,254 @@ class TestStageTelemetry(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             plan_file = self._setup_repo_with_plan(repo_root, "qa-complete")
             with tempfile.TemporaryDirectory() as archive_dir:
-                env = _archive_env(archive_dir)
-                with patch.dict(os.environ, env, clear=False):
-                    logger = telemetry.RunLogger(repo_root, run_id="r1")
-                task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="r1")
+                        task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        _write_passing(reports_dir, "review")
 
-                def run_stage_making_commit(
-                    _adapter, _repo_root, _plan_file, worktree_dir,
-                    _skills, _current, _next,
-                ):
-                    Path(worktree_dir, "feature.txt").write_text("x", encoding="utf-8")
-                    subprocess.run(
-                        ["git", "-C", worktree_dir, "add", "."],
-                        check=True, capture_output=True,
-                    )
-                    subprocess.run(
-                        ["git", "-C", worktree_dir, "commit", "-q", "-m", "feature"],
-                        check=True, capture_output=True,
-                    )
-                    return 0
+                        def run_stage_making_commit(
+                            _adapter,
+                            _repo_root,
+                            _plan_file,
+                            worktree_dir,
+                            _skills,
+                            _current,
+                            _next,
+                            **_kwargs,
+                        ):
+                            Path(worktree_dir, "feature.txt").write_text(
+                                "x", encoding="utf-8"
+                            )
+                            subprocess.run(
+                                ["git", "-C", worktree_dir, "add", "."],
+                                check=True,
+                                capture_output=True,
+                            )
+                            subprocess.run(
+                                ["git", "-C", worktree_dir, "commit", "-q", "-m", "feature"],
+                                check=True,
+                                capture_output=True,
+                            )
+                            return 0
 
-                with patch.object(
-                    orchestrator, "run_stage", side_effect=run_stage_making_commit
-                ):
+                        with patch.object(
+                            orchestrator, "run_stage", side_effect=run_stage_making_commit
+                        ):
+                            with patch.object(
+                                orchestrator,
+                                "verify_branch_has_commits",
+                                return_value=(True, ""),
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_stage_advancement",
+                                    return_value=(True, ""),
+                                ):
+                                    result = orchestrator.process_task(
+                                        task,
+                                        repo_root,
+                                        _FAKE_ADAPTER,
+                                        "full",
+                                        logger=logger,
+                                    )
+
+                        self.assertTrue(result)
+                        records = self._stage_records(logger)
+                        self.assertEqual(len(records), 1)
+                        self.assertEqual(records[0]["files_modified"], ["feature.txt"])
+                        self.assertEqual(records[0]["commits_created"], 1)
+
+
+class TestEvidenceGates(unittest.TestCase):
+    """Fail-closed evidence gates and evidence-driven advancement (frh-11)."""
+
+    def _setup_repo_with_plan(self, repo_root: str, stage: str = "plan-approved") -> str:
+        _init_git_repo(repo_root)
+        plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+        Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+        Path(plan_file).write_text(
+            f"---\nid: demo\n---\n\n# Demo\n\n_Stage: {stage}_\n",
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+        return plan_file
+
+    def _run_group(
+        self,
+        repo_root: str,
+        plan_file: str,
+        reports_dir: str,
+        archive_dir: str,
+    ) -> tuple[bool, "telemetry.RunLogger"]:
+        env = _gate_env(reports_dir, archive_dir)
+        with patch.dict(os.environ, env, clear=False):
+            logger = telemetry.RunLogger(repo_root, run_id="r1")
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with patch.object(orchestrator, "run_stage_group", return_value=0):
+                with patch.object(orchestrator, "run_stage", return_value=0):
                     with patch.object(
-                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                        orchestrator,
+                        "verify_branch_has_commits",
+                        return_value=(True, ""),
                     ):
                         with patch.object(
-                            orchestrator, "verify_stage_advancement", return_value=(True, "")
+                            orchestrator,
+                            "verify_stage_advancement",
+                            return_value=(True, ""),
                         ):
                             result = orchestrator.process_task(
-                                task, repo_root, _FAKE_ADAPTER, "full", logger=logger
+                                task,
+                                repo_root,
+                                _FAKE_ADAPTER,
+                                "standard",
+                                logger=logger,
                             )
+        return result, logger
 
-                self.assertTrue(result)
-                records = self._stage_records(logger)
-                self.assertEqual(len(records), 1)
-                self.assertEqual(records[0]["files_modified"], ["feature.txt"])
-                self.assertEqual(records[0]["commits_created"], 1)
+    def test_gate_fails_on_schema_invalid_verdict(self):
+        """A schema-invalid qa verdict (missing a required key) fails the gate."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    # Write a malformed qa verdict directly, bypassing validation.
+                    path = evidence.evidence_path(
+                        task_id="demo",
+                        kind="qa",
+                        project_slug="demo/project",
+                        reports_root=reports_dir,
+                    )
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(
+                        json.dumps(
+                            {
+                                "task_id": "demo",
+                                "stage": "qa-complete",
+                                "skill": "aet-qa",
+                                "verdict": "pass",
+                                "summary": "missing counts",
+                                "generated_at": "2026-07-09T20:00:00Z",
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    result, _ = self._run_group(
+                        repo_root, plan_file, reports_dir, archive_dir
+                    )
+            self.assertFalse(result)
+
+    def test_gate_fails_on_failing_verdict(self):
+        """A well-formed qa verdict with verdict 'fail' fails the gate."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_verdict(reports_dir, "qa", "fail")
+                    result, _ = self._run_group(
+                        repo_root, plan_file, reports_dir, archive_dir
+                    )
+            self.assertFalse(result)
+
+    def test_group_advancement_determined_by_evidence_not_footer(self):
+        """A stale footer does not block advancement when verdicts pass."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            # Footer stays at plan-approved; only evidence drives advancement.
+            plan_file = self._setup_repo_with_plan(repo_root, stage="plan-approved")
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_passing(reports_dir, "qa", "review")
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        with patch.object(
+                            orchestrator, "run_stage_group", return_value=0
+                        ) as mock_group:
+                            with patch.object(
+                                orchestrator, "run_stage", return_value=0
+                            ) as mock_stage:
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_branch_has_commits",
+                                    return_value=(True, ""),
+                                ):
+                                    with patch.object(
+                                        orchestrator,
+                                        "verify_stage_advancement",
+                                        return_value=(True, ""),
+                                    ):
+                                        result = orchestrator.process_task(
+                                            task,
+                                            repo_root,
+                                            _FAKE_ADAPTER,
+                                            "standard",
+                                        )
+                    self.assertTrue(result)
+                    mock_group.assert_called_once()
+                    mock_stage.assert_called()
+
+    def test_qa_verdict_derives_test_run_record(self):
+        """A passing qa verdict derives a test_run telemetry record."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_verdict(
+                        reports_dir,
+                        "qa",
+                        "pass",
+                        test_command="pytest -k smoke",
+                        tests_total=12,
+                        tests_passed=11,
+                        tests_failed=1,
+                    )
+                    _write_passing(reports_dir, "review")
+                    result, logger = self._run_group(
+                        repo_root, plan_file, reports_dir, archive_dir
+                    )
+                    records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                    test_runs = [r for r in records if r.get("type") == "test_run"]
+            self.assertTrue(result)
+            self.assertEqual(len(test_runs), 1)
+            self.assertEqual(test_runs[0]["test_command"], "pytest -k smoke")
+            self.assertEqual(test_runs[0]["tests_total"], 12)
+            self.assertEqual(test_runs[0]["tests_passed"], 11)
+            self.assertEqual(test_runs[0]["tests_failed"], 1)
+            self.assertEqual(test_runs[0]["exit_code"], 0)
+
+    def test_divergences_found_reads_evidence_home(self):
+        """_divergences_found reads review/cso/sync-docs verdicts, not /tmp."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            with tempfile.TemporaryDirectory() as reports_dir:
+                env = {
+                    "AET_REPORTS_DIR": reports_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    # No verdicts yet: no divergences.
+                    self.assertFalse(
+                        pipeline._divergences_found(plan_file, repo_root)
+                    )
+                    # A review verdict with findings triggers divergences.
+                    _write_verdict(
+                        reports_dir,
+                        "review",
+                        "pass",
+                        findings=[{"file": "x.py", "note": "issue"}],
+                    )
+                    self.assertTrue(
+                        pipeline._divergences_found(plan_file, repo_root)
+                    )
 
 
 if __name__ == "__main__":
