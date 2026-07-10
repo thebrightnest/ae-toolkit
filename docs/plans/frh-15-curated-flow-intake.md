@@ -70,5 +70,5 @@ Revert the merge commit. Queues created in the interim carry `ready`/`blocked` s
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
