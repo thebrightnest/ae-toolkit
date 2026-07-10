@@ -17,27 +17,31 @@ For instructions on enabling telemetry and mining it across projects, see `../..
 
 ### `stage`
 
-One record per pipeline stage executed for a task.
+One record per spawned agent session. Under `standard` isolation a single
+session may span several stages, so `stage` is the session's target stage and
+`stages` carries the ordered span; `full`/`minimal` isolation yield exact
+per-stage records and `stages` is `null`.
 
-| Field                 | Type            | Description                                               |
-| --------------------- | --------------- | --------------------------------------------------------- |
-| `type`                | string          | `"stage"`                                                 |
-| `run_id`              | string          | UUID of the parent orchestrator run                       |
-| `task_id`             | string          | Queue task identifier                                     |
-| `plan_file`           | string          | Path to the plan markdown file                            |
-| `stage`               | string          | Stage name, e.g. `implemented`, `reviewed`, `qa-complete` |
-| `agent_cli`           | string          | CLI used for the spawned session, e.g. `kimi`, `claude`   |
-| `isolation_level`     | string          | `minimal`, `standard`, or `full`                          |
-| `start_time`          | string          | ISO-8601 UTC timestamp                                    |
-| `end_time`            | string          | ISO-8601 UTC timestamp                                    |
-| `duration_seconds`    | float           | Computed from `start_time` and `end_time`                 |
-| `exit_code`           | integer         | Process exit code from the stage session                  |
-| `result`              | string          | `"success"` if `exit_code == 0`, otherwise `"failure"`    |
-| `files_modified`      | list[string]    | Paths changed during the stage (optional)                 |
-| `commits_created`     | integer \| null | Number of commits produced (optional)                     |
-| `worktree_size_bytes` | integer \| null | Size of the task worktree (optional)                      |
-| `token_count`         | integer \| null | Estimated token usage (optional)                          |
-| `cost_estimate`       | float \| null   | Estimated cost in USD (optional)                          |
+| Field                 | Type                 | Description                                             |
+| --------------------- | -------------------- | ------------------------------------------------------- |
+| `type`                | string               | `"stage"`                                               |
+| `run_id`              | string               | UUID of the parent orchestrator run                     |
+| `task_id`             | string               | Queue task identifier                                   |
+| `plan_file`           | string               | Path to the plan markdown file                          |
+| `stage`               | string               | Session target stage, e.g. `implemented`, `reviewed`    |
+| `stages`              | list[string] \| null | Ordered stage span for group sessions; `null` otherwise |
+| `agent_cli`           | string               | CLI used for the spawned session, e.g. `kimi`, `claude` |
+| `isolation_level`     | string               | `minimal`, `standard`, or `full`                        |
+| `start_time`          | string               | ISO-8601 UTC timestamp                                  |
+| `end_time`            | string               | ISO-8601 UTC timestamp                                  |
+| `duration_seconds`    | float                | Computed from `start_time` and `end_time`               |
+| `exit_code`           | integer              | Process exit code from the stage session                |
+| `result`              | string               | `"success"` if `exit_code == 0`, otherwise `"failure"`  |
+| `files_modified`      | list[string]         | Paths changed during the stage (optional)               |
+| `commits_created`     | integer \| null      | Number of commits produced (optional)                   |
+| `worktree_size_bytes` | integer \| null      | Size of the task worktree (optional)                    |
+| `token_count`         | integer \| null      | Estimated token usage (optional)                        |
+| `cost_estimate`       | float \| null        | Estimated cost in USD (optional)                        |
 
 ### `run_summary`
 
@@ -55,26 +59,6 @@ One record per orchestrator run, stored as `last-run.json`.
 | `tasks_failed`                | integer | Tasks that failed                              |
 | `parallel_conflicts_detected` | integer | Potential parallel-worktree conflicts detected |
 | `concurrency_cap`             | integer | Maximum parallel tasks allowed                 |
-
-### `loop`
-
-One record per internal retry loop, such as a test retry or an auto-format fix.
-
-| Field              | Type    | Description                                            |
-| ------------------ | ------- | ------------------------------------------------------ |
-| `type`             | string  | `"loop"`                                               |
-| `run_id`           | string  | UUID of the parent orchestrator run                    |
-| `task_id`          | string  | Queue task identifier                                  |
-| `plan_file`        | string  | Path to the plan markdown file                         |
-| `stage`            | string  | Pipeline stage where the loop occurred                 |
-| `loop_type`        | string  | E.g. `test_retry`, `format_fix`                        |
-| `iteration`        | integer | Loop iteration number                                  |
-| `start_time`       | string  | ISO-8601 UTC timestamp                                 |
-| `end_time`         | string  | ISO-8601 UTC timestamp                                 |
-| `duration_seconds` | float   | Computed from `start_time` and `end_time`              |
-| `exit_code`        | integer | Process exit code for this iteration                   |
-| `result`           | string  | `"success"` if `exit_code == 0`, otherwise `"failure"` |
-| `detail`           | string  | Optional human-readable detail                         |
 
 ### `environment_issue`
 
