@@ -63,7 +63,12 @@ def resolve_repo_root(repo_root: str | Path | None = None) -> Path:
 
 
 def derive_project_slug(repo_root: str | Path | None = None) -> str:
-    """Derive owner/repo slug from the origin remote or directory name."""
+    """Derive a worktree-based slug: ``<main-worktree-dir>/<worktree-label>``.
+
+    The primary worktree is labelled ``main``; a linked worktree contributes
+    its own directory name. Env overrides (``AET_PROJECT_ID`` /
+    ``AET_REPO_SLUG``) win; non-git directories fall back to the basename.
+    """
     env_slug = os.environ.get("AET_PROJECT_ID") or os.environ.get("AET_REPO_SLUG")
     if env_slug:
         return env_slug
@@ -72,20 +77,18 @@ def derive_project_slug(repo_root: str | Path | None = None) -> str:
 
     try:
         result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
+            ["git", "rev-parse", "--git-common-dir"],
             cwd=repo_root,
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode == 0:
-            url = result.stdout.strip()
-            if url.endswith(".git"):
-                url = url[:-4]
-            if ":" in url and "//" not in url:
-                url = url.split(":", 1)[-1]
-            parts = url.rstrip("/").split("/")
-            return "/".join(parts[-2:])
+            out = result.stdout.strip()
+            common = Path(out) if os.path.isabs(out) else (repo_root / out)
+            main_root = common.resolve().parent  # <main>/.git -> <main>
+            label = "main" if repo_root == main_root else repo_root.name
+            return f"{main_root.name}/{label}"
     except FileNotFoundError:
         pass
 
