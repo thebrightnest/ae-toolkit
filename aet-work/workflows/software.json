@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "software",
+  "done_state": "done",
+  "stages": [
+    {
+      "name": "plan-approved",
+      "skills": ["aet-tdd", "aet-implement"],
+      "evidence": null,
+      "gate_key": null
+    },
+    {
+      "name": "implemented",
+      "skills": ["aet-qa"],
+      "evidence": "qa",
+      "gate_key": null
+    },
+    {
+      "name": "qa-complete",
+      "skills": ["aet-review"],
+      "evidence": "review",
+      "gate_key": null
+    },
+    {
+      "name": "reviewed",
+      "skills": ["aet-cso"],
+      "evidence": "cso",
+      "gate_key": "security_review"
+    },
+    {
+      "name": "secure",
+      "skills": ["aet-sync-docs"],
+      "evidence": "sync-docs",
+      "gate_key": "docs_sync"
+    },
+    { "name": "synced", "skills": [], "evidence": null, "gate_key": null }
+  ],
+  "execution_policy": {
+    "session_groups": [
+      ["plan-approved", "implemented"],
+      ["qa-complete"],
+      ["reviewed", "secure"]
+    ]
+  },
+  "routing": {
+    "default": { "harness": "claude", "model": null },
+    "by_stage": {}
+  }
+}
