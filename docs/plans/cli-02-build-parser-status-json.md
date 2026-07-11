@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - wfd-04-workflow-lint-variant-proof
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: mechanical extraction of parser construction plus a read-only JSON projection of local queue state — no auth, data-model, API, or dependency surface
 docs_sync: skipped
@@ -71,5 +71,5 @@ Revert the merge commit. The refactor is behavior-preserving and `--json` is add
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: merge to main (task 5) — `aet-cso` and `aet-sync-docs` skipped per plan frontmatter_
