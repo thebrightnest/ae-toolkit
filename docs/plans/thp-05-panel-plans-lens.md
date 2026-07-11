@@ -79,5 +79,5 @@ Revert the merge commit — `index.html` returns to the runs-only panel; no data
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+_Stage: synced_
+_Next step: run `aet-ship`_
