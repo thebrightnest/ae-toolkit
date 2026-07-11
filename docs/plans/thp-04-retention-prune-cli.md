@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - thp-02-worktree-project-slug
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: recursive deletion inside the user's home directory — verify containment under the archive root, active-run protection, and that dry-run truly performs no writes
 docs_sync: required
@@ -84,5 +84,5 @@ Revert the merge commit — flags and lib function disappear; the guide re-docum
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
