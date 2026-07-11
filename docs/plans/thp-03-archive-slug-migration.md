@@ -47,10 +47,10 @@ docs_sync_reason: telemetry guide gains the migration runbook (one-shot rename c
 
 ## Task List
 
-1. Write `scripts/migrate-telemetry-slugs.py` per Locked design (argparse, dry-run default, containment validation, collision refusal, idempotency) — M (traces: R-3)
-2. Add `tests/test_migrate_telemetry_slugs.py` with the three named tests (below) running the script via `subprocess` against a tmp archive — includes the CLI smoke/exit-code coverage the 2026-07-06 `mine-learnings` learning calls for — S (traces: R-3)
-3. Add the migration runbook to `docs/telemetry-guide.md` (the two commands above + dry-run-first instruction) — S (traces: R-3)
-4. Merge branch to main and verify integration — S
+1. ✓ Write `scripts/migrate-telemetry-slugs.py` per Locked design (argparse, dry-run default, containment validation, collision refusal, idempotency) — M (traces: R-3)
+2. ✓ Add `tests/test_migrate_telemetry_slugs.py` with the three named tests (below) running the script via `subprocess` against a tmp archive — includes the CLI smoke/exit-code coverage the 2026-07-06 `mine-learnings` learning calls for — S (traces: R-3)
+3. ✓ Add the migration runbook to `docs/telemetry-guide.md` (the two commands above + dry-run-first instruction) — S (traces: R-3)
+4. Merge branch to main and verify integration — S [Deferred: to `aet-ship` per the standard pipeline]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -68,12 +68,12 @@ docs_sync_reason: telemetry guide gains the migration runbook (one-shot rename c
 
 ## Validation Steps
 
-- [ ] `tests/test_migrate_telemetry_slugs.py::test_dry_run_lists_renames_and_touches_nothing` — integration: fixture archive unchanged after default invocation; stdout names every pending move
-- [ ] `tests/test_migrate_telemetry_slugs.py::test_apply_renames_and_is_idempotent` — integration: `--apply` moves run dirs (contents intact); second `--apply` exits 0 with "nothing to do"
-- [ ] `tests/test_migrate_telemetry_slugs.py::test_collision_refuses_overwrite` — integration: pre-existing destination run dir → move refused, exit non-zero, source intact
-- [ ] `tests/test_migrate_telemetry_slugs.py::test_apply_renames_reports_tree_too` — integration: fixture reports root with `{OLD}/{task-id}/verdict.json` ends up under `{NEW}/`; absent reports dir is not an error
+- [x] `tests/test_migrate_telemetry_slugs.py::test_dry_run_lists_renames_and_touches_nothing` — integration: fixture archive unchanged after default invocation; stdout names every pending move
+- [x] `tests/test_migrate_telemetry_slugs.py::test_apply_renames_and_is_idempotent` — integration: `--apply` moves run dirs (contents intact); second `--apply` exits 0 with "nothing to do"
+- [x] `tests/test_migrate_telemetry_slugs.py::test_collision_refuses_overwrite` — integration: pre-existing destination run dir → move refused, exit non-zero, source intact
+- [x] `tests/test_migrate_telemetry_slugs.py::test_apply_renames_reports_tree_too` — integration: fixture reports root with `{OLD}/{task-id}/verdict.json` ends up under `{NEW}/`; absent reports dir is not an error
 - [ ] Manual (owner, post-merge): dry-run both runbook commands, then `--apply`; panel folder filter shows `aiskills`/`artifactsh`; `aet-work report --project aiskills/main` returns the historical runs
-- [ ] R-trace coverage: R-3 by tasks 1–3; no unknown R-ids cited
+- [x] R-trace coverage: R-3 by tasks 1–3; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -82,5 +82,5 @@ Code: revert the merge commit. Data: the script's dry-run output is the executed
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
