@@ -7,7 +7,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
 import unittest
 
-from pipeline import STAGE_MAP, get_next_stage, get_stage, group_stages_by_session
+import pipeline
+from pipeline import STAGE_MAP, STAGES, get_next_stage, get_stage, group_stages_by_session
 
 
 class TestPipeline(unittest.TestCase):
@@ -50,6 +51,30 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(len(groups), 5)
         for g in groups:
             self.assertEqual(len(g), 1)
+
+
+class TestStageGateKeys(unittest.TestCase):
+    """Stage routing is pure data: gate_key names the plan-frontmatter key."""
+
+    def test_gated_stages_carry_their_frontmatter_key(self):
+        self.assertEqual(get_stage("reviewed").gate_key, "security_review")
+        self.assertEqual(get_stage("secure").gate_key, "docs_sync")
+
+    def test_ungated_stages_have_no_gate_key(self):
+        for name in ("plan-approved", "implemented", "qa-complete", "synced"):
+            self.assertIsNone(get_stage(name).gate_key)
+
+    def test_gate_key_is_serializable_data(self):
+        for stage in STAGES:
+            self.assertIsInstance(stage.gate_key, (str, type(None)))
+
+    def test_no_runtime_judgment_left_in_the_engine(self):
+        # The conditional callables and their heuristic helpers are gone;
+        # routing happens once at plan time, never inside the engine.
+        for stage in STAGES:
+            self.assertFalse(hasattr(stage, "conditional"))
+        self.assertFalse(hasattr(pipeline, "_security_sensitive"))
+        self.assertFalse(hasattr(pipeline, "_divergences_found"))
 
 
 if __name__ == "__main__":

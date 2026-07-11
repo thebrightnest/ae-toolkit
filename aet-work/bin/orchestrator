@@ -35,6 +35,7 @@ from queue import (  # noqa: E402
 )
 
 import evidence  # noqa: E402
+import plan_parser  # noqa: E402
 import telemetry  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 from cli_adapter import resolve_cli_adapter  # noqa: E402
@@ -494,6 +495,40 @@ def run_stage_group(
     return result.returncode
 
 
+def stage_enabled(stage: Stage, plan_fm: dict) -> bool:
+    """Return True when ``stage`` should run for the given plan frontmatter.
+
+    A stage without a ``gate_key`` always runs. A gated stage runs unless the
+    plan frontmatter sets its gate key to ``skipped``; a missing key defaults
+    to ``required`` (fail-safe — the stage runs). Routing is decided once at
+    plan time and enforced here as pure data (ADR-020).
+    """
+    if not stage.gate_key:
+        return True
+    return plan_fm.get(stage.gate_key) != "skipped"
+
+
+def _report_gate_decision(stage: Stage, plan_fm: dict, enabled: bool) -> None:
+    """Print how a gated stage's run/skip decision was resolved.
+
+    The source is ``frontmatter`` when the plan sets the gate key and
+    ``default`` when the key is absent (fail-safe run). Ungated stages and
+    frontmatter-directed runs are silent.
+    """
+    if not stage.gate_key:
+        return
+    if enabled:
+        if stage.gate_key not in plan_fm:
+            print(
+                f"   🔒 Gate {stage.gate_key} unset; running {stage.name} (source: default)"
+            )
+        return
+    print(
+        f"   ⏭️  Skipping gated stage: {stage.name} "
+        f"({stage.gate_key}=skipped, source: frontmatter)"
+    )
+
+
 def process_task(
     task: dict,
     repo_root: str,
@@ -558,6 +593,10 @@ def process_task(
         )
         return False
 
+    # Gate routing resolves against the plan frontmatter — parse it once per
+    # task so every stage decision below is a pure data lookup.
+    plan_fm = plan_parser.parse_frontmatter(Path(plan_file))
+
     # Determine current stage from the task record; footer is only a breadcrumb.
     current_stage = get_current_stage(task, plan_file)
 
@@ -598,10 +637,14 @@ def process_task(
 
         # For standard isolation, try to run the remaining stages in one session.
         if task_isolation == "standard":
-            runnable = [
-                s for s in remaining
-                if not s.conditional or s.conditional(plan_file, worktree_dir)
-            ]
+            decisions = [(s, stage_enabled(s, plan_fm)) for s in remaining]
+            runnable = [s for s, ok in decisions if ok]
+            if len(runnable) != 1:
+                # The per-stage walk below only runs when exactly one stage is
+                # runnable; in every other case this is where skip decisions
+                # are final, so report them here.
+                for s, ok in decisions:
+                    _report_gate_decision(s, plan_fm, ok)
             if runnable and len(runnable) > 1:
                 expected_final = runnable[-1].next_stage or runnable[-1].name
                 stage_span = [s.name for s in runnable]
@@ -673,7 +716,7 @@ def process_task(
                 current_stage = expected_final
                 continue
             elif not runnable:
-                # All remaining stages are conditional skips; jump to the end of the group.
+                # All remaining stages are gated skips; jump to the end of the group.
                 current_stage = remaining[-1].next_stage or remaining[-1].name
                 continue
 
@@ -692,9 +735,11 @@ def process_task(
                 # All stages in this group are done; break to next group.
                 break
 
-            # Check conditional stages.
-            if target_stage.conditional and not target_stage.conditional(plan_file, worktree_dir):
-                print(f"   ⏭️  Skipping conditional stage: {target_stage.name}")
+            # Gated stages resolve from the plan frontmatter — pure data,
+            # no runtime judgment.
+            enabled = stage_enabled(target_stage, plan_fm)
+            _report_gate_decision(target_stage, plan_fm, enabled)
+            if not enabled:
                 current_stage = target_stage.next_stage or current_stage
                 continue
 

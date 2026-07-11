@@ -304,15 +304,40 @@ def new_task_from_plan(path: Path) -> dict[str, Any]:
     return task
 
 
+# Frontmatter keys that route gated pipeline stages at plan time. Each key is
+# optional (a missing key defaults to ``required`` at run time); when present
+# it must be ``required`` or ``skipped``, and ``skipped`` must carry a
+# non-empty ``<key>_reason`` recording the plan-time judgment.
+ROUTING_GATE_KEYS = ("security_review", "docs_sync")
+
+
+def _routing_key_error(data: dict[str, Any]) -> str | None:
+    """Validate the gate-routing keys of one plan's frontmatter.
+
+    Returns an error reason, or None when the keys satisfy the contract.
+    """
+    for key in ROUTING_GATE_KEYS:
+        value = data.get(key)
+        if value is None:
+            continue
+        if value not in ("required", "skipped"):
+            return f"invalid {key}: {value} (must be required or skipped)"
+        if value == "skipped":
+            reason = data.get(f"{key}_reason")
+            if not isinstance(reason, str) or not reason.strip():
+                return f"{key}_reason is required when {key} is skipped"
+    return None
+
+
 def intake_validation_errors(
     plan_files: list[Path],
     limit_to: set[Path] | None = None,
 ) -> list[tuple[Path, str]]:
     """Validate plan files for intake and return a list of fatal errors.
 
-    Checks the frontmatter contract (id, size, blocked_by), cross-plan blocker
-    references, multi-unit plan markers, atomic-complexity limits, and legacy
-    dependency sections that would silently drop blockers.
+    Checks the frontmatter contract (id, size, blocked_by, gate-routing keys),
+    cross-plan blocker references, multi-unit plan markers, atomic-complexity
+    limits, and legacy dependency sections that would silently drop blockers.
 
     By default every file is validated. When ``limit_to`` is provided, only files
     in that set produce validation errors, but every file is still parsed so that
@@ -351,6 +376,11 @@ def intake_validation_errors(
         size = data.get("size")
         if size not in {"S", "M", "L"}:
             errors.append((pf, f"invalid size: {size}"))
+            continue
+
+        routing_error = _routing_key_error(data)
+        if routing_error:
+            errors.append((pf, routing_error))
             continue
 
         blocked_by = data.get("blocked_by", [])
