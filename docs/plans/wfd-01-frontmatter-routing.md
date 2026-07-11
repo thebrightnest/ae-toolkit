@@ -42,12 +42,12 @@ docs_sync_reason: changes the plan frontmatter contract documented in skills and
 
 ## Task List
 
-1. `aet-work/lib/pipeline.py`: replace `conditional` with `gate_key` on `Stage`; set `gate_key` on `reviewed`/`secure`; delete `_security_sensitive`, `_divergences_found`, and now-unused imports — S (traces: R-5)
-2. `aet-work/bin/orchestrator`: add `stage_enabled(stage, plan_fm)`; parse plan frontmatter once per task; replace both `.conditional` call sites; print the skip decision with its source (`frontmatter` vs `default`) — M (traces: R-5)
-3. `aet-work/lib/plan_parser.py`: validate `security_review`/`docs_sync` values and skipped-requires-reason in `intake_validation_errors` (newly added plans only, via `limit_to`) — S (traces: R-4)
-4. `aet-plan/SKILL.md` (`create-stories` step) + `.agents/templates/plan-template.md` frontmatter example: both keys set deliberately with recorded reasons — S (traces: R-6)
-5. Tests: extend `tests/test_pipeline.py` (gate_key present, conditional gone), `tests/test_orchestrator.py` (skip on `skipped`, run on missing key, run on `required`), `tests/test_init_queue_sync.py` (invalid value rejected; skipped-without-reason rejected; grandfathered plans pass) — M (traces: R-4, R-5)
-6. Merge branch to main and verify integration — S
+1. ✓ `aet-work/lib/pipeline.py`: replace `conditional` with `gate_key` on `Stage`; set `gate_key` on `reviewed`/`secure`; delete `_security_sensitive`, `_divergences_found`, and now-unused imports — S (traces: R-5)
+2. ✓ `aet-work/bin/orchestrator`: add `stage_enabled(stage, plan_fm)`; parse plan frontmatter once per task; replace both `.conditional` call sites; print the skip decision with its source (`frontmatter` vs `default`) — M (traces: R-5)
+3. ✓ `aet-work/lib/plan_parser.py`: validate `security_review`/`docs_sync` values and skipped-requires-reason in `intake_validation_errors` (newly added plans only, via `limit_to`) — S (traces: R-4)
+4. ✓ `aet-plan/SKILL.md` (`create-stories` step) + `.agents/templates/plan-template.md` frontmatter example: both keys set deliberately with recorded reasons — S (traces: R-6)
+5. ✓ Tests: extend `tests/test_pipeline.py` (gate_key present, conditional gone), `tests/test_orchestrator.py` (skip on `skipped`, run on missing key, run on `required`), `tests/test_init_queue_sync.py` (invalid value rejected; skipped-without-reason rejected; grandfathered plans pass) — M (traces: R-4, R-5)
+6. Merge branch to main and verify integration — S [Deferred: merges at closure via aet-ship]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -70,9 +70,9 @@ docs_sync_reason: changes the plan frontmatter contract documented in skills and
 
 ## Validation Steps
 
-- [ ] `make validate` passes (ruff + pytest + skill checks)
-- [ ] Named tests per changed surface: `tests/test_pipeline.py` (unit: Stage.gate_key), `tests/test_orchestrator.py` (integration: frontmatter-driven skip/run across group and per-stage paths), `tests/test_init_queue_sync.py` (unit: intake contract)
-- [ ] `grep -rn "_security_sensitive\|_divergences_found\|conditional" aet-work/` returns no engine hits
+- [x] `make validate` passes (ruff + pytest + skill checks)
+- [x] Named tests per changed surface: `tests/test_pipeline.py` (unit: Stage.gate_key), `tests/test_orchestrator.py` (integration: frontmatter-driven skip/run across group and per-stage paths), `tests/test_init_queue_sync.py` (unit: intake contract)
+- [x] `grep -rn "_security_sensitive\|_divergences_found\|conditional" aet-work/` returns no engine hits
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -81,5 +81,5 @@ Revert the merge commit — the frontmatter keys are additive and ignored by the
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_

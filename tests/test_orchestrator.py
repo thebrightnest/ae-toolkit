@@ -22,7 +22,6 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
 import evidence
-import pipeline
 import telemetry
 from cli_adapter import CLIAdapter, resolve_cli_adapter
 from pipeline import Stage
@@ -390,7 +389,7 @@ class TestDependencyWarmup(unittest.TestCase):
                     with patch.dict(os.environ, env, clear=False):
                         logger = telemetry.RunLogger(repo_root, run_id="r1")
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
-                        _write_passing(reports_dir, "qa", "review")
+                        _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
 
                         with patch.object(orchestrator, "run_stage", return_value=0):
                             with patch.object(
@@ -464,7 +463,7 @@ class TestEnvironmentIssueEmission(unittest.TestCase):
                     with patch.dict(os.environ, env, clear=False):
                         logger = telemetry.RunLogger(repo_root, run_id="r1")
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
-                        _write_passing(reports_dir, "qa", "review")
+                        _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
 
                         with patch.object(orchestrator, "run_stage", return_value=0):
                             with patch.object(
@@ -1068,6 +1067,206 @@ class TestRunStageGroup(unittest.TestCase):
         self.assertEqual(result, 1)
 
 
+class TestStageEnabled(unittest.TestCase):
+    """stage_enabled resolves a stage's gate_key against plan frontmatter."""
+
+    def _gated(self, gate_key: str = "security_review") -> Stage:
+        return Stage(name="gated", skills=["aet-cso"], next_stage="next", gate_key=gate_key)
+
+    def test_stage_without_gate_key_always_runs(self):
+        stage = Stage(name="plain", skills=[], next_stage="next")
+        self.assertTrue(orchestrator.stage_enabled(stage, {}))
+
+    def test_gated_stage_skips_when_frontmatter_marks_skipped(self):
+        self.assertFalse(
+            orchestrator.stage_enabled(self._gated(), {"security_review": "skipped"})
+        )
+
+    def test_gated_stage_runs_when_frontmatter_marks_required(self):
+        self.assertTrue(
+            orchestrator.stage_enabled(self._gated(), {"security_review": "required"})
+        )
+
+    def test_gated_stage_runs_when_key_missing_fail_safe(self):
+        # A missing key defaults to required — the gate fails safe and runs.
+        self.assertTrue(orchestrator.stage_enabled(self._gated(), {}))
+
+    def test_gate_keys_are_independent(self):
+        # A docs_sync skip must not leak into the security_review gate.
+        self.assertTrue(orchestrator.stage_enabled(self._gated(), {"docs_sync": "skipped"}))
+
+
+class TestGateRouting(unittest.TestCase):
+    """End-to-end gate routing: plan frontmatter drives stage skip/run (wfd-01)."""
+
+    def _setup_repo_with_plan(
+        self, repo_root: str, frontmatter_extra: str = "", stage: str = "reviewed"
+    ) -> str:
+        _init_git_repo(repo_root)
+        plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+        Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+        Path(plan_file).write_text(
+            f"---\nid: demo\n{frontmatter_extra}---\n\n# Demo\n\n_Stage: {stage}_\n",
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+        return plan_file
+
+    def _process_task_capture(self, task, repo_root, mock_group, mock_stage):
+        with patch.object(
+            orchestrator, "verify_branch_has_commits", return_value=(True, "")
+        ):
+            with patch.object(
+                orchestrator, "verify_stage_advancement", return_value=(True, "")
+            ):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    result = orchestrator.process_task(
+                        task, repo_root, _FAKE_ADAPTER, "standard"
+                    )
+        return result, buf.getvalue()
+
+    def test_gated_stages_skip_when_plan_marks_them_skipped(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(
+                repo_root,
+                frontmatter_extra=(
+                    "security_review: skipped\n"
+                    "security_review_reason: docs-only change\n"
+                    "docs_sync: skipped\n"
+                    "docs_sync_reason: nothing to reconcile\n"
+                ),
+            )
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    with patch.dict(
+                        os.environ, _gate_env(reports_dir, archive_dir), clear=False
+                    ):
+                        with patch.object(
+                            orchestrator, "run_stage_group", return_value=0
+                        ) as mock_group:
+                            with patch.object(
+                                orchestrator, "run_stage", return_value=0
+                            ) as mock_stage:
+                                result, out = self._process_task_capture(
+                                    task, repo_root, mock_group, mock_stage
+                                )
+
+        self.assertTrue(result)
+        mock_group.assert_not_called()
+        mock_stage.assert_not_called()
+        self.assertIn("Skipping gated stage: reviewed", out)
+        self.assertIn("Skipping gated stage: secure", out)
+        self.assertIn("source: frontmatter", out)
+
+    def test_gated_stages_run_when_keys_missing_fail_safe(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_passing(reports_dir, "cso", "sync-docs")
+                    with patch.dict(
+                        os.environ, _gate_env(reports_dir, archive_dir), clear=False
+                    ):
+                        with patch.object(
+                            orchestrator, "run_stage_group", return_value=0
+                        ) as mock_group:
+                            with patch.object(
+                                orchestrator, "run_stage", return_value=0
+                            ) as mock_stage:
+                                result, out = self._process_task_capture(
+                                    task, repo_root, mock_group, mock_stage
+                                )
+
+        self.assertTrue(result)
+        mock_group.assert_called_once()
+        stages_arg = mock_group.call_args[0][4]
+        self.assertEqual([s.name for s in stages_arg], ["reviewed", "secure"])
+        mock_stage.assert_not_called()
+        self.assertIn("source: default", out)
+
+    def test_gated_stages_run_when_plan_marks_them_required(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(
+                repo_root,
+                frontmatter_extra=(
+                    "security_review: required\n"
+                    "security_review_reason: engine gate logic changed\n"
+                    "docs_sync: required\n"
+                    "docs_sync_reason: frontmatter contract documented in skills\n"
+                ),
+            )
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_passing(reports_dir, "cso", "sync-docs")
+                    with patch.dict(
+                        os.environ, _gate_env(reports_dir, archive_dir), clear=False
+                    ):
+                        with patch.object(
+                            orchestrator, "run_stage_group", return_value=0
+                        ) as mock_group:
+                            with patch.object(
+                                orchestrator, "run_stage", return_value=0
+                            ) as mock_stage:
+                                result, out = self._process_task_capture(
+                                    task, repo_root, mock_group, mock_stage
+                                )
+
+        self.assertTrue(result)
+        mock_group.assert_called_once()
+        stages_arg = mock_group.call_args[0][4]
+        self.assertEqual([s.name for s in stages_arg], ["reviewed", "secure"])
+        mock_stage.assert_not_called()
+        self.assertNotIn("Skipping gated stage", out)
+
+    def test_mixed_gates_walk_per_stage_and_report_both_sources(self):
+        # security_review skipped + docs_sync absent → only sync-docs runs, and
+        # the single runnable stage falls back to the per-stage walk.
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(
+                repo_root,
+                frontmatter_extra=(
+                    "security_review: skipped\n"
+                    "security_review_reason: no auth or data surface\n"
+                ),
+            )
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_passing(reports_dir, "sync-docs")
+                    with patch.dict(
+                        os.environ, _gate_env(reports_dir, archive_dir), clear=False
+                    ):
+                        with patch.object(
+                            orchestrator, "run_stage_group", return_value=0
+                        ) as mock_group:
+                            with patch.object(
+                                orchestrator, "run_stage", return_value=0
+                            ) as mock_stage:
+                                result, out = self._process_task_capture(
+                                    task, repo_root, mock_group, mock_stage
+                                )
+
+        self.assertTrue(result)
+        mock_group.assert_not_called()
+        mock_stage.assert_called_once()
+        self.assertEqual(mock_stage.call_args[0][4], ["aet-sync-docs"])
+        self.assertIn("Skipping gated stage: reviewed", out)
+        self.assertIn("source: frontmatter", out)
+        self.assertIn("source: default", out)
+
+
 class TestStageGroupSessionReuse(unittest.TestCase):
     def _setup_repo_with_plan(self, repo_root: str, stage: str = "plan-approved") -> str:
         _init_git_repo(repo_root)
@@ -1089,7 +1288,7 @@ class TestStageGroupSessionReuse(unittest.TestCase):
         return plan_file
 
     def test_standard_isolation_runs_group_session_for_two_stage_group(self):
-        """standard isolation spawns one session for a two-stage group."""
+        """standard isolation spawns one session per multi-stage group."""
         with tempfile.TemporaryDirectory() as repo_root:
             plan_file = self._setup_repo_with_plan(repo_root)
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
@@ -1102,7 +1301,7 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                 return "plan-approved"
 
             with tempfile.TemporaryDirectory() as reports_dir:
-                _write_passing(reports_dir, "qa", "review")
+                _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
                 with patch.dict(
                     os.environ,
                     {"AET_REPORTS_DIR": reports_dir, "AET_PROJECT_ID": "demo/project"},
@@ -1134,8 +1333,9 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                                         )
 
                 self.assertTrue(result)
-                mock_group.assert_called_once()
-                # Group 1 ran as a single session; group 2 (single stage) still uses run_stage.
+                # Groups 1 and 3 each ran as a single session; group 2 (single
+                # stage) still uses run_stage.
+                self.assertEqual(mock_group.call_count, 2)
                 self.assertEqual(mock_stage.call_count, 1)
 
     def test_minimal_isolation_keeps_per_stage_execution(self):
@@ -1145,7 +1345,7 @@ class TestStageGroupSessionReuse(unittest.TestCase):
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
             with tempfile.TemporaryDirectory() as reports_dir:
-                _write_passing(reports_dir, "qa", "review")
+                _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
                 with patch.dict(
                     os.environ,
                     {"AET_REPORTS_DIR": reports_dir, "AET_PROJECT_ID": "demo/project"},
@@ -1180,7 +1380,7 @@ class TestStageGroupSessionReuse(unittest.TestCase):
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
             with tempfile.TemporaryDirectory() as reports_dir:
-                _write_passing(reports_dir, "qa", "review")
+                _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
                 with patch.dict(
                     os.environ,
                     {"AET_REPORTS_DIR": reports_dir, "AET_PROJECT_ID": "demo/project"},
@@ -1524,12 +1724,24 @@ class TestProcessGroupKill(unittest.TestCase):
 class TestStageTelemetry(unittest.TestCase):
     """Stage-session telemetry emission (frh-09)."""
 
-    def _setup_repo_with_plan(self, repo_root: str, stage: str) -> str:
+    # Tests in this class assert exact session/record counts, so their plans
+    # take the documented skip path for both gates (telemetry, not gate
+    # routing, is under test here).
+    _SKIP_GATES_FM = (
+        "security_review: skipped\n"
+        "security_review_reason: telemetry fixture — gate routing not under test\n"
+        "docs_sync: skipped\n"
+        "docs_sync_reason: telemetry fixture — gate routing not under test\n"
+    )
+
+    def _setup_repo_with_plan(
+        self, repo_root: str, stage: str, frontmatter_extra: str = ""
+    ) -> str:
         _init_git_repo(repo_root)
         plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
         Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
         Path(plan_file).write_text(
-            f"---\nid: demo\n---\n\n# Demo\n\n_Stage: {stage}_\n",
+            f"---\nid: demo\n{frontmatter_extra}---\n\n# Demo\n\n_Stage: {stage}_\n",
             encoding="utf-8",
         )
         subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
@@ -1553,7 +1765,9 @@ class TestStageTelemetry(unittest.TestCase):
     def test_stage_record_emitted_per_session(self):
         """A single-stage (per-stage) session emits exactly one stage record."""
         with tempfile.TemporaryDirectory() as repo_root:
-            plan_file = self._setup_repo_with_plan(repo_root, "qa-complete")
+            plan_file = self._setup_repo_with_plan(
+                repo_root, "qa-complete", frontmatter_extra=self._SKIP_GATES_FM
+            )
             with tempfile.TemporaryDirectory() as archive_dir:
                 with tempfile.TemporaryDirectory() as reports_dir:
                     env = _gate_env(reports_dir, archive_dir)
@@ -1596,7 +1810,9 @@ class TestStageTelemetry(unittest.TestCase):
     def test_group_session_record_carries_stage_span(self):
         """A standard-isolation group session records the stage span it covered."""
         with tempfile.TemporaryDirectory() as repo_root:
-            plan_file = self._setup_repo_with_plan(repo_root, "plan-approved")
+            plan_file = self._setup_repo_with_plan(
+                repo_root, "plan-approved", frontmatter_extra=self._SKIP_GATES_FM
+            )
             with tempfile.TemporaryDirectory() as archive_dir:
                 with tempfile.TemporaryDirectory() as reports_dir:
                     env = _gate_env(reports_dir, archive_dir)
@@ -1661,7 +1877,9 @@ class TestStageTelemetry(unittest.TestCase):
     def test_stage_record_records_files_and_commits(self):
         """Post-session git stats capture files modified and commits created."""
         with tempfile.TemporaryDirectory() as repo_root:
-            plan_file = self._setup_repo_with_plan(repo_root, "qa-complete")
+            plan_file = self._setup_repo_with_plan(
+                repo_root, "qa-complete", frontmatter_extra=self._SKIP_GATES_FM
+            )
             with tempfile.TemporaryDirectory() as archive_dir:
                 with tempfile.TemporaryDirectory() as reports_dir:
                     env = _gate_env(reports_dir, archive_dir)
@@ -1828,7 +2046,7 @@ class TestEvidenceGates(unittest.TestCase):
             plan_file = self._setup_repo_with_plan(repo_root, stage="plan-approved")
             with tempfile.TemporaryDirectory() as reports_dir:
                 with tempfile.TemporaryDirectory() as archive_dir:
-                    _write_passing(reports_dir, "qa", "review")
+                    _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
                     env = _gate_env(reports_dir, archive_dir)
                     with patch.dict(os.environ, env, clear=False):
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
@@ -1855,7 +2073,8 @@ class TestEvidenceGates(unittest.TestCase):
                                             "standard",
                                         )
                     self.assertTrue(result)
-                    mock_group.assert_called_once()
+                    # Group sessions run for both multi-stage groups (1 and 3).
+                    self.assertEqual(mock_group.call_count, 2)
                     mock_stage.assert_called()
 
     def test_qa_verdict_derives_test_run_record(self):
@@ -1873,7 +2092,7 @@ class TestEvidenceGates(unittest.TestCase):
                         tests_passed=11,
                         tests_failed=1,
                     )
-                    _write_passing(reports_dir, "review")
+                    _write_passing(reports_dir, "review", "cso", "sync-docs")
                     result, logger = self._run_group(
                         repo_root, plan_file, reports_dir, archive_dir
                     )
@@ -1886,32 +2105,6 @@ class TestEvidenceGates(unittest.TestCase):
             self.assertEqual(test_runs[0]["tests_passed"], 11)
             self.assertEqual(test_runs[0]["tests_failed"], 1)
             self.assertEqual(test_runs[0]["exit_code"], 0)
-
-    def test_divergences_found_reads_evidence_home(self):
-        """_divergences_found reads review/cso/sync-docs verdicts, not /tmp."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            plan_file = self._setup_repo_with_plan(repo_root)
-            with tempfile.TemporaryDirectory() as reports_dir:
-                env = {
-                    "AET_REPORTS_DIR": reports_dir,
-                    "AET_PROJECT_ID": "demo/project",
-                }
-                with patch.dict(os.environ, env, clear=False):
-                    # No verdicts yet: no divergences.
-                    self.assertFalse(
-                        pipeline._divergences_found(plan_file, repo_root)
-                    )
-                    # A review verdict with findings triggers divergences.
-                    _write_verdict(
-                        reports_dir,
-                        "review",
-                        "pass",
-                        findings=[{"file": "x.py", "note": "issue"}],
-                    )
-                    self.assertTrue(
-                        pipeline._divergences_found(plan_file, repo_root)
-                    )
-
 
 class _InstantProc:
     """A subprocess.Popen stand-in that has already exited successfully."""
