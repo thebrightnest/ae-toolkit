@@ -81,5 +81,5 @@ Revert the merge commit — the frontmatter keys are additive and ignored by the
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-cso`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
