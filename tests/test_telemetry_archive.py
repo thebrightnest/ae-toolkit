@@ -5,8 +5,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -52,9 +54,7 @@ class TestDirectArchive(unittest.TestCase):
         os.environ.pop("AET_TELEMETRY_ARCHIVE_DIR", None)
 
     def test_run_logger_creates_dated_run_directory(self):
-        logger = telemetry.RunLogger(
-            self.project_dir, run_id="run-001", date="2026-06-20"
-        )
+        logger = telemetry.RunLogger(self.project_dir, run_id="run-001", date="2026-06-20")
         self.assertTrue(logger.run_dir.exists())
         self.assertIn("run-001", str(logger.run_dir))
         self.assertIn("2026-06-20", str(logger.run_dir))
@@ -130,12 +130,8 @@ class TestMineLearnings(unittest.TestCase):
         run2 = self._seed_run("p2", "2026-06-20", "r2", {"t1": records})
         # Loop records were removed (frh-09); the repeated-loops signal is now
         # mined from narrative report text rather than JSONL loop records.
-        (run1 / "qa-report.md").write_text(
-            "The agent had to retry once.", encoding="utf-8"
-        )
-        (run2 / "qa-report.md").write_text(
-            "The agent had to retry once.", encoding="utf-8"
-        )
+        (run1 / "qa-report.md").write_text("The agent had to retry once.", encoding="utf-8")
+        (run2 / "qa-report.md").write_text("The agent had to retry once.", encoding="utf-8")
 
         patterns = mine_learnings.mine_archive(self.archive_dir)
         report = mine_learnings.format_report(patterns)
@@ -157,9 +153,7 @@ class TestMineLearnings(unittest.TestCase):
         run_dir = self._seed_run("p1", "2026-06-20", "r1", {"t1": records})
         # Surface a repeated-loop signal via narrative mining; loop JSONL records
         # are no longer emitted, so they cannot drive the aet-implement proposal.
-        (run_dir / "qa-report.md").write_text(
-            "The agent had to retry once.", encoding="utf-8"
-        )
+        (run_dir / "qa-report.md").write_text("The agent had to retry once.", encoding="utf-8")
 
         patterns = mine_learnings.mine_archive(self.archive_dir)
         proposals = mine_learnings.propose_edits(patterns)
@@ -167,6 +161,122 @@ class TestMineLearnings(unittest.TestCase):
         self.assertIn("aet-setup", proposals)
         self.assertIn("aet-implement", proposals)
         self.assertNotIn(str(self.archive_dir), proposals)
+
+
+class TestPruneArchive(unittest.TestCase):
+    def setUp(self):
+        self.archive_dir = Path(tempfile.mkdtemp(prefix="aet-prune-"))
+        os.environ["AET_TELEMETRY_ARCHIVE_DIR"] = str(self.archive_dir)
+
+    def tearDown(self):
+        shutil = __import__("shutil")
+        shutil.rmtree(self.archive_dir, ignore_errors=True)
+        os.environ.pop("AET_TELEMETRY_ARCHIVE_DIR", None)
+
+    def _backdate(self, path: Path, age_days: float) -> None:
+        ts = time.time() - age_days * 86400
+        for p in [path, *path.rglob("*")]:
+            os.utime(p, (ts, ts))
+
+    def _seed_run(self, project: str, date: str, run_id: str, age_days: float) -> Path:
+        run_dir = self.archive_dir / project / date / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "t1.jsonl").write_text('{"type":"stage"}\n', encoding="utf-8")
+        self._backdate(run_dir, age_days)
+        return run_dir
+
+    def test_prune_dry_run_lists_only(self):
+        old = self._seed_run("proj", "2026-05-01", "old-run", 60)
+        new = self._seed_run("proj", "2026-07-10", "new-run", 1)
+
+        report = telemetry.prune_archive(30)
+
+        self.assertTrue(old.exists())
+        self.assertTrue(new.exists())
+        self.assertEqual(report["deleted"], [])
+        self.assertEqual(report["candidates"], [str(old)])
+
+    def test_prune_force_deletes_old_runs(self):
+        old_current = self._seed_run("proj", "2026-05-01", "old-run", 60)
+        old_legacy = self.archive_dir / "proj" / "2026-05-02-legacy-run"
+        old_legacy.mkdir(parents=True, exist_ok=True)
+        (old_legacy / "t1.jsonl").write_text('{"type":"stage"}\n', encoding="utf-8")
+        self._backdate(old_legacy, 60)
+        new = self._seed_run("proj", "2026-07-10", "new-run", 1)
+
+        report = telemetry.prune_archive(30, force=True)
+
+        self.assertFalse(old_current.exists())
+        self.assertFalse(old_legacy.exists())
+        self.assertTrue(new.exists())
+        self.assertEqual(
+            sorted(report["deleted"]),
+            sorted([str(old_current), str(old_legacy)]),
+        )
+        self.assertGreater(report["bytes_reclaimed"], 0)
+
+    def test_prune_skips_leased_run(self):
+        leased = self._seed_run("proj", "2026-05-01", "leased-run", 60)
+        doomed = self._seed_run("proj", "2026-05-01", "doomed-run", 60)
+
+        report = telemetry.prune_archive(30, force=True, protected_run_ids=frozenset({"leased-run"}))
+
+        self.assertTrue(leased.exists())
+        self.assertFalse(doomed.exists())
+        self.assertEqual(report["kept_protected"], [str(leased)])
+
+    def test_prune_skips_fresh_or_summaryless_dirs(self):
+        # The wfd-03 shape: an old-dated dir (empty, no last-run.json) whose
+        # mtime is fresh because the run is live right now.
+        fresh_old = self.archive_dir / "proj" / "2026-05-01" / "live-run"
+        fresh_old.mkdir(parents=True, exist_ok=True)
+        old = self._seed_run("proj", "2026-05-01", "old-run", 60)
+
+        report = telemetry.prune_archive(30, force=True)
+
+        self.assertTrue(fresh_old.exists())
+        self.assertFalse(old.exists())
+        self.assertNotIn(str(fresh_old), report["deleted"])
+
+    def test_prune_removes_stale_empty_dirs(self):
+        stale_date = self.archive_dir / "proj" / "2026-05-01"
+        stale_date.mkdir(parents=True, exist_ok=True)
+        self._backdate(stale_date, 60)
+        stale_project = self.archive_dir / "proj-stale"
+        stale_project.mkdir(parents=True, exist_ok=True)
+        self._backdate(stale_project, 60)
+        fresh_date = self.archive_dir / "proj" / "2026-07-10"
+        fresh_date.mkdir(parents=True, exist_ok=True)
+
+        telemetry.prune_archive(30, force=True)
+
+        self.assertFalse(stale_date.exists())
+        self.assertFalse(stale_project.exists())
+        self.assertTrue(fresh_date.exists())
+        self.assertTrue((self.archive_dir / "proj").exists())
+
+        # Dry run never sweeps, even for stale dirs.
+        telemetry.prune_archive(30)
+        stale_again = self.archive_dir / "proj2" / "2026-05-01"
+        stale_again.mkdir(parents=True, exist_ok=True)
+        self._backdate(stale_again, 60)
+        telemetry.prune_archive(30)
+        self.assertTrue(stale_again.exists())
+
+    def test_report_prune_cli_dry_run_smoke(self):
+        old = self._seed_run("proj", "2026-05-01", "old-run", 60)
+        report_bin = Path(__file__).parent.parent / "aet-work" / "bin" / "report"
+        result = subprocess.run(
+            [sys.executable, str(report_bin), "--prune", "7"],
+            capture_output=True,
+            text=True,
+            cwd=self.archive_dir,
+            env={**os.environ, "AET_TELEMETRY_ARCHIVE_DIR": str(self.archive_dir)},
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("dry run", result.stdout.lower())
+        self.assertTrue(old.exists())
 
 
 if __name__ == "__main__":

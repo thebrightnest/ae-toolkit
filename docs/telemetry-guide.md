@@ -177,8 +177,21 @@ path traversal. To roll back, replay the dry-run output inverted
   write time.
 - Secrets are not collected; if a secret appears in a log, treat the file as
   sensitive and delete it.
-- Retention is manual: delete old directories under `~/.aet/telemetry/` when no
-  longer needed.
+- Retention is handled by the prune CLI. Dry-run first, then delete:
+
+  ```bash
+  aet-work report --prune 30           # dry run: lists candidates, deletes nothing
+  aet-work report --prune 30 --force   # actually delete runs older than 30 days
+  aet-work report --prune 30 --project <slug>  # scope to one project subtree
+  ```
+
+  A run dir is pruned only when both its date path segment and its newest file
+  mtime are older than the cutoff, so a live run (even an empty, summary-less
+  dir) always survives. **Never prune the active run:** the CLI automatically
+  protects the run holding `.agents/work-queue.lease` and the run named by
+  `AET_RUN_ID`. Deletion is irreversible — always review the dry run before
+  passing `--force`. The gate-evidence reports tree (`~/.aet/reports`) is not
+  covered by prune.
 
 ## Troubleshooting
 
