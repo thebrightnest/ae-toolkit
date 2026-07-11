@@ -128,5 +128,5 @@ Revert the merge commit — nothing consumes the new module yet; zero blast radi
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
