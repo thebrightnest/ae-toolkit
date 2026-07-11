@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""aet multicall dispatcher — single entry point for the AE Toolkit.
+
+Maps ``aet <subcommand>`` to the underlying skill binaries via exec-based
+1:1 dispatch with zero behavior change. The module-level ``SUBCOMMANDS``
+spec is the shared source of truth: the dispatcher executes it and tooling
+(e.g. skills-lint) validates against it, so new subcommands are one-row
+additions.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+# Subcommand spec: name -> {"target": ("<skill-dir>", "<bin-name>"), "mode": ...}
+# mode "exec" forwards argv verbatim; "run"/"run-one" carry the documented
+# orchestrator flag mapping from the frh-05 aet-work dispatcher.
+SUBCOMMANDS = {
+    "add": {"target": ("aet-work", "add"), "mode": "exec"},
+    "review": {"target": ("aet-work", "review"), "mode": "exec"},
+    "status": {"target": ("aet-work", "status"), "mode": "exec"},
+    "next": {"target": ("aet-work", "next"), "mode": "exec"},
+    "sync": {"target": ("aet-work", "sync"), "mode": "exec"},
+    "report": {"target": ("aet-work", "report"), "mode": "exec"},
+    "init-queue": {"target": ("aet-work", "init-queue"), "mode": "exec"},
+    "state": {"target": ("aet-work", "aet-state"), "mode": "exec"},
+    "run": {"target": ("aet-work", "orchestrator"), "mode": "run"},
+    "run-one": {"target": ("aet-work", "orchestrator"), "mode": "run-one"},
+    "ship": {"target": ("aet-ship", "ship"), "mode": "exec"},
+    "retro": {"target": ("aet-evolve", "aet-retro"), "mode": "exec"},
+    "mine-learnings": {"target": ("aet-evolve", "mine-learnings"), "mode": "exec"},
+    "configure-backend": {
+        "target": ("aet-setup", "configure-task-backend"),
+        "mode": "exec",
+    },
+}
+
+
+def _skills_root() -> Path:
+    """Return the installed-skills root (resolved script path, up three)."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def _usage() -> str:
+    lines = ["usage: aet <subcommand> [args...]", "", "subcommands:"]
+    lines.extend(f"  {name}" for name in SUBCOMMANDS)
+    return "\n".join(lines)
+
+
+def _resolve_target(spec: dict) -> Path:
+    """Resolve a spec target via the skills-root sibling layout."""
+    skill_dir, bin_name = spec["target"]
+    binary = _skills_root() / skill_dir / "bin" / bin_name
+    if not binary.is_file():
+        print(
+            f"error: missing skill '{skill_dir}' (expected binary at {binary})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return binary
+
+
+def _parse_run_args(args: list[str]) -> list[str]:
+    """Build orchestrator flags from user-provided ``run``/``run-one`` args."""
+    max_jobs = "4"
+    isolation = "standard"
+    task_timeout: str | None = None
+    cli_bin: str | None = None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("--max-jobs", "--isolation", "--task-timeout", "--cli-bin"):
+            if i + 1 >= len(args):
+                print(f"error: {arg} requires a value", file=sys.stderr)
+                sys.exit(2)
+            value = args[i + 1]
+            if arg == "--max-jobs":
+                max_jobs = value
+            elif arg == "--isolation":
+                isolation = value
+            elif arg == "--task-timeout":
+                task_timeout = value
+            else:
+                cli_bin = value
+            i += 2
+        else:
+            print(f"error: unknown flag {arg}", file=sys.stderr)
+            sys.exit(2)
+
+    out = ["--max-jobs", max_jobs, "--isolation", isolation]
+    if task_timeout is not None:
+        out.extend(["--task-timeout", task_timeout])
+    if cli_bin is not None:
+        out.extend(["--cli-bin", cli_bin])
+    return out
+
+
+def _exec(binary: Path, argv: list[str]) -> int:
+    try:
+        os.execvp(str(binary), argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
+def main() -> int:
+    """Dispatch ``aet <subcommand>`` to the target skill binary."""
+    argv = sys.argv
+    if len(argv) < 2:
+        print(_usage(), file=sys.stderr)
+        return 2
+
+    subcommand = argv[1]
+    spec = SUBCOMMANDS.get(subcommand)
+    if spec is None:
+        print(f"error: unknown subcommand '{subcommand}'", file=sys.stderr)
+        print(_usage(), file=sys.stderr)
+        return 2
+
+    binary = _resolve_target(spec)
+    mode = spec["mode"]
+    _, bin_name = spec["target"]
+
+    if mode == "exec":
+        return _exec(binary, [bin_name, *argv[2:]])
+
+    if mode == "run":
+        flags = _parse_run_args(argv[2:])
+        return _exec(
+            binary,
+            ["orchestrator", "--queue-file", ".agents/work-queue.json", *flags],
+        )
+
+    if mode == "run-one":
+        if len(argv) < 3 or argv[2].startswith("-"):
+            print("error: run-one requires a plan file", file=sys.stderr)
+            print(_usage(), file=sys.stderr)
+            return 2
+        plan_file = argv[2]
+        flags = _parse_run_args(argv[3:])
+        return _exec(binary, ["orchestrator", "--plan-file", plan_file, *flags])
+
+    print(f"error: unknown mode '{mode}' for subcommand '{subcommand}'", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
