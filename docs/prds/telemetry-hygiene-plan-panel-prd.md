@@ -114,6 +114,12 @@ _Recorded: 2026-07-11 — Branch: thp-04-retention-prune-cli (scope: thp-04 / R-
 
 - Task 5 (merge to main): deferred to `aet-ship` per the standard pipeline — no code change.
 
+_Recorded: 2026-07-11 — Branch: thp-04-retention-prune-cli (scope: thp-04 / R-4 only — second aet-cso pass)_
+
+### Added (unplanned, thp-04 — cso re-run)
+
+- Second-pass CSO hardening (aet-cso F1/F2, re-run): the whole-archive prune walk (`_iter_run_dirs`) now skips symlinked **project** dirs — previously `is_dir()` followed a symlink planted at `~/.aet/telemetry/<link>` and made dirs in the link target `rmtree` candidates, escaping archive containment (High, the class the plan's security review gates on). `prune_archive()` also raises `ValueError` for negative `days`, which would place the cutoff in the future and mark every run as a candidate (Low). Two regression tests added (`test_prune_skips_symlinked_project_dirs`, `test_prune_negative_days_rejected`).
+
 ---
 
 _Stage: scope-validated_ (owner gate + closure check 2026-07-11)
