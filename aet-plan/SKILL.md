@@ -146,6 +146,10 @@ Break the PRD into vertically-sliced, independently implementable tickets.
    blocked_by:
      - { blocker-id }
    pipeline: standard
+   security_review: required
+   security_review_reason: { one line }
+   docs_sync: required
+   docs_sync_reason: { one line }
    ---
    ```
 
@@ -154,7 +158,9 @@ Break the PRD into vertically-sliced, independently implementable tickets.
    - `size` is the S/M/L complexity label. `stage` lives only in the task record, never in frontmatter.
    - `pipeline` is optional and controls orchestrator isolation: `minimal` (all stages in one session), `standard` (default stage grouping), or `full` (one session per stage).
 
-8. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. Instruct the user to add plans explicitly with `aet-work add`. Do not write `.agents/work-queue.json` directly from this skill.
+8. **Set gate routing keys deliberately.** `security_review` and `docs_sync` route the aet-cso and aet-sync-docs stages at plan time, so the engine never judges at run time. Default both to `required`. Set `skipped` only when the gate is genuinely unnecessary for the plan, and always pair a skip with a one-line `security_review_reason` / `docs_sync_reason` recording why — intake rejects a `skipped` key without its reason, and a missing key is treated as `required` (fail-safe: the stage runs).
+
+9. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. Instruct the user to add plans explicitly with `aet-work add`. Do not write `.agents/work-queue.json` directly from this skill.
 
 **Vertical slice rule:**
 

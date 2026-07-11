@@ -483,6 +483,106 @@ class TestFrontmatterIntake(unittest.TestCase):
         self.assertFalse(self.queue_file.exists())
 
 
+class TestGateKeyIntakeValidation(unittest.TestCase):
+    """security_review/docs_sync frontmatter contract at intake (wfd-01)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _plan(self, name, frontmatter_lines):
+        path = self.root / name
+        path.write_text(
+            "---\n" + "\n".join(frontmatter_lines) + "\n---\n\n# Plan\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def _errors(self, *plans, limit_to=None):
+        return plan_parser.intake_validation_errors(list(plans), limit_to=limit_to)
+
+    def test_required_values_with_reasons_are_accepted(self):
+        plan = self._plan(
+            "feat-1.md",
+            [
+                "id: feat-1",
+                "size: S",
+                "security_review: required",
+                "security_review_reason: touches auth",
+                "docs_sync: required",
+                "docs_sync_reason: changes documented contract",
+            ],
+        )
+        self.assertEqual(self._errors(plan), [])
+
+    def test_missing_keys_are_accepted(self):
+        # Grandfathered plans carry no keys; the runtime fail-safe covers them.
+        plan = self._plan("feat-1.md", ["id: feat-1", "size: S"])
+        self.assertEqual(self._errors(plan), [])
+
+    def test_invalid_security_review_value_rejected(self):
+        plan = self._plan(
+            "feat-1.md", ["id: feat-1", "size: S", "security_review: maybe"]
+        )
+        errors = self._errors(plan)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("security_review", errors[0][1])
+
+    def test_invalid_docs_sync_value_rejected(self):
+        plan = self._plan(
+            "feat-1.md", ["id: feat-1", "size: S", "docs_sync: later"]
+        )
+        errors = self._errors(plan)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("docs_sync", errors[0][1])
+
+    def test_skipped_without_reason_rejected(self):
+        plan = self._plan(
+            "feat-1.md", ["id: feat-1", "size: S", "security_review: skipped"]
+        )
+        errors = self._errors(plan)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("security_review_reason", errors[0][1])
+
+    def test_skipped_with_empty_reason_rejected(self):
+        plan = self._plan(
+            "feat-1.md",
+            [
+                "id: feat-1",
+                "size: S",
+                "docs_sync: skipped",
+                'docs_sync_reason: ""',
+            ],
+        )
+        errors = self._errors(plan)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("docs_sync_reason", errors[0][1])
+
+    def test_skipped_with_reason_accepted(self):
+        plan = self._plan(
+            "feat-1.md",
+            [
+                "id: feat-1",
+                "size: S",
+                "security_review: skipped",
+                "security_review_reason: docs-only change",
+            ],
+        )
+        self.assertEqual(self._errors(plan), [])
+
+    def test_grandfathered_plans_outside_limit_to_pass(self):
+        # Already-queued plans are exempt from the new contract even when
+        # their values would fail it; only newly added plans are validated.
+        bad = self._plan(
+            "feat-old.md", ["id: feat-old", "size: S", "security_review: maybe"]
+        )
+        good = self._plan("feat-new.md", ["id: feat-new", "size: S"])
+        self.assertEqual(self._errors(bad, good, limit_to={good}), [])
+
+
 class TestInitQueue(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
