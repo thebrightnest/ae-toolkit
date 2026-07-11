@@ -5,7 +5,7 @@ blocked_by:
   - wfd-01-frontmatter-routing
   - wfd-02-workflow-schema-loader
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: rewires the orchestrator's gate sequencing source of truth
 docs_sync: required
@@ -80,5 +80,5 @@ Revert the merge commit — `pipeline.py` and its table return intact; the workf
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
