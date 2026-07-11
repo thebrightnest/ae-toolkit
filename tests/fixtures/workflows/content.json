@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "name": "content",
+  "done_state": "live",
+  "stages": [
+    {
+      "name": "draft",
+      "skills": ["content-draft"],
+      "evidence": null,
+      "gate_key": null
+    },
+    {
+      "name": "edited",
+      "skills": ["content-edit"],
+      "evidence": null,
+      "gate_key": null
+    },
+    {
+      "name": "fact-checked",
+      "skills": ["content-fact-check"],
+      "evidence": "review",
+      "gate_key": "fact_check"
+    },
+    { "name": "published", "skills": [], "evidence": null, "gate_key": null }
+  ],
+  "execution_policy": {
+    "session_groups": [["draft", "edited"], ["fact-checked"]]
+  },
+  "routing": {
+    "default": { "harness": "claude", "model": null },
+    "by_stage": { "fact-checked": { "harness": "gemini", "model": null } }
+  }
+}
