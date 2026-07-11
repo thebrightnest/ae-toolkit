@@ -72,7 +72,7 @@ test: ## Run pytest suite
 	@python3 -m pytest tests/ -q
 	@echo "✓ Tests passed"
 
-validate: ## Run all quality checks (lint + format-check + lint-py + test + skill-structure)
+validate: ## Run all quality checks (lint + format-check + lint-py + test + workflow-lint + skill-structure)
 	@$(MAKE) lint
 	@$(MAKE) format-check
 	@$(MAKE) lint-py
