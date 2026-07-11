@@ -82,5 +82,5 @@ Code: revert the merge commit. Data: the script's dry-run output is the executed
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
