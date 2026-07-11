@@ -22,6 +22,30 @@ Do **not** write an ADR for:
 - Bug fixes in individual skills
 - README wording changes
 
+## Index
+
+- [001 — Cross-Cutting Completeness Framework](001-cross-cutting-completeness.md)
+- [002 — Planning Implementation Lockout](002-planning-implementation-lockout.md)
+- [003 — Toolkit-Level Branch Safety](003-toolkit-level-branch-safety.md)
+- [004 — Unify aet-work `run` with OS-Process Isolation](004-unify-aet-work-run.md)
+- [005 — Execution Mode Interaction Model](005-execution-mode.md)
+- [006 — Work Queue Plan Atomicity Boundary](006-work-queue-atomicity-boundary.md)
+- [007 — Separate Release Preparation from Merge Gating](007-ship-release-prep-separation.md)
+- [008 — Test Coverage Completeness + API Boundary Contract](008-test-coverage-completeness.md)
+- [009 — Archive-Aware Work Queue Sync](009-archive-aware-work-queue-sync.md)
+- [010 — Queue State Is Derived from Persistent Facts](010-queue-derived-state.md)
+- [011 — Work State Is Recorded Forward, Not Derived on Read](011-forward-only-deterministic-work-state.md)
+- [012 — Direct Telemetry Archive and Per-Task Logs](012-direct-telemetry-archive.md)
+- [013 — Work Queue Is an Ephemeral Sprint Board, Plans Are the Source of Truth](013-queue-as-ephemeral-sprint-board.md)
+- [014 — Optional GitHub Issues Adapter for the Work Queue](014-optional-github-issues-adapter.md)
+- [015 — Telemetry-Driven Skill Improvements](015-telemetry-driven-skill-improvements.md)
+- [016 — Distribute AE Toolkit as a System, Not Individual Skills](016-distribute-as-system-not-individual-skills.md)
+- [017 — Remove aet-discover from AE Toolkit](017-remove-aet-discover.md)
+- [018 — Remove `.skill` Artifacts and Packaging Build Step](018-remove-skill-artifacts.md)
+- [019 — Structured Gate Evidence Replaces Footer Regex for Stage Gating](019-structured-gate-evidence.md)
+- [020 — Scheduling Is Delegable; Sequencing Is Not; the CLI Is the Enforcement Boundary](020-sequencing-is-not-delegable.md)
+- [021 — Evolve in Place; the Greenfield Is Trigger-Gated](021-evolve-in-place-greenfield-trigger-gated.md)
+
 ## Format
 
 Use `000-template.md` as the starting point. Name files sequentially: `001-why-markdown-only.md`, `002-no-ci-services.md`, etc.

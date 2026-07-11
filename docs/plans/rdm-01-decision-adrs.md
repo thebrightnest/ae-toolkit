@@ -64,11 +64,11 @@ status: approved
 
 ## Validation Steps
 
-- [ ] `make validate` passes (link check — recent learning: broken README links have bitten before)
-- [ ] Both ADRs follow the `000-template.md` section structure (Status/Context/Decision/Consequences)
-- [ ] `docs/adr/README.md` lists 020 and 021 in the existing format
-- [ ] No source files introduced → no unit tests; the named check for this plan is `make validate` plus index-format consistency
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `make validate` passes (link check — recent learning: broken README links have bitten before)
+- [x] Both ADRs follow the `000-template.md` section structure (Status/Context/Decision/Consequences)
+- [x] `docs/adr/README.md` lists 020 and 021 in the existing format
+- [x] No source files introduced → no unit tests; the named check for this plan is `make validate` plus index-format consistency
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` _(deferred to merge/ship stage — out of scope for the implement stage)_
 
 ## Rollback Plan
 
@@ -76,5 +76,5 @@ Revert the merge commit; ADRs are additive documents with no code dependencies.
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
