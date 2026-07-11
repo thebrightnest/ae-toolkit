@@ -373,7 +373,15 @@ def _require_passing_verdict(
     try:
         record = _load_checking_verdict(task_id, kind, repo_root)
     except FileNotFoundError:
-        print(f"   ❌ Gate fail-closed: missing {kind} verdict for {task_id}")
+        path = evidence.evidence_path(
+            task_id=task_id,
+            kind=kind,
+            project_slug=telemetry.derive_project_slug(repo_root),
+        )
+        print(
+            f"   ❌ Gate fail-closed: missing {kind} verdict for {task_id} "
+            f"(looked at {path})"
+        )
         return False
     except (evidence.VerdictValidationError, evidence.VerdictValueError) as exc:
         print(f"   ❌ Gate fail-closed: invalid {kind} verdict for {task_id}: {exc}")
@@ -477,6 +485,21 @@ def run_stage_group(
         env["AET_TASK_ID"] = task_id
     if run_id is not None:
         env["AET_RUN_ID"] = run_id
+    if task_id is not None:
+        # Publish the canonical verdict path per evidence-bound stage so
+        # writers and the gate share one derivation in group sessions too
+        # (ADR-023). Same formula run_stage uses for AET_EVIDENCE_PATH.
+        project_slug = telemetry.derive_project_slug(repo_root)
+        for stage in stages:
+            if stage.evidence is None:
+                continue
+            env[evidence.evidence_path_env_var(stage.evidence)] = str(
+                evidence.evidence_path(
+                    task_id=task_id,
+                    kind=stage.evidence,
+                    project_slug=project_slug,
+                )
+            )
 
     print(f"   Invoking group: {' '.join(cmd)}")
     result = subprocess.run(cmd, cwd=worktree_dir, env=env)

@@ -91,9 +91,11 @@ Before updating the plan.md footer, write a JSON verdict record so the orchestra
    }
    ```
 
-2. Determine the output path:
-   - If `$AET_EVIDENCE_PATH` is set, write to that file.
-   - Otherwise, write to `~/.aet/reports/{project-slug}/{task-id}/review.json`.
+2. Determine the output path with this precedence:
+   1. `$AET_EVIDENCE_PATH` if set (single-stage sessions).
+   2. `$AET_EVIDENCE_PATH_REVIEW` if set (group sessions publish one per stage).
+   3. Default: `~/.aet/reports/{project-slug}/{task-id}/review.json`.
+      When `aet-work/lib` is importable, call `resolve_verdict_path(task_id, "review")` from `aet-work/lib/evidence.py` — the canonical helper implementing this precedence. Never hand-compute `{project-slug}` from the worktree CWD.
 3. Use `aet-work/lib/evidence.py` (`write_verdict`) when available; otherwise write equivalent JSON to the resolved path.
 4. Only update the plan.md footer to `*Stage: reviewed*` after the verdict file is written.
 
