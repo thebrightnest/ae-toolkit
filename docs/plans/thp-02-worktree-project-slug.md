@@ -3,7 +3,7 @@ id: thp-02-worktree-project-slug
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: slug output becomes archive filesystem path segments (mkdir under ~/.aet); derivation shells out to git — verify no path-escaping or injection through crafted worktree names
 docs_sync: required
@@ -86,5 +86,5 @@ Revert the merge commit — slug derivation returns to origin-remote identity; n
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
