@@ -48,7 +48,7 @@ docs_sync_reason: guide's "Privacy and retention" section replaces the manual sn
 
 1. ✓ Implement `prune_archive()` in `aet-work/lib/telemetry.py` per Locked design — M (traces: R-4)
 2. ✓ Wire `--prune` / `--force` into `aet-work/bin/report` incl. lease/`AET_RUN_ID` protection assembly — S (traces: R-4)
-3. ✓ Add the five named tests to `tests/test_telemetry_archive.py` + CLI smoke test (below) — M (traces: R-4) [Changed: 3 extra tests added — aet-cso containment/symlink hardening + root-scope narrowing]
+3. ✓ Add the five named tests to `tests/test_telemetry_archive.py` + CLI smoke test (below) — M (traces: R-4) [Changed: 5 extra tests added — aet-cso containment/symlink hardening (run-dir and project-level), root-scope narrowing, root-escape rejection, negative-days guard]
 4. ✓ Rewrite `docs/telemetry-guide.md` "Privacy and retention" around the CLI; delete the manual snippet — S (traces: R-4)
 5. Merge branch to main and verify integration — S [Deferred: to `aet-ship` per the standard pipeline]
 
@@ -84,5 +84,5 @@ Revert the merge commit — flags and lib function disappear; the guide re-docum
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
