@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - wfd-04-workflow-lint-variant-proof
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: new executable entry point with cross-skill path resolution and exec dispatch — path-resolution correctness is security-relevant
 docs_sync: skipped
@@ -70,5 +70,5 @@ Revert the merge commit. The binary is additive and unreferenced by any skill un
 
 ---
 
-_Stage: secure_
+_Stage: merged_
 _Next step: run `aet-sync-docs`, then `aet-ship`_
