@@ -104,6 +104,16 @@ them directly**.
 
 ## Reviewing a single run
 
+For a visual overview, launch the telemetry panel — a single HTML file plus a
+tiny stdlib-only server that lets the browser read the archive directly:
+
+```bash
+python3 aet-work/panel/serve   # serves panel + ~/.aet/telemetry, opens your browser
+```
+
+(You can also open `aet-work/panel/index.html` directly and pick the telemetry
+folder manually, but the launcher is the intended path.)
+
 For a quick text summary of recent runs:
 
 ```bash
