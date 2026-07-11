@@ -117,10 +117,10 @@ docs_sync_reason: introduces the workflow-file contract that docs must describe
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Named tests for each new source file: `aet-work/lib/workflow.py` → `tests/test_workflow.py` (unit: validation rules, resolution order; integration: parity with `pipeline.py` constants); `aet-work/workflows/software.json` → the same file's parity assertions
-- [ ] Parity check is exact: sequence, skills, evidence kinds, and groups all equal today's table
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `make validate` passes
+- [x] Named tests for each new source file: `aet-work/lib/workflow.py` → `tests/test_workflow.py` (unit: validation rules, resolution order; integration: parity with `pipeline.py` constants); `aet-work/workflows/software.json` → the same file's parity assertions
+- [x] Parity check is exact: sequence, skills, evidence kinds, and groups all equal today's table
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to closure — task 4 merges after the review/secure stages)
 
 ## Rollback Plan
 
@@ -128,5 +128,5 @@ Revert the merge commit — nothing consumes the new module yet; zero blast radi
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
