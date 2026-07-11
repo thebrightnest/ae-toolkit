@@ -5,7 +5,7 @@ blocked_by:
   - rdm-01-decision-adrs
   - rdm-02-rtrace-templates
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: touches orchestrator gate logic — the security stage's own routing
 docs_sync: required
@@ -81,5 +81,5 @@ Revert the merge commit — the frontmatter keys are additive and ignored by the
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
