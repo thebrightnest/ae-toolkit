@@ -312,8 +312,7 @@ def generate_retro(
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generate a retro from AET telemetry, split by project-level and AET-level fixes."
     )
@@ -346,7 +345,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Skip mine-learnings and only use the current project's recent telemetry.",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point."""
+    args = build_parser().parse_args(argv)
 
     project_slug = args.project_slug or derive_project_slug()
     local_records = recent_project_records(

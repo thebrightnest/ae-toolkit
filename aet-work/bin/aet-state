@@ -804,7 +804,7 @@ def cmd_record_merge(args):
     return 0
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aet-state",
         description="Owns queue mutations, stage transitions, and footer updates.",
@@ -870,7 +870,11 @@ def main():
         help="Path to the plan markdown file. If omitted, uses the task's plan_file.",
     )
 
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
 
     if args.command == "audit":
         return cmd_audit(args)

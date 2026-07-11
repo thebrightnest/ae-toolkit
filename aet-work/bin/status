@@ -8,6 +8,7 @@ the stored state, and reports counts, next tasks, failed tasks, and worktree hea
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -15,12 +16,17 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import QueueIntegrityError, current_state, read_queue  # noqa: E402
+from queue import (  # noqa: E402
+    QueueIntegrityError,
+    current_state,
+    pending_blockers,
+    read_queue,
+)
 
 from backends.factory import create_backend  # noqa: E402
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Show work queue status.")
     parser.add_argument(
         "--queue-file",
@@ -37,12 +43,56 @@ def parse_args() -> argparse.Namespace:
         default="docs/plans",
         help="Directory containing atomic plan markdown files",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print a machine-readable JSON projection instead of the human report",
+    )
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def _display_category(task: dict) -> str:
     """Return the canonical state for summary counting."""
     return current_state(task) or "unknown"
+
+
+def _queue_updated_at(queue_file: str) -> str | None:
+    """Return the wrapper's queue_updated_at for JSON-backed queues, else None."""
+    try:
+        with open(queue_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if isinstance(data, dict):
+        return data.get("queue_updated_at")
+    return None
+
+
+def _json_projection(queue: list[dict], queue_file: str) -> dict:
+    """Build the machine-readable status projection (minimal v1 schema)."""
+    counts: dict[str, int] = {}
+    for task in queue:
+        category = _display_category(task)
+        counts[category] = counts.get(category, 0) + 1
+    return {
+        "queue_updated_at": _queue_updated_at(queue_file),
+        "summary": counts,
+        "tasks": [
+            {
+                "id": task.get("id"),
+                "state": current_state(task),
+                "stage": task.get("stage"),
+                "blocked_by": task.get("blocked_by", []),
+                "pending_blockers": pending_blockers(task),
+                "plan_file": task.get("plan_file"),
+            }
+            for task in queue
+        ],
+    }
 
 
 def main() -> int:
@@ -62,6 +112,10 @@ def main() -> int:
         queue = read_queue(args.queue_file, verify=False)
         integrity_failed = True
     plans_dir = Path(args.plans_dir)
+
+    if args.json:
+        print(json.dumps(_json_projection(queue, args.queue_file), indent=2))
+        return 0
 
     orphaned = [] if integrity_failed else backend.plan_drift(plans_dir)
 
