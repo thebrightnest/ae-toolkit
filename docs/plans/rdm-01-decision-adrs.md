@@ -3,7 +3,7 @@ id: rdm-01-decision-adrs
 size: S
 blocked_by: []
 pipeline: minimal
-status: approved
+status: merged
 ---
 
 # Plan: Decision ADRs — Enforcement Boundary (020) and Evolve-in-Place (021)
@@ -76,5 +76,5 @@ Revert the merge commit; ADRs are additive documents with no code dependencies.
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
