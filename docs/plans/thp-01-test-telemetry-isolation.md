@@ -45,10 +45,10 @@ docs_sync_reason: telemetry guide troubleshooting table gains the "junk projects
 
 ## Task List
 
-1. Add the autouse `_isolate_telemetry_archive` fixture to `tests/conftest.py` — S (traces: R-1)
-2. Add `tests/test_telemetry_isolation.py` with the two named guard tests (below) — S (traces: R-1)
-3. Update `docs/telemetry-guide.md`: troubleshooting row for junk projects; note that suite runs are isolated by default and how a test opts out (explicit env) — S (traces: R-1)
-4. Merge branch to main and verify integration — S
+1. ✓ Add the autouse `_isolate_telemetry_archive` fixture to `tests/conftest.py` — S (traces: R-1) [Changed: also patches `telemetry.DEFAULT_ARCHIVE_DIR` — tests running in-process under `patch.dict(os.environ, ..., clear=True)` wipe the env var and would otherwise fall back to the real archive]
+2. ✓ Add `tests/test_telemetry_isolation.py` with the two named guard tests (below) — S (traces: R-1) [Changed: third guard test added — `test_runlogger_stays_isolated_when_env_is_cleared` proves the clear=True escape is closed]
+3. ✓ Update `docs/telemetry-guide.md`: troubleshooting row for junk projects; note that suite runs are isolated by default and how a test opts out (explicit env) — S (traces: R-1)
+4. Merge branch to main and verify integration — S [Deferred: merge happens at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -79,5 +79,5 @@ Revert the merge commit — removes fixture, guard test, and doc row in one step
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_

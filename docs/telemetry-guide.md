@@ -125,6 +125,15 @@ aet-work report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
 This prints run and task counts, wall-clock time, the average isolation level,
 and environment issues.
 
+## Telemetry during test runs
+
+The toolkit's pytest suite spawns the real orchestrator, but it never writes to
+your real archive: an autouse fixture in `tests/conftest.py` points
+`AET_TELEMETRY_ARCHIVE_DIR` (and the `DEFAULT_ARCHIVE_DIR` fallback, for tests
+that wipe `os.environ` in-process) at a per-test tmp dir, and every subprocess
+spawn inherits it. A test opts out only by setting `AET_TELEMETRY_ARCHIVE_DIR`
+explicitly itself.
+
 ## Privacy and retention
 
 - Telemetry is stored on the local filesystem only.
@@ -137,8 +146,9 @@ and environment issues.
 
 ## Troubleshooting
 
-| Symptom                            | Fix                                                                     |
-| ---------------------------------- | ----------------------------------------------------------------------- |
-| `~/.aet/telemetry/` is empty       | Run `aet-work run-one` or `aet-work run` at least once.                 |
-| `mine-learnings` finds no patterns | Run more tasks or extend the date range.                                |
-| Dependency warmup does not run     | Verify `.agents/aet-work.json` exists and the source paths are correct. |
+| Symptom                                               | Fix                                                                               |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `~/.aet/telemetry/` is empty                          | Run `aet-work run-one` or `aet-work run` at least once.                           |
+| `mine-learnings` finds no patterns                    | Run more tasks or extend the date range.                                          |
+| Dependency warmup does not run                        | Verify `.agents/aet-work.json` exists and the source paths are correct.           |
+| Junk projects (`tests`, `tmp*`) appear in the archive | Pre-thp-01 pollution from test runs; the suite is isolated now — delete the dirs. |
