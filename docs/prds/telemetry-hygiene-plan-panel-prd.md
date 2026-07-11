@@ -85,5 +85,5 @@ None blocking. P-0 execution timing (land panel v1) is decided at the PRD approv
 
 ---
 
-_Stage: prd-approved_ (owner gate 2026-07-11)
-_Next step: run `aet-validate-scope`_
+_Stage: scope-validated_ (owner gate + closure check 2026-07-11)
+_Next step: run `aet-work` (single-plan or multi-task queue)_
