@@ -35,6 +35,10 @@ _status_spec = importlib.util.spec_from_loader(
 status = importlib.util.module_from_spec(_status_spec)
 _status_spec.loader.exec_module(status)
 
+# The bin scripts above put aet-work/lib on sys.path; the workflow loader
+# lives there.
+from workflow import load_workflow  # noqa: E402
+
 
 def _write_json_file(data) -> str:
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -395,6 +399,78 @@ class TestReviewCommand(unittest.TestCase):
             ])
 
         self.assertEqual(rc, 1)
+
+
+class TestReviewBoardColumns(unittest.TestCase):
+    """Board columns derive positionally from the loaded workflow (wfd-03)."""
+
+    def setUp(self):
+        self.workflow = load_workflow(_REPO_ROOT)
+
+    def test_entry_stage_maps_to_approved(self):
+        self.assertEqual(
+            review.category_for_stage("plan-approved", self.workflow), "approved"
+        )
+
+    def test_terminal_skill_less_stage_maps_to_queued(self):
+        self.assertEqual(review.category_for_stage("synced", self.workflow), "queued")
+
+    def test_skilled_middle_stages_map_to_in_progress(self):
+        for stage in ("implemented", "qa-complete", "reviewed", "secure"):
+            self.assertEqual(
+                review.category_for_stage(stage, self.workflow), "in-progress"
+            )
+
+    def test_unknown_stage_falls_back_to_in_progress(self):
+        self.assertEqual(
+            review.category_for_stage("imagined-stage", self.workflow), "in-progress"
+        )
+
+    def test_queue_states_keep_their_columns(self):
+        self.assertEqual(
+            review.category_for_stage("awaiting_merge", self.workflow), "awaiting-merge"
+        )
+        self.assertEqual(review.category_for_stage("merged", self.workflow), "closed")
+        self.assertEqual(review.category_for_stage("abandoned", self.workflow), "closed")
+
+    def test_missing_stage_defaults_to_approved(self):
+        self.assertEqual(review.category_for_stage(None, self.workflow), "approved")
+
+    def test_variant_vocabulary_derives_positionally(self):
+        """A variant workflow's unknown vocabulary still renders a board."""
+        variant = {
+            "version": 1,
+            "name": "variant",
+            "done_state": "done",
+            "stages": [
+                {"name": "scoped", "skills": ["aet-implement"], "evidence": None, "gate_key": None},
+                {"name": "built", "skills": ["aet-qa"], "evidence": "qa", "gate_key": None},
+                {"name": "released", "skills": [], "evidence": None, "gate_key": None},
+            ],
+            "execution_policy": {"session_groups": [["scoped", "built"]]},
+            "routing": {"default": {"harness": "test", "model": None}, "by_stage": {}},
+        }
+        with tempfile.TemporaryDirectory() as repo_root:
+            workflow_dir = Path(repo_root) / ".agents" / "workflows"
+            workflow_dir.mkdir(parents=True)
+            Path(workflow_dir, "variant.json").write_text(
+                json.dumps(variant), encoding="utf-8"
+            )
+            wf = load_workflow(repo_root, "variant")
+
+        self.assertEqual(review.category_for_stage("scoped", wf), "approved")
+        self.assertEqual(review.category_for_stage("built", wf), "in-progress")
+        self.assertEqual(review.category_for_stage("released", wf), "queued")
+        self.assertEqual(review.category_for_stage("unlisted", wf), "in-progress")
+
+    def test_without_workflow_legacy_buckets_still_render(self):
+        """With no workflow available the historical map renders the same board."""
+        self.assertEqual(review.category_for_stage("plan-approved"), "approved")
+        self.assertEqual(review.category_for_stage("synced"), "queued")
+        self.assertEqual(review.category_for_stage("implemented"), "in-progress")
+        self.assertEqual(review.category_for_stage("awaiting_merge"), "awaiting-merge")
+        self.assertEqual(review.category_for_stage("merged"), "closed")
+        self.assertEqual(review.category_for_stage("imagined-stage"), "in-progress")
 
 
 class TestStatusEmptyQueue(unittest.TestCase):
