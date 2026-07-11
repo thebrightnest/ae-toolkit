@@ -80,5 +80,5 @@ Revert the merge commit — `pipeline.py` and its table return intact; the workf
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
