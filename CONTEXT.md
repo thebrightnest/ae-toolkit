@@ -98,9 +98,31 @@ _Avoid_: calling lifecycle states "workflow state"; using "work class" for a wor
 Plan frontmatter (`security_review`, `docs_sync`: `required`/`skipped`, with a reason required when skipped) deciding at plan time whether a gated stage runs. Policy input authored at triage — part of the plan's machine contract, not runtime judgment and not state.
 _Avoid_: runtime heuristics deciding whether a gate runs.
 
+## Telemetry & Panel (ADR-012, ADR-019, ADR-022)
+
+**Telemetry Archive**:
+The user-level store of execution records at `~/.aet/telemetry/{project-slug}/{date}/{run-id}/` (override: `AET_TELEMETRY_ARCHIVE_DIR`).
+_Avoid_: "execution log" — that term is reserved for `.agents/work-history.jsonl`.
+
+**Project Slug**:
+`<main-worktree-dirname>/<current-worktree-dirname>` (primary worktree labelled `main`, e.g. `aiskills/main`), derived by `derive_project_slug()` and shared by the telemetry archive and the gate-evidence reports tree (ADR-022). `AET_PROJECT_ID` overrides.
+_Avoid_: origin-remote derived names (pre-ADR-022).
+
+**Run**:
+One orchestrator invocation, recorded as one run directory in the telemetry archive. The execution vehicle for tasks — not the unit of intent.
+_Avoid_: calling runs "projects".
+
+**Project (telemetry/panel)**:
+The repo-level grouping — first slug segment. The panel's top grouping level.
+_Avoid_: "folder" in UI copy.
+
+**Worktree (run attribute)**:
+Where a run or session launched — second slug segment, or parsed from a record's raw `plan_file` prefix. An attribute/filter of a run, never a grouping level.
+
 ## Flagged ambiguities
 
 - “status” was used to mean both stored state and derived state. Resolved: `state` is the canonical stored value for active tasks; plan frontmatter `status` is the source of truth for lifecycle closure.
 - The legacy queue-record `status` key (coexistence shim from fods-02..05) is retired by frh-06/frh-07 (2026-07-09): task records carry `state` only, legacy records are normalized on read, and plan-frontmatter `status` is unaffected.
 - “done” was used interchangeably with `merged`. Resolved: `merged` is the canonical terminal state; `done` is legacy.
 - “workflow” was used loosely for the lifecycle state machine (e.g. “canonical workflow state”). Resolved (2026-07-11, roadmap Phase 1): **Workflow** is the named stage-sequence data file; lifecycle states are just **State**. Where older text says “workflow state,” read “lifecycle state.”
+- “execution log” was used for the telemetry archive in panel docs. Resolved (2026-07-11, thp scope validation): **Execution Log** = `.agents/work-history.jsonl` only; the browsable store is the **Telemetry Archive** (panel README rewording lands with thp-05).
