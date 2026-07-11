@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - wfd-03-engine-rewiring
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: additive CI lint and test fixtures only — no auth, data-model, API, or dependency surface; gate sequencing untouched
 docs_sync: required
@@ -74,5 +74,5 @@ Revert the merge commit; remove the Makefile line if reverted manually. Lint and
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
