@@ -229,6 +229,112 @@ function buildRun(r) {
   return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, status };
 }
 
+/* ---------------- plan model ---------------- */
+
+// Workflow spine from aet-work/workflows/software.json; stage/stages fields on
+// success records are intersected with it to compute plan progress.
+const SPINE = ["plan-approved", "implemented", "qa-complete", "reviewed", "secure", "synced"];
+
+function normalizePlanFile(p) {
+  // Raw values look like {REPO_ROOT}/.worktrees/<task>/docs/plans/<plan>.md;
+  // slice from docs/plans/ so the same plan run from main vs a worktree is one
+  // plan. Fall back to the basename when there is no docs/plans/ segment.
+  if (!p) return null;
+  const i = p.indexOf("docs/plans/");
+  if (i >= 0) return p.slice(i);
+  return p.split("/").pop() || null;
+}
+function planDisplayName(norm) {
+  if (!norm) return "—";
+  return norm.split("/").pop().replace(/\.md$/, "");
+}
+function worktreeOf(rawPlanFile) {
+  const m = rawPlanFile && rawPlanFile.match(/\.worktrees\/([^/]+)\//);
+  return m ? m[1] : "main";
+}
+
+function buildPlans(runs) {
+  // Pass 1: global task -> plan map from every record carrying both fields.
+  // First mapping wins; conflicts are counted in meta.
+  const taskPlanMap = new Map();
+  let taskPlanConflicts = 0;
+  for (const r of runs) {
+    for (const rec of r.records) {
+      const norm = normalizePlanFile(rec.plan_file);
+      if (!rec.task_id || !norm) continue;
+      if (taskPlanMap.has(rec.task_id)) {
+        if (taskPlanMap.get(rec.task_id) !== norm) taskPlanConflicts++;
+      } else {
+        taskPlanMap.set(rec.task_id, norm);
+      }
+    }
+  }
+  // Pass 2: group records by (project, normalized plan). run_summary-only runs
+  // attribute to plans via task_ids through the map.
+  const plans = new Map();
+  for (const r of runs) {
+    const byPlan = new Map();
+    for (const rec of r.records) {
+      const norm = normalizePlanFile(rec.plan_file);
+      if (!norm) continue;
+      if (!byPlan.has(norm)) byPlan.set(norm, []);
+      byPlan.get(norm).push(rec);
+    }
+    if (byPlan.size === 0 && r.summary && Array.isArray(r.summary.task_ids)) {
+      for (const tid of r.summary.task_ids) {
+        const norm = taskPlanMap.get(tid);
+        if (norm && !byPlan.has(norm)) byPlan.set(norm, []);
+      }
+    }
+    for (const [norm, recs] of byPlan) {
+      const key = r.project + "::" + norm;
+      let p = plans.get(key);
+      if (!p) {
+        p = {
+          key, norm, name: planDisplayName(norm), project: r.project,
+          runs: [], sessions: [], tests: [], issues: [], learnings: [],
+          taskIds: new Set(), spine: new Set(), lastActivity: null, status: "success",
+          testsAgg: { total: 0, passed: 0, failed: 0 },
+        };
+        plans.set(key, p);
+      }
+      if (!p.runs.includes(r.dir)) p.runs.push(r.dir);
+      const timed = [];
+      for (const rec of recs) {
+        if (rec.task_id) p.taskIds.add(rec.task_id);
+        const t = rec.end_time || rec.timestamp;
+        if (t) timed.push({ t, result: rec.result });
+        if (rec.type === "stage") {
+          p.sessions.push({ ...rec, runId: r.runId, runDir: r.dir, worktree: worktreeOf(rec.plan_file) });
+          if (rec.result === "success") {
+            for (const s of [rec.stage, ...(rec.stages || [])]) {
+              if (SPINE.includes(s)) p.spine.add(s);
+            }
+          }
+        } else if (rec.type === "test_run") {
+          p.tests.push({ ...rec, runId: r.runId, runDir: r.dir, worktree: worktreeOf(rec.plan_file) });
+          p.testsAgg.total += rec.tests_total || 0;
+          p.testsAgg.passed += rec.tests_passed || 0;
+          p.testsAgg.failed += rec.tests_failed || 0;
+        } else if (rec.type === "environment_issue") {
+          p.issues.push(rec);
+        } else if (rec.type === "learning_candidate") {
+          p.learnings.push(rec);
+        }
+      }
+      timed.sort((a, b) => a.t.localeCompare(b.t));
+      const last = timed[timed.length - 1];
+      if (last && (!p.lastActivity || last.t > p.lastActivity)) {
+        p.lastActivity = last.t;
+        p.status = last.result === "failure" ? "failure" : "success";
+      }
+    }
+  }
+  const out = [...plans.values()].map(p => ({ ...p, progress: p.spine.size, taskIds: [...p.taskIds] }));
+  out.sort((a, b) => (b.lastActivity || "").localeCompare(a.lastActivity || ""));
+  return { plans: out, meta: { taskPlanConflicts } };
+}
+
 /* ---------------- shadcn-style components ---------------- */
 
 function Button({ children, variant = "default", size = "default", className = "", ...props }) {
@@ -278,6 +384,22 @@ function Select({ children, className = "", ...props }) {
 function Input({ className = "", ...props }) {
   return (
     <input className={`flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${className}`} {...props} />
+  );
+}
+
+function Tabs({ value, onChange, options }) {
+  return (
+    <div className="inline-flex h-9 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+      {options.map(o => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${value === o.value ? "bg-primary text-primary-foreground shadow" : "hover:text-foreground"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -345,6 +467,84 @@ function RunsTable({ runs, selectedId, onSelect }) {
         )}
       </tbody>
     </Table>
+  );
+}
+
+function PlansTable({ plans, selectedKey, onSelect }) {
+  return (
+    <Table>
+      <thead>
+        <tr className="border-b">
+          <Th>Plan</Th><Th>Project</Th><Th>Runs</Th><Th>Sessions</Th><Th>Tests</Th><Th>Progress</Th><Th>Last activity</Th><Th>Status</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {plans.map(p => (
+          <tr
+            key={p.key}
+            onClick={() => onSelect(p.key)}
+            className={`border-b cursor-pointer transition-colors hover:bg-muted/50 ${selectedKey === p.key ? "bg-accent" : ""}`}
+          >
+            <Td className="font-medium whitespace-nowrap">{p.name}</Td>
+            <Td className="whitespace-nowrap text-muted-foreground">{p.project}</Td>
+            <Td>{p.runs.length}</Td>
+            <Td>{p.sessions.length || "—"}</Td>
+            <Td>{p.testsAgg.total ? `${p.testsAgg.passed}/${p.testsAgg.total}` : "—"}</Td>
+            <Td className="whitespace-nowrap">{p.progress}/6</Td>
+            <Td className="whitespace-nowrap text-muted-foreground">{fmtTime(p.lastActivity)}</Td>
+            <Td><ResultBadge result={p.status} /></Td>
+          </tr>
+        ))}
+        {plans.length === 0 && (
+          <tr><td colSpan="8" className="px-3 py-8 text-center text-muted-foreground">No plans match the current filters.</td></tr>
+        )}
+      </tbody>
+    </Table>
+  );
+}
+
+function PlanCard({ plan }) {
+  if (!plan) {
+    return (
+      <Card className="h-full flex items-center justify-center min-h-[200px]">
+        <p className="text-sm text-muted-foreground">Select a plan to inspect its summary.</p>
+      </Card>
+    );
+  }
+  return (
+    <Card className="h-full overflow-auto">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="font-semibold break-all">{plan.name}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {plan.project} · last activity {fmtTime(plan.lastActivity)}
+            </div>
+          </div>
+          <ResultBadge result={plan.status} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <Stat label="Runs" value={plan.runs.length} />
+          <Stat label="Stage sessions" value={plan.sessions.length} />
+          <Stat label="Tests" value={plan.testsAgg.total ? `${plan.testsAgg.passed}/${plan.testsAgg.total} passed` : "—"} />
+          <Stat label="Progress" value={`${plan.progress}/6`} />
+        </div>
+
+        <SectionTitle>Pipeline progress</SectionTitle>
+        <div className="flex flex-wrap gap-1.5">
+          {SPINE.map(s => (
+            <Badge key={s} variant={plan.spine.has(s) ? "success" : "outline"}>{s}</Badge>
+          ))}
+        </div>
+
+        <div className="text-xs text-muted-foreground mt-5">
+          {plan.issues.length} environment issue(s) · {plan.learnings.length} learning candidate(s)
+          {" · tasks: "}{plan.taskIds.join(", ") || "—"}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -543,6 +743,8 @@ function App() {
   const [runs, setRuns] = useState([]);
   const [meta, setMeta] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [lens, setLens] = useState("plans");
+  const [selectedPlanKey, setSelectedPlanKey] = useState(null);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(null);
   const [source, setSource] = useState(null); // "archive" | "picker"
@@ -635,7 +837,33 @@ function App() {
     return { stageCount, ok, totalTime };
   }, [filtered]);
 
+  const planData = useMemo(() => buildPlans(runs), [runs]);
+
+  const filteredPlans = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return planData.plans.filter(p => {
+      if (filterFolder !== "all" && !(p.project === filterFolder || p.project.startsWith(filterFolder + "/"))) return false;
+      if (filterProject !== "all" && p.project !== filterProject) return false;
+      if (filterStatus !== "all" && p.status !== filterStatus) return false;
+      if (q) {
+        const hay = [p.name, p.norm, p.project, ...p.taskIds].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [planData, filterFolder, filterProject, filterStatus, search]);
+
+  const planStats = useMemo(() => {
+    const stageCount = filteredPlans.reduce((a, p) => a + p.sessions.length, 0);
+    const ok = filteredPlans.filter(p => p.status === "success").length;
+    const totalTime = filteredPlans.reduce(
+      (a, p) => a + p.sessions.reduce((s, x) => s + (x.duration_seconds || 0), 0), 0
+    );
+    return { stageCount, ok, totalTime };
+  }, [filteredPlans]);
+
   const selected = runs.find(r => r.dir === selectedId) || null;
+  const selectedPlan = planData.plans.find(p => p.key === selectedPlanKey) || filteredPlans[0] || null;
   const archiveEmpty = source === "archive" && !loading && runs.length === 0;
 
   return (
@@ -649,6 +877,9 @@ function App() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {runs.length > 0 && (
+            <Tabs value={lens} onChange={setLens} options={[{ value: "plans", label: "Plans" }, { value: "runs", label: "Runs" }]} />
+          )}
           {meta && (
             <span className="text-xs text-muted-foreground">
               {meta.filesSeen} file(s){meta.skippedLines ? ` · ${meta.skippedLines} malformed line(s) skipped` : ""}
@@ -677,10 +908,21 @@ function App() {
       {runs.length > 0 && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <StatCard label="Runs" value={filtered.length} sub={`of ${runs.length} total`} />
-            <StatCard label="Stage sessions" value={stats.stageCount} />
-            <StatCard label="Success rate" value={filtered.length ? `${Math.round((stats.ok / filtered.length) * 100)}%` : "—"} sub={`${stats.ok} ok / ${filtered.length - stats.ok} failed`} />
-            <StatCard label="Total time" value={fmtDuration(stats.totalTime)} />
+            {lens === "plans" ? (
+              <>
+                <StatCard label="Plans" value={filteredPlans.length} sub={`of ${planData.plans.length} total`} />
+                <StatCard label="Stage sessions" value={planStats.stageCount} />
+                <StatCard label="Success rate" value={filteredPlans.length ? `${Math.round((planStats.ok / filteredPlans.length) * 100)}%` : "—"} sub={`${planStats.ok} ok / ${filteredPlans.length - planStats.ok} failed`} />
+                <StatCard label="Total time" value={fmtDuration(planStats.totalTime)} />
+              </>
+            ) : (
+              <>
+                <StatCard label="Runs" value={filtered.length} sub={`of ${runs.length} total`} />
+                <StatCard label="Stage sessions" value={stats.stageCount} />
+                <StatCard label="Success rate" value={filtered.length ? `${Math.round((stats.ok / filtered.length) * 100)}%` : "—"} sub={`${stats.ok} ok / ${filtered.length - stats.ok} failed`} />
+                <StatCard label="Total time" value={fmtDuration(stats.totalTime)} />
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap mb-4">
@@ -702,9 +944,13 @@ function App() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="max-h-[68vh] overflow-auto">
-              <RunsTable runs={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+              {lens === "plans"
+                ? <PlansTable plans={filteredPlans} selectedKey={selectedPlan ? selectedPlan.key : null} onSelect={setSelectedPlanKey} />
+                : <RunsTable runs={filtered} selectedId={selectedId} onSelect={setSelectedId} />}
             </Card>
-            <div className="max-h-[68vh]"><RunDetail run={selected} /></div>
+            <div className="max-h-[68vh]">
+              {lens === "plans" ? <PlanCard plan={selectedPlan} /> : <RunDetail run={selected} />}
+            </div>
           </div>
         </>
       )}

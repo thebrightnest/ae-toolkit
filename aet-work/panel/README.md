@@ -1,6 +1,6 @@
 # AET Telemetry Panel
 
-Browser-based viewer for the `aet-work` execution log (`~/.aet/telemetry`).
+Browser-based viewer for the `aet-work` telemetry archive (`~/.aet/telemetry`).
 
 ## Usage
 
@@ -31,9 +31,19 @@ Working and verified:
 
 - Auto-loads `~/.aet/telemetry` on open; **Refresh archive** button; archive
   path shown in the header.
-- Stat cards: runs, stage sessions, success rate, total time.
+- Two lenses via a tab strip in the header: **Plans** (default) and **Runs**.
+  - Plans lens groups records by normalized plan file (paths into
+    `.worktrees/<task>/` are sliced to `docs/plans/<plan>.md`, so a plan run
+    from a worktree and from main is one row), attributes `run_summary`-only
+    runs through a global task→plan map, and shows runs, sessions, tests,
+    pipeline progress (n/6 on the `software.json` spine), last activity, and
+    status per plan. Selecting a plan opens a basic summary card (run count,
+    aggregate stats, spine chips); full plan detail is thp-06.
+  - Runs lens is the original runs table + run detail, unchanged.
+- Stat cards: runs/plans, stage sessions, success rate, total time (per lens).
 - Filters: **folder** (top-level archive subfolder) → **project** (scoped to
-  the folder) → status → free-text search (task, plan, run id).
+  the folder) → status → free-text search (task, plan, run id); they apply to
+  both lenses.
 - Master-detail: runs table + run detail with Stages, Test runs, Environment
   issues, and Learning candidates sections (schema:
   `aet-work/references/telemetry-log-schema.md`).
@@ -41,8 +51,10 @@ Working and verified:
   without `last-run.json`, legacy `{project}/{date}-{run-id}/execution.log.jsonl`
   layout (split into one run per `run_summary` record), corrupted legacy lines
   skipped and counted in the header.
-- Verified: headless-Chrome E2E (auto-load, 2,922 runs, folder/project
-  filters, run detail, refresh, zero console errors); `make validate` green.
+- Verified: headless-Chrome E2E (auto-load on the Plans lens, plan-row counts
+  matching an independent archive scan for `thebrightnest/ae-toolkit` and
+  `aiskills/main`, `run_summary` join, plan card, Runs tab regression, zero
+  console errors); `make validate` green.
 
 ## Known quirks
 
@@ -209,9 +221,13 @@ Working and verified:
 - [ ] **Slug redesign** — implement the local git-aware slug in
       `derive_project_slug()` (see "Project slug redesign"), migrate the
       existing archive dirs, update docs.
-- [ ] **Plan-centric view** — normalization helper, Project → Plan filters,
+- [x] ~~**Plan-centric view** — normalization helper, Project → Plan filters,
       plan list + plan detail with the consolidated timeline; run view
-      demoted to a tab (see "Plan-centric consolidated view").
+      demoted to a tab (see "Plan-centric consolidated view").~~ — **Plans
+      lens shipped 2026-07-11 (thp-05):** `plan_file` normalization, task→plan
+      join for `run_summary`-only runs, plan list + basic plan card, Runs
+      demoted to a tab. The consolidated-timeline plan detail remains
+      (thp-06).
 - [ ] **Retention CLI** — promote the doc snippet to a proper home (e.g.
       `aet-work report --prune DAYS`). Must cover `*.log` once session-log
       capture exists, and must never delete the active run dir (check

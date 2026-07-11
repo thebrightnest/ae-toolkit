@@ -40,17 +40,17 @@ docs_sync_reason: telemetry guide's "Reviewing a single run" section gains the p
 
 ## Task List
 
-1. Data layer in `index.html`: `normalizePlanFile`, `worktreeOf`, `taskPlanMap`, `buildPlans` wired after run parsing — M (traces: R-5)
-2. Lens tabs + `PlansTable` + basic plan card, filters applied per lens, Plans as default; Runs tab byte-identical behavior — M (traces: R-5)
-3. Update `aet-work/panel/README.md`: status + roadmap tick, and fix the glossary conflict found at scope validation — the README calls the telemetry archive "the execution log", but CONTEXT.md reserves **Execution Log** for `.agents/work-history.jsonl`; reword to **telemetry archive** — S (traces: R-5)
-4. Merge branch to main and verify integration — S
+1. Data layer in `index.html`: `normalizePlanFile`, `worktreeOf`, `taskPlanMap`, `buildPlans` wired after run parsing — M (traces: R-5) [x]
+2. Lens tabs + `PlansTable` + basic plan card, filters applied per lens, Plans as default; Runs tab byte-identical behavior — M (traces: R-5) [x]
+3. Update `aet-work/panel/README.md`: status + roadmap tick, and fix the glossary conflict found at scope validation — the README calls the telemetry archive "the execution log", but CONTEXT.md reserves **Execution Log** for `.agents/work-history.jsonl`; reword to **telemetry archive** — S (traces: R-5) [x]
+4. Merge branch to main and verify integration — S (deferred: merge happens at the ship/merge stage, after review)
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
 ### Renderer / UI Tasks
 
-- [ ] New components (`Tabs` strip, `PlansTable`, plan card) styled with existing Tailwind utility classes over the shadcn zinc tokens — no custom `className` values requiring new CSS
-- [ ] Verify no unstyled `className` references remain (Tailwind Play CDN resolves utilities at runtime; check console for warnings)
+- [x] New components (`Tabs` strip, `PlansTable`, plan card) styled with existing Tailwind utility classes over the shadcn zinc tokens — no custom `className` values requiring new CSS
+- [x] Verify no unstyled `className` references remain (Tailwind Play CDN resolves utilities at runtime; check console for warnings)
 
 ### Batching Check
 
@@ -67,11 +67,11 @@ docs_sync_reason: telemetry guide's "Reviewing a single run" section gains the p
 
 No JS unit harness exists (no build step — accepted); validation is E2E against the live archive, mirroring the panel's existing verification method:
 
-- [ ] `python3 aet-work/panel/serve --no-open` starts; `curl -s localhost:<port>/api/list` returns 200 with files (server untouched — regression check)
-- [ ] Headless-Chrome E2E (named steps): (1) panel auto-loads and opens on **Plans** lens with ≥ 1 plan row for this repo's project; (2) a plan that ran from a task worktree and from main shows as **one** row (normalization); (3) a `run_summary`-only run's plan appears (task_ids join); (4) Runs tab reproduces today's table + run detail; (5) zero console errors
-- [ ] `make validate` green
-- [ ] R-trace coverage: R-5 by tasks 1–3; no unknown R-ids cited
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `python3 aet-work/panel/serve --no-open` starts; `curl -s localhost:<port>/api/list` returns 200 with files (server untouched — regression check)
+- [x] Headless-Chrome E2E (named steps): (1) panel auto-loads and opens on **Plans** lens with ≥ 1 plan row for this repo's project; (2) a plan that ran from a task worktree and from main shows as **one** row (normalization); (3) a `run_summary`-only run's plan appears (task_ids join); (4) Runs tab reproduces today's table + run detail; (5) zero console errors
+- [x] `make validate` green
+- [x] R-trace coverage: R-5 by tasks 1–3; no unknown R-ids cited
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to ship/merge stage)
 
 ## Rollback Plan
 
@@ -79,5 +79,5 @@ Revert the merge commit — `index.html` returns to the runs-only panel; no data
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work` (after P-0 — panel v1 on origin/main)_
+_Stage: synced_
+_Next step: run `aet-ship`_
