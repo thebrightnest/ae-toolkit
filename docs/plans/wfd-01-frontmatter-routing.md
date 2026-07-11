@@ -81,5 +81,5 @@ Revert the merge commit — the frontmatter keys are additive and ignored by the
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
