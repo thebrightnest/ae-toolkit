@@ -3,7 +3,7 @@ id: thp-01-test-telemetry-isolation
 size: S
 blocked_by: []
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: test-infrastructure-only change (pytest fixture + guard test); no runtime or production code path is touched
 docs_sync: required
@@ -79,5 +79,5 @@ Revert the merge commit — removes fixture, guard test, and doc row in one step
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
