@@ -307,6 +307,35 @@ class TestPruneArchive(unittest.TestCase):
         finally:
             shutil.rmtree(target, ignore_errors=True)
 
+    def test_prune_skips_symlinked_project_dirs(self):
+        # A symlink at the project level must not let the whole-archive walk
+        # escape the archive root into the link target.
+        target = Path(tempfile.mkdtemp(prefix="aet-prune-proj-link-"))
+        try:
+            outside_run = target / "2026-05-01" / "outside-run"
+            outside_run.mkdir(parents=True, exist_ok=True)
+            (outside_run / "t1.jsonl").write_text('{"type":"stage"}\n', encoding="utf-8")
+            self._backdate(target, 60)
+            link = self.archive_dir / "linked-proj"
+            link.symlink_to(target)
+
+            report = telemetry.prune_archive(30, force=True)
+
+            self.assertTrue(outside_run.exists())
+            self.assertTrue(link.exists())
+            self.assertEqual(report["deleted"], [])
+            self.assertEqual(report["candidates"], [])
+        finally:
+            shutil.rmtree(target, ignore_errors=True)
+
+    def test_prune_negative_days_rejected(self):
+        old = self._seed_run("proj", "2026-05-01", "old-run", 60)
+
+        with self.assertRaises(ValueError):
+            telemetry.prune_archive(-1, force=True)
+
+        self.assertTrue(old.exists())
+
     def test_report_prune_cli_dry_run_smoke(self):
         old = self._seed_run("proj", "2026-05-01", "old-run", 60)
         report_bin = Path(__file__).parent.parent / "aet-work" / "bin" / "report"

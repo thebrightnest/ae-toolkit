@@ -377,7 +377,7 @@ def _iter_run_dirs(root: Path):
     """Yield ``(run_dir, date_segment, run_id)`` across all projects under ``root``."""
     if not root.exists():
         return
-    for project_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+    for project_dir in sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink()):
         yield from _iter_project_run_dirs(project_dir)
 
 
@@ -435,10 +435,14 @@ def prune_archive(
     nothing and only reports. ``root`` narrows the walk to a single project
     subtree (``{archive}/{project}``) and must resolve inside the archive
     root — anything else raises ``ValueError``, since prune performs
-    recursive deletion and must never escape the archive. Returns a dict
-    with ``candidates``, ``deleted``, ``kept_protected``, and
+    recursive deletion and must never escape the archive. ``days`` must be
+    non-negative; a negative value would place the cutoff in the future and
+    mark every run as a candidate, so it raises ``ValueError``. Returns a
+    dict with ``candidates``, ``deleted``, ``kept_protected``, and
     ``bytes_reclaimed``.
     """
+    if days < 0:
+        raise ValueError(f"prune days must be non-negative, got {days}")
     protected = frozenset(protected_run_ids or ())
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     cutoff_ts = cutoff.timestamp()
