@@ -205,7 +205,7 @@ def enforce_main_hygiene(repo_root: str) -> bool:
     return False
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AE Toolkit Unified Orchestrator")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--queue-file", help="Path to work-queue.json (batch mode)")
@@ -226,7 +226,11 @@ def parse_args() -> argparse.Namespace:
         default=60,
         help="Seconds between heartbeat log lines (default: 60).",
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def build_prompt(skills: list[str], plan_file: str, current_stage: str, next_stage: str) -> str:

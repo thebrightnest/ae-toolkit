@@ -35,7 +35,7 @@ from plan_parser import (  # noqa: E402
 )
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Rebuild the work queue from docs/plans.")
     parser.add_argument(
         "--queue-file",
@@ -67,7 +67,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def git_merge_commit_for(task_id: str) -> str | None:

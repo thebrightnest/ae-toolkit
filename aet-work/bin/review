@@ -44,7 +44,7 @@ LEGACY_BUCKETS: dict[str, str] = {
 }
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Review plans grouped by pipeline stage."
     )
@@ -53,7 +53,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="docs/plans",
         help="Directory containing atomic plan markdown files",
     )
-    return parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def category_for_stage(stage: str | None, workflow: Workflow | None = None) -> str:

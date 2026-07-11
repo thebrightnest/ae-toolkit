@@ -21,7 +21,7 @@ from queue import current_state, record_task_meta  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Pick the next ready task.")
     parser.add_argument(
         "--queue-file",
@@ -38,7 +38,11 @@ def parse_args() -> argparse.Namespace:
         default="docs/plans",
         help="Directory containing atomic plan markdown files",
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def report_plan_drift(backend, plans_dir: Path) -> None:

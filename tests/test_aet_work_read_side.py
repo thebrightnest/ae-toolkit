@@ -249,6 +249,137 @@ class TestStatusStoredState(unittest.TestCase):
         self.assertNotIn("in-progress: 1", output)
 
 
+class TestStatusJson(unittest.TestCase):
+    def test_json_summary_counts_and_human_output_suppressed(self):
+        """status --json prints a machine-readable summary and no human report."""
+        plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
+        plans_dir = plans_dir_tmp.name
+        queue_file = _make_queue(_resolve_plan_files([
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+            {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
+        ], plans_dir))
+        history_file = _make_history([])
+
+        stdout = io.StringIO()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--json",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = status.main()
+
+        self.assertEqual(rc, 0)
+        output = stdout.getvalue()
+        payload = json.loads(output)
+        self.assertEqual(payload["summary"]["ready"], 1)
+        self.assertEqual(payload["summary"]["blocked"], 1)
+        self.assertNotIn("Queue summary", output)
+        self.assertNotIn("Next ready tasks", output)
+        self.assertNotIn("plan drift", output.lower())
+
+    def test_json_tasks_carry_projection_fields(self):
+        """Each task entry carries id/state/stage/blocked_by/pending_blockers/plan_file."""
+        plans_dir_tmp = _make_plans_dir(["t1.md"])
+        plans_dir = plans_dir_tmp.name
+        queue_file = _make_queue(_resolve_plan_files([
+            {
+                "id": "t1",
+                "state": "blocked",
+                "stage": "plan-approved",
+                "title": "One",
+                "plan_file": "docs/plans/t1.md",
+                "blocked_by": ["t0"],
+            },
+        ], plans_dir))
+        history_file = _make_history([])
+
+        stdout = io.StringIO()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--json",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = status.main()
+
+        self.assertEqual(rc, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(len(payload["tasks"]), 1)
+        entry = payload["tasks"][0]
+        self.assertEqual(entry["id"], "t1")
+        self.assertEqual(entry["state"], "blocked")
+        self.assertEqual(entry["stage"], "plan-approved")
+        self.assertEqual(entry["blocked_by"], ["t0"])
+        self.assertEqual(entry["pending_blockers"], 1)
+        self.assertTrue(entry["plan_file"].endswith("t1.md"))
+
+    def test_json_queue_updated_at_from_wrapper(self):
+        """queue_updated_at is projected from the queue file wrapper metadata."""
+        plans_dir_tmp = _make_plans_dir(["t1.md"])
+        plans_dir = plans_dir_tmp.name
+        tasks = _resolve_plan_files([
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+        ], plans_dir)
+        queue_file = _write_json_file({
+            "queue_updated_at": "2026-07-10T12:00:00Z",
+            "tasks": tasks,
+        })
+        history_file = _make_history([])
+
+        stdout = io.StringIO()
+        with patch.object(sys, "stdout", stdout):
+            with patch.object(sys, "argv", [
+                "status",
+                "--json",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", plans_dir,
+            ]):
+                rc = status.main()
+
+        self.assertEqual(rc, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["queue_updated_at"], "2026-07-10T12:00:00Z")
+
+    def test_json_output_round_trips_through_json_tool(self):
+        """The real binary's --json output parses cleanly via python3 -m json.tool."""
+        plans_dir_tmp = _make_plans_dir(["t1.md"])
+        plans_dir = plans_dir_tmp.name
+        queue_file = _make_queue(_resolve_plan_files([
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+        ], plans_dir))
+        history_file = _make_history([])
+
+        proc = subprocess.run(
+            [
+                sys.executable, str(_STATUS_PY),
+                "--json",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", plans_dir,
+            ],
+            capture_output=True,
+            text=True,
+            cwd=_REPO_ROOT,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        tool = subprocess.run(
+            [sys.executable, "-m", "json.tool"],
+            input=proc.stdout,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(tool.returncode, 0, tool.stderr)
+        payload = json.loads(tool.stdout)
+        self.assertEqual(payload["summary"]["ready"], 1)
+        self.assertEqual(payload["tasks"][0]["id"], "t1")
+
+
 @unittest.skipIf(next_cmd is None, "next command not yet implemented")
 class TestNextStoredState(unittest.TestCase):
     def test_warns_but_picks_ready_on_plan_drift(self):
