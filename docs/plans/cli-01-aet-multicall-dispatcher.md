@@ -70,5 +70,5 @@ Revert the merge commit. The binary is additive and unreferenced by any skill un
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
