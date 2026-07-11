@@ -146,6 +146,30 @@ that wipe `os.environ` in-process) at a per-test tmp dir, and every subprocess
 spawn inherits it. A test opts out only by setting `AET_TELEMETRY_ARCHIVE_DIR`
 explicitly itself.
 
+## Migrating historical slugs
+
+Runs archived before the worktree-based slug scheme (thp-02) sit under
+origin-derived names like `thebrightnest/ae-toolkit`. Records do not embed the
+slug — only the archive paths do — so migration is pure directory renames, and
+`aet-work report` and the panel follow automatically. Use the in-repo helper:
+
+```bash
+# dry-run first (default): lists every pending move, touches nothing
+scripts/migrate-telemetry-slugs.py thebrightnest/ae-toolkit aiskills/main
+scripts/migrate-telemetry-slugs.py thebrightnest/artifactsh artifactsh/main
+
+# then apply
+scripts/migrate-telemetry-slugs.py thebrightnest/ae-toolkit aiskills/main --apply
+scripts/migrate-telemetry-slugs.py thebrightnest/artifactsh artifactsh/main --apply
+```
+
+The script renames the project dirs under **both** roots (`~/.aet/telemetry`
+and `~/.aet/reports`; override with `--archive` / `--reports`). It refuses any
+move whose destination run dir already exists (never clobbers), is idempotent
+(OLD absent + NEW present → nothing to do), and validates slug args against
+path traversal. To roll back, replay the dry-run output inverted
+(`NEW OLD --apply`).
+
 ## Privacy and retention
 
 - Telemetry is stored on the local filesystem only.
