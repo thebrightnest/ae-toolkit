@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AET Telemetry Panel</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: { DEFAULT: "hsl(var(--primary))", foreground: "hsl(var(--primary-foreground))" },
+        secondary: { DEFAULT: "hsl(var(--secondary))", foreground: "hsl(var(--secondary-foreground))" },
+        destructive: { DEFAULT: "hsl(var(--destructive))", foreground: "hsl(var(--destructive-foreground))" },
+        muted: { DEFAULT: "hsl(var(--muted))", foreground: "hsl(var(--muted-foreground))" },
+        accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
+        card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
+      },
+      borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
+    },
+  },
+};
+</script>
+<style>
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 10% 3.9%;
+    --radius: 0.5rem;
+  }
+  * { border-color: hsl(var(--border)); }
+  body { background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.2/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useRef, useEffect } = React;
+
+/* ---------------- helpers ---------------- */
+
+function fmtDuration(s) {
+  if (s == null || isNaN(s)) return "—";
+  if (s < 1) return `${Math.round(s * 1000)}ms`;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60), sec = Math.round(s % 60);
+  if (m < 60) return `${m}m ${sec}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+function fmtTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+function basename(p) { return p ? p.split("/").pop() : "—"; }
+function shortId(id) { return id && id.length > 12 ? id.slice(0, 8) + "…" : id; }
+
+/* ---------------- parsing ---------------- */
+
+function collectGroups(pairs) {
+  // Group relevant files by their containing directory (= run dir).
+  // Each pair is { rel: path relative to the archive root, ... }.
+  const groups = new Map();
+  let filesSeen = 0;
+  for (const p of pairs) {
+    const parts = p.rel.split("/");
+    const name = parts.pop();
+    if (parts.length === 0) continue;
+    if (name !== "last-run.json" && !name.endsWith(".jsonl")) continue;
+    if (name === "work-history.jsonl") continue; // queue history copy, not execution telemetry
+    filesSeen++;
+    const dir = parts.join("/");
+    if (!groups.has(dir)) groups.set(dir, []);
+    groups.get(dir).push({ ...p, name });
+  }
+  return { groups, filesSeen };
+}
+
+async function readInBatches(items, readText) {
+  // A large archive can hold thousands of files; read in bounded chunks.
+  for (let i = 0; i < items.length; i += 150) {
+    const chunk = await Promise.all(items.slice(i, i + 150).map(readText));
+    for (let j = 0; j < chunk.length; j++) items[i + j].text = chunk[j];
+  }
+}
+
+async function parseTelemetryFiles(fileList) {
+  // Folder-picker fallback: strip the picked root folder name from each path.
+  const pairs = [];
+  for (const file of fileList) {
+    const rel = file.webkitRelativePath;
+    if (!rel) continue;
+    const parts = rel.split("/");
+    parts.shift();
+    pairs.push({ rel: parts.join("/"), file });
+  }
+  const { groups, filesSeen } = collectGroups(pairs);
+  const allEntries = [];
+  for (const entries of groups.values()) allEntries.push(...entries);
+  await readInBatches(allEntries, e => e.file.text());
+  return { ...buildRunsFromGroups(groups), filesSeen };
+}
+
+async function loadTelemetryFromApi(onProgress) {
+  // Served mode: the bundled launcher exposes ~/.aet/telemetry over localhost.
+  const listRes = await fetch("/api/list");
+  if (!listRes.ok) throw new Error(`archive unavailable (${listRes.status})`);
+  const { root, files } = await listRes.json();
+  const { groups, filesSeen } = collectGroups(files.map(rel => ({ rel })));
+  const allEntries = [];
+  for (const entries of groups.values()) allEntries.push(...entries);
+  let done = 0;
+  await readInBatches(allEntries, async e => {
+    const res = await fetch("/api/file?p=" + encodeURIComponent(e.rel));
+    if (!res.ok) throw new Error(`cannot read ${e.rel}`);
+    const text = await res.text();
+    done++;
+    if (onProgress && done % 300 === 0) onProgress(done, allEntries.length);
+    return text;
+  });
+  return { ...buildRunsFromGroups(groups), filesSeen, root };
+}
+
+function buildRunsFromGroups(groups) {
+  const runs = [];
+  let skippedLines = 0;
+  for (const [dir, entries] of groups) {
+    const segments = dir.split("/");
+    const dirName = segments[segments.length - 1];
+    // Current layout: {project}/{date}/{run-id}/. Legacy layout: {project}/{date}-{run-id}/.
+    const dateIdx = segments.findIndex(s => /^\d{4}-\d{2}-\d{2}/.test(s));
+    const date = dateIdx >= 0 ? segments[dateIdx].slice(0, 10) : null;
+    const project = (dateIdx >= 0 ? segments.slice(0, dateIdx) : segments.slice(0, -1)).join("/") || "(root)";
+
+    let fileSummary = null;
+    const summaries = [];   // run_summary records (legacy execution.log.jsonl)
+    const records = [];
+    for (const { name, text } of entries) {
+      if (text == null) { skippedLines++; continue; }
+      if (name === "last-run.json") {
+        try { fileSummary = JSON.parse(text); } catch { skippedLines++; }
+        continue;
+      }
+      for (const line of text.split("\n")) {
+        const t = line.trim();
+        if (!t) continue;
+        let rec;
+        try { rec = JSON.parse(t); } catch { skippedLines++; continue; }
+        if (!rec || typeof rec.type !== "string") { skippedLines++; continue; }
+        if (rec.type === "run_summary") summaries.push(rec);
+        else records.push(rec);
+      }
+    }
+
+    if (fileSummary || summaries.length <= 1) {
+      // Standard layout: one run per directory.
+      const summary = fileSummary || summaries[0] || null;
+      if (summary || records.length > 0) {
+        runs.push(buildRun({
+          dir, runId: dirName, date, project,
+          summary,
+          summaryCount: summaries.length + (fileSummary ? 1 : 0),
+          records,
+        }));
+      }
+    } else {
+      // Legacy layout: execution.log.jsonl holds one run_summary per run.
+      for (const s of summaries) {
+        const id = s.run_id || dirName;
+        runs.push(buildRun({
+          dir: `${dir}#${id}`, runId: id, date, project,
+          summary: s, summaryCount: 1,
+          records: records.filter(r => r.run_id === id),
+        }));
+      }
+    }
+  }
+  return { runs, skippedLines };
+}
+
+function buildRun(r) {
+  const stages = r.records.filter(x => x.type === "stage");
+  const tests = r.records.filter(x => x.type === "test_run");
+  const issues = r.records.filter(x => x.type === "environment_issue");
+  const learnings = r.records.filter(x => x.type === "learning_candidate");
+  const tasks = [...new Set(r.records.map(x => x.task_id).filter(Boolean))];
+  const starts = r.records.map(x => x.start_time || x.timestamp).filter(Boolean).sort();
+  const ends = r.records.map(x => x.end_time || x.timestamp).filter(Boolean).sort();
+  const start = (r.summary && r.summary.start_time) || starts[0] || null;
+  const end = (r.summary && r.summary.end_time) || ends[ends.length - 1] || null;
+  const stageFailures = stages.filter(s => s.result === "failure").length;
+  const testFailures = tests.filter(t => t.result === "failure").length;
+  const duration = r.summary && r.summary.wall_clock_seconds != null
+    ? r.summary.wall_clock_seconds
+    : stages.reduce((a, s) => a + (s.duration_seconds || 0), 0);
+  const testsAgg = tests.reduce(
+    (a, t) => ({ total: a.total + (t.tests_total || 0), passed: a.passed + (t.tests_passed || 0), failed: a.failed + (t.tests_failed || 0) }),
+    { total: 0, passed: 0, failed: 0 }
+  );
+  const status = r.summary
+    ? (r.summary.outcome || (r.summary.tasks_failed > 0 ? "failure" : "success"))
+    : (stageFailures + testFailures > 0 ? "failure" : "success");
+  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, status };
+}
+
+/* ---------------- shadcn-style components ---------------- */
+
+function Button({ children, variant = "default", size = "default", className = "", ...props }) {
+  const base = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50";
+  const variants = {
+    default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+    outline: "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+    ghost: "hover:bg-accent hover:text-accent-foreground",
+  };
+  const sizes = { default: "h-9 px-4 py-2", sm: "h-8 rounded-md px-3 text-xs" };
+  return <button className={`${base} ${variants[variant]} ${sizes[size]} ${className}`} {...props}>{children}</button>;
+}
+
+function Card({ children, className = "" }) {
+  return <div className={`rounded-lg border bg-card text-card-foreground shadow-sm ${className}`}>{children}</div>;
+}
+function CardHeader({ children, className = "" }) {
+  return <div className={`flex flex-col space-y-1.5 p-4 ${className}`}>{children}</div>;
+}
+function CardTitle({ children, className = "" }) {
+  return <h3 className={`text-sm font-medium text-muted-foreground ${className}`}>{children}</h3>;
+}
+function CardContent({ children, className = "" }) {
+  return <div className={`p-4 pt-0 ${className}`}>{children}</div>;
+}
+
+function Badge({ children, variant = "default", className = "" }) {
+  const base = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors";
+  const variants = {
+    default: "border-transparent bg-primary text-primary-foreground",
+    secondary: "border-transparent bg-secondary text-secondary-foreground",
+    destructive: "border-transparent bg-destructive text-destructive-foreground",
+    success: "border-transparent bg-emerald-100 text-emerald-800",
+    outline: "text-foreground",
+  };
+  return <span className={`${base} ${variants[variant]} ${className}`}>{children}</span>;
+}
+
+function Select({ children, className = "", ...props }) {
+  return (
+    <select className={`flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${className}`} {...props}>
+      {children}
+    </select>
+  );
+}
+
+function Input({ className = "", ...props }) {
+  return (
+    <input className={`flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${className}`} {...props} />
+  );
+}
+
+function Table({ children, className = "" }) {
+  return (
+    <div className="w-full overflow-auto">
+      <table className={`w-full caption-bottom text-sm ${className}`}>{children}</table>
+    </div>
+  );
+}
+function Th({ children, className = "" }) {
+  return <th className={`h-9 px-3 text-left align-middle font-medium text-muted-foreground whitespace-nowrap ${className}`}>{children}</th>;
+}
+function Td({ children, className = "", ...props }) {
+  return <td className={`px-3 py-2 align-middle ${className}`} {...props}>{children}</td>;
+}
+
+function ResultBadge({ result }) {
+  return result === "failure"
+    ? <Badge variant="destructive">failure</Badge>
+    : <Badge variant="success">success</Badge>;
+}
+
+/* ---------------- views ---------------- */
+
+function StatCard({ label, value, sub }) {
+  return (
+    <Card>
+      <CardHeader className="pb-1"><CardTitle>{label}</CardTitle></CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RunsTable({ runs, selectedId, onSelect }) {
+  return (
+    <Table>
+      <thead>
+        <tr className="border-b">
+          <Th>Project</Th><Th>Date</Th><Th>Run</Th><Th>Tasks</Th><Th>Stages</Th><Th>Tests</Th><Th>Duration</Th><Th>Status</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {runs.map(r => (
+          <tr
+            key={r.dir}
+            onClick={() => onSelect(r.dir)}
+            className={`border-b cursor-pointer transition-colors hover:bg-muted/50 ${selectedId === r.dir ? "bg-accent" : ""}`}
+          >
+            <Td className="font-medium whitespace-nowrap">{r.project}</Td>
+            <Td className="whitespace-nowrap text-muted-foreground">{r.date || "—"}</Td>
+            <Td className="font-mono text-xs" title={r.runId}>{shortId(r.runId)}</Td>
+            <Td>{r.summary ? `${r.summary.tasks_succeeded ?? "?"}/${r.summary.tasks_spawned ?? "?"}` : r.tasks.length || "—"}</Td>
+            <Td>{r.stages.length || "—"}</Td>
+            <Td>{r.testsAgg.total ? `${r.testsAgg.passed}/${r.testsAgg.total}` : "—"}</Td>
+            <Td className="whitespace-nowrap">{fmtDuration(r.duration)}</Td>
+            <Td><ResultBadge result={r.status} /></Td>
+          </tr>
+        ))}
+        {runs.length === 0 && (
+          <tr><td colSpan="8" className="px-3 py-8 text-center text-muted-foreground">No runs match the current filters.</td></tr>
+        )}
+      </tbody>
+    </Table>
+  );
+}
+
+function SectionTitle({ children, count }) {
+  return (
+    <div className="flex items-center gap-2 mt-5 mb-2">
+      <h3 className="text-sm font-semibold">{children}</h3>
+      {count != null && <Badge variant="secondary">{count}</Badge>}
+    </div>
+  );
+}
+
+function RunDetail({ run }) {
+  if (!run) {
+    return (
+      <Card className="h-full flex items-center justify-center min-h-[200px]">
+        <p className="text-sm text-muted-foreground">Select a run to inspect its records.</p>
+      </Card>
+    );
+  }
+  const s = run.summary;
+  return (
+    <Card className="h-full overflow-auto">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="font-mono text-xs break-all">{run.runId}</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {run.project}{run.date ? ` · ${run.date}` : ""} · {fmtTime(run.start)} → {fmtTime(run.end)}
+            </div>
+          </div>
+          <ResultBadge result={run.status} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <Stat label="Tasks" value={s ? `${s.tasks_succeeded ?? "?"} ok / ${s.tasks_failed ?? "?"} failed` : run.tasks.length} />
+          <Stat label="Stage sessions" value={run.stages.length} />
+          <Stat label="Tests" value={run.testsAgg.total ? `${run.testsAgg.passed}/${run.testsAgg.total} passed` : "—"} />
+          <Stat label="Wall clock" value={fmtDuration(run.duration)} />
+        </div>
+
+        {run.stages.length > 0 && (
+          <>
+            <SectionTitle count={run.stages.length}>Stages</SectionTitle>
+            <Table>
+              <thead><tr className="border-b">
+                <Th>Task</Th><Th>Stage</Th><Th>Agent</Th><Th>Isolation</Th><Th>Duration</Th><Th>Exit</Th><Th>Files</Th><Th>Result</Th>
+              </tr></thead>
+              <tbody>
+                {run.stages.map((st, i) => (
+                  <tr key={i} className="border-b hover:bg-muted/50">
+                    <Td className="font-medium whitespace-nowrap">{st.task_id || "—"}</Td>
+                    <Td className="whitespace-nowrap">
+                      {st.stage}
+                      {st.stages && st.stages.length > 1 && (
+                        <span className="text-muted-foreground ml-1" title={st.stages.join(" → ")}>(+{st.stages.length - 1})</span>
+                      )}
+                    </Td>
+                    <Td>{st.agent_cli || "—"}</Td>
+                    <Td><Badge variant="outline">{st.isolation_level || "—"}</Badge></Td>
+                    <Td className="whitespace-nowrap">{fmtDuration(st.duration_seconds)}</Td>
+                    <Td className={st.exit_code ? "text-destructive font-medium" : ""}>{st.exit_code ?? "—"}</Td>
+                    <Td className="whitespace-nowrap" title={(st.files_modified || []).join("\n")}>
+                      {st.files_modified && st.files_modified.length ? `${st.files_modified.length} file(s)` : "—"}
+                    </Td>
+                    <Td><ResultBadge result={st.result} /></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </>
+        )}
+
+        {run.tests.length > 0 && (
+          <>
+            <SectionTitle count={run.tests.length}>Test runs</SectionTitle>
+            <Table>
+              <thead><tr className="border-b">
+                <Th>Task</Th><Th>Stage</Th><Th>Scope</Th><Th>Command</Th><Th>Passed</Th><Th>Failed</Th><Th>Result</Th>
+              </tr></thead>
+              <tbody>
+                {run.tests.map((t, i) => (
+                  <tr key={i} className="border-b hover:bg-muted/50">
+                    <Td className="font-medium whitespace-nowrap">{t.task_id || "—"}</Td>
+                    <Td>{t.stage || "—"}</Td>
+                    <Td><Badge variant="outline">{t.scope || "—"}</Badge></Td>
+                    <Td className="font-mono text-xs max-w-[220px] truncate" title={t.test_command}>{t.test_command || "—"}</Td>
+                    <Td>{t.tests_passed ?? "—"}{t.tests_total != null ? `/${t.tests_total}` : ""}</Td>
+                    <Td className={t.tests_failed ? "text-destructive font-medium" : ""}>{t.tests_failed ?? "—"}</Td>
+                    <Td><ResultBadge result={t.result} /></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </>
+        )}
+
+        {run.issues.length > 0 && (
+          <>
+            <SectionTitle count={run.issues.length}>Environment issues</SectionTitle>
+            <Table>
+              <thead><tr className="border-b">
+                <Th>Time</Th><Th>Type</Th><Th>Dependency</Th><Th>Resolved</Th><Th>Message</Th>
+              </tr></thead>
+              <tbody>
+                {run.issues.map((is, i) => (
+                  <tr key={i} className="border-b hover:bg-muted/50">
+                    <Td className="whitespace-nowrap text-muted-foreground text-xs">{fmtTime(is.timestamp)}</Td>
+                    <Td><Badge variant="outline">{is.issue_type || "—"}</Badge></Td>
+                    <Td className="font-mono text-xs">{is.dependency || "—"}</Td>
+                    <Td>{is.resolved ? <Badge variant="success">yes</Badge> : <Badge variant="destructive">no</Badge>}</Td>
+                    <Td className="text-xs">{is.message || "—"}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </>
+        )}
+
+        {run.learnings.length > 0 && (
+          <>
+            <SectionTitle count={run.learnings.length}>Learning candidates</SectionTitle>
+            <Table>
+              <thead><tr className="border-b">
+                <Th>Stage</Th><Th>Pattern</Th><Th>Confidence</Th><Th>Description</Th>
+              </tr></thead>
+              <tbody>
+                {run.learnings.map((l, i) => (
+                  <tr key={i} className="border-b hover:bg-muted/50">
+                    <Td>{l.stage || "—"}</Td>
+                    <Td><Badge variant="outline">{l.pattern_type || "—"}</Badge></Td>
+                    <Td>{l.confidence != null ? l.confidence.toFixed(2) : "—"}</Td>
+                    <Td className="text-xs">{l.description || "—"}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </>
+        )}
+
+        <div className="text-xs text-muted-foreground mt-5">
+          {run.records.length} record(s){s && s.parallel_conflicts_detected ? ` · ${s.parallel_conflicts_detected} parallel conflict(s) detected` : ""}
+          {s && s.concurrency_cap != null ? ` · concurrency cap ${s.concurrency_cap}` : ""}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="rounded-md border p-2.5">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="text-sm font-semibold mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function EmptyState({ mode, onPick }) {
+  if (mode === "empty") {
+    return (
+      <Card className="max-w-lg mx-auto mt-16">
+        <CardHeader>
+          <h2 className="text-lg font-semibold">Archive is empty</h2>
+          <p className="text-sm text-muted-foreground">No telemetry records found. Run a plan with <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">aet-work</code> first, then refresh this page.</p>
+        </CardHeader>
+      </Card>
+    );
+  }
+  return (
+    <Card className="max-w-lg mx-auto mt-16">
+      <CardHeader>
+        <h2 className="text-lg font-semibold">Archive not connected</h2>
+        <p className="text-sm text-muted-foreground">
+          This page was opened directly, so the browser cannot reach <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">~/.aet/telemetry</code> on its own.
+          Launch the bundled server instead — it serves this panel together with the archive:
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-md border bg-muted/40 p-3 font-mono text-xs">python3 aet-work/panel/serve</div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 border-t" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <div className="flex-1 border-t" />
+        </div>
+        <Button variant="outline" onClick={onPick} className="w-full">Choose telemetry folder manually</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ---------------- app ---------------- */
+
+function App() {
+  const [runs, setRuns] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(null);
+  const [source, setSource] = useState(null); // "archive" | "picker"
+  const [filterFolder, setFilterFolder] = useState("all");
+  const [filterProject, setFilterProject] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [search, setSearch] = useState("");
+  const inputRef = useRef(null);
+
+  function sortRuns(parsed) {
+    parsed.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.start || "").localeCompare(a.start || ""));
+    return parsed;
+  }
+
+  function applyLoaded({ runs: parsed, skippedLines, filesSeen, root }, src) {
+    setRuns(sortRuns(parsed));
+    setMeta({ filesSeen, skippedLines, root: root || null });
+    setSource(src);
+    setSelectedId(parsed[0] ? parsed[0].dir : null);
+    setFilterFolder("all");
+    setFilterProject("all");
+    setFilterStatus("all");
+    setSearch("");
+  }
+
+  async function loadArchive() {
+    setLoading(true);
+    setProgress(null);
+    try {
+      applyLoaded(await loadTelemetryFromApi((done, total) => setProgress({ done, total })), "archive");
+      return true;
+    } finally {
+      setLoading(false);
+      setProgress(null);
+    }
+  }
+
+  // On mount, try the bundled server's API (serves ~/.aet/telemetry directly).
+  // If unreachable (page opened as a plain file), fall back to the folder picker.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/list", { cache: "no-store" });
+        if (!res.ok) throw new Error("no api");
+      } catch {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+      if (!cancelled) await loadArchive();
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleFiles(e) {
+    const files = e.target.files;
+    if (!files || !files.length) return;
+    setLoading(true);
+    try {
+      applyLoaded(await parseTelemetryFiles(files), "picker");
+    } finally {
+      setLoading(false);
+      e.target.value = "";
+    }
+  }
+
+  const folders = useMemo(() => [...new Set(runs.map(r => r.project.split("/")[0]))].sort(), [runs]);
+  const projects = useMemo(() => [...new Set(runs
+    .filter(r => filterFolder === "all" || r.project === filterFolder || r.project.startsWith(filterFolder + "/"))
+    .map(r => r.project))].sort(), [runs, filterFolder]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return runs.filter(r => {
+      if (filterFolder !== "all" && !(r.project === filterFolder || r.project.startsWith(filterFolder + "/"))) return false;
+      if (filterProject !== "all" && r.project !== filterProject) return false;
+      if (filterStatus !== "all" && r.status !== filterStatus) return false;
+      if (q) {
+        const hay = [r.project, r.runId, r.date, ...r.tasks, ...r.records.map(x => basename(x.plan_file))].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [runs, filterFolder, filterProject, filterStatus, search]);
+
+  const stats = useMemo(() => {
+    const stageCount = filtered.reduce((a, r) => a + r.stages.length, 0);
+    const ok = filtered.filter(r => r.status === "success").length;
+    const totalTime = filtered.reduce((a, r) => a + (r.duration || 0), 0);
+    return { stageCount, ok, totalTime };
+  }, [filtered]);
+
+  const selected = runs.find(r => r.dir === selectedId) || null;
+  const archiveEmpty = source === "archive" && !loading && runs.length === 0;
+
+  return (
+    <div className="max-w-[1400px] mx-auto p-4 md:p-6">
+      <header className="flex items-center justify-between gap-4 flex-wrap mb-5">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">AET Telemetry Panel</h1>
+          <p className="text-sm text-muted-foreground">
+            Local execution log viewer for <code className="font-mono text-xs">aet-work</code> runs
+            {meta && meta.root && <span> · <code className="font-mono text-xs">{meta.root}</code></span>}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {meta && (
+            <span className="text-xs text-muted-foreground">
+              {meta.filesSeen} file(s){meta.skippedLines ? ` · ${meta.skippedLines} malformed line(s) skipped` : ""}
+            </span>
+          )}
+          {source === "archive" && (
+            <Button variant="outline" size="sm" onClick={loadArchive} disabled={loading}>
+              {loading ? "Loading…" : "Refresh archive"}
+            </Button>
+          )}
+          <Button variant={source === "archive" ? "ghost" : runs.length ? "outline" : "default"} size="sm" onClick={() => inputRef.current.click()} disabled={loading}>
+            {runs.length ? "Load another folder" : "Open telemetry folder"}
+          </Button>
+          <input ref={inputRef} type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={handleFiles} />
+        </div>
+      </header>
+
+      {loading && runs.length === 0 && (
+        <p className="text-sm text-muted-foreground mt-16 text-center">
+          {progress ? `Reading telemetry files… ${progress.done}/${progress.total}` : "Loading telemetry archive…"}
+        </p>
+      )}
+      {!loading && archiveEmpty && <EmptyState mode="empty" />}
+      {!loading && !runs.length && !archiveEmpty && <EmptyState mode="connect" onPick={() => inputRef.current.click()} />}
+
+      {runs.length > 0 && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <StatCard label="Runs" value={filtered.length} sub={`of ${runs.length} total`} />
+            <StatCard label="Stage sessions" value={stats.stageCount} />
+            <StatCard label="Success rate" value={filtered.length ? `${Math.round((stats.ok / filtered.length) * 100)}%` : "—"} sub={`${stats.ok} ok / ${filtered.length - stats.ok} failed`} />
+            <StatCard label="Total time" value={fmtDuration(stats.totalTime)} />
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            <Input placeholder="Search task, plan, run id…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
+            <Select value={filterFolder} onChange={e => { setFilterFolder(e.target.value); setFilterProject("all"); }}>
+              <option value="all">All folders</option>
+              {folders.map(f => <option key={f} value={f}>{f}</option>)}
+            </Select>
+            <Select value={filterProject} onChange={e => setFilterProject(e.target.value)}>
+              <option value="all">All projects</option>
+              {projects.map(p => <option key={p} value={p}>{p}</option>)}
+            </Select>
+            <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+              <option value="all">All statuses</option>
+              <option value="success">Success</option>
+              <option value="failure">Failure</option>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="max-h-[68vh] overflow-auto">
+              <RunsTable runs={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+            </Card>
+            <div className="max-h-[68vh]"><RunDetail run={selected} /></div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

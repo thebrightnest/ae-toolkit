@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Serve the AET telemetry panel together with ~/.aet/telemetry.
+
+Opens the panel in your default browser; the page reads the archive through
+a tiny localhost-only JSON API. No dependencies beyond the Python stdlib.
+
+Usage:
+    python3 aet-work/panel/serve            # serve + open browser
+    python3 aet-work/panel/serve --no-open  # serve only, print the URL
+"""
+
+import json
+import os
+import sys
+import threading
+import webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
+
+TELEMETRY = os.path.expanduser("~/.aet/telemetry")
+PANEL_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def telemetry_files():
+    """Relative paths of all telemetry files in the archive."""
+    out = []
+    for root, _dirs, files in os.walk(TELEMETRY):
+        for name in files:
+            if name == "last-run.json" or (
+                name.endswith(".jsonl") and name != "work-history.jsonl"
+            ):
+                out.append(os.path.relpath(os.path.join(root, name), TELEMETRY))
+    return sorted(out)
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "AETPanel/1.0"
+
+    def log_message(self, *args):
+        pass  # keep the terminal quiet
+
+    def _send(self, code, body, content_type="text/plain; charset=utf-8"):
+        data = body.encode("utf-8") if isinstance(body, str) else body
+        self.send_response(code)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
+        elif parsed.path in ("/", "/index.html"):
+            with open(os.path.join(PANEL_DIR, "index.html"), "rb") as f:
+                self._send(200, f.read(), "text/html; charset=utf-8")
+        elif parsed.path == "/api/list":
+            body = json.dumps({"root": TELEMETRY, "files": telemetry_files()})
+            self._send(200, body, "application/json")
+        elif parsed.path == "/api/file":
+            rel = parse_qs(parsed.query).get("p", [""])[0]
+            full = os.path.normpath(os.path.join(TELEMETRY, rel))
+            if os.path.commonpath([TELEMETRY, full]) != TELEMETRY or not os.path.isfile(full):
+                self._send(404, "not found")
+                return
+            with open(full, "rb") as f:
+                self._send(200, f.read(), "application/json")
+        else:
+            self._send(404, "not found")
+
+
+def main():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    url = f"http://127.0.0.1:{server.server_address[1]}/"
+    print(f"AET telemetry panel: {url}")
+    print(f"Archive: {TELEMETRY}")
+    print("Press Ctrl-C to stop.")
+    if "--no-open" not in sys.argv:
+        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nstopped")
+        server.shutdown()
+
+
+if __name__ == "__main__":
+    main()
