@@ -70,5 +70,5 @@ Revert the merge commit. The binary is additive and unreferenced by any skill un
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
