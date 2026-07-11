@@ -351,26 +351,33 @@ def _parse_date_segment(segment: str) -> datetime | None:
         return None
 
 
-def _iter_run_dirs(root: Path):
-    """Yield ``(run_dir, date_segment, run_id)`` for both archive layouts.
+def _iter_project_run_dirs(project_dir: Path):
+    """Yield ``(run_dir, date_segment, run_id)`` within one project subtree.
 
-    Current layout: ``{project}/{date}/{run-id}/``; legacy layout:
-    ``{project}/{date}-{run-id}/``. Non-matching directories are skipped.
+    Current layout: ``{date}/{run-id}/``; legacy layout: ``{date}-{run-id}/``.
+    Non-matching directories are skipped.
     """
+    if not project_dir.is_dir():
+        return
+    for child in sorted(project_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        legacy = _LEGACY_RUN_DIR_RE.match(child.name)
+        if legacy:
+            yield child, legacy.group(1), legacy.group(2)
+            continue
+        if _parse_date_segment(child.name) is None:
+            continue
+        for run_dir in sorted(p for p in child.iterdir() if p.is_dir()):
+            yield run_dir, child.name, run_dir.name
+
+
+def _iter_run_dirs(root: Path):
+    """Yield ``(run_dir, date_segment, run_id)`` across all projects under ``root``."""
     if not root.exists():
         return
     for project_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        for child in sorted(project_dir.iterdir()):
-            if not child.is_dir():
-                continue
-            legacy = _LEGACY_RUN_DIR_RE.match(child.name)
-            if legacy:
-                yield child, legacy.group(1), legacy.group(2)
-                continue
-            if _parse_date_segment(child.name) is None:
-                continue
-            for run_dir in sorted(p for p in child.iterdir() if p.is_dir()):
-                yield run_dir, child.name, run_dir.name
+        yield from _iter_project_run_dirs(project_dir)
 
 
 def _newest_mtime(path: Path) -> float:
@@ -424,20 +431,26 @@ def prune_archive(
     cutoff — a live run's dir always has a fresh mtime and therefore survives
     (the wfd-03 incident class). Runs in ``protected_run_ids`` (lease holder,
     ``AET_RUN_ID``) are never deleted. ``force=False`` (default) deletes
-    nothing and only reports. Returns a dict with ``candidates``, ``deleted``,
-    ``kept_protected``, and ``bytes_reclaimed``.
+    nothing and only reports. ``root`` narrows the walk to a single project
+    subtree (``{archive}/{project}``). Returns a dict with ``candidates``,
+    ``deleted``, ``kept_protected``, and ``bytes_reclaimed``.
     """
     protected = frozenset(protected_run_ids or ())
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     cutoff_ts = cutoff.timestamp()
-    scope = Path(root).expanduser() if root is not None else archive_dir()
+    if root is not None:
+        scope = Path(root).expanduser()
+        run_dirs = _iter_project_run_dirs(scope)
+    else:
+        scope = archive_dir()
+        run_dirs = _iter_run_dirs(scope)
 
     candidates: list[str] = []
     deleted: list[str] = []
     kept_protected: list[str] = []
     bytes_reclaimed = 0
 
-    for run_dir, date_segment, run_id in _iter_run_dirs(scope):
+    for run_dir, date_segment, run_id in run_dirs:
         dir_date = _parse_date_segment(date_segment)
         if dir_date is None or dir_date >= cutoff:
             continue
