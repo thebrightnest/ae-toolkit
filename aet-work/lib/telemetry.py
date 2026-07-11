@@ -11,10 +11,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -133,9 +134,7 @@ class RunLogger:
         self.run_id = run_id or new_run_id()
         self.date = date or datetime.now(timezone.utc).strftime(DEFAULT_DATE_FORMAT)
         self.project_slug = derive_project_slug(self.repo_root)
-        self._run_dir = (
-            archive_dir() / self.project_slug / self.date / self.run_id
-        )
+        self._run_dir = archive_dir() / self.project_slug / self.date / self.run_id
         self._run_dir.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -341,6 +340,150 @@ def learning_candidate_record(
     }
 
 
+_LEGACY_RUN_DIR_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(.+)$")
+
+
+def _parse_date_segment(segment: str) -> datetime | None:
+    """Parse a ``YYYY-MM-DD`` archive path segment as midnight UTC, or None."""
+    try:
+        return datetime.strptime(segment, DEFAULT_DATE_FORMAT).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _iter_run_dirs(root: Path):
+    """Yield ``(run_dir, date_segment, run_id)`` for both archive layouts.
+
+    Current layout: ``{project}/{date}/{run-id}/``; legacy layout:
+    ``{project}/{date}-{run-id}/``. Non-matching directories are skipped.
+    """
+    if not root.exists():
+        return
+    for project_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+        for child in sorted(project_dir.iterdir()):
+            if not child.is_dir():
+                continue
+            legacy = _LEGACY_RUN_DIR_RE.match(child.name)
+            if legacy:
+                yield child, legacy.group(1), legacy.group(2)
+                continue
+            if _parse_date_segment(child.name) is None:
+                continue
+            for run_dir in sorted(p for p in child.iterdir() if p.is_dir()):
+                yield run_dir, child.name, run_dir.name
+
+
+def _newest_mtime(path: Path) -> float:
+    """Return the newest mtime within ``path``, including the dir itself."""
+    newest = path.stat().st_mtime
+    for entry in path.rglob("*"):
+        try:
+            newest = max(newest, entry.stat().st_mtime)
+        except OSError:
+            continue
+    return newest
+
+
+def _dir_size(path: Path) -> int:
+    """Return the total size in bytes of all files under ``path``."""
+    total = 0
+    for entry in path.rglob("*"):
+        try:
+            if entry.is_file():
+                total += entry.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+def _protected_run_id(run_dir: Path, run_id: str, protected: frozenset) -> bool:
+    """Return True if the run dir's id or its summary's run_id is protected."""
+    if run_id in protected:
+        return True
+    summary = run_dir / "last-run.json"
+    if summary.is_file():
+        try:
+            data = json.loads(summary.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = None
+        if isinstance(data, dict) and data.get("run_id") in protected:
+            return True
+    return False
+
+
+def prune_archive(
+    days: int,
+    root: str | Path | None = None,
+    force: bool = False,
+    protected_run_ids: frozenset | set | None = None,
+) -> dict[str, Any]:
+    """Prune telemetry run dirs older than ``days``, protecting active runs.
+
+    A run dir is a deletion candidate only when both its date path segment
+    parses before the cutoff and its newest recursive mtime is older than the
+    cutoff — a live run's dir always has a fresh mtime and therefore survives
+    (the wfd-03 incident class). Runs in ``protected_run_ids`` (lease holder,
+    ``AET_RUN_ID``) are never deleted. ``force=False`` (default) deletes
+    nothing and only reports. Returns a dict with ``candidates``, ``deleted``,
+    ``kept_protected``, and ``bytes_reclaimed``.
+    """
+    protected = frozenset(protected_run_ids or ())
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff_ts = cutoff.timestamp()
+    scope = Path(root).expanduser() if root is not None else archive_dir()
+
+    candidates: list[str] = []
+    deleted: list[str] = []
+    kept_protected: list[str] = []
+    bytes_reclaimed = 0
+
+    for run_dir, date_segment, run_id in _iter_run_dirs(scope):
+        dir_date = _parse_date_segment(date_segment)
+        if dir_date is None or dir_date >= cutoff:
+            continue
+        if _newest_mtime(run_dir) >= cutoff_ts:
+            continue
+        if _protected_run_id(run_dir, run_id, protected):
+            kept_protected.append(str(run_dir))
+            continue
+        candidates.append(str(run_dir))
+        if force:
+            bytes_reclaimed += _dir_size(run_dir)
+            shutil.rmtree(run_dir)
+            deleted.append(str(run_dir))
+
+    if force:
+        deleted.extend(_sweep_stale_empty_dirs(scope, cutoff_ts))
+
+    return {
+        "candidates": candidates,
+        "deleted": deleted,
+        "kept_protected": kept_protected,
+        "bytes_reclaimed": bytes_reclaimed,
+    }
+
+
+def _sweep_stale_empty_dirs(root: Path, cutoff_ts: float) -> list[str]:
+    """Delete empty date/project dirs whose mtime predates the cutoff."""
+    removed: list[str] = []
+    if not root.exists():
+        return removed
+    # Deepest-first so date dirs empty out before their project dir is checked.
+    # rmdir refuses non-empty dirs, so emptiness is enforced by the attempt.
+    for dirpath, _dirnames, _filenames in os.walk(root, topdown=False):
+        path = Path(dirpath)
+        if path == root:
+            continue
+        try:
+            if path.stat().st_mtime >= cutoff_ts:
+                continue
+            path.rmdir()
+        except OSError:
+            continue
+        removed.append(str(path))
+    return removed
+
+
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
     """Read and parse a JSONL file, skipping malformed lines."""
     path = Path(path)
@@ -387,10 +530,7 @@ def _scan_records(root: Path, since: str | None = None) -> list[dict[str, Any]]:
         records = [
             r
             for r in records
-            if _parse_iso(
-                r.get("start_time") or r.get("timestamp") or "1970-01-01T00:00:00Z"
-            )
-            >= since_dt
+            if _parse_iso(r.get("start_time") or r.get("timestamp") or "1970-01-01T00:00:00Z") >= since_dt
         ]
 
     return records
@@ -420,10 +560,7 @@ def report(
                 records = [
                     r
                     for r in records
-                    if _parse_iso(
-                        r.get("start_time") or r.get("timestamp") or "1970-01-01T00:00:00Z"
-                    )
-                    >= since_dt
+                    if _parse_iso(r.get("start_time") or r.get("timestamp") or "1970-01-01T00:00:00Z") >= since_dt
                 ]
             summaries = [r for r in records if r.get("type") == "run_summary"]
             stages = [r for r in records if r.get("type") == "stage"]
@@ -445,9 +582,7 @@ def report(
     environment_issues = [r for r in records if r.get("type") == "environment_issue"]
 
     runs_observed = len({r.get("run_id") for r in records if r.get("run_id")})
-    return _format_report(
-        summaries, stages, environment_issues, runs_observed
-    )
+    return _format_report(summaries, stages, environment_issues, runs_observed)
 
 
 def _format_report(
