@@ -79,5 +79,5 @@ Revert the merge commit — removes fixture, guard test, and doc row in one step
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
