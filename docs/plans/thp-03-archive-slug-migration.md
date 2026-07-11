@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - thp-02-worktree-project-slug
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: script renames directories inside the user's home archive — verify path containment under the archive root, collision refusal, and no traversal via crafted slug arguments
 docs_sync: required
@@ -82,5 +82,5 @@ Code: revert the merge commit. Data: the script's dry-run output is the executed
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
