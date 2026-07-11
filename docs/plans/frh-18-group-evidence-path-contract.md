@@ -56,3 +56,8 @@ docs_sync_reason: the writer contract in four checking skills (aet-qa, aet-revie
 
 - [x] Not a near-identical addition
 - [x] Diff ~150 lines / 8 files
+
+---
+
+_Stage: implemented_
+_Next step: run `aet-qa`_
