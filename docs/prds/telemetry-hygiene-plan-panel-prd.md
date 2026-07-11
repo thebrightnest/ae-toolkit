@@ -100,6 +100,20 @@ _Recorded: 2026-07-11 — Branch: thp-01-test-telemetry-isolation (scope: thp-01
 
 - Task 4 (merge to main): deferred to `aet-ship` per the standard pipeline — no code change.
 
+_Recorded: 2026-07-11 — Branch: thp-04-retention-prune-cli (scope: thp-04 / R-4 only)_
+
+### Changed from plan (thp-04)
+
+- None — `prune_archive()`, the `--prune`/`--force` CLI wiring, the guide rewrite, and the five named tests plus CLI smoke test all landed as the Locked design specified.
+
+### Added (unplanned, thp-04)
+
+- CSO-stage hardening (aet-cso F1/F2): `prune_archive()` now rejects a `root` that resolves outside the telemetry archive (`ValueError`), and symlinked dirs are skipped during run-dir iteration so they can never become `rmtree` targets. Two regression tests added (`test_prune_root_outside_archive_rejected`, `test_prune_skips_symlinked_run_dirs`), plus a root-scope narrowing test. Reason: the plan's own security review note required verified archive-root containment.
+
+### Deferred (thp-04)
+
+- Task 5 (merge to main): deferred to `aet-ship` per the standard pipeline — no code change.
+
 ---
 
 _Stage: scope-validated_ (owner gate + closure check 2026-07-11)
