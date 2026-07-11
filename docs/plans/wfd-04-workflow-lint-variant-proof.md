@@ -74,5 +74,5 @@ Revert the merge commit; remove the Makefile line if reverted manually. Lint and
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
