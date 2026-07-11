@@ -2,6 +2,7 @@
 id: 2026-06-18-fix-nondeterministic-skill-packaging
 blocked_by: []
 size: S
+status: merged
 ---
 
 # Plan: Fix Non-Deterministic Skill Packaging
@@ -31,9 +32,9 @@ size: S
 
 ## Validation
 
-- [ ] `make check-reproducible` passes
-- [ ] `make validate` passes
-- [ ] No `.skill` churn across consecutive `make package` runs
+- [x] `make check-reproducible` passes
+- [x] `make validate` passes
+- [x] No `.skill` churn across consecutive `make package` runs
 
 ## Size
 
