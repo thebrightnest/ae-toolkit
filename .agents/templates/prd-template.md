@@ -13,14 +13,23 @@ One-paragraph summary of what this feature does and why it matters.
 
 - What this PRD explicitly does not cover
 
+## Requirements
+
+Numbered, independently testable requirements. Carry them forward from the
+brief when one exists; mint them here (R-1…) otherwise. User stories and
+acceptance criteria below must cite the R-ids they satisfy.
+
+- **R-1**: [Observable, independently testable capability.]
+- **R-2**: [A second, independently testable capability.]
+
 ## User Stories
 
-- As a [user], I want [action] so that [benefit]
+- As a [user], I want [action] so that [benefit] (satisfies: R-1)
 
 ## Acceptance Criteria
 
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [ ] Criterion 1 (satisfies: R-1)
+- [ ] Criterion 2 (satisfies: R-2)
 
 ## Technical Notes
 

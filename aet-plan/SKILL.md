@@ -121,7 +121,7 @@ Transform the grilled conversation into a structured Product Requirements Docume
 1. Read the clarify-goal conversation history as input.
 2. Use `.agents/templates/prd-template.md` as the structure guide.
 3. Create `docs/prds/` if it doesn't exist. Produce a PRD saved to `docs/prds/{feature-name}-prd.md`.
-4. Include: executive summary, mission, target users, scope (in/out), user stories with acceptance criteria, technical notes, architecture decisions, open questions, risks.
+4. Include: executive summary, mission, target users, scope (in/out), a numbered **Requirements** section (R-1…, each independently testable — carried from the brief when one exists, minted here otherwise), user stories with acceptance criteria (each citing the R-ids it satisfies), technical notes, architecture decisions, open questions, risks.
 5. **Explicitly list out-of-scope items** — crucial for defining "done."
 6. Ask the user to review before proceeding. Do not auto-generate stories from an unreviewed PRD.
 
@@ -136,7 +136,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
 4. **Apply task size guardrails**. Evaluate each story against the dual-limit model (≤ 2 days human time; ≤ 10 files / 500 diff lines AI-complexity). Auto-split oversized stories recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 5. Define blocking relationships between tickets (directed acyclic graph).
-6. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort, size label (S/M/L).
+6. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort, size label (S/M/L), and the R-id(s) it satisfies (cited on each user story and acceptance criterion so coverage is visible at review time).
 7. **Plan file frontmatter contract.** Every `docs/plans/{ticket-id}-plan.md` must begin with YAML frontmatter:
 
    ```yaml
@@ -241,6 +241,7 @@ From a ticket/story, produce a structured `plan.md` for implementation.
    - **Check 1 — Prose constraints in code blocks:** Scan the plan for constraints, requirements, or business rules stated in prose (outside code blocks). Verify each one is represented inside a code block, task list item, or explicit file edit. If a prose constraint has no corresponding code artifact, flag it.
    - **Check 2 — Files assigned to tasks:** Extract every file path from the "Files to create and modify" section. Verify each path appears in at least one task. Unassigned files are a `FAIL`.
    - **Check 3 — Observable acceptance criteria:** For each acceptance criterion, verify it describes an observable user behavior (e.g., "user sees an error message") rather than restating a task (e.g., "add error handling"). Criteria that merely restate tasks are `WARN`; criteria that are unverifiable are `FAIL`.
+   - **Check 4 — R-trace coverage:** Collect the R-ids declared in scope (from the PRD/brief Requirements section) and the `(traces: R-n)` citations on the task list. An in-scope R-id with no covering task (and not explicitly deferred with a reason) is a `FAIL`; a task that cites an R-id not present in scope is a `FAIL`.
 
    **Gate:** Any `FAIL` → stop and print the inconsistency. Do not advance to `plan-draft` until resolved. Any `WARN` → print the warning and continue.
 
