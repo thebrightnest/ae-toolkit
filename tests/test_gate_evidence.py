@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+import contextlib
+import importlib.machinery
+import importlib.util
+import io
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import evidence
+import telemetry
+from cli_adapter import CLIAdapter
+from workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
+
+# Load the orchestrator script (no .py extension) as a module.
+_ORCHESTRATOR_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
+_orchestrator_loader = importlib.machinery.SourceFileLoader(
+    "orchestrator", str(_ORCHESTRATOR_BIN)
+)
+_spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
+orchestrator = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(orchestrator)
 
 
 class TestReportsDir(unittest.TestCase):
@@ -189,6 +207,183 @@ class TestCheckingVerdictShapes(unittest.TestCase):
             )
             loaded = evidence.read_verdict(path)
             self.assertEqual(len(loaded["divergences"]), 1)
+
+
+class TestResolveVerdictPath(unittest.TestCase):
+    """resolve_verdict_path implements the three-step verdict path precedence."""
+
+    def test_single_env_var_wins_over_per_kind_and_default(self):
+        env = {
+            "AET_EVIDENCE_PATH": "/tmp/single/qa.json",
+            "AET_EVIDENCE_PATH_QA": "/tmp/per-kind/qa.json",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            path = evidence.resolve_verdict_path(
+                task_id="demo",
+                kind="qa",
+                project_slug="demo/project",
+                reports_root="/tmp/reports",
+            )
+        self.assertEqual(path, Path("/tmp/single/qa.json"))
+
+    def test_per_kind_env_var_used_when_single_unset(self):
+        env = {"AET_EVIDENCE_PATH_SYNC_DOCS": "/tmp/per-kind/sync-docs.json"}
+        with patch.dict(os.environ, env, clear=True):
+            path = evidence.resolve_verdict_path(
+                task_id="demo",
+                kind="sync-docs",
+                project_slug="demo/project",
+                reports_root="/tmp/reports",
+            )
+        self.assertEqual(path, Path("/tmp/per-kind/sync-docs.json"))
+
+    def test_per_kind_env_var_does_not_leak_across_kinds(self):
+        env = {"AET_EVIDENCE_PATH_QA": "/tmp/per-kind/qa.json"}
+        with patch.dict(os.environ, env, clear=True):
+            path = evidence.resolve_verdict_path(
+                task_id="demo",
+                kind="cso",
+                project_slug="demo/project",
+                reports_root="/tmp/reports",
+            )
+        self.assertEqual(
+            path, Path("/tmp/reports/demo/project/demo/cso.json")
+        )
+
+    def test_default_falls_back_to_evidence_path(self):
+        with patch.dict(os.environ, {}, clear=True):
+            resolved = evidence.resolve_verdict_path(
+                task_id="demo",
+                kind="qa",
+                project_slug="demo/project",
+                reports_root="/tmp/reports",
+            )
+            expected = evidence.evidence_path(
+                task_id="demo",
+                kind="qa",
+                project_slug="demo/project",
+                reports_root="/tmp/reports",
+            )
+        self.assertEqual(resolved, expected)
+
+    def test_unknown_kind_raises(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(evidence.VerdictValidationError):
+                evidence.resolve_verdict_path(task_id="demo", kind="nope")
+
+
+class TestGroupSessionEnvVars(unittest.TestCase):
+    """run_stage_group publishes AET_EVIDENCE_PATH_<KIND> per evidence stage."""
+
+    def _workflow(self) -> Workflow:
+        stages = [
+            WorkflowStage(
+                name="plan-approved",
+                skills=["aet-tdd", "aet-implement"],
+                evidence=None,
+                gate_key=None,
+            ),
+            WorkflowStage(
+                name="implemented", skills=["aet-qa"], evidence="qa", gate_key=None
+            ),
+            WorkflowStage(
+                name="qa-complete",
+                skills=["aet-sync-docs"],
+                evidence="sync-docs",
+                gate_key=None,
+            ),
+        ]
+        return Workflow(
+            version=1,
+            name="test",
+            done_state="done",
+            stages=stages,
+            stage_map={s.name: s for s in stages},
+            execution_policy=ExecutionPolicy(
+                session_groups=[["plan-approved", "implemented", "qa-complete"]]
+            ),
+            routing=Routing(default={"harness": "test", "model": None}, by_stage={}),
+        )
+
+    def test_group_env_contains_per_kind_paths_equal_to_gate_path(self):
+        workflow = self._workflow()
+        adapter = CLIAdapter(
+            name="test",
+            bin="echo",
+            prompt_flag="-p",
+            workdir_flag=None,
+            headless_flag=None,
+        )
+        captured = {}
+
+        def fake_run(cmd, env=None, **_kwargs):
+            captured["env"] = env
+            return subprocess.CompletedProcess(cmd, 0)
+
+        env_overlay = {"AET_PROJECT_ID": "demo/project"}
+        with patch.dict(os.environ, env_overlay, clear=False):
+            os.environ.pop("AET_EVIDENCE_PATH", None)
+            with patch.object(
+                orchestrator.subprocess, "run", side_effect=fake_run
+            ):
+                orchestrator.run_stage_group(
+                    adapter,
+                    "/repo",
+                    "/work/plan.md",
+                    "/work",
+                    workflow.stages,
+                    task_id="demo",
+                    workflow=workflow,
+                )
+
+        env = captured["env"]
+        # Writers and the gate share one derivation: the env path must equal
+        # what _load_checking_verdict reads for the same (task, kind).
+        self.assertEqual(
+            env["AET_EVIDENCE_PATH_QA"],
+            str(
+                evidence.evidence_path(
+                    task_id="demo", kind="qa", project_slug="demo/project"
+                )
+            ),
+        )
+        self.assertEqual(
+            env["AET_EVIDENCE_PATH_SYNC_DOCS"],
+            str(
+                evidence.evidence_path(
+                    task_id="demo", kind="sync-docs", project_slug="demo/project"
+                )
+            ),
+        )
+        # Group sessions must not set the single-stage var (multiple kinds).
+        self.assertNotIn("AET_EVIDENCE_PATH", env)
+
+
+class TestGateMessageIncludesPath(unittest.TestCase):
+    """The missing-verdict gate message names the path it read."""
+
+    def test_missing_verdict_message_includes_resolved_path(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as reports_dir:
+                env = {
+                    "AET_REPORTS_DIR": reports_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    logger = telemetry.RunLogger(repo_root, run_id="r1")
+                    buf = io.StringIO()
+                    with contextlib.redirect_stdout(buf):
+                        result = orchestrator._require_passing_verdict(
+                            "demo", "qa", repo_root, "plan.md", "qa-complete", logger
+                        )
+        self.assertFalse(result)
+        expected_path = evidence.evidence_path(
+            task_id="demo",
+            kind="qa",
+            project_slug="demo/project",
+            reports_root=reports_dir,
+        )
+        self.assertIn(str(expected_path), buf.getvalue())
 
 
 if __name__ == "__main__":
