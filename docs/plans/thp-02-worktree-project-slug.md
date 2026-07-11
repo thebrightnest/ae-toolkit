@@ -50,9 +50,9 @@ return f"{main_root.name}/{label}"
 
 ## Task List
 
-1. Rewrite the git branch of `derive_project_slug()` in `aet-work/lib/telemetry.py` per Locked design; keep env-override and non-git fallbacks byte-compatible — S (traces: R-2)
-2. Add `TestDeriveProjectSlug` to `tests/test_telemetry.py` with the four named cases (below), building real tmp repos via `git init` + `git worktree add` — M (traces: R-2)
-3. Update `docs/telemetry-guide.md` "What gets recorded": slug definition, `main` label, override semantics, accepted trade-offs — S (traces: R-2)
+1. ✓ Rewrite the git branch of `derive_project_slug()` in `aet-work/lib/telemetry.py` per Locked design; keep env-override and non-git fallbacks byte-compatible — S (traces: R-2)
+2. ✓ Add `TestDeriveProjectSlug` to `tests/test_telemetry.py` with the four named cases (below), building real tmp repos via `git init` + `git worktree add` — M (traces: R-2)
+3. ✓ Update `docs/telemetry-guide.md` "What gets recorded": slug definition, `main` label, override semantics, accepted trade-offs — S (traces: R-2)
 4. Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
@@ -71,13 +71,13 @@ return f"{main_root.name}/{label}"
 
 ## Validation Steps
 
-- [ ] `tests/test_telemetry.py::TestDeriveProjectSlug::test_primary_worktree_slug` — unit: tmp repo `foo/` → `foo/main`
-- [ ] `tests/test_telemetry.py::TestDeriveProjectSlug::test_linked_worktree_slug` — unit: `git worktree add .worktrees/bar` → `foo/bar`
-- [ ] `tests/test_telemetry.py::TestDeriveProjectSlug::test_env_override_wins` — unit: `AET_PROJECT_ID=x/y` → `x/y` (monkeypatched)
-- [ ] `tests/test_telemetry.py::TestDeriveProjectSlug::test_non_git_dir_falls_back_to_name` — unit: plain tmp dir → its basename
-- [ ] Full suite green (isolation fixture from thp-01 keeps these spawns out of the real archive if it merged first; tests here use tmp archives regardless)
-- [ ] Manual (QA stage): `python3 -c` invocation from repo root prints `aiskills/main`, from `.worktrees/aet-panel` prints `aiskills/aet-panel`
-- [ ] R-trace coverage: R-2 by tasks 1–3; no unknown R-ids cited
+- [x] `tests/test_telemetry.py::TestDeriveProjectSlug::test_primary_worktree_slug` — unit: tmp repo `foo/` → `foo/main`
+- [x] `tests/test_telemetry.py::TestDeriveProjectSlug::test_linked_worktree_slug` — unit: `git worktree add .worktrees/bar` → `foo/bar`
+- [x] `tests/test_telemetry.py::TestDeriveProjectSlug::test_env_override_wins` — unit: `AET_PROJECT_ID=x/y` → `x/y` (monkeypatched)
+- [x] `tests/test_telemetry.py::TestDeriveProjectSlug::test_non_git_dir_falls_back_to_name` — unit: plain tmp dir → its basename
+- [x] Full suite green (isolation fixture from thp-01 keeps these spawns out of the real archive if it merged first; tests here use tmp archives regardless)
+- [x] Manual (QA stage): `python3 -c` invocation from repo root prints `aiskills/main`, from `.worktrees/aet-panel` prints `aiskills/aet-panel` — verified via the thp-02 worktree instead (aet-panel no longer exists): `aiskills/main` from main root, `aiskills/thp-02-worktree-project-slug` from the linked worktree
+- [x] R-trace coverage: R-2 by tasks 1–3; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -86,5 +86,5 @@ Revert the merge commit — slug derivation returns to origin-remote identity; n
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
