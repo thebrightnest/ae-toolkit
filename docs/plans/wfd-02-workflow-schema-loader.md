@@ -5,7 +5,7 @@ blocked_by:
   - rdm-01-decision-adrs
   - rdm-02-rtrace-templates
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: new engine-adjacent module that will drive gate sequencing
 docs_sync: required
@@ -128,5 +128,5 @@ Revert the merge commit — nothing consumes the new module yet; zero blast radi
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
