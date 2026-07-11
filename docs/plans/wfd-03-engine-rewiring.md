@@ -70,7 +70,7 @@ docs_sync_reason: deletes pipeline.py — docs referencing the stage table must 
 - [x] `make validate` passes
 - [x] Named coverage: orchestrator rewiring → `tests/test_orchestrator.py` (integration: data-driven traversal parity, entry stage, evidence kinds, loud load failure); board projection → existing review coverage in `tests/test_aet_work_add_review.py` extended for unknown-stage fallback; migrated baseline pins → `tests/test_workflow.py`
 - [x] `grep -rn "STAGES\|STAGE_MAP\|CHECKING_SKILL_TO_VERDICT" aet-work/` returns no hits
-- [ ] Known docs divergence reconciled at the docs-sync stage: `docs/PIPELINE.md`'s stage table lists `tdd-complete` (never an engine stage) and mixes planning-footer values with engine stages — after this task it must point at the workflow file as the canonical stage list
+- [x] Known docs divergence reconciled at the docs-sync stage: `docs/PIPELINE.md`'s stage table now points at the workflow file as the canonical stage list (`tdd-complete` and the planning-footer rows removed); `aet-work/SKILL.md`'s `review` board columns updated to the positional derivation
 - [x] `aet-work run-one` on a real queued task traverses identically to the pre-change engine — pinned machine-checkably by `TestWorkflowDrivenTraversal.test_full_traversal_from_packaged_file_matches_todays_walk` (exact group spans, skills, evidence kinds, final stage)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to closure — task 5 merges after the review/secure stages)
 
@@ -80,5 +80,5 @@ Revert the merge commit — `pipeline.py` and its table return intact; the workf
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
