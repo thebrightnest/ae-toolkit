@@ -39,12 +39,12 @@ import plan_parser  # noqa: E402
 import telemetry  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 from cli_adapter import resolve_cli_adapter  # noqa: E402
-from pipeline import STAGE_MAP, Stage, group_stages_by_session  # noqa: E402
 from verifier import (  # noqa: E402
     read_plan_stage,
     verify_branch_has_commits,
     verify_stage_advancement,
 )
+from workflow import Workflow, WorkflowError, WorkflowStage, load_workflow  # noqa: E402
 from worktree import (  # noqa: E402
     check_main_hygiene,
     copy_untracked_files,
@@ -142,13 +142,14 @@ def effective_isolation(plan_file: str, cli_isolation: str) -> str:
     return plan_isolation if plan_isolation else cli_isolation
 
 
-def get_current_stage(task: dict, plan_file: str) -> str:
+def get_current_stage(task: dict, plan_file: str, entry_stage: str) -> str:
     """Return the current pipeline stage from the task record.
 
     The footer is consulted only as a backward-compatible fallback; it is
-    never used to make scheduling decisions (ADR-011).
+    never used to make scheduling decisions (ADR-011). With no record and no
+    footer the task starts at the workflow's entry stage.
     """
-    return task.get("stage") or read_plan_stage(plan_file) or "plan-approved"
+    return task.get("stage") or read_plan_stage(plan_file) or entry_stage
 
 
 def _record_stage(task: dict, stage: str, repo_root: str) -> bool:
@@ -305,27 +306,6 @@ def _emit_stage_session(
     )
 
 
-CHECKING_SKILL_TO_VERDICT: dict[str, str] = {
-    "aet-qa": "qa",
-    "aet-review": "review",
-    "aet-cso": "cso",
-    "aet-sync-docs": "sync-docs",
-}
-
-
-def verdict_kind_for_stage(stage: Stage) -> str | None:
-    """Return the evidence verdict kind for a checking stage, or ``None``.
-
-    Non-checking stages (for example ``aet-tdd``/``aet-implement``) do not
-    produce verdicts and return ``None``.
-    """
-    for skill in stage.skills:
-        kind = CHECKING_SKILL_TO_VERDICT.get(skill)
-        if kind is not None:
-            return kind
-    return None
-
-
 def _load_checking_verdict(task_id: str, kind: str, repo_root: str) -> dict:
     """Read and schema-validate a checking verdict from the evidence home.
 
@@ -444,12 +424,14 @@ def run_stage(
     return result.returncode
 
 
-def build_stage_group_prompt(plan_file: str, stages: list[Stage]) -> str:
+def build_stage_group_prompt(
+    plan_file: str, stages: list[WorkflowStage], workflow: Workflow
+) -> str:
     """Build a compound prompt for running multiple stages in one session.
 
     Each stage block preserves the single-stage prompt format so the agent
     can execute them sequentially, committing and updating the plan footer
-    between stages.
+    between stages. Successors resolve through the workflow's list order.
     """
     preamble = (
         "Execute the following consecutive pipeline stages in order. "
@@ -458,7 +440,7 @@ def build_stage_group_prompt(plan_file: str, stages: list[Stage]) -> str:
     )
     blocks = [preamble]
     for stage in stages:
-        next_stage = stage.next_stage or stage.name
+        next_stage = workflow.next_stage(stage.name) or stage.name
         skills_str = " → ".join(stage.skills)
         blocks.append(
             f"Run {skills_str} on {plan_file}\n"
@@ -474,12 +456,14 @@ def run_stage_group(
     repo_root: str,
     plan_file: str,
     worktree_dir: str,
-    stages: list[Stage],
+    stages: list[WorkflowStage],
     task_id: str | None = None,
     run_id: str | None = None,
+    *,
+    workflow: Workflow,
 ) -> int:
     """Spawn one session that runs every stage in the group sequentially."""
-    prompt = build_stage_group_prompt(plan_file, stages)
+    prompt = build_stage_group_prompt(plan_file, stages, workflow)
     cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
 
     env = os.environ.copy()
@@ -495,7 +479,7 @@ def run_stage_group(
     return result.returncode
 
 
-def stage_enabled(stage: Stage, plan_fm: dict) -> bool:
+def stage_enabled(stage: WorkflowStage, plan_fm: dict) -> bool:
     """Return True when ``stage`` should run for the given plan frontmatter.
 
     A stage without a ``gate_key`` always runs. A gated stage runs unless the
@@ -508,7 +492,7 @@ def stage_enabled(stage: Stage, plan_fm: dict) -> bool:
     return plan_fm.get(stage.gate_key) != "skipped"
 
 
-def _report_gate_decision(stage: Stage, plan_fm: dict, enabled: bool) -> None:
+def _report_gate_decision(stage: WorkflowStage, plan_fm: dict, enabled: bool) -> None:
     """Print how a gated stage's run/skip decision was resolved.
 
     The source is ``frontmatter`` when the plan sets the gate key and
@@ -536,8 +520,14 @@ def process_task(
     isolation: str,
     logger: telemetry.RunLogger | None = None,
     worktree_dir: str | None = None,
+    workflow: Workflow | None = None,
 ) -> bool:
-    """Process a single task through all its stage groups."""
+    """Process a single task through all its stage groups.
+
+    The stage sequence, skill bindings, evidence kinds, and session grouping
+    come from the workflow file (``workflow:`` plan frontmatter key, default
+    ``software``) — loaded once per task and threaded through every decision.
+    """
     if logger is None:
         logger = telemetry.RunLogger(repo_root)
     task_id = task["id"]
@@ -597,12 +587,24 @@ def process_task(
     # task so every stage decision below is a pure data lookup.
     plan_fm = plan_parser.parse_frontmatter(Path(plan_file))
 
+    # The workflow file is the engine's source of truth for stage sequencing.
+    # A missing or invalid file fails the run loudly at task start — there is
+    # no silent fallback to a baked-in sequence; the packaged default is the
+    # fallback (ADR-020).
+    if workflow is None:
+        workflow_name = plan_fm.get("workflow") or "software"
+        try:
+            workflow = load_workflow(repo_root, workflow_name)
+        except WorkflowError as exc:
+            print(f"   ❌ {exc}")
+            return False
+
     # Determine current stage from the task record; footer is only a breadcrumb.
-    current_stage = get_current_stage(task, plan_file)
+    current_stage = get_current_stage(task, plan_file, workflow.entry_stage)
 
     # A terminal or unknown stage with no commits means the plan footer (or a
     # stale worktree) is lying. Fail loudly instead of marking the task done.
-    if current_stage not in STAGE_MAP:
+    if current_stage not in workflow.stage_map:
         ok, msg = verify_branch_has_commits(worktree_dir)
         if not ok:
             print(f"   ❌ Stage '{current_stage}' is not a runnable pipeline stage and {msg}")
@@ -614,7 +616,7 @@ def process_task(
         print(f"   📋 Plan isolation: {task_isolation}")
 
     # Group stages by isolation level
-    groups = group_stages_by_session(task_isolation)
+    groups = workflow.session_groups(task_isolation)
     agent_invoked = False
 
     for group in groups:
@@ -646,7 +648,7 @@ def process_task(
                 for s, ok in decisions:
                     _report_gate_decision(s, plan_fm, ok)
             if runnable and len(runnable) > 1:
-                expected_final = runnable[-1].next_stage or runnable[-1].name
+                expected_final = workflow.next_stage(runnable[-1].name) or runnable[-1].name
                 stage_span = [s.name for s in runnable]
                 print(
                     f"   Stage group: {' → '.join(stage_span)} → {expected_final}"
@@ -661,6 +663,7 @@ def process_task(
                     runnable,
                     task_id=task_id,
                     run_id=logger.run_id,
+                    workflow=workflow,
                 )
                 end_time = telemetry.iso_now()
                 _emit_stage_session(
@@ -687,15 +690,15 @@ def process_task(
                     print(f"   ❌ Stage group verification failed: {msg}")
                     return False
 
-                # Fail-closed evidence gates: every checking stage in the group
-                # span must have a schema-valid passing verdict. Group
-                # advancement is determined by evidence, not the plan footer
-                # (which is a breadcrumb only).
+                # Fail-closed evidence gates: every stage in the group span
+                # with an evidence binding must have a schema-valid passing
+                # verdict. Group advancement is determined by evidence, not
+                # the plan footer (which is a breadcrumb only).
                 for stage in runnable:
-                    kind = verdict_kind_for_stage(stage)
+                    kind = stage.evidence
                     if kind is None:
                         continue
-                    target = stage.next_stage or stage.name
+                    target = workflow.next_stage(stage.name) or stage.name
                     if not _require_passing_verdict(
                         task_id, kind, repo_root, plan_file, target, logger
                     ):
@@ -717,7 +720,7 @@ def process_task(
                 continue
             elif not runnable:
                 # All remaining stages are gated skips; jump to the end of the group.
-                current_stage = remaining[-1].next_stage or remaining[-1].name
+                current_stage = workflow.next_stage(remaining[-1].name) or remaining[-1].name
                 continue
 
         # Per-stage execution: used for minimal/full isolation and for single-stage
@@ -740,20 +743,20 @@ def process_task(
             enabled = stage_enabled(target_stage, plan_fm)
             _report_gate_decision(target_stage, plan_fm, enabled)
             if not enabled:
-                current_stage = target_stage.next_stage or current_stage
+                current_stage = workflow.next_stage(target_stage.name) or current_stage
                 continue
 
-            next_stage_name = target_stage.next_stage or current_stage
+            next_stage_name = workflow.next_stage(target_stage.name) or current_stage
             skills = target_stage.skills
 
             if not skills:
-                # Terminal stage (synced).
+                # Terminal stage (skill-less, e.g. synced).
                 current_stage = next_stage_name
                 continue
 
             print(f"   Stage: {target_stage.name} → {next_stage_name} ({' → '.join(skills)})")
 
-            kind = verdict_kind_for_stage(target_stage)
+            kind = target_stage.evidence
             start_time = telemetry.iso_now()
             exit_code = run_stage(
                 adapter,
@@ -1400,6 +1403,36 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         print(f"   📁 Telemetry: {logger.run_dir}")
         return 1
 
+    # Resolve the workflow once per task and thread it through process_task.
+    # A missing or invalid workflow file fails the run loudly at task start;
+    # the packaged default is the only fallback.
+    try:
+        plan_fm = plan_parser.parse_frontmatter(Path(plan_file))
+    except OSError:
+        plan_fm = {}
+    workflow_name = plan_fm.get("workflow") or "software"
+    try:
+        wf = load_workflow(repo_root, workflow_name)
+    except WorkflowError as exc:
+        print(f"   ❌ {exc}")
+        end_time = telemetry.iso_now()
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=1,
+                outcome="failure",
+                exit_code=1,
+                task_ids=[],
+                final_stage=None,
+            )
+        )
+        print(f"   📁 Telemetry: {logger.run_dir}")
+        return 1
+
     # For a top-level run-one, declare that this run owns the queue so
     # out-of-band mutators refuse. Batch children share the parent's lease via
     # AET_RUN_ID and must not acquire/release their own.
@@ -1443,7 +1476,13 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
         print(f"📁 Telemetry: {logger.run_dir}")
         success = process_task(
-            task, repo_root, adapter, args.isolation, logger=logger, worktree_dir=worktree_dir
+            task,
+            repo_root,
+            adapter,
+            args.isolation,
+            logger=logger,
+            worktree_dir=worktree_dir,
+            workflow=wf,
         )
         exit_code = 0 if success else 1
 
@@ -1492,7 +1531,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         end_time = telemetry.iso_now()
 
         # Read the final stage from the synthetic task record; the footer is only a breadcrumb.
-        final_stage = task.get("stage") or read_plan_stage(plan_file) or "plan-approved"
+        final_stage = task.get("stage") or read_plan_stage(plan_file) or wf.entry_stage
 
         logger.write_last_run(
             telemetry.run_summary_record(

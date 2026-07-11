@@ -3,6 +3,11 @@
 
 Scans ``docs/plans/*.md``, reads the footer stage, and groups plans into:
 approved, queued, in-progress, awaiting-merge, and closed.
+
+Workflow stage names map to board columns positionally from the loaded
+workflow (entry → approved, terminal skill-less → queued, anything else →
+in-progress), so variant vocabularies render a sensible board without a
+per-workflow mapping table.
 """
 
 from __future__ import annotations
@@ -16,9 +21,12 @@ _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
 from plan_parser import stage_from_plan, title_from_plan  # noqa: E402
+from workflow import Workflow, WorkflowError, load_workflow  # noqa: E402
 
-# Map footer stage strings to review categories.
-CATEGORY_BUCKETS: dict[str, str] = {
+# Footer values that are not workflow stage names (queue states and
+# historical stage spellings) keep fixed board columns. Also the fallback
+# when no workflow can be loaded.
+LEGACY_BUCKETS: dict[str, str] = {
     "plan-approved": "approved",
     "approved": "approved",
     "synced": "queued",
@@ -48,11 +56,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def category_for_stage(stage: str | None) -> str:
-    """Return the review category for a footer stage value."""
+def category_for_stage(stage: str | None, workflow: Workflow | None = None) -> str:
+    """Return the review category for a footer stage value.
+
+    When a workflow is loaded, stage names derive their column positionally:
+    entry stage → approved, terminal skill-less stage → queued, every other
+    stage (including unknown vocabularies from variant workflows) →
+    in-progress. Non-stage footer values and the no-workflow case use
+    ``LEGACY_BUCKETS``, with in-progress as the catch-all.
+    """
     if not stage:
         return "approved"
-    return CATEGORY_BUCKETS.get(stage, "in-progress")
+    if workflow is not None:
+        if stage == workflow.entry_stage:
+            return "approved"
+        terminal = workflow.stages[-1]
+        if stage == terminal.name and not terminal.skills:
+            return "queued"
+        if stage in workflow.stage_map:
+            return "in-progress"
+    return LEGACY_BUCKETS.get(stage, "in-progress")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -65,6 +88,15 @@ def main(argv: list[str] | None = None) -> int:
 
     plan_files = sorted(plans_dir.glob("*.md"))
 
+    # Best-effort: a board renderer stays useful even when the workflow file
+    # is unreadable — LEGACY_BUCKETS renders the same board for the software
+    # workflow either way.
+    workflow = None
+    try:
+        workflow = load_workflow(Path.cwd())
+    except WorkflowError:
+        pass
+
     categories: dict[str, list[tuple[str, str]]] = {
         "approved": [],
         "queued": [],
@@ -75,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
 
     for pf in plan_files:
         stage = stage_from_plan(pf)
-        category = category_for_stage(stage)
+        category = category_for_stage(stage, workflow)
         categories[category].append((pf.stem, title_from_plan(pf)))
 
     for category in categories:
