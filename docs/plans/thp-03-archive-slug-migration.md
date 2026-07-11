@@ -47,10 +47,10 @@ docs_sync_reason: telemetry guide gains the migration runbook (one-shot rename c
 
 ## Task List
 
-1. Write `scripts/migrate-telemetry-slugs.py` per Locked design (argparse, dry-run default, containment validation, collision refusal, idempotency) — M (traces: R-3)
-2. Add `tests/test_migrate_telemetry_slugs.py` with the three named tests (below) running the script via `subprocess` against a tmp archive — includes the CLI smoke/exit-code coverage the 2026-07-06 `mine-learnings` learning calls for — S (traces: R-3)
-3. Add the migration runbook to `docs/telemetry-guide.md` (the two commands above + dry-run-first instruction) — S (traces: R-3)
-4. Merge branch to main and verify integration — S
+1. ✓ Write `scripts/migrate-telemetry-slugs.py` per Locked design (argparse, dry-run default, containment validation, collision refusal, idempotency) — M (traces: R-3)
+2. ✓ Add `tests/test_migrate_telemetry_slugs.py` with the three named tests (below) running the script via `subprocess` against a tmp archive — includes the CLI smoke/exit-code coverage the 2026-07-06 `mine-learnings` learning calls for — S (traces: R-3)
+3. ✓ Add the migration runbook to `docs/telemetry-guide.md` (the two commands above + dry-run-first instruction) — S (traces: R-3)
+4. Merge branch to main and verify integration — S [Deferred: to `aet-ship` per the standard pipeline]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -82,5 +82,5 @@ Code: revert the merge commit. Data: the script's dry-run output is the executed
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
