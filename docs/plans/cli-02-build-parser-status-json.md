@@ -71,5 +71,5 @@ Revert the merge commit. The refactor is behavior-preserving and `--json` is add
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: tdd-complete_
+_Next step: run `aet-implement`_

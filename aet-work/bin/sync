@@ -25,7 +25,7 @@ from queue import build_blocks, lease_guard  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Sync docs/plans into the work queue.")
     parser.add_argument(
         "--queue-file",
@@ -52,7 +52,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def main() -> int:
