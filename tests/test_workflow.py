@@ -281,7 +281,3 @@ def _load_orchestrator_module():
 
 if __name__ == "__main__":
     unittest.main()
-
-
-if __name__ == "__main__":
-    unittest.main()
