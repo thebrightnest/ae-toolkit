@@ -28,7 +28,7 @@ class TestCurrentStageFromRecord(unittest.TestCase):
 
         task = {"id": "t1", "stage": "implemented"}
 
-        stage = orchestrator.get_current_stage(task, plan_path)
+        stage = orchestrator.get_current_stage(task, plan_path, "plan-approved")
 
         self.assertEqual(stage, "implemented")
 
@@ -40,7 +40,7 @@ class TestCurrentStageFromRecord(unittest.TestCase):
 
         task = {"id": "t1", "stage": "qa-complete"}
 
-        stage = orchestrator.get_current_stage(task, plan_path)
+        stage = orchestrator.get_current_stage(task, plan_path, "plan-approved")
 
         self.assertEqual(stage, "qa-complete")
 
@@ -52,19 +52,19 @@ class TestCurrentStageFromRecord(unittest.TestCase):
 
         task = {"id": "t1"}
 
-        stage = orchestrator.get_current_stage(task, plan_path)
+        stage = orchestrator.get_current_stage(task, plan_path, "plan-approved")
 
         self.assertEqual(stage, "implemented")
 
-    def test_defaults_to_plan_approved_when_nothing_recorded(self):
-        """When no stage exists anywhere, default to plan-approved."""
+    def test_defaults_to_entry_stage_when_nothing_recorded(self):
+        """With no record and no footer, fall back to the workflow entry stage."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write("# Plan\n")
             plan_path = f.name
 
         task = {"id": "t1"}
 
-        stage = orchestrator.get_current_stage(task, plan_path)
+        stage = orchestrator.get_current_stage(task, plan_path, "plan-approved")
 
         self.assertEqual(stage, "plan-approved")
 

@@ -33,19 +33,18 @@ Entry-point skills enforce symmetric guards to prevent misrouted work:
 
 The `aet-work` orchestrator is the sole conductor of the pipeline. It reads each task's recorded `state` and `stage` from `.agents/work-queue.json`, spawns isolated agent sessions per stage group, and advances plans automatically. The plan footer `*Stage:*` is a human breadcrumb, not a scheduler input.
 
-| Stage             | Meaning                             | Next Step                 |
-| ----------------- | ----------------------------------- | ------------------------- |
-| `plan-draft`      | PRD written, not yet validated      | `aet-validate-scope`      |
-| `prd-approved`    | PRD approved by human               | `aet-validate-scope`      |
-| `scope-validated` | Scope validated, plans approved     | `aet-work run`            |
-| `plan-approved`   | Plan ready for implementation       | `aet-work run`            |
-| `tdd-complete`    | Tests written, failing (RED)        | `aet-implement`           |
-| `implemented`     | Code written, tests passing         | `aet-qa`                  |
-| `qa-complete`     | All tests pass, coverage maintained | `aet-review`              |
-| `reviewed`        | Code review passed                  | `aet-cso` (if applicable) |
-| `secure`          | Security audit passed               | `aet-sync-docs`           |
-| `synced`          | Docs synced to reality              | `aet-ship`                |
-| `merged`          | On `origin/main`                    | None — pipeline complete  |
+The stage sequence, skill bindings, evidence gates, and session grouping are **data, not engine code**. The canonical stage list is the workflow file: a repo-level `.agents/workflows/<name>.json` when present, otherwise the packaged `aet-work/workflows/software.json`; the plan frontmatter key `workflow:` selects the workflow by name (default `software`). A missing or invalid workflow file fails the run loudly at task start — there is no baked-in fallback sequence. The table below mirrors the packaged `software` workflow.
+
+| Stage           | Skills                     | Evidence gate                                                  | Next stage    |
+| --------------- | -------------------------- | -------------------------------------------------------------- | ------------- |
+| `plan-approved` | `aet-tdd`, `aet-implement` | —                                                              | `implemented` |
+| `implemented`   | `aet-qa`                   | passing `qa` verdict                                           | `qa-complete` |
+| `qa-complete`   | `aet-review`               | passing `review` verdict                                       | `reviewed`    |
+| `reviewed`      | `aet-cso`                  | passing `cso` verdict; skipped when `security_review: skipped` | `secure`      |
+| `secure`        | `aet-sync-docs`            | passing `sync-docs` verdict; skipped when `docs_sync: skipped` | `synced`      |
+| `synced`        | — (terminal, skill-less)   | —                                                              | `done`        |
+
+At standard isolation the session groups are `[plan-approved, implemented]` → `[qa-complete]` → `[reviewed, secure]`. `aet-ship` merges after `synced`; `merged` is a queue state (see Legal Transitions), not a stage. The planning footers `plan-draft`, `prd-approved`, and `scope-validated` belong to the PRD pipeline (`aet-plan` / `aet-validate-scope`), upstream of the engine stage machine — they are not workflow stages.
 
 ## Recorded-Forward State
 

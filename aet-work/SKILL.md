@@ -138,11 +138,11 @@ Accepts a plan file path or a task ID. Refuses terminal plans (`merged`, `abando
 
 ### `review`
 
-Scan all `docs/plans/*.md` files and print a human-readable status summary:
+Scan all `docs/plans/*.md` files and print a human-readable status summary. Board columns derive positionally from the loaded workflow — entry stage → approved, terminal skill-less stage → queued, every other stage → in-progress — so variant workflow vocabularies render a sensible board without a per-workflow mapping table; queue states keep fixed columns. For the packaged `software` workflow:
 
-- **Approved:** `plan-approved`
-- **Queued:** `synced`
-- **In Progress:** `tdd-complete`, `implemented`, `qa-complete`, `reviewed`, `secure`, `synced-docs`
+- **Approved:** `plan-approved` (workflow entry stage)
+- **Queued:** `synced` (terminal skill-less stage)
+- **In Progress:** `implemented`, `qa-complete`, `reviewed`, `secure`, and any other non-terminal stage
 - **Awaiting Merge:** `awaiting_merge`
 - **Closed:** `merged`, `abandoned`
 
