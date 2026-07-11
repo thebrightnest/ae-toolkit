@@ -3,7 +3,7 @@ id: rdm-02-rtrace-templates
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: merged
 ---
 
 # Plan: Requirements Tracing — Brief/PRD/Plan Templates and aet-plan Prose
@@ -63,5 +63,5 @@ Revert the merge commit. Templates are additive/structural; no downstream code p
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
