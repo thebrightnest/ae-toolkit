@@ -96,10 +96,10 @@ docs_sync_reason: introduces the workflow-file contract that docs must describe
 
 ## Task List
 
-1. Write `aet-work/workflows/software.json` exactly as locked above — S (traces: R-1, R-2, R-8)
-2. Write `aet-work/lib/workflow.py`: dataclasses, `load_workflow` with resolution order and strict validation, `session_groups(isolation)` reproducing today's minimal/standard/full semantics — M (traces: R-1, R-2, R-3, R-8)
-3. Write `tests/test_workflow.py`: parity against `pipeline.STAGES` (sequence, per-stage skills, verdict kinds via the packaged file, session groups per isolation level), resolution-order override in a tmp repo, one failure test per validation rule, routing exposed on the object, unknown extension keys tolerated — M (traces: R-10, R-8, R-2)
-4. Merge branch to main and verify integration — S
+1. ✓ Write `aet-work/workflows/software.json` exactly as locked above — S (traces: R-1, R-2, R-8)
+2. ✓ Write `aet-work/lib/workflow.py`: dataclasses, `load_workflow` with resolution order and strict validation, `session_groups(isolation)` reproducing today's minimal/standard/full semantics — M (traces: R-1, R-2, R-3, R-8)
+3. ✓ Write `tests/test_workflow.py`: parity against `pipeline.STAGES` (sequence, per-stage skills, verdict kinds via the packaged file, session groups per isolation level), resolution-order override in a tmp repo, one failure test per validation rule, routing exposed on the object, unknown extension keys tolerated — M (traces: R-10, R-8, R-2)
+4. Merge branch to main and verify integration — S [Deferred: merges at closure via aet-ship, as noted in Validation Steps]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -128,5 +128,5 @@ Revert the merge commit — nothing consumes the new module yet; zero blast radi
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-cso`_
+_Stage: synced_
+_Next step: run `aet-ship`_
