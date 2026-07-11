@@ -16,6 +16,18 @@ When `aet-work` runs a task, the orchestrator writes directly to:
     └── ...
 ```
 
+The `{project-slug}` is worktree-based: `<main-worktree-dir>/<worktree-label>`,
+derived from the local checkout rather than the git remote. The primary
+worktree is labelled `main` (for example, `aiskills/main`); a linked worktree
+contributes its own directory name (`.worktrees/aet-panel` →
+`aiskills/aet-panel`). The `AET_PROJECT_ID` / `AET_REPO_SLUG` environment
+variables override the derived slug — use them to merge two clones into one
+project. Outside a git repository the slug falls back to the directory
+basename. Accepted trade-offs of local-path identity: two clones of one repo
+are two separate projects, two unrelated repos with the same directory name
+under different parents merge into one, and moving or renaming the folder
+starts the project fresh.
+
 Each task JSONL file contains:
 
 - one stage record per spawned agent session — start/end timestamps, exit code,
