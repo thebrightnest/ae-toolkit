@@ -83,6 +83,23 @@ None blocking. P-0 execution timing (land panel v1) is decided at the PRD approv
 - Plan identity is the normalized path — a plan renumber (see learning 2026-07-11 on renumbering) splits panel history. Accepted for v1.
 - Parallel worktree merges on shared files — mitigated by the `blocked_by` chains above.
 
+## Divergence Summary
+
+_Recorded: 2026-07-11 — Branch: thp-01-test-telemetry-isolation (scope: thp-01 / R-1 only; R-2…R-6 remain planned)_
+
+### Changed from plan
+
+- Task 1 (isolation fixture): the autouse fixture also patches `telemetry.DEFAULT_ARCHIVE_DIR`, not just the env var — several orchestrator tests run in-process under `patch.dict(os.environ, ..., clear=True)`, which wipes `AET_TELEMETRY_ARCHIVE_DIR`; without the module-level patch those calls fell back to the real archive. Found during QA.
+- Task 2 (guard tests): three tests shipped instead of the planned two — `test_runlogger_stays_isolated_when_env_is_cleared` was added to prove the clear=True escape is closed.
+
+### Added (unplanned)
+
+- None beyond the two changes above (both in-scope hardening of the same R-1 mechanism).
+
+### Deferred
+
+- Task 4 (merge to main): deferred to `aet-ship` per the standard pipeline — no code change.
+
 ---
 
 _Stage: scope-validated_ (owner gate + closure check 2026-07-11)
