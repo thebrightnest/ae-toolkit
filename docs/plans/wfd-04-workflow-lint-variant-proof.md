@@ -63,10 +63,10 @@ docs_sync_reason: adds a make validate step and the variant contract worth docum
 
 ## Validation Steps
 
-- [ ] `make validate` passes — and now includes the workflow lint itself
-- [ ] Named tests per new source file: `aet-work/bin/validate-workflows` → `tests/test_workflow_lint.py` (unit: every failure rule; integration: packaged default green); `tests/fixtures/workflows/content.json` → `tests/test_workflow_variant.py` (integration: load/lint/group/traverse)
-- [ ] Deliberately breaking `aet-work/workflows/software.json` (unknown evidence kind) makes `make validate` exit non-zero; restoring it goes green
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `make validate` passes — and now includes the workflow lint itself
+- [x] Named tests per new source file: `aet-work/bin/validate-workflows` → `tests/test_workflow_lint.py` (unit: every failure rule; integration: packaged default green); `tests/fixtures/workflows/content.json` → `tests/test_workflow_variant.py` (integration: load/lint/group/traverse)
+- [x] Deliberately breaking `aet-work/workflows/software.json` (unknown evidence kind) makes `make validate` exit non-zero; restoring it goes green
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to closure — task 5 merges at ship)
 
 ## Rollback Plan
 
@@ -74,5 +74,5 @@ Revert the merge commit; remove the Makefile line if reverted manually. Lint and
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+_Stage: synced_
+_Next step: run `aet-ship`_
