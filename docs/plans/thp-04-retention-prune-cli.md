@@ -84,5 +84,5 @@ Revert the merge commit — flags and lib function disappear; the guide re-docum
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_

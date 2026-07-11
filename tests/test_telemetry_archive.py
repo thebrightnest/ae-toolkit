@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -169,7 +170,6 @@ class TestPruneArchive(unittest.TestCase):
         os.environ["AET_TELEMETRY_ARCHIVE_DIR"] = str(self.archive_dir)
 
     def tearDown(self):
-        shutil = __import__("shutil")
         shutil.rmtree(self.archive_dir, ignore_errors=True)
         os.environ.pop("AET_TELEMETRY_ARCHIVE_DIR", None)
 
@@ -214,6 +214,24 @@ class TestPruneArchive(unittest.TestCase):
             sorted([str(old_current), str(old_legacy)]),
         )
         self.assertGreater(report["bytes_reclaimed"], 0)
+
+    def test_prune_root_scope_narrows_to_project(self):
+        scoped_current = self._seed_run("proj", "2026-05-01", "old-run", 60)
+        scoped_legacy = self.archive_dir / "proj" / "2026-05-02-legacy-run"
+        scoped_legacy.mkdir(parents=True, exist_ok=True)
+        (scoped_legacy / "t1.jsonl").write_text('{"type":"stage"}\n', encoding="utf-8")
+        self._backdate(scoped_legacy, 60)
+        other = self._seed_run("other-proj", "2026-05-01", "old-run", 60)
+
+        report = telemetry.prune_archive(30, root=self.archive_dir / "proj", force=True)
+
+        self.assertFalse(scoped_current.exists())
+        self.assertFalse(scoped_legacy.exists())
+        self.assertTrue(other.exists())
+        self.assertEqual(
+            sorted(report["deleted"]),
+            sorted([str(scoped_current), str(scoped_legacy)]),
+        )
 
     def test_prune_skips_leased_run(self):
         leased = self._seed_run("proj", "2026-05-01", "leased-run", 60)
