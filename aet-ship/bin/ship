@@ -52,7 +52,7 @@ def cmd_ship(args):
     return aet_state.cmd_record_merge(ns)
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Close a task after merge verification."
     )
@@ -77,7 +77,11 @@ def main():
         action="store_true",
         help="Show what would be done without making changes.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
     return cmd_ship(args)
 
 

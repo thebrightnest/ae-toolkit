@@ -335,8 +335,7 @@ def propose_edits(patterns: dict[str, Any]) -> str:
     return "\n".join(["## Proposed Skill Edits", ""] + suggestions) + "\n"
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point."""
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Scan archived telemetry for recurring patterns."
     )
@@ -351,7 +350,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Print suggested skill edits (never writes files).",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point."""
+    args = build_parser().parse_args(argv)
 
     archive_dir = (
         args.archive_dir

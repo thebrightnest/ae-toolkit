@@ -22,7 +22,7 @@ sys.path.insert(0, str(_LIB_DIR))
 import telemetry  # noqa: E402
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Print execution telemetry summary.",
     )
@@ -58,7 +58,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Actually delete prune candidates (default is a dry run)",
     )
-    return parser.parse_args()
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def _leased_run_id() -> str | None:

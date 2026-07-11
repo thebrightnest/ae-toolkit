@@ -22,7 +22,7 @@ from backends.factory import create_backend  # noqa: E402
 from plan_parser import new_task_from_plan, stage_from_plan  # noqa: E402
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Add a plan to the work queue as planned."
     )
@@ -55,7 +55,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     )
-    return parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def resolve_plan(target: str, plans_dir: Path) -> Path | None:
