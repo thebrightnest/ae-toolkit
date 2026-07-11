@@ -50,6 +50,7 @@ class TestAetSpecTable(unittest.TestCase):
             "retro",
             "mine-learnings",
             "configure-backend",
+            "install",
         }
         self.assertEqual(set(aet.SUBCOMMANDS), expected)
 
@@ -58,7 +59,7 @@ class TestAetSpecTable(unittest.TestCase):
         for name, spec in aet.SUBCOMMANDS.items():
             with self.subTest(name=name):
                 skill_dir, bin_name = spec["target"]
-                self.assertIn(spec["mode"], ("exec", "run", "run-one"))
+                self.assertIn(spec["mode"], ("exec", "run", "run-one", "internal"))
                 self.assertTrue(skill_dir)
                 self.assertTrue(bin_name)
 
