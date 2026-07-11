@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 import telemetry
 
@@ -219,6 +221,68 @@ class TestReport(unittest.TestCase):
             self.assertIn("Environment issues: 1", output)
         finally:
             os.unlink(log_path)
+
+
+class TestDeriveProjectSlug(unittest.TestCase):
+    """Worktree-based slug: ``<main-worktree-dir>/<worktree-label>``."""
+
+    def setUp(self):
+        self._env = mock.patch.dict(
+            os.environ,
+            {"AET_PROJECT_ID": "", "AET_REPO_SLUG": "", "AET_REPO_ROOT": ""},
+        )
+        self._env.start()
+        self.addCleanup(self._env.stop)
+
+    def _git(self, *args, cwd):
+        result = subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                "user.name=test",
+                *args,
+            ],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result
+
+    def _init_repo(self, path):
+        os.makedirs(path)
+        self._git("init", cwd=path)
+        self._git("commit", "--allow-empty", "-m", "init", cwd=path)
+
+    def test_primary_worktree_slug(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "foo")
+            self._init_repo(repo)
+            self.assertEqual(telemetry.derive_project_slug(repo), "foo/main")
+
+    def test_linked_worktree_slug(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "foo")
+            self._init_repo(repo)
+            worktree = os.path.join(repo, ".worktrees", "bar")
+            self._git("worktree", "add", worktree, cwd=repo)
+            self.assertEqual(telemetry.derive_project_slug(worktree), "foo/bar")
+
+    def test_env_override_wins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = os.path.join(tmp, "foo")
+            self._init_repo(repo)
+            with mock.patch.dict(os.environ, {"AET_PROJECT_ID": "x/y"}):
+                self.assertEqual(telemetry.derive_project_slug(repo), "x/y")
+
+    def test_non_git_dir_falls_back_to_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plain = os.path.join(tmp, "plain-dir")
+            os.makedirs(plain)
+            self.assertEqual(telemetry.derive_project_slug(plain), "plain-dir")
 
 
 if __name__ == "__main__":
