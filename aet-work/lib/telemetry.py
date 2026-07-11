@@ -355,12 +355,13 @@ def _iter_project_run_dirs(project_dir: Path):
     """Yield ``(run_dir, date_segment, run_id)`` within one project subtree.
 
     Current layout: ``{date}/{run-id}/``; legacy layout: ``{date}-{run-id}/``.
-    Non-matching directories are skipped.
+    Non-matching directories and symlinks are skipped — a symlinked dir must
+    never become a recursive-deletion target.
     """
     if not project_dir.is_dir():
         return
     for child in sorted(project_dir.iterdir()):
-        if not child.is_dir():
+        if child.is_symlink() or not child.is_dir():
             continue
         legacy = _LEGACY_RUN_DIR_RE.match(child.name)
         if legacy:
@@ -368,7 +369,7 @@ def _iter_project_run_dirs(project_dir: Path):
             continue
         if _parse_date_segment(child.name) is None:
             continue
-        for run_dir in sorted(p for p in child.iterdir() if p.is_dir()):
+        for run_dir in sorted(p for p in child.iterdir() if p.is_dir() and not p.is_symlink()):
             yield run_dir, child.name, run_dir.name
 
 
@@ -432,14 +433,21 @@ def prune_archive(
     (the wfd-03 incident class). Runs in ``protected_run_ids`` (lease holder,
     ``AET_RUN_ID``) are never deleted. ``force=False`` (default) deletes
     nothing and only reports. ``root`` narrows the walk to a single project
-    subtree (``{archive}/{project}``). Returns a dict with ``candidates``,
-    ``deleted``, ``kept_protected``, and ``bytes_reclaimed``.
+    subtree (``{archive}/{project}``) and must resolve inside the archive
+    root — anything else raises ``ValueError``, since prune performs
+    recursive deletion and must never escape the archive. Returns a dict
+    with ``candidates``, ``deleted``, ``kept_protected``, and
+    ``bytes_reclaimed``.
     """
     protected = frozenset(protected_run_ids or ())
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     cutoff_ts = cutoff.timestamp()
     if root is not None:
         scope = Path(root).expanduser()
+        resolved = scope.resolve()
+        archive_root = archive_dir().resolve()
+        if not (resolved == archive_root or resolved.is_relative_to(archive_root)):
+            raise ValueError(f"prune root escapes the telemetry archive: {scope}")
         run_dirs = _iter_project_run_dirs(scope)
     else:
         scope = archive_dir()

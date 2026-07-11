@@ -281,6 +281,32 @@ class TestPruneArchive(unittest.TestCase):
         telemetry.prune_archive(30)
         self.assertTrue(stale_again.exists())
 
+    def test_prune_root_outside_archive_rejected(self):
+        outside = Path(tempfile.mkdtemp(prefix="aet-prune-outside-"))
+        try:
+            with self.assertRaises(ValueError):
+                telemetry.prune_archive(30, root=outside, force=True)
+            with self.assertRaises(ValueError):
+                telemetry.prune_archive(30, root=self.archive_dir / ".." / "..", force=True)
+        finally:
+            shutil.rmtree(outside, ignore_errors=True)
+
+    def test_prune_skips_symlinked_run_dirs(self):
+        target = Path(tempfile.mkdtemp(prefix="aet-prune-link-target-"))
+        try:
+            link = self.archive_dir / "proj" / "2026-05-01" / "linked-run"
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(target)
+            self._backdate(link.parent, 60)
+
+            report = telemetry.prune_archive(30, force=True)
+
+            self.assertTrue(target.exists())
+            self.assertTrue(link.exists())
+            self.assertEqual(report["deleted"], [])
+        finally:
+            shutil.rmtree(target, ignore_errors=True)
+
     def test_report_prune_cli_dry_run_smoke(self):
         old = self._seed_run("proj", "2026-05-01", "old-run", 60)
         report_bin = Path(__file__).parent.parent / "aet-work" / "bin" / "report"
