@@ -5,10 +5,19 @@ blocked_by:
   - [blocker-plan-id]
 pipeline: standard
 status: draft
+security_review: required
+security_review_reason: [one line]
+docs_sync: required
+docs_sync_reason: [one line]
 ---
 
 <!-- `status` is the plan lifecycle value (CONTEXT.md): one of `draft`,
 `approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, `abandoned`. -->
+
+<!-- `security_review` / `docs_sync` route the aet-cso and aet-sync-docs
+pipeline gates at plan time: `required` (default) runs the stage; `skipped`
+skips it and must be paired with the one-line reason above. A missing key is
+treated as `required` (fail-safe — the stage runs). -->
 
 # Plan: [Feature Name]
 
