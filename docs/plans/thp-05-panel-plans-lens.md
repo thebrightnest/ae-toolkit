@@ -3,7 +3,7 @@ id: thp-05-panel-plans-lens
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: client-side React rendering of local telemetry inside the existing panel; no server/endpoint changes, no new network surface, React auto-escaping throughout
 docs_sync: required
@@ -79,5 +79,5 @@ Revert the merge commit — `index.html` returns to the runs-only panel; no data
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
