@@ -17,7 +17,14 @@ def _isolate_telemetry_archive(monkeypatch, tmp_path):
     subprocess, so one autouse fixture keeps all spawn sites out of the real
     ``~/.aet/telemetry``. Tests that need an explicit archive override this by
     setting ``AET_TELEMETRY_ARCHIVE_DIR`` themselves.
+
+    ``DEFAULT_ARCHIVE_DIR`` is patched as well: several tests run orchestrator
+    code in-process under ``patch.dict(os.environ, ..., clear=True)``, which
+    wipes the env var; without the module-level patch those calls fall back to
+    the real archive.
     """
-    monkeypatch.setenv(
-        "AET_TELEMETRY_ARCHIVE_DIR", str(tmp_path / "telemetry-archive")
-    )
+    import telemetry
+
+    archive = tmp_path / "telemetry-archive"
+    monkeypatch.setenv("AET_TELEMETRY_ARCHIVE_DIR", str(archive))
+    monkeypatch.setattr(telemetry, "DEFAULT_ARCHIVE_DIR", archive)

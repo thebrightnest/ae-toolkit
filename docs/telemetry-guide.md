@@ -129,8 +129,9 @@ and environment issues.
 
 The toolkit's pytest suite spawns the real orchestrator, but it never writes to
 your real archive: an autouse fixture in `tests/conftest.py` points
-`AET_TELEMETRY_ARCHIVE_DIR` at a per-test tmp dir, and every subprocess spawn
-inherits it. A test opts out only by setting `AET_TELEMETRY_ARCHIVE_DIR`
+`AET_TELEMETRY_ARCHIVE_DIR` (and the `DEFAULT_ARCHIVE_DIR` fallback, for tests
+that wipe `os.environ` in-process) at a per-test tmp dir, and every subprocess
+spawn inherits it. A test opts out only by setting `AET_TELEMETRY_ARCHIVE_DIR`
 explicitly itself.
 
 ## Privacy and retention
