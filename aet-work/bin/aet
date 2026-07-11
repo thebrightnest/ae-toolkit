@@ -6,6 +6,14 @@ Maps ``aet <subcommand>`` to the underlying skill binaries via exec-based
 spec is the shared source of truth: the dispatcher executes it and tooling
 (e.g. skills-lint) validates against it, so new subcommands are one-row
 additions.
+
+Two pieces of PATH ownership live in this file itself (R-5, R-11):
+
+- ``aet install`` — links ``<bin-dir>/aet`` at the resolved running script,
+  with an opt-in ``--prune`` of the seven legacy AET symlink names.
+- ``_ensure_path_link()`` — on every other invocation, silently creates or
+  repairs the ``aet`` symlink so toolkit updates never require re-running
+  an installer.
 """
 
 from __future__ import annotations
@@ -16,7 +24,8 @@ from pathlib import Path
 
 # Subcommand spec: name -> {"target": ("<skill-dir>", "<bin-name>"), "mode": ...}
 # mode "exec" forwards argv verbatim; "run"/"run-one" carry the documented
-# orchestrator flag mapping from the frh-05 aet-work dispatcher.
+# orchestrator flag mapping from the frh-05 aet-work dispatcher. "internal"
+# is handled inside this file — `install` is the one such subcommand (R-1).
 SUBCOMMANDS = {
     "add": {"target": ("aet-work", "add"), "mode": "exec"},
     "review": {"target": ("aet-work", "review"), "mode": "exec"},
@@ -35,11 +44,51 @@ SUBCOMMANDS = {
         "target": ("aet-setup", "configure-task-backend"),
         "mode": "exec",
     },
+    "install": {"target": ("aet-work", "aet"), "mode": "internal"},
 }
+
+# The seven legacy PATH names `aet install --prune` removes (R-5). Pruning
+# only ever removes symlinks that resolve into a skills directory.
+LEGACY_NAMES = (
+    "aet-work",
+    "aet-state",
+    "aet-retro",
+    "orchestrator",
+    "mine-learnings",
+    "configure-task-backend",
+    "install-aet-binaries",
+)
+
+# Directories (relative to $HOME) the standalone installer searches for
+# skills; the prune guard uses the same roots so foreign links are safe.
+_SKILL_ROOT_CANDIDATES = (
+    ".claude/skills",
+    ".kimi/skills",
+    ".cursor/skills",
+    ".codex/skills",
+    ".windsurf/skills",
+    ".kilocode/skills",
+    ".agents/skills",
+)
+
+
+def _running_script() -> Path:
+    """Return the resolved path of this running copy (invoked copy wins)."""
+    return Path(__file__).resolve()
+
+
+def _bin_dir() -> Path:
+    """Return the link target dir: ``AET_BIN_DIR`` or ``~/.local/bin``."""
+    override = os.environ.get("AET_BIN_DIR")
+    return Path(override) if override else Path.home() / ".local" / "bin"
 
 
 def _skills_root() -> Path:
-    """Return the installed-skills root (resolved script path, up three)."""
+    """Return the installed-skills root (AET_SKILLS_DIR override, else
+    resolved script path, up three)."""
+    override = os.environ.get("AET_SKILLS_DIR")
+    if override:
+        return Path(override)
     return Path(__file__).resolve().parent.parent.parent
 
 
@@ -105,6 +154,125 @@ def _exec(binary: Path, argv: list[str]) -> int:
         return exc.code if isinstance(exc.code, int) else 0
 
 
+def _link_target_resolves_to(link: Path, script: Path) -> bool:
+    """True when ``link`` is a symlink already pointing at ``script``."""
+    target = Path(os.readlink(link))
+    if not target.is_absolute():
+        target = link.parent / target
+    return target.resolve() == script
+
+
+def _skill_roots() -> list[Path]:
+    """Candidate skills directories for the prune guard (installer parity)."""
+    home = Path.home()
+    roots = [home / rel for rel in _SKILL_ROOT_CANDIDATES]
+    roots.append(_skills_root())
+    return roots
+
+
+def _points_into_skill_dir(link: Path) -> bool:
+    """True when ``link`` is a symlink resolving into a skills directory."""
+    if not link.is_symlink():
+        return False
+    try:
+        target = Path(os.readlink(link))
+    except OSError:
+        return False
+    if not target.is_absolute():
+        target = link.parent / target
+    target = target.resolve()
+    for root in _skill_roots():
+        resolved = root.resolve()
+        if target == resolved or resolved in target.parents:
+            return True
+    return False
+
+
+def _prune_legacy(bin_dir: Path) -> None:
+    """Remove the seven legacy AET symlinks from ``bin_dir`` (R-5)."""
+    for name in LEGACY_NAMES:
+        link = bin_dir / name
+        if _points_into_skill_dir(link):
+            link.unlink()
+            print(f"  ✗ {name} (pruned legacy AET symlink)")
+
+
+def _install(argv: list[str]) -> int:
+    """``aet install``: link ``aet`` into the bin dir; opt-in legacy prune."""
+    bin_dir: Path | None = None
+    prune = False
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--bin-dir":
+            if i + 1 >= len(argv):
+                print("error: --bin-dir requires a value", file=sys.stderr)
+                return 2
+            bin_dir = Path(argv[i + 1])
+            i += 2
+        elif arg == "--prune":
+            prune = True
+            i += 1
+        else:
+            print(f"error: unknown flag {arg}", file=sys.stderr)
+            return 2
+
+    if bin_dir is None:
+        bin_dir = _bin_dir()
+    bin_dir.mkdir(parents=True, exist_ok=True)
+
+    script = _running_script()
+    link = bin_dir / "aet"
+    if link.is_symlink():
+        if _link_target_resolves_to(link, script):
+            print(f"  = aet already linked -> {script}")
+        else:
+            link.unlink()
+            link.symlink_to(script)
+            print(f"  ✓ aet -> {script} (updated stale symlink)")
+    elif link.exists():
+        print(
+            f"  ⚠ aet exists in {bin_dir} and is not a symlink. Skipping.",
+            file=sys.stderr,
+        )
+    else:
+        link.symlink_to(script)
+        print(f"  ✓ aet -> {script}")
+
+    if prune:
+        _prune_legacy(bin_dir)
+
+    if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
+        print(f"\n⚠ {bin_dir} is not on your PATH. Add it to your shell profile:")
+        print(f'    export PATH="{bin_dir}:$PATH"')
+    return 0
+
+
+def _ensure_path_link() -> None:
+    """Silently create or repair the AET-managed ``aet`` symlink (R-11).
+
+    One readlink per invocation; best-effort and never fatal. Only the
+    ``aet`` symlink in the bin dir is ever touched — a non-symlink
+    collision is left alone, and shell profiles are never edited. Skipped
+    on ``install`` itself, which reports verbosely.
+    """
+    try:
+        bin_dir = _bin_dir()
+        link = bin_dir / "aet"
+        script = _running_script()
+        if link.is_symlink():
+            if _link_target_resolves_to(link, script):
+                return
+            link.unlink()
+        elif link.exists():
+            return  # non-symlink collision — never touch foreign files
+        else:
+            bin_dir.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(script)
+    except OSError:
+        pass
+
+
 def main() -> int:
     """Dispatch ``aet <subcommand>`` to the target skill binary."""
     argv = sys.argv
@@ -119,8 +287,12 @@ def main() -> int:
         print(_usage(), file=sys.stderr)
         return 2
 
-    binary = _resolve_target(spec)
     mode = spec["mode"]
+    if mode == "internal":
+        return _install(argv[2:])
+
+    _ensure_path_link()
+    binary = _resolve_target(spec)
     _, bin_name = spec["target"]
 
     if mode == "exec":
