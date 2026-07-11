@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
-import pipeline  # noqa: E402
+import workflow as workflow_module  # noqa: E402
 from workflow import WorkflowError, load_workflow  # noqa: E402
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -45,11 +45,11 @@ class TestPackagedDefault(unittest.TestCase):
         wf = load_workflow(REPO_ROOT)
         self.assertEqual(wf.entry_stage, "plan-approved")
 
-    def test_stage_sequence_matches_pipeline(self):
+    def test_stage_sequence_is_the_software_pipeline(self):
         wf = load_workflow(REPO_ROOT)
         self.assertEqual(
             [s.name for s in wf.stages],
-            [s.name for s in pipeline.STAGES],
+            ["plan-approved", "implemented", "qa-complete", "reviewed", "secure", "synced"],
         )
 
 
@@ -230,53 +230,78 @@ class TestExtensionKeys(WorkflowFileTestCase):
         self.assertEqual(wf.routing.extra["fallback"], {"harness": "gemini"})
 
 
-class TestPipelineParity(unittest.TestCase):
-    """The packaged default must exactly reproduce pipeline.py's table."""
+class TestPackagedBaseline(unittest.TestCase):
+    """Literal baseline pins for the packaged software workflow.
+
+    Migrated from the pipeline.py parity assertions (wfd-03): with the table
+    deleted, the packaged file is its own baseline — sequence, skills,
+    evidence, gate keys, and session groups stated literally here.
+    """
+
+    # (name, skills, evidence, gate_key) — one row per stage, in list order.
+    EXPECTED_STAGES = [
+        ("plan-approved", ["aet-tdd", "aet-implement"], None, None),
+        ("implemented", ["aet-qa"], "qa", None),
+        ("qa-complete", ["aet-review"], "review", None),
+        ("reviewed", ["aet-cso"], "cso", "security_review"),
+        ("secure", ["aet-sync-docs"], "sync-docs", "docs_sync"),
+        ("synced", [], None, None),
+    ]
 
     def setUp(self):
         self.wf = load_workflow(REPO_ROOT)
 
-    def test_stage_sequence_and_skills_match(self):
+    def test_sequence_skills_evidence_and_gate_keys(self):
         self.assertEqual(
-            [(s.name, s.skills) for s in self.wf.stages],
-            [(s.name, s.skills) for s in pipeline.STAGES],
+            [(s.name, s.skills, s.evidence, s.gate_key) for s in self.wf.stages],
+            [tuple(row) for row in self.EXPECTED_STAGES],
         )
 
-    def test_evidence_kinds_match_orchestrator_verdict_map(self):
-        orchestrator = _load_orchestrator_module()
-        for wf_stage, pipeline_stage in zip(self.wf.stages, pipeline.STAGES):
-            self.assertEqual(
-                wf_stage.evidence,
-                orchestrator.verdict_kind_for_stage(pipeline_stage),
-                f"evidence kind mismatch at stage {wf_stage.name!r}",
-            )
+    def test_stage_map_membership(self):
+        for name, *_ in self.EXPECTED_STAGES:
+            self.assertIn(name, self.wf.stage_map)
 
-    def test_done_state_matches_pipeline_terminal(self):
-        self.assertEqual(self.wf.done_state, pipeline.STAGES[-1].next_stage)
+    def test_entry_stage_and_done_state(self):
+        self.assertEqual(self.wf.entry_stage, "plan-approved")
+        self.assertEqual(self.wf.done_state, "done")
 
-    def test_session_groups_match_pipeline_per_isolation(self):
-        for isolation in ("minimal", "standard", "full"):
-            self.assertEqual(
-                [[s.name for s in group] for group in self.wf.session_groups(isolation)],
-                [[s.name for s in group] for group in pipeline.group_stages_by_session(isolation)],
-                f"session groups differ at isolation {isolation!r}",
-            )
+    def test_terminal_advancement_to_done_state(self):
+        self.assertEqual(self.wf.next_stage("synced"), "done")
+        self.assertIsNone(self.wf.next_stage("done"))
 
-    def test_entry_stage_matches_pipeline(self):
-        self.assertEqual(self.wf.entry_stage, pipeline.STAGES[0].name)
+    def test_next_stage_chain(self):
+        names = [name for name, *_ in self.EXPECTED_STAGES]
+        for current, expected in zip(names, names[1:]):
+            self.assertEqual(self.wf.next_stage(current), expected)
 
+    def _names(self, groups):
+        return [[s.name for s in group] for group in groups]
 
-def _load_orchestrator_module():
-    """Load aet-work/bin/orchestrator (no .py extension) as a module."""
-    import importlib.machinery
-    import importlib.util
+    def test_session_groups_standard(self):
+        self.assertEqual(
+            self._names(self.wf.session_groups("standard")),
+            [["plan-approved", "implemented"], ["qa-complete"], ["reviewed", "secure"]],
+        )
 
-    orchestrator_bin = REPO_ROOT / "aet-work" / "bin" / "orchestrator"
-    loader = importlib.machinery.SourceFileLoader("orchestrator", str(orchestrator_bin))
-    spec = importlib.util.spec_from_loader("orchestrator", loader)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    def test_session_groups_minimal(self):
+        self.assertEqual(
+            self._names(self.wf.session_groups("minimal")),
+            [["plan-approved", "implemented", "qa-complete", "reviewed", "secure"]],
+        )
+
+    def test_session_groups_full(self):
+        self.assertEqual(
+            self._names(self.wf.session_groups("full")),
+            [["plan-approved"], ["implemented"], ["qa-complete"], ["reviewed"], ["secure"]],
+        )
+
+    def test_no_runtime_judgment_left_in_the_engine(self):
+        # Routing is data: stages carry no conditionals and the module keeps
+        # no heuristic helpers (guard migrated from tests/test_pipeline.py).
+        for stage in self.wf.stages:
+            self.assertFalse(hasattr(stage, "conditional"))
+        self.assertFalse(hasattr(workflow_module, "_security_sensitive"))
+        self.assertFalse(hasattr(workflow_module, "_divergences_found"))
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 import evidence
 import telemetry
 from cli_adapter import CLIAdapter, resolve_cli_adapter
-from pipeline import Stage
+from workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
@@ -1009,12 +1009,36 @@ class TestRunSummaryTelemetry(unittest.TestCase):
 
 
 class TestRunStageGroup(unittest.TestCase):
+    def _workflow(self) -> Workflow:
+        """A three-stage workflow: plan-approved → implemented → qa-complete."""
+        stages = [
+            WorkflowStage(
+                name="plan-approved",
+                skills=["aet-tdd", "aet-implement"],
+                evidence=None,
+                gate_key=None,
+            ),
+            WorkflowStage(name="implemented", skills=["aet-qa"], evidence="qa", gate_key=None),
+            WorkflowStage(
+                name="qa-complete", skills=["aet-review"], evidence="review", gate_key=None
+            ),
+        ]
+        return Workflow(
+            version=1,
+            name="test",
+            done_state="done",
+            stages=stages,
+            stage_map={s.name: s for s in stages},
+            execution_policy=ExecutionPolicy(
+                session_groups=[["plan-approved", "implemented", "qa-complete"]]
+            ),
+            routing=Routing(default={"harness": "test", "model": None}, by_stage={}),
+        )
+
     def test_builds_compound_prompt_for_multiple_stages(self):
         """run_stage_group builds a prompt containing every stage in the group."""
-        stages = [
-            Stage(name="plan-approved", skills=["aet-tdd", "aet-implement"], next_stage="implemented"),
-            Stage(name="implemented", skills=["aet-qa"], next_stage="qa-complete"),
-        ]
+        workflow = self._workflow()
+        stages = workflow.stages[:2]
         plan_file = "/work/docs/plans/demo.md"
         adapter = CLIAdapter(
             name="test",
@@ -1032,7 +1056,7 @@ class TestRunStageGroup(unittest.TestCase):
 
         with patch.object(orchestrator.subprocess, "run", side_effect=fake_run):
             orchestrator.run_stage_group(
-                adapter, "/repo", plan_file, "/work", stages
+                adapter, "/repo", plan_file, "/work", stages, workflow=workflow
             )
 
         # cmd == ["echo", "-p", prompt]
@@ -1049,9 +1073,8 @@ class TestRunStageGroup(unittest.TestCase):
 
     def test_returns_adapter_exit_code(self):
         """run_stage_group returns the adapter subprocess exit code."""
-        stages = [
-            Stage(name="plan-approved", skills=["aet-tdd", "aet-implement"], next_stage="implemented"),
-        ]
+        workflow = self._workflow()
+        stages = workflow.stages[:1]
         adapter = CLIAdapter(
             name="test",
             bin="echo",
@@ -1062,7 +1085,7 @@ class TestRunStageGroup(unittest.TestCase):
 
         with patch.object(orchestrator.subprocess, "run", return_value=subprocess.CompletedProcess(["false"], 1)):
             result = orchestrator.run_stage_group(
-                adapter, "/repo", "/work/plan.md", "/work", stages
+                adapter, "/repo", "/work/plan.md", "/work", stages, workflow=workflow
             )
         self.assertEqual(result, 1)
 
@@ -1070,11 +1093,11 @@ class TestRunStageGroup(unittest.TestCase):
 class TestStageEnabled(unittest.TestCase):
     """stage_enabled resolves a stage's gate_key against plan frontmatter."""
 
-    def _gated(self, gate_key: str = "security_review") -> Stage:
-        return Stage(name="gated", skills=["aet-cso"], next_stage="next", gate_key=gate_key)
+    def _gated(self, gate_key: str = "security_review") -> WorkflowStage:
+        return WorkflowStage(name="gated", skills=["aet-cso"], evidence="cso", gate_key=gate_key)
 
     def test_stage_without_gate_key_always_runs(self):
-        stage = Stage(name="plain", skills=[], next_stage="next")
+        stage = WorkflowStage(name="plain", skills=[], evidence=None, gate_key=None)
         self.assertTrue(orchestrator.stage_enabled(stage, {}))
 
     def test_gated_stage_skips_when_frontmatter_marks_skipped(self):
@@ -1452,6 +1475,188 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                 )
 
             self.assertFalse(result)
+
+
+class TestWorkflowDrivenTraversal(unittest.TestCase):
+    """process_task walks the stage sequence declared in the workflow file.
+
+    wfd-03: the engine's source of truth is ``workflow.load_workflow()``, not
+    the deleted ``pipeline.py`` table. The packaged ``software.json`` must
+    reproduce today's walk exactly; variant vocabularies must traverse by
+    data alone.
+    """
+
+    def _setup_repo(self, repo_root: str, plan_body: str) -> str:
+        _init_git_repo(repo_root)
+        plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+        Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+        Path(plan_file).write_text(plan_body, encoding="utf-8")
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+        return plan_file
+
+    def _write_workflow(self, repo_root: str, document: dict, name: str = "variant") -> None:
+        workflow_dir = Path(repo_root, ".agents", "workflows")
+        workflow_dir.mkdir(parents=True, exist_ok=True)
+        Path(workflow_dir, f"{name}.json").write_text(
+            json.dumps(document), encoding="utf-8"
+        )
+
+    def _run(self, task, repo_root, reports_dir, archive_dir):
+        env = _gate_env(reports_dir, archive_dir)
+        with patch.dict(os.environ, env, clear=False):
+            with patch.object(
+                orchestrator, "run_stage_group", return_value=0
+            ) as mock_group:
+                with patch.object(
+                    orchestrator, "run_stage", return_value=0
+                ) as mock_stage:
+                    with patch.object(
+                        orchestrator,
+                        "verify_branch_has_commits",
+                        return_value=(True, ""),
+                    ):
+                        with patch.object(
+                            orchestrator,
+                            "verify_stage_advancement",
+                            return_value=(True, ""),
+                        ):
+                            buf = io.StringIO()
+                            with contextlib.redirect_stdout(buf):
+                                result = orchestrator.process_task(
+                                    task, repo_root, _FAKE_ADAPTER, "standard"
+                                )
+        return result, mock_group, mock_stage, buf.getvalue()
+
+    def test_full_traversal_from_packaged_file_matches_todays_walk(self):
+        """The packaged software.json reproduces the pre-rewiring stage walk."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo(
+                repo_root,
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: plan-approved_\n",
+            )
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as reports_dir:
+                _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    result, mock_group, mock_stage, _out = self._run(
+                        task, repo_root, reports_dir, archive_dir
+                    )
+
+        self.assertTrue(result)
+        # Groups 1 and 3 run as compound sessions; qa-complete runs solo.
+        self.assertEqual(mock_group.call_count, 2)
+        span1 = [s.name for s in mock_group.call_args_list[0][0][4]]
+        span3 = [s.name for s in mock_group.call_args_list[1][0][4]]
+        self.assertEqual(span1, ["plan-approved", "implemented"])
+        self.assertEqual(span3, ["reviewed", "secure"])
+        mock_stage.assert_called_once()
+        stage_args = mock_stage.call_args
+        self.assertEqual(stage_args[0][4], ["aet-review"])
+        self.assertEqual(stage_args[0][5], "qa-complete")
+        self.assertEqual(stage_args[0][6], "reviewed")
+        # The verdict kind is read from the stage's evidence binding.
+        self.assertEqual(stage_args.kwargs["verdict_kind"], "review")
+        self.assertEqual(task.get("stage"), "synced")
+
+    def test_entry_stage_comes_from_workflow_data(self):
+        """A plan with no stage breadcrumbs starts at the workflow's entry stage."""
+        variant = {
+            "version": 1,
+            "name": "variant",
+            "done_state": "done",
+            "stages": [
+                {"name": "scoped", "skills": ["aet-implement"], "evidence": None, "gate_key": None},
+                {"name": "wrapped", "skills": [], "evidence": None, "gate_key": None},
+            ],
+            "execution_policy": {"session_groups": [["scoped"]]},
+            "routing": {"default": {"harness": "test", "model": None}, "by_stage": {}},
+        }
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo(
+                repo_root,
+                "---\nid: demo\nworkflow: variant\n---\n\n# Demo\n",
+            )
+            self._write_workflow(repo_root, variant)
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    result, mock_group, mock_stage, _out = self._run(
+                        task, repo_root, reports_dir, archive_dir
+                    )
+
+        self.assertTrue(result)
+        mock_group.assert_not_called()
+        mock_stage.assert_called_once()
+        stage_args = mock_stage.call_args
+        self.assertEqual(stage_args[0][4], ["aet-implement"])
+        # Entry stage resolved from the workflow file, not a "plan-approved" literal.
+        self.assertEqual(stage_args[0][5], "scoped")
+        self.assertEqual(stage_args[0][6], "wrapped")
+        self.assertIsNone(stage_args.kwargs["verdict_kind"])
+
+    def test_verdict_gate_follows_stage_evidence_not_skill_name(self):
+        """An aet-qa-skilled stage with ``evidence: null`` requires no verdict.
+
+        The old skill→verdict map would have failed closed here; the binding
+        now lives in the workflow file.
+        """
+        variant = {
+            "version": 1,
+            "name": "variant",
+            "done_state": "done",
+            "stages": [
+                {"name": "scoped", "skills": ["aet-qa"], "evidence": None, "gate_key": None},
+                {"name": "wrapped", "skills": [], "evidence": None, "gate_key": None},
+            ],
+            "execution_policy": {"session_groups": [["scoped"]]},
+            "routing": {"default": {"harness": "test", "model": None}, "by_stage": {}},
+        }
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo(
+                repo_root,
+                "---\nid: demo\nworkflow: variant\n---\n\n# Demo\n",
+            )
+            self._write_workflow(repo_root, variant)
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            # Deliberately no verdicts written anywhere.
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    result, _mock_group, mock_stage, _out = self._run(
+                        task, repo_root, reports_dir, archive_dir
+                    )
+
+        self.assertTrue(result)
+        mock_stage.assert_called_once()
+
+    def test_broken_repo_workflow_file_fails_loudly(self):
+        """An unreadable repo-level workflow file fails the run at task start."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo(
+                repo_root,
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: plan-approved_\n",
+            )
+            workflow_dir = Path(repo_root, ".agents", "workflows")
+            workflow_dir.mkdir(parents=True, exist_ok=True)
+            Path(workflow_dir, "software.json").write_text("{not json", encoding="utf-8")
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    result, mock_group, mock_stage, out = self._run(
+                        task, repo_root, reports_dir, archive_dir
+                    )
+
+        self.assertFalse(result)
+        mock_group.assert_not_called()
+        mock_stage.assert_not_called()
+        self.assertIn("Cannot read workflow", out)
 
 
 class TestProcessTaskCompletionGuards(unittest.TestCase):
