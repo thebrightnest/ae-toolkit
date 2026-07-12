@@ -53,7 +53,7 @@ def report_plan_drift(backend, plans_dir: Path) -> None:
         print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")
         for pf in orphaned:
             print(f"  - {pf}")
-        print("Run init-queue to sync if you want these plans tracked.")
+        print("Run `aet init-queue` to sync if you want these plans tracked.")
 
 
 def topological_sort(tasks: list[dict]) -> list[dict]:

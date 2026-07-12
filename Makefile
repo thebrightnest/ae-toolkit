@@ -23,10 +23,10 @@ install-skills: ## Symlink all skills from this repo to ~/.agents/skills/ and pu
 			fi; \
 		fi; \
 	done
-	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-setup/bin/install-aet-binaries
+	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-work/bin/aet install
 
 install-binaries: ## Symlink skill binaries from installed skill dirs onto PATH
-	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-setup/bin/install-aet-binaries
+	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-work/bin/aet install
 
 add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 	@if [ -z "$(NAME)" ]; then \
@@ -78,7 +78,7 @@ validate: ## Run all quality checks (lint + format-check + lint-py + test + work
 	@$(MAKE) lint-py
 	@$(MAKE) test
 	@./aet-work/bin/validate-workflows
-	@./scripts/skills-lint --legacy=warn
+	@./scripts/skills-lint --legacy=error
 	@./scripts/validate-skills.sh
 	@echo "✓ All validation checks passed"
 

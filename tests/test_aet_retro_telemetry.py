@@ -149,3 +149,32 @@ class TestMineLearningsParsesLearningCandidates(unittest.TestCase):
         self.assertEqual(patterns.get("learning_candidates", 0), 2)
         self.assertIn("API contract drift", str(patterns.get("examples", {}).get("learning_candidates", [])))
         self.assertIn("mock-boundary violation", str(patterns.get("examples", {}).get("learning_candidates", [])))
+
+
+class TestRunMineLearningsInvocation(unittest.TestCase):
+    """aet-retro must not rely on the pruned `mine-learnings` PATH name (R-5)."""
+
+    def test_invokes_sibling_binary_not_path_lookup(self):
+        """The legacy PATH symlink is pruned on install; call the sibling bin."""
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = kwargs.get("env", {})
+
+            class Result:
+                returncode = 0
+                stdout = "patterns"
+                stderr = ""
+
+            return Result()
+
+        with patch.object(aet_retro.subprocess, "run", fake_run):
+            out = aet_retro.run_mine_learnings(Path("/tmp/archive"))
+
+        self.assertEqual(out, "patterns")
+        self.assertEqual(
+            captured["cmd"],
+            [str(_MINE_LEARNINGS_PY), "--propose"],
+        )
+        self.assertEqual(captured["env"].get("AET_TELEMETRY_ARCHIVE_DIR"), "/tmp/archive")

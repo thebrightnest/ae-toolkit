@@ -9,8 +9,8 @@ additions.
 
 Two pieces of PATH ownership live in this file itself (R-5, R-11):
 
-- ``aet install`` — links ``<bin-dir>/aet`` at the resolved running script,
-  with an opt-in ``--prune`` of the seven legacy AET symlink names.
+- ``aet install`` — links ``<bin-dir>/aet`` at the resolved running script
+  and prunes the seven legacy AET symlink names.
 - ``_ensure_path_link()`` — on every other invocation, silently creates or
   repairs the ``aet`` symlink so toolkit updates never require re-running
   an installer.
@@ -47,7 +47,7 @@ SUBCOMMANDS = {
     "install": {"target": ("aet-work", "aet"), "mode": "internal"},
 }
 
-# The seven legacy PATH names `aet install --prune` removes (R-5). Pruning
+# The seven legacy PATH names `aet install` removes (R-5). Pruning
 # only ever removes symlinks that resolve into a skills directory.
 LEGACY_NAMES = (
     "aet-work",
@@ -198,9 +198,8 @@ def _prune_legacy(bin_dir: Path) -> None:
 
 
 def _install(argv: list[str]) -> int:
-    """``aet install``: link ``aet`` into the bin dir; opt-in legacy prune."""
+    """``aet install``: link ``aet`` into the bin dir and prune legacy names."""
     bin_dir: Path | None = None
-    prune = False
     i = 0
     while i < len(argv):
         arg = argv[i]
@@ -210,9 +209,6 @@ def _install(argv: list[str]) -> int:
                 return 2
             bin_dir = Path(argv[i + 1])
             i += 2
-        elif arg == "--prune":
-            prune = True
-            i += 1
         else:
             print(f"error: unknown flag {arg}", file=sys.stderr)
             return 2
@@ -239,8 +235,7 @@ def _install(argv: list[str]) -> int:
         link.symlink_to(script)
         print(f"  ✓ aet -> {script}")
 
-    if prune:
-        _prune_legacy(bin_dir)
+    _prune_legacy(bin_dir)
 
     if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
         print(f"\n⚠ {bin_dir} is not on your PATH. Add it to your shell profile:")

@@ -59,7 +59,7 @@
 3. **Update PRODUCT.md:**
    - Add "What's New in v1.1.0" with 2 bullets (the features)
    - Add `aet-release-prep` to the Skills table
-   - Update `aet-work` core feature section to mention parallel execution
+   - Update aet-work core feature section to mention parallel execution
 4. **Bump version:** Note `v1.1.0` for the user to tag manually (git-tag source)
 
 ## Result

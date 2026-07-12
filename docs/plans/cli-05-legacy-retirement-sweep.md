@@ -46,11 +46,11 @@ docs_sync_reason: this task is the docs migration itself; sync verifies README/C
 
 ## Task List
 
-1. Reference sweep: skill SKILL.md + references, `.agents/templates`, `.agents/commands`, `AGENTS.md`, `README.md`, `docs/CONVENTIONS.md` → `aet` surface — M (traces: R-9)
-2. Runtime hint strings in bins/libs suggest `aet …` — S (traces: R-9)
-3. Deletions (`aet-work/bin/aet-work`, `aet-setup/bin/install-aet-binaries`, `tests/test_aet_work_dispatcher.py`) + Makefile bootstrap rewiring + unconditional prune in `aet install` — S (traces: R-5)
-4. Flip skills-lint to `--legacy=error`; run `make validate`; fix stragglers until green — S (traces: R-8)
-5. Merge branch to main and verify integration — S
+1. Reference sweep: skill SKILL.md + references, `.agents/templates`, `.agents/commands`, `AGENTS.md`, `README.md`, `docs/CONVENTIONS.md` → `aet` surface — M (traces: R-9) ✓
+2. Runtime hint strings in bins/libs suggest `aet …` — S (traces: R-9) ✓
+3. Deletions (`aet-work/bin/aet-work`, `aet-setup/bin/install-aet-binaries`, `tests/test_aet_work_dispatcher.py`) + Makefile bootstrap rewiring + unconditional prune in `aet install` — S (traces: R-5) ✓
+4. Flip skills-lint to `--legacy=error`; run `make validate`; fix stragglers until green — S (traces: R-8) ✓
+5. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship` stage]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -80,5 +80,5 @@ Revert the merge commit — restores the old dispatcher, installer, references, 
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
