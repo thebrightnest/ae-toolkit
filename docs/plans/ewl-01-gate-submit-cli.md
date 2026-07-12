@@ -3,6 +3,7 @@ id: ewl-01-gate-submit-cli
 size: M
 blocked_by:
   - cli-03-skills-lint
+  - frh-18-group-evidence-path-contract
 pipeline: standard
 security_review: required
 security_review_reason: new CLI writer for gate verdicts that the orchestrator's fail-closed gate (frh-11) trusts for pass/fail decisions — validation-bypass or injection here would defeat the evidence gate itself
@@ -17,6 +18,7 @@ docs_sync_reason: new user-facing aet subcommand, and the four checking skills' 
 - PRD: `docs/prds/roadmap-p3-enforcement-walls-prd.md` (G1; R-1, R-2, plus R-8 tests)
 - frh-10 built the evidence layer (`aet-work/lib/evidence.py`: `write_verdict`, `validate_verdict`, `SCHEMAS` for `qa`/`review`/`cso`/`sync-docs`) and frh-11 made the orchestrator's gate fail-closed on missing/invalid verdicts. Today the four checking skills (`aet-qa`, `aet-review`, `aet-cso`, `aet-sync-docs`) write verdicts by importing `evidence.py` directly from skill prose ("Use `aet-work/lib/evidence.py` (`write_verdict`) when available; otherwise write equivalent JSON") — there is no CLI entry point, and no argument-level validation before `write_verdict` is called.
 - cli-01 (`aet-work/bin/aet`, `awaiting_merge`) built the multicall dispatcher with a `SUBCOMMANDS` spec table explicitly designed so "Phase 3+ subcommands are one-row additions." This plan adds that row.
+- **Dependency on frh-18 (`status: approved`, queued `ready`)**: found during Phase 3 clarify-goal grounding to target the exact same `run_stage`/`run_stage_group` root cause originally scoped here as a separate `ewl-02` plan — frh-18 is the more correct fix (per-kind `AET_EVIDENCE_PATH_<KIND>` precedence, handling concurrent multi-stage group sessions correctly) and is already queued, so `ewl-02` was abandoned in its favor (see `docs/plans/ewl-02-evidence-path-group-session-fix.md`). `aet gate submit`'s delegation to `evidence.write_verdict` should resolve its destination path through frh-18's canonical `resolve_verdict_path()`, not the pre-fix ambiguous default — hence `blocked_by: frh-18-group-evidence-path-contract`. frh-18 also rewrites the same four checking skills' writer-contract paragraph (to its three-step precedence prose) that task 3 below rewrites again (to `aet gate submit`); this is sequential evolution of one paragraph, not a conflicting edit — ewl-01 always lands after frh-18 by the blocked_by edge, so it supersedes whatever frh-18 left there.
 
 ## Intake Triage
 
@@ -25,7 +27,7 @@ docs_sync_reason: new user-facing aet subcommand, and the four checking skills' 
 ## Locked design
 
 - New `aet-work/bin/gate` (stdlib-only Python): `gate submit --stage <s> --verdict pass|fail --evidence <path>`. Resolves `<s>` against `evidence.SCHEMAS` keys; reads `--evidence` as a JSON file; calls `evidence.validate_verdict` before `evidence.write_verdict`. Any failure (missing arg, unreadable file, schema-invalid payload) prints a named error to stderr and exits 1 — never a silent or partial write.
-- `aet`'s `SUBCOMMANDS` table gains `"gate": {"target": ("aet-work", "bin/gate"), "mode": "exec"}` — same exec-dispatch pattern as every other row (cli-01 precedent); no argument re-parsing in `aet` itself.
+- `aet`'s `SUBCOMMANDS` table gains `"gate": {"target": ("aet-work", "gate"), "mode": "exec"}` — same exec-dispatch pattern as every other row (cli-01 precedent); no argument re-parsing in `aet` itself. Note the target passes the **bare** bin-name `"gate"`, not `"bin/gate"`: `_resolve_target` already composes `_skills_root()/skill_dir/"bin"/bin_name` (`aet-work/bin/aet:104`), so a `bin/`-prefixed value would resolve to `aet-work/bin/bin/gate`.
 - Writer contract in the four checking skills changes from "use `evidence.py` (`write_verdict`) directly" to "run `aet gate submit --stage <stage> --verdict <verdict> --evidence <path>`" — the CLI becomes the sole sanctioned writer, matching the PRD's G1.
 
 ## Rejected Alternatives
@@ -47,7 +49,7 @@ docs_sync_reason: new user-facing aet subcommand, and the four checking skills' 
 
 - [x] Not one of several near-identical additions at the plan level (the four SKILL.md edits are batched _within_ this plan for the same reason cli-02 batched twelve bins — see task 3)
 - [x] Diff expected to exceed 3 files or 50 lines
-- [x] Cannot share a branch with ewl-02 (different files, different risk profile — new capability vs. bugfix)
+- [x] Cannot share a branch with frh-18 (this plan's own dependency, not batching) or ewl-03/04/05 (distinct files, distinct risk surface)
 
 ## Files to Modify
 
@@ -84,5 +86,5 @@ Revert the merge commit. The four skills' fallback instruction ("otherwise write
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_
