@@ -28,3 +28,15 @@ def _isolate_telemetry_archive(monkeypatch, tmp_path):
     archive = tmp_path / "telemetry-archive"
     monkeypatch.setenv("AET_TELEMETRY_ARCHIVE_DIR", str(archive))
     monkeypatch.setattr(telemetry, "DEFAULT_ARCHIVE_DIR", archive)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_aet_bin_dir(monkeypatch, tmp_path):
+    """Point ``AET_BIN_DIR`` at a per-test tmp dir.
+
+    The ``aet`` dispatcher self-repairs its PATH symlink on every
+    invocation; without isolation, in-process ``main()`` calls and spawned
+    subprocesses would rewrite the real ``~/.local/bin/aet``. Env vars are
+    inherited by subprocesses, so one autouse fixture covers both.
+    """
+    monkeypatch.setenv("AET_BIN_DIR", str(tmp_path / "aet-bin"))

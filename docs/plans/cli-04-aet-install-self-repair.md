@@ -71,5 +71,5 @@ Revert the merge commit. `install` and self-repair are additive to a binary noth
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
