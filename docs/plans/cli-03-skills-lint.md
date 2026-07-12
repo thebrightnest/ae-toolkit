@@ -5,7 +5,7 @@ blocked_by:
   - cli-01-aet-multicall-dispatcher
   - cli-02-build-parser-status-json
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: repo-CI lint reading tracked markdown; failure direction is merge-blocking only — no runtime, auth, data-model, or dependency surface
 docs_sync: required
@@ -78,5 +78,5 @@ Revert the merge commit; remove the Makefile line if reverting manually. The lin
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
