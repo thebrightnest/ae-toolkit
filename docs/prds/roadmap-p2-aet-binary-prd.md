@@ -95,6 +95,24 @@ _Recorded: 2026-07-12 — Branch: cli-03-skills-lint_
 
 ---
 
+_Recorded: 2026-07-12 — Branch: cli-05-legacy-retirement-sweep_
+
+### Changed from plan (cli-05)
+
+- None — the reference sweep, runtime-hint rewrite, deletions, Makefile bootstrap rewiring, unconditional prune, and `--legacy=error` flip all landed as planned; the sweep surface extended to example/panel files (`aet-release-prep/examples/minor-release.md`, `aet-setup/examples/*`, `aet-work/examples/README.md`, `aet-work/panel/README.md`) exactly per the plan's grep-at-implementation-time contract.
+
+### Added (unplanned, cli-05)
+
+- `aet-evolve/bin/aet-retro`: `mine-learnings` invocation switched from PATH lookup to direct sibling-binary resolution — required by the unconditional prune, which removes the legacy `mine-learnings` PATH name; regression coverage in `tests/test_aet_retro_telemetry.py::TestRunMineLearningsInvocation`.
+- `tests/test_aet_dispatcher.py`: legacy-parity tests rewritten as direct argv assertions (the legacy dispatcher they compared against is deleted by this task).
+
+### Deferred (cli-05)
+
+- Plan task 5 (merge branch to main + integration verify) — runs at `aet-ship`; additive-then-flip batching keeps the merge as a separate stage.
+- `PRODUCT.md:64` still lists `install-aet-binaries` as current functionality — outside the sweep's grep scope (flagged Info by aet-cso); owned by `aet-release-prep` at the next release.
+
+---
+
 _Stage: scope-validated_
 _Validated: 2026-07-11_
 _Next step: run `aet-work` (single-plan or multi-task queue)_
