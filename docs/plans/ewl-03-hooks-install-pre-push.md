@@ -3,6 +3,7 @@ id: ewl-03-hooks-install-pre-push
 size: M
 blocked_by:
   - cli-03-skills-lint
+  - uct-01-usage-cost-telemetry
 pipeline: standard
 security_review: required
 security_review_reason: modifies and installs the pre-push hook that gates what reaches the remote — hook-bypass, install-path errors, or an incomplete task-branch check would silently defeat the enforcement wall this plan exists to build
