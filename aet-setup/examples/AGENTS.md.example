@@ -87,4 +87,4 @@ Task-specific rules live in `docs/references/` and are loaded on demand:
 | `docs/references/api-conventions.md` | Building or modifying API contracts |
 | `docs/references/security-guidelines.md` | Working on auth, data, secrets, or dependencies |
 | `docs/references/ui-conventions.md` | Building or modifying UI components |
-| `docs/references/worktree-ship-hygiene.md` | Before `aet-work run` or `aet-ship` |
+| `docs/references/worktree-ship-hygiene.md` | Before `aet run` or `aet-ship` |

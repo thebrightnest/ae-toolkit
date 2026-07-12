@@ -80,5 +80,5 @@ Revert the merge commit — restores the old dispatcher, installer, references, 
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
