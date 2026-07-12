@@ -45,6 +45,8 @@ Do **not** write an ADR for:
 - [019 — Structured Gate Evidence Replaces Footer Regex for Stage Gating](019-structured-gate-evidence.md)
 - [020 — Scheduling Is Delegable; Sequencing Is Not; the CLI Is the Enforcement Boundary](020-sequencing-is-not-delegable.md)
 - [021 — Evolve in Place; the Greenfield Is Trigger-Gated](021-evolve-in-place-greenfield-trigger-gated.md)
+- [022 — Local Worktree Project Identity](022-local-worktree-project-identity.md)
+- [023 — One Canonical Verdict Path per (Task, Kind), Published in Every Session Shape](023-one-canonical-verdict-path.md)
 
 ## Format
 
