@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - thp-05-panel-plans-lens
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: client-side React rendering of local telemetry inside the existing panel; no server/endpoint changes, no new network surface, React auto-escaping throughout
 docs_sync: skipped
@@ -85,5 +85,5 @@ Revert the merge commit — Plans lens falls back to thp-05's basic plan card; R
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: run `aet-sync-docs`_
