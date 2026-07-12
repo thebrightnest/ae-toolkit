@@ -77,6 +77,22 @@ Remaining flagged choices:
 2. **`status --json` schema kept minimal v1** (per-task id/state/stage/blockers + summary counts); the Phase 4 desk is the first real consumer and extends it then.
 3. **Phase ordering via queue edges**: cli-01/cli-02 are `blocked_by` wfd-04, so P1 → P2 ordering is enforced by the queue in one batch, exactly as P0 → P1 was.
 
+## Divergence Summary
+
+_Recorded: 2026-07-12 — Branch: cli-03-skills-lint_
+
+### Changed from plan
+
+- None — `scripts/skills-lint`, both rules, Makefile wiring, and the test suite landed as planned (Makefile line placed after `validate-workflows`, per the plan's "wherever wfd-04 left the target" allowance).
+
+### Added (unplanned)
+
+- Escape markers in `aet-pipeline-plan/SKILL.md` around the future `aet plan validate` reference — the real-tree integration check (`skills-lint --legacy=warn` exits 0) required exempting this forward reference; the file was not in the plan's Files to Modify.
+
+### Deferred
+
+- Plan task 5 (merge branch to main + integration verify) — runs at `aet-ship`; additive-then-flip batching keeps the merge as a separate stage.
+
 ---
 
 _Stage: scope-validated_
