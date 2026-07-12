@@ -16,6 +16,7 @@ docs_sync_reason: new tamper-evidence behavior for git-refs needs the same docum
 ## Context
 
 - PRD: `docs/prds/roadmap-p3-enforcement-walls-prd.md` (G3; R-6, plus R-8 tests)
+- **Mode-neutral by construction:** tamper-evidence operates on the `.git` refs (`refs/aet/tasks/*`, `refs/aet/meta/queue`) whether or not they are ever pushed, so it protects the ledger identically in Mode 1 (local, unpushed) and Mode 2 (shared). No change is needed here for the non-invasive scope; ewl-06's Mode-1 arm (d) / R-7c exercises this mechanism in a config-external checkout.
 - frh-17 gave the JSON backend tamper-evidence: `write_queue` (`aet-work/lib/queue.py`) stamps a monotonic `revision` and a sha256 `content_hash` into the wrapper; `read_queue` verifies both and raises `QueueIntegrityError` on mismatch.
 - Confirmed by direct inspection: `GitRefsBackend.seal()` (`aet-work/lib/backends/git_refs_backend.py`, frh-13) drops a task's ref and appends to history with **no equivalent integrity stamp**. This is a genuine gap, not mentioned explicitly in the roadmap's Phase 3 bullet list — surfaced during clarify-goal grounding and confirmed in-scope for this phase, because ewl-04 makes git-refs the default backend, and the PRD's exit gate (R-7b) requires a hand-edited ledger write to be mechanically detected on the backend that is actually the default once Phase 3 lands.
 
