@@ -44,11 +44,11 @@ docs_sync_reason: telemetry-log-schema.md gains populated-by semantics for token
 
 ## Task List
 
-1. Discovery + `aet-work/lib/usage.py` (TDD): verify `claude` and `kimi` headless usage output formats on this machine; implement `parse_usage` with per-CLI strategies, bounded tail scan, garbage-input → `None`; fixtures captured from real CLI output — M
-2. `cli_adapter.py` + orchestrator capture: `usage_mode` on adapters; `run_stage`/`run_stage_group` move to Popen + live-tee reader, return `(exit_code, usage)` — M
-3. Record wiring: `_emit_stage_session` passes usage into `stage_record`; `run_summary_record` gains `total_tokens`/`total_cost_usd`; batch end aggregates stage records — S
-4. Panel + docs: tokens/cost columns and run aggregates in `aet-work/panel/index.html` with `—` null rendering; update `aet-work/references/telemetry-log-schema.md` (populated-by semantics + new summary fields) and `aet-work/panel/README.md` — S
-5. Tests, live evidence, merge: `tests/test_usage_parsing.py` + orchestrator wiring test with a stub CLI; one real `aet run-one` session demonstrating non-null values end-to-end; merge branch to main and verify integration — S
+1. ✓ Discovery + `aet-work/lib/usage.py` (TDD): verified headless usage output formats — `claude` json-envelope carries `usage` + `total_cost_usd`; `kimi` emits no machine-readable usage (2026-07-12), so it records null per the schema contract. `parse_usage` with bounded tail scan, garbage-input → `None`; fixtures in `tests/test_usage_parsing.py`
+2. ✓ `cli_adapter.py` + orchestrator capture: `usage_mode` on adapters; `run_stage`/`run_stage_group` moved to Popen + live-tee reader, return `(exit_code, usage)`
+3. ✓ Record wiring: `_emit_stage_session` passes usage into `stage_record`; `run_summary_record` gained `total_tokens`/`total_cost_usd`; batch end aggregates stage records (`_usage_aggregates`)
+4. ✓ Panel + docs: tokens/cost columns and run aggregates in `aet-work/panel/index.html` with `—` null rendering; `aet-work/references/telemetry-log-schema.md` and `aet-work/panel/README.md` updated
+5. ✓ Tests + live evidence: `tests/test_usage_parsing.py` + orchestrator wiring tests with a stub Popen CLI; panel cost view CDP-verified at QA (553 tests). Merge step executes at `aet-ship` per pipeline
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -90,5 +90,5 @@ Revert the merge commit. All readers tolerate null `token_count`/`cost_estimate`
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
