@@ -332,3 +332,70 @@ def test_heal_apply_restamps_and_applies_state_fix(tmp_path, capsys):
     assert "Healed 1 task(s); 0 failed." in captured.out
     queue = read_queue(str(qf))  # verified read must not raise
     assert queue[0]["state"] == "ready"
+
+
+# ---------------------------------------------------------------------------
+# Integrity refusal: mutating bins fail closed with a clean one-liner, never
+# a traceback, and every refusal names the audit/heal recovery path.
+# ---------------------------------------------------------------------------
+
+
+def _tampered_queue(tmp_path: Path) -> Path:
+    """Write a stamped queue and hand-edit it so the envelope is stale."""
+    qf = tmp_path / "work-queue.json"
+    plan = _write_plan_file(tmp_path, "t1")
+    _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
+    return qf
+
+
+def _assert_clean_refusal(rc: int, err: str) -> None:
+    assert rc == 1
+    assert "queue modified outside aet state" in err
+    assert "aet state audit" in err
+    assert "aet state heal --apply" in err
+    assert "Traceback" not in err
+
+
+def test_next_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
+    nxt = _load_bin("next")
+    qf = _tampered_queue(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["next", "--queue-file", str(qf)])
+
+    rc = nxt.main()
+
+    _assert_clean_refusal(rc, capsys.readouterr().err)
+
+
+def test_sync_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
+    sync = _load_bin("sync")
+    qf = _tampered_queue(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["sync", "--queue-file", str(qf)])
+
+    rc = sync.main()
+
+    _assert_clean_refusal(rc, capsys.readouterr().err)
+
+
+def test_add_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
+    add = _load_bin("add")
+    qf = _tampered_queue(tmp_path)
+    plans_dir = tmp_path / "plans"
+    plan = _write_plan(plans_dir, "t2")
+    monkeypatch.chdir(tmp_path)
+
+    rc = add.main([plan.stem, "--queue-file", str(qf), "--plans-dir", str(plans_dir)])
+
+    _assert_clean_refusal(rc, capsys.readouterr().err)
+
+
+def test_init_queue_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
+    init_queue = _load_bin("init-queue")
+    qf = _tampered_queue(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["init-queue", "--queue-file", str(qf)])
+
+    rc = init_queue.main()
+
+    _assert_clean_refusal(rc, capsys.readouterr().err)

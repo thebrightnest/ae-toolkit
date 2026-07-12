@@ -20,7 +20,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import build_blocks, lease_guard  # noqa: E402
+from queue import QueueIntegrityError, build_blocks, lease_guard  # noqa: E402
 
 from backends.factory import create_backend  # noqa: E402
 
@@ -77,7 +77,13 @@ def main() -> int:
     if not os.path.exists(history_file):
         open(history_file, "a", encoding="utf-8").close()
 
-    data = backend.load()
+    try:
+        data = backend.load()
+    except QueueIntegrityError as exc:
+        # Mutating command: fail closed with a one-line refusal, not a
+        # traceback. The error message names the recovery path (ADR-024).
+        print(f"⛔ {exc}", file=sys.stderr)
+        return 1
     queue = data["queue"]
     history = data["history"]
 
