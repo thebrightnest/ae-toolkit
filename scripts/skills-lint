@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+"""skills-lint — validate documented `aet` invocations against the real tree.
+
+Reads `aet` command lines from code spans in skill/scaffolding markdown and
+validates them against the same sources of truth the dispatcher executes:
+`aet-work/bin/aet`'s SUBCOMMANDS spec and each target binary's build_parser().
+
+Rule 1 (error): unknown `aet` subcommand, or unknown flag for its target parser.
+Rule 2 (legacy): command-position legacy names (`aet-work`, `aet-state`, ...)
+    or `aet-*/bin/...` path invocations — severity via --legacy=warn|error.
+
+Escape: `<!-- aet-lint: off -->` ... `<!-- aet-lint: on -->` exempts spans.
+
+Usage:
+    skills-lint [--legacy=warn|error] [files...]
+
+With no files, lints the default repo set: aet-*/**/*.md,
+.agents/templates/*.md, .agents/commands/*.md, and AGENTS.md.
+Exits 0 when there are no errors (warnings allowed), 1 otherwise.
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import importlib.machinery
+import importlib.util
+import re
+import shlex
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DISPATCHER = REPO_ROOT / "aet-work" / "bin" / "aet"
+
+# Fenced code block info strings whose contents are shell command lines.
+SHELL_LANGS = {"", "bash", "sh", "console"}
+
+# Legacy command-position names replaced by `aet <subcommand>` (cli-01).
+LEGACY_NAMES = {
+    "aet-work",
+    "aet-state",
+    "orchestrator",
+    "aet-retro",
+    "mine-learnings",
+    "configure-task-backend",
+    "install-aet-binaries",
+}
+
+# Path invocation of a skill binary, e.g. ./aet-work/bin/orchestrator.
+LEGACY_PATH_RE = re.compile(r"(?:^|/)aet-[^/]+/bin/")
+
+# Opaque documentation tokens that pass as values without further checks.
+OPAQUE_RE = re.compile(r"^(<.*>|\{.*\}|\.\.\.|…|\$.*)$")
+
+# Split a shell line into command segments (pipeline / list separators).
+SEGMENT_RE = re.compile(r"\s*(?:&&|\|\||[;|])\s*")
+
+INLINE_CODE_RE = re.compile(r"(`+)([^`\n]+?)\1")
+
+FENCE_OPEN_RE = re.compile(r"^```\s*(\S*)")
+
+
+def load_dispatcher():
+    """Load aet-work/bin/aet and return its SUBCOMMANDS spec."""
+    spec = importlib.util.spec_from_loader(
+        "skills_lint_dispatcher",
+        importlib.machinery.SourceFileLoader("skills_lint_dispatcher", str(DISPATCHER)),
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["skills_lint_dispatcher"] = module
+    spec.loader.exec_module(module)
+    return module.SUBCOMMANDS
+
+
+def load_parser(binary: Path):
+    """Load a target binary's build_parser(); None for non-Python targets."""
+    first_line = binary.open().readline()
+    if "python" not in first_line:
+        return None
+    name = "skills_lint_target_" + re.sub(r"\W", "_", str(binary))
+    spec = importlib.util.spec_from_loader(
+        name, importlib.machinery.SourceFileLoader(name, str(binary))
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    if not hasattr(module, "build_parser"):
+        return None
+    return module.build_parser()
+
+
+def parser_grammar(parser):
+    """Extract (valid flags, subcommand choices) from an argparse parser."""
+    import argparse as _argparse
+
+    flags: set[str] = set()
+    choices: set[str] = set()
+
+    def walk(p):
+        for action in p._actions:
+            flags.update(action.option_strings)
+            if isinstance(action, _argparse._SubParsersAction):
+                choices.update(action.choices)
+                for sub in action.choices.values():
+                    walk(sub)
+
+    walk(parser)
+    return flags, choices
+
+
+def build_grammars(subcommands):
+    """Map each subcommand to (flags, choices); None when unparseable."""
+    grammars = {}
+    for name, spec in subcommands.items():
+        skill_dir, bin_name = spec["target"]
+        binary = REPO_ROOT / skill_dir / "bin" / bin_name
+        parser = load_parser(binary)
+        grammars[name] = parser_grammar(parser) if parser is not None else None
+    return grammars
+
+
+def is_opaque(token: str) -> bool:
+    return bool(OPAQUE_RE.match(token))
+
+
+def is_flag_token(token: str) -> bool:
+    """A token that must be a known flag: -x/--xxx, excluding negatives."""
+    if not token.startswith("-") or token == "-":
+        return False
+    return not token[1].isdigit()
+
+
+def extract_spans(text: str):
+    """Yield (line_no, content) shell code spans from markdown text.
+
+    Code spans only: fenced blocks (bash/sh/console/unlabeled) and inline
+    backtick spans. Spans between aet-lint escape markers are exempt.
+    """
+    lines = text.splitlines()
+    active = []  # (line_no, text) of lines not escaped by lint markers
+    lint_on = True
+    for i, line in enumerate(lines, start=1):
+        markers = re.findall(r"<!-- aet-lint: (off|on) -->", line)
+        if markers:
+            # Marker lines are never linted; the last marker sets the state.
+            lint_on = markers[-1] == "on"
+            continue
+        if lint_on:
+            active.append((i, line))
+
+    spans = []
+    consumed: set[int] = set()
+    i = 0
+    while i < len(active):
+        line_no, line = active[i]
+        open_match = FENCE_OPEN_RE.match(line.strip())
+        if open_match:
+            lang = open_match.group(1)
+            body = []
+            j = i + 1
+            while j < len(active):
+                _, inner = active[j]
+                if inner.strip().startswith("```"):
+                    break
+                body.append(active[j])
+                j += 1
+            consumed.update(n for n, _ in active[i : j + 1])
+            if lang in SHELL_LANGS:
+                spans.extend(body)
+            i = j + 1
+        else:
+            i += 1
+
+    for line_no, line in active:
+        if line_no in consumed:
+            continue
+        for match in INLINE_CODE_RE.finditer(line):
+            spans.append((line_no, match.group(2)))
+    return spans
+
+
+def command_segments(line: str):
+    """Split a shell line into token lists, one per command position."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return []
+    if stripped.startswith(("$ ", "% ", "> ")):
+        stripped = stripped[2:]
+    segments = []
+    for segment in SEGMENT_RE.split(stripped):
+        segment = segment.strip()
+        if not segment:
+            continue
+        try:
+            tokens = shlex.split(segment)
+        except ValueError:
+            continue
+        if tokens:
+            segments.append(tokens)
+    return segments
+
+
+def validate_aet_args(args, subcommands, grammars):
+    """Validate the argv after `aet`; return list of error strings."""
+    if not args:
+        return []
+    sub = args[0]
+    if is_opaque(sub):
+        return []
+    if sub not in subcommands:
+        return [f"unknown aet subcommand '{sub}'"]
+    grammar = grammars.get(sub)
+    if grammar is None:
+        return []  # non-Python target: no parser to validate flags against
+    flags, choices = grammar
+    errors = []
+    checked_choice = False
+    for token in args[1:]:
+        if is_opaque(token):
+            continue
+        if is_flag_token(token):
+            flag = token.split("=", 1)[0]
+            if flag not in flags:
+                errors.append(f"unknown flag '{flag}' for 'aet {sub}'")
+        elif choices and not checked_choice:
+            checked_choice = True
+            if token not in choices:
+                errors.append(f"unknown subcommand '{token}' for 'aet {sub}'")
+    return errors
+
+
+def validate_tokens(tokens, subcommands, grammars, legacy_mode):
+    """Validate one command-position token stream; return (severity, msg) list."""
+    findings = []
+    head = tokens[0]
+    basename = head.rsplit("/", 1)[-1]
+
+    if head == "aet" or basename == "aet":
+        for msg in validate_aet_args(tokens[1:], subcommands, grammars):
+            findings.append(("error", msg))
+        return findings
+
+    if head in LEGACY_NAMES:
+        findings.append(
+            (legacy_mode, f"legacy command '{head}' — use 'aet <subcommand>'")
+        )
+    elif ":" not in head and LEGACY_PATH_RE.search(head):
+        findings.append(
+            (legacy_mode, f"legacy binary path '{head}' — use 'aet <subcommand>'")
+        )
+    return findings
+
+
+def lint_file(path: Path, subcommands, grammars, legacy_mode):
+    """Lint one markdown file; return (line_no, severity, message) findings."""
+    findings = []
+    text = path.read_text(encoding="utf-8")
+    for line_no, span in extract_spans(text):
+        for tokens in command_segments(span):
+            for severity, msg in validate_tokens(
+                tokens, subcommands, grammars, legacy_mode
+            ):
+                findings.append((line_no, severity, msg))
+    return findings
+
+
+def default_files():
+    """Repo-root-anchored default lint set."""
+    paths = []
+    for pattern in (
+        "aet-*/**/*.md",
+        ".agents/templates/*.md",
+        ".agents/commands/*.md",
+    ):
+        paths.extend(glob.glob(pattern, root_dir=REPO_ROOT, recursive=True))
+    paths.append("AGENTS.md")
+    return sorted(REPO_ROOT / p for p in paths)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(prog="skills-lint", description=__doc__)
+    parser.add_argument(
+        "--legacy",
+        choices=("warn", "error"),
+        default="warn",
+        help="severity of legacy-name references (default: warn)",
+    )
+    parser.add_argument("files", nargs="*", help="markdown files to lint")
+    args = parser.parse_args(argv)
+
+    legacy_mode = "warning" if args.legacy == "warn" else "error"
+    subcommands = load_dispatcher()
+    grammars = build_grammars(subcommands)
+
+    files = [Path(f) for f in args.files] if args.files else default_files()
+    errors = 0
+    warnings = 0
+    for path in files:
+        for line_no, severity, msg in lint_file(
+            path, subcommands, grammars, legacy_mode
+        ):
+            print(f"{path}:{line_no}: {severity}: {msg}")
+            if severity == "error":
+                errors += 1
+            else:
+                warnings += 1
+
+    print(
+        f"skills-lint: {len(files)} files, {errors} errors, {warnings} warnings"
+    )
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
