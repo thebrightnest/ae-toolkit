@@ -8,17 +8,18 @@ pipeline: standard
 security_review: skipped
 security_review_reason: flips a default between two backends already implemented and parity-tested (frh-13/14); no new code path or trust boundary introduced
 docs_sync: required
-docs_sync_reason: configure-task-backend messaging and backend-selection docs currently describe git-refs as "prototype, opt-in" — that framing becomes incorrect once it is the default
+docs_sync_reason: configure-task-backend messaging and backend-selection docs currently describe git-refs as "prototype, opt-in" — that framing becomes incorrect once it is the default; and ADR-014's consequence "JSON is the default backend" must be amended (or superseded) to reflect the flip
 ---
 
 # Plan: git-refs Becomes the Default Task-Storage Backend
 
 ## Context
 
-- PRD: `docs/prds/roadmap-p3-enforcement-walls-prd.md` (G3; R-5, plus R-8 tests)
+- PRD: `docs/prds/roadmap-p3-enforcement-walls-prd.md` (G3, and the storage half of G5; R-5, plus R-8 tests)
 - `aet-work/lib/backends/factory.py` (frh-14) maps the `task_backend` config key to a backend class, currently defaulting to `JsonBackend` when unset. `GitRefsBackend` (frh-13) is fully implemented and, per frh-14's parity suite (`tests/test_git_refs_parity.py`), behavior-equivalent to the JSON backend for all existing operations.
 - This plan changes only the default — it does not remove the JSON backend, which remains available as an explicit `task_backend: "json"` opt-out (Non-Goal in the PRD: "demoted to disposable projection/cache" describes the JSON backend's new _role_, not its removal).
 - `aet-setup/bin/configure-task-backend` currently frames git-refs as a "prototype, opt-in" choice; that messaging is now stale once this plan lands and must change alongside the default.
+- **Why this default also serves Mode 1 (PRD G5):** git-refs keeps the queue and history in `.git` (`refs/aet/tasks/*`, `refs/aet/meta/queue`) — local-only/unpushed per frh-13, so invisible to `git status` and never in the shared tree or history. Making it the default is therefore the storage half of non-invasiveness: a Mode-1 project's task state lives entirely in `.git` (`refs/aet/*`), with no working-tree file at all. (The JSON backend's `.agents/work-queue.json` is already kept out of shared history — but only by a committed `.gitignore` line, `.gitignore:10`; git-refs needs no `.gitignore` entry and never appears in `git status` in the first place.) This plan does **not** touch the local-only push policy — sharing the ledger across a team (a portable sync branch) is Mode 2, the named team phase (roadmap doc 09 Phase 6), explicitly out of scope here.
 
 ## Intake Triage
 
