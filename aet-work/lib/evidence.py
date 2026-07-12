@@ -97,6 +97,48 @@ def evidence_path(
     return root / slug / task_id / f"{kind}.json"
 
 
+def evidence_path_env_var(kind: str) -> str:
+    """Return the per-kind env var name: ``AET_EVIDENCE_PATH_<KIND>``.
+
+    The kind is uppercased with non-alphanumeric characters replaced by
+    ``_`` (e.g. ``sync-docs`` → ``AET_EVIDENCE_PATH_SYNC_DOCS``).
+    """
+    suffix = "".join(ch if ch.isalnum() else "_" for ch in kind.upper())
+    return f"AET_EVIDENCE_PATH_{suffix}"
+
+
+def resolve_verdict_path(
+    task_id: str,
+    kind: str,
+    project_slug: str | None = None,
+    reports_root: str | Path | None = None,
+) -> Path:
+    """Resolve the canonical verdict path with a three-step precedence.
+
+    1. ``$AET_EVIDENCE_PATH`` — single-stage sessions (unchanged behavior).
+    2. ``$AET_EVIDENCE_PATH_<KIND>`` — group sessions publish one per kind.
+    3. Default: :func:`evidence_path` (project-namespaced archive).
+
+    Writers and the gate must share this single derivation; hand-computing
+    slugs from the worktree CWD is out of contract (ADR-023).
+    """
+    if kind not in SCHEMAS:
+        raise VerdictValidationError(f"Unknown verdict kind: {kind!r}")
+
+    single = os.environ.get("AET_EVIDENCE_PATH")
+    if single:
+        return Path(single).expanduser()
+    per_kind = os.environ.get(evidence_path_env_var(kind))
+    if per_kind:
+        return Path(per_kind).expanduser()
+    return evidence_path(
+        task_id=task_id,
+        kind=kind,
+        project_slug=project_slug,
+        reports_root=reports_root,
+    )
+
+
 def validate_verdict(record: dict[str, Any], kind: str) -> None:
     """Validate a verdict record against the schema for ``kind``.
 
