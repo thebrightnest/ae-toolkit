@@ -277,15 +277,24 @@ def most_recent_prd(prds_dir: Path) -> Path | None:
     return prds[0] if prds else None
 
 
-def new_task_from_plan(path: Path) -> dict[str, Any]:
-    """Create a fresh queue task dict from a plan file using the frontmatter contract."""
+def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[str, Any]:
+    """Create a fresh queue task dict from a plan file using the frontmatter contract.
+
+    ``settled_ids`` carries task ids already terminal in the settled history
+    log. A blocker that merged before this task was added already fired its
+    decrement event and will not fire again, so it must not count toward
+    ``pending_blockers`` — otherwise the task deadlocks on arrival.
+    """
     data = parse_frontmatter(path)
     blocked_by = data.get("blocked_by", [])
     if not isinstance(blocked_by, list):
         blocked_by = []
     blocked_by = [b for b in blocked_by if isinstance(b, str)]
 
-    state = "ready" if not blocked_by else "blocked"
+    settled = settled_ids or set()
+    pending = [b for b in blocked_by if b not in settled]
+
+    state = "ready" if not pending else "blocked"
     task: dict[str, Any] = {
         "id": data.get("id", path.stem),
         "title": title_from_plan(path),
@@ -293,7 +302,7 @@ def new_task_from_plan(path: Path) -> dict[str, Any]:
         "blocked_by": blocked_by,
         "blocks": [],
         "state": state,
-        "pending_blockers": len(blocked_by),
+        "pending_blockers": len(pending),
         "merge_commit": None,
         "completed_at": None,
         "merged_at": None,

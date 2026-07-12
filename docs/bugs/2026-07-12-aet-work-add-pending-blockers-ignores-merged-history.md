@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-07-12T11:14:49Z
 - **Severity:** high
-- **Status:** open (workaround applied — see below)
+- **Status:** fixed (2026-07-12 — see Fix Summary below)
 
 ## Symptoms
 
@@ -105,6 +105,28 @@ deadlocks, with no supported reconcile path.
 - `test_heal_recomputes_pending_against_history` — a queued task with a stale
   `pending_blockers` counting a now-merged blocker is reconciled to `ready` by `heal`.
 
+## Fix Summary (2026-07-12)
+
+Both parts of the proposed fix were implemented:
+
+1. **Primary — history-aware seed in `add`.** `new_task_from_plan` (`aet-work/lib/plan_parser.py:280`)
+   now accepts `settled_ids` and counts only blockers that are not already terminal in
+   `work-history.jsonl` toward `pending_blockers`; if that zeroes the count, the task is
+   inserted as `ready`. `aet-work/bin/add` passes the `settled_ids` it already computes.
+2. **Safety net — history-aware `heal`.** `_derive_all_states` (`aet-work/bin/aet-state:448`)
+   seeds derived states from settled history, so a dependent of an archived blocker now
+   derives `ready` (previously `blocked`, because archived ids resolved to `unknown`).
+   `cmd_heal` also reconciles every task's stored `pending_blockers` against blockers not
+   terminal in the live queue or settled history — promoting deadlocked tasks to `ready`
+   and correcting overcounts (the `ewl-06` 4→2 case) without a state transition.
+   `cmd_audit` shares the history-aware derivation, so audit now surfaces this drift too.
+
+Regression tests added:
+
+- `tests/test_aet_work_add_review.py::TestAddCommand::test_add_ignores_merged_blockers_in_pending_count`
+- `tests/test_aet_work_add_review.py::TestAddCommand::test_add_mixed_blockers_counts_only_live`
+- `tests/test_aet_state.py::TestHealHistoryAware` (promote, recount, dry-run)
+
 ## Workaround Applied (2026-07-12)
 
 Reconciled the four fully-unblocked Phase 3 tasks via the official state tool:
@@ -125,10 +147,11 @@ it will re-deadlock.
 
 ## Validation
 
-- [ ] Reproduction steps no longer trigger the bug once the fix lands
-- [ ] `make validate` passes with the new regression tests
-- [ ] `aet-work add` of a plan whose blocker is already `merged` yields a `ready` task
-- [ ] `ewl-06`'s `pending_blockers` reconciles to `2` (not `4`) under the fix
+- [x] Reproduction steps no longer trigger the bug once the fix lands
+- [x] `make validate` passes with the new regression tests
+- [x] `aet-work add` of a plan whose blocker is already `merged` yields a `ready` task
+- [x] `ewl-06`'s `pending_blockers` reconciles to `2` (not `4`) under the fix — applied to
+      the live queue via `aet-state heal --apply`
 
 ## Lessons Learned
 
