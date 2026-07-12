@@ -65,6 +65,51 @@ class TestCLIAdapter(unittest.TestCase):
             resolve_cli_adapter("nonexistent")
         self.assertIn("nonexistent", str(ctx.exception))
 
+    def test_claude_declares_json_envelope_usage_mode(self):
+        """claude's headless usage data rides in its JSON output envelope."""
+        adapter = resolve_cli_adapter("claude")
+        self.assertEqual(adapter.usage_mode, "json-envelope")
+
+    def test_kimi_has_no_usage_mode(self):
+        """kimi's headless output carries no usage data (verified 2026-07-12)."""
+        adapter = resolve_cli_adapter("kimi")
+        self.assertIsNone(adapter.usage_mode)
+
+    def test_usage_mode_flags_appended_when_headless(self):
+        adapter = CLIAdapter(
+            name="test",
+            bin="test",
+            prompt_flag="-p",
+            workdir_flag=None,
+            headless_flag="--headless",
+            usage_mode="json-envelope",
+        )
+        cmd = adapter.build_cmd("run tests", headless=True)
+        # Usage flags land before the prompt flag: some CLIs treat the token
+        # after -p as the prompt value, so trailing flags are unsafe.
+        self.assertEqual(
+            cmd, ["test", "--headless", "--output-format", "json", "-p", "run tests"]
+        )
+
+    def test_usage_mode_flags_omitted_when_not_headless(self):
+        adapter = CLIAdapter(
+            name="test",
+            bin="test",
+            prompt_flag="-p",
+            workdir_flag=None,
+            headless_flag="--headless",
+            usage_mode="json-envelope",
+        )
+        cmd = adapter.build_cmd("run tests", headless=False)
+        self.assertEqual(cmd, ["test", "-p", "run tests"])
+
+    def test_no_usage_mode_appends_nothing(self):
+        adapter = CLIAdapter(
+            name="test", bin="test", prompt_flag="-p", workdir_flag=None, headless_flag=None
+        )
+        self.assertIsNone(adapter.usage_mode)
+        self.assertEqual(adapter.build_cmd("run tests", headless=True), ["test", "-p", "run tests"])
+
 
 if __name__ == "__main__":
     unittest.main()

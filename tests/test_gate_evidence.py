@@ -7,7 +7,6 @@ import importlib.machinery
 import importlib.util
 import io
 import os
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -316,15 +315,21 @@ class TestGroupSessionEnvVars(unittest.TestCase):
         )
         captured = {}
 
-        def fake_run(cmd, env=None, **_kwargs):
+        class _StubPopen:
+            stdout = io.StringIO("")
+
+            def wait(self):
+                return 0
+
+        def fake_popen(cmd, env=None, **_kwargs):
             captured["env"] = env
-            return subprocess.CompletedProcess(cmd, 0)
+            return _StubPopen()
 
         env_overlay = {"AET_PROJECT_ID": "demo/project"}
         with patch.dict(os.environ, env_overlay, clear=False):
             os.environ.pop("AET_EVIDENCE_PATH", None)
             with patch.object(
-                orchestrator.subprocess, "run", side_effect=fake_run
+                orchestrator.subprocess, "Popen", side_effect=fake_popen
             ):
                 orchestrator.run_stage_group(
                     adapter,

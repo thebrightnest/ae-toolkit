@@ -22,43 +22,45 @@ session may span several stages, so `stage` is the session's target stage and
 `stages` carries the ordered span; `full`/`minimal` isolation yield exact
 per-stage records and `stages` is `null`.
 
-| Field                 | Type                 | Description                                             |
-| --------------------- | -------------------- | ------------------------------------------------------- |
-| `type`                | string               | `"stage"`                                               |
-| `run_id`              | string               | UUID of the parent orchestrator run                     |
-| `task_id`             | string               | Queue task identifier                                   |
-| `plan_file`           | string               | Path to the plan markdown file                          |
-| `stage`               | string               | Session target stage, e.g. `implemented`, `reviewed`    |
-| `stages`              | list[string] \| null | Ordered stage span for group sessions; `null` otherwise |
-| `agent_cli`           | string               | CLI used for the spawned session, e.g. `kimi`, `claude` |
-| `isolation_level`     | string               | `minimal`, `standard`, or `full`                        |
-| `start_time`          | string               | ISO-8601 UTC timestamp                                  |
-| `end_time`            | string               | ISO-8601 UTC timestamp                                  |
-| `duration_seconds`    | float                | Computed from `start_time` and `end_time`               |
-| `exit_code`           | integer              | Process exit code from the stage session                |
-| `result`              | string               | `"success"` if `exit_code == 0`, otherwise `"failure"`  |
-| `files_modified`      | list[string]         | Paths changed during the stage (optional)               |
-| `commits_created`     | integer \| null      | Number of commits produced (optional)                   |
-| `worktree_size_bytes` | integer \| null      | Size of the task worktree (optional)                    |
-| `token_count`         | integer \| null      | Estimated token usage (optional)                        |
-| `cost_estimate`       | float \| null        | Estimated cost in USD (optional)                        |
+| Field                 | Type                 | Description                                                                                                                                                                                                                                 |
+| --------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                | string               | `"stage"`                                                                                                                                                                                                                                   |
+| `run_id`              | string               | UUID of the parent orchestrator run                                                                                                                                                                                                         |
+| `task_id`             | string               | Queue task identifier                                                                                                                                                                                                                       |
+| `plan_file`           | string               | Path to the plan markdown file                                                                                                                                                                                                              |
+| `stage`               | string               | Session target stage, e.g. `implemented`, `reviewed`                                                                                                                                                                                        |
+| `stages`              | list[string] \| null | Ordered stage span for group sessions; `null` otherwise                                                                                                                                                                                     |
+| `agent_cli`           | string               | CLI used for the spawned session, e.g. `kimi`, `claude`                                                                                                                                                                                     |
+| `isolation_level`     | string               | `minimal`, `standard`, or `full`                                                                                                                                                                                                            |
+| `start_time`          | string               | ISO-8601 UTC timestamp                                                                                                                                                                                                                      |
+| `end_time`            | string               | ISO-8601 UTC timestamp                                                                                                                                                                                                                      |
+| `duration_seconds`    | float                | Computed from `start_time` and `end_time`                                                                                                                                                                                                   |
+| `exit_code`           | integer              | Process exit code from the stage session                                                                                                                                                                                                    |
+| `result`              | string               | `"success"` if `exit_code == 0`, otherwise `"failure"`                                                                                                                                                                                      |
+| `files_modified`      | list[string]         | Paths changed during the stage (optional)                                                                                                                                                                                                   |
+| `commits_created`     | integer \| null      | Number of commits produced (optional)                                                                                                                                                                                                       |
+| `worktree_size_bytes` | integer \| null      | Size of the task worktree (optional)                                                                                                                                                                                                        |
+| `token_count`         | integer \| null      | Total tokens (input incl. cache + output) reported by the agent CLI's headless usage output. Populated only when the CLI adapter declares a usage mode (currently `claude`, via `--output-format json`); `null` otherwise — never estimated |
+| `cost_estimate`       | float \| null        | Cost in USD reported by the agent CLI (`total_cost_usd`); `null` when the CLI does not report cost                                                                                                                                          |
 
 ### `run_summary`
 
 One record per orchestrator run, stored as `last-run.json`.
 
-| Field                         | Type    | Description                                    |
-| ----------------------------- | ------- | ---------------------------------------------- |
-| `type`                        | string  | `"run_summary"`                                |
-| `run_id`                      | string  | UUID of the run                                |
-| `start_time`                  | string  | ISO-8601 UTC timestamp                         |
-| `end_time`                    | string  | ISO-8601 UTC timestamp                         |
-| `wall_clock_seconds`          | float   | Total elapsed run time                         |
-| `tasks_spawned`               | integer | Tasks that entered the pipeline                |
-| `tasks_succeeded`             | integer | Tasks that completed successfully              |
-| `tasks_failed`                | integer | Tasks that failed                              |
-| `parallel_conflicts_detected` | integer | Potential parallel-worktree conflicts detected |
-| `concurrency_cap`             | integer | Maximum parallel tasks allowed                 |
+| Field                         | Type            | Description                                                                                   |
+| ----------------------------- | --------------- | --------------------------------------------------------------------------------------------- |
+| `type`                        | string          | `"run_summary"`                                                                               |
+| `run_id`                      | string          | UUID of the run                                                                               |
+| `start_time`                  | string          | ISO-8601 UTC timestamp                                                                        |
+| `end_time`                    | string          | ISO-8601 UTC timestamp                                                                        |
+| `wall_clock_seconds`          | float           | Total elapsed run time                                                                        |
+| `tasks_spawned`               | integer         | Tasks that entered the pipeline                                                               |
+| `tasks_succeeded`             | integer         | Tasks that completed successfully                                                             |
+| `tasks_failed`                | integer         | Tasks that failed                                                                             |
+| `parallel_conflicts_detected` | integer         | Potential parallel-worktree conflicts detected                                                |
+| `concurrency_cap`             | integer         | Maximum parallel tasks allowed                                                                |
+| `total_tokens`                | integer \| null | Sum of non-null stage `token_count` values for this run; `null` when no stage reported usage  |
+| `total_cost_usd`              | float \| null   | Sum of non-null stage `cost_estimate` values for this run; `null` when no stage reported cost |
 
 ### `environment_issue`
 

@@ -235,8 +235,14 @@ def run_summary_record(
     task_ids: list[str] | None = None,
     final_stage: str | None = None,
     leftover: dict[str, int] | None = None,
+    total_tokens: int | None = None,
+    total_cost_usd: float | None = None,
 ) -> dict[str, Any]:
-    """Build a per-run summary telemetry record."""
+    """Build a per-run summary telemetry record.
+
+    ``total_tokens`` / ``total_cost_usd`` aggregate the run's stage records
+    (summed over non-null values; ``None`` when no stage reported usage).
+    """
     wall_clock_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
     return {
         "type": "run_summary",
@@ -254,6 +260,8 @@ def run_summary_record(
         "task_ids": task_ids or [],
         "final_stage": final_stage,
         "leftover": leftover or {},
+        "total_tokens": total_tokens,
+        "total_cost_usd": total_cost_usd,
     }
 
 
