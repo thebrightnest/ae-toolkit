@@ -1,25 +1,25 @@
 # aet-retro
 
-One-shot retro generation from telemetry. Run after an `aet-work` batch, a completed plan, or any session where AET tooling misbehaved. Generates a retro that splits findings into:
+One-shot retro generation from telemetry. Run after an `aet run` batch, a completed plan, or any session where AET tooling misbehaved. Generates a retro that splits findings into:
 
 - **Project-level fixes** — changes to the codebase being built.
 - **AET-level fixes** — changes to the toolkit itself (skills, orchestrator, commands, templates).
 
-The script lives at `aet-evolve/bin/aet-retro` and is installed onto `PATH` by `install-aet-binaries` (run via `make install-skills` when developing in this repo).
+The script lives at aet-evolve/bin/aet-retro; `aet install` puts the `aet` dispatcher on `PATH` (run via `make install-skills` when developing in this repo).
 
 ## When to Run
 
-- End of a multi-task `aet-work run`.
+- End of a multi-task `aet run`.
 - After manually fixing multiple AET-related issues in one session.
 - When you suspect the same AET failure is recurring across projects.
 
 ## Steps
 
-1. Ensure `mine-learnings` is on `PATH` (run `make install-skills` if developing in this repo).
+1. Ensure `aet mine-learnings` is on `PATH` (run `make install-skills` if developing in this repo).
 2. Run:
 
    ```bash
-   aet-retro
+   aet retro
    ```
 
 3. The command writes `docs/retros/YYYY-MM-DD-aet-retro.md`.
@@ -33,15 +33,15 @@ The script lives at `aet-evolve/bin/aet-retro` and is installed onto `PATH` by `
 - `--project-slug SLUG` — override the project slug (default: derived from git origin or cwd).
 - `--lookback-days N` — days of per-task telemetry to read for the current project (default: 7).
 - `--output PATH` — write the retro to a specific file.
-- `--no-mine` — skip `mine-learnings` and only use the current project's recent telemetry.
+- `--no-mine` — skip `aet mine-learnings` and only use the current project's recent telemetry.
 
 ## Expected Output
 
 A retro markdown file with:
 
-- Telemetry summary from `mine-learnings --propose`.
+- Telemetry summary from `aet mine-learnings --propose`.
 - Project-level findings from the current project's recent per-task telemetry.
 - AET-level findings from the current project's recent per-task telemetry.
 - Action items for both layers.
 
-It also appends one `learning_candidate` telemetry record per finding, so the next `mine-learnings --propose` run can surface recurring patterns.
+It also appends one `learning_candidate` telemetry record per finding, so the next `aet mine-learnings --propose` run can surface recurring patterns.

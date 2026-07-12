@@ -32,7 +32,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 ## Prerequisites
 
-`mine-learnings` must be on `PATH`. The installer lives in the `aet-setup` skill, so `aet-setup` must be installed. Run `install-aet-binaries` from the installed `aet-setup` skill (`~/.agents/skills/aet-setup/bin/install-aet-binaries`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+`aet mine-learnings` must be on `PATH`. The installer lives in the aet-work skill, so aet-work must be installed. Run `aet install` from the installed aet-work skill (`~/.agents/skills/aet-work/bin/aet install`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 The orchestrator writes telemetry directly to `~/.aet/telemetry/`; no manual ingestion step is required.
 
@@ -97,27 +97,27 @@ Update the layer that allowed the issue so it doesn't happen again.
 
 Entries without a `trigger` field remain valid; matching falls back to recency.
 
-### `aet-retro`
+### `aet retro`
 
-One-shot retro generation from telemetry. Run this after an `aet-work` batch or any session where AET tooling misbehaved. It runs `mine-learnings --propose`, reads the current project's per-task JSONL telemetry from `~/.aet/telemetry/{project-slug}/` (ADR-012), and writes a retro that separates **project-level** findings (fix the codebase being built) from **AET-level** findings (fix the toolkit).
+One-shot retro generation from telemetry. Run this after an `aet run` batch or any session where AET tooling misbehaved. It runs `aet mine-learnings --propose`, reads the current project's per-task JSONL telemetry from `~/.aet/telemetry/{project-slug}/` (ADR-012), and writes a retro that separates **project-level** findings (fix the codebase being built) from **AET-level** findings (fix the toolkit).
 
 **Procedure:**
 
-1. Ensure `mine-learnings` is on `PATH`.
-2. Run `aet-retro`.
+1. Ensure `aet mine-learnings` is on `PATH`.
+2. Run `aet retro`.
 3. Review `docs/retros/YYYY-MM-DD-aet-retro.md`.
 4. Route project-level findings into the current project's queue.
 5. Route AET-level findings through `system-evolve` and append a learning.
 
 See `references/aet-retro.md` for full usage and flags.
 
-### `mine-learnings`
+### `aet mine-learnings`
 
 Scan the telemetry archive for recurring patterns and output a ranked report.
 
 **Procedure:**
 
-1. Run `mine-learnings`.
+1. Run `aet mine-learnings`.
 2. The script scans the dated run directories under `~/.aet/telemetry/{project-slug}/`:
    - per-task JSONL execution logs
    - `last-run.json` completion summaries

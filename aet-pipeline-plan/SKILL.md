@@ -55,10 +55,10 @@ Before planning, confirm this is a **feature or enhancement**, not a **reproduci
 
 If `ACTIVE_PRD_STAGE` or `ACTIVE_PLAN_STAGE` is found, skip already-completed steps:
 
-| Stage found                          | Resume from                            |
-| ------------------------------------ | -------------------------------------- |
-| `prd-approved` or `prd-draft`        | Step 2 (aet-validate-scope)            |
-| `scope-validated` or `plan-approved` | Pipeline complete → suggest `aet-work` |
+| Stage found                          | Resume from                          |
+| ------------------------------------ | ------------------------------------ |
+| `prd-approved` or `prd-draft`        | Step 2 (aet-validate-scope)          |
+| `scope-validated` or `plan-approved` | Pipeline complete → suggest aet-work |
 
 ## Commands
 
@@ -115,12 +115,12 @@ If the user's request contains implementation directives (e.g., "make", "change"
 4. Update CONTEXT.md and propose ADRs as needed
 5. Update plan footers to `scope-validated` / `plan-approved`
 
-**Step 3 — aet-work add + sync:**
+**Step 3 — aet add + sync:**
 
-1. Run `aet-work add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. Only explicitly added plans enter `.agents/work-queue.json`; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
-2. Run `aet-work sync` to reconcile existing queue entries, recompute reverse `blocks` edges, and report plan drift. Sync never auto-adds new plans.
+1. Run `aet add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. Only explicitly added plans enter `.agents/work-queue.json`; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
+2. Run `aet sync` to reconcile existing queue entries, recompute reverse `blocks` edges, and report plan drift. Sync never auto-adds new plans.
 3. Preserve all existing queue entries and their states
-4. Run `aet-work status` and verify:
+4. Run `aet status` and verify:
    - No plan drift is reported.
    - At least one newly created task appears in the queue summary.
 5. If drift, orphaned entries, or missing tasks are surfaced, resolve them before declaring the pipeline complete
@@ -129,7 +129,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
 - `docs/prds/{feature}-prd.md` — stage: `scope-validated`
 - `docs/plans/*.md` — stage: `plan-approved`
-- `.agents/work-queue.json` — curated via `aet-work add` and reconciled via `aet-work sync`, ready for `aet-work`
+- `.agents/work-queue.json` — curated via `aet add` and reconciled via `aet sync`, ready for aet-work
 
 ## Completion Protocol
 
@@ -147,8 +147,8 @@ After the pipeline completes all steps:
    - Queue:     .agents/work-queue.json (sync verified, no drift)
 
    Next step:
-   - Single task: run `aet-work run-one docs/plans/{ticket}-plan.md`
-   - All tasks (AFK): run `aet-work run`
+   - Single task: run `aet run-one docs/plans/{ticket}-plan.md`
+   - All tasks (AFK): run `aet run`
    ```
 
 ## Key Principles
@@ -157,7 +157,7 @@ After the pipeline completes all steps:
 - **Resumable** — if a stage is found in the footer, skip completed steps
 - **Same quality as individual skills** — the pipeline chains skills, it does not shortcut them
 - **AFK-safe** — the only human touchpoints are the defined gates; everything else runs unattended
-- **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to `aet-work`
+- **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to aet-work
 - **UI validation is a lens, not a stage** — UI/UX coverage is checked as part of `aet-validate-scope` when the PRD describes user-facing interfaces. It is not a separate pipeline step.
 - **Imperative requests are planning targets** — "Do X" means "Plan how to do X"
 - **Session-sized output** — The pipeline delegates to `aet-plan`, which enforces the dual-limit guardrail. Plans that enter the queue are guaranteed to be implementable in a single agent session.

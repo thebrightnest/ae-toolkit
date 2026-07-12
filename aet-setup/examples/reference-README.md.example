@@ -10,7 +10,7 @@ Task-specific reference documents. **Load on demand only** — do not include th
 | `api-conventions.md` | Building or modifying API contracts |
 | `security-guidelines.md` | Working on auth, data models, API endpoints, or dependencies |
 | `ui-conventions.md` | Building or modifying UI components |
-| `worktree-ship-hygiene.md` | Before `aet-work run` or `aet-ship` |
+| `worktree-ship-hygiene.md` | Before `aet run` or `aet-ship` |
 
 ## Usage
 

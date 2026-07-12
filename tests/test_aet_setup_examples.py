@@ -20,9 +20,9 @@ class TestWorktreeShipHygieneExample(unittest.TestCase):
             f"Expected example file to exist: {self.example}",
         )
 
-    def test_example_contains_aet_work_run_checklist(self):
+    def test_example_contains_aet_run_checklist(self):
         content = self.example.read_text()
-        self.assertIn("Before `aet-work run`", content)
+        self.assertIn("Before `aet run`", content)
 
     def test_example_contains_aet_ship_checklist(self):
         content = self.example.read_text()

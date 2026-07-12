@@ -1,12 +1,12 @@
 # Worktree and Ship Hygiene
 
-> Load this before `aet-work run` or `aet-ship`.
+> Load this before `aet run` or `aet-ship`.
 
 ## Context
 
 `aet-work` runs tasks in isolated git worktrees. `aet-ship` opens PRs from those worktrees. If the worktree branch is not based on the current `origin/main`, the resulting PR can include unrelated commits.
 
-## Before `aet-work run`
+## Before `aet run`
 
 1. Ensure the parent session is on `main` and `origin/main` is up to date:
 

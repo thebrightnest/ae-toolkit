@@ -1,6 +1,6 @@
 # Examples for aet-work
 
-This directory contains usage examples for `aet-work`.
+This directory contains usage examples for aet-work.
 
 The skill supports two task backends:
 

@@ -105,10 +105,10 @@ class TestEscapeMarkers(unittest.TestCase):
 
 
 class TestRealTreeIntegration(unittest.TestCase):
-    """The lint passes over the real repo tree at warn severity."""
+    """The lint passes over the real repo tree at error severity."""
 
-    def test_real_tree_exits_zero_at_warn(self):
-        rc, out = run_lint("--legacy=warn")
+    def test_real_tree_exits_zero_at_error(self):
+        rc, out = run_lint("--legacy=error")
         self.assertEqual(rc, 0, out)
         self.assertNotIn("error:", out)
 

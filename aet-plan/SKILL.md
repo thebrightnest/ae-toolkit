@@ -160,7 +160,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 
 8. **Set gate routing keys deliberately.** `security_review` and `docs_sync` route the aet-cso and aet-sync-docs stages at plan time, so the engine never judges at run time. Default both to `required`. Set `skipped` only when the gate is genuinely unnecessary for the plan, and always pair a skip with a one-line `security_review_reason` / `docs_sync_reason` recording why — intake rejects a `skipped` key without its reason, and a missing key is treated as `required` (fail-safe: the stage runs).
 
-9. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. Instruct the user to add plans explicitly with `aet-work add`. Do not write `.agents/work-queue.json` directly from this skill.
+9. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. Instruct the user to add plans explicitly with `aet add`. Do not write `.agents/work-queue.json` directly from this skill.
 
 **Vertical slice rule:**
 
@@ -170,7 +170,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 **Work queue handoff:**
 
 - `aet-plan` produces `docs/plans/*.md` only
-- Queue management is owned by `aet-work`. After plan files are created, the user curates the sprint with `aet-work add <plan-file>`
+- Queue management is owned by aet-work. After plan files are created, the user curates the sprint with `aet add <plan-file>`
 - This keeps queue format, merge logic, and state management in a single skill
 - See [references/work-queue-format.md](references/work-queue-format.md) for the task record schema
 
@@ -220,7 +220,7 @@ Or "None — can start immediately" if no blockers.
 **Rules:**
 
 - Publish in dependency order (blockers first) so real issue IDs can be referenced
-- External issues are a mirror; the local work queue remains the source of truth for `aet-work`
+- External issues are a mirror; the local work queue remains the source of truth for aet-work
 - If the tracker is not configured, skip this step and document the gap in AGENTS.md
 
 ### `plan`
@@ -278,7 +278,7 @@ After the `plan` command completes and the plan.md is ready for review:
    ```
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
-4. Confirm the new plan files were explicitly added to `.agents/work-queue.json` with `aet-work add`; run `aet-work sync` only to reconcile existing entries and report drift.
+4. Confirm the new plan files were explicitly added to `.agents/work-queue.json` with `aet add`; run `aet sync` only to reconcile existing entries and report drift.
 5. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
 
 ## Key Principles
