@@ -78,5 +78,5 @@ Revert the merge commit; remove the Makefile line if reverting manually. The lin
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
