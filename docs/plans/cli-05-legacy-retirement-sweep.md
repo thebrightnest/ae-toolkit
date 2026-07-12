@@ -5,7 +5,7 @@ blocked_by:
   - cli-03-skills-lint
   - cli-04-aet-install-self-repair
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: deletes entry-point files and activates PATH pruning — verify no executable path is orphaned and prune targets resolve only into skills directories
 docs_sync: required
@@ -80,5 +80,5 @@ Revert the merge commit — restores the old dispatcher, installer, references, 
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
