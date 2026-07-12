@@ -2,8 +2,8 @@
 # Configure the aet-work task backend and ensure GitHub labels exist.
 #
 # Usage:
-#   configure-task-backend [--backend json|github|git-refs] [--repo owner/repo]
-#                          [--non-interactive] [--help]
+#   aet configure-backend [--backend json|github|git-refs] [--repo owner/repo]
+#                         [--non-interactive] [--help]
 #
 # In interactive mode (default), the script prompts for the backend and repo.
 # In non-interactive mode, all required values must be supplied via flags.
@@ -30,7 +30,7 @@ LABELS=(
 
 usage() {
   cat <<EOF
-Usage: configure-task-backend [options]
+Usage: aet configure-backend [options]
 
 Configure the task backend for aet-work.
 
@@ -44,9 +44,9 @@ Options:
   --help                  Show this help message.
 
 Examples:
-  configure-task-backend --backend json --non-interactive
-  configure-task-backend --backend github --repo acme/widget --non-interactive
-  configure-task-backend --backend git-refs --non-interactive
+  aet configure-backend --backend json --non-interactive
+  aet configure-backend --backend github --repo acme/widget --non-interactive
+  aet configure-backend --backend git-refs --non-interactive
 EOF
 }
 

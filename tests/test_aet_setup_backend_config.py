@@ -48,7 +48,7 @@ class TestConfigureTaskBackend(unittest.TestCase):
     def test_help_prints_usage(self):
         result = self.run_script(["--help"])
         self.assertEqual(result.returncode, 0)
-        self.assertIn("configure-task-backend", result.stdout)
+        self.assertIn("aet configure-backend", result.stdout)
 
     def test_json_backend_creates_config(self):
         result = self.run_script(["--backend", "json", "--non-interactive"])

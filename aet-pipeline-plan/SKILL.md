@@ -115,7 +115,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 4. Update CONTEXT.md and propose ADRs as needed
 5. Update plan footers to `scope-validated` / `plan-approved`
 
-**Step 3 — aet-work add + sync:**
+**Step 3 — aet add + sync:**
 
 1. Run `aet add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. Only explicitly added plans enter `.agents/work-queue.json`; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
 2. Run `aet sync` to reconcile existing queue entries, recompute reverse `blocks` edges, and report plan drift. Sync never auto-adds new plans.
