@@ -90,5 +90,5 @@ Revert the merge commit. All readers tolerate null `token_count`/`cost_estimate`
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
