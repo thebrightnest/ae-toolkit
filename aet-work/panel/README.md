@@ -25,7 +25,7 @@ python3 aet-work/panel/serve   # serves panel + archive on 127.0.0.1, opens your
   zinc theme tokens (CSS variables in `<style>`).
 - Everything runs client-side; nothing leaves the machine.
 
-## Status (as of 2026-07-11)
+## Status (as of 2026-07-12)
 
 Working and verified:
 
@@ -37,8 +37,14 @@ Working and verified:
     from a worktree and from main is one row), attributes `run_summary`-only
     runs through a global task→plan map, and shows runs, sessions, tests,
     pipeline progress (n/6 on the `software.json` spine), last activity, and
-    status per plan. Selecting a plan opens a basic summary card (run count,
-    aggregate stats, spine chips); full plan detail is thp-06.
+    status per plan. Selecting a plan opens the full plan detail (thp-06):
+    header with contributing-run count, a six-state **pipeline spine**
+    stepper (done/failed/pending per state, latest record wins — the stall
+    point is the first non-done state), a **consolidated timeline** of every
+    stage session and test run across all of the plan's runs (chronological;
+    retries appear as repeated rows; run-summary-only plans get a "no rows"
+    empty state), aggregated environment issues / learning candidates, and
+    **run chips** linking into the Runs lens.
   - Runs lens is the original runs table + run detail, unchanged.
 - Stat cards: runs/plans, stage sessions, success rate, total time (per lens).
 - Filters: **folder** (top-level archive subfolder) → **project** (scoped to
@@ -55,6 +61,13 @@ Working and verified:
   matching an independent archive scan for `thebrightnest/ae-toolkit` and
   `aiskills/main`, `run_summary` join, plan card, Runs tab regression, zero
   console errors); `make validate` green.
+- Plan detail verified 2026-07-12 (thp-06): repeatable headless-Chrome E2E
+  harness (`scripts/test-panel-plan-detail.mjs`, zero npm deps, CDP over
+  Node's built-in WebSocket) against the live archive — wfd-01 spine states +
+  stall point, 4-row timeline across 2 runs matching an independent archive
+  scan, retried `reviewed` stage as repeated rows, run-chip cross-lens
+  navigation, aggregate counts, empty state for `run_summary`-only plans,
+  zero console errors; `make validate` green.
 
 ## Known quirks
 
@@ -226,8 +239,9 @@ Working and verified:
       demoted to a tab (see "Plan-centric consolidated view").~~ — **Plans
       lens shipped 2026-07-11 (thp-05):** `plan_file` normalization, task→plan
       join for `run_summary`-only runs, plan list + basic plan card, Runs
-      demoted to a tab. The consolidated-timeline plan detail remains
-      (thp-06).
+      demoted to a tab. **Plan detail shipped 2026-07-12 (thp-06):** pipeline
+      spine stepper, consolidated cross-run timeline, aggregated
+      issues/learnings, run chips linking to the Runs lens.
 - [ ] **Retention CLI** — promote the doc snippet to a proper home (e.g.
       `aet-work report --prune DAYS`). Must cover `*.log` once session-log
       capture exists, and must never delete the active run dir (check
