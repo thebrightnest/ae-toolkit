@@ -11,19 +11,12 @@ from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parent.parent
 _AET_PY = _REPO_ROOT / "aet-work" / "bin" / "aet"
-_LEGACY_PY = _REPO_ROOT / "aet-work" / "bin" / "aet-work"
 
 _aet_spec = importlib.util.spec_from_loader(
     "aet_dispatcher",
     importlib.machinery.SourceFileLoader("aet_dispatcher", str(_AET_PY)),
 )
 aet = importlib.util.module_from_spec(_aet_spec)
-
-_legacy_spec = importlib.util.spec_from_loader(
-    "aet_work_legacy_dispatcher",
-    importlib.machinery.SourceFileLoader("aet_work_legacy_dispatcher", str(_LEGACY_PY)),
-)
-legacy = importlib.util.module_from_spec(_legacy_spec)
 
 
 class TestAetSpecTable(unittest.TestCase):
@@ -140,15 +133,15 @@ class TestAetExecRouting(unittest.TestCase):
         self.assertEqual(rc, 0)
 
 
-class TestRunMappingParity(unittest.TestCase):
-    """run/run-one flag mapping is identical to the frh-05 aet-work dispatcher."""
+class TestRunMapping(unittest.TestCase):
+    """run/run-one map user flags to the documented orchestrator argv."""
 
     @classmethod
     def setUpClass(cls):
-        _legacy_spec.loader.exec_module(legacy)
+        _aet_spec.loader.exec_module(aet)
 
-    def _capture_exec(self, module, argv):
-        """Run a dispatcher's main() with execvp captured; return (rc, path, argv)."""
+    def _capture_exec(self, argv):
+        """Run main() with execvp captured; return (rc, path, argv)."""
         captured = {}
 
         def mock_execvp(path, exec_argv):
@@ -157,12 +150,12 @@ class TestRunMappingParity(unittest.TestCase):
             raise SystemExit(0)
 
         with patch.object(sys, "argv", argv):
-            with patch.object(module.os, "execvp", mock_execvp):
-                rc = module.main()
+            with patch.object(aet.os, "execvp", mock_execvp):
+                rc = aet.main()
         return rc, captured.get("path"), captured.get("argv")
 
-    def test_run_with_all_flags_matches_legacy(self):
-        """`aet run <flags>` execs the same orchestrator argv as `aet-work run`."""
+    def test_run_with_all_flags(self):
+        """`aet run <flags>` execs the orchestrator with the mapped argv."""
         argv = [
             "aet",
             "run",
@@ -175,35 +168,63 @@ class TestRunMappingParity(unittest.TestCase):
             "--cli-bin",
             "/bin/cli",
         ]
-        rc_new, path_new, exec_new = self._capture_exec(aet, argv)
-        legacy_argv = ["aet-work", *argv[1:]]
-        rc_old, path_old, exec_old = self._capture_exec(legacy, legacy_argv)
-        self.assertEqual(rc_new, rc_old)
-        self.assertEqual(Path(path_new), Path(path_old))
-        self.assertEqual(exec_new, exec_old)
-
-    def test_run_defaults_match_legacy(self):
-        """`aet run` with no flags produces the legacy default orchestrator argv."""
-        rc_new, _, exec_new = self._capture_exec(aet, ["aet", "run"])
-        rc_old, _, exec_old = self._capture_exec(legacy, ["aet-work", "run"])
-        self.assertEqual(rc_new, rc_old)
-        self.assertEqual(exec_new, exec_old)
-        self.assertIn("--queue-file", exec_new)
-        self.assertIn(".agents/work-queue.json", exec_new)
-
-    def test_run_one_matches_legacy(self):
-        """`aet run-one <plan>` maps the plan positional to --plan-file like legacy."""
-        rc_new, _, exec_new = self._capture_exec(
-            aet, ["aet", "run-one", "docs/plans/FEAT-001.md", "--cli-bin", "/bin/kimi"]
+        rc, path, exec_argv = self._capture_exec(argv)
+        self.assertEqual(rc, 0)
+        self.assertEqual(Path(path), _REPO_ROOT / "aet-work" / "bin" / "orchestrator")
+        self.assertEqual(
+            exec_argv,
+            [
+                "orchestrator",
+                "--queue-file",
+                ".agents/work-queue.json",
+                "--max-jobs",
+                "2",
+                "--isolation",
+                "full",
+                "--task-timeout",
+                "600",
+                "--cli-bin",
+                "/bin/cli",
+            ],
         )
-        rc_old, _, exec_old = self._capture_exec(
-            legacy,
-            ["aet-work", "run-one", "docs/plans/FEAT-001.md", "--cli-bin", "/bin/kimi"],
+
+    def test_run_defaults(self):
+        """`aet run` with no flags produces the default orchestrator argv."""
+        rc, _, exec_argv = self._capture_exec(["aet", "run"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            exec_argv,
+            [
+                "orchestrator",
+                "--queue-file",
+                ".agents/work-queue.json",
+                "--max-jobs",
+                "4",
+                "--isolation",
+                "standard",
+            ],
         )
-        self.assertEqual(rc_new, rc_old)
-        self.assertEqual(exec_new, exec_old)
-        self.assertIn("--plan-file", exec_new)
-        self.assertIn("docs/plans/FEAT-001.md", exec_new)
+
+    def test_run_one_maps_plan_positional(self):
+        """`aet run-one <plan>` maps the plan positional to --plan-file."""
+        rc, _, exec_argv = self._capture_exec(
+            ["aet", "run-one", "docs/plans/FEAT-001.md", "--cli-bin", "/bin/kimi"]
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            exec_argv,
+            [
+                "orchestrator",
+                "--plan-file",
+                "docs/plans/FEAT-001.md",
+                "--max-jobs",
+                "4",
+                "--isolation",
+                "standard",
+                "--cli-bin",
+                "/bin/kimi",
+            ],
+        )
 
     def test_run_one_without_plan_exits_2(self):
         """`aet run-one` without a plan file exits 2 without exec."""

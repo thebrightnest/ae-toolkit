@@ -38,22 +38,22 @@ With optional flags to override sensible defaults.
 
 ### `install-binaries`
 
-Put AET skill binaries on `PATH` so skills like `aet-work`, `aet-ship`, and `aet-evolve` can invoke their helpers (`aet-state`, `orchestrator`, `mine-learnings`, etc.).
+Put the `aet` dispatcher on `PATH` so skills like aet-work, aet-ship, and aet-evolve can invoke their helpers (`aet state`, `aet run`, `aet mine-learnings`, etc.).
 
 **Procedure:**
 
-1. Run the installer from the installed `aet-setup` skill:
+1. Run the installer from the installed aet-work skill:
 
    ```bash
-   ~/.agents/skills/aet-setup/bin/install-aet-binaries
+   ~/.agents/skills/aet-work/bin/aet install
    ```
 
-   It symlinks every executable found in installed skill `bin/` directories into `~/.local/bin` (override with `AET_BIN_DIR`).
+   It symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes the retired legacy binary names.
 
-2. Verify the helpers are available:
+2. Verify the dispatcher is available:
 
    ```bash
-   command -v aet-state && command -v orchestrator
+   command -v aet
    ```
 
 3. If `~/.local/bin` is not on `PATH`, tell the user to add it to their shell profile.
@@ -175,7 +175,7 @@ Create/modify files. Always:
 
 ### Step 6: Configure Task Backend
 
-Run `aet-setup/bin/configure-task-backend` to write `.agents/aet-work.json`:
+Run `aet configure-backend` to write `.agents/aet-work.json`:
 
 - `task_backend`: `json` (default) or `github`.
 - For `github`, detect `repo` from `git remote origin` (or prompt), then create `aet:*` labels via `gh`.
@@ -236,7 +236,7 @@ Create `docs/references/` at project root for task-specific reference documents 
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
-**AET skill binaries:** If the project uses `aet-work`, `aet-ship`, or `aet-evolve`, ensure their helper binaries are on `PATH`. Run the `install-aet-binaries` helper from the installed `aet-setup` skill (`~/.agents/skills/aet-setup/bin/install-aet-binaries`). `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
+**AET skill binaries:** If the project uses aet-work, aet-ship, or aet-evolve, ensure their helper binaries are on `PATH`. Run the `aet install` helper from the installed aet-work skill (`~/.agents/skills/aet-work/bin/aet install`). `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
 
 ### Type Safety
 

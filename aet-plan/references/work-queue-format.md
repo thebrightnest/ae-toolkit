@@ -6,7 +6,7 @@
 
 ## Design Principle
 
-The queue file stores **persistent facts** and the canonical `state` for each task. Reads (`aet-work status`, `aet-work next`, the orchestrator) project the stored `state` directly; they do not recompute pickability from git on every read. A separate `aet-state audit` command reconciles stored state against git ground truth on demand.
+The queue file stores **persistent facts** and the canonical `state` for each task. Reads (`aet status`, `aet next`, the orchestrator) project the stored `state` directly; they do not recompute pickability from git on every read. A separate `aet state audit` command reconciles stored state against git ground truth on demand.
 
 ## Schema
 
@@ -80,7 +80,7 @@ Valid values for `tasks[].state`:
 
 ## State Transitions
 
-`aet-state transition` is the only writer of `state`. Legal transitions:
+`aet state transition` is the only writer of `state`. Legal transitions:
 
 ```text
 sync:        ∅ → planned
@@ -106,7 +106,7 @@ When a task reaches a terminal state, the writer decrements each dependent's `pe
 To reconcile stored state against git ground truth, run:
 
 ```bash
-python3 aet-work/bin/aet-state audit [.agents/work-queue.json]
+aet state audit [.agents/work-queue.json]
 ```
 
 `audit` reports every task whose stored state disagrees with the state expected from `branch`, `merge_commit`, `blocked_by`, and `plan_file` existence. It never mutates the queue.

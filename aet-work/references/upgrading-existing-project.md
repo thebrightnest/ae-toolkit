@@ -2,7 +2,7 @@
 
 ## When to read this
 
-You have an existing project that uses the AE Toolkit (`aet-work`) and its work queue is still on the old model:
+You have an existing project that uses the AE Toolkit (aet-work) and its work queue is still on the old model:
 
 - `tasks[].status` is the only field.
 - `merge_verified` or `done` appear as terminal statuses.
@@ -63,10 +63,10 @@ size: S | M | L
 
 ### 4. Seal legacy terminal tasks to settled history
 
-Run the deprecated migration helper once to move terminal tasks that predate the automatic seal:
+Run the heal command once to move terminal tasks that predate the automatic seal:
 
 ```bash
-python3 ~/.agents/skills/aet-work/bin/aet-state archive .agents/work-queue.json
+aet state heal --apply .agents/work-queue.json
 ```
 
 This appends terminal tasks to `.agents/work-history.jsonl` and removes them from the live queue. The command prints what it sealed.
@@ -74,7 +74,7 @@ This appends terminal tasks to `.agents/work-history.jsonl` and removes them fro
 ### 5. Rebuild the live queue from plans
 
 ```bash
-python3 ~/.agents/skills/aet-work/bin/init-queue
+aet init-queue
 ```
 
 This re-ingests every `docs/plans/*.md` using the new frontmatter contract and normalizes legacy statuses.
@@ -84,7 +84,7 @@ This re-ingests every `docs/plans/*.md` using the new frontmatter contract and n
 For any task whose branch is already merged to `origin/main` but the queue still shows it as active:
 
 ```bash
-python3 ~/.agents/skills/aet-work/bin/aet-state record-merge <task-id> .agents/work-queue.json
+aet state record-merge <task-id> .agents/work-queue.json
 ```
 
 Repeat for each merged task. The command resolves the real squash-merge SHA via `gh` (or a diff-equivalence fallback) and seals the task to history automatically.
@@ -92,7 +92,7 @@ Repeat for each merged task. The command resolves the real squash-merge SHA via 
 ### 7. Audit and clean up
 
 ```bash
-python3 ~/.agents/skills/aet-work/bin/aet-state audit .agents/work-queue.json
+aet state audit .agents/work-queue.json
 ```
 
 Fix any discrepancies by transitioning tasks to the correct state or recording merges.
@@ -143,7 +143,7 @@ The orchestrator symlinks each `source` (relative to the repo root) into `target
 ## Ongoing maintenance
 
 - Never edit `.agents/work-queue.json` by hand.
-- Use `aet-state transition` for state changes.
-- Use `aet-state record-merge` when a PR merges.
-- Run `aet-state audit` when you suspect drift.
+- Use `aet state transition` for state changes.
+- Use `aet state record-merge` when a PR merges.
+- Run `aet state audit` when you suspect drift.
 - Keep `docs/plans/*.md` frontmatter complete so intake stays fail-closed.

@@ -1,10 +1,10 @@
 # aet-work Command Reference
 
-Detailed procedures for `aet-work` commands. The skill file describes the mental model; this file describes the mechanics.
+Detailed procedures for `aet` commands. The skill file describes the mental model; this file describes the mechanics.
 
 ## `run`
 
-AFK loop with OS-level process isolation and parallel execution. Invokes the centralized `aet-work/bin/orchestrator` Python script, which spawns fresh agent sessions per pipeline stage. Independent tasks execute simultaneously—each in its own git worktree—up to a configurable concurrency cap. Context leakage between skills is eliminated by session isolation.
+AFK loop with OS-level process isolation and parallel execution. Invokes the centralized aet-work/bin/orchestrator Python script, which spawns fresh agent sessions per pipeline stage. Independent tasks execute simultaneously—each in its own git worktree—up to a configurable concurrency cap. Context leakage between skills is eliminated by session isolation.
 
 **Procedure:**
 
@@ -19,9 +19,7 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
    Background the orchestrator with shell redirection so the launching shell observes its true exit status; do not pipe through `tee` without `set -o pipefail`:
 
    ```bash
-   orchestrator \
-     --queue-file .agents/work-queue.json \
-     --repo-root . \
+   aet run \
      --cli-bin $(which kimi) \
      --isolation standard \
      --max-jobs 4 \
@@ -68,13 +66,11 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 **Procedure:**
 
-1. Accept a plan file path: `aet-work run-one docs/plans/FEAT-001-plan.md`
+1. Accept a plan file path: `aet run-one docs/plans/FEAT-001-plan.md`
 2. Invoke the orchestrator in single-plan mode:
 
    ```bash
-   orchestrator \
-     --plan-file docs/plans/FEAT-001-plan.md \
-     --repo-root . \
+   aet run-one docs/plans/FEAT-001-plan.md \
      --cli-bin $(which kimi) \
      --isolation standard \
      > aet-work-run-one.log 2>&1 &
@@ -86,28 +82,28 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 **Pipeline override:** The plan's frontmatter `pipeline: minimal|standard|full` overrides the `--isolation` default for this task.
 
-**Queue bookkeeping:** When the plan file corresponds to a task already tracked in `.agents/work-queue.json`, `run-one` records the task's `branch` and `worktree`, transitions it to `in_progress` at the start of the run, and transitions it to `awaiting_merge` on success. This lets `aet-state record-merge` resolve the merge commit automatically after the PR ships. If the plan is not in the queue, or if `run-one` was spawned by `run` (`AET_TASK_ID` is set), the queue is left unchanged.
+**Queue bookkeeping:** When the plan file corresponds to a task already tracked in `.agents/work-queue.json`, `run-one` records the task's `branch` and `worktree`, transitions it to `in_progress` at the start of the run, and transitions it to `awaiting_merge` on success. This lets `aet state record-merge` resolve the merge commit automatically after the PR ships. If the plan is not in the queue, or if `run-one` was spawned by `run` (`AET_TASK_ID` is set), the queue is left unchanged.
 
 **When to use:** For one-off plans where you want the full pipeline but don't need a queue.
 
-## `cleanup`
+## Cleanup
 
 Seal terminal tasks and remove their worktrees atomically. Repairs stale queue entries.
 
 **Procedure:**
 
-1. Run `aet-state audit .agents/work-queue.json` to reconcile stored state against git for active (non-terminal) tasks only.
+1. Run `aet state audit .agents/work-queue.json` to reconcile stored state against git for active (non-terminal) tasks only.
 2. Read `.agents/work-queue.json`
 3. Identify terminal tasks: status is `merged`, `done`, or `abandoned`. Normalize any `merge_verified` statuses to `merged`.
 4. Seal any legacy terminal tasks still present in the live queue:
 
    ```bash
-   aet-state archive .agents/work-queue.json
+   aet state heal --apply .agents/work-queue.json
    ```
 
-   Terminal transitions now seal tasks to `.agents/work-history.jsonl` automatically. The deprecated `archive` command remains as a migration helper that seals any remaining terminal tasks and reports what it did.
+   Terminal transitions now seal tasks to `.agents/work-history.jsonl` automatically. `aet state heal --apply` seals any remaining terminal tasks and reports what it did.
 
-5. **Atomicity:** If sealing fails, STOP. Do not remove any worktrees. Investigate the failure and re-run `cleanup`.
+5. **Atomicity:** If sealing fails, STOP. Do not remove any worktrees. Investigate the failure and re-run `aet state heal --apply`.
 6. Remove worktrees for archived tasks:
 
    ```bash
@@ -118,7 +114,7 @@ Seal terminal tasks and remove their worktrees atomically. Repairs stale queue e
    ```
 
 7. **Stale worktree repair (universal):** For each remaining task with a `worktree` field, regardless of status:
-   - If the directory does not exist, clear `worktree: null` via `aet-state transition` (or direct JSON update if the task status is unchanged) and print `Repaired stale worktree field for {task_id}`
+   - If the directory does not exist, clear `worktree: null` via `aet state transition` (or direct JSON update if the task status is unchanged) and print `Repaired stale worktree field for {task_id}`
    - If the directory exists but has 0 commits ahead of main (`git rev-list --count main..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
 8. Report archived, removed, repaired, and remaining worktrees
 
@@ -130,7 +126,7 @@ Reconcile stored state against git ground truth without mutating the queue. `aud
 
 **Procedure:**
 
-1. Run `aet-state audit .agents/work-queue.json`
+1. Run `aet state audit .agents/work-queue.json`
 2. For each task, compute the expected status from git ground truth in order:
    - `merged` — `branch` or `merge_commit` is an ancestor of `origin/main`
    - `in-progress` — local `branch` exists
@@ -149,7 +145,7 @@ Print an execution telemetry summary from the archive.
 
 **Procedure:**
 
-1. Run `report`
+1. Run `aet report`
 2. The helper scans `~/.aet/telemetry/{project-slug}/` and prints:
    - Total runs
    - Tasks spawned, succeeded, and failed
@@ -161,7 +157,7 @@ Print an execution telemetry summary from the archive.
 
 **When to use:** After one or more orchestrator runs to inspect throughput, failure rate, and resource usage.
 
-## `plan-drift`
+## Plan-drift detection
 
 Detect plan files that exist on disk but are not represented in the active work queue.
 
@@ -173,13 +169,13 @@ Detect plan files that exist on disk but are not represented in the active work 
 4. Identify any plan files whose path is not found in the queue's `plan_file` set **and** not found in the settled history's `plan_file` set
 5. Compare the most recent modification time of any `docs/plans/*.md` against the `queue_updated_at` field (or the queue file's mtime as fallback)
 6. Report findings:
-   - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Run init-queue to sync.`
-   - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last init-queue). Run init-queue to sync.`
+   - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Run aet init-queue to sync.`
+   - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last init-queue). Run aet init-queue to sync.`
    - If none: print `✅ No plan drift detected. All plans are tracked in the queue.`
 
-`plan-drift` checks only the active queue. Settled tasks are ignored; their plan files may still exist on disk but are no longer tracked as active work.
+Plan-drift detection checks only the active queue. Settled tasks are ignored; their plan files may still exist on disk but are no longer tracked as active work.
 
-## `drift-check`
+## Drift check
 
 Detect tasks marked `done` or `merged` whose commits are not on `origin/main`.
 
@@ -196,9 +192,9 @@ Detect tasks marked `done` or `merged` whose commits are not on `origin/main`.
    - Unverifiable tasks: print task ID and note missing metadata
    - If none: print `✅ No drift detected. All done/merged tasks are on origin/main.`
 
-## `mark-terminal`
+## Marking tasks terminal
 
-Mark a task as `merged` or `abandoned`. This is the only supported way to set a terminal status manually. Uses the centralized `aet-state` helper for legality validation and atomic updates.
+Mark a task as `merged` or `abandoned`. This is the only supported way to set a terminal status manually. Uses the centralized `aet state` helper for legality validation and atomic updates.
 
 **Procedure:**
 
@@ -207,12 +203,12 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 3. If the requested status is `merge_verified`:
    - STOP and print: `⛔ merge_verified is a legacy status. Use merged instead.`
 4. If setting to `merged`:
-   - Run `aet-state validate <task_id> <current_status> merged .agents/work-queue.json`
+   - Run `aet state validate <task_id> <current_status> merged .agents/work-queue.json`
    - If validation fails, STOP and print the error message
-   - If validation passes, run `aet-state transition <task_id> <current_status> merged .agents/work-queue.json`
+   - If validation passes, run `aet state transition <task_id> <current_status> merged .agents/work-queue.json`
 5. If setting to `abandoned`:
    - Require a `reason` argument (non-empty string)
-   - Run `aet-state transition <task_id> <current_status> abandoned .agents/work-queue.json --reason="<reason>"`
+   - Run `aet state transition <task_id> <current_status> abandoned .agents/work-queue.json --reason="<reason>"`
    - Print: `⚠️ Task {id} marked abandoned. Reason: {reason}`
 
 **Rules:**
@@ -220,4 +216,4 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 - Never mark a task `merged` without verifying its merge_commit is on origin/main
 - Never mark a task `done` manually; use `merged` (if on main) or `abandoned` (if cancelled)
 - Never mark a task `merge_verified`; it is normalized automatically to `merged`
-- Always use `aet-state transition` instead of direct JSON mutation
+- Always use `aet state transition` instead of direct JSON mutation

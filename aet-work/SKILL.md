@@ -33,7 +33,7 @@ If a stage is found, print at the start of execution: `"📍 Current stage: {sta
 
 ## Prerequisites
 
-This skill invokes AET helper binaries (`aet-state`, `status`, `init-queue`, `sync`, `next`, `report`, `orchestrator`). They must be on `PATH`. The installer lives in the `aet-setup` skill, so `aet-setup` must be installed. Run `install-aet-binaries` from the installed `aet-setup` skill (`~/.agents/skills/aet-setup/bin/install-aet-binaries`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet init-queue`, `aet sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. The installer lives in this skill: run `aet install` from the installed aet-work skill (`~/.agents/skills/aet-work/bin/aet install`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 ## Mental Model: Plan Files Are the Source of Truth
 
@@ -41,9 +41,9 @@ This skill invokes AET helper binaries (`aet-state`, `status`, `init-queue`, `sy
 
 This means:
 
-- Approved plans do **not** automatically enter the sprint. Use `aet-work add` to curate the queue.
-- `aet-work review` reads plan files and reports their status without mutating the queue.
-- `aet-work status` reports only the active sprint, not every approved plan.
+- Approved plans do **not** automatically enter the sprint. Use `aet add` to curate the queue.
+- `aet review` reads plan files and reports their status without mutating the queue.
+- `aet status` reports only the active sprint, not every approved plan.
 - Plan drift is informational, not a hard gate.
 
 ### File roles
@@ -56,17 +56,17 @@ This means:
 
 ### Mutation guard
 
-While a batch or `run-one` is live, the orchestrator writes a run lease to `.agents/work-queue.lease` (gitignored). Mutating commands — `add`, `sync`, `init-queue`, and the `aet-state` writers — refuse to run while another run holds a live lease, naming the owning run id. A lease whose process has exited is reclaimed as stale automatically.
+While a batch or `run-one` is live, the orchestrator writes a run lease to `.agents/work-queue.lease` (gitignored). Mutating commands — `add`, `sync`, `init-queue`, and the `aet state` writers — refuse to run while another run holds a live lease, naming the owning run id. A lease whose process has exited is reclaimed as stale automatically.
 
 Use `--force` only to deliberately override a lease you know is stale, or to make an urgent manual edit during a batch. It prints a loud warning and can corrupt a live run, so prefer re-running after the batch finishes.
 
-Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails closed on read. Run `aet-state audit` to reconcile, and read-only commands like `status` warn and continue.
+Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails closed on read. Run `aet state audit` to reconcile, and read-only commands like `status` warn and continue.
 
 ### Queue lifecycle
 
 1. Plan is authored with `status: approved`.
-2. User runs `aet-work add docs/plans/FEAT-001.md` → task appears in queue as `planned`.
-3. `aet-work next` or `aet-work run` transitions it through `in_progress` and its stage sub-states.
+2. User runs `aet add docs/plans/FEAT-001.md` → task appears in queue as `planned`.
+3. `aet next` or `aet run` transitions it through `in_progress` and its stage sub-states.
 4. Task reaches `awaiting_merge`.
 5. PR is opened and merged.
 6. `aet-ship` verifies the merge commit is on `origin/main`.
@@ -74,7 +74,7 @@ Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails clos
 
 ## Task Backends
 
-`aet-work` routes queue I/O through a pluggable backend. The default JSON backend preserves today's behavior exactly; the optional GitHub Issues adapter mirrors tasks as issues for teams that want human-visible work tracking.
+`aet` routes queue I/O through a pluggable backend. The default JSON backend preserves today's behavior exactly; the optional GitHub Issues adapter mirrors tasks as issues for teams that want human-visible work tracking.
 
 ### Configuration
 
@@ -90,7 +90,7 @@ Backends are configured in `.agents/aet-work.json`:
 }
 ```
 
-Valid values for `task_backend` are `json` (default) and `github`. The `github` key is only required when using the GitHub backend. Run `aet-setup` (or `configure-task-backend`) to write this file and create the required `aet:*` labels.
+Valid values for `task_backend` are `json` (default) and `github`. The `github` key is only required when using the GitHub backend. Run `aet-setup` (or `aet configure-backend`) to write this file and create the required `aet:*` labels.
 
 ### JSON backend
 
@@ -111,7 +111,7 @@ The GitHub backend keeps the same local JSON queue as the scheduling source of t
 | `abandoned`      | `aet:abandoned`      |
 | `failed`         | `aet:failed`         |
 
-`aet-work next` picks the next open issue labeled `aet:ready` when GitHub mode is enabled. `aet-work sync` reconciles open issues with local plan files and treats manually closed issues as `abandoned`.
+`aet next` picks the next open issue labeled `aet:ready` when GitHub mode is enabled. `aet sync` reconciles open issues with local plan files and treats manually closed issues as `abandoned`.
 
 ### Backend switching
 
@@ -130,8 +130,8 @@ See [`references/github-backend.md`](references/github-backend.md) for the full 
 Add a single approved plan to the sprint board.
 
 ```bash
-aet-work add docs/plans/FEAT-001.md
-aet-work add FEAT-001
+aet add docs/plans/FEAT-001.md
+aet add FEAT-001
 ```
 
 Accepts a plan file path or a task ID. Refuses terminal plans (`merged`, `abandoned`) and settled tasks. Idempotent. Blockers already settled in `work-history.jsonl` do not count toward `pending_blockers` — a plan whose blockers have all merged enters as `ready`, never deadlocked.
@@ -147,7 +147,7 @@ Scan all `docs/plans/*.md` files and print a human-readable status summary. Boar
 - **Closed:** `merged`, `abandoned`
 
 ```bash
-aet-work review
+aet review
 ```
 
 This reads plan footer stages; it does not modify the queue.
@@ -157,7 +157,7 @@ This reads plan footer stages; it does not modify the queue.
 Show the current sprint board.
 
 ```bash
-aet-work status
+aet status
 ```
 
 Reports active task counts, next ready tasks, failed tasks, and worktree health. Plan drift is reported as a warning only.
@@ -167,7 +167,7 @@ Reports active task counts, next ready tasks, failed tasks, and worktree health.
 Pick the next ready task and transition it to `in_progress`.
 
 ```bash
-aet-work next
+aet next
 ```
 
 ### `run`
@@ -175,7 +175,7 @@ aet-work next
 AFK loop that runs queued tasks in isolated worktrees. Invokes the orchestrator.
 
 ```bash
-aet-work run
+aet run
 ```
 
 Configuration and detailed behavior: [`references/queue-commands.md`](references/queue-commands.md).
@@ -185,7 +185,7 @@ Configuration and detailed behavior: [`references/queue-commands.md`](references
 Run the full pipeline on a single plan without adding it to the queue.
 
 ```bash
-aet-work run-one docs/plans/FEAT-001.md
+aet run-one docs/plans/FEAT-001.md
 ```
 
 ### `sync`
@@ -193,7 +193,7 @@ aet-work run-one docs/plans/FEAT-001.md
 Append-only reconciliation for plans already in or entering the queue. It does **not** auto-add every approved plan.
 
 ```bash
-aet-work sync
+aet sync
 ```
 
 Use `add` for explicit curation; use `sync` after queue edits or when resolving blocker DAGs.
@@ -203,15 +203,15 @@ Use `add` for explicit curation; use `sync` after queue edits or when resolving 
 Rebuild the queue file from existing plans, preserving terminal metadata. Useful when the queue file is lost.
 
 ```bash
-aet-work init-queue
+aet init-queue
 ```
 
-### `cleanup`
+### `state heal`
 
-Seal terminal tasks, remove worktrees, and repair stale entries.
+Seal terminal tasks and repair stale queue entries. Worktree removal is manual (`git worktree remove`) — see [`references/queue-commands.md`](references/queue-commands.md).
 
 ```bash
-aet-work cleanup
+aet state heal
 ```
 
 ### `audit`
@@ -219,7 +219,7 @@ aet-work cleanup
 Reconcile stored state against git ground truth without mutating the queue. Human-run diagnostic only.
 
 ```bash
-aet-work audit
+aet state audit
 ```
 
 ### `report`
@@ -227,32 +227,32 @@ aet-work audit
 Print execution telemetry summary.
 
 ```bash
-aet-work report
+aet report
 ```
 
-### `plan-drift`
+### Plan-drift detection
 
-List plan files that are not in the active queue or settled history. Informational only.
+List plan files that are not in the active queue or settled history. Informational only — reported automatically by `aet status` and `aet next`.
 
 ```bash
-aet-work plan-drift
+aet status
 ```
 
-### `drift-check`
+### Drift check
 
-Detect tasks marked terminal whose commits are not on `origin/main`.
+Detect tasks marked terminal whose commits are not on `origin/main` — part of `aet state audit`.
 
 ```bash
-aet-work drift-check
+aet state audit
 ```
 
-### `mark-terminal`
+### Marking tasks terminal
 
 Manually mark a task as `merged` or `abandoned`. This is the only supported way to set a terminal status manually.
 
 ```bash
-aet-work mark-terminal FEAT-001 merged
-aet-work mark-terminal FEAT-001 abandoned --reason="duplicate"
+aet state transition FEAT-001 <current_status> merged
+aet state transition FEAT-001 <current_status> abandoned --reason="duplicate"
 ```
 
 **Rules:**
@@ -263,11 +263,11 @@ aet-work mark-terminal FEAT-001 abandoned --reason="duplicate"
 
 ## Queue Terminal Statuses
 
-| Status      | Meaning                             | Set by          |
-| ----------- | ----------------------------------- | --------------- |
-| `merged`    | Code is verified on `origin/main`   | `aet-ship`      |
-| `abandoned` | Task explicitly cancelled           | `mark-terminal` |
-| `failed`    | Pipeline failed; needs human review | Orchestrator    |
+| Status      | Meaning                             | Set by                 |
+| ----------- | ----------------------------------- | ---------------------- |
+| `merged`    | Code is verified on `origin/main`   | `aet-ship`             |
+| `abandoned` | Task explicitly cancelled           | `aet state transition` |
+| `failed`    | Pipeline failed; needs human review | Orchestrator           |
 
 ## Key Principles
 
