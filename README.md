@@ -18,7 +18,8 @@ AE Toolkit fixes this by encoding the best agentic engineering patterns from YC,
 - **Observed evidence for critical work** — `aet-verify` exercises the running system and captures proof (HTTP response, screenshot, CLI output) before merge
 - **Test-first development** — `aet-tdd` guides red-green-refactor with vertical tracer bullets and integration-style tests that survive refactors
 - **Fresh-session implementation** — plans and code never share a context window; bias can't leak
-- **Night-shift productivity** — `aet run` grinds through your task queue while you sleep, clearing context between each ticket so quality doesn't degrade
+- **Night-shift productivity** — `aet run` grinds through your curated task queue while you sleep, clearing context between each ticket so quality doesn't degrade. Tasks only close with evidence, and runs shut down cleanly on timeout
+- **A local dashboard for your work** — the telemetry panel lets you browse plans, watch pipeline progress, and review run history without digging through files
 - **One-command full flows** — `aet-pipeline-plan` runs the entire planning sequence; `aet run` runs the full implementation sequence with session-isolated stages
 - **Dependency upgrades as first-class work** — `aet-upgrade` analyzes breaking changes, maps risk, and validates before you bump a framework version
 - **Compounding quality** — every bug updates a rule, template, or guardrail in `.agents/`. The system gets smarter across sessions, not just within them.
@@ -29,6 +30,31 @@ AE Toolkit fixes this by encoding the best agentic engineering patterns from YC,
 - **Solo developers** who want agentic workflows without building them from scratch
 - **Engineering leads** who want consistent planning, review, and shipping standards across a team
 - **AI-native startups** who treat the AI layer (rules, commands, skills) as first-class infrastructure
+
+---
+
+## How the pieces fit together
+
+AE Toolkit has three layers. **Skills decide, the `aet` CLI does, and state remembers.** Your agent reads the skills to make judgment calls; the skills direct the agent to run `aet` CLI commands for anything mechanical; the CLI is the single writer for the queue, telemetry, and git state.
+
+```mermaid
+flowchart TB
+    A["<b>1 · Skills</b> — the workflow brain<br/>aet-plan · aet-prime · aet-implement · aet-review<br/>aet-qa · aet-ship · aet-evolve · …<br/><i>Your agent reads these to decide and judge</i>"]
+    B["<b>2 · aet CLI</b> — the operational hands<br/>aet run · aet next · aet add · aet state<br/>aet status · aet ship · aet retro · aet mine-learnings<br/><i>Deterministic commands that do the mechanical work</i>"]
+    C["<b>3 · State</b> — the memory<br/>Task queue (local JSON · git-refs · GitHub Issues)<br/>Telemetry archive · Git worktrees and branches<br/><i>Where work and evidence live</i>"]
+
+    A -->|"skill directs the agent to run CLI commands"| B
+    B -->|"reads and writes"| C
+    C -->|"state and results flow back"| A
+```
+
+| Layer                | Responsible for                                                                                 | You invoke it by                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Skills** (`aet-*`) | Judgment and workflow — triage, planning, review, QA, quality gates                             | Your agent: `/aet-plan` or natural language       |
+| **`aet` CLI**        | Deterministic operations — queue management, orchestration, state transitions, telemetry mining | Your terminal: `aet run`, `aet state`, `aet ship` |
+| **State**            | Persistence — the task queue, telemetry archive, git worktrees                                  | Indirectly, through the CLI                       |
+
+This is why `aet plan` doesn't exist: planning is judgment — a skill your agent runs — not an operation. The CLI only owns mechanical, repeatable work, and because it's the single writer for queue and state transitions, unattended runs can't corrupt state.
 
 ---
 
@@ -110,16 +136,16 @@ These are the components of the AE Toolkit system. They are installed together; 
 | [aet-ship](./aet-ship)                                     | Pre-merge validation gate with bisectable commits, commit-message conventions, and PR creation.                                                                                           |
 | [aet-release-prep](./aet-release-prep)                     | Release preparation: analyze commits, suggest version bumps, and update CHANGELOG.md and PRODUCT.md.                                                                                      |
 | [aet-sync-docs](./aet-sync-docs)                           | Sync PRD and plan.md to reflect what was actually built. Appends a divergence summary when implementation drifts from the plan.                                                           |
-| [aet-work](./aet-work)                                     | Work queue management and AFK task orchestration. Enables sequential "night shift" loops across multiple plan.md files.                                                                   |
+| [aet-work](./aet-work)                                     | Work queue management and AFK task orchestration. Curated intake, evidence-gated completion, and a local telemetry panel. Backed by local JSON, git-refs, or GitHub Issues.               |
 
 ### Pipelines
 
 These skills orchestrate the full toolkit workflow:
 
-| Skill                                    | Description                                                                                           |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| [aet-pipeline-plan](./aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → plan → validate-scope with hard human gates.              |
-| [aet-work](./aet-work)                   | Work queue management with unified orchestrator. Runs plans in parallel with session-isolated stages. |
+| Skill                                    | Description                                                                                               |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [aet-pipeline-plan](./aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → plan → validate-scope with hard human gates.                  |
+| [aet-work](./aet-work)                   | Work queue management with unified orchestrator. Runs plans with session-isolated, evidence-gated stages. |
 
 ---
 
