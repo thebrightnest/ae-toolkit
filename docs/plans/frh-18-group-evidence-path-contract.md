@@ -59,5 +59,5 @@ docs_sync_reason: the writer contract in four checking skills (aet-qa, aet-revie
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
