@@ -3,7 +3,7 @@ id: frh-18-group-evidence-path-contract
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: merged
 security_review: not-required
 security_review_reason: no new trust boundary — verdict paths stay derived from the main repo root; only the env-var delivery mechanism changes
 docs_sync: required
@@ -59,5 +59,5 @@ docs_sync_reason: the writer contract in four checking skills (aet-qa, aet-revie
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
