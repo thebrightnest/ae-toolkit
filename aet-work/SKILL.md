@@ -60,7 +60,7 @@ While a batch or `run-one` is live, the orchestrator writes a run lease to `.age
 
 Use `--force` only to deliberately override a lease you know is stale, or to make an urgent manual edit during a batch. It prints a loud warning and can corrupt a live run, so prefer re-running after the batch finishes.
 
-Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails closed on read. Run `aet state audit` to reconcile, and read-only commands like `status` warn and continue.
+Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails closed on read for mutating commands. Run `aet state audit` to inspect the unverified queue against git ground truth, and `aet state heal --apply` to reconcile and restamp the envelope. Read-only commands like `status` warn and continue.
 
 ### Queue lifecycle
 
