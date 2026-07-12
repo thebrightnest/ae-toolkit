@@ -134,7 +134,7 @@ aet-work add docs/plans/FEAT-001.md
 aet-work add FEAT-001
 ```
 
-Accepts a plan file path or a task ID. Refuses terminal plans (`merged`, `abandoned`) and settled tasks. Idempotent.
+Accepts a plan file path or a task ID. Refuses terminal plans (`merged`, `abandoned`) and settled tasks. Idempotent. Blockers already settled in `work-history.jsonl` do not count toward `pending_blockers` — a plan whose blockers have all merged enters as `ready`, never deadlocked.
 
 ### `review`
 

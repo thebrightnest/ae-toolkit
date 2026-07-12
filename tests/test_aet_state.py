@@ -1007,5 +1007,119 @@ class TestStateTransition(unittest.TestCase):
             self.assertEqual(release_entries[0]["to"], "ready")
 
 
+class TestHealHistoryAware(unittest.TestCase):
+    """heal reconciles tasks whose blockers already settled to history."""
+
+    def _write_queue_and_history(self, tmpdir, tasks, settled):
+        tmp = Path(tmpdir)
+        plans_dir = tmp / "plans"
+        plans_dir.mkdir()
+        for task in tasks:
+            plan = plans_dir / f"{task['id']}.md"
+            plan.write_text("# Plan\n", encoding="utf-8")
+            task.setdefault("plan_file", str(plan))
+            task.setdefault("branch", None)
+        queue_path = tmp / "work-queue.json"
+        queue_path.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
+        history_path = tmp / "work-history.jsonl"
+        with open(history_path, "w", encoding="utf-8") as f:
+            for record in settled:
+                f.write(json.dumps(record) + "\n")
+        return queue_path
+
+    def _run_heal(self, queue_path, apply):
+        args = aet_state.argparse.Namespace(
+            command="heal",
+            queue=str(queue_path),
+            apply=apply,
+            force=False,
+        )
+        with patch.object(aet_state.subprocess, "run", side_effect=_git_mock({})):
+            return aet_state.cmd_heal(args)
+
+    def test_heal_promotes_task_blocked_on_settled_history(self):
+        """A task blocked on an already-archived blocker heals to ready with pb=0.
+
+        Regression: a task added after its blocker merged stored a stale
+        pending_blockers count and could never be promoted, and heal used to
+        report "No healable discrepancies found" because archived blockers
+        derived as unknown rather than terminal.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = self._write_queue_and_history(
+                tmpdir,
+                [{
+                    "id": "t2",
+                    "state": "blocked",
+                    "blocked_by": ["t1"],
+                    "pending_blockers": 1,
+                }],
+                [{"id": "t1", "state": "merged"}],
+            )
+
+            self.assertEqual(self._run_heal(queue_path, apply=True), 0)
+
+            with open(queue_path, "r", encoding="utf-8") as f:
+                after = json.load(f)
+            task = after["tasks"][0]
+            self.assertEqual(task["state"], "ready")
+            self.assertEqual(task["pending_blockers"], 0)
+
+    def test_heal_recounts_pending_blockers_for_live_and_settled(self):
+        """A still-blocked task's stale counter is reconciled without a transition."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = self._write_queue_and_history(
+                tmpdir,
+                [
+                    {"id": "t3", "state": "ready"},
+                    {
+                        "id": "t4",
+                        "state": "blocked",
+                        "blocked_by": ["t1", "t3"],
+                        "pending_blockers": 2,
+                    },
+                ],
+                [{"id": "t1", "state": "merged"}],
+            )
+
+            self.assertEqual(self._run_heal(queue_path, apply=True), 0)
+
+            with open(queue_path, "r", encoding="utf-8") as f:
+                after = json.load(f)
+            by_id = {t["id"]: t for t in after["tasks"]}
+            self.assertEqual(by_id["t4"]["state"], "blocked")
+            self.assertEqual(by_id["t4"]["pending_blockers"], 1)
+
+    def test_heal_dry_run_reports_without_mutating(self):
+        """Without --apply, heal reports the recount but leaves the queue untouched."""
+        import io
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = self._write_queue_and_history(
+                tmpdir,
+                [{
+                    "id": "t2",
+                    "state": "blocked",
+                    "blocked_by": ["t1"],
+                    "pending_blockers": 1,
+                }],
+                [{"id": "t1", "state": "merged"}],
+            )
+
+            stdout_capture = io.StringIO()
+            with patch.object(sys, "stdout", stdout_capture):
+                self.assertEqual(self._run_heal(queue_path, apply=False), 0)
+
+            output = stdout_capture.getvalue()
+            self.assertIn("t2", output)
+            self.assertIn("pending_blockers -> 0", output)
+
+            with open(queue_path, "r", encoding="utf-8") as f:
+                after = json.load(f)
+            task = after["tasks"][0]
+            self.assertEqual(task["state"], "blocked")
+            self.assertEqual(task["pending_blockers"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

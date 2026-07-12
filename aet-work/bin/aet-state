@@ -445,11 +445,25 @@ def update_plan_status(plan_path, status):
     update_plan_footer(plan_path, status)
 
 
-def _derive_all_states(queue, cwd):
-    """Return (task_by_id, derived) for every task in the queue."""
+def _derive_all_states(queue, cwd, history=None):
+    """Return (task_by_id, derived) for every task in the queue.
+
+    Settled history records seed ``derived`` so a dependent whose blocker
+    already reached a terminal state and was archived out of the live queue
+    derives ``ready`` instead of staying ``blocked`` forever. The settled log
+    is terminal by construction (only ``seal_terminal`` writes to it).
+    """
     tasks = queue
     task_by_id = {t["id"]: t for t in tasks if t.get("id")}
     derived = {}
+
+    for settled in history or []:
+        sid = settled.get("id")
+        if sid and sid not in task_by_id:
+            state = settled.get("state")
+            derived[sid] = {
+                "derived_status": state if state in queue_lib.TERMINAL_STATES else "merged"
+            }
 
     def blocker_status(task_id):
         if task_id not in derived and task_id in task_by_id:
@@ -476,7 +490,7 @@ def cmd_audit(args):
     data = backend.load()
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    task_by_id, derived = _derive_all_states(queue, cwd)
+    task_by_id, derived = _derive_all_states(queue, cwd, history=data["history"])
 
     results = {}
     for task in queue:
@@ -499,6 +513,10 @@ def cmd_heal(args):
     Safe fixes:
       - merged: task branch or merge_commit is an ancestor of origin/main.
       - failed -> ready: plan exists, no branch, and blockers are terminal.
+      - pending_blockers recount: the stored counter is reconciled against
+        blockers that are not terminal in the live queue or the settled
+        history log, so tasks added after a blocker merged cannot deadlock
+        on a stale count.
 
     With ``--apply``, transitions are applied; otherwise the command prints a
     dry-run report.
@@ -507,7 +525,16 @@ def cmd_heal(args):
     data = backend.load()
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    task_by_id, derived = _derive_all_states(queue, cwd)
+    task_by_id, derived = _derive_all_states(queue, cwd, history=data["history"])
+
+    # A blocker counts as pending only while it is not terminal in the live
+    # queue and not settled in history.
+    terminal_ids = {
+        t["id"]
+        for t in queue
+        if t.get("id") and queue_lib.current_state(t) in queue_lib.TERMINAL_STATES
+    }
+    terminal_ids.update(h["id"] for h in data["history"] if h.get("id"))
 
     changes: list[dict] = []
     for task in queue:
@@ -515,32 +542,46 @@ def cmd_heal(args):
         stored_state = queue_lib.current_state(task)
         derived_state = derived[task_id]["derived_status"].split(" (warning")[0]
 
-        if stored_state == derived_state:
-            continue
-
+        change = None
         # Only heal toward terminal/ready states; never move a merged task backward.
         if derived_state == "merged" and stored_state != "merged":
-            changes.append({
+            change = {
                 "task_id": task_id,
                 "from": stored_state,
                 "to": "merged",
                 "reason": "branch/merge_commit is ancestor of origin/main",
                 "branch": task.get("branch"),
-            })
+            }
         elif derived_state == "ready" and stored_state in ("failed", "blocked", "planned"):
-            changes.append({
+            change = {
                 "task_id": task_id,
                 "from": stored_state,
                 "to": "ready",
                 "reason": "plan exists and blockers are terminal",
-            })
+            }
         elif derived_state == "failed" and stored_state == "in_progress":
-            changes.append({
+            change = {
                 "task_id": task_id,
                 "from": stored_state,
                 "to": "failed",
                 "reason": "branch does not exist and plan is missing or blocked",
-            })
+            }
+
+        computed_pb = len(
+            [b for b in task.get("blocked_by", []) if b not in terminal_ids]
+        )
+        if computed_pb != queue_lib.pending_blockers(task):
+            if change is None:
+                change = {
+                    "task_id": task_id,
+                    "from": stored_state,
+                    "to": stored_state,
+                    "reason": "pending_blockers recount against settled blockers",
+                }
+            change["pending_blockers"] = computed_pb
+
+        if change is not None:
+            changes.append(change)
 
     if not changes:
         print("No healable discrepancies found.")
@@ -548,7 +589,10 @@ def cmd_heal(args):
 
     print("Proposed changes:")
     for change in changes:
-        print(f"  {change['task_id']}: {change['from']} -> {change['to']} ({change['reason']})")
+        line = f"  {change['task_id']}: {change['from']} -> {change['to']} ({change['reason']})"
+        if "pending_blockers" in change:
+            line += f" [pending_blockers -> {change['pending_blockers']}]"
+        print(line)
 
     if not args.apply:
         print("\nRun with --apply to apply these changes.")
@@ -577,7 +621,14 @@ def cmd_heal(args):
 
             from_state = queue_lib.current_state(task)
             to_state = change["to"]
+
+            if "pending_blockers" in change:
+                task["pending_blockers"] = change["pending_blockers"]
+
             if from_state == to_state:
+                # Counter-only reconciliation: no transition, just persist.
+                if "pending_blockers" in change:
+                    backend.save(queue)
                 applied += 1
                 continue
 

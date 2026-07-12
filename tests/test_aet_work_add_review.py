@@ -347,6 +347,67 @@ class TestAddCommand(unittest.TestCase):
             self.assertNotEqual(tasks["feat-302"]["history"][0]["to"], "planned")
 
 
+    def test_add_ignores_merged_blockers_in_pending_count(self):
+        """A blocker already merged and archived to history does not count as pending.
+
+        Regression: add-after-merge used to seed pending_blockers from the full
+        blocked_by list, deadlocking the task because the merged blocker's
+        decrement event had already fired.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            plans_dir = Path(tmp) / "plans"
+            plans_dir.mkdir()
+            plan = _make_plan(plans_dir, "feat-400.md", blocked_by=["feat-399"])
+            queue_file = _write_json_file([])
+            history_file = _make_history([{"id": "feat-399", "state": "merged"}])
+
+            rc = add.main([
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
+
+            self.assertEqual(rc, 0)
+            with open(queue_file, "r", encoding="utf-8") as f:
+                queue = json.load(f)
+            self.assertEqual(len(queue), 1)
+            self.assertEqual(queue[0]["state"], "ready")
+            self.assertEqual(queue[0]["pending_blockers"], 0)
+            # The blocked_by edge list is preserved; only the count reconciles.
+            self.assertEqual(queue[0]["blocked_by"], ["feat-399"])
+            self.assertEqual(queue[0]["history"][0]["to"], "ready")
+
+    def test_add_mixed_blockers_counts_only_live(self):
+        """blocked_by mixing a settled blocker and a live one parks blocked with pb=1."""
+        with tempfile.TemporaryDirectory() as tmp:
+            plans_dir = Path(tmp) / "plans"
+            plans_dir.mkdir()
+            live = _make_plan(plans_dir, "feat-500.md")
+            dependent = _make_plan(
+                plans_dir, "feat-501.md", blocked_by=["feat-499", "feat-500"]
+            )
+            queue_file = _write_json_file([])
+            history_file = _make_history([{"id": "feat-499", "state": "merged"}])
+
+            self.assertEqual(add.main([
+                str(live), "--queue-file", queue_file,
+                "--history-file", history_file, "--plans-dir", str(plans_dir),
+            ]), 0)
+            self.assertEqual(add.main([
+                str(dependent), "--queue-file", queue_file,
+                "--history-file", history_file, "--plans-dir", str(plans_dir),
+            ]), 0)
+
+            with open(queue_file, "r", encoding="utf-8") as f:
+                queue = json.load(f)
+            tasks = {t["id"]: t for t in queue}
+            self.assertEqual(tasks["feat-501"]["state"], "blocked")
+            self.assertEqual(tasks["feat-501"]["pending_blockers"], 1)
+            # The live blocker still wires a reverse edge for its decrement.
+            self.assertIn("feat-501", tasks["feat-500"]["blocks"])
+
+
 class TestReviewCommand(unittest.TestCase):
     def test_review_categorizes_plans_by_footer_stage(self):
         """review prints plans grouped into approved/queued/in-progress/awaiting-merge/closed."""
