@@ -12,7 +12,7 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
 
 2. **Pre-branch git hygiene:**
 
-   Before spawning the first task, the orchestrator ensures `main` is clean and synchronized with `origin/main`. If `main` is dirty, ahead, or behind, the orchestrator prints actionable warnings and halts before creating any worktrees. In unattended mode, warnings are logged but the loop continues. Mutations to `.agents/work-queue.json` and `.agents/work-history.jsonl` are ignored by the dirty check because the orchestrator writes them as part of normal operation.
+   Before spawning the first task, the orchestrator ensures `main` is clean and synchronized with `origin/main`. If `main` is dirty, ahead, or behind, the orchestrator prints actionable warnings and halts before creating any worktrees. In unattended mode, warnings are logged but the loop continues. Mutations to `.agents/work-queue.json` and `.agents/work-history.jsonl` are ignored by the dirty check because the orchestrator writes them as part of normal operation; the `.agents/work-queue.json.lock` and `.agents/work-queue.lease` sidecars are ignored too — they linger on disk by design (the lock file is never unlinked; the lease self-reclaims on the next mutation after a crash).
 
 3. **Invoke the unified orchestrator:**
 

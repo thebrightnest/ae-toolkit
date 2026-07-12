@@ -190,5 +190,47 @@ class TestDependencyWarmupRequired(unittest.TestCase):
             self.assertEqual(missing, [])
 
 
+class TestCheckMainHygiene(unittest.TestCase):
+    def _init_repo(self, repo_root: str) -> None:
+        subprocess.run(["git", "init", "-q", repo_root], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.name", "Test User"],
+            check=True,
+        )
+        Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "init"], check=True)
+
+    def test_queue_sidecars_do_not_trip_dirty_check(self):
+        """The lock and lease sidecars linger by design; hygiene must ignore them."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            agents_dir = Path(repo_root, ".agents")
+            agents_dir.mkdir()
+            for sidecar in ("work-queue.json.lock", "work-queue.lease"):
+                (agents_dir / sidecar).write_text("", encoding="utf-8")
+
+            ok, msg = worktree.check_main_hygiene(repo_root)
+
+            self.assertTrue(ok, f"sidecars should be ignored, got: {msg}")
+
+    def test_other_untracked_files_still_fail_hygiene(self):
+        """Control: the ignore list must not widen beyond the queue artifacts."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            agents_dir = Path(repo_root, ".agents")
+            agents_dir.mkdir()
+            (agents_dir / "notes.txt").write_text("x", encoding="utf-8")
+
+            ok, msg = worktree.check_main_hygiene(repo_root)
+
+            self.assertFalse(ok)
+            self.assertEqual(msg, "Working tree is dirty")
+
+
 if __name__ == "__main__":
     unittest.main()

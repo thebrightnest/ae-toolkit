@@ -24,6 +24,7 @@ sys.path.insert(0, str(_LIB_DIR))
 
 from queue import (  # noqa: E402
     LEGAL_TRANSITIONS,
+    QueueIntegrityError,
     acquire_lease,
     current_state,
     get_next_unblocked,
@@ -239,6 +240,9 @@ def build_prompt(skills: list[str], plan_file: str, current_stage: str, next_sta
         f"Run {skills_str} on {plan_file}\n"
         f"Current stage: {current_stage}. Target stage: {next_stage}.\n"
         f"Execute only this stage. Do not proceed to subsequent stages.\n"
+        f"Run validations (tests, lint, format checks) in the foreground and "
+        f"wait for them to finish — never background validations or end your "
+        f"turn while one is still running.\n"
         f"Commit your work and update the plan footer to *Stage: {next_stage}* before exiting."
     )
 
@@ -448,7 +452,10 @@ def build_stage_group_prompt(
     preamble = (
         "Execute the following consecutive pipeline stages in order. "
         "Complete each stage (including its commit and plan-footer update) "
-        "before starting the next. Do not proceed past the final stage listed."
+        "before starting the next. Do not proceed past the final stage listed. "
+        "Run validations (tests, lint, format checks) in the foreground and "
+        "wait for them to finish — never background validations or end your "
+        "turn while one is still running."
     )
     blocks = [preamble]
     for stage in stages:
@@ -1048,7 +1055,14 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     start_time = telemetry.iso_now()
     task_ids: list[str] = []
 
-    queue = backend.load()["queue"]
+    try:
+        queue = backend.load()["queue"]
+    except QueueIntegrityError as exc:
+        # Fail closed before spawning anything: a tampered queue must be
+        # repaired explicitly (audit / heal --apply), not crashed into with a
+        # traceback mid-batch (ADR-024).
+        print(f"⛔ {exc}", file=sys.stderr)
+        return 1
     if not queue:
         print("✅ Queue is empty.")
         end_time = telemetry.iso_now()

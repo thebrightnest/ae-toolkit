@@ -378,6 +378,8 @@ When creating `.agents/`, ensure `.gitignore` excludes generated workflow artifa
 
 ```gitignore
 .agents/work-queue.json
+.agents/work-queue.json.lock
+.agents/work-queue.lease
 .agents/work-history.jsonl
 aet-work.log
 aet-work-*.log

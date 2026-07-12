@@ -23,6 +23,7 @@ sys.path.insert(0, str(_LIB_DIR))
 
 from queue import (  # noqa: E402
     HISTORY_TERMINAL_STATES,
+    QueueIntegrityError,
     append_history_record,
     lease_guard,
 )
@@ -242,7 +243,13 @@ def main() -> int:
     if not os.path.exists(history_file):
         open(history_file, "a", encoding="utf-8").close()
 
-    data = backend.load()
+    try:
+        data = backend.load()
+    except QueueIntegrityError as exc:
+        # Mutating command: fail closed with a one-line refusal, not a
+        # traceback. The error message names the recovery path (ADR-024).
+        print(f"⛔ {exc}", file=sys.stderr)
+        return 1
     queue = data["queue"]
     history = data["history"]
 

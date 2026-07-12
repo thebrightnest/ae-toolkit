@@ -337,10 +337,16 @@ def check_main_hygiene(repo_root: str) -> tuple[bool, str]:
 
     Queue files are excluded from the dirty check because the orchestrator
     mutates them as part of normal operation and they are gitignored in
-    projects using the toolkit.
+    projects using the toolkit. The ``.lock`` sidecar is never unlinked —
+    deleting an fcntl lock file on release races with concurrent openers —
+    and the ``.lease`` sidecar self-reclaims only on the next mutation, so
+    both linger on disk (including after a crash) and must be ignored here
+    and in project ``.gitignore`` files.
     """
     ignored_paths = {
         ".agents/work-queue.json",
+        ".agents/work-queue.json.lock",
+        ".agents/work-queue.lease",
         ".agents/work-history.jsonl",
     }
 
