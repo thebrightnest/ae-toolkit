@@ -43,11 +43,11 @@ docs_sync_reason: the writer contract in four checking skills (aet-qa, aet-revie
 
 ## Task List
 
-1. Add `resolve_verdict_path()` to `aet-work/lib/evidence.py` with the three-step precedence — S (traces: root cause)
-2. Publish `AET_EVIDENCE_PATH_<KIND>` per evidence-bound stage in `run_stage_group`; include the resolved path in the gate's missing-verdict message — S (traces: root cause)
-3. Rewrite the writer contract in the four checking skills to the three-step precedence naming `resolve_verdict_path` — S (traces: docs_sync)
-4. Tests in `tests/test_gate_evidence.py`: resolver precedence (env single, env per-kind, default), group-session env contains per-kind paths equal to the gate path, gate message includes path — M (traces: root cause)
-5. Add ADR-023 amending the ADR-019 evidence contract — S (traces: docs_sync)
+1. ✓ Add `resolve_verdict_path()` to `aet-work/lib/evidence.py` with the three-step precedence — S (traces: root cause)
+2. ✓ Publish `AET_EVIDENCE_PATH_<KIND>` per evidence-bound stage in `run_stage_group`; include the resolved path in the gate's missing-verdict message — S (traces: root cause)
+3. ✓ Rewrite the writer contract in the four checking skills to the three-step precedence naming `resolve_verdict_path` — S (traces: docs_sync)
+4. ✓ Tests in `tests/test_gate_evidence.py`: resolver precedence (env single, env per-kind, default), group-session env contains per-kind paths equal to the gate path, gate message includes path — M (traces: root cause)
+5. ✓ Add ADR-023 amending the ADR-019 evidence contract — S (traces: docs_sync)
 6. Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
@@ -59,5 +59,5 @@ docs_sync_reason: the writer contract in four checking skills (aet-qa, aet-revie
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
