@@ -78,6 +78,7 @@ validate: ## Run all quality checks (lint + format-check + lint-py + test + work
 	@$(MAKE) lint-py
 	@$(MAKE) test
 	@./aet-work/bin/validate-workflows
+	@./scripts/skills-lint --legacy=warn
 	@./scripts/validate-skills.sh
 	@echo "✓ All validation checks passed"
 
