@@ -3,6 +3,7 @@ id: ewl-05-git-refs-tamper-evidence
 size: M
 blocked_by:
   - cli-03-skills-lint
+  - uct-01-usage-cost-telemetry
 pipeline: standard
 security_review: required
 security_review_reason: introduces the integrity/tamper-detection mechanism directly protecting the task ledger against out-of-band writes — the correctness of the detection logic is itself the security property this plan delivers

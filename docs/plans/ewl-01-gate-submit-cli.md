@@ -4,6 +4,7 @@ size: M
 blocked_by:
   - cli-03-skills-lint
   - frh-18-group-evidence-path-contract
+  - uct-01-usage-cost-telemetry
 pipeline: standard
 security_review: required
 security_review_reason: new CLI writer for gate verdicts that the orchestrator's fail-closed gate (frh-11) trusts for pass/fail decisions — validation-bypass or injection here would defeat the evidence gate itself

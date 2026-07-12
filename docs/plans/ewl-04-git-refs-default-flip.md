@@ -3,6 +3,7 @@ id: ewl-04-git-refs-default-flip
 size: S
 blocked_by:
   - cli-03-skills-lint
+  - uct-01-usage-cost-telemetry
 pipeline: standard
 security_review: skipped
 security_review_reason: flips a default between two backends already implemented and parity-tested (frh-13/14); no new code path or trust boundary introduced
