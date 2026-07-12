@@ -13,13 +13,13 @@ This is not hypothetical. The "smart zone" for LLMs is ~100k tokens. After that,
 
 ## Why Cooperative Isolation Failed
 
-Earlier versions of `aet-work` attempted a cooperative approach: the skill instructed the agent to clear its own context between tasks (via `/clear`, session restart, or equivalent). This failed on every tested runtime for the same reason — **no agent can reset its own context and continue executing skill instructions mid-session.** The instruction is ignored, context leaks, and quality degrades.
+Earlier versions of aet-work attempted a cooperative approach: the skill instructed the agent to clear its own context between tasks (via `/clear`, session restart, or equivalent). This failed on every tested runtime for the same reason — **no agent can reset its own context and continue executing skill instructions mid-session.** The instruction is ignored, context leaks, and quality degrades.
 
 The only reliable solution is to move isolation out of the skill and into the OS process layer.
 
-## OS-Process Isolation — `aet-work run`
+## OS-Process Isolation — `aet run`
 
-`aet-work run` invokes the unified Python orchestrator that spawns a fresh OS process for every task:
+`aet run` invokes the unified Python orchestrator that spawns a fresh OS process for every task:
 
 ```
 Parent agent session (clean)
@@ -49,23 +49,23 @@ Parent agent session (clean)
 
 ## Runtime Self-Detection
 
-`aet-work run` does not scan `PATH` or maintain a hard-coded priority list. The agent executing the skill **self-reports** its own CLI command and flags. This means:
+`aet run` does not scan `PATH` or maintain a hard-coded priority list. The agent executing the skill **self-reports** its own CLI command and flags. This means:
 
-- Kimi Code running `aet-work run` generates a script that calls `kimi`
-- Claude Code running `aet-work run` generates a script that calls `claude`
+- Kimi Code running `aet run` generates a script that calls `kimi`
+- Claude Code running `aet run` generates a script that calls `claude`
 - A new agent CLI works immediately without any changes to the skill
 
 The skill asks the currently running agent: "What CLI command and flags should the orchestrator use to spawn a fresh process of you?" The agent answers based on its own identity.
 
 ### Known Runtime Capabilities
 
-| Runtime             | Non-interactive CLI | `aet-work run` support |
-| ------------------- | ------------------- | ---------------------- |
-| Claude Code         | `claude --print`    | ✅ Supported           |
-| Kimi Code CLI       | `kimi --print`      | ✅ Supported           |
-| Cursor              | Limited             | ⚠️ Check CLI docs      |
-| GitHub Copilot Chat | Not available       | ❌ Not supported       |
-| Aider               | `aider --message`   | ✅ Supported           |
+| Runtime             | Non-interactive CLI | `aet run` support |
+| ------------------- | ------------------- | ----------------- |
+| Claude Code         | `claude --print`    | ✅ Supported      |
+| Kimi Code CLI       | `kimi --print`      | ✅ Supported      |
+| Cursor              | Limited             | ⚠️ Check CLI docs |
+| GitHub Copilot Chat | Not available       | ❌ Not supported  |
+| Aider               | `aider --message`   | ✅ Supported      |
 
 > This table reflects known capabilities as of the skill's last update. Runtimes evolve; verify with your specific version.
 
@@ -135,7 +135,7 @@ When a task fails under parallel execution, the orchestrator does not kill the o
 3. Waits for all currently running tasks to finish
 4. Exits with a non-zero status
 
-This preserves work already in progress. If Task #3 fails while Tasks #4 and #5 are running, Tasks #4 and #5 complete normally and their results are saved. Only new spawns are halted. The user can inspect the failed branch, fix the issue, and re-run `aet-work run` to resume.
+This preserves work already in progress. If Task #3 fails while Tasks #4 and #5 are running, Tasks #4 and #5 complete normally and their results are saved. Only new spawns are halted. The user can inspect the failed branch, fix the issue, and re-run `aet run` to resume.
 
 ## Queue-Update Invariant
 
@@ -145,11 +145,11 @@ Under parallel execution, only the main orchestrator loop reads and writes `.age
 - The child runs to completion and exits
 - The orchestrator polls for completion and only then does it update the queue
 
-Queue mutations are serialized by the `queue_lock` helper in `aet-work/lib/queue.py`, which uses an advisory `flock` on a sidecar lock file. The orchestrator wraps every load→mutate→save cycle in this lock, and `aet-state` acquires the same lock around every transition. No database is required, but file locking is required even within a single process because child CLI sessions and the orchestrator itself can write concurrently.
+Queue mutations are serialized by the `queue_lock` helper in `aet-work/lib/queue.py`, which uses an advisory `flock` on a sidecar lock file. The orchestrator wraps every load→mutate→save cycle in this lock, and `aet state` acquires the same lock around every transition. No database is required, but file locking is required even within a single process because child CLI sessions and the orchestrator itself can write concurrently.
 
 ## Further Reading
 
-- `bin/orchestrator` — the unified Python orchestrator invoked by `aet-work run`
+- `bin/orchestrator` — the unified Python orchestrator invoked by `aet run`
 - `lib/queue.py` — queue read/write operations with wrapper-format preservation
 - `lib/cli_adapter.py` — CLI detection and command building for Kimi and Claude
 - `references/parallel-execution.md` — deep dive on concurrency caps and resume behavior

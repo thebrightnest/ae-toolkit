@@ -103,7 +103,7 @@ Run the pre-merge validation gate.
 
 7. **Stage-aware review / CSO gate**
 
-   Read the plan.md footer `*Stage:*`. The implementation pipeline (`aet-work run` / `run-one`) already advances plans through `reviewed` → `secure` → `synced`, so `aet-ship` must not duplicate that work.
+   Read the plan.md footer `*Stage:*`. The implementation pipeline (`aet run` / `run-one`) already advances plans through `reviewed` → `secure` → `synced`, so `aet-ship` must not duplicate that work.
 
    - If stage is `synced` or `secure`: skip both `aet-review` and `aet-cso`.
    - If stage is `reviewed`: run `aet-cso` only if the diff touches auth, data, API, or dependencies.
@@ -209,10 +209,10 @@ Run the pre-merge validation gate.
     ```
     ⚠️  ship is not on PATH.
         AET skill binaries must be installed before merge verification can close the task.
-        The installer lives in the aet-setup skill, so aet-setup must be installed.
+        The installer lives in the aet-work skill, so aet-work must be installed.
         Install options:
-          - Run install-aet-binaries from the installed aet-setup skill
-            (~/.agents/skills/aet-setup/bin/install-aet-binaries)
+          - Run aet install from the installed aet-work skill
+            ~/.agents/skills/aet-work/bin/aet install
           - From this repo: make install-skills
           - Manually: add the skill bin directories (e.g. ~/.agents/skills/aet-ship/bin) to PATH.
     ```

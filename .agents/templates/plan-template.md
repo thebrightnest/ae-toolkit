@@ -91,7 +91,7 @@ How to undo this change if something goes wrong.
 ## Pipeline
 
 `pipeline` controls how the orchestrator runs this plan. It is set in the
-frontmatter and is read by `aet-work run`/`run-one`.
+frontmatter and is read by `aet run`/`run-one`.
 
 | Value      | Behavior                                            |
 | ---------- | --------------------------------------------------- |

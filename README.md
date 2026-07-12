@@ -18,8 +18,8 @@ AE Toolkit fixes this by encoding the best agentic engineering patterns from YC,
 - **Observed evidence for critical work** — `aet-verify` exercises the running system and captures proof (HTTP response, screenshot, CLI output) before merge
 - **Test-first development** — `aet-tdd` guides red-green-refactor with vertical tracer bullets and integration-style tests that survive refactors
 - **Fresh-session implementation** — plans and code never share a context window; bias can't leak
-- **Night-shift productivity** — `aet-work run` grinds through your task queue while you sleep, clearing context between each ticket so quality doesn't degrade
-- **One-command full flows** — `aet-pipeline-plan` runs the entire planning sequence; `aet-work run` runs the full implementation sequence with session-isolated stages
+- **Night-shift productivity** — `aet run` grinds through your task queue while you sleep, clearing context between each ticket so quality doesn't degrade
+- **One-command full flows** — `aet-pipeline-plan` runs the entire planning sequence; `aet run` runs the full implementation sequence with session-isolated stages
 - **Dependency upgrades as first-class work** — `aet-upgrade` analyzes breaking changes, maps risk, and validates before you bump a framework version
 - **Compounding quality** — every bug updates a rule, template, or guardrail in `.agents/`. The system gets smarter across sessions, not just within them.
 - **Agent-agnostic** — works with Claude Code, Kimi, Cursor, Codex, Copilot, or paste-into-chat. Your workflow is portable.
@@ -50,13 +50,13 @@ npx skills add https://github.com/thebrightnest/ae-toolkit --all -a claude-code
 
 Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
 
-AET skills ship with helper binaries (`aet-state`, `orchestrator`, `mine-learnings`, etc.). After installing skills, put them on `PATH` by running the installer from the `aet-setup` skill:
+AET skills ship with a single `aet` binary that dispatches to every helper (`aet state`, `aet run`, `aet mine-learnings`, etc.). After installing skills, put it on `PATH` by running the installer from the `aet-work` skill:
 
 ```bash
-~/.agents/skills/aet-setup/bin/install-aet-binaries
+~/.agents/skills/aet-work/bin/aet install
 ```
 
-Or invoke via your agent's skill command (e.g., `/aet-setup install-binaries` in Claude Code). The installer symlinks every executable found in installed skill `bin/` directories into `~/.local/bin` (override with `AET_BIN_DIR`). If `~/.local/bin` is not on your `PATH`, add it to your shell profile.
+Or invoke via your agent's skill command (e.g., `/aet-setup install-binaries` in Claude Code). The installer symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes the retired legacy binary names. If `~/.local/bin` is not on your `PATH`, add it to your shell profile — after that, `aet` maintains its own link.
 
 If you cloned this repo and are developing skills locally, `make install-skills` runs the installer automatically.
 
@@ -80,7 +80,7 @@ cp -r aet-setup ~/.agents/skills/
 | **Cursor**                    | Natural language or rules | "Set up this project with aet-setup"  |
 | **Codex / Copilot / Generic** | Paste into prompt         | Copy `SKILL.md` content into the chat |
 
-Pipelines work the same way — just invoke `aet-pipeline-plan` for planning or `aet-work run` for implementation with session-isolated stages.
+Pipelines work the same way — just invoke `aet-pipeline-plan` for planning or `aet run` for implementation with session-isolated stages.
 
 All skills follow the same markdown-based format. The agent reads the YAML frontmatter (`name`, `description`) to decide when to trigger, then loads the full instructions on demand.
 

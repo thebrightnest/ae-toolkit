@@ -1,6 +1,6 @@
 # AET Telemetry Panel
 
-Browser-based viewer for the `aet-work` telemetry archive (`~/.aet/telemetry`).
+Browser-based viewer for the aet-work telemetry archive (`~/.aet/telemetry`).
 
 ## Usage
 
@@ -83,7 +83,7 @@ Working and verified:
   older than 2026-07-04 + 2,897 empty leftover dirs; 30 MB → 23 MB). The
   prune snippet is documented in `docs/telemetry-guide.md` ("Privacy and
   retention"). June-era legacy archives were removed by that rule. The same
-  cleanup also deleted the **active** run dir of a live `aet-work run`
+  cleanup also deleted the **active** run dir of a live `aet run`
   (wfd-03): the run's bookkeeping crashed and the task DAG stalled even
   though every worktree commit was intact (learning recorded in
   `.agents/learnings.jsonl`). Rule going forward: never prune the active run —
@@ -94,7 +94,7 @@ Working and verified:
 - Panel work happens in `.worktrees/aet-panel` (branch `aet-panel`, based on
   `origin/main`). It is the source of truth for `aet-work/panel/` and the
   `docs/telemetry-guide.md` changes.
-- The main tree may also show `aet-work/panel/` files: a running `aet-work`
+- The main tree may also show `aet-work/panel/` files: a running aet-work
   orchestrator stashes uncommitted panel work at run start ("aet-work-run:
   temp stash") and pops it back when the run finishes (observed 2026-07-11 —
   the panel files vanished mid-session and came back with the stash pop).
@@ -144,7 +144,7 @@ Working and verified:
   decision).
 - **Migration:** records don't embed the slug, so it's pure directory
   renames — `thebrightnest/ae-toolkit` → `aiskills/main`,
-  `thebrightnest/artifactsh` → `artifactsh/main`. `aet-work report` follows
+  `thebrightnest/artifactsh` → `artifactsh/main`. `aet report` follows
   automatically (it shares the function).
 - **Blast radius:** `derive_project_slug()` (`aet-work/lib/telemetry.py:65`)
   - docs. Panel grouping logic (`index.html:612-615`) needs no change — the
@@ -243,7 +243,7 @@ Working and verified:
       spine stepper, consolidated cross-run timeline, aggregated
       issues/learnings, run chips linking to the Runs lens.
 - [ ] **Retention CLI** — promote the doc snippet to a proper home (e.g.
-      `aet-work report --prune DAYS`). Must cover `*.log` once session-log
+      `aet report --prune DAYS`). Must cover `*.log` once session-log
       capture exists, and must never delete the active run dir (check
       `.agents/work-queue.lease` — see Known quirks).
 - [ ] **Session log capture (deferred)** — tee design in "Live session log";

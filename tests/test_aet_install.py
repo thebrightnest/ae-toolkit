@@ -131,7 +131,7 @@ class TestInstallPathWarning(InstallTestCase):
 
 
 class TestInstallPrune(InstallTestCase):
-    """`--prune` removes exactly the seven legacy names, guarded by target."""
+    """Install unconditionally prunes the seven legacy names, guarded by target."""
 
     def _seed_skill_bin(self):
         skill_bin = Path(self.tmp.name) / "skills" / "aet-work" / "bin"
@@ -164,7 +164,6 @@ class TestInstallPrune(InstallTestCase):
         rc, _, err = self._run_install(
             "--bin-dir",
             str(self.bin_dir),
-            "--prune",
             env_extra={"AET_SKILLS_DIR": str(skill_bin.parent.parent)},
         )
         self.assertEqual(rc, 0, err)
@@ -176,18 +175,26 @@ class TestInstallPrune(InstallTestCase):
         self.assertTrue((self.bin_dir / "stale-bin").is_symlink())
         self.assertTrue((self.bin_dir / "aet").is_symlink())
 
-    def test_without_prune_flag_legacy_links_survive(self):
+    def test_install_prunes_legacy_links_by_default(self):
+        """No flag needed: install prunes skills-dir legacy links (R-5 flip)."""
         self.bin_dir.mkdir(parents=True)
         skill_bin = self._seed_skill_bin()
         (self.bin_dir / "aet-work").symlink_to(skill_bin / "aet-work")
 
-        rc, _, err = self._run_install(
+        rc, out, err = self._run_install(
             "--bin-dir",
             str(self.bin_dir),
             env_extra={"AET_SKILLS_DIR": str(skill_bin.parent.parent)},
         )
         self.assertEqual(rc, 0, err)
-        self.assertTrue((self.bin_dir / "aet-work").is_symlink())
+        self.assertFalse((self.bin_dir / "aet-work").exists())
+        self.assertIn("pruned legacy AET symlink", out)
+
+    def test_prune_flag_rejected(self):
+        """The --prune gate is gone with the flag — no deprecation window."""
+        rc, _, err = self._run_install("--bin-dir", str(self.bin_dir), "--prune")
+        self.assertEqual(rc, 2)
+        self.assertIn("unknown flag", err)
 
 
 class TestSelfRepair(InstallTestCase):

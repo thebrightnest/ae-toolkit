@@ -36,21 +36,21 @@ Skills may include executable helpers in `<skill>/bin/`. These are installed int
 
 Rules:
 
-- Skill instructions must invoke helper binaries by command name (e.g. `aet-state record-merge`), not by hardcoded agent-specific paths.
+- Skill instructions must invoke helper binaries through the `aet` dispatcher (e.g. `aet state record-merge`), not by hardcoded agent-specific paths or retired binary names.
 - Skills that depend on binaries must include a **Prerequisites** section telling the user how to install them onto `PATH`.
-- The canonical installer is owned by `aet-setup`: run the `install-aet-binaries` helper from the installed `aet-setup` skill (`~/.agents/skills/aet-setup/bin/install-aet-binaries`). It symlinks binaries from all installed skill directories into `~/.local/bin` (or `AET_BIN_DIR`).
+- The canonical installer is `aet install`, implemented in the `aet-work/bin/aet` dispatcher and bootstrapped by path (`~/.agents/skills/aet-work/bin/aet install`). It symlinks `aet` into `~/.local/bin` (or `AET_BIN_DIR`) and prunes the retired legacy binary names.
 - `make install-skills` in this repo runs the installer automatically for the local development workflow.
 
 ## Planning Artifact Directories
 
 The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/`; all other planning artifacts belong in their designated directories.
 
-| Directory        | Purpose                                                                        | Queue Ingestion                                            |
-| ---------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| `docs/plans/`    | Atomic, implementable task plans (single session, ≤ 8 files, ≤ 300 diff lines) | Yes — `aet-work init-queue` and `sync` scan this directory |
-| `docs/prds/`     | Product Requirements Documents                                                 | No                                                         |
-| `docs/roadmaps/` | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                         |
-| `docs/audits/`   | Testing audits, strategy reviews, gap analyses                                 | No                                                         |
+| Directory        | Purpose                                                                        | Queue Ingestion                                           |
+| ---------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `docs/plans/`    | Atomic, implementable task plans (single session, ≤ 8 files, ≤ 300 diff lines) | Yes — `aet init-queue` and `aet sync` scan this directory |
+| `docs/prds/`     | Product Requirements Documents                                                 | No                                                        |
+| `docs/roadmaps/` | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
+| `docs/audits/`   | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
 
 Rules:
 
@@ -72,11 +72,11 @@ blocked_by:
 ```
 
 - `id` must match the plan filename stem and be unique within the PRD family.
-- `blocked_by` is the authoritative dependency list; prose dependency sections are ignored by `aet-work sync`.
+- `blocked_by` is the authoritative dependency list; prose dependency sections are ignored by `aet sync`.
 - `size` is the S/M/L complexity label from the dual-limit model.
 - `stage` lives only in the task record, never in plan frontmatter.
 
-`aet-work sync` validates the contract and fails closed on missing or duplicate IDs, unknown blockers, mismatched filenames, or invalid size values.
+`aet sync` validates the contract and fails closed on missing or duplicate IDs, unknown blockers, mismatched filenames, or invalid size values.
 
 ## SKILL.md Format
 
@@ -173,9 +173,9 @@ If the answer is **yes** to any of these, batch the related work into a single p
 
 Workflow state is recorded at transition time and trusted on read.
 
-- `aet-state transition` is the only writer of `tasks[].state`.
-- `aet-work status`, `aet-work next`, and the orchestrator read stored `state` directly and make zero git calls on the read path.
-- `aet-state audit` reconciles stored state against git ground truth on demand; it never runs during normal operation.
+- `aet state transition` is the only writer of `tasks[].state`.
+- `aet status`, `aet next`, and the orchestrator read stored `state` directly and make zero git calls on the read path.
+- `aet state audit` reconciles stored state against git ground truth on demand; it never runs during normal operation.
 
 ### Legal Transitions
 
@@ -303,7 +303,7 @@ Every toolkit-relevant retro must contain:
 
 Run `aet-evolve --toolkit` periodically (monthly, or after every 5 retros) to scan `reports/*.md` files with `toolkit-relevant: true` and propose toolkit-level changes. See `aet-evolve/SKILL.md` for the full procedure.
 
-The orchestrator writes execution telemetry directly to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/`. Run `aet-evolve/bin/mine-learnings` periodically to scan the archive for recurring patterns (dependency issues, repeated loops, stage failures, review noise) and propose toolkit-level skill edits.
+The orchestrator writes execution telemetry directly to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/`. Run `aet mine-learnings` periodically to scan the archive for recurring patterns (dependency issues, repeated loops, stage failures, review noise) and propose toolkit-level skill edits.
 
 ## Versioning
 
