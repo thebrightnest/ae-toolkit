@@ -43,11 +43,11 @@ docs_sync_reason: adds a make validate step and the escape-marker convention wor
 
 ## Task List
 
-1. Write `scripts/skills-lint`: span extraction + `aet` invocation validation against the imported spec/parsers — M (traces: R-7)
-2. Legacy-reference rule with `--legacy=warn|error` severity + escape-marker handling — S (traces: R-8)
-3. Wire into `Makefile` `validate` (`--legacy=warn`) — S (traces: R-7)
-4. Write `tests/test_skills_lint.py` + fixtures under `tests/fixtures/skills-lint/`: valid invocation passes; unknown subcommand fails; unknown flag fails; placeholder tokens pass; legacy name warns at `warn` and fails at `error`; escape-marked span skipped — M (traces: R-10)
-5. Merge branch to main and verify integration — S
+1. ✓ Write `scripts/skills-lint`: span extraction + `aet` invocation validation against the imported spec/parsers — M (traces: R-7)
+2. ✓ Legacy-reference rule with `--legacy=warn|error` severity + escape-marker handling — S (traces: R-8)
+3. ✓ Wire into `Makefile` `validate` (`--legacy=warn`) — S (traces: R-7)
+4. ✓ Write `tests/test_skills_lint.py` + fixtures under `tests/fixtures/skills-lint/`: valid invocation passes; unknown subcommand fails; unknown flag fails; placeholder tokens pass; legacy name warns at `warn` and fails at `error`; escape-marked span skipped — M (traces: R-10)
+5. [Deferred: merge runs at `aet-ship`, per additive-then-flip batching] Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -66,11 +66,11 @@ docs_sync_reason: adds a make validate step and the escape-marker convention wor
 
 ## Validation Steps
 
-- [ ] `make validate` passes — and now includes skills-lint itself (legacy at warn)
-- [ ] Named tests per new source file: `scripts/skills-lint` → `tests/test_skills_lint.py` (unit: every rule and escape path via fixtures; integration: lint run over the real tree exits 0 at `--legacy=warn`)
-- [ ] Deliberately inserting `aet status --bogus` into a SKILL.md makes `make validate` exit non-zero; removing it goes green
-- [ ] R-trace coverage: R-7 by tasks 1, 3; R-8 by task 2; R-10 by task 4; no unknown R-ids cited
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `make validate` passes — and now includes skills-lint itself (legacy at warn)
+- [x] Named tests per new source file: `scripts/skills-lint` → `tests/test_skills_lint.py` (unit: every rule and escape path via fixtures; integration: lint run over the real tree exits 0 at `--legacy=warn`)
+- [x] Deliberately inserting `aet status --bogus` into a SKILL.md makes `make validate` exit non-zero; removing it goes green
+- [x] R-trace coverage: R-7 by tasks 1, 3; R-8 by task 2; R-10 by task 4; no unknown R-ids cited
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to `aet-ship`)
 
 ## Rollback Plan
 
@@ -78,5 +78,5 @@ Revert the merge commit; remove the Makefile line if reverting manually. The lin
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+_Stage: synced_
+_Next step: run `aet-ship`_
