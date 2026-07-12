@@ -71,5 +71,5 @@ Revert the merge commit. `install` and self-repair are additive to a binary noth
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
