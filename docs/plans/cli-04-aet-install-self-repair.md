@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - cli-01-aet-multicall-dispatcher
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: creates and removes symlinks in the user bin directory; path-resolution and prune-target correctness are security-relevant
 docs_sync: skipped
@@ -71,5 +71,5 @@ Revert the merge commit. `install` and self-repair are additive to a binary noth
 
 ---
 
-_Stage: secure_
+_Stage: merged_
 _Next step: run `aet-sync-docs`, then `aet-ship`_
