@@ -394,7 +394,8 @@ def read_queue(queue_file: str, verify: bool = True) -> list[dict[str, Any]]:
             tasks_for_hash = data.get("tasks", [])
             if _content_hash(tasks_for_hash) != stored_hash:
                 raise QueueIntegrityError(
-                    "queue modified outside aet state — run `aet state audit`"
+                    "queue modified outside aet state — run `aet state audit` "
+                    "to inspect, `aet state heal --apply` to repair"
                 )
         _queue_wrappers[queue_file] = {k: v for k, v in data.items() if k != "tasks"}
         tasks = data.get("tasks", [])

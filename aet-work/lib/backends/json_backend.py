@@ -24,10 +24,10 @@ class JsonBackend(TaskBackend):
         self.queue_file = queue_file
         self.history_file = history_file
 
-    def load(self) -> dict[str, Any]:
+    def load(self, verify: bool = True) -> dict[str, Any]:
         """Return queue and history from local JSON files."""
         return {
-            "queue": read_queue(self.queue_file),
+            "queue": read_queue(self.queue_file, verify=verify),
             "history": read_history(self.history_file),
         }
 

@@ -16,11 +16,17 @@ class TaskBackend(ABC):
     """
 
     @abstractmethod
-    def load(self) -> dict[str, Any]:
+    def load(self, verify: bool = True) -> dict[str, Any]:
         """Return the current queue and settled history.
 
         Returns a dict with at least ``queue`` (list of task dicts) and
         ``history`` (list of settled task dicts).
+
+        ``verify`` controls the tamper-evident envelope check: when true
+        (the default) a stamped queue whose tasks no longer match its
+        ``content_hash`` raises ``QueueIntegrityError`` so mutating callers
+        fail closed. Recovery commands (``audit``, ``heal``) pass
+        ``verify=False`` to load the unverified data they exist to repair.
         """
 
     @abstractmethod

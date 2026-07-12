@@ -25,6 +25,12 @@ _queue_spec.loader.exec_module(queue_lib)
 _LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 from backends.factory import create_backend  # noqa: E402, I001
+import queue as backend_queue  # noqa: E402 — the queue module instance the backends use
+
+# queue.py is loaded twice in-process (as ``aet_queue`` above and as ``queue``
+# by the backends), so QueueIntegrityError exists as two distinct classes.
+# A mismatch raised by backend.load() is the backend copy; catch both.
+_INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError, backend_queue.QueueIntegrityError)
 
 def make_backend(queue_path):
     """Create a task backend for the given queue path."""
@@ -485,9 +491,24 @@ def cmd_audit(args):
     Reports every task where the recorded state disagrees with the state
     derived from git. This is the old ``derive`` command repurposed as an
     explicit, human-run audit; it never runs during normal operation.
+
+    A queue whose integrity envelope no longer matches its tasks (edited
+    outside ``aet-state``) is still auditable: the mismatch is reported on
+    stderr and the audit proceeds with the unverified data, so audit works
+    as the diagnostic for exactly the situation it is recommended in. Run
+    ``aet state heal --apply`` to reconcile and restamp the envelope.
     """
     backend = make_backend(args.queue)
-    data = backend.load()
+    try:
+        backend.load()
+    except _INTEGRITY_ERRORS:
+        print(
+            "⚠️  Queue integrity check failed (content_hash mismatch); "
+            "audit continues with unverified data. "
+            "Run `aet state heal --apply` to reconcile and restamp.",
+            file=sys.stderr,
+        )
+    data = backend.load(verify=False)
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
     task_by_id, derived = _derive_all_states(queue, cwd, history=data["history"])
@@ -520,9 +541,25 @@ def cmd_heal(args):
 
     With ``--apply``, transitions are applied; otherwise the command prints a
     dry-run report.
+
+    A queue whose integrity envelope no longer matches its tasks (edited
+    outside ``aet-state``) is loaded unverified so heal can act as the
+    repair path. ``--apply`` restamps the envelope (revision + content_hash)
+    before applying any fixes, so a successful heal always leaves the queue
+    verifiable again — including when there is nothing else to fix.
     """
     backend = make_backend(args.queue)
-    data = backend.load()
+    integrity_ok = True
+    try:
+        backend.load()
+    except _INTEGRITY_ERRORS:
+        integrity_ok = False
+        print(
+            "⚠️  Queue integrity check failed (content_hash mismatch); "
+            "heal continues with unverified data.",
+            file=sys.stderr,
+        )
+    data = backend.load(verify=False)
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
     task_by_id, derived = _derive_all_states(queue, cwd, history=data["history"])
@@ -585,21 +622,37 @@ def cmd_heal(args):
 
     if not changes:
         print("No healable discrepancies found.")
-        return 0
+        if integrity_ok:
+            return 0
+        if not args.apply:
+            print("Queue integrity envelope is stale; run with --apply to restamp it.")
+            return 0
+        # Fall through: no state fixes, but the envelope needs restamping.
+    else:
+        print("Proposed changes:")
+        for change in changes:
+            line = f"  {change['task_id']}: {change['from']} -> {change['to']} ({change['reason']})"
+            if "pending_blockers" in change:
+                line += f" [pending_blockers -> {change['pending_blockers']}]"
+            print(line)
 
-    print("Proposed changes:")
-    for change in changes:
-        line = f"  {change['task_id']}: {change['from']} -> {change['to']} ({change['reason']})"
-        if "pending_blockers" in change:
-            line += f" [pending_blockers -> {change['pending_blockers']}]"
-        print(line)
-
-    if not args.apply:
-        print("\nRun with --apply to apply these changes.")
-        return 0
+        if not args.apply:
+            print("\nRun with --apply to apply these changes.")
+            return 0
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1
+
+    if not integrity_ok:
+        # Restamp before applying fixes: every later load in this run (the
+        # per-change reloads below and any record-merge invocation) verifies
+        # against the new hash.
+        with queue_lib.queue_lock(args.queue):
+            fresh = backend.load(verify=False)
+            backend.save(fresh["queue"])
+        print("Restamped queue integrity envelope (revision + content_hash).")
+        if not changes:
+            return 0
 
     applied = 0
     failed = 0
@@ -927,18 +980,23 @@ def build_parser() -> argparse.ArgumentParser:
 def main():
     args = build_parser().parse_args()
 
-    if args.command == "audit":
-        return cmd_audit(args)
-    if args.command == "heal":
-        return cmd_heal(args)
-    if args.command == "validate":
-        return cmd_validate(args)
-    if args.command == "transition":
-        return cmd_transition(args)
-    if args.command == "set-stage":
-        return cmd_set_stage(args)
-    if args.command == "record-merge":
-        return cmd_record_merge(args)
+    try:
+        if args.command == "audit":
+            return cmd_audit(args)
+        if args.command == "heal":
+            return cmd_heal(args)
+        if args.command == "validate":
+            return cmd_validate(args)
+        if args.command == "transition":
+            return cmd_transition(args)
+        if args.command == "set-stage":
+            return cmd_set_stage(args)
+        if args.command == "record-merge":
+            return cmd_record_merge(args)
+    except _INTEGRITY_ERRORS as exc:
+        # Fail closed with a deliberate message, not a traceback.
+        print(f"⛔ {exc}", file=sys.stderr)
+        return 1
 
     return 1
 

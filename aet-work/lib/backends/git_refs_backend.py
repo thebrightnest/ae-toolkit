@@ -133,8 +133,13 @@ class GitRefsBackend(TaskBackend):
 
     # -- TaskBackend interface ------------------------------------------------
 
-    def load(self) -> dict[str, Any]:
-        """Return queue (from refs) and settled history (from JSONL)."""
+    def load(self, verify: bool = True) -> dict[str, Any]:
+        """Return queue (from refs) and settled history (from JSONL).
+
+        ``verify`` is accepted for interface parity with the JSON backends;
+        git-refs tamper-evidence is not implemented yet, so the flag is a
+        no-op here.
+        """
         queue: list[dict[str, Any]] = []
         loaded_shas: dict[str, str] = {}
         for ref in self._list_task_refs():

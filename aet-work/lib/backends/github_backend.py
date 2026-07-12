@@ -65,10 +65,10 @@ class GitHubBackend(TaskBackend):
         self.label_prefix = label_prefix
         self.gh_path = gh_path
 
-    def load(self) -> dict[str, Any]:
+    def load(self, verify: bool = True) -> dict[str, Any]:
         """Return queue and history from the local JSON mirror."""
         return {
-            "queue": read_queue(self.queue_file),
+            "queue": read_queue(self.queue_file, verify=verify),
             "history": read_history(self.history_file),
         }
 
