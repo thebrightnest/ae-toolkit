@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.0.0] — 2026-07-12
+
+**First stable release.** This is a major version bump: the legacy per-skill binaries are retired in favor of the unified `aet` multicall binary, which is a breaking change for any scripts or muscle memory that invoke the old binaries directly.
+
+### Added
+
+- **`aet` unified binary** — a single multicall dispatcher that routes to all toolkit subcommands, with an `aet install` subcommand and on-invocation PATH self-repair. Replaces the collection of separate legacy binaries (cli-01…05).
+- **Machine-readable status** — toolkit bins expose `build_parser()` and a `status --json` output for scripted inspection (cli-02).
+- **skills-lint invocation checker** — a new lint that validates skill invocation patterns (cli-03).
+- **Workflow-as-data pipelines** — pipeline stage sequences are now declared in a packaged workflow file with a schema and loader, and plans route gated stages from YAML frontmatter (wfd-01…03).
+- **Workflow lint** — `make validate` now lints workflow definitions, with a team-variant exit-gate proof (wfd-04).
+- **Telemetry panel** — a local, stdlib-launched archive viewer with a Plans lens: plan model, tabs, plan list, and plan detail with a pipeline spine, consolidated timeline, and run chips (thp-05/06).
+- **Telemetry retention pruning** — a prune CLI with active-run protection, a worktree-based project slug, and an archive slug migration helper (thp-02/03/04).
+- **git-refs task backend** — `aet-work` can store task state in git refs as an alternative to the local JSON queue, with backend sealing and a parity suite (frh-13/14).
+- **Curated sprint intake** — `aet-work` sync no longer auto-adds plans; intake parks them as ready or blocked for explicit curation (frh-15).
+- **R-trace decision templates** — `aet-plan` gains requirement-traceability templates and prose, backed by ADR-020 and ADR-021 (rdm-01/02).
+
+### Changed
+
+- **aet-work orchestrator hardening** — locked, atomic queue writes; a tamper-evident mutation guard with a run lease; and evidence-gated task completion that requires a structured gate verdict (frh-01/02/10/11/17).
+- **Live frontier batch exit** — the orchestrator widens the scheduling frontier and exits cleanly when idle instead of spinning (frh-16).
+- **Process isolation** — batch children spawn in a new session and are killed by process group on timeout or shutdown (frh-03).
+- **aet-retro telemetry** — now emits structured `learning_candidate` records for downstream mining (frh-12).
+- **`make validate`** — wires pytest and ruff into the validation gate (frh-04).
+
+### Fixed
+
+- **Orchestrator false-completion** — the orchestrator now requires commits before marking a task complete and reconciles `pending_blockers` against settled history.
+- **Verifier stage detection** — the verifier reads the footer stage instead of scanning body mentions.
+- **Per-kind verdict paths** — verdicts are published to per-kind paths so stages read the correct evidence.
+- **Worktree reuse** — `aet-work` reuses existing worktrees that are up-to-date or dirty instead of recreating them.
+
+### Removed
+
+- **Legacy skill binaries** — the many separate per-skill binaries are retired in favor of the `aet` multicall binary (cli-05).
+- **Hardcoded pipeline module** — `pipeline.py` deleted; stage sequencing now lives in the workflow file (wfd-03).
+- **Legacy status vocabulary** — retired from the queue library, read side, and state layer (frh-06/07).
+- **Dead orchestrator layer** — removed unused dead code (frh-08).
+
+### Documentation
+
+- Added ADR-019, ADR-020, and ADR-021, and indexed the ADR set.
+- Added PRDs and plan suites for fable-review hardening (frh-01…18), workflow-as-data extraction (wfd-01…04), the `aet` binary (cli-01…05), and telemetry hygiene & the plan-centric panel (thp-01…06).
+- Added the p3 enforcement-walls plan set (ewl-01…06) and PRD; retired the abandoned ewl-02 plan while retaining its trail.
+
+---
+
 ## [0.10.0] — 2026-07-09
 
 ### Added

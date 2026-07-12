@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 0.10.0
+## Current Version: 1.0.0
 
-Last updated: 2026-07-09
+Last updated: 2026-07-12
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees; optionally backed by GitHub Issues for team-wide visibility.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, and an optional GitHub Issues or git-refs backend for team-wide visibility.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -58,16 +58,27 @@ Keep projects and the toolkit itself healthy.
 
 ## Integrations
 
-| Name                   | Description                                                                                              |
-| ---------------------- | -------------------------------------------------------------------------------------------------------- |
-| `make install-skills`  | Symlinks all skills to `~/.agents/skills/` for local agent use.                                          |
-| `install-aet-binaries` | Installs skill executables such as `mine-learnings` on `PATH`.                                           |
-| GitHub Issues          | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                      |
-| Git                    | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required. |
+| Name                  | Description                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `make install-skills` | Symlinks all skills to `~/.agents/skills/` for local agent use.                                                                      |
+| `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet install` self-installs and repairs `PATH` on invocation. |
+| Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, and run history. |
+| GitHub Issues         | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                                                  |
+| git-refs backend      | Optional `aet-work` task backend that stores queue state in git refs instead of local JSON files.                                    |
+| Git                   | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required.                             |
 
 ---
 
 ## What's New
+
+### What's New in v1.0.0
+
+- **One `aet` command for the whole toolkit** — a single multicall binary now dispatches to every subcommand, self-installs, and repairs `PATH` on invocation, replacing the many separate legacy binaries.
+- **Local telemetry panel with a Plans lens** — browse plans, pipeline progress, consolidated timelines, and run history from a stdlib-launched viewer of the telemetry archive.
+- **Curated sprint intake** — `aet-work` sync no longer auto-adds plans; intake parks them as ready or blocked so you decide what enters the queue.
+- **More trustworthy unattended runs** — the orchestrator uses locked, atomic queue writes with a tamper-evident guard, requires a structured evidence verdict before completing a task, and shuts down batch children cleanly by process group.
+- **git-refs task backend option** — `aet-work` can store queue state in git refs as an alternative to local JSON files or GitHub Issues.
+- **Pipelines as data** — pipeline stage sequences are declared in a packaged workflow file and linted by `make validate`, instead of being hardcoded.
 
 ### What's New in v0.10.0
 
