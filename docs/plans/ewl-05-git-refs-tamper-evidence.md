@@ -83,5 +83,5 @@ Revert the merge commit — `GitRefsBackend.seal()`/read path return to no integ
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_

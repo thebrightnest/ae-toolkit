@@ -25,7 +25,7 @@ docs_sync_reason: configure-task-backend messaging and backend-selection docs cu
 
 ## Locked design
 
-- `aet-work/lib/backends/factory.py`: when `task_backend` is unset in config, the factory returns `GitRefsBackend` instead of `JsonBackend`. Explicit `task_backend: "json"` and `task_backend: "git-refs"` both continue to work unchanged.
+- `aet-work/lib/backends/factory.py`: flip **both** unset-default sites to `GitRefsBackend` — the `config.get("task_backend", "json")` fallback (`factory.py:31`, for a config dict present but missing the key) **and** `_read_config`'s no-config-file return `{"task_backend": "json"}` (`factory.py:56-57`), plus the docstring's "`json` (default), `git-refs` (prototype, opt-in)" framing (`factory.py:24-26`). The second site is load-bearing and easy to miss: a genuinely fresh install has no `.agents/aet-work.json`, so it never reaches line 31's `.get` default — line 57 governs, and if only line 31 is flipped, R-5's acceptance criterion ("a fresh `aet-setup` run yields git-refs") silently fails while the unit test on the key-absent path still passes. Explicit `task_backend: "json"` and `task_backend: "git-refs"` both continue to work unchanged.
 - `aet-setup/bin/configure-task-backend`: update prompt/messaging so git-refs is presented as the default, JSON as the documented fallback/opt-out (reverse of today's framing) — no change to the mechanics of how the choice is written to config.
 - No change to `GitRefsBackend` or `JsonBackend` implementations themselves in this plan — this is a default-selection change plus the messaging and test-default-assertion that follow from it. (Tamper-evidence for `GitRefsBackend` is ewl-05, a separate plan, so this flip does not silently ship a backend with weaker integrity guarantees than the one it replaces as default — ewl-05 is sequenced to land alongside or before this default takes effect in practice, per the PRD's phase-closing R-7/R-8.)
 
@@ -36,7 +36,7 @@ docs_sync_reason: configure-task-backend messaging and backend-selection docs cu
 
 ## Task List
 
-1. Change the default branch of `aet-work/lib/backends/factory.py` to return `GitRefsBackend` when `task_backend` is unset — S (traces: R-5)
+1. Flip **both** unset-default sites in `aet-work/lib/backends/factory.py` to `GitRefsBackend`: the `config.get("task_backend", "json")` fallback (`:31`) and `_read_config`'s no-file return `{"task_backend": "json"}` (`:56-57`); update the docstring framing (`:24-26`) — S (traces: R-5)
 2. Update `aet-setup/bin/configure-task-backend` messaging: git-refs as default, JSON as explicit opt-out — S (traces: R-5)
 3. Extend `tests/test_git_refs_parity.py` (or the factory's own test file) with an explicit assertion that the _no-config_ factory output is `GitRefsBackend` — S (traces: R-5, R-8)
 4. Merge branch to main and verify integration — S
@@ -58,7 +58,7 @@ docs_sync_reason: configure-task-backend messaging and backend-selection docs cu
 ## Validation Steps
 
 - [ ] `make validate` passes; full suite passes
-- [ ] `tests/test_git_refs_parity.py::test_default_backend_is_git_refs_when_unconfigured` (new) — unit: factory with no `task_backend` key returns `GitRefsBackend`
+- [ ] `tests/test_git_refs_parity.py::test_default_backend_is_git_refs_when_unconfigured` (new) — unit: factory returns `GitRefsBackend` for **both** unset paths — (a) a config dict present but missing `task_backend`, and (b) no config file at all (`_read_config`'s no-file fallback). Case (b) is the one guarding R-5's fresh-install acceptance criterion; a test covering only (a) would pass while a fresh install still gets JSON.
 - [ ] Full `tests/test_git_refs_parity.py` suite still green against the new default (frh-14's existing parity cases re-run, now exercising the default path rather than an explicit opt-in)
 - [ ] Manual: a fresh `aet-setup` run with no prior config yields git-refs as the active backend (satisfies PRD acceptance criterion for R-5)
 - [ ] R-trace coverage: R-5 by tasks 1–3; R-8 by task 3; no unknown R-ids cited
@@ -74,5 +74,5 @@ Revert the merge commit — factory default returns to `JsonBackend`. Any queue 
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_

@@ -31,7 +31,7 @@ docs_sync_reason: replaces docs/CONVENTIONS.md's manual symlink instructions wit
   3. For each required stage, check recorded gate evidence (via `evidence.read_verdict`) is present and `pass`. Any missing or failing required stage refuses the push with a named, per-stage error listing exactly what's missing.
   4. Non-task-branch pushes and the existing coverage gate behavior are unchanged.
 - New `aet-setup/bin/hooks` (stdlib-only Python, own argparse subcommands — `install` is the first): symlinks `scripts/hooks/pre-push` into `.git/hooks/pre-push`, idempotent (safe to re-run, detects and leaves a pre-existing non-AET hook alone with a warning rather than clobbering it).
-- `aet`'s `SUBCOMMANDS` table gains `"hooks": {"target": ("aet-setup", "bin/hooks"), "mode": "exec"}` — `aet hooks install` execs `aet-setup/bin/hooks` with `install` forwarded as an argument, matching the `state`-style nested-subcommand precedent.
+- `aet`'s `SUBCOMMANDS` table gains `"hooks": {"target": ("aet-setup", "hooks"), "mode": "exec"}` — `aet hooks install` execs `aet-setup/bin/hooks` with `install` forwarded as an argument, matching the `state`-style nested-subcommand precedent. The target passes the **bare** bin-name `"hooks"`, not `"bin/hooks"`: `_resolve_target` (`aet-work/bin/aet:104`) already appends `bin/`, so a prefixed value would resolve to `aet-setup/bin/bin/hooks`.
 - `docs/CONVENTIONS.md`'s manual symlink instructions are replaced with `aet hooks install`.
 
 ## Rejected Alternatives
@@ -55,7 +55,7 @@ docs_sync_reason: replaces docs/CONVENTIONS.md's manual symlink instructions wit
 
 - [x] Not a near-identical addition to anything queued
 - [x] Diff expected > 3 files / > 100 lines (hook extension + new binary + dispatcher row + docs + tests)
-- [x] Cannot share a branch with ewl-01/ewl-02/ewl-04/ewl-05 — distinct files, distinct risk surface (git hook installation)
+- [x] Cannot share a branch with ewl-01/ewl-04/ewl-05 — distinct files, distinct risk surface (git hook installation)
 
 ## Files to Modify
 
@@ -87,5 +87,5 @@ Revert the merge commit. `scripts/hooks/pre-push` returns to waf-05's deletion-s
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_

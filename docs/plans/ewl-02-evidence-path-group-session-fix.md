@@ -4,6 +4,7 @@ size: S
 blocked_by:
   - cli-03-skills-lint
 pipeline: standard
+status: abandoned
 security_review: skipped
 security_review_reason: surgical env-var export fix inside the existing orchestrator evidence-gate path; no new writer, no new trust boundary — frh-11 already established this exact pattern for run_stage
 docs_sync: skipped
@@ -11,6 +12,8 @@ docs_sync_reason: internal orchestrator bugfix with no user-facing surface chang
 ---
 
 # Plan: Fix `AET_EVIDENCE_PATH` Derivation in `run_stage_group`
+
+> **ABANDONED — duplicate.** Superseded by `docs/plans/frh-18-group-evidence-path-contract.md`, already `status: approved` and queued (`ready`) before this plan reached `aet-work add`. frh-18 targets the identical root cause (confirmed same functions/line ranges in `aet-work/bin/orchestrator`) with a materially more correct design: a per-kind `AET_EVIDENCE_PATH_<KIND>` precedence, which this plan's single flat `AET_EVIDENCE_PATH` does not handle correctly when a group session runs more than one evidence-bound stage concurrently (e.g. a `[reviewed, secure]` group — the exact scenario this plan's own regression test named). frh-18 also adds gate-diagnostics and an ADR this plan didn't scope. Never added to the work queue; nothing to `mark-terminal`. Kept on disk, unqueued, for the paper trail — see `ewl-01`'s Context for the resulting `blocked_by` change.
 
 ## Context
 
@@ -71,5 +74,5 @@ Revert the merge commit — `run_stage_group` returns to CWD-derived-fallback be
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`_
+_Stage: abandoned_
+_Next step: none — superseded by `frh-18-group-evidence-path-contract`_
