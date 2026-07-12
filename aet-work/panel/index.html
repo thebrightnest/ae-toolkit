@@ -253,6 +253,20 @@ function worktreeOf(rawPlanFile) {
   return m ? m[1] : "main";
 }
 
+function spineStatusOf(sessions) {
+  // Per spine state: latest record naming it wins — failure -> failed, else
+  // done; states never named stay pending (honest: telemetry can't see skips).
+  const sorted = [...sessions].sort((a, b) =>
+    (a.start_time || a.timestamp || "").localeCompare(b.start_time || b.timestamp || ""));
+  const status = {};
+  for (const rec of sorted) {
+    for (const s of [rec.stage, ...(rec.stages || [])]) {
+      if (SPINE.includes(s)) status[s] = rec.result === "failure" ? "failed" : "done";
+    }
+  }
+  return status;
+}
+
 function buildPlans(runs) {
   // Pass 1: global task -> plan map from every record carrying both fields.
   // First mapping wins; conflicts are counted in meta.
@@ -330,7 +344,9 @@ function buildPlans(runs) {
       }
     }
   }
-  const out = [...plans.values()].map(p => ({ ...p, progress: p.spine.size, taskIds: [...p.taskIds] }));
+  const out = [...plans.values()].map(p => ({
+    ...p, progress: p.spine.size, spineStatus: spineStatusOf(p.sessions), taskIds: [...p.taskIds],
+  }));
   out.sort((a, b) => (b.lastActivity || "").localeCompare(a.lastActivity || ""));
   return { plans: out, meta: { taskPlanConflicts } };
 }
@@ -348,8 +364,8 @@ function Button({ children, variant = "default", size = "default", className = "
   return <button className={`${base} ${variants[variant]} ${sizes[size]} ${className}`} {...props}>{children}</button>;
 }
 
-function Card({ children, className = "" }) {
-  return <div className={`rounded-lg border bg-card text-card-foreground shadow-sm ${className}`}>{children}</div>;
+function Card({ children, className = "", ...props }) {
+  return <div className={`rounded-lg border bg-card text-card-foreground shadow-sm ${className}`} {...props}>{children}</div>;
 }
 function CardHeader({ children, className = "" }) {
   return <div className={`flex flex-col space-y-1.5 p-4 ${className}`}>{children}</div>;
@@ -361,7 +377,7 @@ function CardContent({ children, className = "" }) {
   return <div className={`p-4 pt-0 ${className}`}>{children}</div>;
 }
 
-function Badge({ children, variant = "default", className = "" }) {
+function Badge({ children, variant = "default", className = "", ...props }) {
   const base = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors";
   const variants = {
     default: "border-transparent bg-primary text-primary-foreground",
@@ -370,7 +386,7 @@ function Badge({ children, variant = "default", className = "" }) {
     success: "border-transparent bg-emerald-100 text-emerald-800",
     outline: "text-foreground",
   };
-  return <span className={`${base} ${variants[variant]} ${className}`}>{children}</span>;
+  return <span className={`${base} ${variants[variant]} ${className}`} {...props}>{children}</span>;
 }
 
 function Select({ children, className = "", ...props }) {
@@ -403,10 +419,10 @@ function Tabs({ value, onChange, options }) {
   );
 }
 
-function Table({ children, className = "" }) {
+function Table({ children, className = "", ...props }) {
   return (
     <div className="w-full overflow-auto">
-      <table className={`w-full caption-bottom text-sm ${className}`}>{children}</table>
+      <table className={`w-full caption-bottom text-sm ${className}`} {...props}>{children}</table>
     </div>
   );
 }
@@ -503,7 +519,7 @@ function PlansTable({ plans, selectedKey, onSelect }) {
   );
 }
 
-function PlanCard({ plan }) {
+function PlanDetail({ plan, runs, onOpenRun }) {
   if (!plan) {
     return (
       <Card className="h-full flex items-center justify-center min-h-[200px]">
@@ -511,8 +527,14 @@ function PlanCard({ plan }) {
       </Card>
     );
   }
+  // One chronological stream of every stage session and test run across all
+  // of the plan's runs; retries show up as repeated rows.
+  const timeline = [
+    ...plan.sessions.map(r => ({ ...r, kind: "stage" })),
+    ...plan.tests.map(r => ({ ...r, kind: "test" })),
+  ].sort((a, b) => (a.start_time || a.timestamp || "").localeCompare(b.start_time || b.timestamp || ""));
   return (
-    <Card className="h-full overflow-auto">
+    <Card className="h-full overflow-auto" data-testid="plan-detail">
       <CardHeader>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
@@ -526,17 +548,88 @@ function PlanCard({ plan }) {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Stat label="Runs" value={plan.runs.length} />
+          <Stat label="Contributing runs" value={plan.runs.length} testid="plan-detail-runs" />
           <Stat label="Stage sessions" value={plan.sessions.length} />
           <Stat label="Tests" value={plan.testsAgg.total ? `${plan.testsAgg.passed}/${plan.testsAgg.total} passed` : "—"} />
           <Stat label="Progress" value={`${plan.progress}/6`} />
         </div>
 
-        <SectionTitle>Pipeline progress</SectionTitle>
+        <SectionTitle>Pipeline spine</SectionTitle>
+        <div className="flex items-center gap-1 flex-wrap">
+          {SPINE.map((s, i) => {
+            const st = (plan.spineStatus && plan.spineStatus[s]) || "pending";
+            const variant = st === "done" ? "success" : st === "failed" ? "destructive" : "outline";
+            return (
+              <React.Fragment key={s}>
+                {i > 0 && <span className="text-muted-foreground text-xs">→</span>}
+                <Badge variant={variant} data-testid={`spine-state-${s}`} data-state={st}>{s}</Badge>
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        <SectionTitle count={timeline.length}>Timeline</SectionTitle>
+        <Table>
+          <thead><tr className="border-b">
+            <Th>Time</Th><Th>Run</Th><Th>Worktree</Th><Th>Kind</Th><Th>Stage</Th><Th>Duration</Th><Th>Result</Th>
+          </tr></thead>
+          <tbody>
+            {timeline.map((r, i) => (
+              <tr
+                key={i}
+                data-testid="timeline-row"
+                data-kind={r.kind}
+                data-run={r.runId}
+                data-time={r.start_time || r.timestamp || ""}
+                data-result={r.result}
+                className="border-b hover:bg-muted/50"
+              >
+                <Td className="whitespace-nowrap text-muted-foreground text-xs">{fmtTime(r.start_time || r.timestamp)}</Td>
+                <Td className="font-mono text-xs" title={r.runId}>{shortId(r.runId)}</Td>
+                <Td data-testid="timeline-worktree" className="whitespace-nowrap">{r.worktree || "—"}</Td>
+                <Td><Badge variant="outline">{r.kind}</Badge></Td>
+                <Td data-testid="timeline-stage" className="whitespace-nowrap">{r.stage || "—"}</Td>
+                <Td data-testid="timeline-duration" className="whitespace-nowrap">{fmtDuration(r.duration_seconds)}</Td>
+                <Td><ResultBadge result={r.result} /></Td>
+              </tr>
+            ))}
+            {timeline.length === 0 && (
+              <tr><td colSpan="7" data-testid="timeline-empty" className="px-3 py-8 text-center text-muted-foreground">No stage sessions or test runs recorded for this plan</td></tr>
+            )}
+          </tbody>
+        </Table>
+
+        {plan.issues.length > 0 && (
+          <>
+            <SectionTitle count={plan.issues.length}>Environment issues</SectionTitle>
+            <IssuesTable issues={plan.issues} />
+          </>
+        )}
+
+        {plan.learnings.length > 0 && (
+          <>
+            <SectionTitle count={plan.learnings.length}>Learning candidates</SectionTitle>
+            <LearningsTable learnings={plan.learnings} />
+          </>
+        )}
+
+        <SectionTitle count={plan.runs.length}>Contributing runs</SectionTitle>
         <div className="flex flex-wrap gap-1.5">
-          {SPINE.map(s => (
-            <Badge key={s} variant={plan.spine.has(s) ? "success" : "outline"}>{s}</Badge>
-          ))}
+          {plan.runs.map(dir => {
+            const run = runs.find(r => r.dir === dir);
+            return (
+              <button
+                key={dir}
+                data-testid="run-chip"
+                data-run-dir={dir}
+                onClick={() => onOpenRun(dir)}
+                title={dir}
+                className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-mono transition-colors hover:bg-accent"
+              >
+                {shortId(run ? run.runId : dir)}
+              </button>
+            );
+          })}
         </div>
 
         <div className="text-xs text-muted-foreground mt-5">
@@ -557,6 +650,47 @@ function SectionTitle({ children, count }) {
   );
 }
 
+function IssuesTable({ issues }) {
+  return (
+    <Table data-testid="issues-table">
+      <thead><tr className="border-b">
+        <Th>Time</Th><Th>Type</Th><Th>Dependency</Th><Th>Resolved</Th><Th>Message</Th>
+      </tr></thead>
+      <tbody>
+        {issues.map((is, i) => (
+          <tr key={i} className="border-b hover:bg-muted/50">
+            <Td className="whitespace-nowrap text-muted-foreground text-xs">{fmtTime(is.timestamp)}</Td>
+            <Td><Badge variant="outline">{is.issue_type || "—"}</Badge></Td>
+            <Td className="font-mono text-xs">{is.dependency || "—"}</Td>
+            <Td>{is.resolved ? <Badge variant="success">yes</Badge> : <Badge variant="destructive">no</Badge>}</Td>
+            <Td className="text-xs">{is.message || "—"}</Td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+}
+
+function LearningsTable({ learnings }) {
+  return (
+    <Table data-testid="learnings-table">
+      <thead><tr className="border-b">
+        <Th>Stage</Th><Th>Pattern</Th><Th>Confidence</Th><Th>Description</Th>
+      </tr></thead>
+      <tbody>
+        {learnings.map((l, i) => (
+          <tr key={i} className="border-b hover:bg-muted/50">
+            <Td>{l.stage || "—"}</Td>
+            <Td><Badge variant="outline">{l.pattern_type || "—"}</Badge></Td>
+            <Td>{l.confidence != null ? l.confidence.toFixed(2) : "—"}</Td>
+            <Td className="text-xs">{l.description || "—"}</Td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+}
+
 function RunDetail({ run }) {
   if (!run) {
     return (
@@ -567,7 +701,7 @@ function RunDetail({ run }) {
   }
   const s = run.summary;
   return (
-    <Card className="h-full overflow-auto">
+    <Card className="h-full overflow-auto" data-testid="run-detail">
       <CardHeader>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
@@ -646,43 +780,14 @@ function RunDetail({ run }) {
         {run.issues.length > 0 && (
           <>
             <SectionTitle count={run.issues.length}>Environment issues</SectionTitle>
-            <Table>
-              <thead><tr className="border-b">
-                <Th>Time</Th><Th>Type</Th><Th>Dependency</Th><Th>Resolved</Th><Th>Message</Th>
-              </tr></thead>
-              <tbody>
-                {run.issues.map((is, i) => (
-                  <tr key={i} className="border-b hover:bg-muted/50">
-                    <Td className="whitespace-nowrap text-muted-foreground text-xs">{fmtTime(is.timestamp)}</Td>
-                    <Td><Badge variant="outline">{is.issue_type || "—"}</Badge></Td>
-                    <Td className="font-mono text-xs">{is.dependency || "—"}</Td>
-                    <Td>{is.resolved ? <Badge variant="success">yes</Badge> : <Badge variant="destructive">no</Badge>}</Td>
-                    <Td className="text-xs">{is.message || "—"}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            <IssuesTable issues={run.issues} />
           </>
         )}
 
         {run.learnings.length > 0 && (
           <>
             <SectionTitle count={run.learnings.length}>Learning candidates</SectionTitle>
-            <Table>
-              <thead><tr className="border-b">
-                <Th>Stage</Th><Th>Pattern</Th><Th>Confidence</Th><Th>Description</Th>
-              </tr></thead>
-              <tbody>
-                {run.learnings.map((l, i) => (
-                  <tr key={i} className="border-b hover:bg-muted/50">
-                    <Td>{l.stage || "—"}</Td>
-                    <Td><Badge variant="outline">{l.pattern_type || "—"}</Badge></Td>
-                    <Td>{l.confidence != null ? l.confidence.toFixed(2) : "—"}</Td>
-                    <Td className="text-xs">{l.description || "—"}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+            <LearningsTable learnings={run.learnings} />
           </>
         )}
 
@@ -695,11 +800,11 @@ function RunDetail({ run }) {
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, testid }) {
   return (
     <div className="rounded-md border p-2.5">
       <div className="text-[11px] text-muted-foreground">{label}</div>
-      <div className="text-sm font-semibold mt-0.5">{value}</div>
+      <div className="text-sm font-semibold mt-0.5" data-testid={testid}>{value}</div>
     </div>
   );
 }
@@ -949,7 +1054,9 @@ function App() {
                 : <RunsTable runs={filtered} selectedId={selectedId} onSelect={setSelectedId} />}
             </Card>
             <div className="max-h-[68vh]">
-              {lens === "plans" ? <PlanCard plan={selectedPlan} /> : <RunDetail run={selected} />}
+              {lens === "plans"
+                ? <PlanDetail plan={selectedPlan} runs={runs} onOpenRun={dir => { setSelectedId(dir); setLens("runs"); }} />
+                : <RunDetail run={selected} />}
             </div>
           </div>
         </>

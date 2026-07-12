@@ -85,5 +85,5 @@ Revert the merge commit — Plans lens falls back to thp-05's basic plan card; R
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work` (after P-0 — panel v1 on origin/main)_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
