@@ -91,17 +91,17 @@ docs_sync_reason: aet-work/references/telemetry-log-schema.md must state explici
 
 ## Task List
 
-1. aet-retro: import writer `derive_project_slug`, delete local origin-URL
+1. ✓ aet-retro: import writer `derive_project_slug`, delete local origin-URL
    version; fail named-error on import failure — S (traces: root cause 1)
-2. aet-retro: restrict `categorize_records`/`extract_message` to typed records;
+2. ✓ aet-retro: restrict `categorize_records`/`extract_message` to typed records;
    remove `stage` and `str(record)` fallbacks — S (traces: root cause 2)
-3. mine-learnings: four-level walk with date validation; correct run/file
+3. ✓ mine-learnings: four-level walk with date validation; correct run/file
    counts — S (traces: root cause 1)
-4. Tests: fixture archive in the writer layout for both readers (retro finds
+4. ✓ Tests: fixture archive in the writer layout for both readers (retro finds
    real findings, mine-learnings reports nonzero file/run counts), plus a
    contract test asserting reader slug == writer slug for a temp repo — M
    (traces: root cause 1, root cause 2)
-5. Docs: make the slug definition explicit in
+5. ✓ Docs: make the slug definition explicit in
    `aet-work/references/telemetry-log-schema.md`; delete the polluted archive
    run dir and sweep empty parents — S
 6. Merge branch to main and verify integration — S
@@ -128,14 +128,14 @@ docs_sync_reason: aet-work/references/telemetry-log-schema.md must state explici
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] For each new source file introduced by this plan, name the test that will cover it
-- [ ] Contract test: reader slug derivation is literally the writer's
+- [x] Lint passes
+- [x] Tests pass
+- [x] For each new source file introduced by this plan, name the test that will cover it
+- [x] Contract test: reader slug derivation is literally the writer's
       `derive_project_slug` (no second implementation)
-- [ ] Live check: `aet retro` against the real `~/.aet/telemetry` produces
+- [x] Live check: `aet retro` against the real `~/.aet/telemetry` produces
       nonzero file counts and no dict-repr findings
-- [ ] Polluted run dir
+- [x] Polluted run dir
       `~/.aet/telemetry/thebrightnest/ae-toolkit/2026-07-13/76dbc80d6849442abe8682b7f294164f/`
       confirmed deleted
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
@@ -152,4 +152,5 @@ intentionally not restorable (its contents are the bug's pollution).
 
 ---
 
-_Stage: plan-approved_
+_Stage: implemented_
+_Next step: run `aet-qa`_

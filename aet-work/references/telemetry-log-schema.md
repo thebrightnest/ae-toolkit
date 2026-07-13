@@ -9,6 +9,17 @@ The orchestrator writes execution telemetry directly to the user-level archive:
     └── ...
 ```
 
+`{project-slug}` is the worktree-based slug derived by
+`aet-work/lib/telemetry.py::derive_project_slug`:
+`<main-worktree-dir>/<worktree-label>` (e.g. `aiskills/main`). The primary
+worktree is labelled `main`; a linked worktree contributes its own directory
+name. The `AET_PROJECT_ID` / `AET_REPO_SLUG` environment variables override
+the derivation; a non-git directory falls back to its own basename (a single
+path segment). The full on-disk layout is therefore
+`~/.aet/telemetry/<main-worktree-dir>/<worktree-label>/{date}/{run-id}/{task-id}.jsonl`.
+Readers (aet-retro, mine-learnings) import `derive_project_slug` from the
+writer rather than re-deriving it — do not implement a second derivation.
+
 Each `{task-id}.jsonl` file is append-only and newline-delimited JSON. Each line is a self-contained record. `last-run.json` is a single JSON object containing the run summary.
 
 For instructions on enabling telemetry and mining it across projects, see `../../docs/telemetry-guide.md`.
@@ -123,7 +134,7 @@ Use the `aet report` command to print a text summary:
 ```bash
 aet report
 aet report --since 2026-06-15T00:00:00Z
-aet report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
+aet report --run-dir ~/.aet/telemetry/my-project/main/2026-06-30/<run-id>
 ```
 
 Or read the log programmatically via `aet-work/lib/telemetry.py`:
