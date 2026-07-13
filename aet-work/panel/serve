@@ -14,7 +14,9 @@ import os
 import sys
 import threading
 import webbrowser
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 TELEMETRY = os.path.expanduser("~/.aet/telemetry")
@@ -31,6 +33,56 @@ def telemetry_files():
             ):
                 out.append(os.path.relpath(os.path.join(root, name), TELEMETRY))
     return sorted(out)
+
+
+def _is_date_segment(name):
+    """True for YYYY-MM-DD archive path segments (same rule as telemetry.py)."""
+    try:
+        datetime.strptime(name, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _newest_mtime(path):
+    """Newest mtime within path, including the dir itself.
+
+    Same definition as telemetry.py:_newest_mtime — the aggregate prune
+    safety already trusts — so JSONL appends count as run activity.
+    """
+    newest = path.stat().st_mtime
+    for entry in path.rglob("*"):
+        try:
+            newest = max(newest, entry.stat().st_mtime)
+        except OSError:
+            continue
+    return newest
+
+
+def run_dirs():
+    """Current-layout run dirs ({project}/{YYYY-MM-DD}/{run-id}) with activity.
+
+    A dir is a run dir when its parent's basename parses as a date (mirrors
+    telemetry.py:_iter_project_run_dirs; legacy {date}-{run-id} dirs fail the
+    date check and are excluded). Symlinked dirs are skipped, as in the prune
+    walk. mtime is the newest recursive mtime, so appends register. Empty
+    run dirs are included — that is the point (lvp-01).
+    """
+    out = []
+    if not os.path.isdir(TELEMETRY):
+        return out
+    for root, dirnames, _files in os.walk(TELEMETRY):
+        if not _is_date_segment(os.path.basename(root)):
+            continue
+        for name in sorted(dirnames):
+            full = os.path.join(root, name)
+            if os.path.islink(full):
+                continue
+            out.append(
+                {"rel": os.path.relpath(full, TELEMETRY), "mtime": _newest_mtime(Path(full))}
+            )
+        dirnames[:] = []  # run dirs never nest run dirs; stop descending
+    return sorted(out, key=lambda d: d["rel"])
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -56,7 +108,7 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(PANEL_DIR, "index.html"), "rb") as f:
                 self._send(200, f.read(), "text/html; charset=utf-8")
         elif parsed.path == "/api/list":
-            body = json.dumps({"root": TELEMETRY, "files": telemetry_files()})
+            body = json.dumps({"root": TELEMETRY, "files": telemetry_files(), "dirs": run_dirs()})
             self._send(200, body, "application/json")
         elif parsed.path == "/api/file":
             rel = parse_qs(parsed.query).get("p", [""])[0]
