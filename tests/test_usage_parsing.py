@@ -1,6 +1,8 @@
 """Tests for aet-work/lib/usage.py — parsing agent CLI headless usage output."""
 
+import json
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
@@ -26,7 +28,8 @@ CLAUDE_ENVELOPE = (
 
 
 # Real `kimi -p` text output captured 2026-07-12: response text plus a resume
-# hint, and no token/cost data of any kind.
+# hint. Stdout carries no token/cost data; usage lives in the session's
+# on-disk wire files (see TestParseUsageKimiWire).
 KIMI_TEXT_OUTPUT = (
     '• The user asked me to reply with exactly "OK". Simple instruction.\n'
     "\n"
@@ -36,7 +39,7 @@ KIMI_TEXT_OUTPUT = (
 )
 
 # Real `kimi --output-format stream-json` output captured 2026-07-12: NDJSON
-# events, still no usage/token fields.
+# events, still no usage/token fields on stdout.
 KIMI_STREAM_JSON_OUTPUT = (
     '{"role":"assistant","content":"OK"}\n'
     '{"role":"meta","type":"session.resume_hint","session_id":"session_9f98",'
@@ -84,14 +87,259 @@ class TestParseUsageClaude(unittest.TestCase):
 
 
 class TestParseUsageKimi(unittest.TestCase):
-    def test_kimi_text_output_returns_none(self):
-        self.assertIsNone(parse_usage("kimi", KIMI_TEXT_OUTPUT))
+    """Kimi prints no usage to stdout (verified 2026-07-12); its usage lives
+    in on-disk wire files. With no resolvable session, parsing yields None."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.kimi_home = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_kimi_text_output_returns_none_without_wire_session(self):
+        self.assertIsNone(parse_usage("kimi", KIMI_TEXT_OUTPUT, kimi_home=self.kimi_home))
 
     def test_kimi_stream_json_output_returns_none(self):
-        self.assertIsNone(parse_usage("kimi", KIMI_STREAM_JSON_OUTPUT))
+        self.assertIsNone(
+            parse_usage("kimi", KIMI_STREAM_JSON_OUTPUT, kimi_home=self.kimi_home)
+        )
 
 
-class TestParseUsageGarbage(unittest.TestCase):
+def _step_end_line(uuid, input_other=100, output=10, cache_read=20, cache_creation=5):
+    """One wire.jsonl line, trimmed from real kimi 0.23.6 wire files."""
+    return json.dumps(
+        {
+            "type": "context.append_loop_event",
+            "event": {
+                "type": "step.end",
+                "uuid": uuid,
+                "turnId": "0",
+                "step": 1,
+                "usage": {
+                    "inputOther": input_other,
+                    "output": output,
+                    "inputCacheRead": cache_read,
+                    "inputCacheCreation": cache_creation,
+                },
+                "finishReason": "stop",
+            },
+            "time": 1781943979640,
+        }
+    )
+
+
+def _config_update_line(model_alias):
+    return json.dumps(
+        {"type": "config.update", "modelAlias": model_alias, "thinkingLevel": "high", "time": 1}
+    )
+
+
+def _write_kimi_session(home, session_id, wires, workdir_key="wd_proj_abc123", index=True):
+    """Materialize a fake ~/.kimi-code session: agents/<id>/wire.jsonl files,
+    optionally registered in session_index.jsonl."""
+    session_dir = home / "sessions" / workdir_key / session_id
+    for agent_id, lines in wires.items():
+        wire = session_dir / "agents" / agent_id / "wire.jsonl"
+        wire.parent.mkdir(parents=True, exist_ok=True)
+        wire.write_text("\n".join(lines) + "\n")
+    if index:
+        with (home / "session_index.jsonl").open("a") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "sessionId": session_id,
+                        "sessionDir": str(session_dir),
+                        "workDir": "/tmp/proj",
+                    }
+                )
+                + "\n"
+            )
+    return session_dir
+
+
+def _resume_hint(session_id):
+    return f"some output\nTo resume this session: kimi -r {session_id}\n"
+
+
+class TestParseUsageKimiWire(unittest.TestCase):
+    """Kimi usage is parsed post-exit from ~/.kimi-code wire files."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.kimi_home = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_wire_sums_step_end_usage(self):
+        session_id = "session_f00f44f4-729f-48e9-8459-ff25c43c5923"
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {
+                "main": [
+                    _config_update_line("kimi-code/kimi-for-coding"),
+                    _step_end_line("u1", input_other=100, output=10, cache_read=20, cache_creation=5),
+                    _step_end_line("u2", input_other=200, output=30, cache_read=0, cache_creation=7),
+                ]
+            },
+        )
+        usage = parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        # input = Σ(inputOther + inputCacheRead + inputCacheCreation)
+        self.assertEqual(usage["input_tokens"], (100 + 20 + 5) + (200 + 0 + 7))
+        self.assertEqual(usage["output_tokens"], 10 + 30)
+        self.assertEqual(usage["total_tokens"], 332 + 40)
+        # kimi-for-coding is subscription/quota-billed: no per-token price.
+        self.assertIsNone(usage["cost_usd"])
+
+    def test_wire_dedupes_duplicate_uuids(self):
+        """A replayed/duplicated step.end line counts once, within one wire
+        and across agent wires."""
+        session_id = "session_a1"
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {
+                "main": [
+                    _step_end_line("dup", input_other=100, output=10),
+                    _step_end_line("dup", input_other=100, output=10),
+                ],
+                "sub_0": [_step_end_line("dup", input_other=100, output=10)],
+            },
+        )
+        usage = parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["input_tokens"], 100 + 20 + 5)
+        self.assertEqual(usage["output_tokens"], 10)
+
+    def test_wire_sums_main_and_subagent_wires(self):
+        session_id = "session_b2"
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {
+                "main": [_step_end_line("m1", input_other=100, output=10)],
+                "agent_7f3a": [
+                    _step_end_line("s1", input_other=50, output=5),
+                    _step_end_line("s2", input_other=60, output=6),
+                ],
+            },
+        )
+        usage = parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["input_tokens"], (100 + 25) + (50 + 25) + (60 + 25))
+        self.assertEqual(usage["output_tokens"], 10 + 5 + 6)
+
+    def test_ses_prefix_session_id_resolves(self):
+        """Both `ses_` and `session_` id prefixes exist in the wild."""
+        session_id = "ses_54ef083f-6e11-47e5-a0ab-48e621e99b72"
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {"main": [_step_end_line("u1", input_other=10, output=1)]},
+        )
+        usage = parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["total_tokens"], 10 + 25 + 1)
+
+    def test_glob_fallback_when_index_missing(self):
+        """No session_index.jsonl entry → glob sessions/*/<sessionId>/."""
+        session_id = "session_c3"
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {"main": [_step_end_line("u1", input_other=10, output=1)]},
+            index=False,
+        )
+        usage = parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["total_tokens"], 10 + 25 + 1)
+
+    def test_missing_session_returns_none(self):
+        """A resume hint for a session that exists nowhere yields None."""
+        usage = parse_usage(
+            "kimi", _resume_hint("session_does-not-exist"), kimi_home=self.kimi_home
+        )
+        self.assertIsNone(usage)
+
+    def test_wire_without_step_end_returns_none(self):
+        """A session that died before any LLM step records null usage."""
+        session_id = "session_d4"
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {"main": [_config_update_line("kimi-code/kimi-for-coding")]},
+        )
+        self.assertIsNone(
+            parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        )
+
+    def test_garbage_and_truncated_wire_lines_skipped(self):
+        session_id = "session_e5"
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {
+                "main": [
+                    "not json at all",
+                    '{"type": "context.append_loop_event", "event": {"type": "step.e',  # truncated
+                    _step_end_line("u1", input_other=10, output=1),
+                    '{"type": "context.append_loop_event", "event": {"type": "step.end"}}',  # no usage
+                    "",
+                ]
+            },
+        )
+        usage = parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["total_tokens"], 10 + 25 + 1)
+
+    def test_oversized_wire_line_skipped(self):
+        """A pathological line is skipped, not loaded/parsed whole."""
+        session_id = "session_f6"
+        giant = '{"type": "metadata", "blob": "' + ("x" * (4 * 1024 * 1024 + 10)) + '"}'
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {"main": [giant, _step_end_line("u1", input_other=10, output=1)]},
+        )
+        usage = parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["total_tokens"], 36)
+
+    def test_last_resume_hint_wins(self):
+        """Resumed sessions print several hints; the final id is current."""
+        old_id = "session_g7"
+        new_id = "session_g7-resumed"
+        _write_kimi_session(
+            self.kimi_home, old_id, {"main": [_step_end_line("old", input_other=1, output=1)]}
+        )
+        _write_kimi_session(
+            self.kimi_home, new_id, {"main": [_step_end_line("new", input_other=10, output=1)]}
+        )
+        text = _resume_hint(old_id) + "more output\n" + _resume_hint(new_id)
+        usage = parse_usage("kimi", text, kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["total_tokens"], 36)
+
+    def test_unknown_model_alias_cost_null(self):
+        """No published price for the alias → null, never an invented number."""
+        session_id = "session_h8"
+        _write_kimi_session(
+            self.kimi_home,
+            session_id,
+            {
+                "main": [
+                    _config_update_line("kimi-code/some-future-model"),
+                    _step_end_line("u1", input_other=10, output=1),
+                ]
+            },
+        )
+        usage = parse_usage("kimi", _resume_hint(session_id), kimi_home=self.kimi_home)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["total_tokens"], 36)
+        self.assertIsNone(usage["cost_usd"])
     def test_garbage_returns_none(self):
         self.assertIsNone(parse_usage("claude", "not json at all\n>>> random <<<"))
 
