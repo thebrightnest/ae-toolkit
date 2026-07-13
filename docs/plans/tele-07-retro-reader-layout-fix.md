@@ -152,5 +152,5 @@ intentionally not restorable (its contents are the bug's pollution).
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
