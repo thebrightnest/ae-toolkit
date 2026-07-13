@@ -65,12 +65,14 @@ rendering. No orchestrator changes.
    with `HOME=<tmp fixture>` — assert: empty-dir run row renders with
    `live` badge; stale no-summary dir renders `incomplete`; live row sorts
    first; run detail shows the banner; Plans lens shows the live dot; zero
-   console errors — M (traces: R-2, R-3) ✅
+   console errors — M (traces: R-2, R-3) ✅ [Changed: QA-stage teardown-race
+   fix — await Chrome exit before sweeping the profile dir]
 7. Docs (`aet-work/panel/README.md`): status section gains live-run
    support; replace the stale "Where panel development lives" section with
    main-tree development (the aet-panel worktree was temporary, confirmed
    by owner 2026-07-13); note live features are served-mode only — S
-   (traces: R-2, R-3) ✅
+   (traces: R-2, R-3) ✅ [Changed: docs sync also added a live-run note to
+   `docs/telemetry-guide.md`]
 8. Merge branch to main and verify integration — S _(deferred to the ship
    stage; qa/review/cso gates run first in this pipeline)_
 
@@ -150,5 +152,5 @@ archive-root confinement on the new dirs listing.
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_

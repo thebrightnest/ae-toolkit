@@ -126,6 +126,15 @@ python3 aet-work/panel/serve   # serves panel + ~/.aet/telemetry, opens your bro
 (You can also open `aet-work/panel/index.html` directly and pick the telemetry
 folder manually, but the launcher is the intended path.)
 
+In-flight runs are first-class in served mode (lvp-01): a just-started run
+appears on load even before its first stage record lands, and any run without
+`last-run.json` is labeled **live** (archive activity fresher than 30 minutes)
+or **incomplete** (stale) instead of a fake success — crashed or abandoned
+runs become visible for the first time. Live rows sort to the top of the Runs
+table, and plan rows in the Plans lens show a live dot while a contributing
+run is live. The folder-picker fallback has no dir listing, so live-run
+visibility requires the launcher.
+
 For a quick text summary of recent runs:
 
 ```bash
