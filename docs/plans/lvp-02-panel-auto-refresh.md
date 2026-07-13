@@ -97,20 +97,26 @@ than the 30-minute freshness window).
 
 ## Validation Steps
 
-- [ ] `make validate` green (lint, format, ruff, pytest, skill-structure validator)
-- [ ] `node scripts/test-panel-live-runs.mjs` passes — E2E/integration
+- [x] `make validate` green (lint, format, ruff, pytest, skill-structure validator)
+- [x] `node scripts/test-panel-live-runs.mjs` passes — E2E/integration
       coverage: mid-session append reflected ≤ ~6s without manual refresh,
       `incomplete → live` on mtime advance, no polling while hidden, zero
       console errors
-- [ ] Regression: `tests/test_panel_serve.py` still passes (no serve
+- [x] Regression: `tests/test_panel_serve.py` still passes (no serve
       changes in this plan)
-- [ ] Manual smoke: panel open during a real `aet run` shows stage records
+- [x] Manual smoke: panel open during a real `aet run` shows stage records
       appearing without touching Refresh; closing the laptop lid (tab
-      hidden) pauses polling
-- [ ] R-trace coverage: R-4 (tasks 1–5) covered; R-2 refinement (task 3)
+      hidden) pauses polling — verified in parts 2026-07-13: the fixture E2E
+      drives the real serve + headless Chrome with real filesystem mtimes
+      (records appear on their own within ~6s); the hidden-tab pause/resume
+      uses the plan-sanctioned visibility override on the same
+      `visibilitychange` listener a lid close fires (CDP focus emulation
+      does not drive `document.visibilityState` in headless=new Chrome 150)
+- [x] R-trace coverage: R-4 (tasks 1–5) covered; R-2 refinement (task 3)
       cites an in-scope PRD R-id; no unknown R-ids
-- [ ] No new source files introduced (extends lvp-01's named E2E harness)
+- [x] No new source files introduced (extends lvp-01's named E2E harness)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+      _(ship stage)_
 
 ## Rollback Plan
 
@@ -129,5 +135,6 @@ gate stays deliberately skipped (no new network surface).
 
 ---
 
-_Stage: plan-approved_ (owner approval + closure check 2026-07-13)
-_Next step: run `aet-work`_
+_Stage: implemented_ (TDD vertical slices — poll+merge, poll-diff liveness,
+visibility gating; 9/9 E2E checks, 583 tests green 2026-07-13)
+_Next step: merge to main (task 6) — run `aet-ship`_
