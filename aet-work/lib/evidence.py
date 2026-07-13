@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import telemetry
+import verifier
 
 DEFAULT_REPORTS_DIR = Path.home() / ".aet" / "reports"
 
@@ -24,6 +26,7 @@ SCHEMAS: dict[str, dict[str, type]] = {
         "verdict": str,
         "summary": str,
         "generated_at": str,
+        "tree_hash": str,
         "test_command": str,
         "tests_total": int,
         "tests_passed": int,
@@ -36,6 +39,7 @@ SCHEMAS: dict[str, dict[str, type]] = {
         "verdict": str,
         "summary": str,
         "generated_at": str,
+        "tree_hash": str,
         "findings": list,
     },
     "cso": {
@@ -45,6 +49,7 @@ SCHEMAS: dict[str, dict[str, type]] = {
         "verdict": str,
         "summary": str,
         "generated_at": str,
+        "tree_hash": str,
         "findings": list,
     },
     "sync-docs": {
@@ -54,6 +59,7 @@ SCHEMAS: dict[str, dict[str, type]] = {
         "verdict": str,
         "summary": str,
         "generated_at": str,
+        "tree_hash": str,
         "divergences": list,
     },
 }
@@ -175,8 +181,14 @@ def write_verdict(
     project_slug: str | None = None,
     reports_root: str | Path | None = None,
     path: str | Path | None = None,
+    worktree_dir: str | Path | None = None,
 ) -> Path:
     """Validate and write a verdict record to the archive.
+
+    Stamps the record with ``tree_hash`` — a fingerprint of the working tree
+    the verdict attests to — unless the caller supplied one. The code stamps
+    it, not the skill: provenance is recorded, never remembered. ``worktree_dir``
+    overrides the tree that gets hashed (defaults to the resolved repo root).
 
     ``path`` overrides the computed destination; callers that need the
     canonical env-aware precedence (ADR-023) resolve it via
@@ -185,6 +197,9 @@ def write_verdict(
     Returns:
         The path to the written verdict file.
     """
+    if "tree_hash" not in record:
+        root = worktree_dir if worktree_dir is not None else telemetry.resolve_repo_root()
+        record = {**record, "tree_hash": verifier.working_tree_hash(str(root))}
     validate_verdict(record, kind)
     if path is None:
         path = evidence_path(
@@ -205,3 +220,110 @@ def read_verdict(path: str | Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Verdict not found: {path}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+# --- Validation freshness -------------------------------------------------
+#
+# A prior passing verdict stamps the tree it attests to. Before a later stage
+# re-runs the same validation, it can ask whether the tree has moved since —
+# and skip, lint-only, or run accordingly. The bias is always toward RUN: a
+# stale skip ships broken code; a needless run only costs minutes.
+
+RUN = "run"
+LINT_ONLY = "lint-only"
+SKIP = "skip"
+
+_DOCS_PREFIXES = ("docs/",)
+_DOCS_SUFFIXES = (".md",)
+_DOCS_EXACT = frozenset({".agents/learnings.jsonl"})
+
+
+@dataclass
+class FreshnessResult:
+    """The freshness decision for one (task, kind) against the current tree."""
+
+    decision: str  # RUN | LINT_ONLY | SKIP
+    reason: str
+    prior_hash: str = ""
+    current_hash: str = ""
+    changed_paths: list[str] = field(default_factory=list)
+
+    @property
+    def needs_full_run(self) -> bool:
+        return self.decision == RUN
+
+
+def default_is_code_path(path: str) -> bool:
+    """Whether a changed path can alter test outcomes (bias: assume yes).
+
+    Only clearly non-executable churn — Markdown, ``docs/``, and the appended
+    learnings log — is treated as non-code. Everything else, config and
+    fixtures included, forces a full run.
+    """
+    p = path.strip()
+    if not p:
+        return False
+    if p in _DOCS_EXACT:
+        return False
+    if p.startswith(_DOCS_PREFIXES):
+        return False
+    if p.endswith(_DOCS_SUFFIXES):
+        return False
+    return True
+
+
+def validation_freshness(
+    task_id: str,
+    kind: str,
+    worktree_dir: str | Path | None = None,
+    *,
+    is_code_path: Callable[[str], bool] = default_is_code_path,
+    project_slug: str | None = None,
+    reports_root: str | Path | None = None,
+) -> FreshnessResult:
+    """Decide whether the last passing verdict still covers the current tree.
+
+    Compares the working tree's fingerprint against the ``tree_hash`` stamped
+    on the last verdict of this ``kind``:
+
+    - no prior verdict, a prior *fail*, or an unknown hash → ``RUN``
+    - identical tree → ``SKIP`` (nothing changed since it last passed)
+    - only non-code paths changed → ``LINT_ONLY``
+    - any code path changed, or the diff can't be computed → ``RUN``
+    """
+    root = str(worktree_dir) if worktree_dir is not None else str(telemetry.resolve_repo_root())
+    current = verifier.working_tree_hash(root)
+    if not current:
+        return FreshnessResult(RUN, "working tree hash unavailable", current_hash=current)
+
+    path = resolve_verdict_path(
+        task_id=task_id,
+        kind=kind,
+        project_slug=project_slug,
+        reports_root=reports_root,
+    )
+    try:
+        prior = read_verdict(path)
+    except FileNotFoundError:
+        return FreshnessResult(RUN, "no prior verdict", current_hash=current)
+
+    if prior.get("verdict") != "pass":
+        return FreshnessResult(RUN, "prior verdict did not pass", current_hash=current)
+
+    prior_hash = prior.get("tree_hash") or ""
+    if not prior_hash:
+        return FreshnessResult(RUN, "prior verdict has no tree hash", current_hash=current)
+    if prior_hash == current:
+        return FreshnessResult(SKIP, "tree unchanged since last pass", prior_hash, current)
+
+    paths = verifier.changed_paths(root, prior_hash, current)
+    if paths is None:
+        return FreshnessResult(RUN, "cannot diff against prior tree", prior_hash, current)
+    code = [p for p in paths if is_code_path(p)]
+    if not code:
+        return FreshnessResult(
+            LINT_ONLY, "only non-code paths changed", prior_hash, current, paths
+        )
+    return FreshnessResult(
+        RUN, f"{len(code)} code path(s) changed", prior_hash, current, paths
+    )

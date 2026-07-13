@@ -227,6 +227,7 @@ class TestVariantTraversal(unittest.TestCase):
                 "verdict": "pass",
                 "summary": "ok",
                 "generated_at": "2026-07-11T00:00:00Z",
+                "tree_hash": "t0",
                 "findings": [],
             },
             project_slug="demo/project",
