@@ -135,6 +135,7 @@ gate stays deliberately skipped (no new network surface).
 
 ---
 
-_Stage: implemented_ (TDD vertical slices — poll+merge, poll-diff liveness,
-visibility gating; 9/9 E2E checks, 583 tests green 2026-07-13)
-_Next step: merge to main (task 6) — run `aet-ship`_
+_Stage: qa-complete_ (aet-qa pass 2026-07-13 — make validate green: 583 tests +
+30 subtests, lint/format/ruff/validators clean; E2E 9/9 incl. lvp-02 auto-refresh,
+poll-diff liveness, visibility gating; serve regression 6/6; verdict pass)
+_Next step: run `aet-review`_
