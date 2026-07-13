@@ -112,6 +112,12 @@ function liveStatus(lastActivity) {
   return fresh ? "live" : "incomplete";
 }
 
+// Auto-refresh polling (lvp-02): while the tab is visible and any no-summary
+// run has activity younger than POLL_ACTIVITY_MINUTES, poll /api/list every
+// POLL_INTERVAL_MS and merge only new or changed run dirs into the run list.
+const POLL_INTERVAL_MS = 5000;
+const POLL_ACTIVITY_MINUTES = 60;
+
 /* ---------------- parsing ---------------- */
 
 function collectGroups(pairs) {
@@ -175,7 +181,7 @@ async function loadTelemetryFromApi(onProgress) {
     if (onProgress && done % 300 === 0) onProgress(done, allEntries.length);
     return text;
   });
-  return { ...buildRunsFromGroups(groups, dirs), filesSeen, root };
+  return { ...buildRunsFromGroups(groups, dirs), filesSeen, root, dirs: dirs || [] };
 }
 
 function parseRunDir(dir) {
@@ -954,6 +960,12 @@ function App() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
   const inputRef = useRef(null);
+  // Last-seen /api/list dir snapshot (rel -> mtime seconds) for the
+  // incremental poll diff; runsRef lets the poll loop read current runs
+  // without re-subscribing on every merge.
+  const snapshotRef = useRef(new Map());
+  const runsRef = useRef(runs);
+  runsRef.current = runs;
 
   function sortRuns(parsed) {
     // Live runs first, then most recent archive activity (lvp-01).
@@ -966,11 +978,12 @@ function App() {
     return parsed;
   }
 
-  function applyLoaded({ runs: parsed, skippedLines, filesSeen, root }, src) {
+  function applyLoaded({ runs: parsed, skippedLines, filesSeen, root, dirs }, src) {
     setRuns(sortRuns(parsed));
     setMeta({ filesSeen, skippedLines, root: root || null });
     setSource(src);
     setSelectedId(parsed[0] ? parsed[0].dir : null);
+    snapshotRef.current = new Map((dirs || []).map(d => [d.rel, d.mtime]));
     setFilterFolder("all");
     setFilterProject("all");
     setFilterStatus("all");
@@ -1005,6 +1018,66 @@ function App() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Incremental poll tick (lvp-02): diff the polled dirs against the last
+  // snapshot by (rel, mtime); re-fetch only new/changed dirs' files, rebuild
+  // those runs, and merge them into the list in place. Lens, filters, and
+  // selection live in separate state, so they survive the merge untouched.
+  async function pollOnce() {
+    const res = await fetch("/api/list", { cache: "no-store" });
+    if (!res.ok) return;
+    const { files, dirs } = await res.json();
+    const prev = snapshotRef.current;
+    const changed = (dirs || []).filter(d => {
+      const old = prev.get(d.rel);
+      return old === undefined || (d.mtime != null && d.mtime > old);
+    });
+    snapshotRef.current = new Map((dirs || []).map(d => [d.rel, d.mtime]));
+    if (!changed.length) return;
+    const changedDirs = new Set(changed.map(d => d.rel));
+    const pairs = [];
+    for (const rel of files || []) {
+      const parts = rel.split("/");
+      parts.pop();
+      if (changedDirs.has(parts.join("/"))) pairs.push({ rel });
+    }
+    const { groups } = collectGroups(pairs);
+    const entries = [];
+    for (const e of groups.values()) entries.push(...e);
+    await readInBatches(entries, async e => {
+      const r = await fetch("/api/file?p=" + encodeURIComponent(e.rel));
+      if (!r.ok) throw new Error(`cannot read ${e.rel}`);
+      return r.text();
+    });
+    const { runs: rebuilt } = buildRunsFromGroups(groups, changed);
+    setRuns(prev => sortRuns([...prev.filter(r => !changedDirs.has(r.dir)), ...rebuilt]));
+  }
+
+  // Poll loop: 5s cadence while the tab is visible and any no-summary run has
+  // activity younger than the polling window; stops once all runs settle.
+  useEffect(() => {
+    if (source !== "archive") return;
+    let timer = null;
+    let inFlight = false;
+    const active = () => runsRef.current.some(r =>
+      !r.summary && r.lastActivity != null &&
+      Date.now() - r.lastActivity < POLL_ACTIVITY_MINUTES * 60 * 1000);
+    const tick = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try { await pollOnce(); } catch { /* transient localhost failure: keep polling */ }
+      inFlight = false;
+    };
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = null;
+      if (document.visibilityState === "visible" && active()) {
+        timer = setTimeout(async () => { await tick(); schedule(); }, POLL_INTERVAL_MS);
+      }
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [source]);
 
   async function handleFiles(e) {
     const files = e.target.files;
