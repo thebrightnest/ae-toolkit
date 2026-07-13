@@ -135,7 +135,9 @@ gate stays deliberately skipped (no new network surface).
 
 ---
 
-_Stage: qa-complete_ (aet-qa pass 2026-07-13 — make validate green: 583 tests +
-30 subtests, lint/format/ruff/validators clean; E2E 9/9 incl. lvp-02 auto-refresh,
-poll-diff liveness, visibility gating; serve regression 6/6; verdict pass)
-_Next step: run `aet-review`_
+_Stage: reviewed_ (aet-review pass 2026-07-13 — all lenses clean; make validate
+green: 583 tests + 30 subtests, lint/format/ruff/validators clean; E2E 9/9 re-run
+incl. lvp-02 auto-refresh, poll-diff liveness, visibility gating; 0 fix-now,
+2 flag-for-human: sticky `bumped` keeps a rescued run live for the page session,
+snapshot advances before changed-dir file fetch; verdict pass)
+_Next step: run `aet-sync-docs`_
