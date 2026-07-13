@@ -1083,8 +1083,22 @@ function App() {
         timer = setTimeout(async () => { await tick(); schedule(); }, POLL_INTERVAL_MS);
       }
     };
+    // Pause on hidden (a laptop lid closed overnight never wakes the panel);
+    // resume with an immediate tick so returning to the tab is instant.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        if (active()) tick().then(schedule);
+      } else {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     schedule();
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [source]);
 
   async function handleFiles(e) {

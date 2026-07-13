@@ -16,7 +16,8 @@
 //  5. the Plans lens shows a live dot when a contributing run is live
 //  6. a stage record appended mid-session appears in the row within ~6s (lvp-02)
 //  7. a stale run whose mtime advances flips incomplete → live (lvp-02)
-//  8. zero console errors
+//  8. no polling while the tab is hidden; immediate tick on resume (lvp-02)
+//  9. zero console errors
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -305,6 +306,36 @@ async function main() {
       flippedToLive = true;
     } catch {}
     check("mtime advance past the freshness window flips incomplete → live", flippedToLive);
+
+    console.log("\nVisibility gating: no polling while hidden, immediate tick on resume");
+    // CDP focus emulation does not drive document.visibilityState in
+    // headless=new (Chrome 150), so override the property directly — the
+    // plan's sanctioned "visibility override" — and dispatch the event our
+    // listener reacts to.
+    const setVisibility = state => ev(`(() => {
+      window.__vis = "${state}";
+      if (!document.__visOverridden) {
+        Object.defineProperty(document, "visibilityState", { get: () => window.__vis, configurable: true });
+        document.__visOverridden = true;
+      }
+      document.dispatchEvent(new Event("visibilitychange"));
+      return document.visibilityState;
+    })()`);
+    await setVisibility("hidden");
+    check("tab reports hidden", await ev(`document.visibilityState`) === "hidden");
+    fs.appendFileSync(path.join(root, "proj/2026-07-13", RUN_LIVE_PARTIAL, "task.jsonl"),
+      stageRec({ stage: "reviewed" }) + "\n");
+    await sleep(8000); // > one poll interval: ungated polling would pick it up
+    check("no polling while hidden (appended record not picked up)",
+      await ev(`(${stagesCell(RUN_LIVE_PARTIAL)}) === "3"`));
+    await setVisibility("visible");
+    let resumedImmediately = false;
+    try {
+      await waitFor(`(${stagesCell(RUN_LIVE_PARTIAL)}) === "4"`, "immediate tick on resume", 3000);
+      resumedImmediately = true;
+    } catch {}
+    check("resume triggers an immediate tick (record appears ≤ ~3s)", resumedImmediately);
+    await ev(`delete document.visibilityState`).catch(() => {});
 
     console.log("\nConsole");
     check("zero console errors", cdp.consoleErrors.length === 0,
