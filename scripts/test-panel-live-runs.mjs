@@ -15,7 +15,8 @@
 //  4. run detail shows the in-progress banner (zero-record + partial variants)
 //  5. the Plans lens shows a live dot when a contributing run is live
 //  6. a stage record appended mid-session appears in the row within ~6s (lvp-02)
-//  7. zero console errors
+//  7. a stale run whose mtime advances flips incomplete → live (lvp-02)
+//  8. zero console errors
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -284,6 +285,26 @@ async function main() {
       gainedWithin6s = true;
     } catch {}
     check("appended stage record appears in the row within ~6s (no manual refresh)", gainedWithin6s);
+
+    console.log("\nPoll-diff liveness: stale run flips incomplete → live on mtime advance");
+    const staleBefore = await ev(rowExpr(RUN_STALE));
+    check("stale run starts incomplete", !!staleBefore && staleBefore.text.includes("incomplete"));
+    // Append a record, then age its mtime to 45 min ago: the dir's mtime
+    // advances vs the last poll (2h → 45m) but stays outside the 30-minute
+    // freshness window, so only poll-diff liveness can recover "live".
+    const staleJsonl = path.join(root, "proj/2026-07-10", RUN_STALE, "task.jsonl");
+    fs.appendFileSync(staleJsonl, stageRec({ plan_file: null, stage: "qa-complete" }) + "\n");
+    const aged = Date.now() / 1000 - 2700;
+    fs.utimesSync(staleJsonl, aged, aged);
+    let flippedToLive = false;
+    try {
+      await waitFor(`(() => {
+        const tr = [...document.querySelectorAll("tbody tr")].find(t => t.textContent.includes("${RUN_STALE.slice(0, 8)}"));
+        return !!tr && tr.textContent.includes("live") && !tr.textContent.includes("incomplete");
+      })()`, "stale run flips to live", 7000);
+      flippedToLive = true;
+    } catch {}
+    check("mtime advance past the freshness window flips incomplete → live", flippedToLive);
 
     console.log("\nConsole");
     check("zero console errors", cdp.consoleErrors.length === 0,
