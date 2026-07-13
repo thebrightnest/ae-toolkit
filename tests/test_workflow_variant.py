@@ -237,9 +237,9 @@ class TestVariantTraversal(unittest.TestCase):
             logger = telemetry.RunLogger(self.repo_root, run_id="r1")
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
             with patch.object(
-                orchestrator, "run_stage_group", return_value=0
+                orchestrator, "run_stage_group", return_value=(0, None)
             ) as mock_group, patch.object(
-                orchestrator, "run_stage", return_value=0
+                orchestrator, "run_stage", return_value=(0, None)
             ) as mock_stage, patch.object(
                 orchestrator, "verify_branch_has_commits", return_value=(True, "")
             ), patch.object(

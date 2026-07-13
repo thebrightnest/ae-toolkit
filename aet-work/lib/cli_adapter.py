@@ -6,6 +6,13 @@ import os
 import shutil
 from dataclasses import dataclass
 
+# Flags each usage mode needs appended to a headless invocation. Modes absent
+# from this map (e.g. kimi's "wire-file", read post-exit from on-disk session
+# files) need no flags — the tee already captures what they parse from.
+_USAGE_MODE_FLAGS: dict[str, tuple[str, ...]] = {
+    "json-envelope": ("--output-format", "json"),
+}
+
 
 @dataclass(frozen=True)
 class CLIAdapter:
@@ -13,7 +20,9 @@ class CLIAdapter:
 
     The orchestrator handles the working directory via ``subprocess.run(cwd=...)``,
     so ``workdir_flag`` is ``None`` for CLIs that do not expose a dedicated
-    work-directory flag (e.g. kimi, claude).
+    work-directory flag (e.g. kimi, claude). ``usage_mode`` names the CLI's
+    machine-readable usage output mode (parsed by ``usage.parse_usage``), or
+    ``None`` when the CLI emits no usage data.
     """
 
     name: str
@@ -21,6 +30,7 @@ class CLIAdapter:
     prompt_flag: str
     workdir_flag: str | None
     headless_flag: str | None
+    usage_mode: str | None = None
 
     def build_cmd(
         self,
@@ -32,6 +42,10 @@ class CLIAdapter:
         cmd = [self.bin]
         if headless and self.headless_flag is not None:
             cmd.append(self.headless_flag)
+        if headless and self.usage_mode is not None:
+            # Before the prompt flag: some CLIs consume the token after -p as
+            # the prompt value, so trailing flags would break the invocation.
+            cmd.extend(_USAGE_MODE_FLAGS.get(self.usage_mode, ()))
         if self.prompt_flag:
             cmd.extend([self.prompt_flag, prompt])
         else:
@@ -48,6 +62,9 @@ ADAPTERS: dict[str, CLIAdapter] = {
         prompt_flag="-p",
         workdir_flag=None,
         headless_flag=None,
+        # Usage lives in ~/.kimi-code session wire files (verified 0.23.6),
+        # read post-exit via the resume hint in captured stdout.
+        usage_mode="wire-file",
     ),
     "claude": CLIAdapter(
         name="claude",
@@ -55,6 +72,7 @@ ADAPTERS: dict[str, CLIAdapter] = {
         prompt_flag="-p",
         workdir_flag=None,
         headless_flag="--dangerously-skip-permissions",
+        usage_mode="json-envelope",
     ),
 }
 
