@@ -46,13 +46,21 @@ Working and verified:
     empty state), aggregated environment issues / learning candidates, and
     **run chips** linking into the Runs lens.
   - Runs lens is the original runs table + run detail, unchanged.
-- Stat cards: runs/plans, stage sessions, success rate, total time (per lens).
+- Stat cards: runs/plans, stage sessions, success rate, total time (per lens);
+  run detail also shows **Tokens** and **Cost** cards (uct-01).
 - Filters: **folder** (top-level archive subfolder) → **project** (scoped to
   the folder) → status → free-text search (task, plan, run id); they apply to
   both lenses.
 - Master-detail: runs table + run detail with Stages, Test runs, Environment
   issues, and Learning candidates sections (schema:
   `aet-work/references/telemetry-log-schema.md`).
+- Usage & cost view (uct-01, 2026-07-12): Tokens + Cost columns on the runs
+  table, per-stage rows (run detail Stages table, plan timeline), and
+  Tokens/Cost stat cards in run detail. Run aggregates prefer the
+  summary's `total_tokens`/`total_cost_usd`, falling back to summing stage
+  records; `null` (pre-uct-01 records, unsupported CLIs, or subscription
+  aliases without a per-token price) renders as `—` so old archives look
+  intentional, not broken.
 - Format tolerance: nested project slugs (`demo/project/...`), run dirs
   without `last-run.json`, legacy `{project}/{date}-{run-id}/execution.log.jsonl`
   layout (split into one run per `run_summary` record), corrupted legacy lines

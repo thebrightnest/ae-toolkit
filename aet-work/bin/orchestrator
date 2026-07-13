@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import collections
 import os
 import re
 import signal
@@ -38,6 +39,7 @@ from queue import (  # noqa: E402
 import evidence  # noqa: E402
 import plan_parser  # noqa: E402
 import telemetry  # noqa: E402
+import usage as usage_lib  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 from cli_adapter import resolve_cli_adapter  # noqa: E402
 from verifier import (  # noqa: E402
@@ -292,8 +294,14 @@ def _emit_stage_session(
     start_time: str,
     end_time: str,
     exit_code: int,
+    usage: dict | None = None,
 ) -> None:
-    """Emit one stage telemetry record for a completed agent session."""
+    """Emit one stage telemetry record for a completed agent session.
+
+    ``usage`` is the parsed CLI usage dict (or ``None`` for CLIs without a
+    usage mode); it populates ``token_count`` / ``cost_estimate`` on the
+    record. Null is the honest value when usage was not measurable.
+    """
     files_modified, commits_created = _session_diff_stats(worktree_dir)
     logger.append_record(
         telemetry.stage_record(
@@ -309,9 +317,36 @@ def _emit_stage_session(
             files_modified=files_modified,
             commits_created=commits_created,
             stages=stages,
+            token_count=usage.get("total_tokens") if usage else None,
+            cost_estimate=usage.get("cost_usd") if usage else None,
         ),
         task_id=task_id,
     )
+
+
+def _usage_aggregates(logger: telemetry.RunLogger) -> tuple[int | None, float | None]:
+    """Sum token/cost over this run's stage records; all-null -> ``(None, None)``.
+
+    The ``work-history.jsonl`` copy is queue history, not execution telemetry,
+    and is skipped (mirrors the panel's filtering).
+    """
+    total_tokens = 0
+    total_cost = 0.0
+    have_tokens = False
+    have_cost = False
+    for path in logger.run_dir.glob("*.jsonl"):
+        if path.name == "work-history.jsonl":
+            continue
+        for record in telemetry.read_jsonl(path):
+            if record.get("type") != "stage":
+                continue
+            if record.get("token_count") is not None:
+                total_tokens += record["token_count"]
+                have_tokens = True
+            if record.get("cost_estimate") is not None:
+                total_cost += record["cost_estimate"]
+                have_cost = True
+    return (total_tokens if have_tokens else None, total_cost if have_cost else None)
 
 
 def _load_checking_verdict(task_id: str, kind: str, repo_root: str) -> dict:
@@ -403,6 +438,52 @@ def _require_passing_verdict(
     return True
 
 
+def _run_with_live_tee(cmd: list[str], cwd: str, env: dict) -> tuple[int, str]:
+    """Spawn a session: echo its output live, keep a bounded tail buffer.
+
+    Stage sessions run up to ~1 hour, so ``capture_output=True`` is not an
+    option — it would silence live agent output for the whole session. This
+    reader loop mirrors each line to the terminal as it arrives AND keeps the
+    last ~256 KB (usage blocks are emitted at exit). Returns
+    ``(exit_code, tail_text)``.
+    """
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        errors="replace",
+    )
+    chunks: collections.deque[str] = collections.deque()
+    buffered = 0
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        chunks.append(line)
+        buffered += len(line)
+        while buffered > usage_lib.TAIL_SCAN_BYTES and chunks:
+            buffered -= len(chunks.popleft())
+    return proc.wait(), "".join(chunks)
+
+
+def _spawn_session(
+    adapter, cmd: list[str], worktree_dir: str, env: dict
+) -> tuple[int, dict | None]:
+    """Run one agent session, returning ``(exit_code, usage)``.
+
+    ``usage`` is parsed from the captured tail only when the adapter declares
+    a usage mode; otherwise it is ``None`` and the record keeps null fields.
+    """
+    exit_code, output = _run_with_live_tee(cmd, worktree_dir, env)
+    usage = None
+    if adapter.usage_mode is not None:
+        usage = usage_lib.parse_usage(adapter.name, output)
+    return exit_code, usage
+
+
 def run_stage(
     adapter,
     repo_root: str,
@@ -414,8 +495,8 @@ def run_stage(
     task_id: str | None = None,
     run_id: str | None = None,
     verdict_kind: str | None = None,
-) -> int:
-    """Spawn a single stage session and return exit code."""
+) -> tuple[int, dict | None]:
+    """Spawn a single stage session and return ``(exit_code, usage)``."""
     prompt = build_prompt(skills, plan_file, current_stage, next_stage)
     cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
 
@@ -436,8 +517,7 @@ def run_stage(
         )
 
     print(f"   Invoking: {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=worktree_dir, env=env)
-    return result.returncode
+    return _spawn_session(adapter, cmd, worktree_dir, env)
 
 
 def build_stage_group_prompt(
@@ -480,8 +560,11 @@ def run_stage_group(
     run_id: str | None = None,
     *,
     workflow: Workflow,
-) -> int:
-    """Spawn one session that runs every stage in the group sequentially."""
+) -> tuple[int, dict | None]:
+    """Spawn one session that runs every stage in the group sequentially.
+
+    Returns ``(exit_code, usage)``; usage covers the whole group session.
+    """
     prompt = build_stage_group_prompt(plan_file, stages, workflow)
     cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
 
@@ -509,8 +592,7 @@ def run_stage_group(
             )
 
     print(f"   Invoking group: {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=worktree_dir, env=env)
-    return result.returncode
+    return _spawn_session(adapter, cmd, worktree_dir, env)
 
 
 def stage_enabled(stage: WorkflowStage, plan_fm: dict) -> bool:
@@ -689,7 +771,7 @@ def process_task(
                 )
 
                 start_time = telemetry.iso_now()
-                exit_code = run_stage_group(
+                exit_code, usage = run_stage_group(
                     adapter,
                     repo_root,
                     plan_file,
@@ -712,6 +794,7 @@ def process_task(
                     start_time,
                     end_time,
                     exit_code,
+                    usage=usage,
                 )
                 agent_invoked = True
                 if exit_code != 0:
@@ -792,7 +875,7 @@ def process_task(
 
             kind = target_stage.evidence
             start_time = telemetry.iso_now()
-            exit_code = run_stage(
+            exit_code, usage = run_stage(
                 adapter,
                 repo_root,
                 plan_file,
@@ -817,6 +900,7 @@ def process_task(
                 start_time,
                 end_time,
                 exit_code,
+                usage=usage,
             )
             agent_invoked = True
 
@@ -1129,6 +1213,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             return
         summary_written = True
         end_time = telemetry.iso_now()
+        total_tokens, total_cost_usd = _usage_aggregates(logger)
         logger.write_last_run(
             telemetry.run_summary_record(
                 run_id=logger.run_id,
@@ -1142,6 +1227,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 task_ids=task_ids,
                 final_stage=None,
                 leftover=leftover_report or None,
+                total_tokens=total_tokens,
+                total_cost_usd=total_cost_usd,
             )
         )
         logger.copy_work_history(os.path.join(repo_root, ".agents", "work-history.jsonl"))
@@ -1574,6 +1661,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         # Read the final stage from the synthetic task record; the footer is only a breadcrumb.
         final_stage = task.get("stage") or read_plan_stage(plan_file) or wf.entry_stage
 
+        total_tokens, total_cost_usd = _usage_aggregates(logger)
         logger.write_last_run(
             telemetry.run_summary_record(
                 run_id=logger.run_id,
@@ -1586,6 +1674,8 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 exit_code=exit_code,
                 task_ids=[task_id],
                 final_stage=final_stage,
+                total_tokens=total_tokens,
+                total_cost_usd=total_cost_usd,
             )
         )
         if not spawned_by_batch:

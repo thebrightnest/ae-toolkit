@@ -80,6 +80,16 @@ function fmtTime(iso) {
 }
 function basename(p) { return p ? p.split("/").pop() : "—"; }
 function shortId(id) { return id && id.length > 12 ? id.slice(0, 8) + "…" : id; }
+function fmtTokens(n) {
+  if (n == null || isNaN(n)) return "—";
+  if (n < 1000) return `${n}`;
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
+  return `${(n / 1_000_000).toFixed(2)}M`;
+}
+function fmtCost(c) {
+  if (c == null || isNaN(c)) return "—";
+  return `$${c.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 /* ---------------- parsing ---------------- */
 
@@ -223,10 +233,20 @@ function buildRun(r) {
     (a, t) => ({ total: a.total + (t.tests_total || 0), passed: a.passed + (t.tests_passed || 0), failed: a.failed + (t.tests_failed || 0) }),
     { total: 0, passed: 0, failed: 0 }
   );
+  // Run-level token/cost: prefer the summary aggregates (orchestrator-written);
+  // fall back to summing stage records for summaries written before uct-01.
+  const stageTokens = stages.filter(s => s.token_count != null);
+  const stageCost = stages.filter(s => s.cost_estimate != null);
+  const tokens = r.summary && r.summary.total_tokens != null
+    ? r.summary.total_tokens
+    : (stageTokens.length ? stageTokens.reduce((a, s) => a + s.token_count, 0) : null);
+  const cost = r.summary && r.summary.total_cost_usd != null
+    ? r.summary.total_cost_usd
+    : (stageCost.length ? stageCost.reduce((a, s) => a + s.cost_estimate, 0) : null);
   const status = r.summary
     ? (r.summary.outcome || (r.summary.tasks_failed > 0 ? "failure" : "success"))
     : (stageFailures + testFailures > 0 ? "failure" : "success");
-  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, status };
+  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, tokens, cost, status };
 }
 
 /* ---------------- plan model ---------------- */
@@ -458,7 +478,7 @@ function RunsTable({ runs, selectedId, onSelect }) {
     <Table>
       <thead>
         <tr className="border-b">
-          <Th>Project</Th><Th>Date</Th><Th>Run</Th><Th>Tasks</Th><Th>Stages</Th><Th>Tests</Th><Th>Duration</Th><Th>Status</Th>
+          <Th>Project</Th><Th>Date</Th><Th>Run</Th><Th>Tasks</Th><Th>Stages</Th><Th>Tests</Th><Th>Duration</Th><Th>Tokens</Th><Th>Cost</Th><Th>Status</Th>
         </tr>
       </thead>
       <tbody>
@@ -475,11 +495,13 @@ function RunsTable({ runs, selectedId, onSelect }) {
             <Td>{r.stages.length || "—"}</Td>
             <Td>{r.testsAgg.total ? `${r.testsAgg.passed}/${r.testsAgg.total}` : "—"}</Td>
             <Td className="whitespace-nowrap">{fmtDuration(r.duration)}</Td>
+            <Td data-testid="run-tokens" className="whitespace-nowrap text-muted-foreground">{fmtTokens(r.tokens)}</Td>
+            <Td data-testid="run-cost" className="whitespace-nowrap text-muted-foreground">{fmtCost(r.cost)}</Td>
             <Td><ResultBadge result={r.status} /></Td>
           </tr>
         ))}
         {runs.length === 0 && (
-          <tr><td colSpan="8" className="px-3 py-8 text-center text-muted-foreground">No runs match the current filters.</td></tr>
+          <tr><td colSpan="10" className="px-3 py-8 text-center text-muted-foreground">No runs match the current filters.</td></tr>
         )}
       </tbody>
     </Table>
@@ -571,7 +593,7 @@ function PlanDetail({ plan, runs, onOpenRun }) {
         <SectionTitle count={timeline.length}>Timeline</SectionTitle>
         <Table>
           <thead><tr className="border-b">
-            <Th>Time</Th><Th>Run</Th><Th>Worktree</Th><Th>Kind</Th><Th>Stage</Th><Th>Duration</Th><Th>Result</Th>
+            <Th>Time</Th><Th>Run</Th><Th>Worktree</Th><Th>Kind</Th><Th>Stage</Th><Th>Duration</Th><Th>Tokens</Th><Th>Cost</Th><Th>Result</Th>
           </tr></thead>
           <tbody>
             {timeline.map((r, i) => (
@@ -590,11 +612,13 @@ function PlanDetail({ plan, runs, onOpenRun }) {
                 <Td><Badge variant="outline">{r.kind}</Badge></Td>
                 <Td data-testid="timeline-stage" className="whitespace-nowrap">{r.stage || "—"}</Td>
                 <Td data-testid="timeline-duration" className="whitespace-nowrap">{fmtDuration(r.duration_seconds)}</Td>
+                <Td className="whitespace-nowrap text-muted-foreground">{r.kind === "stage" ? fmtTokens(r.token_count) : "—"}</Td>
+                <Td className="whitespace-nowrap text-muted-foreground">{r.kind === "stage" ? fmtCost(r.cost_estimate) : "—"}</Td>
                 <Td><ResultBadge result={r.result} /></Td>
               </tr>
             ))}
             {timeline.length === 0 && (
-              <tr><td colSpan="7" data-testid="timeline-empty" className="px-3 py-8 text-center text-muted-foreground">No stage sessions or test runs recorded for this plan</td></tr>
+              <tr><td colSpan="9" data-testid="timeline-empty" className="px-3 py-8 text-center text-muted-foreground">No stage sessions or test runs recorded for this plan</td></tr>
             )}
           </tbody>
         </Table>
@@ -719,6 +743,8 @@ function RunDetail({ run }) {
           <Stat label="Stage sessions" value={run.stages.length} />
           <Stat label="Tests" value={run.testsAgg.total ? `${run.testsAgg.passed}/${run.testsAgg.total} passed` : "—"} />
           <Stat label="Wall clock" value={fmtDuration(run.duration)} />
+          <Stat label="Tokens" value={fmtTokens(run.tokens)} testid="run-detail-tokens" />
+          <Stat label="Cost" value={fmtCost(run.cost)} testid="run-detail-cost" />
         </div>
 
         {run.stages.length > 0 && (
@@ -726,7 +752,7 @@ function RunDetail({ run }) {
             <SectionTitle count={run.stages.length}>Stages</SectionTitle>
             <Table>
               <thead><tr className="border-b">
-                <Th>Task</Th><Th>Stage</Th><Th>Agent</Th><Th>Isolation</Th><Th>Duration</Th><Th>Exit</Th><Th>Files</Th><Th>Result</Th>
+                <Th>Task</Th><Th>Stage</Th><Th>Agent</Th><Th>Isolation</Th><Th>Duration</Th><Th>Tokens</Th><Th>Cost</Th><Th>Exit</Th><Th>Files</Th><Th>Result</Th>
               </tr></thead>
               <tbody>
                 {run.stages.map((st, i) => (
@@ -741,6 +767,8 @@ function RunDetail({ run }) {
                     <Td>{st.agent_cli || "—"}</Td>
                     <Td><Badge variant="outline">{st.isolation_level || "—"}</Badge></Td>
                     <Td className="whitespace-nowrap">{fmtDuration(st.duration_seconds)}</Td>
+                    <Td data-testid="stage-tokens" className="whitespace-nowrap text-muted-foreground">{fmtTokens(st.token_count)}</Td>
+                    <Td data-testid="stage-cost" className="whitespace-nowrap text-muted-foreground">{fmtCost(st.cost_estimate)}</Td>
                     <Td className={st.exit_code ? "text-destructive font-medium" : ""}>{st.exit_code ?? "—"}</Td>
                     <Td className="whitespace-nowrap" title={(st.files_modified || []).join("\n")}>
                       {st.files_modified && st.files_modified.length ? `${st.files_modified.length} file(s)` : "—"}

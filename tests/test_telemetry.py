@@ -48,6 +48,29 @@ class TestStageRecord(unittest.TestCase):
         self.assertEqual(record["stages"], ["plan-approved", "implemented"])
 
 
+class TestRunSummaryRecord(unittest.TestCase):
+    def _summary(self, **kwargs):
+        return telemetry.run_summary_record(
+            run_id="r1",
+            start_time="2026-07-12T00:00:00Z",
+            end_time="2026-07-12T00:01:00Z",
+            tasks_spawned=1,
+            tasks_succeeded=1,
+            tasks_failed=0,
+            **kwargs,
+        )
+
+    def test_usage_aggregates_default_to_null(self):
+        record = self._summary()
+        self.assertIsNone(record["total_tokens"])
+        self.assertIsNone(record["total_cost_usd"])
+
+    def test_usage_aggregates_carried_when_provided(self):
+        record = self._summary(total_tokens=13851, total_cost_usd=0.139146)
+        self.assertEqual(record["total_tokens"], 13851)
+        self.assertAlmostEqual(record["total_cost_usd"], 0.139146)
+
+
 class TestEnvironmentIssueRecord(unittest.TestCase):
     def test_environment_issue_record_contains_required_fields(self):
         record = telemetry.environment_issue_record(
