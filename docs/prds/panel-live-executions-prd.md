@@ -133,7 +133,31 @@ records). No orchestrator or telemetry-emission changes.
 - **Stash-pop conflict** if implemented while an orchestrator run is active
   in this repo — mitigated by the lease check before implementation starts.
 
+## Divergence Summary
+
+_Recorded: 2026-07-13 — Branch: lvp-01-panel-live-run-visibility (plan lvp-01)_
+
+### Changed from plan
+
+- Task 6 (`scripts/test-panel-live-runs.mjs`): QA caught a teardown race —
+  the harness now awaits Chrome exit (3s cap) before sweeping its profile
+  dir and retries the directory removals; without it `rmdir` hit ENOTEMPTY
+  on cache files Chrome was still flushing. Test-only; no panel behavior
+  change.
+
+### Added (unplanned)
+
+- `docs/telemetry-guide.md`: the "Reviewing a single run" section gained a
+  live-run behavior note during docs sync — anticipated by the plan's
+  `docs_sync_reason` but not listed in the plan's task list, which scoped
+  docs to the panel README only.
+
+### Deferred
+
+- Task 8 (merge to main) — deferred to the ship stage by design; lvp-02
+  (R-4 polling) remains a separate plan.
+
 ---
 
-_Stage: scope-validated_ (owner gate + closure check 2026-07-13)
-_Next step: run `aet-work` (single-plan or multi-task queue)_
+_Stage: scope-validated_ (lvp-01 implemented, reviewed, secured, and synced 2026-07-13; lvp-02 polling pending)
+_Next step: run `aet-ship` for lvp-01, then plan lvp-02_

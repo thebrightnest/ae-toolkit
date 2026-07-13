@@ -52,6 +52,9 @@ tailwind.config = {
   body { background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
+  @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; background: #059669; animation: live-pulse 1.5s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 </style>
 </head>
 <body>
@@ -89,6 +92,24 @@ function fmtTokens(n) {
 function fmtCost(c) {
   if (c == null || isNaN(c)) return "—";
   return `$${c.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function fmtAgo(ms) {
+  if (!ms) return "—";
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+// A no-summary run is live while its archive mtime is fresher than this;
+// older activity means incomplete (lvp-01). Named constant, tuned by use.
+const LIVE_FRESHNESS_MINUTES = 30;
+function liveStatus(lastActivity) {
+  const fresh = lastActivity != null && Date.now() - lastActivity < LIVE_FRESHNESS_MINUTES * 60 * 1000;
+  return fresh ? "live" : "incomplete";
 }
 
 /* ---------------- parsing ---------------- */
@@ -141,7 +162,7 @@ async function loadTelemetryFromApi(onProgress) {
   // Served mode: the bundled launcher exposes ~/.aet/telemetry over localhost.
   const listRes = await fetch("/api/list");
   if (!listRes.ok) throw new Error(`archive unavailable (${listRes.status})`);
-  const { root, files } = await listRes.json();
+  const { root, files, dirs } = await listRes.json();
   const { groups, filesSeen } = collectGroups(files.map(rel => ({ rel })));
   const allEntries = [];
   for (const entries of groups.values()) allEntries.push(...entries);
@@ -154,20 +175,28 @@ async function loadTelemetryFromApi(onProgress) {
     if (onProgress && done % 300 === 0) onProgress(done, allEntries.length);
     return text;
   });
-  return { ...buildRunsFromGroups(groups), filesSeen, root };
+  return { ...buildRunsFromGroups(groups, dirs), filesSeen, root };
 }
 
-function buildRunsFromGroups(groups) {
+function parseRunDir(dir) {
+  const segments = dir.split("/");
+  const dirName = segments[segments.length - 1];
+  // Current layout: {project}/{date}/{run-id}/. Legacy layout: {project}/{date}-{run-id}/.
+  const dateIdx = segments.findIndex(s => /^\d{4}-\d{2}-\d{2}/.test(s));
+  const date = dateIdx >= 0 ? segments[dateIdx].slice(0, 10) : null;
+  const project = (dateIdx >= 0 ? segments.slice(0, dateIdx) : segments.slice(0, -1)).join("/") || "(root)";
+  return { dirName, date, project };
+}
+
+function buildRunsFromGroups(groups, dirList) {
+  // dirList (served mode only): [{rel, mtime}] for every current-layout run
+  // dir, including empty ones. mtime is seconds; lastActivity is ms.
+  const dirMtimes = new Map();
+  for (const d of dirList || []) dirMtimes.set(d.rel, d.mtime != null ? d.mtime * 1000 : null);
   const runs = [];
   let skippedLines = 0;
   for (const [dir, entries] of groups) {
-    const segments = dir.split("/");
-    const dirName = segments[segments.length - 1];
-    // Current layout: {project}/{date}/{run-id}/. Legacy layout: {project}/{date}-{run-id}/.
-    const dateIdx = segments.findIndex(s => /^\d{4}-\d{2}-\d{2}/.test(s));
-    const date = dateIdx >= 0 ? segments[dateIdx].slice(0, 10) : null;
-    const project = (dateIdx >= 0 ? segments.slice(0, dateIdx) : segments.slice(0, -1)).join("/") || "(root)";
-
+    const { dirName, date, project } = parseRunDir(dir);
     let fileSummary = null;
     const summaries = [];   // run_summary records (legacy execution.log.jsonl)
     const records = [];
@@ -197,6 +226,7 @@ function buildRunsFromGroups(groups) {
           summary,
           summaryCount: summaries.length + (fileSummary ? 1 : 0),
           records,
+          lastActivity: dirMtimes.has(dir) ? dirMtimes.get(dir) : undefined,
         }));
       }
     } else {
@@ -207,9 +237,20 @@ function buildRunsFromGroups(groups) {
           dir: `${dir}#${id}`, runId: id, date, project,
           summary: s, summaryCount: 1,
           records: records.filter(r => r.run_id === id),
+          lastActivity: dirMtimes.has(dir) ? dirMtimes.get(dir) : undefined,
         }));
       }
     }
+  }
+  // Run dirs with no telemetry files yet (empty or pre-first-record) become
+  // zero-record runs, so a just-started run is visible on load (lvp-01).
+  for (const [dir, ms] of dirMtimes) {
+    if (groups.has(dir)) continue;
+    const { dirName, date, project } = parseRunDir(dir);
+    runs.push(buildRun({
+      dir, runId: dirName, date, project,
+      summary: null, summaryCount: 0, records: [], lastActivity: ms,
+    }));
   }
   return { runs, skippedLines };
 }
@@ -224,8 +265,16 @@ function buildRun(r) {
   const ends = r.records.map(x => x.end_time || x.timestamp).filter(Boolean).sort();
   const start = (r.summary && r.summary.start_time) || starts[0] || null;
   const end = (r.summary && r.summary.end_time) || ends[ends.length - 1] || null;
-  const stageFailures = stages.filter(s => s.result === "failure").length;
-  const testFailures = tests.filter(t => t.result === "failure").length;
+  // Activity timestamp (ms): the dir's recursive mtime from the API when
+  // present; folder-picker fallback is the latest record end time, then the
+  // summary end time. Drives live/incomplete status and the Runs sort.
+  const lastActivity = r.lastActivity != null
+    ? r.lastActivity
+    : ends.length
+      ? Date.parse(ends[ends.length - 1]) || null
+      : end
+        ? Date.parse(end) || null
+        : null;
   const duration = r.summary && r.summary.wall_clock_seconds != null
     ? r.summary.wall_clock_seconds
     : stages.reduce((a, s) => a + (s.duration_seconds || 0), 0);
@@ -245,8 +294,8 @@ function buildRun(r) {
     : (stageCost.length ? stageCost.reduce((a, s) => a + s.cost_estimate, 0) : null);
   const status = r.summary
     ? (r.summary.outcome || (r.summary.tasks_failed > 0 ? "failure" : "success"))
-    : (stageFailures + testFailures > 0 ? "failure" : "success");
-  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, tokens, cost, status };
+    : liveStatus(lastActivity);
+  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, tokens, cost, lastActivity, status };
 }
 
 /* ---------------- plan model ---------------- */
@@ -328,11 +377,13 @@ function buildPlans(runs) {
           key, norm, name: planDisplayName(norm), project: r.project,
           runs: [], sessions: [], tests: [], issues: [], learnings: [],
           taskIds: new Set(), spine: new Set(), lastActivity: null, status: "success",
+          live: false,
           testsAgg: { total: 0, passed: 0, failed: 0 },
         };
         plans.set(key, p);
       }
       if (!p.runs.includes(r.dir)) p.runs.push(r.dir);
+      if (r.status === "live") p.live = true;
       const timed = [];
       for (const rec of recs) {
         if (rec.task_id) p.taskIds.add(rec.task_id);
@@ -404,6 +455,7 @@ function Badge({ children, variant = "default", className = "", ...props }) {
     secondary: "border-transparent bg-secondary text-secondary-foreground",
     destructive: "border-transparent bg-destructive text-destructive-foreground",
     success: "border-transparent bg-emerald-100 text-emerald-800",
+    warning: "border-transparent bg-amber-100 text-amber-800",
     outline: "text-foreground",
   };
   return <span className={`${base} ${variants[variant]} ${className}`} {...props}>{children}</span>;
@@ -454,6 +506,12 @@ function Td({ children, className = "", ...props }) {
 }
 
 function ResultBadge({ result }) {
+  if (result === "live") {
+    return <Badge variant="success" className="gap-1.5"><span className="live-dot" />live</Badge>;
+  }
+  if (result === "incomplete") {
+    return <Badge variant="warning">incomplete</Badge>;
+  }
   return result === "failure"
     ? <Badge variant="destructive">failure</Badge>
     : <Badge variant="success">success</Badge>;
@@ -523,7 +581,10 @@ function PlansTable({ plans, selectedKey, onSelect }) {
             onClick={() => onSelect(p.key)}
             className={`border-b cursor-pointer transition-colors hover:bg-muted/50 ${selectedKey === p.key ? "bg-accent" : ""}`}
           >
-            <Td className="font-medium whitespace-nowrap">{p.name}</Td>
+            <Td className="font-medium whitespace-nowrap">
+              {p.live && <span data-testid="plan-live-dot" className="live-dot mr-1.5" title="run in progress" />}
+              {p.name}
+            </Td>
             <Td className="whitespace-nowrap text-muted-foreground">{p.project}</Td>
             <Td>{p.runs.length}</Td>
             <Td>{p.sessions.length || "—"}</Td>
@@ -738,6 +799,13 @@ function RunDetail({ run }) {
         </div>
       </CardHeader>
       <CardContent>
+        {!s && (
+          <div data-testid="run-progress-banner" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-3">
+            {run.records.length > 0
+              ? `In progress — ${run.stages.length} stage records, last activity ${fmtAgo(run.lastActivity)}`
+              : "Waiting for first stage record"}
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <Stat label="Tasks" value={s ? `${s.tasks_succeeded ?? "?"} ok / ${s.tasks_failed ?? "?"} failed` : run.tasks.length} />
           <Stat label="Stage sessions" value={run.stages.length} />
@@ -888,7 +956,13 @@ function App() {
   const inputRef = useRef(null);
 
   function sortRuns(parsed) {
-    parsed.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.start || "").localeCompare(a.start || ""));
+    // Live runs first, then most recent archive activity (lvp-01).
+    parsed.sort((a, b) => {
+      const al = a.status === "live" ? 1 : 0;
+      const bl = b.status === "live" ? 1 : 0;
+      if (al !== bl) return bl - al;
+      return (b.lastActivity || 0) - (a.lastActivity || 0);
+    });
     return parsed;
   }
 
@@ -977,7 +1051,9 @@ function App() {
     return planData.plans.filter(p => {
       if (filterFolder !== "all" && !(p.project === filterFolder || p.project.startsWith(filterFolder + "/"))) return false;
       if (filterProject !== "all" && p.project !== filterProject) return false;
-      if (filterStatus !== "all" && p.status !== filterStatus) return false;
+      // Plans carry success/failure only; "live" matches plans with a live run.
+      if (filterStatus === "live" && !p.live) return false;
+      if (filterStatus !== "all" && filterStatus !== "live" && p.status !== filterStatus) return false;
       if (q) {
         const hay = [p.name, p.norm, p.project, ...p.taskIds].join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
@@ -1072,6 +1148,8 @@ function App() {
               <option value="all">All statuses</option>
               <option value="success">Success</option>
               <option value="failure">Failure</option>
+              <option value="live">Live</option>
+              <option value="incomplete">Incomplete</option>
             </Select>
           </div>
 
