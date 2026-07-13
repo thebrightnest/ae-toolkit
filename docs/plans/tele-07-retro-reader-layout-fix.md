@@ -125,6 +125,8 @@ docs_sync_reason: aet-work/references/telemetry-log-schema.md must state explici
 - `tests/test_aet_retro.py` (new or extended — name the test covering both readers)
 - `tests/test_mine_learnings.py` (new or extended)
 - `aet-work/references/telemetry-log-schema.md`
+- `tests/test_aet_retro_telemetry.py` [Changed: fixture archive path updated to the four-level `<project>/main/<date>/<run>` layout required by task 3]
+- `tests/test_telemetry_archive.py` [Changed: `_seed_run` fixture updated to the same four-level layout]
 
 ## Validation Steps
 
@@ -152,5 +154,5 @@ intentionally not restorable (its contents are the bug's pollution).
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+_Stage: synced_
+_Next step: run `aet-ship`_
