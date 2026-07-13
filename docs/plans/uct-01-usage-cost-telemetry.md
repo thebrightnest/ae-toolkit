@@ -83,8 +83,8 @@ docs_sync_reason: telemetry-log-schema.md gains populated-by semantics for token
 - [x] Orchestrator wiring test: stub CLI emitting a usage block produces a stage record with non-null `token_count`/`cost_estimate`, and the run summary carries the aggregates
 - [x] Live evidence (claude or stub): stage `.jsonl` shows non-null `token_count`/`cost_estimate`, `last-run.json` shows `total_tokens`/`total_cost_usd`, panel renders both
 - [x] Live evidence (kimi): one real kimi stage session → stage `.jsonl` shows non-null `token_count` matching a manual sum of that session's `wire.jsonl` `step.end` events (70181 tokens, 2026-07-13)
-- [ ] Backward compat: pre-change records (null fields) render `—` in the panel; `aet report` still runs against the old archive
-- [ ] Live output preserved: batch run still streams agent output to the terminal in real time
+- [x] Backward compat: pre-change records (null fields) render `—` in the panel; `aet report` still runs against the old archive
+- [x] Live output preserved: batch run still streams agent output to the terminal in real time (observed during the kimi live-evidence run, 2026-07-13)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -97,5 +97,5 @@ Revert the merge commit. All readers tolerate null `token_count`/`cost_estimate`
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
