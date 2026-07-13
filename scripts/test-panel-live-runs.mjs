@@ -7,13 +7,17 @@
 //
 // Usage: node scripts/test-panel-live-runs.mjs
 //
-// Checks (plan validation steps, docs/plans/lvp-01-panel-live-run-visibility.md):
+// Checks (plan validation steps, docs/plans/lvp-01-panel-live-run-visibility.md
+// and docs/plans/lvp-02-panel-auto-refresh.md):
 //  1. an empty current-layout run dir renders a row with a live badge
 //  2. a stale no-summary run dir renders incomplete (never success)
 //  3. live rows sort first, then last activity descending
 //  4. run detail shows the in-progress banner (zero-record + partial variants)
 //  5. the Plans lens shows a live dot when a contributing run is live
-//  6. zero console errors
+//  6. a stage record appended mid-session appears in the row within ~6s (lvp-02)
+//  7. a stale run whose mtime advances flips incomplete → live (lvp-02)
+//  8. no polling while the tab is hidden; immediate tick on resume (lvp-02)
+//  9. zero console errors
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -42,22 +46,23 @@ function check(name, cond, detail = "") {
 
 /* ---------------- fixture archive ---------------- */
 
+const stageRec = over =>
+  JSON.stringify({
+    type: "stage",
+    task_id: "lvp-99",
+    stage: "implemented",
+    result: "success",
+    plan_file: `/repo/.worktrees/lvp-99/docs/plans/${PLAN_NAME}.md`,
+    start_time: "2026-07-13T10:00:00Z",
+    end_time: "2026-07-13T10:01:00Z",
+    duration_seconds: 60,
+    ...over,
+  });
+
 function buildFixture() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "panel-live-home-"));
   const root = path.join(home, ".aet", "telemetry");
   const now = Date.now() / 1000;
-  const stageRec = over =>
-    JSON.stringify({
-      type: "stage",
-      task_id: "lvp-99",
-      stage: "implemented",
-      result: "success",
-      plan_file: `/repo/.worktrees/lvp-99/docs/plans/${PLAN_NAME}.md`,
-      start_time: "2026-07-13T10:00:00Z",
-      end_time: "2026-07-13T10:01:00Z",
-      duration_seconds: 60,
-      ...over,
-    });
   const mk = (rel, files, mtime) => {
     const dir = path.join(root, rel);
     fs.mkdirSync(dir, { recursive: true });
@@ -90,7 +95,7 @@ function buildFixture() {
       end_time: "2026-07-09T10:05:00Z",
     }),
   }, now - 120);
-  return { home };
+  return { home, root };
 }
 
 /* ---------------- minimal CDP client ---------------- */
@@ -140,7 +145,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 /* ---------------- main ---------------- */
 
 async function main() {
-  const { home } = buildFixture();
+  const { home, root } = buildFixture();
   console.log(`fixture archive: ${path.join(home, ".aet", "telemetry")}`);
 
   // 1. panel server against the fixture archive (HOME override), random port
@@ -264,6 +269,73 @@ async function main() {
       const tr = [...document.querySelectorAll("tbody tr")].find(t => t.textContent.includes("${PLAN_NAME}"));
       return !!tr && !!tr.querySelector('[data-testid="plan-live-dot"]');
     })()`));
+
+    console.log("\nAuto-refresh: mid-session append appears without manual refresh (lvp-02)");
+    await ev(`(() => { const b = [...document.querySelectorAll("button")].find(b => b.textContent.trim() === "Runs"); b.click(); })()`);
+    await waitFor(`document.body.textContent.includes("${RUN_DONE.slice(0, 8)}")`, "runs lens rows (auto-refresh)");
+    const stagesCell = runId => `(() => {
+      const tr = [...document.querySelectorAll("tbody tr")].find(t => t.textContent.includes("${runId.slice(0, 8)}"));
+      return tr ? tr.querySelector("td:nth-child(5)")?.textContent.trim() : null;
+    })()`;
+    check("partial run starts with 2 stage records", await ev(`(${stagesCell(RUN_LIVE_PARTIAL)}) === "2"`));
+    fs.appendFileSync(path.join(root, "proj/2026-07-13", RUN_LIVE_PARTIAL, "task.jsonl"),
+      stageRec({ stage: "qa-complete" }) + "\n");
+    let gainedWithin6s = false;
+    try {
+      await waitFor(`(${stagesCell(RUN_LIVE_PARTIAL)}) === "3"`, "row gains appended record", 7000);
+      gainedWithin6s = true;
+    } catch {}
+    check("appended stage record appears in the row within ~6s (no manual refresh)", gainedWithin6s);
+
+    console.log("\nPoll-diff liveness: stale run flips incomplete → live on mtime advance");
+    const staleBefore = await ev(rowExpr(RUN_STALE));
+    check("stale run starts incomplete", !!staleBefore && staleBefore.text.includes("incomplete"));
+    // Append a record, then age its mtime to 45 min ago: the dir's mtime
+    // advances vs the last poll (2h → 45m) but stays outside the 30-minute
+    // freshness window, so only poll-diff liveness can recover "live".
+    const staleJsonl = path.join(root, "proj/2026-07-10", RUN_STALE, "task.jsonl");
+    fs.appendFileSync(staleJsonl, stageRec({ plan_file: null, stage: "qa-complete" }) + "\n");
+    const aged = Date.now() / 1000 - 2700;
+    fs.utimesSync(staleJsonl, aged, aged);
+    let flippedToLive = false;
+    try {
+      await waitFor(`(() => {
+        const tr = [...document.querySelectorAll("tbody tr")].find(t => t.textContent.includes("${RUN_STALE.slice(0, 8)}"));
+        return !!tr && tr.textContent.includes("live") && !tr.textContent.includes("incomplete");
+      })()`, "stale run flips to live", 7000);
+      flippedToLive = true;
+    } catch {}
+    check("mtime advance past the freshness window flips incomplete → live", flippedToLive);
+
+    console.log("\nVisibility gating: no polling while hidden, immediate tick on resume");
+    // CDP focus emulation does not drive document.visibilityState in
+    // headless=new (Chrome 150), so override the property directly — the
+    // plan's sanctioned "visibility override" — and dispatch the event our
+    // listener reacts to.
+    const setVisibility = state => ev(`(() => {
+      window.__vis = "${state}";
+      if (!document.__visOverridden) {
+        Object.defineProperty(document, "visibilityState", { get: () => window.__vis, configurable: true });
+        document.__visOverridden = true;
+      }
+      document.dispatchEvent(new Event("visibilitychange"));
+      return document.visibilityState;
+    })()`);
+    await setVisibility("hidden");
+    check("tab reports hidden", await ev(`document.visibilityState`) === "hidden");
+    fs.appendFileSync(path.join(root, "proj/2026-07-13", RUN_LIVE_PARTIAL, "task.jsonl"),
+      stageRec({ stage: "reviewed" }) + "\n");
+    await sleep(8000); // > one poll interval: ungated polling would pick it up
+    check("no polling while hidden (appended record not picked up)",
+      await ev(`(${stagesCell(RUN_LIVE_PARTIAL)}) === "3"`));
+    await setVisibility("visible");
+    let resumedImmediately = false;
+    try {
+      await waitFor(`(${stagesCell(RUN_LIVE_PARTIAL)}) === "4"`, "immediate tick on resume", 3000);
+      resumedImmediately = true;
+    } catch {}
+    check("resume triggers an immediate tick (record appears ≤ ~3s)", resumedImmediately);
+    await ev(`delete document.visibilityState`).catch(() => {});
 
     console.log("\nConsole");
     check("zero console errors", cdp.consoleErrors.length === 0,

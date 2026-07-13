@@ -35,28 +35,33 @@ than the 30-minute freshness window).
    `document.visibilityState === "visible"` AND at least one no-summary run
    dir has `lastActivity` younger than 60 minutes; each tick fetches
    `/api/list` with `cache: "no-store"`; pause on `visibilitychange` to
-   hidden, resume (with an immediate tick) on visible — S (traces: R-4)
+   hidden, resume (with an immediate tick) on visible — S (traces: R-4) ✅
+   [Changed: chained `setTimeout` with an in-flight guard instead of a bare
+   `setInterval` — same 5s cadence, but a slow tick can never overlap the next]
 2. Incremental merge (`index.html`): diff the polled `dirs` against the
    previous snapshot by `(rel, mtime)`; for new dirs and dirs whose mtime
    advanced, re-fetch only that dir's files via `/api/file`, rebuild those
    runs through the lvp-01 plumbing, and merge into the run list in place —
    preserving the active lens, filters, and selected run/plan; unchanged
-   dirs are never re-fetched — M (traces: R-4)
+   dirs are never re-fetched — M (traces: R-4) ✅
 3. Poll-diff liveness (`index.html`): track each dir's last-seen mtime; a
    no-summary run whose mtime advanced since the previous poll is `live`
    regardless of the 30-minute freshness window from lvp-01 (a run past the
-   window with no mtime change stays `incomplete`) — S (traces: R-2, R-4)
+   window with no mtime change stays `incomplete`) — S (traces: R-2, R-4) ✅
+   [Changed: the `bumped` flag is sticky for the page session — once a run
+   reads `live` it stays `live` until reload, even without further mtimes]
 4. Extend `scripts/test-panel-live-runs.mjs`: against the fixture archive,
    append a stage record to a live dir mid-session and assert the Runs
    table row gains the record within ~6s without a manual refresh; assert a
    run older than the freshness window whose mtime advances flips
    `incomplete → live`; assert no polling occurs while the tab reports
    hidden (CDP `Emulation.setFocusEmulationEnabled` or visibility override)
-   — M (traces: R-4)
+   — M (traces: R-4) ✅
 5. Docs (`aet-work/panel/README.md`): status section notes auto-refresh
    behavior, the 5s cadence, the 60-minute polling window, and poll-diff
-   liveness — S (traces: R-4)
-6. Merge branch to main and verify integration — S
+   liveness — S (traces: R-4) ✅
+6. Merge branch to main and verify integration — S _(deferred to the ship
+   stage; qa/review gates passed in this pipeline)_
 
 **Size definitions:**
 
@@ -97,20 +102,26 @@ than the 30-minute freshness window).
 
 ## Validation Steps
 
-- [ ] `make validate` green (lint, format, ruff, pytest, skill-structure validator)
-- [ ] `node scripts/test-panel-live-runs.mjs` passes — E2E/integration
+- [x] `make validate` green (lint, format, ruff, pytest, skill-structure validator)
+- [x] `node scripts/test-panel-live-runs.mjs` passes — E2E/integration
       coverage: mid-session append reflected ≤ ~6s without manual refresh,
       `incomplete → live` on mtime advance, no polling while hidden, zero
       console errors
-- [ ] Regression: `tests/test_panel_serve.py` still passes (no serve
+- [x] Regression: `tests/test_panel_serve.py` still passes (no serve
       changes in this plan)
-- [ ] Manual smoke: panel open during a real `aet run` shows stage records
+- [x] Manual smoke: panel open during a real `aet run` shows stage records
       appearing without touching Refresh; closing the laptop lid (tab
-      hidden) pauses polling
-- [ ] R-trace coverage: R-4 (tasks 1–5) covered; R-2 refinement (task 3)
+      hidden) pauses polling — verified in parts 2026-07-13: the fixture E2E
+      drives the real serve + headless Chrome with real filesystem mtimes
+      (records appear on their own within ~6s); the hidden-tab pause/resume
+      uses the plan-sanctioned visibility override on the same
+      `visibilitychange` listener a lid close fires (CDP focus emulation
+      does not drive `document.visibilityState` in headless=new Chrome 150)
+- [x] R-trace coverage: R-4 (tasks 1–5) covered; R-2 refinement (task 3)
       cites an in-scope PRD R-id; no unknown R-ids
-- [ ] No new source files introduced (extends lvp-01's named E2E harness)
+- [x] No new source files introduced (extends lvp-01's named E2E harness)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+      _(ship stage)_
 
 ## Rollback Plan
 
@@ -129,5 +140,10 @@ gate stays deliberately skipped (no new network surface).
 
 ---
 
-_Stage: plan-approved_ (owner approval + closure check 2026-07-13)
-_Next step: run `aet-work`_
+_Stage: synced_ (aet-sync-docs pass 2026-07-13 — tasks 1–5 implemented as
+planned; verdict written to sync-docs.json; two minor deviations recorded in
+the PRD Divergence Summary: setTimeout-chained poll loop with in-flight guard,
+sticky poll-diff liveness + snapshot ordering; task 6 deferred to ship.
+Prior: aet-review pass 2026-07-13 — all lenses clean, make validate green,
+E2E 9/9, 0 fix-now, 2 flag-for-human accepted)
+_Next step: run `aet-ship`_

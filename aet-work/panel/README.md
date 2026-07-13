@@ -46,6 +46,21 @@ Working and verified:
   `prefers-reduced-motion`. Verified: `tests/test_panel_serve.py` (API
   contract) and `scripts/test-panel-live-runs.mjs` (fixture archive +
   headless Chrome, zero console errors).
+- Auto-refresh (lvp-02, served mode): while the tab is visible and any
+  no-summary run has activity younger than 60 minutes, the panel polls
+  `/api/list` every 5s (`cache: "no-store"`), diffs run dirs by
+  `(rel, mtime)`, and re-fetches only new or changed dirs' files — merging
+  into the run list in place, so the active lens, filters, and selection
+  survive. Poll-diff liveness: a no-summary run whose mtime advanced since
+  the previous poll is **live** regardless of the 30-minute freshness
+  window, so a healthy stage running longer than the window recovers its
+  badge the moment a record lands. Polling pauses on `visibilitychange` to
+  hidden (a panel left open overnight never wakes) and resumes with an
+  immediate tick; manual **Refresh archive** remains a full reload.
+  Verified: `scripts/test-panel-live-runs.mjs` — mid-session stage append
+  reflected in the Runs row within ~6s without refresh, `incomplete → live`
+  on mtime advance past the freshness window, no polling while the tab
+  reports hidden, zero console errors.
 - Two lenses via a tab strip in the header: **Plans** (default) and **Runs**.
   - Plans lens groups records by normalized plan file (paths into
     `.worktrees/<task>/` are sliced to `docs/plans/<plan>.md`, so a plan run

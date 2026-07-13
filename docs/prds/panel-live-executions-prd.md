@@ -157,7 +157,26 @@ _Recorded: 2026-07-13 — Branch: lvp-01-panel-live-run-visibility (plan lvp-01)
 - Task 8 (merge to main) — deferred to the ship stage by design; lvp-02
   (R-4 polling) remains a separate plan.
 
+_Recorded: 2026-07-13 — Branch: lvp-02-panel-auto-refresh (plan lvp-02)_
+
+### Changed from plan (lvp-02)
+
+- Task 1 (poll loop): chained `setTimeout` with an in-flight guard instead
+  of a bare `setInterval` — same 5s cadence, but a slow tick on a large
+  archive can never overlap with the next one.
+- Task 3 (poll-diff liveness): the `bumped` flag is sticky for the page
+  session — once a run's mtime advance marks it `live`, it stays `live`
+  until reload even if no further records land (flag-for-human from
+  aet-review; accepted — a rescued run should read as live). Minor ordering
+  note from the same review: the dir snapshot advances before the
+  changed-dir file fetch, so a record landing between the two is picked up
+  on the next tick, not the current one (self-heals within one cadence).
+
+### Deferred (lvp-02)
+
+- Task 6 (merge to main) — deferred to the ship stage by design.
+
 ---
 
-_Stage: scope-validated_ (lvp-01 implemented, reviewed, secured, and synced 2026-07-13; lvp-02 polling pending)
-_Next step: run `aet-ship` for lvp-01, then plan lvp-02_
+_Stage: synced_ (lvp-01 merged 2026-07-13; lvp-02 implemented, reviewed, and synced 2026-07-13 — pipeline: minimal, CSO deliberately skipped per plan frontmatter)
+_Next step: run `aet-ship` for lvp-02_
