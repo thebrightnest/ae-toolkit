@@ -70,10 +70,17 @@ class TestCLIAdapter(unittest.TestCase):
         adapter = resolve_cli_adapter("claude")
         self.assertEqual(adapter.usage_mode, "json-envelope")
 
-    def test_kimi_has_no_usage_mode(self):
-        """kimi's headless output carries no usage data (verified 2026-07-12)."""
+    def test_kimi_declares_wire_file_usage_mode(self):
+        """kimi usage is read post-exit from on-disk wire files; stdout
+        carries only the resume hint (verified kimi 0.23.6, 2026-07-13)."""
         adapter = resolve_cli_adapter("kimi")
-        self.assertIsNone(adapter.usage_mode)
+        self.assertEqual(adapter.usage_mode, "wire-file")
+
+    def test_wire_file_mode_appends_no_flags(self):
+        """wire-file parsing needs no CLI flags — the tee captures the hint."""
+        adapter = resolve_cli_adapter("kimi")
+        cmd = adapter.build_cmd("run tests", headless=True)
+        self.assertEqual(cmd, ["kimi", "-p", "run tests"])
 
     def test_usage_mode_flags_appended_when_headless(self):
         adapter = CLIAdapter(

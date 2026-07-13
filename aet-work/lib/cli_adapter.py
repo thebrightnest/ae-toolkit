@@ -6,10 +6,9 @@ import os
 import shutil
 from dataclasses import dataclass
 
-# Flags each usage mode needs appended to a headless invocation. A CLI with
-# ``usage_mode=None`` has no machine-readable usage output and records null
-# usage (verified for kimi 2026-07-12: neither text nor stream-json headless
-# output carries token/cost data).
+# Flags each usage mode needs appended to a headless invocation. Modes absent
+# from this map (e.g. kimi's "wire-file", read post-exit from on-disk session
+# files) need no flags — the tee already captures what they parse from.
 _USAGE_MODE_FLAGS: dict[str, tuple[str, ...]] = {
     "json-envelope": ("--output-format", "json"),
 }
@@ -46,7 +45,7 @@ class CLIAdapter:
         if headless and self.usage_mode is not None:
             # Before the prompt flag: some CLIs consume the token after -p as
             # the prompt value, so trailing flags would break the invocation.
-            cmd.extend(_USAGE_MODE_FLAGS[self.usage_mode])
+            cmd.extend(_USAGE_MODE_FLAGS.get(self.usage_mode, ()))
         if self.prompt_flag:
             cmd.extend([self.prompt_flag, prompt])
         else:
@@ -63,7 +62,9 @@ ADAPTERS: dict[str, CLIAdapter] = {
         prompt_flag="-p",
         workdir_flag=None,
         headless_flag=None,
-        usage_mode=None,
+        # Usage lives in ~/.kimi-code session wire files (verified 0.23.6),
+        # read post-exit via the resume hint in captured stdout.
+        usage_mode="wire-file",
     ),
     "claude": CLIAdapter(
         name="claude",

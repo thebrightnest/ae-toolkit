@@ -58,8 +58,9 @@ Working and verified:
   table, per-stage rows (run detail Stages table, plan timeline), and
   Tokens/Cost stat cards in run detail. Run aggregates prefer the
   summary's `total_tokens`/`total_cost_usd`, falling back to summing stage
-  records; `null` (pre-uct-01 records and CLIs without a usage mode, e.g.
-  kimi) renders as `—` so old archives look intentional, not broken.
+  records; `null` (pre-uct-01 records, unsupported CLIs, or subscription
+  aliases without a per-token price) renders as `—` so old archives look
+  intentional, not broken.
 - Format tolerance: nested project slugs (`demo/project/...`), run dirs
   without `last-run.json`, legacy `{project}/{date}-{run-id}/execution.log.jsonl`
   layout (split into one run per `run_summary` record), corrupted legacy lines
