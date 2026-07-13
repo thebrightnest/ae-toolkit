@@ -272,8 +272,11 @@ async function main() {
     if (cdp) cdp.close();
     chrome.kill("SIGKILL");
     serve.kill();
-    fs.rmSync(profile, { recursive: true, force: true });
-    fs.rmSync(home, { recursive: true, force: true });
+    // Let Chrome exit before sweeping its profile, or rmdir hits ENOTEMPTY
+    // on cache files it is still flushing.
+    await Promise.race([new Promise(r => chrome.once("exit", r)), sleep(3000)]);
+    fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
   }
 
   console.log("");
