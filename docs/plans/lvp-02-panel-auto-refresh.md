@@ -3,7 +3,7 @@ id: lvp-02-panel-auto-refresh
 size: M
 blocked_by:
   - lvp-01-panel-live-run-visibility
-pipeline: standard
+pipeline: minimal
 security_review: skipped
 security_review_reason: client-side polling of the existing /api/list endpoint inside the panel; no server/endpoint changes, no new network surface, React auto-escaping throughout (same boundary as thp-05/06)
 docs_sync: skipped
@@ -120,8 +120,12 @@ API changes in this plan.
 
 ## Pipeline
 
-`pipeline: standard` — default grouping; client-side-only change with the
-CSO gate deliberately skipped (no new network surface).
+`pipeline: minimal` — all stages in one session. Chosen 2026-07-13 (owner
+decision): this plan is pure client-side polling of an existing endpoint —
+no auth, data-model, API-surface, or dependency changes — and lvp-01 showed
+the multi-session overhead dominating wall-clock (~90 min for a 635-line
+diff, most of it per-session ramp-up and repeated full-suite runs). The CSO
+gate stays deliberately skipped (no new network surface).
 
 ---
 
