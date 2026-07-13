@@ -194,9 +194,11 @@ function parseRunDir(dir) {
   return { dirName, date, project };
 }
 
-function buildRunsFromGroups(groups, dirList) {
+function buildRunsFromGroups(groups, dirList, bumpedDirs) {
   // dirList (served mode only): [{rel, mtime}] for every current-layout run
   // dir, including empty ones. mtime is seconds; lastActivity is ms.
+  // bumpedDirs (lvp-02): dirs whose mtime advanced since the previous poll —
+  // a no-summary run among them is live regardless of the freshness window.
   const dirMtimes = new Map();
   for (const d of dirList || []) dirMtimes.set(d.rel, d.mtime != null ? d.mtime * 1000 : null);
   const runs = [];
@@ -233,6 +235,7 @@ function buildRunsFromGroups(groups, dirList) {
           summaryCount: summaries.length + (fileSummary ? 1 : 0),
           records,
           lastActivity: dirMtimes.has(dir) ? dirMtimes.get(dir) : undefined,
+          bumped: bumpedDirs ? bumpedDirs.has(dir) : false,
         }));
       }
     } else {
@@ -244,6 +247,7 @@ function buildRunsFromGroups(groups, dirList) {
           summary: s, summaryCount: 1,
           records: records.filter(r => r.run_id === id),
           lastActivity: dirMtimes.has(dir) ? dirMtimes.get(dir) : undefined,
+          bumped: bumpedDirs ? bumpedDirs.has(dir) : false,
         }));
       }
     }
@@ -256,6 +260,7 @@ function buildRunsFromGroups(groups, dirList) {
     runs.push(buildRun({
       dir, runId: dirName, date, project,
       summary: null, summaryCount: 0, records: [], lastActivity: ms,
+      bumped: bumpedDirs ? bumpedDirs.has(dir) : false,
     }));
   }
   return { runs, skippedLines };
@@ -298,9 +303,12 @@ function buildRun(r) {
   const cost = r.summary && r.summary.total_cost_usd != null
     ? r.summary.total_cost_usd
     : (stageCost.length ? stageCost.reduce((a, s) => a + s.cost_estimate, 0) : null);
+  // No-summary status: poll-diff liveness (lvp-02) wins over the freshness
+  // window — a dir whose mtime advanced since the previous poll is live
+  // regardless of age; otherwise fall back to mtime freshness (lvp-01).
   const status = r.summary
     ? (r.summary.outcome || (r.summary.tasks_failed > 0 ? "failure" : "success"))
-    : liveStatus(lastActivity);
+    : (r.bumped ? "live" : liveStatus(lastActivity));
   return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, tokens, cost, lastActivity, status };
 }
 
@@ -1049,7 +1057,7 @@ function App() {
       if (!r.ok) throw new Error(`cannot read ${e.rel}`);
       return r.text();
     });
-    const { runs: rebuilt } = buildRunsFromGroups(groups, changed);
+    const { runs: rebuilt } = buildRunsFromGroups(groups, changed, changedDirs);
     setRuns(prev => sortRuns([...prev.filter(r => !changedDirs.has(r.dir)), ...rebuilt]));
   }
 
