@@ -4,8 +4,9 @@
 Reads both structured JSONL records and narrative markdown reports so it can
 surface patterns the toolkit authors did not explicitly instrument.
 
-Archive layout:
-    ~/.aet/telemetry/{project-slug}/{date}/{run-id}/
+Archive layout (as written by aet-work/lib/telemetry.py; the project slug is
+<main-worktree-dir>/<worktree-label>):
+    ~/.aet/telemetry/{project-dir}/{worktree-label}/{date}/{run-id}/
         ├── last-run.json
         ├── {task-id}.jsonl
         └── ... reports and evidence
@@ -20,6 +21,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -183,8 +185,23 @@ def mine_narrative(text: str) -> dict[str, PatternBucket]:
     return buckets
 
 
+def _is_date_dir(path: Path) -> bool:
+    """Return True if the directory name parses as a YYYY-MM-DD date."""
+    try:
+        datetime.strptime(path.name, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
 def mine_archive(archive_dir: Path) -> dict[str, Any]:
-    """Scan the archive and return aggregated pattern counts."""
+    """Scan the archive and return aggregated pattern counts.
+
+    Walks the writer's layout
+    ``{project-dir}/{worktree-label}/{date}/{run-id}/*.jsonl``. Directories at
+    the date level whose names do not parse as ``%Y-%m-%d`` are skipped, never
+    treated as runs; "runs scanned" counts actual run-id dirs.
+    """
     archive_dir = archive_dir.expanduser()
     counts: Counter = Counter()
     examples: dict[str, list[str]] = defaultdict(list)
@@ -195,45 +212,48 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
     for project_dir in sorted(archive_dir.glob("*")):
         if not project_dir.is_dir():
             continue
-        for date_dir in sorted(project_dir.glob("*")):
-            if not date_dir.is_dir():
+        for label_dir in sorted(project_dir.glob("*")):
+            if not label_dir.is_dir():
                 continue
-            for run_dir in sorted(date_dir.glob("*")):
-                if not run_dir.is_dir():
+            for date_dir in sorted(label_dir.glob("*")):
+                if not date_dir.is_dir() or not _is_date_dir(date_dir):
                     continue
-                runs_scanned += 1
+                for run_dir in sorted(date_dir.glob("*")):
+                    if not run_dir.is_dir():
+                        continue
+                    runs_scanned += 1
 
-                for task_log in sorted(run_dir.glob("*.jsonl")):
-                    records = read_jsonl(task_log)
-                    files_scanned += 1
+                    for task_log in sorted(run_dir.glob("*.jsonl")):
+                        records = read_jsonl(task_log)
+                        files_scanned += 1
 
-                    for record in records:
-                        rtype = record.get("type")
-                        if rtype == "environment_issue":
-                            counts["dependency_issues"] += 1
-                        elif rtype == "stage":
-                            if record.get("exit_code", 0) != 0:
-                                counts["stage_failures"] += 1
-                            if record.get("stage") == "review":
-                                counts["review_noise"] += 1
-                        elif rtype == "learning_candidate":
-                            counts["learning_candidates"] += 1
-                            description = record.get("description")
-                            if description:
-                                examples["learning_candidates"].append(str(description))
+                        for record in records:
+                            rtype = record.get("type")
+                            if rtype == "environment_issue":
+                                counts["dependency_issues"] += 1
+                            elif rtype == "stage":
+                                if record.get("exit_code", 0) != 0:
+                                    counts["stage_failures"] += 1
+                                if record.get("stage") == "review":
+                                    counts["review_noise"] += 1
+                            elif rtype == "learning_candidate":
+                                counts["learning_candidates"] += 1
+                                description = record.get("description")
+                                if description:
+                                    examples["learning_candidates"].append(str(description))
 
-                last_run = read_json(run_dir / "last-run.json")
-                if last_run:
-                    files_scanned += 1
+                    last_run = read_json(run_dir / "last-run.json")
+                    if last_run:
+                        files_scanned += 1
 
-                # Mine narrative markdown reports for patterns that were never
-                # explicitly instrumented.
-                for _path, text in read_markdown_reports(run_dir):
-                    reports_scanned += 1
-                    buckets = mine_narrative(text)
-                    for category, bucket in buckets.items():
-                        counts[category] += bucket.count
-                        examples[category].extend(bucket.examples)
+                    # Mine narrative markdown reports for patterns that were never
+                    # explicitly instrumented.
+                    for _path, text in read_markdown_reports(run_dir):
+                        reports_scanned += 1
+                        buckets = mine_narrative(text)
+                        for category, bucket in buckets.items():
+                            counts[category] += bucket.count
+                            examples[category].extend(bucket.examples)
 
     return {
         "dependency_issues": counts.get("dependency_issues", 0),
