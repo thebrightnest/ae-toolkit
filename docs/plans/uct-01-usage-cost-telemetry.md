@@ -97,5 +97,5 @@ Revert the merge commit. All readers tolerate null `token_count`/`cost_estimate`
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
