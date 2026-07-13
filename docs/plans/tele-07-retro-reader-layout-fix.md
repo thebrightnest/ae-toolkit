@@ -7,6 +7,7 @@ security_review: skipped
 security_review_reason: read-only archive scanners plus deletion of one known-bad archive file; no new trust boundaries, no network, no writes into the tracked tree
 docs_sync: required
 docs_sync_reason: aet-work/references/telemetry-log-schema.md must state explicitly that {project-slug} is the worktree-based `<main-worktree-dir>/<worktree-label>` value from aet-work/lib/telemetry.py derive_project_slug, so future readers cannot re-derive it differently
+status: merged
 ---
 
 # Plan: Fix aet-retro / mine-learnings Telemetry Reader Layout Drift
@@ -154,5 +155,5 @@ intentionally not restorable (its contents are the bug's pollution).
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: None_
