@@ -7,6 +7,7 @@ security_review: required
 security_review_reason: modifies the panel's localhost HTTP handler to walk the telemetry archive and emit a new dirs payload — verify archive-root confinement and no path-traversal regression on the new code path
 docs_sync: required
 docs_sync_reason: panel README status section and stale worktree-dev note must reflect main-tree development + live-run support; docs/telemetry-guide.md review path gains live-run behavior
+status: merged
 ---
 
 # Plan: Panel Live-Run Visibility (dirs API + honest status)
@@ -152,5 +153,5 @@ archive-root confinement on the new dirs listing.
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
