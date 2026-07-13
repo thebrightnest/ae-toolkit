@@ -13,7 +13,8 @@ python3 aet-work/panel/serve   # serves panel + archive on 127.0.0.1, opens your
   (the page tells you to use the launcher instead).
 - The launcher is localhost-only, stdlib-only, refuses path traversal, and
   ignores `work-history.jsonl` (queue-history copies, not execution records).
-  API: `GET /api/list`, `GET /api/file?p=<relpath>`.
+  API: `GET /api/list` (returns `files` plus `dirs` — run dirs with activity
+  mtimes), `GET /api/file?p=<relpath>`.
 
 ## Design
 
@@ -25,12 +26,26 @@ python3 aet-work/panel/serve   # serves panel + archive on 127.0.0.1, opens your
   zinc theme tokens (CSS variables in `<style>`).
 - Everything runs client-side; nothing leaves the machine.
 
-## Status (as of 2026-07-12)
+## Status (as of 2026-07-13)
 
 Working and verified:
 
 - Auto-loads `~/.aet/telemetry` on open; **Refresh archive** button; archive
   path shown in the header.
+- Live-run visibility (lvp-01, **served mode only** — the folder picker has no
+  dir listing): `/api/list` additionally returns `dirs`, every current-layout
+  run dir with its newest recursive mtime (same definition prune safety
+  trusts), so a just-started run with an empty dir appears on load. Runs
+  without `last-run.json` get an honest status: **live** (pulsing emerald
+  dot, activity fresher than `LIVE_FRESHNESS_MINUTES` = 30) or **incomplete**
+  (amber) — never a fake success. The Runs table sorts live first, then last
+  activity; run detail shows an in-progress banner ("Waiting for first stage
+  record" for zero-record dirs, "In progress — N stage records, last activity
+  Xm ago" otherwise); plan rows get a live dot when any contributing run is
+  live; the status filter gains Live/Incomplete options; the pulse honors
+  `prefers-reduced-motion`. Verified: `tests/test_panel_serve.py` (API
+  contract) and `scripts/test-panel-live-runs.mjs` (fixture archive +
+  headless Chrome, zero console errors).
 - Two lenses via a tab strip in the header: **Plans** (default) and **Runs**.
   - Plans lens groups records by normalized plan file (paths into
     `.worktrees/<task>/` are sliced to `docs/plans/<plan>.md`, so a plan run
@@ -99,18 +114,15 @@ Working and verified:
 
 ## Where panel development lives
 
-- Panel work happens in `.worktrees/aet-panel` (branch `aet-panel`, based on
-  `origin/main`). It is the source of truth for `aet-work/panel/` and the
-  `docs/telemetry-guide.md` changes.
-- The main tree may also show `aet-work/panel/` files: a running aet-work
-  orchestrator stashes uncommitted panel work at run start ("aet-work-run:
-  temp stash") and pops it back when the run finishes (observed 2026-07-11 —
-  the panel files vanished mid-session and came back with the stash pop).
-  Those popped copies are leftovers; do not edit them. Edit the worktree.
-- Smoke test (2026-07-11): serving from the worktree returns `/` 200,
-  `/api/list` with 3,090 files across all archive folders, and `/api/file`
-  run JSON. Everything below was verified against the live archive and the
-  running panel server.
+- Panel work happens in the **main tree** on ordinary feature branches
+  branched from `origin/main`, like any other toolkit change. The dedicated
+  `aet-panel` worktree was a temporary arrangement while main-tree panel
+  edits were restricted; the owner confirmed on 2026-07-13 it is no longer
+  needed.
+- The orchestrator stash quirk still applies to uncommitted main-tree files:
+  a running aet-work orchestrator stashes them at run start ("aet-work-run:
+  temp stash") and pops them back when the run finishes (observed 2026-07-11).
+  Commit panel work before launching a run from the main tree.
 
 ## Findings & decisions (2026-07-11)
 

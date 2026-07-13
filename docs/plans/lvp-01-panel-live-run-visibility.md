@@ -34,24 +34,24 @@ rendering. No orchestrator changes.
    parent basename parses as a date, mirroring `telemetry.py:_iter_project_run_dirs`)
    with `mtime` = newest recursive mtime (dir + files, same definition as
    `telemetry.py:_newest_mtime`); return them as `dirs: [{rel, mtime}]` in
-   the `/api/list` JSON alongside the unchanged `files` array — S (traces: R-1)
+   the `/api/list` JSON alongside the unchanged `files` array — S (traces: R-1) ✅
 2. `tests/test_panel_serve.py` (new): load `aet-work/panel/serve` via
    importlib against a tmp fixture archive (empty run dir, dir with partial
    JSONL, stale dir, completed dir, legacy `{date}-{run-id}` dir) — assert
    `dirs` includes the empty dir, excludes the legacy dir, `mtime` equals
    the newest file's mtime after an append, `files` is byte-identical to
-   today, and `/api/file` still 404s on `..` traversal — S (traces: R-1)
+   today, and `/api/file` still 404s on `..` traversal — S (traces: R-1) ✅
 3. Panel data plumbing (`index.html`): thread `dirs` from
    `loadTelemetryFromApi` through `collectGroups`/`buildRunsFromGroups`:
    create a zero-record run entry for every dir with no file group, and
    attach each dir's `mtime` to its run as `lastActivity` (fallback for
    folder-picker mode, where `dirs` is absent: latest record end time) —
-   M (traces: R-1, R-2)
+   M (traces: R-1, R-2) ✅
 4. Status model (`index.html`): add `LIVE_FRESHNESS_MINUTES = 30`; for runs
    with no summary, status = `live` when `now - lastActivity < 30 min`,
    else `incomplete` (summary runs keep the existing outcome logic; a
    no-summary run never renders `success`/`failure`); Runs table sort key
-   becomes `live` first, then `lastActivity` descending — S (traces: R-2)
+   becomes `live` first, then `lastActivity` descending — S (traces: R-2) ✅
 5. UI rendering (`index.html`): `live` badge (pulsing emerald dot; keyframe
    in the existing `<style>` block) and `incomplete` badge (amber) in the
    Runs table; add both to the status filter options; run-detail banner for
@@ -59,19 +59,22 @@ rendering. No orchestrator changes.
    zero-record dirs: "Waiting for first stage record"); live dot on plan
    rows in the Plans lens when any contributing run is `live`; the pulse
    keyframe gets a `prefers-reduced-motion` fallback that renders the dot
-   static — M (traces: R-2, R-3)
+   static — M (traces: R-2, R-3) ✅
 6. `scripts/test-panel-live-runs.mjs` (new): CDP E2E on the
    `test-panel-plan-detail.mjs` pattern (zero npm deps), spawning `serve`
    with `HOME=<tmp fixture>` — assert: empty-dir run row renders with
    `live` badge; stale no-summary dir renders `incomplete`; live row sorts
    first; run detail shows the banner; Plans lens shows the live dot; zero
-   console errors — M (traces: R-2, R-3)
+   console errors — M (traces: R-2, R-3) ✅ [Changed: QA-stage teardown-race
+   fix — await Chrome exit before sweeping the profile dir]
 7. Docs (`aet-work/panel/README.md`): status section gains live-run
    support; replace the stale "Where panel development lives" section with
    main-tree development (the aet-panel worktree was temporary, confirmed
    by owner 2026-07-13); note live features are served-mode only — S
-   (traces: R-2, R-3)
-8. Merge branch to main and verify integration — S
+   (traces: R-2, R-3) ✅ [Changed: docs sync also added a live-run note to
+   `docs/telemetry-guide.md`]
+8. Merge branch to main and verify integration — S _(deferred to the ship
+   stage; qa/review/cso gates run first in this pipeline)_
 
 **Size definitions:**
 
@@ -113,21 +116,27 @@ rendering. No orchestrator changes.
 
 ## Validation Steps
 
-- [ ] `make validate` green (lint, format, ruff, pytest, skill-structure validator)
-- [ ] `tests/test_panel_serve.py` passes — unit/API-boundary coverage of the
+- [x] `make validate` green (lint, format, ruff, pytest, skill-structure validator)
+- [x] `tests/test_panel_serve.py` passes — unit/API-boundary coverage of the
       `dirs` payload contract (serve ↔ panel), including traversal-guard
       regression and append-updates-mtime
-- [ ] `node scripts/test-panel-live-runs.mjs` passes — E2E/integration
+- [x] `node scripts/test-panel-live-runs.mjs` passes — E2E/integration
       coverage of live/incomplete rendering against a fixture archive
       (real serve + headless Chrome), zero console errors
-- [ ] Manual smoke: with a real `aet run` in flight, the run's row appears
-      on panel load with a `live` badge before any stage completes
-- [ ] R-trace coverage: R-1 (tasks 1–3), R-2 (tasks 3–6), R-3 (tasks 5–7)
+- [x] Manual smoke: with a real `aet run` in flight, the run's row appears
+      on panel load with a `live` badge before any stage completes —
+      verified in parts 2026-07-13: fixture E2E covers the empty-dir → live
+      badge render path; real-archive API smoke shows the in-flight run
+      `17e9ccc4` in `dirs` with accurate activity age (mid-stage quiet
+      window >30 min renders `incomplete`, the PRD-accepted behavior lvp-02
+      polling recovers)
+- [x] R-trace coverage: R-1 (tasks 1–3), R-2 (tasks 3–6), R-3 (tasks 5–7)
       covered; no task cites an R-id outside the PRD
-- [ ] New source files have named tests: `tests/test_panel_serve.py` covers
+- [x] New source files have named tests: `tests/test_panel_serve.py` covers
       the serve change; `scripts/test-panel-live-runs.mjs` covers the panel
       rendering change
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+      _(ship stage)_
 
 ## Rollback Plan
 
@@ -143,5 +152,5 @@ archive-root confinement on the new dirs listing.
 
 ---
 
-_Stage: plan-approved_ (owner approval + closure check 2026-07-13)
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
