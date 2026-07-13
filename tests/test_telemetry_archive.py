@@ -106,7 +106,7 @@ class TestMineLearnings(unittest.TestCase):
         shutil.rmtree(self.archive_dir, ignore_errors=True)
 
     def _seed_run(self, project_id: str, date: str, run_name: str, task_records: dict[str, list[dict]]) -> Path:
-        run_dir = self.archive_dir / project_id / date / run_name
+        run_dir = self.archive_dir / project_id / "main" / date / run_name
         run_dir.mkdir(parents=True, exist_ok=True)
         for task_id, records in task_records.items():
             _write_jsonl(run_dir / f"{task_id}.jsonl", records)

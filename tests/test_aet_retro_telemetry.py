@@ -114,7 +114,7 @@ class TestMineLearningsParsesLearningCandidates(unittest.TestCase):
     def test_learning_candidate_records_parse_with_mine_learnings(self):
         """mine-learnings reads learning_candidate records without crashing."""
         tmp = Path(tempfile.mkdtemp())
-        date_dir = tmp / "myproject" / datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_dir = tmp / "myproject" / "main" / datetime.now(timezone.utc).strftime("%Y-%m-%d")
         date_dir.mkdir(parents=True)
         run_dir = date_dir / "run-123"
         run_dir.mkdir()

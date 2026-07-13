@@ -5,9 +5,12 @@ Distinguishes findings that should improve the current project from findings
 that should improve the AET toolkit itself.
 
 Reads:
-- ~/.aet/telemetry/{project-slug}/ via mine-learnings --propose
-- ~/.aet/telemetry/{project-slug}/{date}/{run-id}/{task-id}.jsonl for the
-  current project (per-task structured telemetry, as decided in ADR-012)
+- ~/.aet/telemetry/<main-worktree-dir>/<worktree-label>/ via mine-learnings --propose
+- ~/.aet/telemetry/<main-worktree-dir>/<worktree-label>/{date}/{run-id}/{task-id}.jsonl
+  for the current project (per-task structured telemetry, as decided in ADR-012)
+
+The project slug is imported from the telemetry writer
+(aet-work/lib/telemetry.py: derive_project_slug) — readers never re-derive it.
 
 Writes a markdown retro to docs/retros/ by default.
 """
@@ -27,6 +30,18 @@ from pathlib import Path
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 DEFAULT_LOOKBACK_DAYS = 7
 
+# The telemetry writer (sibling aet-work skill) is the single source of truth
+# for the project slug and archive layout. Readers import its
+# derive_project_slug instead of re-deriving — a second, origin-URL-based
+# derivation drifted from the writer once already (tele-07).
+_TELEMETRY_LIB_DIR = Path(__file__).resolve().parents[2] / "aet-work" / "lib"
+if _TELEMETRY_LIB_DIR.is_dir() and str(_TELEMETRY_LIB_DIR) not in sys.path:
+    sys.path.insert(0, str(_TELEMETRY_LIB_DIR))
+try:
+    from telemetry import derive_project_slug
+except ImportError:
+    derive_project_slug = None
+
 # Heuristic signals that a finding belongs to the AET toolkit rather than the
 # project being built. Keep this list small and project-agnostic.
 AET_PATH_PATTERNS = [
@@ -44,33 +59,6 @@ AET_PATH_PATTERNS = [
 def is_aet_level(text: str) -> bool:
     """Return True if the finding text points at the AET toolkit."""
     return any(re.search(p, text, re.IGNORECASE) for p in AET_PATH_PATTERNS)
-
-
-def derive_project_slug() -> str:
-    """Derive owner/repo slug from the origin remote or directory name."""
-    env_slug = os.environ.get("AET_PROJECT_ID") or os.environ.get("AET_REPO_SLUG")
-    if env_slug:
-        return env_slug
-
-    try:
-        result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            url = result.stdout.strip()
-            if url.endswith(".git"):
-                url = url[:-4]
-            if ":" in url and "//" not in url:
-                url = url.split(":", 1)[-1]
-            parts = url.rstrip("/").split("/")
-            return "/".join(parts[-2:])
-    except FileNotFoundError:
-        pass
-
-    return Path.cwd().name
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -191,6 +179,7 @@ def recent_project_records(
 
     The archive layout is:
         ~/.aet/telemetry/{project-slug}/{date}/{run-id}/{task-id}.jsonl
+    where {project-slug} is the writer's <main-worktree-dir>/<worktree-label>.
     """
     project_dir = archive_dir.expanduser() / project_slug
     if not project_dir.is_dir():
@@ -234,18 +223,38 @@ def run_mine_learnings(archive_dir: Path) -> str:
     return result.stdout
 
 
-def extract_message(record: dict) -> str:
-    """Best-effort extraction of a human-readable message from a log record."""
-    if isinstance(record, dict):
-        for key in ("message", "error", "summary", "stage", "detail", "note", "description"):
-            value = record.get(key)
-            if value is not None:
-                return str(value)
-    return str(record)
+# Record fields that carry explicit human-readable finding text. Records with
+# none of these (queue snapshots, bare stage telemetry, ...) are skipped —
+# never rendered as findings.
+_FINDING_TEXT_KEYS = ("message", "error", "summary")
+
+
+def extract_message(record: dict) -> str | None:
+    """Extract finding text from a telemetry record, or None if it has none.
+
+    Only typed findings are eligible: ``learning_candidate`` records (which
+    carry ``description``) or records with an explicit
+    ``message``/``error``/``summary`` field. Bare stage names and dict reprs
+    are never returned.
+    """
+    if not isinstance(record, dict):
+        return None
+    if record.get("type") == "learning_candidate":
+        description = record.get("description")
+        return str(description) if description else None
+    for key in _FINDING_TEXT_KEYS:
+        value = record.get(key)
+        if value:
+            return str(value)
+    return None
 
 
 def categorize_records(records: list[dict]) -> tuple[list[str], list[str]]:
-    """Split telemetry records into AET-level and project-level findings."""
+    """Split telemetry records into AET-level and project-level findings.
+
+    Only records with usable finding text (see ``extract_message``) are
+    considered; everything else is skipped, never rendered.
+    """
     aet: list[str] = []
     project: list[str] = []
     seen: set[str] = set()
@@ -329,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--project-slug",
         type=str,
         default=None,
-        help="Project slug in the telemetry archive (default: derived from git origin or cwd).",
+        help="Project slug in the telemetry archive (default: writer-derived <dir>/<label>).",
     )
     parser.add_argument(
         "--lookback-days",
@@ -355,7 +364,18 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
     args = build_parser().parse_args(argv)
 
-    project_slug = args.project_slug or derive_project_slug()
+    if args.project_slug:
+        project_slug = args.project_slug
+    elif derive_project_slug is None:
+        print(
+            "error: cannot derive the project slug — sibling skill 'aet-work' "
+            f"(expected at {_TELEMETRY_LIB_DIR}) is missing; install the full "
+            "AE Toolkit or pass --project-slug explicitly.",
+            file=sys.stderr,
+        )
+        return 1
+    else:
+        project_slug = derive_project_slug()
     local_records = recent_project_records(
         args.archive_dir, project_slug, lookback_days=args.lookback_days
     )
