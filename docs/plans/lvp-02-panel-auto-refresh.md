@@ -8,6 +8,7 @@ security_review: skipped
 security_review_reason: client-side polling of the existing /api/list endpoint inside the panel; no server/endpoint changes, no new network surface, React auto-escaping throughout (same boundary as thp-05/06)
 docs_sync: skipped
 docs_sync_reason: panel README status section updated within the plan; no docs/ tree impact beyond what lvp-01 already synced
+status: merged
 ---
 
 # Plan: Panel Auto-Refresh (polling + poll-diff liveness)
@@ -140,10 +141,5 @@ gate stays deliberately skipped (no new network surface).
 
 ---
 
-_Stage: synced_ (aet-sync-docs pass 2026-07-13 — tasks 1–5 implemented as
-planned; verdict written to sync-docs.json; two minor deviations recorded in
-the PRD Divergence Summary: setTimeout-chained poll loop with in-flight guard,
-sticky poll-diff liveness + snapshot ordering; task 6 deferred to ship.
-Prior: aet-review pass 2026-07-13 — all lenses clean, make validate green,
-E2E 9/9, 0 fix-now, 2 flag-for-human accepted)
+_Stage: merged_
 _Next step: run `aet-ship`_
