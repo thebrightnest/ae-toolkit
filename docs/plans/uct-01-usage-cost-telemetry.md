@@ -7,6 +7,7 @@ security_review: required
 security_review_reason: captures and parses agent-CLI subprocess output (an LLM-adjacent trust boundary) into telemetry records — verify JSON-only parsing with input size caps and that captured text is never re-invoked as a shell command
 docs_sync: required
 docs_sync_reason: telemetry-log-schema.md gains populated-by semantics for token_count/cost_estimate plus new run-summary aggregate fields; panel README gains the cost view
+status: merged
 ---
 
 # Plan: Usage & Cost Telemetry — Capture, Record, Display
@@ -97,5 +98,5 @@ Revert the merge commit. All readers tolerate null `token_count`/`cost_estimate`
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
