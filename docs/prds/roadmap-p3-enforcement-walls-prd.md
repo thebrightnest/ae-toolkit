@@ -92,14 +92,25 @@ Five pieces: `aet gate submit` centralizes and fail-closes verdict writing (fixi
 
 _Recorded: 2026-07-14 — Branch: ewl-01-gate-submit-cli_
 
-### Changed from plan
+### ewl-01 — Changed from plan
 
 - Task 1 (`aet-work/bin/gate`): landed as designed, plus fail-closed hardening beyond the locked design — `--verdict` must match the payload's `verdict` field (rejected pre-write), `AET_TASK_ID` takes precedence over the payload's `task_id` for destination resolution, malformed/non-object JSON is rejected with named errors, and argument errors exit 1 instead of argparse's default 2 (`_GateParser`). All within R-1/R-2's fail-closed intent.
 - Task 4 (`tests/test_gate_submit.py`): the seven planned tests all exist; three more added for the hardening branches (`test_malformed_json_payload_exits_nonzero`, `test_non_object_payload_exits_nonzero`, `test_verdict_mismatch_exits_nonzero`).
 
-### Added (unplanned)
+### ewl-01 — Added (unplanned)
 
 - `aet-work/lib/evidence.py` — `write_verdict` gained a backward-compatible `path=` override so `gate submit` writes to the canonical `resolve_verdict_path()` destination. The plan's Context required resolving through frh-18's helper, but the Files to Modify list omitted this file.
+
+_Recorded: 2026-07-14 — Branch: ewl-05-git-refs-tamper-evidence_
+
+### ewl-05 — Changed from plan
+
+- Task 2 (read-path verification): the new integrity-error type landed as `GitRefsIntegrityError(QueueIntegrityError)` — the plan's explicitly deferred implementer's call — so the existing `aet-state`/bin fail-closed and warn-and-continue routing catches it unmodified. Restamping also extends to `seal()`: dropping a sealed task's ref changes the manifest, so without a restamp the next verified read would report a spurious mismatch (covered by `test_seal_restamps_envelope_no_false_positive`).
+- Task 3 (tests): all six planned tests landed; two added — the seal-restamp round-trip above, and `test_status_read_only_warns_and_reports_tampered_data` paired with the unplanned `bin/status` fix below.
+
+### ewl-05 — Added (unplanned)
+
+- `aet-work/bin/status`: integrity-mismatch recovery rerouted from the JSON `read_queue` to `backend.load(verify=False)`. The git-refs backend keeps no `work-queue.json`, so the old fallback returned an empty list and silently hid the very tasks `status` exists to surface on a compromised ledger.
 
 ### Deferred
 
