@@ -80,5 +80,5 @@ before the sub-second high-signal checks.
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
+_Next step: merge (`aet-cso` and `aet-sync-docs` skipped per plan frontmatter)_
