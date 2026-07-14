@@ -470,17 +470,17 @@ def _emit_test_run_from_verdict(
     stage: str,
 ) -> None:
     """Derive a ``test_run`` telemetry record from a passing qa verdict."""
-    generated_at = record.get("generated_at") or telemetry.iso_now()
+    test_command = record.get("test_command", "")
     logger.append_record(
         telemetry.test_run_record(
             run_id=logger.run_id,
             task_id=task_id,
             plan_file=plan_file,
             stage=stage,
-            scope="full-suite",
-            test_command=record.get("test_command", ""),
-            start_time=generated_at,
-            end_time=generated_at,
+            scope=telemetry.classify_test_scope(test_command),
+            test_command=test_command,
+            start_time=None,
+            end_time=None,
             exit_code=0,
             tests_total=record.get("tests_total"),
             tests_passed=record.get("tests_passed"),

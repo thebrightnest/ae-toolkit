@@ -2331,6 +2331,59 @@ class TestEvidenceGates(unittest.TestCase):
             self.assertEqual(test_runs[0]["tests_passed"], 11)
             self.assertEqual(test_runs[0]["tests_failed"], 1)
             self.assertEqual(test_runs[0]["exit_code"], 0)
+            self.assertIsNone(test_runs[0]["duration_seconds"])
+
+    def test_qa_verdict_classifies_full_suite_scope(self):
+        """A suite-wide test command is classified as full-suite scope."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_verdict(
+                        reports_dir,
+                        "qa",
+                        "pass",
+                        test_command="make validate",
+                        tests_total=42,
+                        tests_passed=42,
+                        tests_failed=0,
+                    )
+                    _write_passing(reports_dir, "review", "cso", "sync-docs")
+                    result, logger = self._run_group(
+                        repo_root, plan_file, reports_dir, archive_dir
+                    )
+                    records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                    test_runs = [r for r in records if r.get("type") == "test_run"]
+            self.assertTrue(result)
+            self.assertEqual(len(test_runs), 1)
+            self.assertEqual(test_runs[0]["scope"], "full-suite")
+            self.assertEqual(test_runs[0]["tests_total"], 42)
+
+    def test_qa_verdict_classifies_impact_scope(self):
+        """A path-specific test command is classified as impact scope."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_verdict(
+                        reports_dir,
+                        "qa",
+                        "pass",
+                        test_command="pytest tests/test_x.py",
+                        tests_total=7,
+                        tests_passed=7,
+                        tests_failed=0,
+                    )
+                    _write_passing(reports_dir, "review", "cso", "sync-docs")
+                    result, logger = self._run_group(
+                        repo_root, plan_file, reports_dir, archive_dir
+                    )
+                    records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                    test_runs = [r for r in records if r.get("type") == "test_run"]
+            self.assertTrue(result)
+            self.assertEqual(len(test_runs), 1)
+            self.assertEqual(test_runs[0]["scope"], "impact")
+            self.assertEqual(test_runs[0]["tests_total"], 7)
 
 class _StubPopen:
     """subprocess.Popen stand-in for _run_with_live_tee: canned output + exit code."""
