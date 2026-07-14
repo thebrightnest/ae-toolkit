@@ -2974,6 +2974,53 @@ class TestQaFreshnessInjection(unittest.TestCase):
             self.assertNotEqual(captured["env"].get("AET_QA_FRESHNESS"), evidence.SKIP)
             self.assertNotIn("do NOT re-run", " ".join(captured["cmd"]))
 
+    def _capture_run_stage_group(self, repo: str) -> dict:
+        captured: dict = {}
+
+        def fake_spawn(adapter, cmd, worktree_dir, env):
+            captured["cmd"] = cmd
+            captured["env"] = env
+            return 0, None
+
+        stages = [
+            WorkflowStage(
+                name="reviewed", skills=["aet-review"], evidence="review", gate_key=None
+            ),
+        ]
+        workflow = Workflow(
+            version=1,
+            name="test",
+            done_state="done",
+            stages=stages,
+            stage_map={s.name: s for s in stages},
+            execution_policy=ExecutionPolicy(session_groups=[["reviewed"]]),
+            routing=Routing(default={"harness": "test", "model": None}, by_stage={}),
+        )
+        with patch.object(orchestrator, "_spawn_session", side_effect=fake_spawn):
+            orchestrator.run_stage_group(
+                _FAKE_ADAPTER,
+                repo,
+                str(Path(repo) / "docs" / "plans" / "demo.md"),
+                repo,
+                stages,
+                task_id="demo",
+                run_id="run-test",
+                workflow=workflow,
+            )
+        return captured
+
+    def test_fresh_qa_verdict_injects_skip_clause_in_group_prompt(self):
+        with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as reports:
+            _init_git_repo(repo)
+            env = {"AET_REPORTS_DIR": reports, "AET_PROJECT_ID": "demo/project"}
+            with patch.dict(os.environ, env, clear=False):
+                for k in ("AET_EVIDENCE_PATH", "AET_EVIDENCE_PATH_QA"):
+                    os.environ.pop(k, None)
+                self._write_qa_pass(repo, reports)
+                captured = self._capture_run_stage_group(repo)
+            self.assertEqual(captured["env"].get("AET_QA_FRESHNESS"), evidence.SKIP)
+            self.assertIn("do NOT re-run", " ".join(captured["cmd"]))
+
 
 if __name__ == "__main__":
     unittest.main()
