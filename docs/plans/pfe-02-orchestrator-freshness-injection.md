@@ -155,5 +155,5 @@ and CSO passes (security_review required) even though the injected text is stati
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-cso`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
