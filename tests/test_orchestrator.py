@@ -114,6 +114,7 @@ def _verdict_record(kind: str, verdict: str = "pass", **overrides) -> dict:
         "verdict": verdict,
         "summary": overrides.pop("summary", "ok"),
         "generated_at": overrides.pop("generated_at", "2026-07-09T20:00:00Z"),
+        "tree_hash": overrides.pop("tree_hash", "t0"),
     }
     if kind == "qa":
         record.update(
@@ -2880,6 +2881,145 @@ class TestUsageCapture(unittest.TestCase):
         self.assertAlmostEqual(records[0]["cost_estimate"], 0.0123)
         self.assertEqual(summary["total_tokens"], 185)
         self.assertAlmostEqual(summary["total_cost_usd"], 0.0123)
+
+
+class TestQaFreshnessInjection(unittest.TestCase):
+    """The orchestrator injects a QA-freshness clause into stage prompts."""
+
+    def test_freshness_clause_mapping(self):
+        skip = orchestrator._freshness_clause(evidence.SKIP)
+        lint = orchestrator._freshness_clause(evidence.LINT_ONLY)
+        self.assertIn("do NOT re-run", skip)
+        self.assertIn("lint/format", lint)
+        self.assertEqual(orchestrator._freshness_clause(evidence.RUN), "")
+        self.assertEqual(orchestrator._freshness_clause(""), "")
+
+    def test_decision_empty_without_task_id(self):
+        self.assertEqual(orchestrator._qa_freshness_decision(None, "/x", "/y"), "")
+
+    def test_decision_never_raises_on_bad_paths(self):
+        # A non-existent worktree yields a string (RUN), never an exception.
+        self.assertIsInstance(
+            orchestrator._qa_freshness_decision("demo", "/nope", "/nope"), str
+        )
+
+    def _write_qa_pass(self, repo: str, reports: str) -> None:
+        # No tree_hash in the record → write_verdict stamps the real repo hash.
+        evidence.write_verdict(
+            task_id="demo",
+            kind="qa",
+            record={
+                "task_id": "demo",
+                "stage": "qa-complete",
+                "skill": "aet-qa",
+                "verdict": "pass",
+                "summary": "green",
+                "generated_at": "2026-07-13T00:00:00Z",
+                "test_command": "make validate",
+                "tests_total": 1,
+                "tests_passed": 1,
+                "tests_failed": 0,
+            },
+            project_slug="demo/project",
+            reports_root=reports,
+            worktree_dir=repo,
+        )
+
+    def _capture_run_stage(self, repo: str) -> dict:
+        captured: dict = {}
+
+        # Patch the spawn (not subprocess.Popen) so the real git calls the
+        # freshness check makes still run against the temp repo.
+        def fake_spawn(adapter, cmd, worktree_dir, env):
+            captured["cmd"] = cmd
+            captured["env"] = env
+            return 0, None
+
+        with patch.object(orchestrator, "_spawn_session", side_effect=fake_spawn):
+            orchestrator.run_stage(
+                _FAKE_ADAPTER,
+                repo,
+                str(Path(repo) / "docs" / "plans" / "demo.md"),
+                repo,
+                ["aet-review"],
+                "qa-complete",
+                "reviewed",
+                task_id="demo",
+                run_id="run-test",
+            )
+        return captured
+
+    def test_fresh_qa_verdict_injects_skip_clause(self):
+        with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as reports:
+            _init_git_repo(repo)
+            env = {"AET_REPORTS_DIR": reports, "AET_PROJECT_ID": "demo/project"}
+            with patch.dict(os.environ, env, clear=False):
+                for k in ("AET_EVIDENCE_PATH", "AET_EVIDENCE_PATH_QA"):
+                    os.environ.pop(k, None)
+                self._write_qa_pass(repo, reports)
+                captured = self._capture_run_stage(repo)
+            self.assertEqual(captured["env"].get("AET_QA_FRESHNESS"), evidence.SKIP)
+            self.assertIn("do NOT re-run", " ".join(captured["cmd"]))
+
+    def test_changed_tree_omits_clause(self):
+        with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as reports:
+            _init_git_repo(repo)
+            env = {"AET_REPORTS_DIR": reports, "AET_PROJECT_ID": "demo/project"}
+            with patch.dict(os.environ, env, clear=False):
+                for k in ("AET_EVIDENCE_PATH", "AET_EVIDENCE_PATH_QA"):
+                    os.environ.pop(k, None)
+                self._write_qa_pass(repo, reports)
+                Path(repo, "src.py").write_text("x = 1\n", encoding="utf-8")
+                captured = self._capture_run_stage(repo)
+            self.assertNotEqual(captured["env"].get("AET_QA_FRESHNESS"), evidence.SKIP)
+            self.assertNotIn("do NOT re-run", " ".join(captured["cmd"]))
+
+    def _capture_run_stage_group(self, repo: str) -> dict:
+        captured: dict = {}
+
+        def fake_spawn(adapter, cmd, worktree_dir, env):
+            captured["cmd"] = cmd
+            captured["env"] = env
+            return 0, None
+
+        stages = [
+            WorkflowStage(
+                name="reviewed", skills=["aet-review"], evidence="review", gate_key=None
+            ),
+        ]
+        workflow = Workflow(
+            version=1,
+            name="test",
+            done_state="done",
+            stages=stages,
+            stage_map={s.name: s for s in stages},
+            execution_policy=ExecutionPolicy(session_groups=[["reviewed"]]),
+            routing=Routing(default={"harness": "test", "model": None}, by_stage={}),
+        )
+        with patch.object(orchestrator, "_spawn_session", side_effect=fake_spawn):
+            orchestrator.run_stage_group(
+                _FAKE_ADAPTER,
+                repo,
+                str(Path(repo) / "docs" / "plans" / "demo.md"),
+                repo,
+                stages,
+                task_id="demo",
+                run_id="run-test",
+                workflow=workflow,
+            )
+        return captured
+
+    def test_fresh_qa_verdict_injects_skip_clause_in_group_prompt(self):
+        with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as reports:
+            _init_git_repo(repo)
+            env = {"AET_REPORTS_DIR": reports, "AET_PROJECT_ID": "demo/project"}
+            with patch.dict(os.environ, env, clear=False):
+                for k in ("AET_EVIDENCE_PATH", "AET_EVIDENCE_PATH_QA"):
+                    os.environ.pop(k, None)
+                self._write_qa_pass(repo, reports)
+                captured = self._capture_run_stage_group(repo)
+            self.assertEqual(captured["env"].get("AET_QA_FRESHNESS"), evidence.SKIP)
+            self.assertIn("do NOT re-run", " ".join(captured["cmd"]))
 
 
 if __name__ == "__main__":
