@@ -10,6 +10,7 @@ security_review: required
 security_review_reason: new CLI writer for gate verdicts that the orchestrator's fail-closed gate (frh-11) trusts for pass/fail decisions — validation-bypass or injection here would defeat the evidence gate itself
 docs_sync: required
 docs_sync_reason: new user-facing aet subcommand, and the four checking skills' writer contract changes from a direct library call to this command
+status: merged
 ---
 
 # Plan: `aet gate submit` — Centralized, Fail-Closed Verdict Writer
@@ -88,5 +89,5 @@ Revert the merge commit. The four skills' fallback instruction ("otherwise write
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
