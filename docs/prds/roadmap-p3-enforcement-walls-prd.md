@@ -112,11 +112,22 @@ _Recorded: 2026-07-14 — Branch: ewl-05-git-refs-tamper-evidence_
 
 - `aet-work/bin/status`: integrity-mismatch recovery rerouted from the JSON `read_queue` to `backend.load(verify=False)`. The git-refs backend keeps no `work-queue.json`, so the old fallback returned an empty list and silently hid the very tasks `status` exists to surface on a compromised ledger.
 
+_Recorded: 2026-07-14 — Branch: ewl-07-non-invasive-config-root_
+
+### ewl-07 — Changed from plan
+
+- Task 1 (`aet-work/lib/backends/factory.py`): added an explicit `AET_WORK_CONFIG` environment variable as the highest-precedence absolute path override. The locked design left a "direct config/path override only if warranted" open; it proved warranted for testing and for users who want to point at a specific config without relocating their project slug.
+
+### ewl-07 — Added (unplanned)
+
+- `aet-work/lib/project_id.py`: extracted `derive_project_slug()` and `resolve_repo_root()` from `telemetry.py` so the backend factory can resolve the external config path without importing telemetry (closes the layering inversion noted in the plan's Validation note). `telemetry.py` re-exports both names for backward compatibility.
+- `tests/test_read_path_no_git.py`: patched `AET_PROJECT_ID` in the no-git status/next tests so they resolve a stable slug instead of deriving one from the temp test directory, keeping external paths deterministic when git is unavailable.
+
 ### Deferred
 
 - Plan task 5 (merge branch to main + integration verify) — runs at `aet-ship`.
 
 ---
 
-_Stage: scope-validated (2026-07-12) — narrowed to config-only (plans/PRDs versioned; ADR-025 reverted); all six plans queued, closure check green._
-_Next step: run `aet-work` (single-plan or multi-task queue)_
+_Stage: synced_
+_Next step: run `aet-ship`_
