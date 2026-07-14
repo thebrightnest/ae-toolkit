@@ -55,10 +55,10 @@ radius — downstream repos — that the owner chose to fold into this pipeline.
 
 ## Validation Steps
 
-- [ ] `grep -rniE 'prettier|format-check' aet-setup/` returns no live scaffolding references (only intentional historical mentions, if any, remain and are called out)
-- [ ] Confirm no other aet-setup scaffold template (e.g., an embedded `.pre-commit-config`/Makefile snippet) still injects prettier
-- [ ] The walkthrough reads coherently with markdownlint-only gating
-- [ ] **No new source modules** — scaffold content is template/doc, exercised by the aet-setup skill flow, not pytest; verified by the grep above
+- [x] `grep -rniE 'prettier|format-check' aet-setup/` returns no live scaffolding references (only intentional historical mentions, if any, remain and are called out)
+- [x] Confirm no other aet-setup scaffold template (e.g., an embedded `.pre-commit-config`/Makefile snippet) still injects prettier
+- [x] The walkthrough reads coherently with markdownlint-only gating
+- [x] **No new source modules** — scaffold content is template/doc, exercised by the aet-setup skill flow, not pytest; verified by the grep above
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 **Self-consistency lint:** Check 1 PASS · Check 2 (SKILL.md=t1, walkthrough=t2) PASS · Check 3 (observable via grep) PASS · Check 4 (R-7 covered) PASS.
@@ -73,5 +73,5 @@ radius — downstream repos — that the owner chose to fold into this pipeline.
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
