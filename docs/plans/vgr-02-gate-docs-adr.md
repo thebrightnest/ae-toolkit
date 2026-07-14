@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - vgr-01-slim-markdown-gates
 pipeline: minimal
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: Documentation and an ADR only; no code, dependency, or security surface.
 docs_sync: skipped
@@ -76,4 +76,5 @@ revised, not just appended to.
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
+_Next step: run `aet-work`_
