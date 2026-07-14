@@ -3,7 +3,7 @@ id: vgr-03-validate-skills-link-perf
 size: M
 blocked_by: []
 pipeline: standard
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: Internal refactor of a local link-resolution loop in a bash validator; identical inputs/outputs, no network, no new trust boundary.
 docs_sync: skipped
@@ -73,5 +73,5 @@ lock behavior before the refactor.
 
 ---
 
-_Stage: reviewed_
-_Next step: merge (`aet-cso` and `aet-sync-docs` skipped per plan frontmatter)_
+_Stage: merged_
+_Next step: run `aet-work`_
