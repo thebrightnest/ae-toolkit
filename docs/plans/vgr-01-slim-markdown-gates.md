@@ -3,7 +3,7 @@ id: vgr-01-slim-markdown-gates
 size: M
 blocked_by: []
 pipeline: standard
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: Removes only cosmetic markdown gates (prettier, all-files markdownlint); detect-private-key and every real validator are retained — no auth, secret, or input-handling surface changes.
 docs_sync: skipped
@@ -80,5 +80,5 @@ before the sub-second high-signal checks.
 
 ---
 
-_Stage: reviewed_
-_Next step: merge (`aet-cso` and `aet-sync-docs` skipped per plan frontmatter)_
+_Stage: merged_
+_Next step: run `aet-work`_
