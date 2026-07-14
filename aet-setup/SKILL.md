@@ -88,7 +88,7 @@ For every project, ensure these topics are addressed. Use auto-detection; fall b
 | 4   | **Linting & formatting** | Presence of linter/formatter configs                                 | Dominant tools for the language, configured and runnable          |
 | 5   | **Security scanning**    | Presence of static analysis, dependency audit, secret scanning       | **Enable by default** — never optional                            |
 | 6   | **Testing**              | Presence of test runner config                                       | Unit + integration for backend; unit + component for frontend     |
-| 7   | **Git hooks**            | Presence of pre-commit config or git hooks                           | pre-commit with format/lint/type-check/test/security gates        |
+| 7   | **Git hooks**            | Presence of pre-commit config or git hooks                           | pre-commit with lint/type-check/test/security gates               |
 | 8   | **AI guardrails**        | Presence of `AGENTS.md`                                              | Generate with explicit forbidden/mandatory rules                  |
 | 9   | **Documentation**        | Presence of docs, README quality                                     | `AGENTS.md` + `docs/CONVENTIONS.md` + ADR process                 |
 | 10  | **Observability**        | Presence of structured logging, metrics, tracing                     | Structured logging + health checks at minimum                     |
@@ -248,11 +248,12 @@ For every typed language in the project:
 
 ### Linting & Formatting
 
-Every code directory must have automated format and lint checks:
+Every code directory must have an automated lint check, with a formatter configured as a manual convenience rather than a blocking gate:
 
 - Use the dominant tools for the detected language/framework
 - Ensure formatter and linter configs don't conflict
 - Line length: pick a standard (80, 100, or 120) and enforce it everywhere
+- Keep formatting out of the validation gate — provide a manual `make format` target if wanted, but do not add a format check to `make validate` or the commit/push path
 
 ### Security Scanning
 
@@ -297,7 +298,6 @@ Before trusting any validation gate, prove it can actually fail. Calibration is 
    {
      "commands": [
        { "name": "lint", "command": "make lint" },
-       { "name": "format-check", "command": "make format-check" },
        { "name": "type-check", "command": "make type-check" },
        { "name": "test", "command": "make test" }
      ]
@@ -310,7 +310,7 @@ Agents must use the commands listed in `.agents/validation-commands.json` as the
 
 All quality gates must run locally:
 
-- Create `.pre-commit-config.yaml` or git hooks running: format check, lint, type check, security scan, tests
+- Create `.pre-commit-config.yaml` or git hooks running: lint, type check, security scan, tests
 - Create root orchestration (`Makefile` or `justfile`) with: install, dev, test, lint, format, type-check, security-audit, smoke
 - Ensure every target actually works
 
