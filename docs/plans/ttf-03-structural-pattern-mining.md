@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - ttf-01-wire-test-run-extraction
 pipeline: standard
-status: draft
+status: approved
 security_review: skipped
 security_review_reason: read-only aggregation of local telemetry JSONL; no untrusted input executed, no network, no new trust boundary, no data mutation (analysis path only)
 docs_sync: skipped
@@ -155,5 +155,5 @@ review pass on the analysis path (matches ttf-02's rationale).
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_
