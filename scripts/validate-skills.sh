@@ -158,34 +158,52 @@ fi
 echo
 
 echo "=== Internal Link Checks ==="
-LINK_ERRORS=0
-# Check that relative markdown links resolve
-while IFS= read -r -d '' mdfile; do
-  # Strip code blocks before checking links (templates contain example links)
-  links=$(sed '/^```/,/^```/d' "$mdfile" | grep -oE '\[([^]]*)\]\(([^)]+)\)' 2>/dev/null | grep -v 'http' | grep -v '^#' || true)
-  if [ -n "$links" ]; then
-    echo "$links" | while read -r match; do
-      link=$(echo "$match" | sed -E 's/.*\]\(([^)]+)\).*/\1/')
-      # Strip anchor
-      link="${link%%\#*}"
-      [ -z "$link" ] && continue
-      case "$link" in
-        \#*) continue ;;
-      esac
-      dir=$(dirname "$mdfile")
-      target="$dir/$link"
-      target=$(cd "$REPO_ROOT" && python3 -c "import os, sys; print(os.path.normpath(os.path.join(os.getcwd(), sys.argv[1])))" "$target" 2>/dev/null || echo "$target")
-      if [ ! -e "$target" ]; then
-        echo "❌ Broken link in $mdfile → $link"
-        touch "$REPO_ROOT/.link-errors"
-      fi
-    done
-  fi
-done < <(find . -name '*.md' -not -path './.git/*' -not -path './content/*' -print0)
+# Single-pass relative-link check: one python process strips code blocks,
+# extracts links, and resolves each target (previously several subshells
+# per link). Behavior preserved: code-block stripping, http/anchor skips,
+# and the broken-link message format are unchanged.
+if ! python3 - "$REPO_ROOT" <<'PYEOF'
+import os
+import re
+import sys
 
-if [ -f "$REPO_ROOT/.link-errors" ]; then
-  rm "$REPO_ROOT/.link-errors"
-  LINK_ERRORS=1
+repo_root = sys.argv[1]
+link_re = re.compile(r"\[([^]]*)\]\(([^)]+)\)")
+
+broken = False
+for dirpath, dirnames, filenames in os.walk("."):
+    if dirpath == ".":
+        dirnames[:] = [d for d in dirnames if d not in (".git", "content")]
+    for fname in filenames:
+        if not fname.endswith(".md"):
+            continue
+        mdfile = os.path.join(dirpath, fname)
+        with open(mdfile, encoding="utf-8", errors="replace") as fh:
+            lines = fh.read().splitlines()
+        # Strip code blocks before checking links (templates contain example links)
+        in_fence = False
+        kept = []
+        for line in lines:
+            if line.startswith("```"):
+                in_fence = not in_fence
+                continue
+            if not in_fence:
+                kept.append(line)
+        for match in link_re.finditer("\n".join(kept)):
+            if "http" in match.group(0):
+                continue
+            # Strip anchor
+            link = match.group(2).split("#", 1)[0]
+            if not link:
+                continue
+            target = os.path.normpath(os.path.join(repo_root, os.path.dirname(mdfile), link))
+            if not os.path.exists(target):
+                print(f"❌ Broken link in {mdfile} → {link}")
+                broken = True
+
+sys.exit(1 if broken else 0)
+PYEOF
+then
   ERRORS=$((ERRORS + 1))
 fi
 
