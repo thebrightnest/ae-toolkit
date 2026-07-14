@@ -3,7 +3,7 @@ id: pdh-01-unattended-hygiene-failclosed
 size: M
 blocked_by: []
 pipeline: standard
-status: draft
+status: merged
 security_review: required
 security_review_reason: Changes the execution-boundary contract — whether an unhygienic/non-durable working tree is allowed to spawn an unattended run — and extends ADR-005's "must still stop in unattended mode" category.
 docs_sync: required
@@ -93,5 +93,5 @@ ahead-check.
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
