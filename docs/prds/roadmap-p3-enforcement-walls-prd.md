@@ -88,6 +88,23 @@ Five pieces: `aet gate submit` centralizes and fail-closes verdict writing (fixi
 4. **Plans/PRDs location — resolved (2026-07-12).** Plans and PRDs stay versioned in `docs/` — they are project artifacts, not relocated. The earlier options (external files vs. git blobs under `refs/aet/*`) are moot; only the AET config leaves version control.
 5. **Fresh-install config location — resolved (2026-07-12).** There is no `sidecar|in-repo` mode enum; `aet-setup` writes config in-tree by default (self-hosting) and offers an external-config option (`~/.aet/{slug}/config.json`) for non-invasive projects. Reads are always external-first (R-10).
 
+## Divergence Summary
+
+_Recorded: 2026-07-14 — Branch: ewl-01-gate-submit-cli_
+
+### Changed from plan
+
+- Task 1 (`aet-work/bin/gate`): landed as designed, plus fail-closed hardening beyond the locked design — `--verdict` must match the payload's `verdict` field (rejected pre-write), `AET_TASK_ID` takes precedence over the payload's `task_id` for destination resolution, malformed/non-object JSON is rejected with named errors, and argument errors exit 1 instead of argparse's default 2 (`_GateParser`). All within R-1/R-2's fail-closed intent.
+- Task 4 (`tests/test_gate_submit.py`): the seven planned tests all exist; three more added for the hardening branches (`test_malformed_json_payload_exits_nonzero`, `test_non_object_payload_exits_nonzero`, `test_verdict_mismatch_exits_nonzero`).
+
+### Added (unplanned)
+
+- `aet-work/lib/evidence.py` — `write_verdict` gained a backward-compatible `path=` override so `gate submit` writes to the canonical `resolve_verdict_path()` destination. The plan's Context required resolving through frh-18's helper, but the Files to Modify list omitted this file.
+
+### Deferred
+
+- Plan task 5 (merge branch to main + integration verify) — runs at `aet-ship`.
+
 ---
 
 _Stage: scope-validated (2026-07-12) — narrowed to config-only (plans/PRDs versioned; ADR-025 reverted); all six plans queued, closure check green._
