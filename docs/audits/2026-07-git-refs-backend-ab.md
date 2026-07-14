@@ -4,6 +4,8 @@
 **Scope:** `frh-14-git-refs-wiring-parity` — backend-routed sealing, factory/config wiring, and the parity suite that proves `GitRefsBackend` behaves like the JSON backend.
 **Question:** Is the opt-in `git-refs` backend behaviorally equivalent to the default JSON backend, and what does it cost?
 
+> **Superseded 2026-07-14 (ewl-04-git-refs-default-flip):** the "keep opt-in" recommendation below no longer holds — `aet-setup` now writes `git-refs` as the default task backend (JSON the documented opt-out), per the roadmap P3 PRD's R-5. The promotion rested on wiring parity (frh-13/14) and tamper-evidence (ewl-05); Known Gap 1 (multi-task save granularity) was **not** remediated and remains the open performance caveat on large queues. The A/B data below stands as a valid point-in-time record.
+
 **Recommendation, up front:** behavior is equivalent; performance is not. Keep `git-refs` as an **opt-in prototype**. Do **not** promote it to the default until multi-task save granularity is addressed (see Known Gaps).
 
 ---

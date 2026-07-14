@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Revises ADR-011 (Forward-Only Deterministic Work State).
+Accepted. Revises ADR-011 (Forward-Only Deterministic Work State). Annotated 2026-07-14 (ewl-04-git-refs-default-flip): Decision 1's "JSON is the default backend" remains true for unconfigured projects — the factory fallback is unchanged — but `aet-setup` now writes `git-refs` as the default configured backend; JSON is the documented opt-out for non-git or unconfigured contexts.
 
 ## Context
 
