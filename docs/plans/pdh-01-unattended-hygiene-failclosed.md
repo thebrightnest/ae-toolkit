@@ -45,10 +45,12 @@ ahead-check.
 
 ## Task List
 
-1. `aet-work/bin/orchestrator` — in `enforce_main_hygiene`, remove the unattended warn-and-continue branch so a `check_main_hygiene` failure returns `False` (halts) in unattended mode too; keep a clear halt log line — M (traces: R-1)
-2. Author `docs/adr/027-main-hygiene-halts-unattended.md` (extends ADR-005: main hygiene is a mechanical durability hard-stop like merge verification, not a bypassable approval gate) and add its row to `docs/adr/README.md` — S (traces: R-1)
-3. Tests in `tests/test_orchestrator.py` — `enforce_main_hygiene` under unattended: main-ahead → halts; genuinely-dirty tree → halts; clean tree → proceeds; no-remote (no `origin/main`) → not falsely halted; interactive unchanged — M (traces: R-1)
-4. Verify (see Validation Steps) and merge — S (traces: R-1)
+1. ✓ `aet-work/bin/orchestrator` — in `enforce_main_hygiene`, remove the unattended warn-and-continue branch so a `check_main_hygiene` failure returns `False` (halts) in unattended mode too; keep a clear halt log line — M (traces: R-1)
+2. ✓ Author `docs/adr/027-main-hygiene-halts-unattended.md` (extends ADR-005: main hygiene is a mechanical durability hard-stop like merge verification, not a bypassable approval gate) and add its row to `docs/adr/README.md` — S (traces: R-1) [Added: README index also gained the missing ADR-024/025 rows — both ADRs existed on `main` unindexed]
+3. ✓ Tests in `tests/test_orchestrator.py` — `enforce_main_hygiene` under unattended: main-ahead → halts; genuinely-dirty tree → halts; clean tree → proceeds; no-remote (no `origin/main`) → not falsely halted; interactive unchanged — M (traces: R-1)
+4. Verify (see Validation Steps) and merge — S (traces: R-1) [Verify done 2026-07-14; merge at `aet-ship`]
+
+[Added: `aet-work/references/queue-commands.md` updated to the fail-closed contract per this plan's `docs_sync` frontmatter; not in the original Files to Modify.]
 
 **Size labels:** 4 files (orchestrator, ADR-027, adr/README, test), ~120 diff lines → **M**.
 
@@ -91,5 +93,5 @@ ahead-check.
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
