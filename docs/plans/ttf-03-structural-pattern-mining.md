@@ -155,5 +155,4 @@ review pass on the analysis path (matches ttf-02's rationale).
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: reviewed_
