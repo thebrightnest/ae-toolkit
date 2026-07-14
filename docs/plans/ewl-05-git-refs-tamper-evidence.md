@@ -41,11 +41,11 @@ docs_sync_reason: new tamper-evidence behavior for git-refs needs the same docum
 
 ## Task List
 
-1. Design and implement content-hash chaining for `GitRefsBackend`'s save path (envelope blob at `refs/aet/meta/queue` carries the chained `content_hash`) — M (traces: R-6)
-2. Implement the read-path verification: mutating paths fail closed with a new integrity-error type; read-only paths warn and continue; legacy unstamped data is accepted and stamped on next write — M (traces: R-6)
-3. Tests: `tests/test_git_refs_tamper_evidence.py` (new) — hand-edit a ref/blob outside the backend API, assert detection on next read; assert legacy unstamped data is accepted and stamped; assert read-only paths warn-and-continue while mutating paths fail closed — M (traces: R-6, R-8)
-4. Docs: extend `aet-work/SKILL.md` (or wherever frh-17's JSON queue-guard note lives) with the git-refs tamper-evidence equivalent — S (traces: R-6)
-5. Merge branch to main and verify integration — S
+1. ✓ Design and implement content-hash chaining for `GitRefsBackend`'s save path (envelope blob at `refs/aet/meta/queue` carries the chained `content_hash`) — M (traces: R-6)
+2. ✓ Implement the read-path verification: mutating paths fail closed with a new integrity-error type; read-only paths warn and continue; legacy unstamped data is accepted and stamped on next write — M (traces: R-6) [Changed: `GitRefsIntegrityError` subclasses `QueueIntegrityError` — the plan's explicitly deferred implementer's call; restamping extends to `seal()` so dropping a sealed task's ref can't trip a spurious mismatch on the next verified read]
+3. ✓ Tests: `tests/test_git_refs_tamper_evidence.py` (new) — hand-edit a ref/blob outside the backend API, assert detection on next read; assert legacy unstamped data is accepted and stamped; assert read-only paths warn-and-continue while mutating paths fail closed — M (traces: R-6, R-8) [Changed: +2 tests beyond the planned six — seal-restamp round-trip, and status recovery through the backend (paired with the unplanned `bin/status` fix)]
+4. ✓ Docs: extend `aet-work/SKILL.md` (or wherever frh-17's JSON queue-guard note lives) with the git-refs tamper-evidence equivalent — S (traces: R-6)
+5. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -85,5 +85,5 @@ Revert the merge commit — `GitRefsBackend.seal()`/read path return to no integ
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_

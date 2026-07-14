@@ -20,7 +20,6 @@ from queue import (  # noqa: E402
     QueueIntegrityError,
     current_state,
     pending_blockers,
-    read_queue,
 )
 
 from backends.factory import create_backend  # noqa: E402
@@ -109,7 +108,10 @@ def main() -> int:
             f"⚠️  {exc}; read-only status continues with unverified data.",
             file=sys.stderr,
         )
-        queue = read_queue(args.queue_file, verify=False)
+        # Recover through the backend abstraction, not the JSON reader: the
+        # git-refs backend keeps no work-queue.json, so read_queue would
+        # return an empty list and hide the very tasks status must surface.
+        queue = backend.load(verify=False)["queue"]
         integrity_failed = True
     plans_dir = Path(args.plans_dir)
 
