@@ -74,5 +74,5 @@ radius from the orchestrator behavior change.)
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: merge to main — `aet-cso` and `aet-sync-docs` skipped per plan frontmatter_
