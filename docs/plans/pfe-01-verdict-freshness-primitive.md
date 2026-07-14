@@ -171,5 +171,5 @@ though there is no security surface (security_review skipped with reason).
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
