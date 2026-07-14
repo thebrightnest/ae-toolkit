@@ -10,6 +10,7 @@ security_review: required
 security_review_reason: introduces a config-resolution precedence (env → external root → in-tree → defaults) and a new config-write location; a precedence bug could silently read the wrong config or write AET config into a shared repo it was meant to stay out of — the correctness of that precedence is the property this plan delivers
 docs_sync: required
 docs_sync_reason: introduces a non-invasive config setup path (AET backend/mode config resolvable from outside the repo); configure-backend and setup docs must describe where config lives and the resolution order
+status: merged
 ---
 
 # Plan: Non-Invasive External Config Root
@@ -86,5 +87,5 @@ Revert the merge commit — `_read_config` returns to reading the single in-tree
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
