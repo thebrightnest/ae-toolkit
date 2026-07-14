@@ -81,5 +81,5 @@ Revert the merge commit — the no-flag configure path returns to requiring an e
 
 ---
 
-_Stage: plan-approved (revised 2026-07-14 — option A: configure-layer default; factory flip measured infeasible at implement time: 103 suite failures + read-path no-git invariant; false fresh-install premise corrected; re-approved)_
-_Next step: run `aet-work`_
+_Stage: implemented (2026-07-14 — tasks 1–3: configure-layer git-refs default + messaging flip, factory docstring, SKILL.md Step 6, checklist.md; 4 tests added/updated in tests/test_aet_setup_backend_config.py; make validate green, full suite 640 passed; manual fresh-dir run writes git-refs)_
+_Next step: run `aet-qa`_
