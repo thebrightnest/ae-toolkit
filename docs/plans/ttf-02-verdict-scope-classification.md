@@ -4,7 +4,7 @@ size: S
 blocked_by:
   - ttf-01-wire-test-run-extraction
 pipeline: standard
-status: draft
+status: approved
 security_review: skipped
 security_review_reason: value-only change at a telemetry emission site; no parsing of untrusted input beyond the existing verdict read, no new trust boundary
 docs_sync: skipped
@@ -102,5 +102,5 @@ next run; existing JSONL lines are append-only and untouched.
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_
