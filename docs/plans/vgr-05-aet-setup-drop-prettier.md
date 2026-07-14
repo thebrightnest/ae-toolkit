@@ -3,7 +3,7 @@ id: vgr-05-aet-setup-drop-prettier
 size: S
 blocked_by: []
 pipeline: minimal
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: Edits scaffold prose/templates only; removes a formatter from generated config, adds no code path or surface.
 docs_sync: skipped
@@ -55,10 +55,10 @@ radius — downstream repos — that the owner chose to fold into this pipeline.
 
 ## Validation Steps
 
-- [x] `grep -rniE 'prettier|format-check' aet-setup/` returns no live scaffolding references (only intentional historical mentions, if any, remain and are called out)
-- [x] Confirm no other aet-setup scaffold template (e.g., an embedded `.pre-commit-config`/Makefile snippet) still injects prettier
-- [x] The walkthrough reads coherently with markdownlint-only gating
-- [x] **No new source modules** — scaffold content is template/doc, exercised by the aet-setup skill flow, not pytest; verified by the grep above
+- [ ] `grep -rniE 'prettier|format-check' aet-setup/` returns no live scaffolding references (only intentional historical mentions, if any, remain and are called out)
+- [ ] Confirm no other aet-setup scaffold template (e.g., an embedded `.pre-commit-config`/Makefile snippet) still injects prettier
+- [ ] The walkthrough reads coherently with markdownlint-only gating
+- [ ] **No new source modules** — scaffold content is template/doc, exercised by the aet-setup skill flow, not pytest; verified by the grep above
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 **Self-consistency lint:** Check 1 PASS · Check 2 (SKILL.md=t1, walkthrough=t2) PASS · Check 3 (observable via grep) PASS · Check 4 (R-7 covered) PASS.
@@ -73,5 +73,5 @@ radius — downstream repos — that the owner chose to fold into this pipeline.
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-ship` (aet-cso and aet-sync-docs skipped per plan frontmatter)_
+_Stage: merged_
+_Next step: run `aet-work`_
