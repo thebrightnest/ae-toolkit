@@ -35,6 +35,7 @@ def _qa_payload(**overrides) -> dict:
         "verdict": "pass",
         "summary": "All checks passed",
         "generated_at": "2026-07-13T00:00:00Z",
+        "tree_hash": "t0",
         "test_command": "pytest tests/ -q",
         "tests_total": 10,
         "tests_passed": 10,

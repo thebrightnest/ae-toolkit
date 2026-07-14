@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import tempfile
 
 
 def verify_branch_has_commits(worktree_dir: str) -> tuple[bool, str]:
@@ -75,3 +76,67 @@ def verify_stage_advancement(
     if ok:
         return True, ""
     return False, msg
+
+
+def working_tree_hash(worktree_dir: str) -> str:
+    """Return a git tree object id fingerprinting the whole working tree.
+
+    Stages every tracked and untracked-but-not-ignored path into a throwaway
+    index and writes it out as a tree object. The id is stable for a given set
+    of file contents and changes the moment any content does — including
+    uncommitted, mid-stage edits, which is exactly the state a validation
+    attests to. ``write-tree`` persists the tree and its blobs to the repo's
+    real object store, so the id stays diffable later (see :func:`changed_paths`).
+
+    Returns ``""`` when ``worktree_dir`` is not a git repo or git is
+    unavailable, so callers can treat an empty hash as "unknown — revalidate".
+    The real index is never touched: staging happens in a temporary
+    ``GIT_INDEX_FILE`` seeded from ``HEAD`` so only changed paths are rehashed.
+    """
+    if not os.path.isdir(worktree_dir):
+        return ""
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "GIT_INDEX_FILE": os.path.join(tmp, "index")}
+            # Seed from HEAD so `add -A` only rehashes what changed; a repo with
+            # no commits yet starts from an empty index, which is also valid.
+            subprocess.run(
+                ["git", "-C", worktree_dir, "read-tree", "HEAD"],
+                env=env, capture_output=True, text=True, check=False,
+            )
+            staged = subprocess.run(
+                ["git", "-C", worktree_dir, "add", "-A"],
+                env=env, capture_output=True, text=True, check=False,
+            )
+            if staged.returncode != 0:
+                return ""
+            tree = subprocess.run(
+                ["git", "-C", worktree_dir, "write-tree"],
+                env=env, capture_output=True, text=True, check=False,
+            )
+            if tree.returncode != 0:
+                return ""
+            return tree.stdout.strip()
+    except OSError:
+        return ""
+
+
+def changed_paths(worktree_dir: str, tree_a: str, tree_b: str) -> list[str] | None:
+    """Return the repo-relative paths differing between two tree object ids.
+
+    Returns ``None`` when the diff cannot be computed — a missing/garbage tree
+    id, or git unavailable — so callers treat it as "unknown — revalidate"
+    rather than "nothing changed".
+    """
+    if not tree_a or not tree_b:
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", worktree_dir, "diff", "--name-only", tree_a, tree_b],
+            capture_output=True, text=True, check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    return [line for line in result.stdout.splitlines() if line.strip()]

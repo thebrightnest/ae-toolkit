@@ -108,21 +108,21 @@ Implementation is committed (branch `pfe-validation-freshness`). Execute these a
 applying only the Upgrade candidates that prove worthwhile. Do not re-implement
 what exists.
 
-1. Verify `verifier.py`: `working_tree_hash` + `changed_paths` (defensive;
+1. ✓ Verify `verifier.py`: `working_tree_hash` + `changed_paths` (defensive;
    empty/None on failure) — S (traces: R2)
-2. `evidence.py`: `tree_hash` on the four schemas; `write_verdict` auto-stamp;
+2. ✓ `evidence.py`: `tree_hash` on the four schemas; `write_verdict` auto-stamp;
    `validation_freshness` + `FreshnessResult` + `default_is_code_path` — M
    (traces: R2)
-3. `tests/test_validation_freshness.py` (new): real temp-repo coverage of the
+3. ✓ `tests/test_validation_freshness.py` (new): real temp-repo coverage of the
    hash (stable / content-sensitive / uncommitted / non-git), `changed_paths`,
    the code-path classifier, and every freshness branch (no prior, unchanged,
    docs-only, code, mixed, prior-fail, missing-hash) — M (traces: R2)
-4. `tests/test_gate_evidence.py`: add `tree_hash` to the direct verdict records;
+4. ✓ `tests/test_gate_evidence.py`: add `tree_hash` to the direct verdict records;
    assert `write_verdict` stamps it and does not mutate the caller's dict — S
    (traces: R2)
-5. Docs: record the `tree_hash` field + freshness vocabulary against the
+5. ✓ Docs: record the `tree_hash` field + freshness vocabulary against the
    evidence contract (ADR-019 note / `docs/telemetry-guide.md`) — S (traces: R2)
-6. Merge branch to main and verify integration — S
+6. ✓ Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -147,14 +147,14 @@ what exists.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`python3 -m pytest tests/test_validation_freshness.py tests/test_gate_evidence.py tests/test_verifier.py -q`, then full suite before commit)
-- [ ] Named coverage: `tests/test_validation_freshness.py` covers the new
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`python3 -m pytest tests/test_validation_freshness.py tests/test_gate_evidence.py tests/test_verifier.py -q`, then full suite before commit)
+- [x] Named coverage: `tests/test_validation_freshness.py` covers the new
       `verifier` primitives and `evidence.validation_freshness`; the
       `write_verdict` auto-stamp is asserted in `tests/test_gate_evidence.py`
-- [ ] Distinguish test types: unit (hash, classifier, freshness branches) exercised against real temp git repos
-- [ ] R-trace coverage: R2 covered; no unknown R-ids cited
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] Distinguish test types: unit (hash, classifier, freshness branches) exercised against real temp git repos
+- [x] R-trace coverage: R2 covered; no unknown R-ids cited
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -171,5 +171,5 @@ though there is no security surface (security_review skipped with reason).
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
