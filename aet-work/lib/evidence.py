@@ -174,19 +174,26 @@ def write_verdict(
     record: dict[str, Any],
     project_slug: str | None = None,
     reports_root: str | Path | None = None,
+    path: str | Path | None = None,
 ) -> Path:
     """Validate and write a verdict record to the archive.
+
+    ``path`` overrides the computed destination; callers that need the
+    canonical env-aware precedence (ADR-023) resolve it via
+    :func:`resolve_verdict_path` and pass the result here.
 
     Returns:
         The path to the written verdict file.
     """
     validate_verdict(record, kind)
-    path = evidence_path(
-        task_id=task_id,
-        kind=kind,
-        project_slug=project_slug,
-        reports_root=reports_root,
-    )
+    if path is None:
+        path = evidence_path(
+            task_id=task_id,
+            kind=kind,
+            project_slug=project_slug,
+            reports_root=reports_root,
+        )
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record, indent=2, default=str) + "\n", encoding="utf-8")
     return path
