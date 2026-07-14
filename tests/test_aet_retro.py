@@ -160,5 +160,50 @@ class TestProjectSlugContract(unittest.TestCase):
         self.assertFalse(output.exists())
 
 
+class TestTelemetrySummaryEmbedsMineLearnings(unittest.TestCase):
+    """The retro embeds mine-learnings --propose output verbatim."""
+
+    def _write_run(self, archive: Path, slug: str, records: list[dict]) -> Path:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        run_dir = archive / slug / date / "run-1"
+        run_dir.mkdir(parents=True)
+        (run_dir / "task-1.jsonl").write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8"
+        )
+        return run_dir
+
+    def test_telemetry_summary_renders_new_counts_and_propose(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "archive"
+            output = Path(tmp) / "retro.md"
+            records = [
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
+                {"type": "test_run", "task_id": "t2", "scope": "impact"},
+                {"type": "stage", "stage": "qa", "duration_seconds": 1900, "token_count": 0},
+                {"type": "stage", "stage": "implement", "duration_seconds": 0, "token_count": 6_000_000},
+            ]
+            self._write_run(archive, "myrepo/main", records)
+            with patch.dict(os.environ, {"AET_PROJECT_ID": "myrepo/main"}, clear=False):
+                rc = aet_retro.main(
+                    ["--archive-dir", str(archive), "--output", str(output)]
+                )
+            self.assertEqual(rc, 0)
+            text = output.read_text(encoding="utf-8")
+
+            # Telemetry Summary block contains the new structural counts.
+            summary = text.split("## Telemetry Summary", 1)[1].split("## Findings", 1)[0]
+            self.assertIn("Full-suite runs: 2", summary)
+            self.assertIn("Impact-scoped runs: 1", summary)
+            self.assertIn("Repeated test invocations: 1", summary)
+            self.assertIn("Slow stages", summary)
+            self.assertIn("Token-burn stages", summary)
+
+            # Proposed skill edits reference the new patterns.
+            self.assertIn("prefer impact-scoped tests", text)
+            self.assertIn("stage-time triage", text)
+            self.assertIn("trim prompt context", text)
+
+
 if __name__ == "__main__":
     unittest.main()
