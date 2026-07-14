@@ -73,5 +73,5 @@ radius — downstream repos — that the owner chose to fold into this pipeline.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-ship` (aet-cso and aet-sync-docs skipped per plan frontmatter)_
