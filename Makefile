@@ -1,4 +1,4 @@
-.PHONY: help install-skills install-binaries add-skill lint format format-check validate install-hooks test lint-py
+.PHONY: help install-skills install-binaries add-skill lint format validate install-hooks test lint-py
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
 SKILLS_DIR ?= $(HOME)/.agents/skills
@@ -52,16 +52,12 @@ add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 	@echo "✓ Edit $(NAME)/SKILL.md to add your skill logic"
 
 lint: ## Run markdownlint on all markdown files
-	@npx markdownlint-cli2 --config .markdownlint.yaml $(MARKDOWN_FILES)
+	@npx markdownlint-cli2@0.17.2 --config .markdownlint.yaml $(MARKDOWN_FILES)
 	@echo "✓ Lint passed"
 
 format: ## Format all markdown files with prettier
 	@npx prettier@3.1.0 --write $(MARKDOWN_FILES)
 	@echo "✓ Format complete"
-
-format-check: ## Check markdown formatting (CI mode)
-	@npx prettier@3.1.0 --check $(MARKDOWN_FILES)
-	@echo "✓ Format check passed"
 
 lint-py: ## Run ruff on Python files
 	@command -v ruff >/dev/null 2>&1 || { echo "ruff not installed. Install it: pip install ruff"; exit 1; }
@@ -72,14 +68,12 @@ test: ## Run pytest suite
 	@python3 -m pytest tests/ -q
 	@echo "✓ Tests passed"
 
-validate: ## Run all quality checks (lint + format-check + lint-py + test + workflow-lint + skill-structure)
-	@$(MAKE) lint
-	@$(MAKE) format-check
+validate: ## Run all quality checks, fail-fast (lint-py + workflow-lint + skills-lint + skill-structure, pytest last)
 	@$(MAKE) lint-py
-	@$(MAKE) test
 	@./aet-work/bin/validate-workflows
 	@./scripts/skills-lint --legacy=error
 	@./scripts/validate-skills.sh
+	@$(MAKE) test
 	@echo "✓ All validation checks passed"
 
 install-hooks: ## Install pre-commit hooks
