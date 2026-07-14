@@ -12,6 +12,7 @@ security_review: skipped
 security_review_reason: produces a rehearsal transcript and audit doc only; no source code changes to review beyond what ewl-03 and ewl-05 already covered under their own security reviews
 docs_sync: skipped
 docs_sync_reason: the audit doc is itself the documentation output of this plan; there is no separate maintained doc surface to reconcile against it
+status: merged
 ---
 
 # Plan: Enforcement-Walls Adversarial Rehearsal
@@ -81,5 +82,5 @@ Revert the merge commit — removes the audit doc. No code behavior to unwind; t
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
