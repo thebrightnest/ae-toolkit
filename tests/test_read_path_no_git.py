@@ -10,6 +10,7 @@ import importlib.machinery
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -117,15 +118,16 @@ class TestStatusReadPathNoGit(unittest.TestCase):
 
         no_git = _NoGitRun()
         stdout = io.StringIO()
-        with patch.object(subprocess, "run", side_effect=no_git):
-            with patch.object(sys, "stdout", stdout):
-                with patch.object(sys, "argv", [
-                    "status",
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    rc = status.main()
+        with patch.dict(os.environ, {"AET_PROJECT_ID": "no-git-test"}, clear=False):
+            with patch.object(subprocess, "run", side_effect=no_git):
+                with patch.object(sys, "stdout", stdout):
+                    with patch.object(sys, "argv", [
+                        "status",
+                        "--queue-file", queue_file,
+                        "--history-file", history_file,
+                        "--plans-dir", plans_dir,
+                    ]):
+                        rc = status.main()
 
         self.assertEqual(rc, 0)
         output = stdout.getvalue()
@@ -154,15 +156,16 @@ class TestNextReadPathNoGit(unittest.TestCase):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         stdout = io.StringIO()
-        with patch.object(subprocess, "run", side_effect=mock_run):
-            with patch.object(sys, "stdout", stdout):
-                with patch.object(sys, "argv", [
-                    "next",
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    rc = next_cmd.main()
+        with patch.dict(os.environ, {"AET_PROJECT_ID": "no-git-test"}, clear=False):
+            with patch.object(subprocess, "run", side_effect=mock_run):
+                with patch.object(sys, "stdout", stdout):
+                    with patch.object(sys, "argv", [
+                        "next",
+                        "--queue-file", queue_file,
+                        "--history-file", history_file,
+                        "--plans-dir", plans_dir,
+                    ]):
+                        rc = next_cmd.main()
 
         self.assertEqual(rc, 0)
         self.assertTrue(

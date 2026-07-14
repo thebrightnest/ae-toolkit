@@ -3,18 +3,24 @@
 #
 # Usage:
 #   aet configure-backend [--backend json|github|git-refs] [--repo owner/repo]
-#                         [--non-interactive] [--help]
+#                         [--external-config] [--non-interactive] [--help]
 #
 # In interactive mode (default), the script prompts for the backend (empty
 # input accepts the default, git-refs) and the repo. In non-interactive mode,
 # a missing --backend selects the default (git-refs); other required values
 # must be supplied via flags.
+#
+# Use --external-config for a non-invasive project: the config is written to
+# ~/.aet/{slug}/config.json and nothing is written inside the repo. Reads
+# always resolve external-first: AET_WORK_CONFIG env → ~/.aet/{slug}/config.json
+# → .agents/aet-work.json → defaults.
 
 set -euo pipefail
 
 BACKEND=""
 REPO=""
 NON_INTERACTIVE=0
+EXTERNAL_CONFIG=0
 PROJECT_ROOT="$(pwd)"
 CONFIG_DIR="$PROJECT_ROOT/.agents"
 CONFIG_FILE="$CONFIG_DIR/aet-work.json"
@@ -44,6 +50,9 @@ Options:
                           opt-out for non-git or unconfigured contexts.
   --repo owner/repo       GitHub repository (required for github backend;
                           detected from git remote origin if omitted).
+  --external-config       Write config to ~/.aet/{slug}/config.json instead of
+                          .agents/aet-work.json. Keeps AET config out of the
+                          shared repo (non-invasive setup).
   --non-interactive       Fail if a required value is missing instead of prompting.
   --help                  Show this help message.
 
@@ -51,6 +60,7 @@ Examples:
   aet configure-backend --non-interactive
   aet configure-backend --backend json --non-interactive
   aet configure-backend --backend github --repo acme/widget --non-interactive
+  aet configure-backend --backend git-refs --external-config --non-interactive
 EOF
 }
 
@@ -61,6 +71,22 @@ log() {
 error() {
   echo "Error: $*" >&2
   exit 1
+}
+
+skills_root() {
+  # This script lives at <skills-root>/<skill>/bin/<script>; resolve the
+  # skills root so we can import aet-work/lib/project_id.py regardless of
+  # whether we are running from the repo or an installed skills directory.
+  cd "$(dirname "$0")/../.." && pwd
+}
+
+derive_project_slug() {
+  PYTHONPATH="$(skills_root)/aet-work/lib" python3 - "$PROJECT_ROOT" <<'PY'
+import os, sys
+sys.path.insert(0, os.environ.get("PYTHONPATH", ""))
+from project_id import derive_project_slug
+print(derive_project_slug(sys.argv[1] if len(sys.argv) > 1 else None))
+PY
 }
 
 while [ $# -gt 0 ]; do
@@ -75,6 +101,10 @@ while [ $# -gt 0 ]; do
       ;;
     --non-interactive)
       NON_INTERACTIVE=1
+      shift
+      ;;
+    --external-config)
+      EXTERNAL_CONFIG=1
       shift
       ;;
     --help)
@@ -101,10 +131,17 @@ case "$BACKEND" in
   *) error "Invalid backend '$BACKEND'. Choose 'json', 'github', or 'git-refs'." ;;
 esac
 
-mkdir -p "$CONFIG_DIR"
+if [ "$EXTERNAL_CONFIG" -eq 1 ]; then
+  SLUG="$(derive_project_slug)"
+  EXTERNAL_CONFIG_DIR="$HOME/.aet/$SLUG"
+  EXTERNAL_CONFIG_FILE="$EXTERNAL_CONFIG_DIR/config.json"
+  mkdir -p "$EXTERNAL_CONFIG_DIR"
+fi
 
 EXISTING_BACKEND=""
-if [ -f "$CONFIG_FILE" ]; then
+if [ "$EXTERNAL_CONFIG" -eq 1 ] && [ -f "$EXTERNAL_CONFIG_FILE" ]; then
+  EXISTING_BACKEND="$(python3 -c "import json,sys; print(json.load(open('$EXTERNAL_CONFIG_FILE')).get('task_backend',''))" 2>/dev/null || true)"
+elif [ -f "$CONFIG_FILE" ]; then
   EXISTING_BACKEND="$(python3 -c "import json,sys; print(json.load(open('$CONFIG_FILE')).get('task_backend',''))" 2>/dev/null || true)"
 fi
 
@@ -199,11 +236,25 @@ if [ "$BACKEND" = "github" ]; then
   fi
 fi
 
-EXISTING_JSON=""
-if [ -f "$CONFIG_FILE" ]; then
-  EXISTING_JSON="$(cat "$CONFIG_FILE")"
+if [ "$EXTERNAL_CONFIG" -eq 1 ]; then
+  EXISTING_JSON=""
+  if [ -f "$EXTERNAL_CONFIG_FILE" ]; then
+    EXISTING_JSON="$(cat "$EXTERNAL_CONFIG_FILE")"
+  fi
+
+  write_json_config "$EXISTING_JSON" "$BACKEND" "$REPO" "$LABEL_PREFIX" "$LABELS_CREATED" "$REASON" "$SWITCH_WARNING" > "$EXTERNAL_CONFIG_FILE"
+
+  log "Wrote external config to $EXTERNAL_CONFIG_FILE"
+  log "Config resolution order: AET_WORK_CONFIG env → ~/.aet/{slug}/config.json → .agents/aet-work.json → defaults"
+else
+  mkdir -p "$CONFIG_DIR"
+
+  EXISTING_JSON=""
+  if [ -f "$CONFIG_FILE" ]; then
+    EXISTING_JSON="$(cat "$CONFIG_FILE")"
+  fi
+
+  write_json_config "$EXISTING_JSON" "$BACKEND" "$REPO" "$LABEL_PREFIX" "$LABELS_CREATED" "$REASON" "$SWITCH_WARNING" > "$CONFIG_FILE"
+
+  log "Wrote $CONFIG_FILE"
 fi
-
-write_json_config "$EXISTING_JSON" "$BACKEND" "$REPO" "$LABEL_PREFIX" "$LABELS_CREATED" "$REASON" "$SWITCH_WARNING" > "$CONFIG_FILE"
-
-log "Wrote $CONFIG_FILE"

@@ -13,12 +13,14 @@ import os
 import re
 import shlex
 import shutil
-import subprocess
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+# Re-export the neutral identity helper so existing callers keep working.
+from project_id import derive_project_slug, resolve_repo_root  # noqa: F401
 
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
@@ -106,63 +108,6 @@ def archive_dir() -> Path:
     """Return the telemetry archive root, respecting ``AET_TELEMETRY_ARCHIVE_DIR``."""
     env = os.environ.get("AET_TELEMETRY_ARCHIVE_DIR")
     return Path(env).expanduser() if env else DEFAULT_ARCHIVE_DIR
-
-
-def resolve_repo_root(repo_root: str | Path | None = None) -> Path:
-    """Resolve the repository root from args, env, git, or cwd."""
-    if repo_root is not None:
-        return Path(repo_root).resolve()
-
-    env_root = os.environ.get("AET_REPO_ROOT")
-    if env_root:
-        return Path(env_root).resolve()
-
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            return Path(result.stdout.strip()).resolve()
-    except FileNotFoundError:
-        pass
-
-    return Path.cwd().resolve()
-
-
-def derive_project_slug(repo_root: str | Path | None = None) -> str:
-    """Derive a worktree-based slug: ``<main-worktree-dir>/<worktree-label>``.
-
-    The primary worktree is labelled ``main``; a linked worktree contributes
-    its own directory name. Env overrides (``AET_PROJECT_ID`` /
-    ``AET_REPO_SLUG``) win; non-git directories fall back to the basename.
-    """
-    env_slug = os.environ.get("AET_PROJECT_ID") or os.environ.get("AET_REPO_SLUG")
-    if env_slug:
-        return env_slug
-
-    repo_root = resolve_repo_root(repo_root)
-
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-common-dir"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            out = result.stdout.strip()
-            common = Path(out) if os.path.isabs(out) else (repo_root / out)
-            main_root = common.resolve().parent  # <main>/.git -> <main>
-            label = "main" if repo_root == main_root else repo_root.name
-            return f"{main_root.name}/{label}"
-    except FileNotFoundError:
-        pass
-
-    return repo_root.name
 
 
 def _sanitize(value: Any, repo_root: Path) -> Any:

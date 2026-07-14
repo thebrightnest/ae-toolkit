@@ -41,6 +41,41 @@ Rules:
 - The canonical installer is `aet install`, implemented in the `aet-work/bin/aet` dispatcher and bootstrapped by path (`~/.agents/skills/aet-work/bin/aet install`). It symlinks `aet` into `~/.local/bin` (or `AET_BIN_DIR`) and prunes the retired legacy binary names.
 - `make install-skills` in this repo runs the installer automatically for the local development workflow.
 
+## AET Backend Configuration
+
+`aet-work` reads its backend/mode config through an external-first precedence so that AET can run without committing any AET _config_ to a shared repo.
+
+### Resolution Order
+
+Config is resolved in this order; the first source that exists wins:
+
+1. `AET_WORK_CONFIG` environment variable (path to a JSON config file)
+2. `~/.aet/{project-slug}/config.json`
+3. In-tree `.agents/aet-work.json`
+4. Built-in defaults (`{"task_backend": "json"}`)
+
+`{project-slug}` is derived the same way as telemetry and evidence paths (see `aet-work/lib/project_id.py`). `AET_PROJECT_ID` or `AET_REPO_SLUG` override the derived slug.
+
+### Non-Invasive Setup
+
+For projects whose owners cannot enforce AET on the whole team, keep AET config out of the repo entirely:
+
+```bash
+aet configure-backend --external-config
+```
+
+This writes config to `~/.aet/{project-slug}/config.json` and touches nothing inside the repo. Plans, PRDs, and other project artifacts remain versioned in `docs/` as usual; only the AET backend/mode config leaves version control.
+
+### In-Tree Setup
+
+For self-hosted or team-wide AET adoption, write config in-tree as before:
+
+```bash
+aet configure-backend
+```
+
+This writes `.agents/aet-work.json`. Because reads are external-first, an external config (if present) will still take precedence.
+
 ## Planning Artifact Directories
 
 The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/`; all other planning artifacts belong in their designated directories.
