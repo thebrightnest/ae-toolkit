@@ -171,5 +171,5 @@ though there is no security surface (security_review skipped with reason).
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: tdd-complete_
+_Next step: run `aet-implement`_
