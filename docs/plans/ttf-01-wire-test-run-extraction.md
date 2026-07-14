@@ -3,7 +3,7 @@ id: ttf-01-wire-test-run-extraction
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: passive parser of local session logs; commands are recorded into telemetry, never executed; no network, no secrets, no new trust boundary
 docs_sync: required
@@ -138,5 +138,5 @@ auth/data-model/API surface.
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
