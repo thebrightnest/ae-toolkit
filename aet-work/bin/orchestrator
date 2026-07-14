@@ -193,15 +193,12 @@ def enforce_main_hygiene(repo_root: str) -> bool:
     """Check main hygiene and decide whether to proceed.
 
     Returns True when the caller should continue, False when it should halt.
-    In unattended mode a violation prints a warning and returns True; in
-    interactive mode it prints an error and returns False.
+    Main hygiene is a mechanical durability check (see ADR-005/ADR-027): a real
+    violation halts in both interactive and unattended mode so an AFK run never
+    builds an empty worktree off a dirty or unpushed ``main``.
     """
     ok, msg = check_main_hygiene(repo_root)
     if ok:
-        return True
-
-    if os.environ.get("AET_EXECUTION_MODE") == "unattended":
-        print(f"   ⚠️  {msg}. Continuing in unattended mode.")
         return True
 
     print(f"⛔ {msg}. Halting.")

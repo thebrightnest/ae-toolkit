@@ -45,10 +45,12 @@ ahead-check.
 
 ## Task List
 
-1. `aet-work/bin/orchestrator` — in `enforce_main_hygiene`, remove the unattended warn-and-continue branch so a `check_main_hygiene` failure returns `False` (halts) in unattended mode too; keep a clear halt log line — M (traces: R-1)
-2. Author `docs/adr/027-main-hygiene-halts-unattended.md` (extends ADR-005: main hygiene is a mechanical durability hard-stop like merge verification, not a bypassable approval gate) and add its row to `docs/adr/README.md` — S (traces: R-1)
-3. Tests in `tests/test_orchestrator.py` — `enforce_main_hygiene` under unattended: main-ahead → halts; genuinely-dirty tree → halts; clean tree → proceeds; no-remote (no `origin/main`) → not falsely halted; interactive unchanged — M (traces: R-1)
-4. Verify (see Validation Steps) and merge — S (traces: R-1)
+1. ✓ `aet-work/bin/orchestrator` — in `enforce_main_hygiene`, remove the unattended warn-and-continue branch so a `check_main_hygiene` failure returns `False` (halts) in unattended mode too; keep a clear halt log line — M (traces: R-1)
+2. ✓ Author `docs/adr/027-main-hygiene-halts-unattended.md` (extends ADR-005: main hygiene is a mechanical durability hard-stop like merge verification, not a bypassable approval gate) and add its row to `docs/adr/README.md` — S (traces: R-1) [Added: README index also gained the missing ADR-024/025 rows — both ADRs existed on `main` unindexed]
+3. ✓ Tests in `tests/test_orchestrator.py` — `enforce_main_hygiene` under unattended: main-ahead → halts; genuinely-dirty tree → halts; clean tree → proceeds; no-remote (no `origin/main`) → not falsely halted; interactive unchanged — M (traces: R-1)
+4. Verify (see Validation Steps) and merge — S (traces: R-1) [Verify done 2026-07-14; merge at `aet-ship`]
+
+[Added: `aet-work/references/queue-commands.md` updated to the fail-closed contract per this plan's `docs_sync` frontmatter; not in the original Files to Modify.]
 
 **Size labels:** 4 files (orchestrator, ADR-027, adr/README, test), ~120 diff lines → **M**.
 
@@ -73,10 +75,10 @@ ahead-check.
 
 ## Validation Steps
 
-- [ ] Lint passes (ruff); `make validate` green
-- [ ] `tests/test_orchestrator.py` covers: unattended main-ahead halts · unattended dirty halts · unattended clean proceeds · no-remote not halted · interactive unchanged
-- [ ] **New source behavior** in `enforce_main_hygiene` is covered by the named `tests/test_orchestrator.py` cases above (unit-level, monkeypatching `AET_EXECUTION_MODE` and `check_main_hygiene`/a temp git repo)
-- [ ] ADR-027 exists (Status: Accepted), extends ADR-005, and is indexed in `docs/adr/README.md`
+- [x] Lint passes (ruff); `make validate` green
+- [x] `tests/test_orchestrator.py` covers: unattended main-ahead halts · unattended dirty halts · unattended clean proceeds · no-remote not halted · interactive unchanged
+- [x] **New source behavior** in `enforce_main_hygiene` is covered by the named `tests/test_orchestrator.py` cases above (unit-level, monkeypatching `AET_EXECUTION_MODE` and `check_main_hygiene`/a temp git repo)
+- [x] ADR-027 exists (Status: Accepted), extends ADR-005, and is indexed in `docs/adr/README.md`
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 **Self-consistency lint:** Check 1 PASS · Check 2 (orchestrator=t1, ADR+README=t2, test=t3) PASS · Check 3 (observable: halt vs proceed + exit codes) PASS · Check 4 (R-1 covered) PASS.
@@ -91,5 +93,5 @@ ahead-check.
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_

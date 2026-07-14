@@ -47,6 +47,9 @@ Do **not** write an ADR for:
 - [021 — Evolve in Place; the Greenfield Is Trigger-Gated](021-evolve-in-place-greenfield-trigger-gated.md)
 - [022 — Local Worktree Project Identity](022-local-worktree-project-identity.md)
 - [023 — One Canonical Verdict Path per (Task, Kind), Published in Every Session Shape](023-one-canonical-verdict-path.md)
+- [024 — Queue Integrity Recovery: Audit Inspects, Heal Restamps](024-queue-integrity-recovery.md)
+- [025 — Validation Freshness: Gate Stages Trust a Fresh QA Verdict Instead of Re-Running](025-validation-freshness-trust-fresh-qa-verdict.md)
+- [027 — Main Hygiene Halts Unattended Runs](027-main-hygiene-halts-unattended.md)
 
 ## Format
 
