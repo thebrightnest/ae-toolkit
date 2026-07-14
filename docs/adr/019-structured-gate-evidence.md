@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-07-09). Implements PRD `docs/prds/fable-review-hardening-prd.md` G7; informed by the Fable 5 review (`content/fable-review/02-2026-07-09-strategic-alternatives.md`, alternative 3).
+Accepted (2026-07-09). Implements PRD `docs/prds/fable-review-hardening-prd.md` G7; informed by the Fable 5 review (`content/fable-review/02-2026-07-09-strategic-alternatives.md`, alternative 3). Extended by ADR-025 (2026-07-13): the common core gains a required `tree_hash` — a git tree-object fingerprint of the working tree the verdict attests to — auto-stamped by `write_verdict`.
 
 ## Context
 

@@ -76,6 +76,7 @@ class TestValidateVerdict(unittest.TestCase):
             "verdict": "pass",
             "summary": "All checks passed",
             "generated_at": "2026-07-09T20:00:00Z",
+            "tree_hash": "abc123",
             "test_command": "pytest tests/test_gate_evidence.py",
             "tests_total": 6,
             "tests_passed": 6,
@@ -102,6 +103,7 @@ class TestValidateVerdict(unittest.TestCase):
             "verdict": "pass",
             "summary": "Bad counts",
             "generated_at": "2026-07-09T20:00:00Z",
+            "tree_hash": "abc123",
             "test_command": "pytest",
             "tests_total": "six",
             "tests_passed": 6,
@@ -118,6 +120,7 @@ class TestValidateVerdict(unittest.TestCase):
             "verdict": "maybe",
             "summary": "Invalid verdict value",
             "generated_at": "2026-07-09T20:00:00Z",
+            "tree_hash": "abc123",
             "test_command": "pytest",
             "tests_total": 1,
             "tests_passed": 1,
@@ -142,6 +145,7 @@ class TestWriteThenReadVerdict(unittest.TestCase):
                 "verdict": "pass",
                 "summary": "Roundtrip",
                 "generated_at": "2026-07-09T20:00:00Z",
+                "tree_hash": "t0",
                 "test_command": "pytest",
                 "tests_total": 1,
                 "tests_passed": 1,
@@ -159,6 +163,37 @@ class TestWriteThenReadVerdict(unittest.TestCase):
             self.assertEqual(loaded["task_id"], "frh-10")
             self.assertEqual(loaded["verdict"], "pass")
 
+    def test_write_verdict_stamps_tree_hash_when_absent(self):
+        # The code stamps provenance; the caller need not supply it. A non-git
+        # worktree yields an empty hash, but the field is present regardless.
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            record = {
+                "task_id": "frh-10",
+                "stage": "qa-complete",
+                "skill": "aet-qa",
+                "verdict": "pass",
+                "summary": "No hash supplied",
+                "generated_at": "2026-07-09T20:00:00Z",
+                "test_command": "pytest",
+                "tests_total": 1,
+                "tests_passed": 1,
+                "tests_failed": 0,
+            }
+            path = evidence.write_verdict(
+                task_id="frh-10",
+                kind="qa",
+                record=record,
+                project_slug="owner/repo",
+                reports_root=base,
+                worktree_dir=base,  # not a git repo → empty hash, still stamped
+            )
+            loaded = evidence.read_verdict(path)
+            self.assertIn("tree_hash", loaded)
+            self.assertEqual(loaded["tree_hash"], "")
+            # The caller's record must not be mutated in place.
+            self.assertNotIn("tree_hash", record)
+
 
 class TestCheckingVerdictShapes(unittest.TestCase):
     """Round-trip shapes consumed by the orchestrator's evidence gates."""
@@ -173,6 +208,7 @@ class TestCheckingVerdictShapes(unittest.TestCase):
                 "verdict": "fail",
                 "summary": "Findings present",
                 "generated_at": "2026-07-09T20:00:00Z",
+                "tree_hash": "t0",
                 "findings": [{"file": "x.py", "note": "issue"}],
             }
             path = evidence.write_verdict(
@@ -195,6 +231,7 @@ class TestCheckingVerdictShapes(unittest.TestCase):
                 "verdict": "fail",
                 "summary": "Divergences present",
                 "generated_at": "2026-07-09T20:00:00Z",
+                "tree_hash": "t0",
                 "divergences": [{"plan": "t1", "note": "drift"}],
             }
             path = evidence.write_verdict(
