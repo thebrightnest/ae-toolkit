@@ -86,5 +86,5 @@ Revert the merge commit — `_read_config` returns to reading the single in-tree
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
