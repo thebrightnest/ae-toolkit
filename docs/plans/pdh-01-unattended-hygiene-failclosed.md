@@ -73,10 +73,10 @@ ahead-check.
 
 ## Validation Steps
 
-- [ ] Lint passes (ruff); `make validate` green
-- [ ] `tests/test_orchestrator.py` covers: unattended main-ahead halts · unattended dirty halts · unattended clean proceeds · no-remote not halted · interactive unchanged
-- [ ] **New source behavior** in `enforce_main_hygiene` is covered by the named `tests/test_orchestrator.py` cases above (unit-level, monkeypatching `AET_EXECUTION_MODE` and `check_main_hygiene`/a temp git repo)
-- [ ] ADR-027 exists (Status: Accepted), extends ADR-005, and is indexed in `docs/adr/README.md`
+- [x] Lint passes (ruff); `make validate` green
+- [x] `tests/test_orchestrator.py` covers: unattended main-ahead halts · unattended dirty halts · unattended clean proceeds · no-remote not halted · interactive unchanged
+- [x] **New source behavior** in `enforce_main_hygiene` is covered by the named `tests/test_orchestrator.py` cases above (unit-level, monkeypatching `AET_EXECUTION_MODE` and `check_main_hygiene`/a temp git repo)
+- [x] ADR-027 exists (Status: Accepted), extends ADR-005, and is indexed in `docs/adr/README.md`
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 **Self-consistency lint:** Check 1 PASS · Check 2 (orchestrator=t1, ADR+README=t2, test=t3) PASS · Check 3 (observable: halt vs proceed + exit codes) PASS · Check 4 (R-1 covered) PASS.
@@ -91,5 +91,5 @@ ahead-check.
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
