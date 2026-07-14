@@ -115,13 +115,15 @@ Before updating the plan.md footer, write a JSON verdict record so the orchestra
    }
    ```
 
-2. Determine the output path with this precedence:
-   1. `$AET_EVIDENCE_PATH` if set (single-stage sessions).
-   2. `$AET_EVIDENCE_PATH_QA` if set (group sessions publish one per stage).
-   3. Default: `~/.aet/reports/{project-slug}/{task-id}/qa.json`.
-      When `aet-work/lib` is importable, call `resolve_verdict_path(task_id, "qa")` from `aet-work/lib/evidence.py` — the canonical helper implementing this precedence. Never hand-compute `{project-slug}` from the worktree CWD.
-3. Use `aet-work/lib/evidence.py` (`write_verdict`) when available; otherwise write equivalent JSON to the resolved path.
-4. Only update the plan.md footer to `*Stage: qa-complete*` after the verdict file is written.
+2. Submit the verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Write the payload JSON to a scratch file outside the tracked tree, then run:
+
+   ```bash
+   aet gate submit --stage qa --verdict <pass|fail> --evidence <payload-file>
+   ```
+
+   The CLI schema-validates the payload, resolves the destination (`$AET_EVIDENCE_PATH` → `$AET_EVIDENCE_PATH_QA` → `~/.aet/reports/{project-slug}/{task-id}/qa.json`), and exits non-zero with a named error on any failure. If `aet gate submit` is unavailable, fall back to writing equivalent JSON to the path from `resolve_verdict_path(task_id, "qa")` in `aet-work/lib/evidence.py`.
+
+3. Only update the plan.md footer to `*Stage: qa-complete*` after `aet gate submit` exits 0.
 
 **Browser tooling preference:**
 
