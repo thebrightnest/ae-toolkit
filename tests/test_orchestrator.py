@@ -174,7 +174,7 @@ class TestEnforceMainHygiene(unittest.TestCase):
                 os.environ.pop("AET_EXECUTION_MODE", None)
                 self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
 
-    def test_enforce_main_hygiene_warns_and_continues_when_main_ahead_in_unattended_mode(self):
+    def test_enforce_main_hygiene_halts_when_main_ahead_in_unattended_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, "ahead.txt").write_text("x", encoding="utf-8")
@@ -184,7 +184,7 @@ class TestEnforceMainHygiene(unittest.TestCase):
                 check=True,
             )
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
-                self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
 
     def test_enforce_main_hygiene_halts_when_main_behind_in_interactive_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
@@ -219,10 +219,28 @@ class TestEnforceMainHygiene(unittest.TestCase):
                 os.environ.pop("AET_EXECUTION_MODE", None)
                 self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
 
-    def test_enforce_main_hygiene_warns_when_dirty_in_unattended_mode(self):
+    def test_enforce_main_hygiene_halts_when_dirty_in_unattended_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
+            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
+
+    def test_enforce_main_hygiene_proceeds_when_clean_in_unattended_mode(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
+                self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+
+    def test_enforce_main_hygiene_proceeds_without_origin_in_unattended_mode(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            # Drop the remote-tracking ref so there is no origin/main to be
+            # ahead of. No-remote projects must not be falsely halted.
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "-d", "refs/remotes/origin/main"],
+                check=True,
+            )
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
                 self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
 
@@ -324,7 +342,7 @@ class TestRunSingleHygiene(unittest.TestCase):
             self.assertEqual(exit_code, 1)
             mock_process.assert_not_called()
 
-    def test_run_single_warns_in_unattended(self):
+    def test_run_single_halts_in_unattended(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, "ahead.txt").write_text("x", encoding="utf-8")
@@ -342,9 +360,9 @@ class TestRunSingleHygiene(unittest.TestCase):
                 ) as mock_process:
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
             self.assertEqual(exit_code, 1)
-            # In unattended mode hygiene warns and continues; process_task is
-            # reached but fails because the plan file is missing.
-            mock_process.assert_called_once()
+            # Main hygiene fails closed in unattended mode too: the run halts
+            # before process_task is reached.
+            mock_process.assert_not_called()
 
 
 class TestDependencyWarmup(unittest.TestCase):

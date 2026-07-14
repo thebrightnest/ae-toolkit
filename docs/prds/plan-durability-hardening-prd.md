@@ -89,6 +89,31 @@ skills, so the change takes effect immediately.
 
 Both independent of each other and of the merged Gap-1 fix.
 
+## Divergence Summary
+
+_Recorded: 2026-07-14 — Branch: pdh-01-unattended-hygiene-failclosed_
+
+### pdh-01 — Changed from plan
+
+- None — Tasks 1–3 landed as planned: `enforce_main_hygiene` fails closed with
+  an explicit halt log line in both modes, ADR-027 extends ADR-005, and
+  `tests/test_orchestrator.py` covers unattended ahead/dirty/clean/no-remote,
+  interactive-unchanged, and `run_single` halting in unattended mode.
+
+### pdh-01 — Added (unplanned)
+
+- `aet-work/references/queue-commands.md` — the AFK pre-branch hygiene
+  paragraph rewritten to the fail-closed contract. The plan's
+  `docs_sync: required` frontmatter required AFK-behavior docs to reflect the
+  halt, but the task list / Files to Modify did not name this file.
+- `docs/adr/README.md` — index rows for ADR-024 and ADR-025 added alongside
+  the planned ADR-027 row; both ADR files existed on `main` but were unindexed.
+
+### pdh-01 — Deferred
+
+- None. (R-2 is delivered by pdh-02, a separate queued plan — not a pdh-01
+  deferral.)
+
 ---
 
 _Stage: scope-validated_
