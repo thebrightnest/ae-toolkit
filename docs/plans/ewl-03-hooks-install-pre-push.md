@@ -9,6 +9,7 @@ security_review: required
 security_review_reason: generates and installs the pre-push hook that gates what reaches the remote — hook-bypass, install-path errors, or an incomplete task-branch check would silently defeat the enforcement wall this plan exists to build
 docs_sync: required
 docs_sync_reason: replaces docs/CONVENTIONS.md's manual symlink instructions with a new aet hooks install command; the bootstrap step documented today changes
+status: merged
 ---
 
 # Plan: `aet hooks install` — Pre-Push Gate-Evidence Enforcement
@@ -103,5 +104,5 @@ Revert the merge commit. `aet hooks install`/`aet hooks check` and the generated
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
