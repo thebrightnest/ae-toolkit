@@ -7,6 +7,7 @@ security_review: skipped
 security_review_reason: changes a default in an install-time config writer plus messaging — no new code path or trust boundary; both backends are already implemented, parity-tested (frh-13/14), and git-refs gained tamper-evidence in ewl-05 (merged)
 docs_sync: required
 docs_sync_reason: configure-task-backend messaging, aet-setup Step 6 docs, and the factory docstring currently describe git-refs as "prototype, opt-in" — that framing becomes incorrect once aet-setup writes it by default; ADR-014's consequence "JSON is the default backend" remains true for unconfigured projects (factory fallback unchanged) and must be annotated, not reversed, to record the setup-layer default
+status: merged
 ---
 
 # Plan: git-refs Becomes the Default Task-Storage Backend
@@ -40,10 +41,10 @@ docs_sync_reason: configure-task-backend messaging, aet-setup Step 6 docs, and t
 
 ## Task List
 
-1. ✓ `aet-setup/bin/configure-task-backend`: default the no-`--backend` path to `git-refs` (interactive + non-interactive); flip messaging to default-vs-opt-out; remove the prototype NOTE — S (traces: R-5)
-2. ✓ `aet-work/lib/backends/factory.py` docstring + `aet-setup/SKILL.md` Step 6 (+ `checklist.md` if applicable): document the setup-layer default; factory fallback stays `json` — S (traces: R-5)
-3. ✓ `tests/test_aet_setup_backend_config.py`: update `test_git_refs_backend_creates_config_and_notes_prototype` (prototype framing removed); add a no-flag test asserting the written config selects `git-refs`; add a factory assertion that the no-config fallback remains `JsonBackend` (guards against regression toward the rejected factory flip) — S (traces: R-5, R-8)
-4. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
+1. `aet-setup/bin/configure-task-backend`: default the no-`--backend` path to `git-refs` (interactive + non-interactive); flip messaging to default-vs-opt-out; remove the prototype NOTE — S (traces: R-5)
+2. `aet-work/lib/backends/factory.py` docstring + `aet-setup/SKILL.md` Step 6 (+ `checklist.md` if applicable): document the setup-layer default; factory fallback stays `json` — S (traces: R-5)
+3. `tests/test_aet_setup_backend_config.py`: update `test_git_refs_backend_creates_config_and_notes_prototype` (prototype framing removed); add a no-flag test asserting the written config selects `git-refs`; add a factory assertion that the no-config fallback remains `JsonBackend` (guards against regression toward the rejected factory flip) — S (traces: R-5, R-8)
+4. Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -81,5 +82,5 @@ Revert the merge commit — the no-flag configure path returns to requiring an e
 
 ---
 
-_Stage: synced (2026-07-14 — no divergences: diff matches the revised locked design exactly; tasks 1–3 completed as planned, task 4 deferred to `aet-ship`; docs_sync actions: ADR-014 annotated — JSON default remains true only for unconfigured/factory-fallback contexts, aet-setup writes git-refs by default; A/B audit `docs/audits/2026-07-git-refs-backend-ab.md` annotated superseded with the gap-1 save-granularity caveat preserved; verdict written via `evidence.write_verdict` fallback — `aet gate submit` rejected the unstamped payload, pre-existing bug `docs/bugs/2026-07-14-gate-submit-rejects-unstamped-payload.md`)_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
