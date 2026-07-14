@@ -56,11 +56,11 @@ radius from the orchestrator behavior change.)
 
 ## Validation Steps
 
-- [ ] `./scripts/validate-skills.sh` passes on both edited skills (structure, line count ≤ 400, links)
-- [ ] `./scripts/skills-lint` passes (no broken `aet` references introduced)
-- [ ] Both skills now describe committing plans before `aet add`; no `aet add` instruction precedes the commit step
-- [ ] **No new source modules** — skill instruction docs, covered by validate-skills.sh / skills-lint, not pytest
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `./scripts/validate-skills.sh` passes on both edited skills (structure, line count ≤ 400, links)
+- [x] `./scripts/skills-lint` passes (no broken `aet` references introduced)
+- [x] Both skills now describe committing plans before `aet add`; no `aet add` instruction precedes the commit step
+- [x] **No new source modules** — skill instruction docs, covered by validate-skills.sh / skills-lint, not pytest
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to ship stage)
 
 **Self-consistency lint:** Check 1 PASS · Check 2 (pipeline-plan=t1, plan=t2) PASS · Check 3 (observable: commit precedes add in the docs) PASS · Check 4 (R-2 covered) PASS.
 
@@ -74,5 +74,5 @@ radius from the orchestrator behavior change.)
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
