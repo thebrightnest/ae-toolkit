@@ -3,7 +3,7 @@ id: pdh-02-pipeline-commit-plans-step
 size: S
 blocked_by: []
 pipeline: minimal
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: Edits skill instruction docs only (process step); no code, dependency, or trust-boundary surface.
 docs_sync: skipped
@@ -74,5 +74,5 @@ radius from the orchestrator behavior change.)
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
 _Next step: merge to main — `aet-cso` and `aet-sync-docs` skipped per plan frontmatter_
