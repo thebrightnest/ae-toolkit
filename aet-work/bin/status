@@ -149,27 +149,19 @@ def main() -> int:
 
     terminal = {"merged", "abandoned"}
     active_ids = {t.get("id") for t in queue}
-    rows = []
+    print(f"\n{'ID':<40} {'State':<15} Depends on")
+    print("-" * 68)
     for task in queue:
         if current_state(task) in terminal:
             continue
         deps = [
-            b if b in active_ids else f"{b}†" for b in task.get("blocked_by", [])
+            "-".join(b.split("-")[:2])
+            for b in task.get("blocked_by", [])
+            if b in active_ids
         ]
-        rows.append(
-            (
-                task.get("id", ""),
-                current_state(task) or "unknown",
-                ", ".join(deps) or "—",
-                ", ".join(task.get("blocks", [])) or "—",
-            )
-        )
-    dep_width = max((len(row[2]) for row in rows), default=10)
-    print(f"\n{'ID':<40} {'State':<15} {'Depends on':<{dep_width}} Blocks")
-    print("-" * (58 + dep_width))
-    for task_id, state, deps, blocks in rows:
-        print(f"{task_id:<40} {state:<15} {deps:<{dep_width}} {blocks}")
-    print("† = settled dependency (merged; not counted in pending blockers)")
+        task_id = task.get("id", "")
+        state = current_state(task) or "unknown"
+        print(f"{task_id:<40} {state:<15} {', '.join(deps) or '—'}")
 
     ready = [t for t in queue if current_state(t) == "ready"]
     print("\nNext ready tasks:")
