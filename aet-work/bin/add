@@ -9,6 +9,7 @@ edges, preserves existing queue metadata, and rejects terminal plans.
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -55,6 +56,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     )
+    parser.add_argument(
+        "--allow-untracked",
+        action="store_true",
+        help=(
+            "Queue the plan even if its file is not tracked in git. By default "
+            "an untracked plan is refused so aet-work can retrieve it from "
+            "origin/main; use this only for a throwaway spike."
+        ),
+    )
     return parser
 
 
@@ -79,6 +89,32 @@ def resolve_plan(target: str, plans_dir: Path) -> Path | None:
     return None
 
 
+def plan_is_untracked(plan_file: Path) -> bool:
+    """True when ``plan_file`` is inside a git work tree but not tracked.
+
+    Returns False when the file is tracked *or* when it is not inside any git
+    repository — outside version control there is no durability to enforce.
+    aet-work builds task worktrees from ``origin/main``; a queued plan that git
+    cannot retrieve there yields an empty worktree, so intake refuses an
+    untracked plan early instead of failing deep in a run.
+    """
+    resolved = plan_file.resolve()
+    parent = str(resolved.parent)
+    inside = subprocess.run(
+        ["git", "-C", parent, "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        return False
+    tracked = subprocess.run(
+        ["git", "-C", parent, "ls-files", "--error-unmatch", resolved.name],
+        capture_output=True,
+        text=True,
+    )
+    return tracked.returncode != 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     plans_dir = Path(args.plans_dir)
@@ -92,6 +128,16 @@ def main(argv: list[str] | None = None) -> int:
     if stage in ("merged", "abandoned"):
         print(
             f"⛔ Refusing to add {plan_file.name}: plan stage is '{stage}'.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not args.allow_untracked and plan_is_untracked(plan_file):
+        print(
+            f"⛔ Refusing to add {plan_file.name}: the plan file is not tracked "
+            f"in git. Commit it first so aet-work can retrieve it from "
+            f"origin/main (it builds task worktrees there); pass "
+            f"--allow-untracked to queue a throwaway spike anyway.",
             file=sys.stderr,
         )
         return 1
