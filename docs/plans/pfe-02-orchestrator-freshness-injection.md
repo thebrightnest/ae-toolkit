@@ -4,7 +4,7 @@ size: S
 blocked_by:
   - pfe-01-verdict-freshness-primitive
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 docs_sync: skipped
 docs_sync_reason: orchestrator-internal prompt modulation; the injected clause and the AET_QA_FRESHNESS signal are runtime behavior, not a documented contract — no user-facing doc changes
@@ -155,5 +155,5 @@ and CSO passes (security_review required) even though the injected text is stati
 
 ---
 
-_Stage: secure_
+_Stage: merged_
 _Next step: run `aet-sync-docs`, then `aet-ship`_
