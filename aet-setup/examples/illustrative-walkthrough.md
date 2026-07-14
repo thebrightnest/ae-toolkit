@@ -93,7 +93,6 @@ Run:
 
 - `make lint` → passes
 - `make type-check` → passes
-- `make format-check` → passes
 - `make security-audit` → passes
 - `make test` → passes
 - `pre-commit install` → succeeds
