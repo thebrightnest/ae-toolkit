@@ -39,11 +39,11 @@ docs_sync_reason: new user-facing aet subcommand, and the four checking skills' 
 
 ## Task List
 
-1. Write `aet-work/bin/gate`: `submit` subcommand, argument validation, delegation to `evidence.validate_verdict`/`write_verdict`, named errors on every failure path — M (traces: R-1, R-2)
-2. Add the `gate` row to `aet-work/bin/aet`'s `SUBCOMMANDS` table — S (traces: R-1)
-3. Update the writer contract in `aet-qa/SKILL.md`, `aet-review/SKILL.md`, `aet-cso/SKILL.md`, `aet-sync-docs/SKILL.md`: replace the direct `write_verdict` import instruction with `aet gate submit`. Batched deliberately — four near-identical one-paragraph edits to the same contract, same reasoning cli-02 used for its twelve-bin `build_parser()` sweep — S (traces: R-1)
-4. Tests: `tests/test_gate_submit.py` (new) — M (traces: R-1, R-2, R-8)
-5. Merge branch to main and verify integration — S
+1. ✓ Write `aet-work/bin/gate`: `submit` subcommand, argument validation, delegation to `evidence.validate_verdict`/`write_verdict`, named errors on every failure path — M (traces: R-1, R-2) [Changed: added fail-closed hardening — `--verdict`/payload-verdict cross-check, `AET_TASK_ID` precedence, JSON-shape rejection, argparse exit-1; threads the canonical path through a new `evidence.write_verdict` `path=` parameter]
+2. ✓ Add the `gate` row to `aet-work/bin/aet`'s `SUBCOMMANDS` table — S (traces: R-1)
+3. ✓ Update the writer contract in `aet-qa/SKILL.md`, `aet-review/SKILL.md`, `aet-cso/SKILL.md`, `aet-sync-docs/SKILL.md`: replace the direct `write_verdict` import instruction with `aet gate submit`. Batched deliberately — four near-identical one-paragraph edits to the same contract, same reasoning cli-02 used for its twelve-bin `build_parser()` sweep — S (traces: R-1)
+4. ✓ Tests: `tests/test_gate_submit.py` (new) — M (traces: R-1, R-2, R-8) [Changed: +3 tests for the added hardening branches]
+5. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -88,5 +88,5 @@ Revert the merge commit. The four skills' fallback instruction ("otherwise write
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_

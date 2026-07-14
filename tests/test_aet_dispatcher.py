@@ -37,6 +37,7 @@ class TestAetSpecTable(unittest.TestCase):
             "report",
             "init-queue",
             "state",
+            "gate",
             "run",
             "run-one",
             "ship",
