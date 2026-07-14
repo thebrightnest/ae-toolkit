@@ -43,7 +43,12 @@ Each task JSONL file contains:
 When a checking stage passes, the orchestrator gates on the structured verdict
 and, for a passing `aet-qa` verdict, derives an individual `test_run` record
 from its fields (`test_command`, `tests_total`, `tests_passed`,
-`tests_failed`). Beyond that derived record, the orchestrator does not emit
+`tests_failed`). Every verdict also carries a required `tree_hash` — a git
+tree-object fingerprint of the working tree it attests to, auto-stamped by
+`write_verdict` (ADR-025). `evidence.validation_freshness` compares it against
+the current tree and returns `run` (revalidate), `lint-only` (only docs or
+Markdown changed), or `skip` (tree unchanged since the last pass). Beyond that
+derived record, the orchestrator does not emit
 per-loop or per-test-run records; those are produced by other skills (for
 example, `aet-retro` emits learning candidates).
 
