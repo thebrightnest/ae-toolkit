@@ -137,5 +137,5 @@ auth/data-model/API surface.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
