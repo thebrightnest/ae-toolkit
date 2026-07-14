@@ -25,7 +25,7 @@ bug report.)
 | prettier (`make format-check`) | 10.27s             | No — whitespace/wrapping/tables      | **Drop entirely**                |
 | ruff (`make lint-py`)          | 0.10s              | Yes                                  | Keep                             |
 | validate-workflows             | 0.20s              | Yes                                  | Keep                             |
-| skills-lint                    | 0.29s              | Yes (doc↔CLI drift)                 | Keep                             |
+| skills-lint                    | 0.29s              | Yes (doc-to-CLI drift)               | Keep                             |
 | validate-skills.sh             | 22.78s             | Yes (frontmatter/dirs/links)         | Keep + **optimize**              |
 | pytest (`make test`)           | 91.75s (610 tests) | Yes                                  | Keep + **parallelize**, run last |
 
