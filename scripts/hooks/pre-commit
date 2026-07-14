@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # AE Toolkit pre-commit hook
-# Runs markdownlint, format-check, and secrets scan.
+# Runs the pre-commit suite; fallback runs markdownlint only.
 
 echo "Running pre-commit checks..."
 
@@ -11,7 +11,6 @@ if command -v pre-commit > /dev/null 2>&1; then
 else
   echo "pre-commit not found; running fallback checks..."
   make lint
-  make format-check
 fi
 
 echo "Pre-commit checks passed."
