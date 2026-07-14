@@ -45,6 +45,7 @@ SUBCOMMANDS = {
         "target": ("aet-setup", "configure-task-backend"),
         "mode": "exec",
     },
+    "hooks": {"target": ("aet-setup", "hooks"), "mode": "exec"},
     "install": {"target": ("aet-work", "aet"), "mode": "internal"},
 }
 
