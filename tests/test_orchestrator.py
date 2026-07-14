@@ -410,7 +410,7 @@ class TestDependencyWarmup(unittest.TestCase):
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
                         _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
 
-                        with patch.object(orchestrator, "run_stage", return_value=(0, None)):
+                        with patch.object(orchestrator, "run_stage", return_value=(0, None, None)):
                             with patch.object(
                                 orchestrator, "verify_branch_has_commits", return_value=(True, "")
                             ):
@@ -484,7 +484,7 @@ class TestEnvironmentIssueEmission(unittest.TestCase):
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
                         _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
 
-                        with patch.object(orchestrator, "run_stage", return_value=(0, None)):
+                        with patch.object(orchestrator, "run_stage", return_value=(0, None, None)):
                             with patch.object(
                                 orchestrator, "verify_branch_has_commits", return_value=(True, "")
                             ):
@@ -1108,7 +1108,7 @@ class TestRunStageGroup(unittest.TestCase):
             result = orchestrator.run_stage_group(
                 adapter, "/repo", "/work/plan.md", "/work", stages, workflow=workflow
             )
-        self.assertEqual(result, (1, None))
+        self.assertEqual(result, (1, None, None))
 
 
 class TestStageEnabled(unittest.TestCase):
@@ -1196,10 +1196,10 @@ class TestGateRouting(unittest.TestCase):
                         os.environ, _gate_env(reports_dir, archive_dir), clear=False
                     ):
                         with patch.object(
-                            orchestrator, "run_stage_group", return_value=(0, None)
+                            orchestrator, "run_stage_group", return_value=(0, None, None)
                         ) as mock_group:
                             with patch.object(
-                                orchestrator, "run_stage", return_value=(0, None)
+                                orchestrator, "run_stage", return_value=(0, None, None)
                             ) as mock_stage:
                                 result, out = self._process_task_capture(
                                     task, repo_root, mock_group, mock_stage
@@ -1223,10 +1223,10 @@ class TestGateRouting(unittest.TestCase):
                         os.environ, _gate_env(reports_dir, archive_dir), clear=False
                     ):
                         with patch.object(
-                            orchestrator, "run_stage_group", return_value=(0, None)
+                            orchestrator, "run_stage_group", return_value=(0, None, None)
                         ) as mock_group:
                             with patch.object(
-                                orchestrator, "run_stage", return_value=(0, None)
+                                orchestrator, "run_stage", return_value=(0, None, None)
                             ) as mock_stage:
                                 result, out = self._process_task_capture(
                                     task, repo_root, mock_group, mock_stage
@@ -1258,10 +1258,10 @@ class TestGateRouting(unittest.TestCase):
                         os.environ, _gate_env(reports_dir, archive_dir), clear=False
                     ):
                         with patch.object(
-                            orchestrator, "run_stage_group", return_value=(0, None)
+                            orchestrator, "run_stage_group", return_value=(0, None, None)
                         ) as mock_group:
                             with patch.object(
-                                orchestrator, "run_stage", return_value=(0, None)
+                                orchestrator, "run_stage", return_value=(0, None, None)
                             ) as mock_stage:
                                 result, out = self._process_task_capture(
                                     task, repo_root, mock_group, mock_stage
@@ -1293,10 +1293,10 @@ class TestGateRouting(unittest.TestCase):
                         os.environ, _gate_env(reports_dir, archive_dir), clear=False
                     ):
                         with patch.object(
-                            orchestrator, "run_stage_group", return_value=(0, None)
+                            orchestrator, "run_stage_group", return_value=(0, None, None)
                         ) as mock_group:
                             with patch.object(
-                                orchestrator, "run_stage", return_value=(0, None)
+                                orchestrator, "run_stage", return_value=(0, None, None)
                             ) as mock_stage:
                                 result, out = self._process_task_capture(
                                     task, repo_root, mock_group, mock_stage
@@ -1352,10 +1352,10 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                     clear=False,
                 ):
                     with patch.object(
-                        orchestrator, "run_stage_group", return_value=(0, None)
+                        orchestrator, "run_stage_group", return_value=(0, None, None)
                     ) as mock_group:
                         with patch.object(
-                            orchestrator, "run_stage", return_value=(0, None)
+                            orchestrator, "run_stage", return_value=(0, None, None)
                         ) as mock_stage:
                             with patch.object(
                                 orchestrator,
@@ -1397,7 +1397,7 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                 ):
                     with patch.object(orchestrator, "run_stage_group") as mock_group:
                         with patch.object(
-                            orchestrator, "run_stage", return_value=(0, None)
+                            orchestrator, "run_stage", return_value=(0, None, None)
                         ) as mock_stage:
                             with patch.object(
                                 orchestrator,
@@ -1432,7 +1432,7 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                 ):
                     with patch.object(orchestrator, "run_stage_group") as mock_group:
                         with patch.object(
-                            orchestrator, "run_stage", return_value=(0, None)
+                            orchestrator, "run_stage", return_value=(0, None, None)
                         ) as mock_stage:
                             with patch.object(
                                 orchestrator,
@@ -1469,9 +1469,9 @@ class TestStageGroupSessionReuse(unittest.TestCase):
                     clear=False,
                 ):
                     with patch.object(
-                        orchestrator, "run_stage_group", return_value=(0, None)
+                        orchestrator, "run_stage_group", return_value=(0, None, None)
                     ) as mock_group:
-                        with patch.object(orchestrator, "run_stage", return_value=(0, None)):
+                        with patch.object(orchestrator, "run_stage", return_value=(0, None, None)):
                             with patch.object(
                                 orchestrator,
                                 "verify_branch_has_commits",
@@ -1490,7 +1490,7 @@ class TestStageGroupSessionReuse(unittest.TestCase):
             plan_file = self._setup_repo_with_plan(repo_root)
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
-            with patch.object(orchestrator, "run_stage_group", return_value=(1, None)):
+            with patch.object(orchestrator, "run_stage_group", return_value=(1, None, None)):
                 result = orchestrator.process_task(
                     task, repo_root, _FAKE_ADAPTER, "standard"
                 )
@@ -1534,10 +1534,10 @@ class TestWorkflowDrivenTraversal(unittest.TestCase):
         env = _gate_env(reports_dir, archive_dir)
         with patch.dict(os.environ, env, clear=False):
             with patch.object(
-                orchestrator, "run_stage_group", return_value=(0, None)
+                orchestrator, "run_stage_group", return_value=(0, None, None)
             ) as mock_group:
                 with patch.object(
-                    orchestrator, "run_stage", return_value=(0, None)
+                    orchestrator, "run_stage", return_value=(0, None, None)
                 ) as mock_stage:
                     with patch.object(
                         orchestrator,
@@ -2003,7 +2003,7 @@ class TestStageTelemetry(unittest.TestCase):
                         _write_passing(reports_dir, "review")
 
                         with patch.object(
-                            orchestrator, "run_stage", return_value=(0, None)
+                            orchestrator, "run_stage", return_value=(0, None, None)
                         ) as mock_stage:
                             with patch.object(
                                 orchestrator,
@@ -2047,8 +2047,8 @@ class TestStageTelemetry(unittest.TestCase):
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
                         _write_passing(reports_dir, "qa", "review")
 
-                        with patch.object(orchestrator, "run_stage_group", return_value=(0, None)):
-                            with patch.object(orchestrator, "run_stage", return_value=(0, None)):
+                        with patch.object(orchestrator, "run_stage_group", return_value=(0, None, None)):
+                            with patch.object(orchestrator, "run_stage", return_value=(0, None, None)):
                                 with patch.object(
                                     orchestrator,
                                     "verify_branch_has_commits",
@@ -2088,7 +2088,7 @@ class TestStageTelemetry(unittest.TestCase):
                     logger = telemetry.RunLogger(repo_root, run_id="r1")
                 task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
 
-                with patch.object(orchestrator, "run_stage", return_value=(1, None)):
+                with patch.object(orchestrator, "run_stage", return_value=(1, None, None)):
                     result = orchestrator.process_task(
                         task, repo_root, _FAKE_ADAPTER, "full", logger=logger
                     )
@@ -2137,7 +2137,7 @@ class TestStageTelemetry(unittest.TestCase):
                                 check=True,
                                 capture_output=True,
                             )
-                            return (0, None)
+                            return (0, None, None)
 
                         with patch.object(
                             orchestrator, "run_stage", side_effect=run_stage_making_commit
@@ -2200,8 +2200,8 @@ class TestEvidenceGates(unittest.TestCase):
         with patch.dict(os.environ, env, clear=False):
             logger = telemetry.RunLogger(repo_root, run_id="r1")
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
-            with patch.object(orchestrator, "run_stage_group", return_value=(0, None)):
-                with patch.object(orchestrator, "run_stage", return_value=(0, None)):
+            with patch.object(orchestrator, "run_stage_group", return_value=(0, None, None)):
+                with patch.object(orchestrator, "run_stage", return_value=(0, None, None)):
                     with patch.object(
                         orchestrator,
                         "verify_branch_has_commits",
@@ -2277,10 +2277,10 @@ class TestEvidenceGates(unittest.TestCase):
                     with patch.dict(os.environ, env, clear=False):
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
                         with patch.object(
-                            orchestrator, "run_stage_group", return_value=(0, None)
+                            orchestrator, "run_stage_group", return_value=(0, None, None)
                         ) as mock_group:
                             with patch.object(
-                                orchestrator, "run_stage", return_value=(0, None)
+                                orchestrator, "run_stage", return_value=(0, None, None)
                             ) as mock_stage:
                                 with patch.object(
                                     orchestrator,
@@ -2723,7 +2723,7 @@ class TestUsageCapture(unittest.TestCase):
     def test_run_stage_returns_exit_code_and_parsed_usage(self):
         with tempfile.TemporaryDirectory() as tmp:
             adapter = self._claude_stub_adapter(tmp)
-            exit_code, usage = orchestrator.run_stage(
+            exit_code, usage, session_dir = orchestrator.run_stage(
                 adapter, tmp, "plan.md", tmp, ["skill"], "a", "b"
             )
         self.assertEqual(exit_code, 0)
@@ -2734,7 +2734,7 @@ class TestUsageCapture(unittest.TestCase):
 
     def test_run_stage_without_usage_mode_returns_none_usage(self):
         with tempfile.TemporaryDirectory() as tmp:
-            exit_code, usage = orchestrator.run_stage(
+            exit_code, usage, session_dir = orchestrator.run_stage(
                 _FAKE_ADAPTER, tmp, "plan.md", tmp, ["skill"], "a", "b"
             )
         self.assertEqual(exit_code, 0)
@@ -2860,7 +2860,7 @@ class TestUsageCapture(unittest.TestCase):
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
             adapter = self._claude_stub_adapter(repo_root)
-            exit_code, usage = orchestrator.run_stage(
+            exit_code, usage, session_dir = orchestrator.run_stage(
                 adapter,
                 repo_root,
                 "docs/plans/demo.md",
@@ -2899,6 +2899,208 @@ class TestUsageCapture(unittest.TestCase):
         self.assertAlmostEqual(records[0]["cost_estimate"], 0.0123)
         self.assertEqual(summary["total_tokens"], 185)
         self.assertAlmostEqual(summary["total_cost_usd"], 0.0123)
+
+
+class TestWireTestRunEmission(unittest.TestCase):
+    """Wire-derived test_run records from kimi session logs (ttf-01)."""
+
+    @staticmethod
+    def _tool_call(uuid, command, time_ms):
+        return json.dumps(
+            {
+                "type": "context.append_loop_event",
+                "event": {
+                    "type": "tool.call",
+                    "uuid": uuid,
+                    "toolCallId": uuid,
+                    "name": "Bash",
+                    "args": {"command": command},
+                },
+                "time": time_ms,
+            }
+        )
+
+    @staticmethod
+    def _tool_result(uuid, output, time_ms, is_error=None):
+        result = {"output": output}
+        if is_error is not None:
+            result["isError"] = is_error
+        return json.dumps(
+            {
+                "type": "context.append_loop_event",
+                "event": {
+                    "type": "tool.result",
+                    "parentUuid": uuid,
+                    "toolCallId": uuid,
+                    "result": result,
+                },
+                "time": time_ms,
+            }
+        )
+
+    def _write_session(self, root, session_id, wires):
+        session_dir = Path(root) / "sessions" / "wd_proj_abc123" / session_id
+        for agent_id, lines in wires.items():
+            wire = session_dir / "agents" / agent_id / "wire.jsonl"
+            wire.parent.mkdir(parents=True, exist_ok=True)
+            wire.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return session_dir
+
+    def _emit(self, logger, repo_root, session_dir, agent_cli="kimi"):
+        orchestrator._emit_stage_session(
+            logger,
+            "demo",
+            "docs/plans/demo.md",
+            agent_cli,
+            "standard",
+            "implemented",
+            None,
+            repo_root,
+            "2026-07-14T00:00:00Z",
+            "2026-07-14T00:30:00Z",
+            0,
+            usage=None,
+            session_dir=session_dir,
+        )
+
+    def test_emit_stage_session_emits_one_test_run_per_wire_invocation(self):
+        """A fixture kimi session yields one test_run per test invocation
+        with classified scope and measured duration."""
+        t0 = 1784049800000  # 2026-07-14T17:23:20Z
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            logger = telemetry.RunLogger(repo_root, run_id="r1")
+            with tempfile.TemporaryDirectory() as home:
+                session_dir = self._write_session(
+                    home,
+                    "session_t1",
+                    {
+                        "main": [
+                            self._tool_call("c1", "python3 -m pytest tests/ -q", t0),
+                            self._tool_result("c1", "631 passed", t0 + 60_000),
+                            self._tool_call("c2", "pytest tests/test_panel_serve.py", t0 + 100_000),
+                            self._tool_result(
+                                "c2",
+                                "1 failed\nCommand failed with exit code: 1.",
+                                t0 + 105_000,
+                                is_error=True,
+                            ),
+                            self._tool_call("c3", "git status", t0 + 200_000),
+                            self._tool_result("c3", "clean", t0 + 201_000),
+                        ],
+                        "agent_7f3a": [
+                            self._tool_call("s1", "make validate", t0 + 300_000),
+                            self._tool_result("s1", "ok", t0 + 340_000),
+                        ],
+                    },
+                )
+                self._emit(logger, repo_root, session_dir)
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+        test_runs = [r for r in records if r.get("type") == "test_run"]
+        self.assertEqual(records[0]["type"], "stage")
+        self.assertEqual(len(test_runs), 3)
+
+        self.assertEqual(test_runs[0]["test_command"], "python3 -m pytest tests/ -q")
+        self.assertEqual(test_runs[0]["scope"], "full-suite")
+        self.assertEqual(test_runs[0]["duration_seconds"], 60.0)
+        self.assertEqual(test_runs[0]["exit_code"], 0)
+        self.assertEqual(test_runs[0]["result"], "success")
+
+        self.assertEqual(test_runs[1]["test_command"], "pytest tests/test_panel_serve.py")
+        self.assertEqual(test_runs[1]["scope"], "impact")
+        self.assertEqual(test_runs[1]["duration_seconds"], 5.0)
+        self.assertEqual(test_runs[1]["exit_code"], 1)
+        self.assertEqual(test_runs[1]["result"], "failure")
+
+        self.assertEqual(test_runs[2]["test_command"], "make validate")
+        self.assertEqual(test_runs[2]["scope"], "full-suite")
+        self.assertEqual(test_runs[2]["duration_seconds"], 40.0)
+
+        for record in test_runs:
+            self.assertEqual(record["stage"], "implemented")
+            self.assertEqual(record["run_id"], "r1")
+            self.assertEqual(record["task_id"], "demo")
+            self.assertEqual(record["plan_file"], "docs/plans/demo.md")
+
+    def test_emit_stage_session_without_session_dir_emits_no_test_runs(self):
+        """Non-kimi CLIs and unresolvable sessions emit nothing."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            logger = telemetry.RunLogger(repo_root, run_id="r1")
+            self._emit(logger, repo_root, None, agent_cli="claude")
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+        self.assertEqual([r["type"] for r in records], ["stage"])
+
+    def test_emit_stage_session_with_unresolvable_dir_emits_no_test_runs(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            logger = telemetry.RunLogger(repo_root, run_id="r1")
+            self._emit(logger, repo_root, Path(repo_root) / "no-such-session")
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+        self.assertEqual([r["type"] for r in records], ["stage"])
+
+    def test_unpaired_wire_call_yields_null_duration_record(self):
+        t0 = 1784049800000
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            logger = telemetry.RunLogger(repo_root, run_id="r1")
+            with tempfile.TemporaryDirectory() as home:
+                session_dir = self._write_session(
+                    home,
+                    "session_t2",
+                    {"main": [self._tool_call("c1", "pytest tests/", t0)]},
+                )
+                self._emit(logger, repo_root, session_dir)
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+        test_runs = [r for r in records if r.get("type") == "test_run"]
+        self.assertEqual(len(test_runs), 1)
+        self.assertIsNone(test_runs[0]["end_time"])
+        self.assertIsNone(test_runs[0]["duration_seconds"])
+        self.assertIsNone(test_runs[0]["exit_code"])
+        self.assertEqual(test_runs[0]["result"], "unknown")
+
+    def test_spawn_session_resolves_kimi_session_dir(self):
+        """The spawn path threads the resolved wire dir for kimi sessions."""
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_path = Path(tmp, "kimi-stub")
+            bin_path.write_text(
+                "#!/bin/sh\necho 'To resume this session: kimi -r session_stub1'\n",
+                encoding="utf-8",
+            )
+            bin_path.chmod(0o755)
+            adapter = CLIAdapter(
+                name="kimi",
+                bin=str(bin_path),
+                prompt_flag="-p",
+                workdir_flag=None,
+                headless_flag=None,
+                usage_mode="wire-file",
+            )
+            home = Path(tmp, "kimi-home")
+            expected = self._write_session(home / ".kimi-code", "session_stub1", {"main": []})
+            env = os.environ.copy()
+            with patch.dict(os.environ, {"HOME": str(home)}):
+                exit_code, _usage, session_dir = orchestrator._spawn_session(
+                    adapter, [str(bin_path)], tmp, env
+                )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(session_dir, expected)
+
+    def test_spawn_session_non_kimi_yields_none_session_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = CLIAdapter(
+                name="test",
+                bin="echo",
+                prompt_flag="-p",
+                workdir_flag=None,
+                headless_flag=None,
+            )
+            exit_code, usage, session_dir = orchestrator._spawn_session(
+                adapter, ["echo", "hi"], tmp, os.environ.copy()
+            )
+        self.assertEqual(exit_code, 0)
+        self.assertIsNone(usage)
+        self.assertIsNone(session_dir)
 
 
 class TestQaFreshnessInjection(unittest.TestCase):
@@ -2951,7 +3153,7 @@ class TestQaFreshnessInjection(unittest.TestCase):
         def fake_spawn(adapter, cmd, worktree_dir, env):
             captured["cmd"] = cmd
             captured["env"] = env
-            return 0, None
+            return 0, None, None
 
         with patch.object(orchestrator, "_spawn_session", side_effect=fake_spawn):
             orchestrator.run_stage(
@@ -2998,7 +3200,7 @@ class TestQaFreshnessInjection(unittest.TestCase):
         def fake_spawn(adapter, cmd, worktree_dir, env):
             captured["cmd"] = cmd
             captured["env"] = env
-            return 0, None
+            return 0, None, None
 
         stages = [
             WorkflowStage(

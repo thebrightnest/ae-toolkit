@@ -77,20 +77,21 @@ duration_seconds, exit_code}` from the records' top-level `time`.
 
 ## Task List
 
-1. `aet-work/lib/wirelog.py`: extraction + pairing + defensive parsing — M
+1. ✓ `aet-work/lib/wirelog.py`: extraction + pairing + defensive parsing — M
    (traces: R-1, R-3)
-2. `tests/test_wirelog.py` (new): fixture wire.jsonl covering paired calls,
+2. ✓ `tests/test_wirelog.py` (new): fixture wire.jsonl covering paired calls,
    unpaired call (null duration), non-test commands ignored, malformed line
    skipped, multi-agent dirs — M (traces: R-1, R-3)
-3. `telemetry.py`: `classify_test_scope` + nullable timestamps in
+3. ✓ `telemetry.py`: `classify_test_scope` + nullable timestamps in
    `test_run_record`; extend `tests/test_telemetry.py` — S (traces: R-2, R-3)
-4. `orchestrator`: emit per-invocation `test_run` records after kimi sessions
+4. ✓ `orchestrator`: emit per-invocation `test_run` records after kimi sessions
    in `_emit_stage_session`; integration test in
    `tests/test_orchestrator.py` asserting N records with real durations from
    a fixture session — M (traces: R-1, R-2)
-5. Docs: `telemetry-log-schema.md` provenance + scope vocabulary + null
+5. ✓ Docs: `telemetry-log-schema.md` provenance + scope vocabulary + null
    contract — S (traces: R-3)
-6. Merge branch to main and verify integration — S
+6. [Deferred: merge executed by `aet-ship` after review] Merge branch to main
+   and verify integration — S
 
 **Size definitions:**
 
@@ -116,12 +117,12 @@ duration_seconds, exit_code}` from the records' top-level `time`.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`python3 -m pytest tests/test_wirelog.py tests/test_telemetry.py tests/test_orchestrator.py -q`, then full suite before commit)
-- [ ] Unit: `tests/test_wirelog.py` covers `aet-work/lib/wirelog.py` (paired, unpaired, malformed, non-test, multi-agent)
-- [ ] Integration: orchestrator test proves a fixture kimi session yields one `test_run` per invocation with classified scope and measured duration
-- [ ] R-trace coverage: R-1, R-2, R-3 all covered; no unknown R-ids cited
-- [ ] Live check: run one queued plan under `aet run` (or replay a recent session dir) and confirm real `test_run` records land in the task JSONL
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`python3 -m pytest tests/test_wirelog.py tests/test_telemetry.py tests/test_orchestrator.py -q`, then full suite before commit)
+- [x] Unit: `tests/test_wirelog.py` covers `aet-work/lib/wirelog.py` (paired, unpaired, malformed, non-test, multi-agent)
+- [x] Integration: orchestrator test proves a fixture kimi session yields one `test_run` per invocation with classified scope and measured duration
+- [x] R-trace coverage: R-1, R-2, R-3 all covered; no unknown R-ids cited
+- [x] Live check: run one queued plan under `aet run` (or replay a recent session dir) and confirm real `test_run` records land in the task JSONL
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -137,5 +138,5 @@ auth/data-model/API surface.
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
