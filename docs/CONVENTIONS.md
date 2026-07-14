@@ -312,11 +312,10 @@ The generated shim is self-contained — it needs no committed AET file, so it i
 
 Runs the AE Toolkit quality checks:
 
-- **markdownlint** (`make lint`)
-- **format-check** (`make format-check`)
+- **markdownlint** (`make lint`) on staged markdown files only
 - **secrets scan** (via `pre-commit run`, which includes `detect-private-key`)
 
-If the `pre-commit` framework is not installed, the hook falls back to `make lint` and `make format-check`.
+If the `pre-commit` framework is not installed, the hook falls back to `make lint`.
 
 ## Cross-Project Feedback Channel
 
