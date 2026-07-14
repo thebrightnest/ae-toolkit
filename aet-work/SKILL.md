@@ -162,7 +162,7 @@ Show the current sprint board.
 aet status
 ```
 
-Reports active task counts, next ready tasks, failed tasks, and worktree health. Plan drift is reported as a warning only.
+Reports active task counts, a dependency table (`blocked_by` / `blocks`, settled blockers marked †), next ready tasks, failed tasks, and worktree health. Plan drift is reported as a warning only.
 
 ### `next`
 
