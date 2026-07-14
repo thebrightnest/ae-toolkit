@@ -3,12 +3,15 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 SCRIPT = REPO_ROOT / "aet-setup" / "bin" / "configure-task-backend"
+
+sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
 
 
 class TestConfigureTaskBackend(unittest.TestCase):
@@ -56,17 +59,47 @@ class TestConfigureTaskBackend(unittest.TestCase):
         config = self.read_config()
         self.assertEqual(config["task_backend"], "json")
         self.assertNotIn("github", config)
+        # json is the documented opt-out; the NOTE explains when it applies.
+        self.assertIn("non-git", result.stderr.lower())
 
-    def test_git_refs_backend_creates_config_and_notes_prototype(self):
+    def test_no_backend_flag_writes_git_refs_default(self):
+        result = self.run_script(["--non-interactive"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = self.read_config()
+        self.assertEqual(config["task_backend"], "git-refs")
+
+    def test_interactive_empty_input_writes_git_refs_default(self):
+        result = self.run_script([], input_text="\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = self.read_config()
+        self.assertEqual(config["task_backend"], "git-refs")
+
+    def test_git_refs_backend_creates_config_without_prototype_framing(self):
         result = self.run_script(["--backend", "git-refs", "--non-interactive"])
         self.assertEqual(result.returncode, 0, result.stderr)
         config = self.read_config()
         self.assertEqual(config["task_backend"], "git-refs")
         # git-refs is local-only; no github mirror is configured.
         self.assertNotIn("github", config)
-        # The opt-in path surfaces a prototype warning so users know it is not
-        # the default, production recommendation.
-        self.assertIn("prototype", result.stderr.lower())
+        # git-refs is the default written backend, so the selection path must
+        # not carry the stale prototype/opt-in framing.
+        stderr = result.stderr.lower()
+        self.assertNotIn("prototype", stderr)
+        self.assertNotIn("opt-in", stderr)
+        self.assertNotIn("not recommended", stderr)
+
+    def test_factory_no_config_fallback_remains_json(self):
+        # Guards the rejected factory-level flip: aet-setup writes git-refs by
+        # default, but the no-config factory fallback must stay JsonBackend.
+        from backends.factory import create_backend
+        from backends.json_backend import JsonBackend
+
+        backend = create_backend(
+            config_path=str(self.project / "missing.json"),
+            queue_file=str(self.project / "work-queue.json"),
+            history_file=str(self.project / "work-history.jsonl"),
+        )
+        self.assertIsInstance(backend, JsonBackend)
 
     def test_github_backend_with_explicit_repo_creates_config(self):
         result = self.run_script(
