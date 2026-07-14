@@ -111,7 +111,7 @@ Use this checklist during every `/aet-setup` invocation. Every topic must be exp
 
 ## 15. Task Backend Configuration
 
-- [ ] `.agents/aet-work.json` exists with a valid `task_backend` (`json` or `github`)?
+- [ ] `.agents/aet-work.json` exists with a valid `task_backend` (`git-refs` (default), `json`, or `github`)?
 - [ ] When `github` is selected, `repo` is set to `owner/repo`?
 - [ ] When `github` is selected, `aet:ready` and other `aet:*` labels exist (or a retry gap is documented)?
 - [ ] `gh` availability and authentication are verified before label creation?

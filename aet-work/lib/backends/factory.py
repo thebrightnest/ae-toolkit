@@ -22,9 +22,10 @@ def create_backend(
     """Instantiate a task backend based on ``.agents/aet-work.json``.
 
     The configuration key ``task_backend`` selects the implementation:
-    ``json`` (default), ``git-refs`` (prototype, opt-in), ``github``, or
-    ``both``. Unsupported or missing values fall back to the JSON backend for
-    local-only operation.
+    ``json``, ``git-refs``, ``github``, or ``both``. aet-setup writes
+    ``git-refs`` by default (``aet configure-backend``); ``json`` is the
+    documented opt-out and remains the fallback here for unconfigured or
+    non-git contexts.
     """
     config_path = config_path or DEFAULT_CONFIG_PATH
     config = _read_config(config_path)
