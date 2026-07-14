@@ -8,7 +8,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 - **Content format:** Markdown with YAML frontmatter
 - **Build / packaging:** GNU Make + `zip`
-- **Quality:** prettier, markdownlint, ruff, pytest, custom skill-structure validator
+- **Quality:** markdownlint (staged/manual), ruff, pytest, custom skill-structure validator, workflow lint
 
 ## Directory Structure
 
@@ -38,12 +38,10 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 | `make help`             | Show all available targets                                                           |
 | `make install-skills`   | Symlink all skills to `~/.agents/skills/`                                            |
 | `make add-skill NAME=x` | Scaffold a new skill directory                                                       |
-| `make lint`             | markdownlint all markdown files                                                      |
-| `make format`           | Prettier format all markdown files                                                   |
-| `make format-check`     | Prettier check (CI mode)                                                             |
+| `make lint`             | Run markdownlint on all markdown files (manual / staged-only)                        |
 | `make lint-py`          | Run ruff on Python files                                                             |
 | `make test`             | Run pytest suite                                                                     |
-| `make validate`         | Run lint + format-check + lint-py + test + workflow lint + skill-structure validator |
+| `make validate`         | Run lint-py + workflow lint + skills-lint + skill-structure validator + test         |
 | `make install-hooks`    | Install pre-commit hooks                                                             |
 
 ## Skill Structure Validator
@@ -102,4 +100,4 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - **Markdown-only repo:** No package.json, requirements.txt, etc. Quality tools are installed via pre-commit or system package manager.
 - **Directory-based distribution:** Skills are installed together from this repo via `npx skills add ... --all`. Individual `.skill` zip artifacts are no longer produced or tracked.
 - **No CI:** All gates local via pre-commit + Make. Keeps the repo portable and free of vendor lock-in.
-- **Trimmed tooling:** Dropped cspell, lychee, and detect-secrets. A skills library's quality surface is structure and formatting, not runtime security or external link graphs.
+- **Trimmed tooling:** Dropped cspell, lychee, detect-secrets, and prettier. Cosmetic formatting (prettier) produced churn without catching real defects; the quality surface is structure (`validate-skills`), semantics (`skills-lint`, `validate-workflows`), and code (`ruff`, `pytest`). Markdownlint remains as a light, staged-only guard.
