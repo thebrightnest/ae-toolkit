@@ -59,6 +59,21 @@ def _display_category(task: dict) -> str:
     return current_state(task) or "unknown"
 
 
+def _render_table(headers: list[str], rows: list[list[str]]) -> list[str]:
+    """Render a markdown table with columns padded for terminal readability."""
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+
+    def fmt(cells: list[str]) -> str:
+        padded = (cell.ljust(width) for cell, width in zip(cells, widths))
+        return "| " + " | ".join(padded) + " |"
+
+    separator = "| " + " | ".join("-" * w for w in widths) + " |"
+    return [fmt(headers), separator, *(fmt(row) for row in rows)]
+
+
 def _queue_updated_at(queue_file: str) -> str | None:
     """Return the wrapper's queue_updated_at for JSON-backed queues, else None."""
     try:
@@ -149,8 +164,7 @@ def main() -> int:
 
     terminal = {"merged", "abandoned"}
     active_ids = {t.get("id") for t in queue}
-    print(f"\n{'ID':<40} {'State':<15} Depends on")
-    print("-" * 68)
+    rows = []
     for task in queue:
         if current_state(task) in terminal:
             continue
@@ -159,9 +173,16 @@ def main() -> int:
             for b in task.get("blocked_by", [])
             if b in active_ids
         ]
-        task_id = task.get("id", "")
-        state = current_state(task) or "unknown"
-        print(f"{task_id:<40} {state:<15} {', '.join(deps) or '—'}")
+        rows.append(
+            [
+                task.get("id", ""),
+                current_state(task) or "unknown",
+                ", ".join(deps) or "—",
+            ]
+        )
+    print()
+    for line in _render_table(["ID", "State", "Depends on"], rows):
+        print(line)
 
     ready = [t for t in queue if current_state(t) == "ready"]
     print("\nNext ready tasks:")
