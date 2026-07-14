@@ -161,5 +161,5 @@ _Intake triage: feature/enhancement (new measurement capability). Contains one
 defect repair — the hardcoded `scope`/`0s` in verdict-derived records — folded
 into ttf-02 rather than a separate bug plan, mirroring the tdsh precedent._
 
-_Stage: prd-approved_
-_Next step: run `aet-validate-scope`_
+_Stage: synced_
+_Next step: run `aet-ship`_

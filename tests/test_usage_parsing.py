@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
 import unittest
 
-from usage import parse_usage
+from usage import parse_usage, resolve_kimi_session_dir_from_output
 
 # Trimmed from real `claude -p --output-format json` output captured 2026-07-12:
 # a single-line JSON array whose final element (type "result") carries `usage`
@@ -372,6 +372,54 @@ class TestParseUsageKimiWire(unittest.TestCase):
         )
         text = result + "\n" + "later noise\n" * 100_000
         self.assertIsNone(parse_usage("claude", text))
+
+
+class TestResolveKimiSessionDirFromOutput(unittest.TestCase):
+    """The shared resume-hint → session-dir path used by usage and wirelog."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.kimi_home = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_resolves_via_session_index(self):
+        session_id = "session_r1"
+        expected = _write_kimi_session(self.kimi_home, session_id, {"main": []})
+        resolved = resolve_kimi_session_dir_from_output(
+            _resume_hint(session_id), kimi_home=self.kimi_home
+        )
+        self.assertEqual(resolved, expected)
+
+    def test_glob_fallback_without_index(self):
+        session_id = "session_r2"
+        expected = _write_kimi_session(self.kimi_home, session_id, {"main": []}, index=False)
+        resolved = resolve_kimi_session_dir_from_output(
+            _resume_hint(session_id), kimi_home=self.kimi_home
+        )
+        self.assertEqual(resolved, expected)
+
+    def test_last_resume_hint_wins(self):
+        _write_kimi_session(self.kimi_home, "session_old", {"main": []})
+        expected = _write_kimi_session(self.kimi_home, "session_new", {"main": []})
+        text = _resume_hint("session_old") + "noise\n" + _resume_hint("session_new")
+        resolved = resolve_kimi_session_dir_from_output(text, kimi_home=self.kimi_home)
+        self.assertEqual(resolved, expected)
+
+    def test_no_hint_returns_none(self):
+        self.assertIsNone(
+            resolve_kimi_session_dir_from_output("plain output\n", kimi_home=self.kimi_home)
+        )
+
+    def test_unresolvable_session_returns_none(self):
+        resolved = resolve_kimi_session_dir_from_output(
+            _resume_hint("session_ghost"), kimi_home=self.kimi_home
+        )
+        self.assertIsNone(resolved)
+
+    def test_empty_output_returns_none(self):
+        self.assertIsNone(resolve_kimi_session_dir_from_output("", kimi_home=self.kimi_home))
 
 
 if __name__ == "__main__":
