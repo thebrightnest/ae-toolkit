@@ -42,11 +42,11 @@ docs_sync_reason: introduces a non-invasive config setup path (AET backend/mode 
 
 ## Task List
 
-1. Extend `factory.py` `_read_config` to the external-first precedence (env → external `~/.aet/{slug}/config.json` → in-tree `.agents/aet-work.json` → defaults), resolving the external path via `derive_project_slug()` — S (traces: R-9, R-10)
-2. `aet-setup`/`configure-task-backend`: add the option to write config to `~/.aet/{slug}/config.json` for a non-invasive project (nothing written in-repo); messaging states where config resolves from and the precedence — S (traces: R-9, R-10)
-3. Tests: `tests/test_config_resolution.py` (new) — precedence (env > external > in-tree > default); a non-invasive setup keeps the tracked tree free of AET _config_ and pushes no `refs/aet/*`; in-tree config resolves unchanged — S (traces: R-9, R-10, R-8)
-4. Docs: non-invasive config setup + resolution order, in `docs/CONVENTIONS.md` or a dedicated setup doc — S (traces: R-9, R-10)
-5. Merge branch to main and verify integration — S
+1. ✓ Extend `factory.py` `_read_config` to the external-first precedence (env → external `~/.aet/{slug}/config.json` → in-tree `.agents/aet-work.json` → defaults), resolving the external path via `derive_project_slug()` — S (traces: R-9, R-10)
+2. ✓ `aet-setup`/`configure-task-backend`: add the option to write config to `~/.aet/{slug}/config.json` for a non-invasive project (nothing written in-repo); messaging states where config resolves from and the precedence — S (traces: R-9, R-10)
+3. ✓ Tests: `tests/test_config_resolution.py` (new) — precedence (env > external > in-tree > default); a non-invasive setup keeps the tracked tree free of AET _config_ and pushes no `refs/aet/*`; in-tree config resolves unchanged — S (traces: R-9, R-10, R-8)
+4. ✓ Docs: non-invasive config setup + resolution order, in `docs/CONVENTIONS.md` or a dedicated setup doc — S (traces: R-9, R-10)
+5. [Deferred: runs at `aet-ship`] Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -86,5 +86,5 @@ Revert the merge commit — `_read_config` returns to reading the single in-tree
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
