@@ -85,5 +85,5 @@ Revert the merge commit — `GitRefsBackend.seal()`/read path return to no integ
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
