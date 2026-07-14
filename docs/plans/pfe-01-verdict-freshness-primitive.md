@@ -3,7 +3,7 @@ id: pfe-01-verdict-freshness-primitive
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: additive local primitive — hashes the repo's own worktree through a throwaway git index and reads already-trusted verdict JSON; no untrusted-input parsing, no network, no new trust boundary
 docs_sync: required
@@ -171,5 +171,5 @@ though there is no security surface (security_review skipped with reason).
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
