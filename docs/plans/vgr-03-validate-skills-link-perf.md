@@ -73,5 +73,5 @@ lock behavior before the refactor.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: merge (`aet-cso` and `aet-sync-docs` skipped per plan frontmatter)_
