@@ -86,5 +86,5 @@ Revert the merge commit — `_read_config` returns to reading the single in-tree
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-cso`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
