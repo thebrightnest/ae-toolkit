@@ -27,6 +27,10 @@ from typing import Any
 
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 
+# Per-stage anomaly thresholds. Revisit after one week of data.
+SLOW_STAGE_THRESHOLD_S = 1800
+TOKEN_BURN_THRESHOLD = 5_000_000
+
 
 @dataclass
 class PatternBucket:
@@ -77,17 +81,6 @@ NARRATIVE_PATTERNS: list[tuple[str, list[str]]] = [
             "lint failed",
             "failed 1/",
             "initially failed",
-        ],
-    ),
-    (
-        "full_suite_runs",
-        [
-            "full suite",
-            "full test suite",
-            "entire suite",
-            "run all tests",
-            "488-test",
-            "vitest suite",
         ],
     ),
     (
@@ -208,6 +201,7 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
     files_scanned = 0
     runs_scanned = 0
     reports_scanned = 0
+    task_full_suite_counts: Counter = Counter()
 
     for project_dir in sorted(archive_dir.glob("*")):
         if not project_dir.is_dir():
@@ -236,6 +230,19 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
                                     counts["stage_failures"] += 1
                                 if record.get("stage") == "review":
                                     counts["review_noise"] += 1
+                                duration_seconds = record.get("duration_seconds")
+                                if duration_seconds is not None and duration_seconds > SLOW_STAGE_THRESHOLD_S:
+                                    counts["slow_stage"] += 1
+                                token_count = record.get("token_count")
+                                if token_count is not None and token_count > TOKEN_BURN_THRESHOLD:
+                                    counts["token_burn"] += 1
+                            elif rtype == "test_run":
+                                scope = record.get("scope")
+                                if scope == "full-suite":
+                                    counts["full_suite_runs"] += 1
+                                    task_full_suite_counts[record.get("task_id", "unknown")] += 1
+                                elif scope == "impact":
+                                    counts["impact_runs"] += 1
                             elif rtype == "learning_candidate":
                                 counts["learning_candidates"] += 1
                                 description = record.get("description")
@@ -255,13 +262,19 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
                             counts[category] += bucket.count
                             examples[category].extend(bucket.examples)
 
+    repeated_test_invocations = sum(max(0, count - 1) for count in task_full_suite_counts.values())
+
     return {
         "dependency_issues": counts.get("dependency_issues", 0),
         "repeated_loops": counts.get("repeated_loops", 0),
         "full_suite_runs": counts.get("full_suite_runs", 0),
+        "impact_runs": counts.get("impact_runs", 0),
+        "repeated_test_invocations": repeated_test_invocations,
         "stage_failures": counts.get("stage_failures", 0),
         "review_noise": counts.get("review_noise", 0),
         "learning_candidates": counts.get("learning_candidates", 0),
+        "slow_stage": counts.get("slow_stage", 0),
+        "token_burn": counts.get("token_burn", 0),
         "runs_scanned": runs_scanned,
         "files_scanned": files_scanned,
         "reports_scanned": reports_scanned,
@@ -283,6 +296,10 @@ def format_report(patterns: dict[str, Any]) -> str:
         f"- Dependency issues: {patterns['dependency_issues']}",
         f"- Repeated loops: {patterns['repeated_loops']}",
         f"- Full-suite runs: {patterns['full_suite_runs']}",
+        f"- Impact-scoped runs: {patterns['impact_runs']}",
+        f"- Repeated test invocations: {patterns['repeated_test_invocations']}",
+        f"- Slow stages (> {SLOW_STAGE_THRESHOLD_S}s): {patterns['slow_stage']}",
+        f"- Token-burn stages (> {TOKEN_BURN_THRESHOLD:,} tokens): {patterns['token_burn']}",
         f"- Stage failures: {patterns['stage_failures']}",
         f"- Review noise: {patterns['review_noise']}",
         "",
@@ -332,10 +349,25 @@ def propose_edits(patterns: dict[str, Any]) -> str:
             "- aet-implement: add a 'run validation after every task' guardrail so "
             "format-fix and test-retry loops are caught early."
         )
-    if patterns["full_suite_runs"]:
+    if patterns["full_suite_runs"] or patterns["repeated_test_invocations"]:
         suggestions.append(
             "- aet-qa / aet-implement: prefer impact-scoped tests and run the full "
             "suite only once per task unless core framework files changed."
+        )
+    if patterns["impact_runs"]:
+        suggestions.append(
+            "- aet-qa / aet-implement: expand impact-scoped test coverage; "
+            "validate that the scope boundary matches the files the task touched."
+        )
+    if patterns["slow_stage"]:
+        suggestions.append(
+            "- aet-plan / aet-implement: add a stage-time triage guardrail; "
+            "break or hand off stages exceeding the slow-stage threshold."
+        )
+    if patterns["token_burn"]:
+        suggestions.append(
+            "- aet-plan / aet-implement: trim prompt context and scope for "
+            "stages that exceed the token-burn threshold."
         )
     if patterns["stage_failures"]:
         suggestions.append(

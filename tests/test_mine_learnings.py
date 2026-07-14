@@ -96,5 +96,98 @@ class TestMineArchiveWriterLayout(unittest.TestCase):
         self.assertEqual(patterns["files_scanned"], 2)
 
 
+class TestStructuralScopeCounting(unittest.TestCase):
+    """test_run records are counted by scope, not narrative keyword scans."""
+
+    def test_full_suite_and_impact_runs_counted_structurally(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            records = [
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
+                {"type": "test_run", "task_id": "t2", "scope": "impact"},
+                {"type": "test_run", "task_id": "t3", "scope": "unknown"},
+            ]
+            _write_run(archive, "myrepo/main", _today(), "run-1", records)
+            patterns = mine_learnings.mine_archive(archive)
+        self.assertEqual(patterns["full_suite_runs"], 2)
+        self.assertEqual(patterns["impact_runs"], 1)
+        # Unknown scope is left uncounted in both categories.
+        self.assertEqual(patterns["repeated_test_invocations"], 1)
+
+    def test_repeated_invocations_tallied_per_task(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            records = [
+                # t1 ran full suite three times → 2 redundant.
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
+                # t2 ran full suite once → 0 redundant.
+                {"type": "test_run", "task_id": "t2", "scope": "full-suite"},
+                # t3 ran impact only → ignored for repetition tally.
+                {"type": "test_run", "task_id": "t3", "scope": "impact"},
+                {"type": "test_run", "task_id": "t3", "scope": "impact"},
+            ]
+            _write_run(archive, "myrepo/main", _today(), "run-1", records)
+            patterns = mine_learnings.mine_archive(archive)
+        self.assertEqual(patterns["full_suite_runs"], 4)
+        self.assertEqual(patterns["repeated_test_invocations"], 2)
+
+
+class TestStageAnomalyDetection(unittest.TestCase):
+    """Slow and token-burn stages are flagged from stage record fields."""
+
+    def test_slow_stage_boundary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            records = [
+                {"type": "stage", "stage": "qa", "duration_seconds": 1800, "token_count": 0},
+                {"type": "stage", "stage": "qa", "duration_seconds": 1801, "token_count": 0},
+            ]
+            _write_run(archive, "myrepo/main", _today(), "run-1", records)
+            patterns = mine_learnings.mine_archive(archive)
+        self.assertEqual(patterns["slow_stage"], 1)
+
+    def test_token_burn_boundary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            records = [
+                {"type": "stage", "stage": "implement", "duration_seconds": 0, "token_count": 5_000_000},
+                {"type": "stage", "stage": "implement", "duration_seconds": 0, "token_count": 5_000_001},
+            ]
+            _write_run(archive, "myrepo/main", _today(), "run-1", records)
+            patterns = mine_learnings.mine_archive(archive)
+        self.assertEqual(patterns["token_burn"], 1)
+
+    def test_missing_stage_fields_are_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            records = [
+                {"type": "stage", "stage": "qa"},
+                {"type": "stage", "stage": "qa", "duration_seconds": None, "token_count": None},
+            ]
+            _write_run(archive, "myrepo/main", _today(), "run-1", records)
+            patterns = mine_learnings.mine_archive(archive)
+        self.assertEqual(patterns["slow_stage"], 0)
+        self.assertEqual(patterns["token_burn"], 0)
+
+
+class TestRetiredNarrativeKeyword(unittest.TestCase):
+    """The stale 'full_suite_runs' keyword list is no longer used."""
+
+    def test_488_test_keyword_no_longer_counts_as_full_suite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            _write_run(archive, "myrepo/main", _today(), "run-1", [])
+            run_dir = archive / "myrepo" / "main" / _today() / "run-1"
+            (run_dir / "report.md").write_text(
+                "The agent ran the 488-test suite five times.\n", encoding="utf-8"
+            )
+            patterns = mine_learnings.mine_archive(archive)
+        self.assertEqual(patterns["full_suite_runs"], 0)
+        self.assertEqual(patterns["reports_scanned"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
