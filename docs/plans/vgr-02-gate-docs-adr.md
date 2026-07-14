@@ -62,7 +62,7 @@ revised, not just appended to.
 - [ ] `AGENTS.md:105` no longer claims formatting is part of the quality surface
 - [ ] `docs/adr/026-*.md` exists with Status: Accepted and is listed in `docs/adr/README.md`
 - [ ] **No new source modules** — docs/ADR are not pytest-covered; correctness verified by the grep above
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [ ] Merge verified: `git merge-base --is-ancestor origin/main HEAD`
 
 **Self-consistency lint:** Check 1 PASS · Check 2 (AGENTS.md=t1/2, CONVENTIONS.md=t3, ADR+README=t4) PASS · Check 3 (observable via grep) PASS · Check 4 (R-4 covered) PASS.
 
@@ -76,5 +76,5 @@ revised, not just appended to.
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
