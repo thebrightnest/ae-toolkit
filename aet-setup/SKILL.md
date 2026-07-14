@@ -177,7 +177,7 @@ Create/modify files. Always:
 
 Run `aet configure-backend` to write `.agents/aet-work.json`:
 
-- `task_backend`: `json` (default) or `github`.
+- `task_backend`: `git-refs` (default), `json` (documented opt-out for non-git or unconfigured contexts), or `github`.
 - For `github`, detect `repo` from `git remote origin` (or prompt), then create `aet:*` labels via `gh`.
 - If `gh` is missing or unauthenticated, warn and record the gap.
 - Backend switches are forward-only; history is not migrated.

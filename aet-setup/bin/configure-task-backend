@@ -5,8 +5,10 @@
 #   aet configure-backend [--backend json|github|git-refs] [--repo owner/repo]
 #                         [--non-interactive] [--help]
 #
-# In interactive mode (default), the script prompts for the backend and repo.
-# In non-interactive mode, all required values must be supplied via flags.
+# In interactive mode (default), the script prompts for the backend (empty
+# input accepts the default, git-refs) and the repo. In non-interactive mode,
+# a missing --backend selects the default (git-refs); other required values
+# must be supplied via flags.
 
 set -euo pipefail
 
@@ -36,17 +38,19 @@ Configure the task backend for aet-work.
 
 Options:
   --backend json|github|git-refs
-                          Choose the task backend. git-refs is a prototype,
-                          opt-in backend that stores live tasks as git refs.
+                          Choose the task backend. Defaults to git-refs, the
+                          recommended backend: live tasks are stored as local
+                          git refs (refs/aet/tasks/*). json is the documented
+                          opt-out for non-git or unconfigured contexts.
   --repo owner/repo       GitHub repository (required for github backend;
                           detected from git remote origin if omitted).
   --non-interactive       Fail if a required value is missing instead of prompting.
   --help                  Show this help message.
 
 Examples:
+  aet configure-backend --non-interactive
   aet configure-backend --backend json --non-interactive
   aet configure-backend --backend github --repo acme/widget --non-interactive
-  aet configure-backend --backend git-refs --non-interactive
 EOF
 }
 
@@ -85,9 +89,11 @@ done
 
 if [ -z "$BACKEND" ]; then
   if [ "$NON_INTERACTIVE" -eq 1 ]; then
-    error "--backend is required in non-interactive mode"
+    BACKEND="git-refs"
+  else
+    read -rp "Choose task backend (json, github, or git-refs) [git-refs]: " BACKEND
+    BACKEND="${BACKEND:-git-refs}"
   fi
-  read -rp "Choose task backend (json, github, or git-refs): " BACKEND
 fi
 
 case "$BACKEND" in
@@ -139,8 +145,8 @@ LABEL_PREFIX="aet"
 LABELS_CREATED="false"
 REASON=""
 
-if [ "$BACKEND" = "git-refs" ]; then
-  log "NOTE: git-refs is a prototype, opt-in backend. Live tasks are stored as local git refs (refs/aet/tasks/*); it is not the default and is not recommended for production queues yet."
+if [ "$BACKEND" = "json" ]; then
+  log "NOTE: json is the documented opt-out, appropriate for non-git or unconfigured contexts; git-refs is the default backend written by aet-setup."
 fi
 
 if [ "$BACKEND" = "github" ]; then
