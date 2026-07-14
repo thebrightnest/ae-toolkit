@@ -103,5 +103,5 @@ Revert the merge commit. `aet hooks install`/`aet hooks check` and the generated
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_
