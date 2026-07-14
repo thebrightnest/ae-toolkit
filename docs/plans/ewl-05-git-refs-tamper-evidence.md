@@ -9,6 +9,7 @@ security_review: required
 security_review_reason: introduces the integrity/tamper-detection mechanism directly protecting the task ledger against out-of-band writes — the correctness of the detection logic is itself the security property this plan delivers
 docs_sync: required
 docs_sync_reason: new tamper-evidence behavior for git-refs needs the same documentation treatment frh-17 gave the JSON backend's queue guard
+status: merged
 ---
 
 # Plan: git-refs Tamper-Evidence
@@ -85,5 +86,5 @@ Revert the merge commit — `GitRefsBackend.seal()`/read path return to no integ
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
