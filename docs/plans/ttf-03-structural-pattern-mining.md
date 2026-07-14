@@ -155,5 +155,4 @@ review pass on the analysis path (matches ttf-02's rationale).
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
