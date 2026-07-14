@@ -155,5 +155,5 @@ and CSO passes (security_review required) even though the injected text is stati
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-cso`_
