@@ -102,5 +102,4 @@ next run; existing JSONL lines are append-only and untouched.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
