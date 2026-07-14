@@ -10,14 +10,22 @@ Ref updates are atomic under git's own ref locks. A multi-task ``save`` writes
 per-task refs and skips tasks whose blob is unchanged versus what was loaded, so
 concurrent writers touching *different* tasks never clobber each other. Nothing
 here pushes ``refs/aet/*``: the backend is local-only by default.
+
+Tamper-evidence (ewl-05): the envelope blob carries a chained ``content_hash``
+over the prior hash plus the current task-ref set (task ids + their blob OIDs).
+``save`` and ``seal`` restamp it; a verified ``load`` recomputes the expected
+hash from the live refs and raises ``GitRefsIntegrityError`` on mismatch, so a
+hand-edited, inserted, or removed ref is detected. Mutating callers fail closed;
+read-only callers pass ``verify=False`` and continue with unverified data.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
-from queue import read_history
+from queue import QueueIntegrityError, read_history
 from typing import Any
 
 from backends.base import TaskBackend
@@ -35,6 +43,20 @@ def _canonical_json(value: Any) -> bytes:
     return json.dumps(
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
+
+
+class GitRefsIntegrityError(QueueIntegrityError):
+    """Raised when a stamped git-refs envelope no longer matches its task refs.
+
+    The git-refs analogue of the JSON backend's ``QueueIntegrityError``: the
+    envelope blob at ``refs/aet/meta/queue`` carries a chained content hash over
+    the task-ref set, and a mismatch means a ref or the envelope was changed
+    outside the backend (for example a hand-edited ``git update-ref``). Mutating
+    callers must fail closed; read-only callers may warn and continue.
+
+    Subclassing ``QueueIntegrityError`` lets the shared ``aet-state``/bin
+    fail-closed and warn-and-continue routing catch both without change.
+    """
 
 
 class GitRefsBackend(TaskBackend):
@@ -112,6 +134,26 @@ class GitRefsBackend(TaskBackend):
         result.check_returncode()
         return [line for line in result.stdout.decode().splitlines() if line]
 
+    def _current_ref_manifest(self) -> list[list[str]]:
+        """Return the sorted ``[[task_id, blob_sha], ...]`` manifest of live refs.
+
+        Built from ground truth (``for-each-ref`` + ``rev-parse``), so the stamp
+        and the read-path verification always cover exactly what is in git.
+        """
+        manifest: list[list[str]] = []
+        for ref in self._list_task_refs():
+            sha = self._ref_sha(ref)
+            if sha is None:
+                continue
+            manifest.append([ref[len(TASKS_REF_PREFIX) :], sha])
+        manifest.sort()
+        return manifest
+
+    def _content_hash(self, prev: str | None) -> str:
+        """Chained sha256 over the prior hash plus the current task-ref manifest."""
+        payload = {"prev": prev, "refs": self._current_ref_manifest()}
+        return hashlib.sha256(_canonical_json(payload)).hexdigest()
+
     def _history_path(self) -> str:
         path = Path(self.history_file)
         if path.is_absolute():
@@ -136,9 +178,12 @@ class GitRefsBackend(TaskBackend):
     def load(self, verify: bool = True) -> dict[str, Any]:
         """Return queue (from refs) and settled history (from JSONL).
 
-        ``verify`` is accepted for interface parity with the JSON backends;
-        git-refs tamper-evidence is not implemented yet, so the flag is a
-        no-op here.
+        ``verify`` controls the tamper-evident envelope check. When true (the
+        default) a stamped envelope whose chained ``content_hash`` no longer
+        matches the live task refs raises ``GitRefsIntegrityError`` so mutating
+        callers fail closed. Read-only/recovery callers (``audit``, ``heal``,
+        ``status``) pass ``verify=False`` to load the unverified data they exist
+        to inspect or repair.
         """
         queue: list[dict[str, Any]] = []
         loaded_shas: dict[str, str] = {}
@@ -157,6 +202,8 @@ class GitRefsBackend(TaskBackend):
                 loaded_shas[task_id] = sha
         self._loaded_shas = loaded_shas
         self._envelope = self._read_envelope()
+        if verify:
+            self._verify_envelope()
         return {"queue": queue, "history": read_history(self._history_path())}
 
     def save(
@@ -194,10 +241,10 @@ class GitRefsBackend(TaskBackend):
                 self._git("update-ref", "-d", ref).check_returncode()
                 self._loaded_shas.pop(task_id, None)
 
-        if self._envelope:
-            envelope_sha = self._write_blob(_canonical_json(self._envelope))
-            if self._ref_sha(ENVELOPE_REF) != envelope_sha:
-                self._git("update-ref", ENVELOPE_REF, envelope_sha).check_returncode()
+        # Tamper-evident envelope: advance the chained content hash to cover the
+        # post-save task-ref set, then persist the envelope blob.
+        self._stamp_envelope()
+        self._write_envelope()
 
     def plan_drift(self, plans_dir: str | Path) -> list[str]:
         """Return plan files that are not present in queue or history."""
@@ -253,6 +300,12 @@ class GitRefsBackend(TaskBackend):
         self._git("update-ref", "-d", ref).check_returncode()
         self._loaded_shas.pop(task_id, None)
 
+        # The sealed task left the ref set, so the envelope's chained hash must
+        # be restamped over the reduced manifest; otherwise the next verified
+        # read would report a spurious integrity mismatch.
+        self._stamp_envelope()
+        self._write_envelope()
+
         append_history_record(self._resolve_history(history_file), task)
         return task
 
@@ -267,3 +320,38 @@ class GitRefsBackend(TaskBackend):
         except (json.JSONDecodeError, subprocess.CalledProcessError):
             return {}
         return data if isinstance(data, dict) else {}
+
+    def _stamp_envelope(self) -> None:
+        """Advance the chained content hash into the in-memory envelope.
+
+        The new hash covers the previous ``content_hash`` (``None`` at genesis)
+        plus the live task-ref manifest, so a hand-edited, inserted, or removed
+        ref breaks the chain and is detected on the next verified read.
+        """
+        prev = self._envelope.get("content_hash")
+        self._envelope["prev_content_hash"] = prev
+        self._envelope["content_hash"] = self._content_hash(prev)
+
+    def _write_envelope(self) -> None:
+        """Persist the envelope blob and point the meta ref at it."""
+        envelope_sha = self._write_blob(_canonical_json(self._envelope))
+        if self._ref_sha(ENVELOPE_REF) != envelope_sha:
+            self._git("update-ref", ENVELOPE_REF, envelope_sha).check_returncode()
+
+    def _verify_envelope(self) -> None:
+        """Fail closed when the stamped envelope no longer matches the live refs.
+
+        Legacy envelopes written before tamper-evidence (no ``content_hash``)
+        are accepted and stamped on the next save, mirroring frh-17's
+        legacy-queue acceptance so an existing git-refs install is not bricked
+        mid-flight.
+        """
+        if "content_hash" not in self._envelope:
+            return
+        stored = self._envelope.get("content_hash")
+        expected = self._content_hash(self._envelope.get("prev_content_hash"))
+        if expected != stored:
+            raise GitRefsIntegrityError(
+                "git-refs queue modified outside aet state — run `aet state "
+                "audit` to inspect, `aet state heal --apply` to repair"
+            )

@@ -118,18 +118,23 @@ def test_wrapper_envelope_roundtrip(repo: Path) -> None:
     }
     backend.save([_task("frh-13-git-refs-backend-core")], wrapper=wrapper)
 
-    # Envelope is stored as a blob at the meta ref.
+    # Envelope is stored as a blob at the meta ref. Alongside the caller
+    # metadata it carries the tamper-evidence stamp (chained content hash).
     sha = _git(repo, "rev-parse", "--verify", "-q", ENVELOPE_REF).stdout.strip()
     assert sha
     stored = json.loads(_git(repo, "cat-file", "-p", sha).stdout)
-    assert stored == wrapper
+    assert {k: stored[k] for k in wrapper} == wrapper
+    assert "content_hash" in stored
+    assert "prev_content_hash" in stored
 
-    # A fresh instance re-reads the envelope on load and preserves it on save.
+    # A fresh instance re-reads the envelope on load and preserves the caller
+    # metadata on save (the stamp keys advance with the chain).
     again = _backend()
     again.load()
     again.save([_task("frh-13-git-refs-backend-core")])
     sha2 = _git(repo, "rev-parse", "--verify", "-q", ENVELOPE_REF).stdout.strip()
-    assert json.loads(_git(repo, "cat-file", "-p", sha2).stdout) == wrapper
+    stored2 = json.loads(_git(repo, "cat-file", "-p", sha2).stdout)
+    assert {k: stored2[k] for k in wrapper} == wrapper
 
 
 def test_refs_visible_from_second_worktree(repo: Path) -> None:
