@@ -81,5 +81,5 @@ Revert the merge commit — removes the audit doc. No code behavior to unwind; t
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-ship`_
