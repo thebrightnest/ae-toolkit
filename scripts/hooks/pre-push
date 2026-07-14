@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# AE Toolkit pre-push hook
-# Short-circuits when all pushed refs are branch deletions.
+# AE Toolkit repo-local pre-push coverage companion.
+#
+# This is NOT the installed hook. `aet hooks install` generates a self-contained
+# .git/hooks/pre-push shim that runs the gate-evidence check (`aet hooks check`)
+# and then chains to this script when it is present and executable. It carries
+# aiskills' own `make validate` coverage gate; a Mode-1 repo that does not use
+# AET simply omits it, and the shim skips the chain.
+#
+# The shim already short-circuits pure branch-deletion pushes before chaining,
+# but the check is repeated here so the script is safe when invoked directly
+# (e.g. via a legacy symlink during migration).
 
 remote="${1:-}"
 url="${2:-}"
@@ -17,10 +26,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 done
 
 if [ "$all_deletions" = true ]; then
-  echo "Pre-push: all refs are deletions — skipping coverage gate."
+  echo "Pre-push companion: all refs are deletions — skipping coverage gate."
   exit 0
 fi
 
-echo "Pre-push: running coverage gate..."
+echo "Pre-push companion: running coverage gate..."
 make validate
-echo "Pre-push: coverage gate passed."
+echo "Pre-push companion: coverage gate passed."

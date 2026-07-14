@@ -71,8 +71,8 @@ docs_sync_reason: replaces docs/CONVENTIONS.md's manual symlink instructions wit
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] New source coverage — `tests/test_hooks_install.py`:
+- [x] `make validate` passes; full suite passes (592 passed, 2026-07-14)
+- [x] New source coverage — `tests/test_hooks_install.py` (9 tests, all green):
   - `test_install_generates_self_contained_pre_push_hook`
   - `test_install_works_with_no_committed_scripts_hook`
   - `test_install_is_idempotent_on_rerun`
@@ -82,9 +82,16 @@ docs_sync_reason: replaces docs/CONVENTIONS.md's manual symlink instructions wit
   - `test_hooks_check_allows_task_branch_with_all_gates_recorded`
   - `test_hooks_check_noop_on_non_task_branch`
   - `test_hooks_install_routed_through_aet_dispatcher`
-- [ ] Manual validation (task 5), both (a) and (b), executed and result recorded in this plan before merge
-- [ ] R-trace coverage: R-4 by tasks 1–3, 5; R-8 by task 4; no unknown R-ids cited
+- [x] Manual validation (task 5), both (a) and (b), executed 2026-07-14 in a scratch Mode-1 repo (result below)
+- [x] R-trace coverage: R-4 by tasks 1–3, 5; R-8 by task 4; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+
+### Manual validation result (2026-07-14)
+
+Executed in a scratch repo with **no committed `scripts/hooks/pre-push`** (Mode-1 non-invasive install) and a bare `origin`:
+
+- **(a) gate refusal/allowance** — on task branch `demo-task` (plan with `security_review: required`, `docs_sync: skipped`) with `qa`+`review` verdicts recorded but `cso` missing: `git push` was **refused** with `task 'demo-task': required gate 'cso' (stage 'reviewed') — no verdict recorded at <path>`; `demo-task` did not reach the remote. After recording the `cso` pass verdict, the push **succeeded**.
+- **(b) no committed companion** — with no `scripts/hooks/pre-push` in the repo, `aet hooks install` still produced a working gate-evidence hook (the refusals/allowances above ran through it; the companion chain was skipped as designed). A non-task branch (`main`, no verdicts) pushed cleanly as a no-op.
 
 ## Rollback Plan
 
@@ -96,5 +103,5 @@ Revert the merge commit. `aet hooks install`/`aet hooks check` and the generated
 
 ---
 
-_Stage: plan-approved (revised 2026-07-12 for Mode 1 non-invasive install — generate a self-contained hook instead of symlinking a tracked script; re-approve alongside the PRD's scope re-validation)_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_

@@ -251,16 +251,27 @@ When adding a new approval gate to a skill:
 
 ## Repository Hooks
 
-Hooks live in `scripts/hooks/` and must be symlinked from `.git/hooks/`:
+Hook sources live in `scripts/hooks/`, but the **pre-push** hook is not symlinked by hand. Install it with the dispatcher, which generates a self-contained `.git/hooks/pre-push` shim:
 
 ```bash
-ln -s $(pwd)/scripts/hooks/pre-push .git/hooks/pre-push
+aet hooks install
+```
+
+The **pre-commit** hook is still symlinked from `.git/hooks/`:
+
+```bash
 ln -s $(pwd)/scripts/hooks/pre-commit .git/hooks/pre-commit
 ```
 
 ### pre-push
 
-Runs `make validate` before any push. Short-circuits (exits 0 immediately) when **all** pushed refs are branch deletions, so `git push origin --delete` is not blocked by a slow coverage gate.
+The generated shim is self-contained — it needs no committed AET file, so it installs cleanly on a repo whose team does not use AET. On each push it:
+
+1. Short-circuits (exits 0 immediately) when **all** pushed refs are branch deletions, so `git push origin --delete` is not blocked.
+2. Runs the AET gate-evidence check (`aet hooks check`): for each pushed **task branch** (branch name matches a `docs/plans/<id>.md`), it refuses the push unless every required gate — `qa` and `review` always, `cso` unless `security_review: skipped`, `sync-docs` unless `docs_sync: skipped` — has a recorded `pass` verdict. Non-task branches are a no-op, and no build/coverage gate is imposed by AET itself.
+3. Chains to the optional repo-local companion `scripts/hooks/pre-push` when that file is present and executable. In this repo the companion runs `make validate`; a repo that does not use AET omits it and the chain is skipped.
+
+`aet hooks install` is idempotent and never clobbers a pre-existing non-AET hook — it warns and leaves it in place. Re-run it to regenerate a prior AET shim.
 
 ### pre-commit
 
