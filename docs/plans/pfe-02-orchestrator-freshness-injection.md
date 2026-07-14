@@ -102,11 +102,11 @@ Implementation is committed (branch `pfe-validation-freshness`). Execute these a
 **verification** — confirm each unit matches the Locked design — applying only
 the Upgrade candidates that prove worthwhile. Do not re-implement what exists.
 
-1. Verify `orchestrator`: `_qa_freshness_decision` + `_freshness_clause`; thread
+1. ✓ Verify `orchestrator`: `_qa_freshness_decision` + `_freshness_clause`; thread
    `freshness_clause` through `build_prompt` and `build_stage_group_prompt`;
    compute + inject in `run_stage` and `run_stage_group` (incl. `AET_QA_FRESHNESS`)
    — S (traces: R2)
-2. `tests/test_orchestrator.py`: clause mapping; `_qa_freshness_decision` returns
+2. ✓ `tests/test_orchestrator.py`: clause mapping; `_qa_freshness_decision` returns
    `""` without a task id and never raises on bad paths; integration — a fresh
    QA verdict injects the SKIP clause + `AET_QA_FRESHNESS=skip`, a changed tree
    omits it — S (traces: R2)
@@ -133,13 +133,13 @@ the Upgrade candidates that prove worthwhile. Do not re-implement what exists.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`python3 -m pytest tests/test_orchestrator.py -q`, then full suite before commit)
-- [ ] Named coverage: `TestQaFreshnessInjection` covers the clause mapping and
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`python3 -m pytest tests/test_orchestrator.py -q`, then full suite before commit)
+- [x] Named coverage: `TestQaFreshnessInjection` covers the clause mapping and
       the fresh/changed injection paths through `run_stage`
-- [ ] Distinguish test types: unit (clause mapping, defensive decision) + integration (real temp repo + QA verdict through `run_stage`, spawn stubbed)
-- [ ] R-trace coverage: R2 covered; no unknown R-ids cited
-- [ ] Behavioral check: the injected prompt carries the freshness clause when the tree is unchanged since QA and omits it after a code edit
+- [x] Distinguish test types: unit (clause mapping, defensive decision) + integration (real temp repo + QA verdict through `run_stage`, spawn stubbed)
+- [x] R-trace coverage: R2 covered; no unknown R-ids cited
+- [x] Behavioral check: the injected prompt carries the freshness clause when the tree is unchanged since QA and omits it after a code edit
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -155,5 +155,5 @@ and CSO passes (security_review required) even though the injected text is stati
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
