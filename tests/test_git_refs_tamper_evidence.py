@@ -38,6 +38,14 @@ _spec = importlib.util.spec_from_loader(
 aet_state = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(aet_state)
 
+_STATUS_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "status"
+_status_spec = importlib.util.spec_from_loader(
+    "aet_status_tamper",
+    importlib.machinery.SourceFileLoader("aet_status_tamper", str(_STATUS_PY)),
+)
+status_bin = importlib.util.module_from_spec(_status_spec)
+_status_spec.loader.exec_module(status_bin)
+
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -266,3 +274,39 @@ def test_read_only_path_warns_and_continues_on_integrity_mismatch(
     assert "integrity check failed" in captured.err
     results = json.loads(captured.out)
     assert "task-a" in results
+
+
+def test_status_read_only_warns_and_reports_tampered_data(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """`aet status` warns and still surfaces the compromised task, not an empty queue.
+
+    The git-refs backend keeps no ``work-queue.json``; recovering through the
+    JSON reader would return ``[]`` and hide the very tasks status exists to
+    show. The recovery must go through the backend abstraction so the tampered
+    task is reported with its (unverified) state.
+    """
+    plan = repo / "docs" / "plans" / "task-a.md"
+    plan.parent.mkdir(parents=True, exist_ok=True)
+    plan.write_text("# task-a\n", encoding="utf-8")
+    queue_file = _seed_git_refs_queue(
+        repo, _task("task-a", state="ready", plan_file=str(plan))
+    )
+    _rewrite_task_ref(
+        repo, "task-a", {"id": "task-a", "state": "in_progress", "plan_file": str(plan)}
+    )
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["status", "--queue-file", queue_file, "--plans-dir", "docs/plans", "--json"],
+    )
+    rc = status_bin.main()
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "read-only status continues with unverified data" in captured.err
+    projection = json.loads(captured.out)
+    tasks = {t["id"]: t for t in projection["tasks"]}
+    assert tasks["task-a"]["state"] == "in_progress"
+    assert projection["summary"] == {"in_progress": 1}
