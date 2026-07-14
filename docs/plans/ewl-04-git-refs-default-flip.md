@@ -81,5 +81,5 @@ Revert the merge commit — the no-flag configure path returns to requiring an e
 
 ---
 
-_Stage: qa-complete (2026-07-14 — Standard tier PASS: full suite 640/640 green, test_read_path_no_git green, no bugs found, no new source files; verdict via evidence.write_verdict fallback — `aet gate submit` rejected the unstamped payload, pre-existing bug docs/bugs/2026-07-14-gate-submit-rejects-unstamped-payload.md; report /tmp/aet-reports/ewl-04-git-refs-default-flip/qa-report.md)_
-_Next step: run `aet-review`_
+_Stage: reviewed (2026-07-14 — PASS: diff matches locked design (configure-layer default; factory fallback stays json and is test-guarded); no fix-now issues; lint/format-check/lint-py/workflow-lint/skills-lint/validate-skills green under lint-only freshness (suite untouched since QA 640/640); verdict via evidence.write_verdict fallback — `aet gate submit` rejected the unstamped payload, pre-existing bug docs/bugs/2026-07-14-gate-submit-rejects-unstamped-payload.md; handoff: ADR-014 annotation + audit-framing decision belong to sync-docs; report /tmp/aet-reports/ewl-04-git-refs-default-flip/review-report.md)_
+_Next step: run `aet-sync-docs`_
