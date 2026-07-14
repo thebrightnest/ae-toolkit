@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import uuid
@@ -21,6 +22,74 @@ from typing import Any
 
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
+
+
+TEST_SCOPE_FULL_SUITE = "full-suite"
+TEST_SCOPE_IMPACT = "impact"
+TEST_SCOPE_UNKNOWN = "unknown"
+
+# File suffixes that mark a command argument as a specific test file.
+_TEST_FILE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs")
+
+# Arguments naming these roots run the whole suite, not an impact subset.
+_SUITE_ROOT_ARGS = {".", "test", "tests", "./..."}
+
+
+def classify_test_scope(command: str) -> str:
+    """Classify a test command's scope: ``full-suite``, ``impact``, ``unknown``.
+
+    The single scope heuristic for every ``test_run`` emission site. A
+    command naming specific test files or subdirectories is ``impact``; a
+    recognized runner invoked bare (or on the suite root) is ``full-suite``;
+    anything else is ``unknown``. Deliberately a pure command-string
+    heuristic — auditable, stable, and environment-independent.
+    """
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+    runner_args = _test_runner_args(tokens)
+    if runner_args is None:
+        return TEST_SCOPE_UNKNOWN
+    for arg in runner_args:
+        if _is_scope_narrowing_arg(arg):
+            return TEST_SCOPE_IMPACT
+    return TEST_SCOPE_FULL_SUITE
+
+
+def _test_runner_args(tokens: list[str]) -> list[str] | None:
+    """Return the arguments following a recognized test runner, or None.
+
+    The recognized runners mirror the wire-extraction match list (v1):
+    pytest variants, vitest, jest, make test/validate, npm test, cargo test,
+    go test. ``make`` invocations yield no path arguments — make targets are
+    never paths in v1.
+    """
+    if not tokens:
+        return None
+    head, rest = tokens[0], tokens[1:]
+    if head == "pytest" or head in ("vitest", "jest"):
+        return rest
+    if head in ("python", "python3") and rest[:2] == ["-m", "pytest"]:
+        return rest[2:]
+    if head == "make":
+        targets = [token for token in rest if not token.startswith("-")]
+        return [] if any(t in ("test", "validate") for t in targets) else None
+    if head in ("npm", "cargo", "go") and rest[:1] == ["test"]:
+        return rest[1:]
+    return None
+
+
+def _is_scope_narrowing_arg(arg: str) -> bool:
+    """Return True when an argument names a specific test file or directory."""
+    if arg.startswith("-"):
+        return False
+    normalized = arg.rstrip("/")
+    if normalized in _SUITE_ROOT_ARGS:
+        return False
+    if arg.endswith(_TEST_FILE_SUFFIXES):
+        return True
+    return "/" in normalized
 
 
 def iso_now() -> str:
@@ -296,15 +365,28 @@ def test_run_record(
     stage: str,
     scope: str,
     test_command: str,
-    start_time: str,
-    end_time: str,
-    exit_code: int,
+    start_time: str | None,
+    end_time: str | None,
+    exit_code: int | None,
     tests_total: int | None = None,
     tests_passed: int | None = None,
     tests_failed: int | None = None,
 ) -> dict[str, Any]:
-    """Build an individual test-run telemetry record."""
-    duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
+    """Build an individual test-run telemetry record.
+
+    Null contract: ``start_time``/``end_time`` are optional; ``duration_seconds``
+    is ``None`` when either is missing — never estimated. A ``None`` ``exit_code``
+    (unmeasured, e.g. a killed or unpaired command) yields ``result: "unknown"``.
+    """
+    duration_seconds = None
+    if start_time is not None and end_time is not None:
+        duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
+    if exit_code == 0:
+        result = "success"
+    elif exit_code is None:
+        result = "unknown"
+    else:
+        result = "failure"
     return {
         "type": "test_run",
         "run_id": run_id,
@@ -317,7 +399,7 @@ def test_run_record(
         "end_time": end_time,
         "duration_seconds": duration_seconds,
         "exit_code": exit_code,
-        "result": "success" if exit_code == 0 else "failure",
+        "result": result,
         "tests_total": tests_total,
         "tests_passed": tests_passed,
         "tests_failed": tests_failed,

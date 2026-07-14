@@ -129,6 +129,28 @@ def _find_result_element(text: str) -> dict[str, Any] | None:
     return None
 
 
+def resolve_kimi_session_dir_from_output(
+    text: str, kimi_home: str | Path | None = None
+) -> Path | None:
+    """Resolve a kimi session's wire dir from captured CLI output.
+
+    Kimi prints a resume hint carrying the session id at exit; this is the
+    same resolution ``parse_usage`` performs for token extraction — one
+    shared path, so wire-log consumers (usage, test-run extraction) never
+    fork the hint parsing. Returns ``None`` when no hint is present or the
+    session dir cannot be located.
+    """
+    if not text:
+        return None
+    if len(text) > TAIL_SCAN_BYTES:
+        text = text[-TAIL_SCAN_BYTES:]
+    hints = _KIMI_RESUME_HINT_RE.findall(text)
+    if not hints:
+        return None
+    home = Path(kimi_home) if kimi_home is not None else Path.home() / ".kimi-code"
+    return _resolve_kimi_session_dir(home, hints[-1])
+
+
 def _parse_kimi(text: str, kimi_home: str | Path | None) -> dict[str, Any] | None:
     """Parse kimi usage from the session's on-disk wire files.
 
@@ -139,12 +161,7 @@ def _parse_kimi(text: str, kimi_home: str | Path | None) -> dict[str, Any] | Non
     wire schema is a recovery stream, not a documented public contract —
     re-verify on kimi upgrades.
     """
-    hints = _KIMI_RESUME_HINT_RE.findall(text)
-    if not hints:
-        return None
-    session_id = hints[-1]
-    home = Path(kimi_home) if kimi_home is not None else Path.home() / ".kimi-code"
-    session_dir = _resolve_kimi_session_dir(home, session_id)
+    session_dir = resolve_kimi_session_dir_from_output(text, kimi_home)
     if session_dir is None:
         return None
     return _sum_wire_usage(session_dir)

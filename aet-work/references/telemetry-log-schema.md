@@ -93,23 +93,56 @@ One record per environment or dependency problem detected in the worktree, such 
 
 One record per test invocation, capturing command, scope, and outcome.
 
-| Field              | Type            | Description                                            |
-| ------------------ | --------------- | ------------------------------------------------------ |
-| `type`             | string          | `"test_run"`                                           |
-| `run_id`           | string          | UUID of the parent orchestrator run                    |
-| `task_id`          | string          | Queue task identifier                                  |
-| `plan_file`        | string          | Path to the plan markdown file                         |
-| `stage`            | string          | Pipeline stage where tests ran                         |
-| `scope`            | string          | E.g. `full`, `impact`                                  |
-| `test_command`     | string          | Shell command that was executed                        |
-| `start_time`       | string          | ISO-8601 UTC timestamp                                 |
-| `end_time`         | string          | ISO-8601 UTC timestamp                                 |
-| `duration_seconds` | float           | Computed from `start_time` and `end_time`              |
-| `exit_code`        | integer         | Process exit code from the test command                |
-| `result`           | string          | `"success"` if `exit_code == 0`, otherwise `"failure"` |
-| `tests_total`      | integer \| null | Total tests executed (optional)                        |
-| `tests_passed`     | integer \| null | Tests that passed (optional)                           |
-| `tests_failed`     | integer \| null | Tests that failed (optional)                           |
+Records have two provenances:
+
+- **Wire-derived** — after a kimi session exits, the orchestrator extracts
+  every Bash test invocation from the session's wire log
+  (`~/.kimi-code/sessions/<workDirKey>/<sessionId>/agents/*/wire.jsonl`) via
+  `aet-work/lib/wirelog.py::extract_test_invocations`: each `tool.call` whose
+  command matches the test-runner match list, paired with its `tool.result`
+  event. `start_time`/`end_time` come from the wire events' top-level `time`
+  (epoch millis, converted to ISO-8601), so `duration_seconds` is real.
+  Non-kimi CLIs and unresolvable sessions emit nothing.
+- **Verdict-derived** — a passing `qa` evidence verdict derives one record
+  carrying the verdict's `generated_at` as both timestamps (duration is
+  unmeasurable from a single timestamp).
+
+`scope` is assigned by the single shared heuristic
+`aet-work/lib/telemetry.py::classify_test_scope` — no emission site hardcodes
+a scope value:
+
+| Value        | Meaning                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `full-suite` | Recognized test runner invoked bare or on the suite root (e.g. `pytest tests/`, `make validate`, `go test ./...`)  |
+| `impact`     | Command names specific test files or subdirectories (e.g. `pytest tests/test_panel_serve.py`, `go test ./pkg/foo`) |
+| `unknown`    | Command did not match a recognized runner shape                                                                    |
+
+Null contract (R-3: unmeasured fields stay `null` — no zeros, no estimates):
+
+- `start_time`/`end_time` are `null` when the corresponding wire event is
+  absent (unpaired call) or lacks a usable `time`.
+- `duration_seconds` is `null` whenever either timestamp is `null`.
+- `exit_code` is `null` when the command failed without a parseable code
+  (killed by timeout, premature close) or the call was never paired.
+- `result` is `"unknown"` when `exit_code` is `null`.
+
+| Field              | Type            | Description                                                                     |
+| ------------------ | --------------- | ------------------------------------------------------------------------------- |
+| `type`             | string          | `"test_run"`                                                                    |
+| `run_id`           | string          | UUID of the parent orchestrator run                                             |
+| `task_id`          | string          | Queue task identifier                                                           |
+| `plan_file`        | string          | Path to the plan markdown file                                                  |
+| `stage`            | string          | Pipeline stage where tests ran                                                  |
+| `scope`            | string          | `full-suite`, `impact`, or `unknown` (see `classify_test_scope`)                |
+| `test_command`     | string          | Shell command that was executed                                                 |
+| `start_time`       | string \| null  | ISO-8601 UTC timestamp; `null` when unmeasured                                  |
+| `end_time`         | string \| null  | ISO-8601 UTC timestamp; `null` when unmeasured                                  |
+| `duration_seconds` | float \| null   | Computed from `start_time` and `end_time`; `null` when either is missing        |
+| `exit_code`        | integer \| null | Process exit code from the test command; `null` when unmeasured                 |
+| `result`           | string          | `"success"` if `exit_code == 0`, `"failure"` if non-zero, `"unknown"` if `null` |
+| `tests_total`      | integer \| null | Total tests executed (optional)                                                 |
+| `tests_passed`     | integer \| null | Tests that passed (optional)                                                    |
+| `tests_failed`     | integer \| null | Tests that failed (optional)                                                    |
 
 ### `learning_candidate`
 

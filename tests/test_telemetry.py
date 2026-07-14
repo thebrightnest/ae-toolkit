@@ -114,6 +114,102 @@ class TestTestRunRecord(unittest.TestCase):
         self.assertEqual(record["result"], "success")
         self.assertEqual(record["tests_total"], 5)
 
+    def test_test_run_record_null_timestamps_yield_null_duration(self):
+        """Null contract: unmeasured timestamps produce a null duration."""
+        record = telemetry.test_run_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            scope="full-suite",
+            test_command="pytest tests/",
+            start_time="2026-06-18T00:00:00Z",
+            end_time=None,
+            exit_code=None,
+        )
+        self.assertIsNone(record["end_time"])
+        self.assertIsNone(record["duration_seconds"])
+        self.assertIsNone(record["exit_code"])
+        self.assertEqual(record["result"], "unknown")
+
+    def test_test_run_record_none_exit_code_result_unknown(self):
+        record = telemetry.test_run_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            scope="impact",
+            test_command="pytest tests/test_a.py",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:10Z",
+            exit_code=None,
+        )
+        self.assertEqual(record["duration_seconds"], 10.0)
+        self.assertEqual(record["result"], "unknown")
+
+    def test_test_run_record_nonzero_exit_is_failure(self):
+        record = telemetry.test_run_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            scope="full-suite",
+            test_command="pytest tests/",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:01:00Z",
+            exit_code=1,
+        )
+        self.assertEqual(record["result"], "failure")
+
+
+class TestClassifyTestScope(unittest.TestCase):
+    """The single scope heuristic shared by every test_run emission site."""
+
+    def test_bare_suite_runners_are_full_suite(self):
+        for command in (
+            "pytest",
+            "pytest tests/",
+            "python -m pytest tests/",
+            "python3 -m pytest tests/ -q",
+            "pytest -k smoke",
+            "vitest run",
+            "jest",
+            "make test",
+            "make validate",
+            "make -j4 test",
+            "npm test",
+            "cargo test",
+            "go test",
+            "go test ./...",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(telemetry.classify_test_scope(command), "full-suite")
+
+    def test_commands_naming_test_files_or_dirs_are_impact(self):
+        for command in (
+            "pytest tests/test_panel_serve.py",
+            "pytest tests/test_a.py tests/test_b.py",
+            "python3 -m pytest tests/unit/",
+            "pytest -v --maxfail=1 tests/test_x.py",
+            "vitest run src/foo.test.ts",
+            "jest tests/foo.test.js",
+            "go test ./pkg/foo",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(telemetry.classify_test_scope(command), "impact")
+
+    def test_unrecognized_commands_are_unknown(self):
+        for command in (
+            "make build",
+            "echo pytest",
+            "./run_tests.sh",
+            "ruby -Itest test/foo_test.rb",
+            "git status",
+            "",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(telemetry.classify_test_scope(command), "unknown")
+
 
 class TestLearningCandidateRecord(unittest.TestCase):
     def test_learning_candidate_record_contains_required_fields(self):

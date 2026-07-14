@@ -40,6 +40,7 @@ import evidence  # noqa: E402
 import plan_parser  # noqa: E402
 import telemetry  # noqa: E402
 import usage as usage_lib  # noqa: E402
+import wirelog  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 from cli_adapter import resolve_cli_adapter  # noqa: E402
 from verifier import (  # noqa: E402
@@ -347,12 +348,18 @@ def _emit_stage_session(
     end_time: str,
     exit_code: int,
     usage: dict | None = None,
+    session_dir: Path | None = None,
 ) -> None:
     """Emit one stage telemetry record for a completed agent session.
 
     ``usage`` is the parsed CLI usage dict (or ``None`` for CLIs without a
     usage mode); it populates ``token_count`` / ``cost_estimate`` on the
     record. Null is the honest value when usage was not measurable.
+
+    ``session_dir`` is the resolved kimi wire dir for the session (``None``
+    for non-kimi CLIs and unresolvable sessions); when present, one
+    wire-derived ``test_run`` record is appended per extracted test
+    invocation, tagged with the session's ``stage``.
     """
     files_modified, commits_created = _session_diff_stats(worktree_dir)
     logger.append_record(
@@ -374,6 +381,43 @@ def _emit_stage_session(
         ),
         task_id=task_id,
     )
+    _emit_wire_test_runs(logger, task_id, plan_file, stage, session_dir)
+
+
+def _emit_wire_test_runs(
+    logger: telemetry.RunLogger,
+    task_id: str,
+    plan_file: str,
+    stage: str,
+    session_dir: Path | None,
+) -> None:
+    """Append one ``test_run`` record per wire-log test invocation.
+
+    Best-effort, mirroring ``_session_diff_stats``: extraction is defensive,
+    and any unexpected failure must never block a run.
+    """
+    if session_dir is None:
+        return
+    try:
+        invocations = wirelog.extract_test_invocations(session_dir)
+    except Exception as exc:  # noqa: BLE001
+        print(f"   ⚠️  Wire test-run extraction failed (skipping): {exc}")
+        return
+    for invocation in invocations:
+        logger.append_record(
+            telemetry.test_run_record(
+                run_id=logger.run_id,
+                task_id=task_id,
+                plan_file=plan_file,
+                stage=stage,
+                scope=telemetry.classify_test_scope(invocation["command"]),
+                test_command=invocation["command"],
+                start_time=invocation["start_time"],
+                end_time=invocation["end_time"],
+                exit_code=invocation["exit_code"],
+            ),
+            task_id=task_id,
+        )
 
 
 def _usage_aggregates(logger: telemetry.RunLogger) -> tuple[int | None, float | None]:
@@ -523,17 +567,22 @@ def _run_with_live_tee(cmd: list[str], cwd: str, env: dict) -> tuple[int, str]:
 
 def _spawn_session(
     adapter, cmd: list[str], worktree_dir: str, env: dict
-) -> tuple[int, dict | None]:
-    """Run one agent session, returning ``(exit_code, usage)``.
+) -> tuple[int, dict | None, Path | None]:
+    """Run one agent session, returning ``(exit_code, usage, session_dir)``.
 
     ``usage`` is parsed from the captured tail only when the adapter declares
     a usage mode; otherwise it is ``None`` and the record keeps null fields.
+    ``session_dir`` is the resolved kimi wire dir (``None`` for non-kimi CLIs
+    and unresolvable sessions); it feeds wire-log test-run extraction.
     """
     exit_code, output = _run_with_live_tee(cmd, worktree_dir, env)
     usage = None
     if adapter.usage_mode is not None:
         usage = usage_lib.parse_usage(adapter.name, output)
-    return exit_code, usage
+    session_dir = None
+    if adapter.name == "kimi":
+        session_dir = usage_lib.resolve_kimi_session_dir_from_output(output)
+    return exit_code, usage, session_dir
 
 
 def run_stage(
@@ -547,8 +596,8 @@ def run_stage(
     task_id: str | None = None,
     run_id: str | None = None,
     verdict_kind: str | None = None,
-) -> tuple[int, dict | None]:
-    """Spawn a single stage session and return ``(exit_code, usage)``."""
+) -> tuple[int, dict | None, Path | None]:
+    """Spawn a single stage session, returning ``(exit_code, usage, session_dir)``."""
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
     prompt = build_prompt(
         skills, plan_file, current_stage, next_stage,
@@ -621,10 +670,12 @@ def run_stage_group(
     run_id: str | None = None,
     *,
     workflow: Workflow,
-) -> tuple[int, dict | None]:
+) -> tuple[int, dict | None, Path | None]:
     """Spawn one session that runs every stage in the group sequentially.
 
-    Returns ``(exit_code, usage)``; usage covers the whole group session.
+    Returns ``(exit_code, usage, session_dir)``; usage covers the whole group
+    session and ``session_dir`` is the resolved kimi wire dir (``None`` for
+    non-kimi CLIs and unresolvable sessions).
     """
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
     prompt = build_stage_group_prompt(
@@ -837,7 +888,7 @@ def process_task(
                 )
 
                 start_time = telemetry.iso_now()
-                exit_code, usage = run_stage_group(
+                exit_code, usage, session_dir = run_stage_group(
                     adapter,
                     repo_root,
                     plan_file,
@@ -861,6 +912,7 @@ def process_task(
                     end_time,
                     exit_code,
                     usage=usage,
+                    session_dir=session_dir,
                 )
                 agent_invoked = True
                 if exit_code != 0:
@@ -941,7 +993,7 @@ def process_task(
 
             kind = target_stage.evidence
             start_time = telemetry.iso_now()
-            exit_code, usage = run_stage(
+            exit_code, usage, session_dir = run_stage(
                 adapter,
                 repo_root,
                 plan_file,
@@ -967,6 +1019,7 @@ def process_task(
                 end_time,
                 exit_code,
                 usage=usage,
+                session_dir=session_dir,
             )
             agent_invoked = True
 
