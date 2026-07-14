@@ -77,20 +77,21 @@ duration_seconds, exit_code}` from the records' top-level `time`.
 
 ## Task List
 
-1. `aet-work/lib/wirelog.py`: extraction + pairing + defensive parsing — M
+1. ✓ `aet-work/lib/wirelog.py`: extraction + pairing + defensive parsing — M
    (traces: R-1, R-3)
-2. `tests/test_wirelog.py` (new): fixture wire.jsonl covering paired calls,
+2. ✓ `tests/test_wirelog.py` (new): fixture wire.jsonl covering paired calls,
    unpaired call (null duration), non-test commands ignored, malformed line
    skipped, multi-agent dirs — M (traces: R-1, R-3)
-3. `telemetry.py`: `classify_test_scope` + nullable timestamps in
+3. ✓ `telemetry.py`: `classify_test_scope` + nullable timestamps in
    `test_run_record`; extend `tests/test_telemetry.py` — S (traces: R-2, R-3)
-4. `orchestrator`: emit per-invocation `test_run` records after kimi sessions
+4. ✓ `orchestrator`: emit per-invocation `test_run` records after kimi sessions
    in `_emit_stage_session`; integration test in
    `tests/test_orchestrator.py` asserting N records with real durations from
    a fixture session — M (traces: R-1, R-2)
-5. Docs: `telemetry-log-schema.md` provenance + scope vocabulary + null
+5. ✓ Docs: `telemetry-log-schema.md` provenance + scope vocabulary + null
    contract — S (traces: R-3)
-6. Merge branch to main and verify integration — S
+6. [Deferred: merge executed by `aet-ship` after review] Merge branch to main
+   and verify integration — S
 
 **Size definitions:**
 
@@ -137,5 +138,5 @@ auth/data-model/API surface.
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+_Stage: synced_
+_Next step: run `aet-ship`_
