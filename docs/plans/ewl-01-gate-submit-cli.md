@@ -88,5 +88,5 @@ Revert the merge commit. The four skills' fallback instruction ("otherwise write
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
