@@ -36,6 +36,7 @@ SUBCOMMANDS = {
     "init-queue": {"target": ("aet-work", "init-queue"), "mode": "exec"},
     "state": {"target": ("aet-work", "aet-state"), "mode": "exec"},
     "gate": {"target": ("aet-work", "gate"), "mode": "exec"},
+    "plan": {"target": ("aet-work", "plan"), "mode": "exec"},
     "run": {"target": ("aet-work", "orchestrator"), "mode": "run"},
     "run-one": {"target": ("aet-work", "orchestrator"), "mode": "run-one"},
     "ship": {"target": ("aet-ship", "ship"), "mode": "exec"},
