@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.0.0
+## Current Version: 1.1.0
 
-Last updated: 2026-07-12
+Last updated: 2026-07-15
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, and an optional GitHub Issues or git-refs backend for team-wide visibility.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, and an optional GitHub Issues or git-refs backend for team-wide visibility.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -49,7 +49,7 @@ Land code cleanly and document releases.
 
 Keep projects and the toolkit itself healthy.
 
-- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation and AI guardrails.
+- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, and optional pre-push hook gates.
 - **aet-upgrade** — Dependency and framework upgrade planning with breaking-change analysis.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
@@ -64,12 +64,23 @@ Keep projects and the toolkit itself healthy.
 | `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet install` self-installs and repairs `PATH` on invocation. |
 | Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, and run history. |
 | GitHub Issues         | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                                                  |
-| git-refs backend      | Optional `aet-work` task backend that stores queue state in git refs instead of local JSON files.                                    |
+| git-refs backend      | `aet-work` task backend that stores queue state in git refs instead of local JSON files; now the default written backend.              |
 | Git                   | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required.                             |
 
 ---
 
 ## What's New
+
+### What's New in v1.1.0
+
+- **Live execution panel** — `aet-work status` now shows running tasks with auto-refreshing live-run visibility and a cleaner dependency/blocker table.
+- **Usage-cost telemetry** — agent CLI usage and kimi wire files are captured into the telemetry archive, with a cost view in the panel.
+- **`aet gate submit` verdict writer** — record skill verdicts directly from the CLI, feeding the orchestrator's evidence-gated completion.
+- **git-refs as the default task backend** — queue state now lives in git refs by default, with tamper-evidence and a pre-push hook gate in `aet-setup`.
+- **Validation freshness** — verdicts carry a `tree_hash` and freshness query so QA gates can detect stale evidence.
+- **Test-run extraction and classification** — wire logs yield structured test-run records classified by verdict scope.
+- **Structural pattern mining** — `mine-learnings` and `aet-retro` can surface recurring structural patterns across projects.
+- **Faster, slimmer validation** — `pytest-xdist` parallelizes the suite and `aet-setup` drops Prettier from the default scaffold.
 
 ### What's New in v1.0.0
 
