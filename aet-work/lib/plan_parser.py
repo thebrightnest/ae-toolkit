@@ -352,9 +352,10 @@ def intake_validation_errors(
 ) -> list[tuple[Path, str]]:
     """Validate plan files for intake and return a list of fatal errors.
 
-    Checks the frontmatter contract (id, size, blocked_by, gate-routing keys),
-    cross-plan blocker references, multi-unit plan markers, atomic-complexity
-    limits, and legacy dependency sections that would silently drop blockers.
+    Checks the frontmatter contract (id, size, blocked_by, work_class,
+    gate-routing keys), cross-plan blocker references, multi-unit plan markers,
+    atomic-complexity limits, and legacy dependency sections that would silently
+    drop blockers.
 
     By default every file is validated. When ``limit_to`` is provided, only files
     in that set produce validation errors, but every file is still parsed so that
