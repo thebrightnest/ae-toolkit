@@ -61,6 +61,7 @@ class TestAetSpecTable(unittest.TestCase):
             "mine-learnings",
             "configure-backend",
             "hooks",
+            "harness-guard",
             "install",
         }
         self.assertEqual(set(aet.SUBCOMMANDS), expected)
