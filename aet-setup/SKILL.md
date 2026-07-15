@@ -385,6 +385,16 @@ aet-work.log
 aet-work-*.log
 ```
 
+## Per-Provider Merge Guard
+
+When setting up a project, install a harness-level merge guard that blocks `gh pr merge` at the provider's tool-call layer. This is the only surface that refuses the command under session auto/bypass mode.
+
+- Detect the active harness from workspace markers (`.claude/` → `claude-code`, `.kimi-code/` → `kimi`).
+- Use the lightweight adapter registry in `aet-setup/lib/harness_guard.py` to map `harness_id → adapter`.
+- Run `aet harness-guard install` (or the equivalent setup step) to generate the provider-specific guard.
+- Unsupported/undetected harnesses must fail safe: print a named gap and exit non-zero — never silently pass.
+- Generated guards are Mode-1 config (under `.claude/`, gitignorable) and non-clobbering.
+
 ## AI Guardrails Template
 
 Every `AGENTS.md` must include guardrails with **Forbidden**, **Mandatory**, **Agentic Workflow**, and **Context Budget** sections. See `examples/AGENTS.md.example` for the full template.

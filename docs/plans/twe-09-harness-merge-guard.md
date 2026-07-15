@@ -91,5 +91,5 @@ Revert the merge commit. The generator and adapter are removed; any already-gene
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
