@@ -86,5 +86,5 @@ Remove `requirements-dev.txt`, revert the `Makefile` `-n auto` line, revert test
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-cso`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
