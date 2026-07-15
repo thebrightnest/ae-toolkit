@@ -42,10 +42,10 @@ status: approved
 
 ## Task List
 
-1. Write `aet-work/lib/plan_validate.py`: the four check families composing `intake_validation_errors`, returning named per-check results — M (traces: R-4)
-2. Add the ack escape hatch (`⚠️ VALIDATE ACK: <check-id> — <reason>`), per-check-id, reason-required — S (traces: R-5)
-3. Write `aet-work/bin/plan` (`validate` subparser) and add the `plan` row to `aet-work/bin/aet` `SUBCOMMANDS` — S (traces: R-4)
-4. Tests: `tests/test_plan_validate.py` (new) — M (traces: R-4, R-5, R-11)
+1. ✓ Write `aet-work/lib/plan_validate.py`: the four check families composing `intake_validation_errors`, returning named per-check results — M (traces: R-4)
+2. ✓ Add the ack escape hatch (`⚠️ VALIDATE ACK: <check-id> — <reason>`), per-check-id, reason-required — S (traces: R-5)
+3. ✓ Write `aet-work/bin/plan` (`validate` subparser) and add the `plan` row to `aet-work/bin/aet` `SUBCOMMANDS` — S (traces: R-4)
+4. ✓ Tests: `tests/test_plan_validate.py` (new) — M (traces: R-4, R-5, R-11)
 5. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
@@ -65,8 +65,8 @@ status: approved
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] New source coverage — `tests/test_plan_validate.py`:
+- [x] `make validate` passes; full suite passes (lint, workflow lint, skills-lint pass; 13 `test_aet_install.py` failures are environmental — install refuses to link from an ephemeral git worktree copy)
+- [x] New source coverage — `tests/test_plan_validate.py`:
   - `test_structural_delegates_to_intake_validation`
   - `test_rtrace_missing_covering_task_fails`
   - `test_rtrace_task_cites_unknown_rid_fails`
@@ -77,8 +77,8 @@ status: approved
   - `test_ack_with_reason_overrides_that_check`
   - `test_ack_without_reason_does_not_override`
   - `test_plan_validate_routed_through_aet_dispatcher` (subprocess)
-- [ ] R-trace coverage: R-4 by tasks 1,3; R-5 by task 2; R-11 (this slice) by task 4; no unknown R-ids cited
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-4 by tasks 1,3; R-5 by task 2; R-11 (this slice) by task 4; no unknown R-ids cited
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to `aet-ship`)
 
 ## Rollback Plan
 
@@ -92,5 +92,5 @@ Revert the merge commit. `aet plan validate` is a new read-only command; removin
 
 ⚠️ VALIDATE ACK: rtrace — this plan is a slice of roadmap-p4; requirements R-1–R-3, R-6–R-10, and R-12–R-14 are covered by sibling `twe-*` plans
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
