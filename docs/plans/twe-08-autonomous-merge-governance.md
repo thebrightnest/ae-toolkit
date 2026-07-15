@@ -80,5 +80,5 @@ Revert the merge commit. The governance text and skill wording return to their p
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
