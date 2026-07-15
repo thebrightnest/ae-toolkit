@@ -51,6 +51,7 @@ Do **not** write an ADR for:
 - [025 — Validation Freshness: Gate Stages Trust a Fresh QA Verdict Instead of Re-Running](025-validation-freshness-trust-fresh-qa-verdict.md)
 - [026 — Slim Markdown Quality Gates](026-slim-markdown-quality-gates.md)
 - [027 — Main Hygiene Halts Unattended Runs](027-main-hygiene-halts-unattended.md)
+- [028 — Work Class Is a Recorded Attribute; Zero-Review Auto-Merge Is Policy-Gated and Off by Default](028-work-class-attribute-and-zero-review-policy.md)
 
 ## Format
 
