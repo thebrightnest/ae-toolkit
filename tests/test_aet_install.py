@@ -243,6 +243,37 @@ class TestSelfRepair(InstallTestCase):
         self.assertNotIn("already linked", out)
 
 
+class TestWorktreeCopyGuard(InstallTestCase):
+    """An ephemeral worktree copy never becomes the global install target."""
+
+    def _worktree_copy(self):
+        return (
+            Path(self.tmp.name) / ".worktrees" / "t-1" / "aet-work" / "bin" / "aet"
+        )
+
+    def test_self_repair_skips_worktree_copy(self):
+        self.bin_dir.mkdir(parents=True)
+        main_copy = Path(self.tmp.name) / "main-checkout" / "aet"
+        main_copy.parent.mkdir()
+        main_copy.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        (self.bin_dir / "aet").symlink_to(main_copy)
+
+        wt = self._worktree_copy()
+        with patch.object(aet, "_running_script", lambda: wt):
+            aet._ensure_path_link()
+
+        self.assertEqual(Path(os.readlink(self.bin_dir / "aet")), main_copy)
+
+    def test_install_refuses_worktree_copy(self):
+        wt = self._worktree_copy()
+        with patch.object(aet, "_running_script", lambda: wt):
+            rc, _, err = self._run_install("--bin-dir", str(self.bin_dir))
+
+        self.assertEqual(rc, 1)
+        self.assertIn("worktree", err)
+        self.assertFalse((self.bin_dir / "aet").exists())
+
+
 class TestInstallIntegration(InstallTestCase):
     """Subprocess integration: real install, then self-repair via `aet status`."""
 
