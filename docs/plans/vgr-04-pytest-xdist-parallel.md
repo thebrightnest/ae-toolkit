@@ -86,5 +86,5 @@ Remove `requirements-dev.txt`, revert the `Makefile` `-n auto` line, revert test
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
