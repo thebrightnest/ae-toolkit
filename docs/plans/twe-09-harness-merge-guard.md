@@ -91,4 +91,5 @@ Revert the merge commit. The generator and adapter are removed; any already-gene
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
