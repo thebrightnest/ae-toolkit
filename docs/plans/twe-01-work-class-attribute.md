@@ -38,10 +38,10 @@ status: approved
 
 ## Task List
 
-1. Add `work_class` parsing to `plan_parser.parse_frontmatter` and carry it onto the record in `new_task_from_plan` (default `unclassified`) — M (traces: R-7)
-2. Add the closed-set `work_class` validation rule to `plan_parser.intake_validation_errors` (present-and-invalid → named error; absent → legal) — S (traces: R-7)
-3. Update the "work class" glossary entry in `CONTEXT.md` and the tier description in `docs/PIPELINE.md` to record it as a stored machine-readable attribute — S (traces: R-7)
-4. Tests: `tests/test_work_class_attribute.py` (new) — M (traces: R-7, R-11)
+1. ✓ Add `work_class` parsing to `plan_parser.parse_frontmatter` and carry it onto the record in `new_task_from_plan` (default `unclassified`) — M (traces: R-7)
+2. ✓ Add the closed-set `work_class` validation rule to `plan_parser.intake_validation_errors` (present-and-invalid → named error; absent → legal) — S (traces: R-7)
+3. ✓ Update the "work class" glossary entry in `CONTEXT.md` and the tier description in `docs/PIPELINE.md` to record it as a stored machine-readable attribute — S (traces: R-7)
+4. ✓ Tests: `tests/test_work_class_attribute.py` (new) — M (traces: R-7, R-11)
 5. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
@@ -80,5 +80,5 @@ Revert the merge commit. `work_class` is additive and optional; absent it, every
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
