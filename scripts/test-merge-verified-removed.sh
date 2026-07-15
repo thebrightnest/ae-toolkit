@@ -34,7 +34,7 @@ check_file_absent "aet-ship/examples/squash-merge-example.md" "aet-ship example"
 check_file_present "aet-work/SKILL.md" "aet-work skill instructions"
 
 # merge_verified SHOULD be handled in the orchestrator for backward compat
-check_file_present "aet-work/lib/queue.py" "orchestrator queue module"
+check_file_present "aet-work/lib/aet_queue.py" "orchestrator queue module"
 
 # The boolean field merge_verified must NOT exist in the work queue JSON
 if grep -n '"merge_verified"' .agents/work-queue.json >/dev/null 2>&1; then
