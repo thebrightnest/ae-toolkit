@@ -90,5 +90,5 @@ Revert the merge commit. `aet plan validate` is a new read-only command; removin
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
