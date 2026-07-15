@@ -80,5 +80,5 @@ Revert the merge commit. `work_class` is additive and optional; absent it, every
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
