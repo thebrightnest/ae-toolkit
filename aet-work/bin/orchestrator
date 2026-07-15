@@ -23,7 +23,12 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import (  # noqa: E402
+import evidence  # noqa: E402
+import plan_parser  # noqa: E402
+import telemetry  # noqa: E402
+import usage as usage_lib  # noqa: E402
+import wirelog  # noqa: E402
+from aet_queue import (  # noqa: E402
     LEGAL_TRANSITIONS,
     QueueIntegrityError,
     acquire_lease,
@@ -32,15 +37,9 @@ from queue import (  # noqa: E402
     queue_lock,
     release_lease,
 )
-from queue import (  # noqa: E402
+from aet_queue import (  # noqa: E402
     has_pending_tasks as queue_has_pending_tasks,
 )
-
-import evidence  # noqa: E402
-import plan_parser  # noqa: E402
-import telemetry  # noqa: E402
-import usage as usage_lib  # noqa: E402
-import wirelog  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 from cli_adapter import resolve_cli_adapter  # noqa: E402
 from verifier import (  # noqa: E402

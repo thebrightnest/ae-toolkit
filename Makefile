@@ -64,8 +64,12 @@ lint-py: ## Run ruff on Python files
 	@ruff check .
 	@echo "✓ Python lint passed"
 
-test: ## Run pytest suite
-	@python3 -m pytest tests/ -q
+test: ## Run pytest suite (parallel if pytest-xdist is installed)
+	@if python3 -c "import xdist" 2>/dev/null; then \
+		python3 -m pytest tests/ -q -n auto; \
+	else \
+		python3 -m pytest tests/ -q; \
+	fi
 	@echo "✓ Tests passed"
 
 validate: ## Run all quality checks, fail-fast (lint-py + workflow-lint + skills-lint + skill-structure, pytest last)

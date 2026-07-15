@@ -145,11 +145,11 @@ Under parallel execution, only the main orchestrator loop reads and writes `.age
 - The child runs to completion and exits
 - The orchestrator polls for completion and only then does it update the queue
 
-Queue mutations are serialized by the `queue_lock` helper in `aet-work/lib/queue.py`, which uses an advisory `flock` on a sidecar lock file. The orchestrator wraps every load→mutate→save cycle in this lock, and `aet state` acquires the same lock around every transition. No database is required, but file locking is required even within a single process because child CLI sessions and the orchestrator itself can write concurrently.
+Queue mutations are serialized by the `queue_lock` helper in `aet-work/lib/aet_queue.py`, which uses an advisory `flock` on a sidecar lock file. The orchestrator wraps every load→mutate→save cycle in this lock, and `aet state` acquires the same lock around every transition. No database is required, but file locking is required even within a single process because child CLI sessions and the orchestrator itself can write concurrently.
 
 ## Further Reading
 
 - `bin/orchestrator` — the unified Python orchestrator invoked by `aet run`
-- `lib/queue.py` — queue read/write operations with wrapper-format preservation
+- `lib/aet_queue.py` — queue read/write operations with wrapper-format preservation
 - `lib/cli_adapter.py` — CLI detection and command building for Kimi and Claude
 - `references/parallel-execution.md` — deep dive on concurrency caps and resume behavior
