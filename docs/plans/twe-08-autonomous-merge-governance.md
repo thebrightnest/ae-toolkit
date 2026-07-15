@@ -80,5 +80,5 @@ Revert the merge commit. The governance text and skill wording return to their p
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
