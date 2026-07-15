@@ -5,7 +5,7 @@ blocked_by:
   - vgr-01-slim-markdown-gates
   - vgr-02-gate-docs-adr
 pipeline: standard
-status: draft
+status: merged
 security_review: required
 security_review_reason: Introduces the repo's first third-party test dependency (pytest-xdist) into an otherwise dependency-free project — supply-chain and trust review of the new dev dependency.
 docs_sync: required
@@ -86,5 +86,5 @@ Remove `requirements-dev.txt`, revert the `Makefile` `-n auto` line, revert test
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
