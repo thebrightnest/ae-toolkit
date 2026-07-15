@@ -91,5 +91,4 @@ Revert the merge commit. The generator and adapter are removed; any already-gene
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
