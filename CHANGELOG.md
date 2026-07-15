@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.1.0] — 2026-07-15
+
+### Added
+
+- **Live-run panel** — `aet-work` exposes live-run visibility with a dirs API, honest status, and a panel that auto-refreshes every 5 seconds with incremental dir merging and tab-visibility-aware polling (lvp-01/02).
+- **Usage-cost telemetry** — parses kimi wire files and captures agent CLI usage into the telemetry archive, with a cost view in the telemetry panel (uct-01).
+- **`aet gate submit` verdict writer** — record skill verdicts directly from the CLI so the orchestrator can gate completion on structured evidence (ewl-01).
+- **Pre-push hook gate** — `aet-setup` can install and check a pre-push gate that blocks pushes until skill verdicts pass (ewl-03).
+- **git-refs as default written backend** — `aet-work` now writes queue state to git refs by default, with backend sealing and a parity suite (ewl-04).
+- **git-refs tamper-evidence** — git-refs backend gains tamper-evident mutations for trustworthy unattended state (ewl-05).
+- **Non-invasive external config root** — support an external config root without invasive repository changes (ewl-07).
+- **Validation freshness primitive** — verdicts carry a `tree_hash` and a validation-freshness query so stale evidence can be detected (pfe-01).
+- **QA-freshness clause injection** — orchestrator stage prompts now inject QA-freshness requirements into each stage (pfe-02).
+- **Wire-log test-run extraction** — extract structured `test_run` records from wire logs for richer telemetry (ttf-01).
+- **Verdict-derived test_run scope classification** — classify `test_run` scope from verdicts with honest nulls when evidence is missing (ttf-02).
+- **Structural pattern mining** — `mine-learnings` and `aet-retro` can surface recurring structural patterns across projects (ttf-03).
+
+### Changed
+
+- **Slimmer scaffolded gates** — `aet-setup` no longer scaffolds Prettier into the default gate set (vgr-05).
+- **Faster test suite** — pytest suite is now parallelized with `pytest-xdist` (vgr-04).
+- **Slim markdown quality gates** — `make validate` uses lighter markdown gates and fails fast on the first problem (vgr-01).
+- **Status command readability** — `aet-work status` renders the task list as a markdown table, shows only pending blockers, and prints a dependency table.
+
+### Fixed
+
+- **Global `aet` symlink safety** — worktree copies no longer hijack the global `aet` symlink (#116).
+- **Untracked plan intake** — `aet-work` refuses untracked plans at `aet add` instead of silently accepting them.
+- **Telemetry reader alignment** — `aet-retro` and `mine-learnings` readers are now aligned with the telemetry writer layout (tele-07).
+- **Queue integrity recovery** — the queue integrity envelope is recoverable via audit/heal.
+- **Integrity refusal cleanup** — cleaned up integrity refusals, hygiene sidecars, and foreground validations.
+
+### Documentation
+
+- Added ADR-026 documenting slim markdown quality gates (vgr-02).
+- Added enforcement-walls adversarial rehearsal documentation (ewl-06).
+- Added plan-durability hardening PRD and pdh-01/pdh-02 plans.
+- Added usage-cost telemetry plan and ADR-025 on freshness.
+- Added validate-gate-review PRD and vgr-01..05 plans.
+- Recovered and landed telemetry-fidelity PRD and plans.
+- Synced multiple plans to implementation reality after closure.
+
+---
+
 ## [1.0.0] — 2026-07-12
 
 **First stable release.** This is a major version bump: the legacy per-skill binaries are retired in favor of the unified `aet` multicall binary, which is a breaking change for any scripts or muscle memory that invoke the old binaries directly.
