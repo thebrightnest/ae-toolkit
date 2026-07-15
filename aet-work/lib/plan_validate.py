@@ -304,7 +304,14 @@ def validate(
     limit_to = set(plans)
     findings: list[Finding] = []
 
-    findings.extend(structural_findings(plans, limit_to=limit_to))
+    # Structural checks parse every plan in the directory so that blocker
+    # references and duplicate-id detection remain accurate.
+    if repo_root is not None:
+        plans_dir = repo_root / "docs" / "plans"
+        all_plans = sorted(plans_dir.glob("*.md")) if plans_dir.exists() else plans
+    else:
+        all_plans = plans
+    findings.extend(structural_findings(all_plans, limit_to=limit_to))
 
     for plan in plans:
         findings.extend(rtrace_findings(plan))

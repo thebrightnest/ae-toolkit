@@ -90,5 +90,7 @@ Revert the merge commit. `aet plan validate` is a new read-only command; removin
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+⚠️ VALIDATE ACK: rtrace — this plan is a slice of roadmap-p4; requirements R-1–R-3, R-6–R-10, and R-12–R-14 are covered by sibling `twe-*` plans
+
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
