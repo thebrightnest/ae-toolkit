@@ -38,10 +38,10 @@ Blocked by vgr-01 (shared `Makefile`) and vgr-02 (shared `AGENTS.md`).
 
 ## Task List
 
-1. Add `requirements-dev.txt` declaring `pytest-xdist`; update `AGENTS.md` dependency-stance line + a `pip install -r requirements-dev.txt` note — S (traces: R-6)
-2. Measure parallel-safety: run `python3 -m pytest tests/ -n auto`, capture the failing/flaky set (git/process-group/tmp/cwd/env sharing are the risks) — S (traces: R-6)
-3. Fix the parallel-unsafe tests from task 2 (isolate shared state via `tmp_path`/`monkeypatch`/unique dirs). **Contingency:** if the fix exceeds the session limit (≤ 8 files / ≤ 300 lines), split per auto-split with `Split from: vgr-04-pytest-xdist-parallel` — M (traces: R-6)
-4. Wire `-n auto` into the `Makefile` `test` target with a single-process fallback when xdist is unavailable — S (traces: R-6)
+1. ✓ Add `requirements-dev.txt` declaring `pytest-xdist`; update `AGENTS.md` dependency-stance line + a `pip install -r requirements-dev.txt` note — S (traces: R-6)
+2. ✓ Measure parallel-safety: run `python3 -m pytest tests/ -n auto`, capture the failing/flaky set (git/process-group/tmp/cwd/env sharing are the risks) — S (traces: R-6)
+3. ✓ Fix the parallel-unsafe tests from task 2. [Changed: root cause was stdlib `queue` module collision under `pytest-xdist` workers; fixed by renaming `aet-work/lib/queue.py` → `aet_queue.py` and updating imports.] **Contingency:** if the fix exceeds the session limit (≤ 8 files / ≤ 300 lines), split per auto-split with `Split from: vgr-04-pytest-xdist-parallel` — M (traces: R-6)
+4. ✓ Wire `-n auto` into the `Makefile` `test` target with a single-process fallback when xdist is unavailable — S (traces: R-6)
 5. Verify (see Validation Steps) and merge — S (traces: R-6)
 
 **Size labels:** known-bounded core (t1/t2/t4/t5) is M; the isolation-fix (t3) is size-contingent on the task-2 measurement and may force an implement-time split. Overall **M** with that contingency; re-label if task 2 surfaces broad fallout.
@@ -86,5 +86,5 @@ Remove `requirements-dev.txt`, revert the `Makefile` `-n auto` line, revert test
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_

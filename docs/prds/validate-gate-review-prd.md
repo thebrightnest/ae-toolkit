@@ -181,7 +181,24 @@ parallel-worktree merge conflicts.
 - **Downstream expectation** (R-7): repos previously scaffolded with prettier are
   unaffected; only new scaffolds change.
 
+## Divergence Summary
+
+_Recorded: 2026-07-15 — Branch: vgr-04-pytest-xdist-parallel_
+
+### Changed from plan
+
+- **vgr-04 Task 3 (fix parallel-unsafe tests):** The planned approach was to isolate shared state via `tmp_path`/`monkeypatch`/unique directories. The implementation-time measurement revealed the actual failure mode was a Python stdlib `queue` module name collision under `pytest-xdist` workers, not shared mutable state. The fix renamed `aet-work/lib/queue.py` to `aet-work/lib/aet_queue.py` and updated imports across `aet-work/bin/*`, `aet-work/lib/*`, `tests/`, and `aet-work/references/context-isolation.md`.
+
+### Added (unplanned)
+
+- **`.gitignore`**: Added `.venv/` to support the documented `pip install -r requirements-dev.txt` workflow in a local virtual environment.
+- **`scripts/test-merge-verified-removed.sh`**: Updated the queue-module presence check from `aet-work/lib/queue.py` to `aet-work/lib/aet_queue.py` to match the rename.
+
+### Deferred
+
+- None.
+
 ---
 
-_Stage: scope-validated_
-_Next step: run `aet-work` (single-plan or multi-task queue)_
+_Stage: synced_
+_Next step: run `aet-ship`_
