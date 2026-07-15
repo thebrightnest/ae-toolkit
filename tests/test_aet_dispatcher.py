@@ -17,14 +17,11 @@ _aet_spec = importlib.util.spec_from_loader(
     importlib.machinery.SourceFileLoader("aet_dispatcher", str(_AET_PY)),
 )
 aet = importlib.util.module_from_spec(_aet_spec)
+_aet_spec.loader.exec_module(aet)
 
 
 class TestAetSpecTable(unittest.TestCase):
     """The SUBCOMMANDS spec is importable data shared by dispatch and tooling."""
-
-    @classmethod
-    def setUpClass(cls):
-        _aet_spec.loader.exec_module(aet)
 
     def test_spec_covers_all_operational_subcommands(self):
         """SUBCOMMANDS lists every operational toolkit command from R-1."""

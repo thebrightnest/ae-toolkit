@@ -70,7 +70,7 @@ def _leased_run_id() -> str | None:
     queue_file = Path(".agents/work-queue.json")
     if not queue_file.is_file():
         return None
-    import queue as queue_lib  # noqa: PLC0415
+    import aet_queue as queue_lib  # noqa: PLC0415
 
     lease = queue_lib.read_lease(str(queue_file))
     if isinstance(lease, dict):

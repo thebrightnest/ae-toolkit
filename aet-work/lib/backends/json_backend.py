@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from queue import (
+from typing import Any
+
+from aet_queue import (
     read_history,
     read_queue,
     write_queue,
 )
-from typing import Any
-
 from backends.base import TaskBackend
 
 

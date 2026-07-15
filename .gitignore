@@ -1,6 +1,7 @@
 .claude
 content/
 node_modules/
+.venv/
 .lycheecache
 .worktrees/
 .review-report.md

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from queue import append_history  # noqa: E402
 from typing import Any
+
+from aet_queue import append_history  # noqa: E402
 
 
 def _unquote_scalar(value: str) -> str:

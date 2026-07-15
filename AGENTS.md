@@ -9,6 +9,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - **Content format:** Markdown with YAML frontmatter
 - **Build / packaging:** GNU Make + `zip`
 - **Quality:** markdownlint (staged/manual), ruff, pytest, custom skill-structure validator, workflow lint
+- **Dev dependencies:** `requirements-dev.txt` (install with `pip install -r requirements-dev.txt`); runtime code has no Python dependencies
 
 ## Directory Structure
 
@@ -97,7 +98,8 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 ## Decision Log
 
-- **Markdown-only repo:** No package.json, requirements.txt, etc. Quality tools are installed via pre-commit or system package manager.
+- **Markdown-only repo:** No package.json, runtime requirements.txt, etc. Quality tools are installed via pre-commit or system package manager.
+- **Dev-only Python dependencies:** `requirements-dev.txt` declares test-only dependencies (e.g., `pytest-xdist`). Runtime code remains dependency-free; install dev deps with `pip install -r requirements-dev.txt`.
 - **Directory-based distribution:** Skills are installed together from this repo via `npx skills add ... --all`. Individual `.skill` zip artifacts are no longer produced or tracked.
 - **No CI:** All gates local via pre-commit + Make. Keeps the repo portable and free of vendor lock-in.
 - **Trimmed tooling:** Dropped cspell, lychee, detect-secrets, and prettier. Cosmetic formatting (prettier) produced churn without catching real defects; the quality surface is structure (`validate-skills`), semantics (`skills-lint`, `validate-workflows`), and code (`ruff`, `pytest`). Markdownlint remains as a light, staged-only guard.
