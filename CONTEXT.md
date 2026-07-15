@@ -92,7 +92,7 @@ _Avoid_: treating a footer stage string as proof a stage passed.
 
 **Workflow**:
 A named, versioned data file defining one linear stage sequence with its skill and evidence bindings (packaged default `aet-work/workflows/<name>.json`, overridable per repo in `.agents/workflows/`). Selected by the plan frontmatter key `workflow:` (default `software`). Stage vocabulary comes from the workflow; lifecycle **State** stays frozen in code.
-_Avoid_: calling lifecycle states "workflow state"; using "work class" for a workflow name (work class = the Trivial/Normal/Critical intake tiers in `docs/PIPELINE.md`).
+_Avoid_: calling lifecycle states "workflow state"; using "work class" for a workflow name (work class = a recorded machine-readable task attribute, one of `trivial`/`normal`/`critical`/`unclassified`, authored in plan frontmatter).
 
 **Stage Routing Key**:
 Plan frontmatter (`security_review`, `docs_sync`: `required`/`skipped`, with a reason required when skipped) deciding at plan time whether a gated stage runs. Policy input authored at triage — part of the plan's machine contract, not runtime judgment and not state.
