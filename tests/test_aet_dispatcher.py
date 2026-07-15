@@ -1,7 +1,14 @@
-"""Tests for the aet multicall dispatcher (aet-work/bin/aet)."""
+"""Tests for the aet multicall dispatcher (aet-work/bin/aet).
+
+Every test that calls ``aet.main()`` isolates the bin dir via
+``AET_BIN_DIR`` pointed at a temp dir: ``main()`` runs the on-invocation
+symlink self-repair, and an unisolated call from a worktree checkout would
+re-point the real ``~/.local/bin/aet`` at the ephemeral worktree copy.
+"""
 
 import importlib.machinery
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,6 +25,18 @@ _aet_spec = importlib.util.spec_from_loader(
 )
 aet = importlib.util.module_from_spec(_aet_spec)
 _aet_spec.loader.exec_module(aet)
+
+
+class _IsolatedBinDir(unittest.TestCase):
+    """Temp ``AET_BIN_DIR`` so self-repair never touches ``~/.local/bin``."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.bin_dir = Path(self._tmp.name) / "bin"
+
+    def _bin_env(self):
+        return patch.dict(os.environ, {"AET_BIN_DIR": str(self.bin_dir)})
 
 
 class TestAetSpecTable(unittest.TestCase):
@@ -64,7 +83,7 @@ class TestAetSpecTable(unittest.TestCase):
                 self.assertTrue(binary.is_file(), f"missing {binary}")
 
 
-class TestAetExecRouting(unittest.TestCase):
+class TestAetExecRouting(_IsolatedBinDir):
     """Exec-mode subcommands reach their target binary with argv forwarded."""
 
     @classmethod
@@ -81,10 +100,11 @@ class TestAetExecRouting(unittest.TestCase):
 
     def _dispatch(self, argv, expected_bin, expected_argv):
         with patch.object(sys, "argv", argv):
-            with patch.object(
-                aet.os, "execvp", self._expect_exec(expected_bin, expected_argv)
-            ):
-                return aet.main()
+            with self._bin_env():
+                with patch.object(
+                    aet.os, "execvp", self._expect_exec(expected_bin, expected_argv)
+                ):
+                    return aet.main()
 
     def test_status_routes_to_aet_work_status(self):
         """`aet status --queue-file foo.json` execs aet-work/bin/status verbatim."""
@@ -132,7 +152,7 @@ class TestAetExecRouting(unittest.TestCase):
         self.assertEqual(rc, 0)
 
 
-class TestRunMapping(unittest.TestCase):
+class TestRunMapping(_IsolatedBinDir):
     """run/run-one map user flags to the documented orchestrator argv."""
 
     @classmethod
@@ -149,8 +169,9 @@ class TestRunMapping(unittest.TestCase):
             raise SystemExit(0)
 
         with patch.object(sys, "argv", argv):
-            with patch.object(aet.os, "execvp", mock_execvp):
-                rc = aet.main()
+            with self._bin_env():
+                with patch.object(aet.os, "execvp", mock_execvp):
+                    rc = aet.main()
         return rc, captured.get("path"), captured.get("argv")
 
     def test_run_with_all_flags(self):
@@ -228,13 +249,14 @@ class TestRunMapping(unittest.TestCase):
     def test_run_one_without_plan_exits_2(self):
         """`aet run-one` without a plan file exits 2 without exec."""
         with patch.object(sys, "argv", ["aet", "run-one"]):
-            with patch.object(aet.os, "execvp") as mock_exec:
-                rc = aet.main()
+            with self._bin_env():
+                with patch.object(aet.os, "execvp") as mock_exec:
+                    rc = aet.main()
         self.assertEqual(rc, 2)
         mock_exec.assert_not_called()
 
 
-class TestAetErrorPaths(unittest.TestCase):
+class TestAetErrorPaths(_IsolatedBinDir):
     """Unknown subcommands and missing siblings fail with clear errors."""
 
     def test_unknown_subcommand_exits_2_with_usage(self):
@@ -244,8 +266,9 @@ class TestAetErrorPaths(unittest.TestCase):
         stderr = io.StringIO()
         with patch.object(sys, "argv", ["aet", "nope"]):
             with patch.object(sys, "stderr", stderr):
-                with patch.object(aet.os, "execvp") as mock_exec:
-                    rc = aet.main()
+                with self._bin_env():
+                    with patch.object(aet.os, "execvp") as mock_exec:
+                        rc = aet.main()
         self.assertEqual(rc, 2)
         mock_exec.assert_not_called()
         err = stderr.getvalue()
@@ -257,8 +280,9 @@ class TestAetErrorPaths(unittest.TestCase):
     def test_no_subcommand_exits_2_with_usage(self):
         """Bare `aet` prints usage and exits 2."""
         with patch.object(sys, "argv", ["aet"]):
-            with patch.object(aet.os, "execvp") as mock_exec:
-                rc = aet.main()
+            with self._bin_env():
+                with patch.object(aet.os, "execvp") as mock_exec:
+                    rc = aet.main()
         self.assertEqual(rc, 2)
         mock_exec.assert_not_called()
 
@@ -271,15 +295,16 @@ class TestAetErrorPaths(unittest.TestCase):
             with patch.object(aet, "_skills_root", lambda: Path(tmp)):
                 with patch.object(sys, "argv", ["aet", "ship"]):
                     with patch.object(sys, "stderr", stderr):
-                        with patch.object(aet.os, "execvp") as mock_exec:
-                            with self.assertRaises(SystemExit) as ctx:
-                                aet.main()
+                        with self._bin_env():
+                            with patch.object(aet.os, "execvp") as mock_exec:
+                                with self.assertRaises(SystemExit) as ctx:
+                                    aet.main()
         self.assertEqual(ctx.exception.code, 1)
         mock_exec.assert_not_called()
         self.assertIn("aet-ship", stderr.getvalue())
 
 
-class TestAetIntegration(unittest.TestCase):
+class TestAetIntegration(_IsolatedBinDir):
     """Subprocess integration: the real exec path reaches the target binary."""
 
     def test_status_via_real_exec(self):
@@ -289,6 +314,7 @@ class TestAetIntegration(unittest.TestCase):
             history_file = Path(tmp) / "history.jsonl"
             plans_dir = Path(tmp) / "plans"
             plans_dir.mkdir()
+            env = {**os.environ, "AET_BIN_DIR": str(self.bin_dir)}
             result = subprocess.run(
                 [
                     str(_AET_PY),
@@ -303,6 +329,7 @@ class TestAetIntegration(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 cwd=tmp,
+                env=env,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
 

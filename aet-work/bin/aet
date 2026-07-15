@@ -79,6 +79,15 @@ def _running_script() -> Path:
     return Path(__file__).resolve()
 
 
+def _is_worktree_copy(script: Path) -> bool:
+    """True when the running copy lives under a ``.worktrees`` directory.
+
+    Pipeline worktrees are ephemeral: a global symlink pointed at one
+    dangles as soon as the worktree is removed after merge.
+    """
+    return ".worktrees" in script.parts
+
+
 def _bin_dir() -> Path:
     """Return the link target dir: ``AET_BIN_DIR`` or ``~/.local/bin``."""
     override = os.environ.get("AET_BIN_DIR")
@@ -220,6 +229,13 @@ def _install(argv: list[str]) -> int:
     bin_dir.mkdir(parents=True, exist_ok=True)
 
     script = _running_script()
+    if _is_worktree_copy(script):
+        print(
+            f"  ⚠ refusing to link from an ephemeral worktree copy ({script});"
+            " run install from the main checkout.",
+            file=sys.stderr,
+        )
+        return 1
     link = bin_dir / "aet"
     if link.is_symlink():
         if _link_target_resolves_to(link, script):
@@ -257,6 +273,8 @@ def _ensure_path_link() -> None:
         bin_dir = _bin_dir()
         link = bin_dir / "aet"
         script = _running_script()
+        if _is_worktree_copy(script):
+            return  # ephemeral worktree copy — never a global install target
         if link.is_symlink():
             if _link_target_resolves_to(link, script):
                 return
