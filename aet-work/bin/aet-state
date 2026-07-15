@@ -6,7 +6,6 @@ validates transition legality, and updates footers + queue JSON atomically.
 """
 
 import argparse
-import importlib.util
 import json
 import os
 import re
@@ -15,22 +14,14 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Load the shared queue library from aet-work/lib/queue.py.
-_QUEUE_PY = Path(__file__).resolve().parent.parent / "lib" / "queue.py"
-_queue_spec = importlib.util.spec_from_file_location("aet_queue", _QUEUE_PY)
-queue_lib = importlib.util.module_from_spec(_queue_spec)
-_queue_spec.loader.exec_module(queue_lib)
-
-# Make aet-work/lib importable so we can load the backend factory.
+# Make aet-work/lib importable so we can load the queue library and backend factory.
 _LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
-from backends.factory import create_backend  # noqa: E402, I001
-import queue as backend_queue  # noqa: E402 — the queue module instance the backends use
 
-# queue.py is loaded twice in-process (as ``aet_queue`` above and as ``queue``
-# by the backends), so QueueIntegrityError exists as two distinct classes.
-# A mismatch raised by backend.load() is the backend copy; catch both.
-_INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError, backend_queue.QueueIntegrityError)
+import aet_queue as queue_lib  # noqa: E402
+from backends.factory import create_backend  # noqa: E402, I001
+
+_INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
 
 def make_backend(queue_path):
     """Create a task backend for the given queue path."""

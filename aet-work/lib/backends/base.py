@@ -100,7 +100,7 @@ class TaskBackend(ABC):
         and a second independent ``flock`` file descriptor to the same lock file
         would self-deadlock under POSIX ``flock`` semantics.
         """
-        from queue import append_history_record, read_queue, write_queue
+        from aet_queue import append_history_record, read_queue, write_queue
 
         queue = read_queue(self.queue_file)
         task = next((t for t in queue if t.get("id") == task_id), None)

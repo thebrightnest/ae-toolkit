@@ -21,13 +21,12 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
-from queue import (  # noqa: E402
+from aet_queue import (  # noqa: E402
     HISTORY_TERMINAL_STATES,
     QueueIntegrityError,
     append_history_record,
     lease_guard,
 )
-
 from backends.factory import create_backend  # noqa: E402
 from plan_parser import (  # noqa: E402
     intake_validation_errors,
