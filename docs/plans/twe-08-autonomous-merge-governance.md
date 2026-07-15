@@ -15,7 +15,7 @@ status: approved
 
 ## Context
 
-- PRD: `docs/prds/roadmap-p4-two-human-ends-prd.md` (G5; R-12). Remediates the **2026-07-15 autonomous-shipping audit** (`reports/2026-07-15-autonomous-shipping-audit.md`).
+- PRD: `docs/prds/roadmap-p4-two-human-ends-prd.md` (G5; R-12). Remediates the **2026-07-15 autonomous-shipping audit** (`docs/audits/2026-07-15-autonomous-shipping-audit.md`).
 - The **governance half** of G5: state the autonomous-merge boundary in code-adjacent governance (not load-bearing prose an AI reinterprets), and remove the in-skill ambiguity the incident exploited.
 - **Ground truth (2026-07-15):** `docs/adr/005-execution-mode.md` lists three "Gates That Must Still Stop in Unattended Mode" (ATOMIC OVERSIZED, Critical/High security, merge-verification failures), mirrored in `docs/CONVENTIONS.md` (§ "Gates That Must Still Stop in Unattended Mode", currently three bullets). `ADR-027` set the precedent for **extending** ADR-005 with a new must-stop category via a **new** ADR (ADRs are immutable). `aet-ship/SKILL.md:199` (step 14) says closure runs "after the PR is created and **the user indicates it has been merged**", but its Key Principles (`:285`) say "**Non-interactive by default** — the gate runs without human input until something is wrong" — the exact self-contradiction the agent resolved into a self-merge.
 - **The ADR itself is authored at `aet-validate-scope`** (ADR candidate 3 in the PRD), so this plan **mirrors** the already-authored ADR into `CONVENTIONS.md` and does the skill hygiene; it does not write the ADR.
