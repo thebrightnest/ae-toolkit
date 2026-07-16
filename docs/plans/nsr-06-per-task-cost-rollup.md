@@ -37,10 +37,10 @@ docs_sync_reason: introduces a per-task `cost` field on the ledger record that t
 
 ## Task List
 
-1. Add a per-`task_id` token/cost aggregation over the run's `stage` telemetry (null-preserving) — M (traces: R-11)
-2. Write the rolled-up `cost` onto the task's git-refs ledger record at task close — S (traces: R-11)
-3. Docs: document the per-task `cost` field and its analytics-only contract in `docs/PIPELINE.md` / CONTEXT.md — S (traces: R-11)
-4. Tests: `tests/test_per_task_cost_rollup.py` (new) — M (traces: R-11, R-13)
+1. ✓ Add a per-`task_id` token/cost aggregation over the run's `stage` telemetry (null-preserving) — M (traces: R-11)
+2. ✓ Write the rolled-up `cost` onto the task's git-refs ledger record at task close — S (traces: R-11)
+3. ✓ Docs: document the per-task `cost` field and its analytics-only contract in `docs/PIPELINE.md` / CONTEXT.md — S (traces: R-11)
+4. ✓ Tests: `tests/test_per_task_cost_rollup.py` (new) — M (traces: R-11, R-13)
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -78,5 +78,5 @@ Revert the merge commit. The per-task `cost` field stops being written; per-run 
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
