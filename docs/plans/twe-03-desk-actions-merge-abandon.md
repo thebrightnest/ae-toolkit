@@ -39,9 +39,9 @@ status: approved
 
 ## Task List
 
-1. [x] Add the `merge` subcommand to `aet-work/bin/desk`: live-queue id resolution, `awaiting_merge` precondition, drive the `aet-ship`/`record-merge` closure path, fail-closed named errors — M (traces: R-3)
-2. [x] Add the `abandon` subcommand: id resolution, required `--reason`, terminal transition via `aet-state`, fail-closed named errors — S (traces: R-3)
-3. [x] Tests: `tests/test_desk_actions.py` (new) — M (traces: R-3, R-11)
+1. [✓] Add the `merge` subcommand to `aet-work/bin/desk`: live-queue id resolution, `awaiting_merge` precondition, drive the `aet-ship`/`record-merge` closure path, fail-closed named errors — M (traces: R-3)
+2. [✓] Add the `abandon` subcommand: id resolution, required `--reason`, terminal transition via `aet-state`, fail-closed named errors — S (traces: R-3)
+3. [✓] Tests: `tests/test_desk_actions.py` (new) — M (traces: R-3, R-11)
 4. [ ] Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
@@ -80,5 +80,5 @@ Revert the merge commit. Actions are removed; the read-only desk (twe-02) and th
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
