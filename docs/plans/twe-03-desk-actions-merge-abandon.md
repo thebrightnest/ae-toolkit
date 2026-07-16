@@ -80,5 +80,5 @@ Revert the merge commit. Actions are removed; the read-only desk (twe-02) and th
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: None*
