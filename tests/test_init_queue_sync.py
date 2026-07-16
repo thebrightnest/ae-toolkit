@@ -116,8 +116,33 @@ def read_tasks(queue_file):
     return data
 
 
+def _repo_root_for_plan(path: Path) -> Path:
+    """Infer the repo root from a plan file path for PRD resolution."""
+    if path.parent.name == "plans" and path.parent.parent.name == "docs":
+        return path.parent.parent.parent
+    return path.parent.parent
+
+
+def _ensure_default_prd(path: Path) -> None:
+    """Create a default PRD so tests can produce intake-valid plans."""
+    repo_root = _repo_root_for_plan(path)
+    prds_dir = repo_root / "docs" / "prds"
+    prds_dir.mkdir(parents=True, exist_ok=True)
+    prd_path = prds_dir / "default-prd.md"
+    if not prd_path.exists():
+        prd_path.write_text(
+            "# Default PRD\n\n## Requirements\n- **R-1**: default requirement\n",
+            encoding="utf-8",
+        )
+
+
 def make_plan(path, title, blocked_by=None, size="M", extra_body=""):
-    """Write a minimal plan markdown file using the frontmatter contract."""
+    """Write a plan markdown file that passes the full intake validation suite.
+
+    ``extra_body`` is inserted before the default task list/validation content so
+    tests can supply their own task list (e.g. for oversized-plan tests) while
+    still inheriting a PRD reference and other intake-valid boilerplate.
+    """
     stem = path.stem
     lines = ["---", f"id: {stem}", f"size: {size}"]
     if blocked_by:
@@ -125,8 +150,18 @@ def make_plan(path, title, blocked_by=None, size="M", extra_body=""):
         for blocker in blocked_by:
             lines.append(f"  - {blocker}")
     lines.extend(["---", "", f"# {title}", ""])
+
+    _ensure_default_prd(path)
+    lines.extend(["## Context", "PRD: docs/prds/default-prd.md", ""])
+
     if extra_body:
         lines.extend([extra_body, ""])
+
+    lines.extend(["## Task List", "1. Do something (traces: R-1).", ""])
+    lines.extend(["## Files to Modify", "- `src/widget.py` (new)", ""])
+    lines.extend(
+        ["## Validation Steps", "- [ ] test_widget_creation verifies widget.py", ""]
+    )
     lines.extend(["---", "", "*Stage: plan-approved*"])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -395,14 +430,15 @@ class TestFrontmatterIntake(unittest.TestCase):
 
     def test_oversize_with_marker_is_accepted(self):
         """A marked oversized plan is accepted despite complexity limits."""
-        body_lines = ["## Task List"] + [f"{i}. task {i}" for i in range(302)]
-        content = (
-            "---\nid: big\nsize: L\n---\n\n# Big\n\n"
-            "\u26a0\ufe0f ATOMIC OVERSIZED\n\n"
-            + "\n".join(body_lines)
-            + "\n\n---\n\n*Stage: plan-approved*\n"
+        body_lines = ["\u26a0\ufe0f ATOMIC OVERSIZED", "", "## Task List"] + [
+            f"{i}. task {i} (traces: R-1)" for i in range(302)
+        ]
+        make_plan(
+            self.plans_dir / "big.md",
+            "Big",
+            size="L",
+            extra_body="\n".join(body_lines),
         )
-        (self.plans_dir / "big.md").write_text(content, encoding="utf-8")
 
         result, _ = run_script(
             "init-queue",
@@ -982,8 +1018,8 @@ class TestSync(unittest.TestCase):
         self.assertNotIn("settled", tasks)
         self.assertIn("1 skipped (already settled)", result.stdout)
 
-    def test_sync_does_not_revalidate_existing_queued_plans(self):
-        """sync trusts existing queue entries and does not add new plans."""
+    def test_sync_validates_existing_queued_plans(self):
+        """sync validates existing queue entries and rejects invalid ones."""
         existing = self.plans_dir / "existing.md"
         existing.write_text(
             "---\nid: existing\nsize: S\n---\n\n# Existing\n\n"
@@ -1010,16 +1046,15 @@ class TestSync(unittest.TestCase):
         }
         self.queue_file.write_text(json.dumps(initial))
 
-        make_plan(self.plans_dir / "new.md", "New task", size="S")
-
         result, _ = run_script(
             "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("legacy dependency section", result.stderr)
 
+        # Fail-closed: the queue file is not mutated, so the existing entry stays.
         tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
         self.assertIn("existing", tasks)
-        self.assertNotIn("new", tasks)
 
     def test_sync_never_adds_new_plans(self):
         """sync reconciles existing entries and never auto-adds plans from disk."""

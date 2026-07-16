@@ -37,11 +37,39 @@ def _load_bin(name: str):
 
 
 def _write_plan(plans_dir: Path, stem: str) -> Path:
-    """Write a minimal valid plan file and return its path."""
+    """Write a plan file that passes the full intake validation suite."""
     plans_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create a default PRD in the canonical layout for rtrace resolution.
+    if plans_dir.name == "plans" and plans_dir.parent.name == "docs":
+        repo_root = plans_dir.parent.parent
+    else:
+        repo_root = plans_dir.parent
+    prds_dir = repo_root / "docs" / "prds"
+    prds_dir.mkdir(parents=True, exist_ok=True)
+    prd_path = prds_dir / "default-prd.md"
+    if not prd_path.exists():
+        prd_path.write_text(
+            "# Default PRD\n\n## Requirements\n- **R-1**: default requirement\n",
+            encoding="utf-8",
+        )
+
     plan = plans_dir / f"{stem}.md"
     plan.write_text(
-        f"---\nid: {stem}\nsize: S\n---\n\n# {stem}\n\n_Stage: plan-approved_\n",
+        f"---\n"
+        f"id: {stem}\n"
+        f"size: S\n"
+        f"---\n\n"
+        f"# {stem}\n\n"
+        f"## Context\n"
+        f"PRD: docs/prds/default-prd.md\n\n"
+        f"## Task List\n"
+        f"1. Do something (traces: R-1).\n\n"
+        f"## Files to Modify\n"
+        f"- `src/widget.py` (new)\n\n"
+        f"## Validation Steps\n"
+        f"- [ ] test_widget_creation verifies widget.py\n\n"
+        f"_Stage: plan-approved_\n",
         encoding="utf-8",
     )
     return plan
