@@ -83,5 +83,5 @@ Revert the merge commit. `init-queue` returns to its standalone structural call;
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

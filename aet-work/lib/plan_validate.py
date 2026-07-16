@@ -135,10 +135,14 @@ def _repo_root_for(plan: Path) -> Path:
 
 
 def structural_findings(
-    plan_files: list[Path], limit_to: set[Path] | None = None
+    plan_files: list[Path],
+    limit_to: set[Path] | None = None,
+    extra_known_ids: set[str] | None = None,
 ) -> list[Finding]:
     """Delegate structural intake validation to ``plan_parser``."""
-    errors = plan_parser.intake_validation_errors(plan_files, limit_to=limit_to)
+    errors = plan_parser.intake_validation_errors(
+        plan_files, limit_to=limit_to, extra_known_ids=extra_known_ids
+    )
     return [Finding("structural", path, message) for path, message in errors]
 
 
@@ -289,7 +293,9 @@ def scope_findings(plan: Path, repo_root: Path) -> list[Finding]:
 
 
 def validate(
-    plans: list[Path], repo_root: Path | None = None
+    plans: list[Path],
+    repo_root: Path | None = None,
+    extra_known_ids: set[str] | None = None,
 ) -> list[Finding]:
     """Run the full check suite over the requested plan files.
 
@@ -297,6 +303,9 @@ def validate(
     parse every plan in the directory (when a directory context is available)
     so that blocker references and duplicate-id detection remain accurate,
     but only report errors for files in ``plans``.
+
+    ``extra_known_ids`` allows callers to include settled history ids as valid
+    blocker references.
     """
     if repo_root is None and plans:
         repo_root = _repo_root_for(plans[0])
@@ -311,7 +320,9 @@ def validate(
         all_plans = sorted(plans_dir.glob("*.md")) if plans_dir.exists() else plans
     else:
         all_plans = plans
-    findings.extend(structural_findings(all_plans, limit_to=limit_to))
+    findings.extend(
+        structural_findings(all_plans, limit_to=limit_to, extra_known_ids=extra_known_ids)
+    )
 
     for plan in plans:
         findings.extend(rtrace_findings(plan))

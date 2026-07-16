@@ -349,6 +349,7 @@ def _routing_key_error(data: dict[str, Any]) -> str | None:
 def intake_validation_errors(
     plan_files: list[Path],
     limit_to: set[Path] | None = None,
+    extra_known_ids: set[str] | None = None,
 ) -> list[tuple[Path, str]]:
     """Validate plan files for intake and return a list of fatal errors.
 
@@ -360,6 +361,10 @@ def intake_validation_errors(
     By default every file is validated. When ``limit_to`` is provided, only files
     in that set produce validation errors, but every file is still parsed so that
     cross-plan blocker references and duplicate-id detection remain accurate.
+
+    ``extra_known_ids`` allows callers (e.g. ``aet-work add``) to include
+    already-settled task ids that are valid blocker references even though the
+    plan file may no longer be present.
     """
     parsed: dict[Path, dict[str, Any]] = {}
     ids: list[str] = []
@@ -371,7 +376,7 @@ def intake_validation_errors(
             ids.append(task_id)
 
     duplicate_ids = {task_id for task_id in ids if ids.count(task_id) > 1}
-    known_ids = set(ids)
+    known_ids = set(ids) | (extra_known_ids or set())
 
     errors: list[tuple[Path, str]] = []
     for pf in plan_files:
