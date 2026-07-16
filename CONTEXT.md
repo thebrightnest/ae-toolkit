@@ -17,7 +17,7 @@ The markdown document in `docs/plans/` that describes how to implement a task an
 _Avoid_: PRD, roadmap, spec.
 
 **State**:
-The canonical workflow state stored in `tasks[].state` while a task is in the queue: `planned`, `ready`, `blocked`, `in_progress`, `awaiting_merge`, or `failed`.
+The canonical workflow state stored in `tasks[].state` while a task is in the queue: `planned`, `ready`, `blocked`, `in_progress`, `awaiting_merge`, `failed`, or `quarantined`.
 _Avoid_: using `state` for terminal truth.
 
 **Status (plan lifecycle)**:
@@ -61,12 +61,35 @@ The product requirements document that generated the plan, referenced from the p
 ## Forward-Only State Model (ADR-011, revised by ADR-013)
 
 **State**:
-The canonical workflow state stored in `tasks[].state` while a task is active in the queue: `planned`, `ready`, `blocked`, `in_progress`, `awaiting_merge`, or `failed`.
+The canonical workflow state stored in `tasks[].state` while a task is active in the queue: `planned`, `ready`, `blocked`, `in_progress`, `awaiting_merge`, `failed`, or `quarantined`.
 _Avoid_: using `state` for terminal truth.
 
 **Terminal State**:
 A plan `status` value that ends a task's lifecycle and satisfies blockers: `merged` or `abandoned`. `failed` is **not** terminal and does **not** unblock dependents.
 _Avoid_: treating `failed` or legacy `done` as terminal.
+
+**Quarantined**:
+A non-actionable task state entered when the **Circuit Breaker** judges a failure deterministic (`{in_progress, failed} → quarantined`). Like `failed`, it is **not** terminal and does **not** unblock dependents; unlike `failed`, it is never auto-retried — a human clears it forward (`quarantined → ready`) after a fix, or abandons it. (ADR-030)
+_Avoid_: conflating a breaker quarantine with human `abandoned`, or expecting the scheduler to ever re-pick it on its own.
+
+## Night-Shift Runtime (ADR-030, ADR-031)
+
+**Failure Class**:
+The single category assigned to a terminating agent session: `environment`, `flaky`, `design`, `timeout`, or `canceled`. A fixed, code-owned menu — the breaker's counting never depends on an LLM inferring it. (ADR-030)
+
+**Failure Signature**:
+A deterministic short digest of `(stage, normalized-error)` with volatile spans (paths, PIDs, timestamps, ids, line numbers) stripped, so identical failures collide and distinct ones do not. It is the key the **Circuit Breaker** counts. (ADR-030)
+
+**Circuit Breaker**:
+The deterministic rule that stops throwing work at a repeating failure: **per-task** (the same **Failure Signature** 3× ⇒ the task is quarantined) and **systemic** (one signature across N distinct tasks ⇒ the shift stops spawning). Counts are persisted, so a quarantine survives across shifts. (ADR-030)
+
+**Triage**:
+A bounded judgment session spawned on a failure under the default `--on-failure=triage`, which confirms the **Failure Class** and routes the outcome — requeue (`flaky`/`environment`) vs quarantine (`design`). Judgment lives in an explicit, sanctioned session; the engine only enforces its verdict, and the breaker bounds it. (ADR-030)
+_Avoid_: reading "triage" as a runtime conditional embedded in the engine — the engine holds no hidden branch; it spawns a session and enforces the result, as it does for any stage.
+
+**Per-Task Cost**:
+Token and dollar totals rolled up per task from stage telemetry onto the task's ledger record at close. **Analytics only** — read by the desk and the scoreboard, never by any gate, kill, or triage path. Null is preserved (an unmeasurable task records null, never `0`). (ADR-031)
+_Avoid_: treating cost as a budget ceiling or any execution-control signal.
 
 **History**:
 Append-only log of transition entries and closure events written to the optional, gitignored `.agents/work-history.jsonl`. It is used for reporting, not for scheduling or closure determination.
