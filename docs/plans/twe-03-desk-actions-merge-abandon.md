@@ -39,10 +39,10 @@ status: approved
 
 ## Task List
 
-1. Add the `merge` subcommand to `aet-work/bin/desk`: live-queue id resolution, `awaiting_merge` precondition, drive the `aet-ship`/`record-merge` closure path, fail-closed named errors — M (traces: R-3)
-2. Add the `abandon` subcommand: id resolution, required `--reason`, terminal transition via `aet-state`, fail-closed named errors — S (traces: R-3)
-3. Tests: `tests/test_desk_actions.py` (new) — M (traces: R-3, R-11)
-4. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
+1. [x] Add the `merge` subcommand to `aet-work/bin/desk`: live-queue id resolution, `awaiting_merge` precondition, drive the `aet-ship`/`record-merge` closure path, fail-closed named errors — M (traces: R-3)
+2. [x] Add the `abandon` subcommand: id resolution, required `--reason`, terminal transition via `aet-state`, fail-closed named errors — S (traces: R-3)
+3. [x] Tests: `tests/test_desk_actions.py` (new) — M (traces: R-3, R-11)
+4. [ ] Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -59,15 +59,15 @@ status: approved
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] New source coverage — `tests/test_desk_actions.py`:
+- [x] `make validate` passes; full suite passes
+- [x] New source coverage — `tests/test_desk_actions.py`:
   - `test_merge_drives_closure_path_to_merged`
   - `test_abandon_records_terminal_transition_with_reason`
   - `test_merge_unknown_id_fails_closed_nonzero`
   - `test_merge_non_awaiting_merge_task_fails_closed`
   - `test_abandon_missing_reason_fails_closed`
   - `test_no_second_closure_writer` (asserts `merged` still routed through `record-merge`)
-- [ ] R-trace coverage: R-3 by tasks 1–2; R-11 (this slice) by task 3; no unknown R-ids cited
+- [x] R-trace coverage: R-3 by tasks 1–2; R-11 (this slice) by task 3; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -80,5 +80,5 @@ Revert the merge commit. Actions are removed; the read-only desk (twe-02) and th
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
