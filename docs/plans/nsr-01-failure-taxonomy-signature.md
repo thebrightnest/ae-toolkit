@@ -78,5 +78,5 @@ Revert the merge commit. The module is standalone and imported by nothing until 
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
