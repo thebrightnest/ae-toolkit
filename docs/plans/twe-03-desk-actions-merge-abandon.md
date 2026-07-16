@@ -80,5 +80,5 @@ Revert the merge commit. Actions are removed; the read-only desk (twe-02) and th
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
