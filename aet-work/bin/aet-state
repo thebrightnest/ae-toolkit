@@ -570,6 +570,11 @@ def cmd_heal(args):
         stored_state = queue_lib.current_state(task)
         derived_state = derived[task_id]["derived_status"].split(" (warning")[0]
 
+        # Quarantined is a human-held state: it reconciles to itself and is never
+        # auto-derived away by heal (nsr-02).
+        if stored_state == "quarantined":
+            continue
+
         change = None
         # Only heal toward terminal/ready states; never move a merged task backward.
         if derived_state == "merged" and stored_state != "merged":
