@@ -85,5 +85,5 @@ Revert the merge commit. The desk is read-only, so removal restores the prior re
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
