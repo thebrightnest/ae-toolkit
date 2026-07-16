@@ -65,6 +65,21 @@ def _make_plan(
 ) -> Path:
     path = plans_dir / name
     blocked_lines = "".join(f"  - {b}\n" for b in (blocked_by or []))
+
+    # Create a default PRD so plans pass the full intake validation suite.
+    if plans_dir.name == "plans" and plans_dir.parent.name == "docs":
+        repo_root = plans_dir.parent.parent
+    else:
+        repo_root = plans_dir.parent
+    prds_dir = repo_root / "docs" / "prds"
+    prds_dir.mkdir(parents=True, exist_ok=True)
+    prd_path = prds_dir / "default-prd.md"
+    if not prd_path.exists():
+        prd_path.write_text(
+            "# Default PRD\n\n## Requirements\n- **R-1**: default requirement\n",
+            encoding="utf-8",
+        )
+
     body = f"""---
 id: {Path(name).stem}
 size: M
@@ -73,9 +88,20 @@ blocked_by:
 
 # Plan: {name}
 
+## Context
+PRD: docs/prds/default-prd.md
+
 ## Task List
 
-1. Do something.
+1. Do something (traces: R-1).
+
+## Files to Modify
+
+- `src/widget.py` (new)
+
+## Validation Steps
+
+- [ ] test_widget_creation verifies widget.py
 
 ---
 

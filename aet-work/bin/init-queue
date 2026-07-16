@@ -21,6 +21,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+import plan_validate  # noqa: E402
 from aet_queue import (  # noqa: E402
     HISTORY_TERMINAL_STATES,
     QueueIntegrityError,
@@ -29,7 +30,6 @@ from aet_queue import (  # noqa: E402
 )
 from backends.factory import create_backend  # noqa: E402
 from plan_parser import (  # noqa: E402
-    intake_validation_errors,
     most_recent_prd,
     new_task_from_plan,
 )
@@ -259,10 +259,24 @@ def main() -> int:
 
     plan_files = sorted(plans_dir.glob("*.md"))
 
-    errors = intake_validation_errors(plan_files)
-    if errors:
-        for pf, reason in errors:
-            print(f"❌ {pf.name}: {reason}", file=sys.stderr)
+    repo_root = Path(
+        subprocess.run(
+            ["git", "-C", str(plans_dir), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        or str(plans_dir.parent.parent)
+    )
+    findings = plan_validate.validate(plan_files, repo_root=repo_root)
+    plan_texts = {pf: pf.read_text(errors="ignore") for pf in plan_files}
+    findings = plan_validate.apply_acks(findings, plan_texts)
+    unacked = [f for f in findings if not f.acked]
+    if unacked:
+        for finding in unacked:
+            print(
+                f"❌ {finding.plan.name}: {finding.check_id}: {finding.message}",
+                file=sys.stderr,
+            )
         return 1
 
     preserved = 0

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+import plan_validate  # noqa: E402
 from aet_queue import QueueIntegrityError, build_blocks, lease_guard  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 
@@ -108,6 +110,37 @@ def main() -> int:
             preserved += 1
 
     build_blocks(final_queue)
+
+    # Validate existing queue entries before any reconciliation or save.
+    plan_files_to_validate = []
+    for task in final_queue:
+        pf = task.get("plan_file")
+        if pf:
+            plan_path = Path(pf)
+            if plan_path.is_file():
+                plan_files_to_validate.append(plan_path)
+
+    repo_root = Path(
+        subprocess.run(
+            ["git", "-C", str(plans_dir), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        or str(plans_dir.parent.parent)
+    )
+    findings = plan_validate.validate(plan_files_to_validate, repo_root=repo_root)
+    plan_texts = {
+        pf: pf.read_text(errors="ignore") for pf in plan_files_to_validate
+    }
+    findings = plan_validate.apply_acks(findings, plan_texts)
+    unacked = [f for f in findings if not f.acked]
+    if unacked:
+        for finding in unacked:
+            print(
+                f"❌ {finding.plan.name}: {finding.check_id}: {finding.message}",
+                file=sys.stderr,
+            )
+        return 1
 
     # Report plan drift without mutating stored state.
     drifted = 0
