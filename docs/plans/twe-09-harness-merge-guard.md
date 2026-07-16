@@ -44,11 +44,11 @@ status: approved
 
 ## Task List
 
-1. `aet-setup/lib/harness_guard.py`: active-harness detection (markers + override) + adapter registry/interface + unsupported-harness named-gap path — M (traces: R-13)
-2. Claude Code adapter in `aet-setup/lib/harness_guard.py`: generate the `PreToolUse` guard (script + settings hook entry) refusing `gh pr merge`; idempotent, non-clobbering, marker-based — M (traces: R-13)
-3. `aet-setup/bin/harness-guard` (`install`/`check`), wired into the setup procedure — S (traces: R-13)
-4. `tests/test_harness_merge_guard.py` — M (traces: R-13, R-14)
-5. Docs: `aet-setup/SKILL.md` (harness-adapter interface + guard) + `aet-setup/checklist.md` (guard install step) — S (traces: R-13)
+1. ✓ `aet-setup/lib/harness_guard.py`: active-harness detection (markers + override) + adapter registry/interface + unsupported-harness named-gap path — M (traces: R-13)
+2. ✓ Claude Code adapter in `aet-setup/lib/harness_guard.py`: generate the `PreToolUse` guard (script + settings hook entry) refusing `gh pr merge`; idempotent, non-clobbering, marker-based — M (traces: R-13)
+3. ✓ `aet-setup/bin/harness-guard` (`install`/`check`), wired into the setup procedure and the `aet` dispatcher — S (traces: R-13)
+4. ✓ `tests/test_harness_merge_guard.py` — M (traces: R-13, R-14) [Added: extra harness-detection and CLI coverage tests]
+5. ✓ Docs: `aet-setup/SKILL.md` (harness-adapter interface + guard) + `aet-setup/checklist.md` (guard install step) — S (traces: R-13) [Changed: base `SKILL.md` was already at the 400-line recommended limit, now 410; validator warns but passes]
 6. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
@@ -69,17 +69,17 @@ status: approved
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] New source coverage — `tests/test_harness_merge_guard.py`:
+- [x] `make validate` passes; full suite passes
+- [x] New source coverage — `tests/test_harness_merge_guard.py`:
   - `test_detects_claude_code_from_marker`
   - `test_explicit_override_beats_detection`
   - `test_claude_guard_refuses_gh_pr_merge` (simulated `PreToolUse` invocation returns a blocking decision)
   - `test_guard_ignores_git_push_and_desk_merge` (a `git push` / `aet desk merge` command is not blocked)
   - `test_guard_install_is_idempotent_and_non_clobbering`
   - `test_unsupported_harness_named_gap_nonzero` (fail-safe: no silent pass)
-- [ ] R-trace coverage: R-13 by tasks 1–3,5; R-14 (guard slice) by task 4; no unknown R-ids cited
-- [ ] Generated guard is confirmed gitignorable (Mode-1 non-invasive) — install writes under the harness config dir, not the tracked tree
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-13 by tasks 1–3,5; R-14 (guard slice) by task 4; no unknown R-ids cited
+- [x] Generated guard is confirmed gitignorable (Mode-1 non-invasive) — install writes under the harness config dir, not the tracked tree
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` [Deferred: runs at `aet-ship`]
 
 ## Rollback Plan
 
@@ -91,5 +91,5 @@ Revert the merge commit. The generator and adapter are removed; any already-gene
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

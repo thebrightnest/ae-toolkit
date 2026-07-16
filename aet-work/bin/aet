@@ -47,6 +47,7 @@ SUBCOMMANDS = {
         "mode": "exec",
     },
     "hooks": {"target": ("aet-setup", "hooks"), "mode": "exec"},
+    "harness-guard": {"target": ("aet-setup", "harness-guard"), "mode": "exec"},
     "install": {"target": ("aet-work", "aet"), "mode": "internal"},
 }
 
