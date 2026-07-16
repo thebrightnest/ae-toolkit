@@ -296,6 +296,12 @@ def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[
     pending = [b for b in blocked_by if b not in settled]
 
     state = "ready" if not pending else "blocked"
+    work_class = data.get("work_class")
+    if isinstance(work_class, str) and work_class.lower() in {"trivial", "normal", "critical"}:
+        work_class = work_class.lower()
+    else:
+        work_class = "unclassified"
+
     task: dict[str, Any] = {
         "id": data.get("id", path.stem),
         "title": title_from_plan(path),
@@ -309,6 +315,7 @@ def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[
         "merged_at": None,
         "worktree": None,
         "branch": None,
+        "work_class": work_class,
     }
     append_history(task, None, state, "sync")
     return task
@@ -345,9 +352,10 @@ def intake_validation_errors(
 ) -> list[tuple[Path, str]]:
     """Validate plan files for intake and return a list of fatal errors.
 
-    Checks the frontmatter contract (id, size, blocked_by, gate-routing keys),
-    cross-plan blocker references, multi-unit plan markers, atomic-complexity
-    limits, and legacy dependency sections that would silently drop blockers.
+    Checks the frontmatter contract (id, size, blocked_by, work_class,
+    gate-routing keys), cross-plan blocker references, multi-unit plan markers,
+    atomic-complexity limits, and legacy dependency sections that would silently
+    drop blockers.
 
     By default every file is validated. When ``limit_to`` is provided, only files
     in that set produce validation errors, but every file is still parsed so that
@@ -386,6 +394,16 @@ def intake_validation_errors(
         size = data.get("size")
         if size not in {"S", "M", "L"}:
             errors.append((pf, f"invalid size: {size}"))
+            continue
+
+        work_class = data.get("work_class")
+        if work_class is not None and (
+            not isinstance(work_class, str)
+            or work_class.lower() not in {"trivial", "normal", "critical"}
+        ):
+            errors.append(
+                (pf, f"work_class must be one of trivial|normal|critical (got '{work_class}')")
+            )
             continue
 
         routing_error = _routing_key_error(data)
