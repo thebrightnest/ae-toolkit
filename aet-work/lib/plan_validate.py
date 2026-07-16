@@ -155,13 +155,14 @@ _RID_RE = re.compile(r"\bR-\d+\b")
 _TASK_TRACE_RE = re.compile(r"\(\s*traces:\s*([^)]+)\)")
 
 
-def _prd_path_for_plan(plan: Path) -> Path | None:
+def _prd_path_for_plan(plan: Path, repo_root: Path | None = None) -> Path | None:
     """Resolve the PRD file referenced from a plan's context."""
     text = plan.read_text(errors="ignore")
     match = _PRD_REF_RE.search(text)
     if not match:
         return None
-    return _repo_root_for(plan) / match.group(1)
+    root = repo_root if repo_root is not None else _repo_root_for(plan)
+    return root / match.group(1)
 
 
 def _requirements_rids(prd: Path) -> set[str]:
@@ -181,9 +182,39 @@ def _task_trace_rids(plan: Path) -> set[str]:
     return rids
 
 
-def rtrace_findings(plan: Path) -> list[Finding]:
-    """Check that every in-scope R-id is traced and every trace is valid."""
-    prd = _prd_path_for_plan(plan)
+def _prd_coverage(
+    all_plans: list[Path], repo_root: Path | None
+) -> dict[Path, set[str]]:
+    """Union of task-traced R-ids per referenced PRD across the plan set.
+
+    AET decomposes one PRD into many atomic plans, so requirement coverage is
+    a property of the whole set, not of any single plan: this maps each PRD to
+    every R-id traced by any plan referencing it, letting ``rtrace_findings``
+    credit a requirement covered by a sibling plan.
+    """
+    coverage: dict[Path, set[str]] = {}
+    for plan in all_plans:
+        prd = _prd_path_for_plan(plan, repo_root)
+        if prd is None:
+            continue
+        coverage.setdefault(prd, set()).update(_task_trace_rids(plan))
+    return coverage
+
+
+def rtrace_findings(
+    plan: Path,
+    repo_root: Path | None = None,
+    coverage: dict[Path, set[str]] | None = None,
+) -> list[Finding]:
+    """Check R-id coverage across the plan set and per-plan citation validity.
+
+    Coverage — every PRD requirement traced by some task — is a whole-set
+    property: a requirement is covered when *any* plan sharing the PRD traces
+    it. ``coverage`` carries that plan-set union (see ``_prd_coverage``);
+    without it a plan is judged against its own traces alone. Citation
+    validity — no task cites an R-id absent from the PRD — stays per-plan.
+    """
+    prd = _prd_path_for_plan(plan, repo_root)
     if prd is None:
         return [Finding("rtrace", plan, "no PRD reference found in plan context")]
     if not prd.exists():
@@ -191,14 +222,16 @@ def rtrace_findings(plan: Path) -> list[Finding]:
 
     required = _requirements_rids(prd)
     task_rids = _task_trace_rids(plan)
+
+    covered = set(task_rids)
+    if coverage is not None:
+        covered |= coverage.get(prd, set())
+
     findings: list[Finding] = []
-
-    for rid in sorted(required):
-        if rid not in task_rids:
-            findings.append(
-                Finding("rtrace", plan, f"requirement {rid} has no covering task")
-            )
-
+    for rid in sorted(required - covered):
+        findings.append(
+            Finding("rtrace", plan, f"requirement {rid} has no covering task")
+        )
     for rid in sorted(task_rids - required):
         findings.append(Finding("rtrace", plan, f"task cites unknown requirement {rid}"))
 
@@ -210,6 +243,30 @@ def rtrace_findings(plan: Path) -> list[Finding]:
 # ---------------------------------------------------------------------------
 
 _NEW_FILE_RE = re.compile(r"`?([^`]+)`?\s*\(new\)")
+
+# A named test *file* — ``test_x.py``, ``x_test.go``, ``x.test.ts``,
+# ``x.spec.js`` — so the strategy is credited when it names a test for the
+# behavior rather than echoing the source filename.
+_TEST_FILE_RE = re.compile(
+    r"\b(?:test[_-][\w-]+|[\w-]+[_-]test|[\w-]+\.(?:test|spec))\.\w+\b",
+    re.IGNORECASE,
+)
+
+
+def _is_testable_source(ref: str) -> bool:
+    """Whether a new ``Files to Modify`` deliverable is source a validation
+    strategy should name a test for.
+
+    Documentation write-ups (audit docs, ADRs, templates — anything under
+    ``docs/`` or ending in ``.md``) and directory entries are deliverables
+    but not testable source files, so they carry no named test.
+    """
+    ref = ref.strip()
+    if ref.endswith("/"):
+        return False
+    if ref.lower().endswith(".md"):
+        return False
+    return "docs" not in Path(ref).parts
 
 
 def acceptance_findings(plan: Path) -> list[Finding]:
@@ -247,7 +304,7 @@ def acceptance_findings(plan: Path) -> list[Finding]:
     new_files: list[str] = []
     for item in _list_items(files_section):
         match = _NEW_FILE_RE.search(item)
-        if match:
+        if match and _is_testable_source(match.group(1)):
             new_files.append(Path(match.group(1).strip()).name)
 
     val_names = [
@@ -255,9 +312,16 @@ def acceptance_findings(plan: Path) -> list[Finding]:
         for it in ac_items
     ]
 
+    # A validation strategy that names a test file (e.g. a "New source
+    # coverage" block citing tests/test_*.py) evidences test coverage even
+    # when the test is named for the behavior, not the source file. Only a
+    # strategy naming no test at all leaves a new source file uncovered.
+    names_test_file = any(_TEST_FILE_RE.search(it) for it in ac_items)
+
     for new_file in new_files:
         stem = Path(new_file).stem
-        if not any(stem in name or new_file in name for name in val_names):
+        named_for_file = any(stem in name or new_file in name for name in val_names)
+        if not named_for_file and not names_test_file:
             findings.append(
                 Finding(
                     "acceptance",
@@ -324,8 +388,13 @@ def validate(
         structural_findings(all_plans, limit_to=limit_to, extra_known_ids=extra_known_ids)
     )
 
+    # R-trace coverage is a whole-plan-set property: one PRD decomposes into
+    # many atomic plans, so a requirement is covered when any sibling traces
+    # it. Build the union from the full plan set, then report per plan.
+    coverage = _prd_coverage(all_plans, repo_root)
+
     for plan in plans:
-        findings.extend(rtrace_findings(plan))
+        findings.extend(rtrace_findings(plan, repo_root=repo_root, coverage=coverage))
         findings.extend(acceptance_findings(plan))
         if repo_root:
             findings.extend(scope_findings(plan, repo_root))

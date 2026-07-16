@@ -116,6 +116,32 @@ class TestRtraceValidation(unittest.TestCase):
         self.assertEqual(len(rtrace), 1)
         self.assertIn("R-99", rtrace[0].message)
 
+    def test_rtrace_coverage_credited_across_plan_set(self):
+        """A requirement covered by a sibling plan is not flagged as uncovered.
+
+        One PRD decomposes into many atomic plans, so coverage is a whole-set
+        property: each plan need only trace its own slice.
+        """
+        prd = self.prds_dir / "prd.md"
+        make_prd(prd, rids=["R-4", "R-5"])
+        plan_a = self.plans_dir / "plan-a.md"
+        plan_b = self.plans_dir / "plan-b.md"
+        make_plan(
+            plan_a,
+            prd_ref="docs/prds/prd.md",
+            body="## Task List\n1. Task one (traces: R-4)\n",
+        )
+        make_plan(
+            plan_b,
+            prd_ref="docs/prds/prd.md",
+            body="## Task List\n1. Task two (traces: R-5)\n",
+        )
+
+        findings = plan_validate.validate([plan_a, plan_b], repo_root=self.root)
+
+        rtrace = [f for f in findings if f.check_id == "rtrace"]
+        self.assertEqual(rtrace, [], [f.message for f in rtrace])
+
 
 class TestAcceptanceValidation(unittest.TestCase):
     def setUp(self):
@@ -162,6 +188,59 @@ class TestAcceptanceValidation(unittest.TestCase):
         acceptance = [f for f in findings if f.check_id == "acceptance"]
         self.assertEqual(len(acceptance), 1)
         self.assertIn("widget.py", acceptance[0].message)
+
+    def test_doc_deliverable_needs_no_named_test(self):
+        """A new documentation deliverable (docs/*.md) is not testable source."""
+        plan = self.plans_dir / "plan.md"
+        body = (
+            "## Files to Modify\n"
+            "- `docs/audits/rehearsal-writeup.md` (new)\n"
+            "\n"
+            "## Validation Steps\n"
+            "- [ ] Run the full suite\n"
+        )
+        make_plan(plan, body=body)
+
+        findings = plan_validate.validate([plan], repo_root=self.root)
+
+        acceptance = [f for f in findings if f.check_id == "acceptance"]
+        self.assertEqual(acceptance, [], [f.message for f in acceptance])
+
+    def test_feature_named_test_credits_new_source(self):
+        """A new source file is covered when the strategy names a test file,
+        even if the test is named for the behavior, not the source file."""
+        plan = self.plans_dir / "plan.md"
+        body = (
+            "## Files to Modify\n"
+            "- `src/track_record.py` (new)\n"
+            "\n"
+            "## Validation Steps\n"
+            "- [ ] New source coverage — `tests/test_zero_review.py`:\n"
+            "  - `test_clean_merge_counts_all_pass`\n"
+        )
+        make_plan(plan, body=body)
+
+        findings = plan_validate.validate([plan], repo_root=self.root)
+
+        acceptance = [f for f in findings if f.check_id == "acceptance"]
+        self.assertEqual(acceptance, [], [f.message for f in acceptance])
+
+    def test_new_directory_needs_no_named_test(self):
+        """A new directory deliverable (trailing slash) is not a source file."""
+        plan = self.plans_dir / "plan.md"
+        body = (
+            "## Files to Modify\n"
+            "- `tests/fixtures/scenario/` (new)\n"
+            "\n"
+            "## Validation Steps\n"
+            "- [ ] Run the full suite\n"
+        )
+        make_plan(plan, body=body)
+
+        findings = plan_validate.validate([plan], repo_root=self.root)
+
+        acceptance = [f for f in findings if f.check_id == "acceptance"]
+        self.assertEqual(acceptance, [], [f.message for f in acceptance])
 
 
 class TestScopeValidation(unittest.TestCase):
