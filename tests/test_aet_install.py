@@ -35,17 +35,28 @@ class InstallTestCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.bin_dir = Path(self.tmp.name) / "bin"
 
-    def _run_install(self, *args, env_extra=None):
-        """Run `aet install <args>` in-process; returns (rc, stdout, stderr)."""
+    def _run_install(self, *args, env_extra=None, allow_worktree=False):
+        """Run `aet install <args>` in-process; returns (rc, stdout, stderr).
+
+        By default ``_is_worktree_copy`` is forced to ``False`` so the suite
+        passes when executed from a pipeline worktree. Tests that specifically
+        exercise worktree guarding pass ``allow_worktree=True``.
+        """
         stdout, stderr = io.StringIO(), io.StringIO()
         env = {"AET_BIN_DIR": str(self.bin_dir), "PATH": "/usr/bin:/bin"}
         if env_extra:
             env.update(env_extra)
+        wt_patch = (
+            patch.object(aet, "_is_worktree_copy", lambda _script: False)
+            if not allow_worktree
+            else patch.object(aet, "_is_worktree_copy", aet._is_worktree_copy)
+        )
         with patch.object(sys, "argv", ["aet", "install", *args]):
             with patch.dict(os.environ, env):
                 with patch.object(sys, "stdout", stdout):
                     with patch.object(sys, "stderr", stderr):
-                        rc = aet.main()
+                        with wt_patch:
+                            rc = aet.main()
         return rc, stdout.getvalue(), stderr.getvalue()
 
 
@@ -205,7 +216,10 @@ class TestSelfRepair(InstallTestCase):
         with patch.object(sys, "argv", argv):
             with patch.dict(os.environ, {"AET_BIN_DIR": str(self.bin_dir)}):
                 with patch.object(aet.os, "execvp", side_effect=SystemExit(0)):
-                    return aet.main()
+                    with patch.object(
+                        aet, "_is_worktree_copy", lambda _script: False
+                    ):
+                        return aet.main()
 
     def test_deleted_link_restored_on_invocation(self):
         rc = self._dispatch(["aet", "status"])
@@ -267,13 +281,19 @@ class TestWorktreeCopyGuard(InstallTestCase):
     def test_install_refuses_worktree_copy(self):
         wt = self._worktree_copy()
         with patch.object(aet, "_running_script", lambda: wt):
-            rc, _, err = self._run_install("--bin-dir", str(self.bin_dir))
+            rc, _, err = self._run_install(
+                "--bin-dir", str(self.bin_dir), allow_worktree=True
+            )
 
         self.assertEqual(rc, 1)
         self.assertIn("worktree", err)
         self.assertFalse((self.bin_dir / "aet").exists())
 
 
+@unittest.skipIf(
+    aet._is_worktree_copy(_SCRIPT),
+    "subprocess integration cannot override worktree-copy guard",
+)
 class TestInstallIntegration(InstallTestCase):
     """Subprocess integration: real install, then self-repair via `aet status`."""
 
