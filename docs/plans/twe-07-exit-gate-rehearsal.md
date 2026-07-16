@@ -73,5 +73,5 @@ Revert the merge commit — removes a documentation artifact only; no code path 
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: tdd-complete*
+*Next step: run `aet-implement`*
