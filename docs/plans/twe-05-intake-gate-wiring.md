@@ -83,4 +83,5 @@ Revert the merge commit. `init-queue` returns to its standalone structural call;
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
