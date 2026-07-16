@@ -41,8 +41,8 @@ status: approved
 
 ## Task List
 
-1. Execute the four-part rehearsal (desk merge, intake rejection, zero-review off, merge-guard refuses a self-merge) on a scratch queue and capture commands + outputs — S (traces: R-10, R-14)
-2. Write `docs/audits/2026-07-two-human-ends-rehearsal.md` (setup, A-B observations per claim, findings), citing the twe-06 enabled-and-qualified test as the (c) proof and the twe-09 guard as the (d) proof — S (traces: R-10, R-11, R-14)
+1. [x] Execute the four-part rehearsal (desk merge, intake rejection, zero-review off, merge-guard refuses a self-merge) on a scratch queue and capture commands + outputs — S (traces: R-10, R-14)
+2. [x] Write `docs/audits/2026-07-two-human-ends-rehearsal.md` (setup, A-B observations per claim, findings), citing the twe-06 enabled-and-qualified test as the (c) proof and the twe-09 guard as the (d) proof — S (traces: R-10, R-11, R-14)
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -58,9 +58,9 @@ status: approved
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] The audit doc records all four claims with observed commands + outputs; the (c) claim cites the passing twe-06 enabled-and-qualified test and the (d) claim cites the twe-09 guard refusing a self-merge
-- [ ] R-trace coverage: R-10 by tasks 1–2; R-11 (integration demonstration) by task 2; R-14 (guard demo) by tasks 1–2; no unknown R-ids cited
+- [x] `make validate` passes
+- [x] The audit doc records all four claims with observed commands + outputs; the (c) claim cites the passing twe-06 enabled-and-qualified test and the (d) claim cites the twe-09 guard refusing a self-merge
+- [x] R-trace coverage: R-10 by tasks 1–2; R-11 (integration demonstration) by task 2; R-14 (guard demo) by tasks 1–2; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -73,5 +73,5 @@ Revert the merge commit — removes a documentation artifact only; no code path 
 
 ---
 
-*Stage: tdd-complete*
-*Next step: run `aet-implement`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
