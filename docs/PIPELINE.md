@@ -95,6 +95,36 @@ blocked_by:
 
 `.agents/work-queue.json` holds only non-terminal tasks. When a task reaches a terminal state, the writer appends its final record plus history to `.agents/work-history.jsonl` and removes it from the live file atomically. The orchestrator, `status`, and `next` never load settled history for scheduling.
 
+## Task Ledger Record Fields
+
+Each live task record in `.agents/work-queue.json` carries the fields needed by the orchestrator and the morning desk. Fields are written only by their sanctioned paths and are read-only for everyone else unless noted.
+
+| Field | Writer | Description |
+| ----- | ------ | ----------- |
+| `id` | `aet-work add/sync` | Plan identifier, matching the plan filename stem. |
+| `state` | `aet-state transition` | Canonical lifecycle state (see Legal Transitions). |
+| `stage` | orchestrator | Sub-state of `in_progress` (e.g., `implement`, `qa`). |
+| `plan_file` | `aet-work add/sync` | Relative path to the plan markdown file. |
+| `branch` / `worktree` | orchestrator | Git branch and checkout path for isolated execution. |
+| `cost` | orchestrator | **Analytics-only** per-task token/cost rollup written at task close. See below. |
+
+### Per-Task Cost (`cost`)
+
+At task close the orchestrator sums the task's `stage` telemetry records (`token_count` / `cost_estimate`) into a per-task total and writes:
+
+```json
+{
+  "cost": {
+    "tokens": 1234,
+    "usd": 0.0567
+  }
+}
+```
+
+- The field is **analytics-only** (ADR-031): the desk and scoreboard may read it, but no runtime gate, kill, throttle, or triage path does.
+- Null is preserved honestly: a task whose stage records carry no token/cost values gets no `cost` field (rather than a zeroed or null-valued object).
+- The per-run total remains available via the telemetry archive; `cost` is the per-task decomposition needed by downstream reporting.
+
 ## Diff Budget for Bug Fixes
 
 `aet-bug-report` enforces a diff budget to keep fixes proportional:

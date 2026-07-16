@@ -88,7 +88,7 @@ A bounded judgment session spawned on a failure under the default `--on-failure=
 _Avoid_: reading "triage" as a runtime conditional embedded in the engine — the engine holds no hidden branch; it spawns a session and enforces the result, as it does for any stage.
 
 **Per-Task Cost**:
-Token and dollar totals rolled up per task from stage telemetry onto the task's ledger record at close. **Analytics only** — read by the desk and the scoreboard, never by any gate, kill, or triage path. Null is preserved (an unmeasurable task records null, never `0`). (ADR-031)
+Token and dollar totals rolled up per task from stage telemetry onto the task's ledger record at close, stored as `cost: {tokens, usd}`. **Analytics only** — read by the desk and the scoreboard, never by any gate, kill, or triage path. Null is preserved honestly: when no stage record carried a measurable value, the field is omitted rather than zeroed or written as a null-valued object. (ADR-031)
 _Avoid_: treating cost as a budget ceiling or any execution-control signal.
 
 **History**:
