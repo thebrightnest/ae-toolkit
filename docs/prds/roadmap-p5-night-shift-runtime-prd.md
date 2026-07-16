@@ -94,6 +94,5 @@ The five open questions are resolved and folded into the plans and ADR-030/031:
 
 ---
 
-*Stage: scope-validated (2026-07-16 — terminology, ADR-020 reconciliation, ADR-030/031 authored, code-ground-truth, and R-trace checks pass; the 5 open questions are resolved)*
-*Intake triage: feature/enhancement (new runtime subsystems), not a reproducible defect — confirmed at pipeline entry.*
-*Next step: run `aet-work` (single-plan or multi-task queue). Closure: the `nsr-*` plans are committed and `aet add`/`aet sync`'d into the queue.*
+*Stage: synced*
+*Next step: run `aet-ship`*
