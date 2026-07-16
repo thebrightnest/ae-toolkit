@@ -10,7 +10,10 @@ actions are handled by ``twe-03``.
 from __future__ import annotations
 
 import argparse
+import importlib.machinery
+import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -26,6 +29,16 @@ import telemetry  # noqa: E402
 import track_record  # noqa: E402
 from aet_queue import current_state  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
+
+# Load aet-state as a module so desk actions can reuse queue mutations and
+# plan-footer updates rather than re-implementing closure logic.
+_AET_STATE_PY = _SCRIPT_DIR / "aet-state"
+_aet_state_spec = importlib.util.spec_from_loader(
+    "aet_state_desk",
+    importlib.machinery.SourceFileLoader("aet_state_desk", str(_AET_STATE_PY)),
+)
+aet_state = importlib.util.module_from_spec(_aet_state_spec)
+_aet_state_spec.loader.exec_module(aet_state)
 
 # Verdict kinds that are always required before a task can safely merge.
 _ALWAYS_REQUIRED_VERDICTS = ("qa", "review")
@@ -71,6 +84,43 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit a machine-readable JSON projection.",
     )
+
+    # Shared args for the action subcommands.
+    action_parent = argparse.ArgumentParser(add_help=False)
+    action_parent.add_argument(
+        "--queue-file",
+        default=".agents/work-queue.json",
+        help="Path to work-queue.json",
+    )
+    action_parent.add_argument(
+        "--history-file",
+        default=".agents/work-history.jsonl",
+        help="Path to the settled work-history JSONL.",
+    )
+
+    sub = parser.add_subparsers(dest="command")
+
+    merge = sub.add_parser(
+        "merge",
+        parents=[action_parent],
+        help="Merge a PR and record the task as merged.",
+        description="Resolve an awaiting_merge task, merge its PR, and drive the aet-ship/record-merge closure path.",
+    )
+    merge.add_argument("task_id", help="Task ID to merge.")
+
+    abandon = sub.add_parser(
+        "abandon",
+        parents=[action_parent],
+        help="Abandon a task with a recorded reason.",
+        description="Resolve an awaiting_merge task and record the terminal abandoned transition.",
+    )
+    abandon.add_argument("task_id", help="Task ID to abandon.")
+    abandon.add_argument(
+        "--reason",
+        required=True,
+        help="Required reason for abandoning the task.",
+    )
+
     return parser
 
 
@@ -316,6 +366,104 @@ def _run_eligibility(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_actionable_task(
+    args: argparse.Namespace,
+) -> tuple[dict[str, object] | None, object | None, str]:
+    """Load the queue, find the task, and fail closed unless it is awaiting_merge.
+
+    Returns ``(task, backend, cwd)`` on success.  On failure prints a named
+    error to stderr and returns ``(None, None, "")``; the caller should
+    return 1.
+    """
+    backend = create_backend(
+        queue_file=args.queue_file, history_file=args.history_file
+    )
+    data = backend.load(verify=False)
+    queue = data["queue"]
+    task = next((t for t in queue if t.get("id") == args.task_id), None)
+    if task is None:
+        print(f"error: task not found: {args.task_id}", file=sys.stderr)
+        return None, None, ""
+
+    state = current_state(task)
+    if state != "awaiting_merge":
+        print(
+            f"error: task {args.task_id} is not awaiting_merge (state is {state})",
+            file=sys.stderr,
+        )
+        return None, None, ""
+
+    cwd = str(Path(args.queue_file).resolve().parent)
+    return task, backend, cwd
+
+
+def _run_merge(args: argparse.Namespace) -> int:
+    """Merge the PR for an awaiting_merge task and record closure."""
+    task, _backend, cwd = _resolve_actionable_task(args)
+    if task is None:
+        return 1
+    branch = task.get("branch")
+    if not branch:
+        print(f"error: task {args.task_id} has no branch", file=sys.stderr)
+        return 1
+
+    result = subprocess.run(
+        ["gh", "pr", "merge", branch, "--squash"],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        check=False,
+    )
+    if result.returncode != 0:
+        print(
+            f"error: gh pr merge failed for {branch}: {result.stderr.strip()}",
+            file=sys.stderr,
+        )
+        return 1
+
+    ns = aet_state.argparse.Namespace(
+        command="record-merge",
+        task_id=args.task_id,
+        queue=args.queue_file,
+        branch=branch,
+        merge_commit=None,
+        plan=task.get("plan_file"),
+        dry_run=False,
+    )
+    return aet_state.cmd_record_merge(ns)
+
+
+def _run_abandon(args: argparse.Namespace) -> int:
+    """Record the terminal abandoned transition for an awaiting_merge task."""
+    task, _backend, cwd = _resolve_actionable_task(args)
+    if task is None:
+        return 1
+    ns = aet_state.argparse.Namespace(
+        command="transition",
+        task_id=args.task_id,
+        from_stage="awaiting_merge",
+        to_stage="abandoned",
+        queue=args.queue_file,
+        reason=args.reason,
+        dry_run=False,
+    )
+    rc = aet_state.cmd_transition(ns)
+    if rc != 0:
+        return rc
+
+    plan_path = task.get("plan_file")
+    if plan_path and Path(plan_path).exists():
+        try:
+            aet_state.update_plan_status(plan_path, "abandoned")
+        except ValueError as exc:
+            print(
+                f"Abandoned recorded, but plan update failed: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+    return 0
+
+
 def _run_risk_view(args: argparse.Namespace) -> int:
     """Emit the risk-ranked awaiting_merge view."""
     backend = create_backend(
@@ -369,6 +517,10 @@ def _run_risk_view(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = build_parser().parse_args()
+    if args.command == "merge":
+        return _run_merge(args)
+    if args.command == "abandon":
+        return _run_abandon(args)
     if args.eligibility:
         return _run_eligibility(args)
     return _run_risk_view(args)
