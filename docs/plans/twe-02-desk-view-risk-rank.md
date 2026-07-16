@@ -8,7 +8,7 @@ security_review: skipped
 security_review_reason: read-only projection — lists `awaiting_merge` tasks and reads existing verdict files; writes nothing, mutates no state, opens no network. The risk score is a pure function of already-recorded local signals.
 docs_sync: required
 docs_sync_reason: new user-facing `aet desk` subcommand (and its `--json` projection); the dispatcher's subcommand set and user docs gain a row.
-status: approved
+status: merged
 ---
 
 # Plan: `aet desk` — Risk-Ranked `awaiting_merge` View + Evidence Bundle
@@ -85,5 +85,5 @@ Revert the merge commit. The desk is read-only, so removal restores the prior re
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: None*
