@@ -11,7 +11,7 @@ security_review: skipped
 security_review_reason: a demonstration + write-up that exercises already-shipped, already-reviewed code paths (desk merge, intake rejection, zero-review off); it introduces no new runtime code path of its own.
 docs_sync: skipped
 docs_sync_reason: the deliverable is an audit document under `docs/audits/`; it records evidence rather than changing a user-facing contract, so there is no skill/doc contract to sync.
-status: approved
+status: merged
 ---
 
 # Plan: Phase 4 Exit-Gate — End-to-End Rehearsal + Audit Doc
@@ -61,7 +61,7 @@ status: approved
 - [x] `make validate` passes
 - [x] The audit doc records all four claims with observed commands + outputs; the (c) claim cites the passing twe-06 enabled-and-qualified test and the (d) claim cites the twe-09 guard refusing a self-merge
 - [x] R-trace coverage: R-10 by tasks 1–2; R-11 (integration demonstration) by task 2; R-14 (guard demo) by tasks 1–2; no unknown R-ids cited
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin-main`
 
 ## Rollback Plan
 
@@ -73,5 +73,5 @@ Revert the merge commit — removes a documentation artifact only; no code path 
 
 ---
 
-*Stage: awaiting_merge*
-*Next step: merge PR #127 and run `aet-ship`*
+*Stage: merged*
+*Next step: None*
