@@ -8,7 +8,7 @@ security_review: required
 security_review_reason: builds an auto-merge path that closes a task without human review — the single highest-stakes mechanism in the phase. It must be provably OFF by default (empty policy → nothing auto-merges) and fire only on an explicit class enable AND a met track-record threshold. A default-on bug, an over-counted "clean merge", or a hook that fires before the enable check would ship unreviewed work.
 docs_sync: required
 docs_sync_reason: introduces a zero-review policy config and a new orchestrator behavior (even though disabled) plus `aet desk --eligibility`; the mechanism, its default-off guarantee, and the enablement path must be documented.
-status: approved
+status: merged
 ---
 
 # Plan: Zero-Review Mechanism — Track-Record Reader + Auto-Merge Hook (OFF by Default)
@@ -84,5 +84,5 @@ Revert the merge commit. Since the mechanism ships OFF (empty policy), rollback 
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: None*
