@@ -84,5 +84,5 @@ Revert the merge commit. Since the mechanism ships OFF (empty policy), rollback 
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
