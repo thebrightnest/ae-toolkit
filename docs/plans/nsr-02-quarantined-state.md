@@ -85,5 +85,4 @@ Revert the merge commit. The state is additive and unset by any code until nsr-0
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
