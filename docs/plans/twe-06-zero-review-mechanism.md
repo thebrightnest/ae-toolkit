@@ -37,11 +37,11 @@ status: approved
 
 ## Task List
 
-1. Write `aet-work/lib/track_record.py`: per-class clean-merge computation from telemetry archive + history log — M (traces: R-8)
-2. Add `aet desk --eligibility`: read-only per-class clean-merge count + enabled/disabled status — S (traces: R-8)
-3. Add the zero-review policy loader (empty/off default) and the orchestrator auto-merge hook at the `awaiting_merge` promote, gated on enabled-class AND met-threshold, driving the `record-merge` closure path — M (traces: R-9)
-4. Tests: `tests/test_zero_review.py` (new) — M (traces: R-8, R-9, R-11)
-5. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
+1. [x] Write `aet-work/lib/track_record.py`: per-class clean-merge computation from telemetry archive + history log — M (traces: R-8)
+2. [x] Add `aet desk --eligibility`: read-only per-class clean-merge count + enabled/disabled status — S (traces: R-8)
+3. [x] Add the zero-review policy loader (empty/off default) and the orchestrator auto-merge hook at the `awaiting_merge` promote, gated on enabled-class AND met-threshold, driving the `record-merge` closure path — M (traces: R-9)
+4. [x] Tests: `tests/test_zero_review.py` (new) — M (traces: R-8, R-9, R-11)
+5. [ ] Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -61,8 +61,8 @@ status: approved
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] New source coverage — `tests/test_zero_review.py`:
+- [x] `make validate` passes; full suite passes (validated at QA stage)
+- [x] New source coverage — `tests/test_zero_review.py`:
   - `test_clean_merge_counts_all_pass_no_rework`
   - `test_reworked_or_failed_merge_not_counted_clean`
   - `test_eligibility_reports_count_and_disabled_status`
@@ -70,9 +70,9 @@ status: approved
   - `test_unclassified_never_eligible`
   - `test_enabled_class_at_threshold_auto_merges_via_closure_path`
   - `test_enabled_class_below_threshold_left_for_human`
-- [ ] R-trace coverage: R-8 by tasks 1–2; R-9 by task 3; R-11 (this slice) by task 4; no unknown R-ids cited
-- [ ] **Default-off assertion:** a full orchestrator run with the shipped default config auto-merges nothing (explicit test)
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-8 by tasks 1–2; R-9 by task 3; R-11 (this slice) by task 4; no unknown R-ids cited
+- [x] **Default-off assertion:** a full orchestrator run with the shipped default config auto-merges nothing (explicit test)
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin main` [Deferred: runs at `aet-ship`]
 
 ## Rollback Plan
 
@@ -84,5 +84,5 @@ Revert the merge commit. Since the mechanism ships OFF (empty policy), rollback 
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
