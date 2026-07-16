@@ -73,5 +73,5 @@ Revert the merge commit — removes a documentation artifact only; no code path 
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-ship`*
+*Stage: awaiting_merge*
+*Next step: merge PR #127 and run `aet-ship`*
