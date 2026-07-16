@@ -260,6 +260,7 @@ Not all gates are bypassed. The following categories **must** halt execution eve
 - **ATOMIC OVERSIZED tasks** — No human available to approve scope override. Hard stop with non-zero exit code.
 - **Critical security findings** (`aet-cso` Critical/High) — Unattended mode must not auto-approve security risks.
 - **Merge verification failures** (`aet-ship`, `post-ship-verify`) — Mechanical check; failure is a hard stop.
+- **Autonomous merge** (an agent issuing a PR merge / `gh pr merge`) — The merge action is a human decision; skills are merge-neutral and must not instruct an agent to merge a PR. Fail-closed even in unattended mode (see ADR-029).
 
 ### Author Checklist
 
@@ -268,6 +269,7 @@ When adding a new approval gate to a skill:
 - [ ] Gate checks `AET_EXECUTION_MODE` before prompting
 - [ ] Unattended path logs the bypass with the exact emoji + wording above
 - [ ] Gate is categorized as "bypassable" or "hard stop even in unattended mode"
+- [ ] Autonomous-merge is fail-closed; skills never instruct a PR merge
 
 ## Branch Lifecycle
 

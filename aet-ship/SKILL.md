@@ -196,7 +196,7 @@ Run the pre-merge validation gate.
 
     > **Version bump is not handled here.** Release versioning is the responsibility of a future `aet-release` skill. Do not commit `chore(release)` or VERSION changes on feature branches.
 
-14. **Merge Verification and Terminal Closure** — `aet-ship` is the single owner of task closure after merge verification. After the PR is created and the user indicates it has been merged:
+14. **Merge Verification and Terminal Closure** — `aet-ship` is the single owner of task closure after merge verification. **The PR merge is the human's decision**; the skill only runs after the human indicates the PR has been merged:
 
     First, confirm the `ship` helper is available:
 
@@ -282,7 +282,7 @@ Run the pre-merge validation gate.
 
 ## Key Principles
 
-- **Non-interactive by default** — the gate runs without human input until something is wrong
+- **Non-interactive by default** — the validation gate runs without human input until something is wrong; the merge action itself is the human's decision and is never performed by the agent
 - **Composable** — invokes `aet-review` and `aet-cso` rather than duplicating their logic
 - **Stage-aware** — respects the plan footer; does not rerun review or CSO already completed by the implementation pipeline
 - **Bisectable commits** — one logical change per commit, enforced at process level
