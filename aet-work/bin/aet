@@ -28,6 +28,7 @@ from pathlib import Path
 # is handled inside this file — `install` is the one such subcommand (R-1).
 SUBCOMMANDS = {
     "add": {"target": ("aet-work", "add"), "mode": "exec"},
+    "desk": {"target": ("aet-work", "desk"), "mode": "exec"},
     "review": {"target": ("aet-work", "review"), "mode": "exec"},
     "status": {"target": ("aet-work", "status"), "mode": "exec"},
     "next": {"target": ("aet-work", "next"), "mode": "exec"},

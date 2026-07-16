@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""aet-work desk — Review cockpit.
+
+For twe-06 this ships the read-only ``--eligibility`` projection. The full
+risk-ranked ``awaiting_merge`` list and merge/abandon actions are added by
+twe-02 and twe-03.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+import telemetry  # noqa: E402
+import track_record  # noqa: E402
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Review cockpit for awaiting_merge tasks."
+    )
+    parser.add_argument(
+        "--eligibility",
+        action="store_true",
+        help="Show per-class clean-merge counts and zero-review eligibility.",
+    )
+    parser.add_argument(
+        "--policy",
+        default=track_record.DEFAULT_POLICY_PATH,
+        help="Path to the zero-review policy JSON.",
+    )
+    parser.add_argument(
+        "--history-file",
+        default=".agents/work-history.jsonl",
+        help="Path to the settled work-history JSONL.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable JSON projection.",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    if not args.eligibility:
+        print(
+            "error: this build of desk only supports --eligibility; "
+            "the full desk view ships in twe-02.",
+            file=sys.stderr,
+        )
+        return 1
+
+    policy = track_record.load_policy(args.policy)
+    project_slug = telemetry.derive_project_slug()
+    report: dict[str, dict] = {}
+    for work_class in ("trivial", "normal", "critical"):
+        report[work_class] = track_record.class_eligibility(
+            work_class,
+            policy=policy,
+            history_file=args.history_file,
+            project_slug=project_slug,
+        )
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return 0
+
+    for line in track_record.format_eligibility_report(
+        policy=policy,
+        history_file=args.history_file,
+        project_slug=project_slug,
+    ):
+        print(line)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
