@@ -38,10 +38,10 @@ status: approved
 
 ## Task List
 
-1. Write the pure risk-scoring function (weighted signal table, legible per-factor breakdown) with stable ordering — M (traces: R-2)
-2. Write `aet-work/bin/desk`: `awaiting_merge` filter, evidence-bundle attachment with missing-verdict gap flagging, risk-ordered human table, `--json` projection — M (traces: R-1, R-2)
-3. Add the `desk` row to `aet-work/bin/aet` `SUBCOMMANDS` — S (traces: R-1)
-4. Tests: `tests/test_desk_view.py` (new) — M (traces: R-1, R-2, R-11)
+1. ✓ Write the pure risk-scoring function (weighted signal table, legible per-factor breakdown) with stable ordering — M (traces: R-2)
+2. ✓ Write `aet-work/bin/desk`: `awaiting_merge` filter, evidence-bundle attachment with missing-verdict gap flagging, risk-ordered human table, `--json` projection — M (traces: R-1, R-2)
+3. ✓ Add the `desk` row to `aet-work/bin/aet` `SUBCOMMANDS` — S (traces: R-1)
+4. ✓ Tests: `tests/test_desk_view.py` (new) — M [Changed: also updated `tests/test_aet_dispatcher.py` to cover the new `desk` row in the dispatcher spec table] (traces: R-1, R-2, R-11)
 5. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
@@ -85,5 +85,5 @@ Revert the merge commit. The desk is read-only, so removal restores the prior re
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*

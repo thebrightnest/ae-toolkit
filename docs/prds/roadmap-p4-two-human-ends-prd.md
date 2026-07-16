@@ -128,6 +128,22 @@ Phase 4 of the AET roadmap (`content/fable-review/09-2026-07-10-roadmap.md`): at
 - `twe-09` task 6 (merge to main and verify integration) remains deferred to `aet-ship`.
 - `twe-05` task 5 (merge to main and verify integration) remains deferred to `aet-ship`.
 
+## Divergence Summary — twe-02-desk-view-risk-rank
+
+*Recorded: 2026-07-16 — Branch: twe-02-desk-view-risk-rank*
+
+### Changed from plan
+
+- Task 4 (tests): the desk dispatcher table gained a matching assertion in `tests/test_aet_dispatcher.py` so the new `desk` subcommand is covered by the existing spec-table test; the plan only named `tests/test_desk_view.py`.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- Task 5 (merge to main and verify integration) remains deferred to `aet-ship`.
+
 ---
 
 *Stage: synced*
