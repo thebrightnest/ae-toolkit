@@ -46,6 +46,7 @@ class TestAetSpecTable(unittest.TestCase):
         """SUBCOMMANDS lists every operational toolkit command from R-1."""
         expected = {
             "add",
+            "desk",
             "review",
             "status",
             "next",

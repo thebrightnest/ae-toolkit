@@ -26,6 +26,7 @@ sys.path.insert(0, str(_LIB_DIR))
 import evidence  # noqa: E402
 import plan_parser  # noqa: E402
 import telemetry  # noqa: E402
+import track_record  # noqa: E402
 import usage as usage_lib  # noqa: E402
 import wirelog  # noqa: E402
 from aet_queue import (  # noqa: E402
@@ -1188,6 +1189,23 @@ def _mark_failed(
                 )
 
 
+def _maybe_auto_merge(task: dict, queue_file: str, repo_root: str) -> bool:
+    """Auto-merge ``task`` if its class is enabled and meets the threshold.
+
+    Returns True when the task was auto-merged through the record-merge closure
+    path. Returns False when the task should be left for a human decision at
+    the desk (the default, since the shipped policy is empty).
+    """
+    try:
+        policy_path = os.path.join(repo_root, track_record.DEFAULT_POLICY_PATH)
+        policy = track_record.load_policy(policy_path)
+    except Exception:  # pragma: no cover - defensive fallback
+        return False
+    if not track_record.is_eligible_for_auto_merge(task, policy=policy):
+        return False
+    return track_record.perform_auto_merge(task, queue_file, repo_root)
+
+
 def _finalize_task(
     backend, queue_file: str, task_id: str, ret: int, repo_root: str | None = None
 ) -> dict[str, int | bool]:
@@ -1213,10 +1231,12 @@ def _finalize_task(
                     print(f"   ❌ {task_id} succeeded but produced no commits: {msg}")
                     _mark_failed(backend, queue_file, task_id, current_state(task))
                     return {"successes": 0, "failures": 1, "stop_spawn": True}
-        print(f"   ✅ {task_id} awaiting merge")
         from_state = current_state(task) if task else "in_progress"
         if from_state == "awaiting_merge":
             return {"successes": 1, "failures": 0, "stop_spawn": False}
+        if task and _maybe_auto_merge(task, queue_file, repo_root):
+            return {"successes": 1, "failures": 0, "stop_spawn": False}
+        print(f"   ✅ {task_id} awaiting merge")
         result = subprocess.run(
             [
                 sys.executable,
@@ -1750,27 +1770,30 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                             _mark_failed(backend, queue_file, task_id, from_state)
                             exit_code = 1
                         else:
-                            aet_state_bin = str(_SCRIPT_DIR / "aet-state")
-                            result = subprocess.run(
-                                [
-                                    sys.executable,
-                                    aet_state_bin,
-                                    "transition",
-                                    task_id,
-                                    from_state,
-                                    "awaiting_merge",
-                                    queue_file,
-                                ],
-                                capture_output=True,
-                                text=True,
-                            )
-                            if result.returncode == 0:
-                                print(f"   ✅ Task {task_id} awaiting merge")
+                            if _maybe_auto_merge(queue_task, queue_file, repo_root):
+                                pass  # perform_auto_merge prints success/failure.
                             else:
-                                print(
-                                    f"   ⚠️  Could not transition {task_id} to "
-                                    f"awaiting_merge: {result.stderr.strip()}"
+                                aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+                                result = subprocess.run(
+                                    [
+                                        sys.executable,
+                                        aet_state_bin,
+                                        "transition",
+                                        task_id,
+                                        from_state,
+                                        "awaiting_merge",
+                                        queue_file,
+                                    ],
+                                    capture_output=True,
+                                    text=True,
                                 )
+                                if result.returncode == 0:
+                                    print(f"   ✅ Task {task_id} awaiting merge")
+                                else:
+                                    print(
+                                        f"   ⚠️  Could not transition {task_id} to "
+                                        f"awaiting_merge: {result.stderr.strip()}"
+                                    )
             except Exception as exc:  # pragma: no cover - defensive logging
                 print(f"   ⚠️  Could not mark {task_id} awaiting merge: {exc}")
 
