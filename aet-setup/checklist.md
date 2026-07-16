@@ -54,6 +54,7 @@ Use this checklist during every `/aet-setup` invocation. Every topic must be exp
 - [ ] Root orchestration file exists (`Makefile` or `justfile`)?
 - [ ] Key targets: install, dev, test, lint, format, type-check, security-audit?
 - [ ] Every target is runnable and documented?
+- [ ] Per-provider merge guard installed (`aet harness-guard install`) and blocks `gh pr merge` at the harness tool-call layer?
 
 ## 8. AI Guardrails (`AGENTS.md`)
 

@@ -108,9 +108,23 @@ Phase 4 of the AET roadmap (`content/fable-review/09-2026-07-10-roadmap.md`): at
 3. **Deferred fail-closed-confirm helper (P3 OQ1)** — this phase deliberately keeps the desk non-interactive (explicit subcommands), so no blocking prompt is introduced and the shared helper stays deferred. Revisit only if a genuinely interactive desk flow is later wanted.
 4. **`aet plan validate` two-word dispatch** — depends on Phase 3's `aet gate submit` establishing the two-word subcommand mechanism; a coordination point, not a design fork (Phase 4 is `blocked_by` Phase 3's exit gate, so the mechanism will exist).
 
+## Divergence Summary
+
+*Recorded: 2026-07-15 — Branch: twe-09-harness-merge-guard*
+
+### Changed from plan
+
+- Docs task 5: the `aet-setup/SKILL.md` section was added as specified, but the base file was already at the 400-line recommended limit; the file now sits at 410 lines and the skill-structure validator warns. Validation still passes.
+
+### Added (unplanned)
+
+- `tests/test_harness_merge_guard.py`: additional harness-detection coverage (`test_detects_kimi_from_marker`, `test_unknown_marker_is_none`) and CLI invocation tests (`TestHarnessGuardCLI`) beyond the six named acceptance tests.
+
+### Deferred
+
+- `twe-09` task 6 (merge to main and verify integration) remains deferred to `aet-ship`.
+
 ---
 
-*Stage: scope-validated (2026-07-15 — terminology / ADR-005+027 / code-ground-truth / R-trace checks pass; ADR-028 authored; ADR-029 ratified → `twe-08`)*
-*Unparked 2026-07-15: Phases 2 (`cli-*`) and 3 (`ewl-*`) are merged, satisfying the park condition. Re-grounded against `HEAD` — see the "Re-grounding delta (2026-07-15)" in Technical Notes (queue.py→aet_queue.py; orchestrator auto-merge hook `:1761–1772`; init-queue `:262`; dispatch / `add`-gap / `ewl-06` confirmed). The plan step produced `twe-01`…`twe-07` (twe-04 split into command + intake-wiring, as anticipated).*
-*Amended 2026-07-15 (autonomous-shipping audit): added G5 / R-12–R-14 (autonomous-merge fail-closed + `aet setup` per-provider merge-guard), refined the Phase-6 Non-Goal to carve out the active-harness guard, and added plans `twe-08` (governance) + `twe-09` (harness merge-guard). Gap-1 closure-push split to `aet-bug-report`.*
-*Next step: commit the `twe-*` plans + ADR-028 (plans must be git-tracked before `aet add` — untracked plans are refused, per the 2026-07-14 durability guard), then `aet add` the plan set + `aet sync` (this admits them to the live queue, closing the scope-validation closure check), then `aet-work`. Coordination: land the gap-1 closure-push bug fix before/with `twe-03`/`twe-06`.*
+*Stage: synced*
+*Next step: run `aet-ship`*
