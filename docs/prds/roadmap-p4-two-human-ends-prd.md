@@ -115,14 +115,18 @@ Phase 4 of the AET roadmap (`content/fable-review/09-2026-07-10-roadmap.md`): at
 ### Changed from plan
 
 - Docs task 5: the `aet-setup/SKILL.md` section was added as specified, but the base file was already at the 400-line recommended limit; the file now sits at 410 lines and the skill-structure validator warns. Validation still passes.
+- `twe-05` task 3 (`sync` intake gate): the plan described wiring validation for "newly-admitted plans," but `aet-work sync` never admits new plans from disk. Implementation validates existing queued entries before reconciliation — the only intake-shaped behavior available to `sync` — while preserving the no-new-plans contract.
+- `twe-05` task 4 (tests): `tests/test_intake_gate.py` grew beyond the six named cases to ~446 lines, adding admission/ack edge-case coverage for `add`, `init-queue`, and `sync` to prove the fail-closed contract.
 
 ### Added (unplanned)
 
 - `tests/test_harness_merge_guard.py`: additional harness-detection coverage (`test_detects_kimi_from_marker`, `test_unknown_marker_is_none`) and CLI invocation tests (`TestHarnessGuardCLI`) beyond the six named acceptance tests.
+- `twe-05`: additional pass-path and partial-ack rejection tests in `tests/test_intake_gate.py`.
 
 ### Deferred
 
 - `twe-09` task 6 (merge to main and verify integration) remains deferred to `aet-ship`.
+- `twe-05` task 5 (merge to main and verify integration) remains deferred to `aet-ship`.
 
 ---
 
