@@ -78,5 +78,5 @@ Revert the merge commit. The per-task `cost` field stops being written; per-run 
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
