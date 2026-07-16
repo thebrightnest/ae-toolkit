@@ -39,10 +39,10 @@ status: approved
 
 ## Task List
 
-1. Wire the `plan_validate` suite into `aet-work/bin/add` (validate-before-mutate, fail-closed named error) — S (traces: R-6)
-2. Replace `init-queue`'s standalone `intake_validation_errors` call with the full suite — S (traces: R-6)
-3. Wire the suite into `sync` for newly-admitted plans, preserving existing-entry reconciliation — S (traces: R-6)
-4. Tests: `tests/test_intake_gate.py` (new) — M (traces: R-6, R-7, R-11)
+1. ✓ Wire the `plan_validate` suite into `aet-work/bin/add` (validate-before-mutate, fail-closed named error) — S (traces: R-6)
+2. ✓ Replace `init-queue`'s standalone `intake_validation_errors` call with the full suite — S (traces: R-6)
+3. ✓ Wire the suite into `sync` for newly-admitted plans, preserving existing-entry reconciliation — S (traces: R-6) [Changed: `sync` validates existing queued entries before reconciliation; it has no new-plan intake path]
+4. ✓ Tests: `tests/test_intake_gate.py` (new) — M (traces: R-6, R-7, R-11) [Changed: coverage expanded beyond the six named cases to include clean-plan admission and partial-ack rejection]
 5. Merge branch to main and verify integration — S [Deferred: runs at `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
@@ -83,5 +83,5 @@ Revert the merge commit. `init-queue` returns to its standalone structural call;
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

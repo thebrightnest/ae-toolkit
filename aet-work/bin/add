@@ -9,6 +9,7 @@ edges, preserves existing queue metadata, and rejects terminal plans.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+import plan_validate  # noqa: E402
 from aet_queue import QueueIntegrityError, build_blocks, lease_guard  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 from plan_parser import new_task_from_plan, stage_from_plan  # noqa: E402
@@ -139,6 +141,39 @@ def main(argv: list[str] | None = None) -> int:
             f"--allow-untracked to queue a throwaway spike anyway.",
             file=sys.stderr,
         )
+        return 1
+
+    # Validate the target plan in the context of every plan in plans_dir so
+    # blocker references resolve, but only report findings for the target plan.
+    all_plan_files = sorted(plans_dir.glob("*.md"))
+    if plan_file not in all_plan_files:
+        all_plan_files.append(plan_file)
+    # Settled history ids are valid blocker references even when the plan file
+    # is gone, so include them in the structural cross-reference set.
+    settled_ids: set[str] = set()
+    if Path(args.history_file).exists():
+        for line in Path(args.history_file).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if record.get("id"):
+                settled_ids.add(record["id"])
+
+    findings = plan_validate.validate(all_plan_files, extra_known_ids=settled_ids)
+    plan_texts = {pf: pf.read_text(errors="ignore") for pf in all_plan_files}
+    findings = plan_validate.apply_acks(findings, plan_texts)
+    unacked = [f for f in findings if f.plan == plan_file and not f.acked]
+    if unacked:
+        print(
+            f"⛔ Refusing to add {plan_file.name}: intake validation failed.",
+            file=sys.stderr,
+        )
+        for finding in unacked:
+            print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
         return 1
 
     backend = create_backend(
