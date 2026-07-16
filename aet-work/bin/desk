@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """aet-work desk — Review cockpit.
 
-For twe-06 this ships the read-only ``--eligibility`` projection. The full
-risk-ranked ``awaiting_merge`` list and merge/abandon actions are added by
-twe-02 and twe-03.
+Default mode lists every task in the ``awaiting_merge`` state, riskiest first,
+with the evidence needed to decide on it.  The ``--eligibility`` projection
+shows per-class clean-merge counts and zero-review eligibility.  Merge/abandon
+actions are handled by ``twe-03``.
 """
 
 from __future__ import annotations
@@ -17,8 +18,23 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+import evidence  # noqa: E402
+import plan_parser  # noqa: E402
+import project_id  # noqa: E402
+import risk  # noqa: E402
 import telemetry  # noqa: E402
 import track_record  # noqa: E402
+from aet_queue import current_state  # noqa: E402
+from backends.factory import create_backend  # noqa: E402
+
+# Verdict kinds that are always required before a task can safely merge.
+_ALWAYS_REQUIRED_VERDICTS = ("qa", "review")
+
+# Optional gate verdicts and the plan-frontmatter key that controls them.
+_GATE_ROUTING_KEYS: dict[str, str] = {
+    "cso": "security_review",
+    "sync-docs": "docs_sync",
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,9 +52,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the zero-review policy JSON.",
     )
     parser.add_argument(
+        "--queue-file",
+        default=".agents/work-queue.json",
+        help="Path to work-queue.json",
+    )
+    parser.add_argument(
         "--history-file",
         default=".agents/work-history.jsonl",
-        help="Path to the settled work-history JSONL.",
+        help="Path to the settled work-history JSONL (also used for eligibility).",
+    )
+    parser.add_argument(
+        "--plans-dir",
+        default="docs/plans",
+        help="Directory containing atomic plan markdown files",
     )
     parser.add_argument(
         "--json",
@@ -48,18 +74,226 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    args = build_parser().parse_args()
-    if not args.eligibility:
-        print(
-            "error: this build of desk only supports --eligibility; "
-            "the full desk view ships in twe-02.",
-            file=sys.stderr,
-        )
-        return 1
+def _plan_path(task: dict, plans_dir: str) -> Path:
+    """Resolve the plan file for a task, preferring an absolute plan_file."""
+    plan_file = task.get("plan_file")
+    if plan_file:
+        path = Path(plan_file)
+        if path.is_absolute():
+            return path
+    return Path(plans_dir) / f"{task.get('id', '')}.md"
 
+
+def _required_verdicts(plan_data: dict[str, object]) -> list[str]:
+    """Return the required verdict kinds for a task from its plan routing keys."""
+    required = list(_ALWAYS_REQUIRED_VERDICTS)
+    for kind, key in _GATE_ROUTING_KEYS.items():
+        if plan_data.get(key) != "skipped":
+            required.append(kind)
+    return required
+
+
+def _load_evidence(task_id: str, kind: str) -> dict[str, object] | None:
+    """Read a single verdict file, or ``None`` when it is absent or unreadable."""
+    path = evidence.evidence_path(task_id, kind)
+    if not path.exists():
+        return None
+    try:
+        return evidence.read_verdict(path)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _findings_count(record: dict[str, object] | None, kind: str) -> int:
+    """Return the number of findings/divergences in a verdict record."""
+    if record is None:
+        return 0
+    if kind == "sync-docs":
+        return len(record.get("divergences") or [])  # type: ignore[arg-type]
+    return len(record.get("findings") or [])  # type: ignore[arg-type]
+
+
+def _telemetry_signals(task_id: str) -> tuple[dict[str, object] | None, int]:
+    """Return the latest stage record and the highest tests_failed seen.
+
+    Walks the telemetry archive for this project once, collecting the most
+    recent ``stage_record`` (for ``files_modified``) and the maximum
+    ``tests_failed`` from any ``test_run_record``.
+    """
+    slug = project_id.derive_project_slug()
+    root = telemetry.archive_dir() / slug
+    latest_stage: dict[str, object] | None = None
+    tests_failed = 0
+    if not root.exists():
+        return latest_stage, tests_failed
+
+    for path in root.rglob("*.jsonl"):
+        for record in telemetry.read_jsonl(path):
+            if record.get("task_id") != task_id:
+                continue
+            if record.get("type") == "stage":
+                if latest_stage is None or record.get("end_time", "") > latest_stage.get(  # type: ignore[operator]
+                    "end_time", ""
+                ):
+                    latest_stage = record
+            elif record.get("type") == "test_run":
+                failed = record.get("tests_failed") or 0
+                if isinstance(failed, int) and failed > tests_failed:
+                    tests_failed = failed
+    return latest_stage, tests_failed
+
+
+def _build_evidence_bundle(
+    task_id: str, required: list[str]
+) -> tuple[dict[str, dict[str, object]], list[str], list[str]]:
+    """Load evidence, build per-kind entries, and collect gaps.
+
+    Returns ``(bundle, failed_verdicts, missing_required_verdicts)``.
+    """
+    bundle: dict[str, dict[str, object]] = {}
+    failed: list[str] = []
+    missing: list[str] = []
+
+    for kind in evidence.SCHEMAS:
+        record = _load_evidence(task_id, kind)
+        is_required = kind in required
+        entry: dict[str, object] = {"present": record is not None, "required": is_required}
+        if record is not None:
+            entry["verdict"] = record.get("verdict")
+            entry["summary"] = record.get("summary", "")
+            if kind == "qa":
+                entry["tests_total"] = record.get("tests_total")
+                entry["tests_passed"] = record.get("tests_passed")
+                entry["tests_failed"] = record.get("tests_failed")
+            else:
+                entry["findings_count"] = _findings_count(record, kind)
+
+        if is_required and record is None:
+            missing.append(kind)
+            entry["gap"] = True
+        elif record is not None and record.get("verdict") == "fail":
+            failed.append(kind)
+
+        bundle[kind] = entry
+    return bundle, failed, missing
+
+
+def _signals_for_task(
+    task: dict,
+    plan_data: dict[str, object],
+    bundle: dict[str, dict[str, object]],
+    latest_stage: dict[str, object] | None,
+    telemetry_tests_failed: int,
+) -> dict[str, object]:
+    """Assemble the signal dict consumed by ``risk.score``."""
+    qa_tests_failed = bundle.get("qa", {}).get("tests_failed") or 0
+    tests_failed = max(
+        telemetry_tests_failed,
+        qa_tests_failed if isinstance(qa_tests_failed, int) else 0,
+    )
+    return {
+        "work_class": task.get("work_class") or "unclassified",
+        "size": plan_data.get("size") or "",
+        "review_findings": bundle.get("review", {}).get("findings_count", 0),
+        "cso_findings": bundle.get("cso", {}).get("findings_count", 0),
+        "sync_docs_divergences": bundle.get("sync-docs", {}).get("findings_count", 0),
+        "failed_verdicts": [
+            kind for kind, entry in bundle.items() if entry.get("verdict") == "fail"
+        ],
+        "missing_required_verdicts": [
+            kind for kind, entry in bundle.items() if entry.get("required") and not entry.get("present")
+        ],
+        "files_modified": len((latest_stage or {}).get("files_modified") or []),
+        "tests_failed": tests_failed,
+    }
+
+
+def _render_table(headers: list[str], rows: list[list[str]]) -> list[str]:
+    """Render a markdown table with columns padded for terminal readability."""
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+
+    def fmt(cells: list[str]) -> str:
+        padded = (cell.ljust(width) for cell, width in zip(cells, widths))
+        return "| " + " | ".join(padded) + " |"
+
+    separator = "| " + " | ".join("-" * w for w in widths) + " |"
+    return [fmt(headers), separator, *(fmt(row) for row in rows)]
+
+
+def _render_human(rows: list[dict[str, object]]) -> None:
+    """Print the risk-ranked human table and the per-task evidence bundle."""
+    if not rows:
+        print("No awaiting_merge tasks.")
+        return
+
+    print(f"Desk: {len(rows)} awaiting_merge task(s), riskiest first\n")
+
+    headers = ["ID", "Title", "Risk", "Size", "Class", "Factors", "Gaps"]
+    table_rows: list[list[str]] = []
+    for row in rows:
+        task = row["task"]  # type: ignore[index]
+        table_rows.append(
+            [
+                str(task.get("id", "")),
+                str(task.get("title", ""))[:40],
+                str(row["score"]),
+                str(row["plan_data"].get("size", "")),
+                str(task.get("work_class", "unclassified")),
+                ", ".join(row["factors"]) or "—",
+                ", ".join(row["gaps"]) or "—",
+            ]
+        )
+    for line in _render_table(headers, table_rows):
+        print(line)
+
+    print("\nEvidence bundle:")
+    for row in rows:
+        task = row["task"]  # type: ignore[index]
+        bundle = row["bundle"]  # type: ignore[index]
+        print(f"\n{task.get('id')}:")
+        for kind in evidence.SCHEMAS:
+            entry = bundle[kind]
+            if not entry.get("present"):
+                suffix = " (required)" if entry.get("required") else " (not required)"
+                print(f"  {kind}: missing{suffix}")
+                continue
+            verdict = entry.get("verdict", "?")
+            summary = str(entry.get("summary", ""))[:60]
+            if kind == "qa":
+                passed = entry.get("tests_passed")
+                total = entry.get("tests_total")
+                extra = f" [{passed}/{total} passed]"
+            else:
+                extra = f" ({entry.get('findings_count', 0)} findings)"
+            print(f"  {kind}: {verdict} — {summary}{extra}")
+
+
+def _json_projection(rows: list[dict[str, object]]) -> dict[str, object]:
+    """Build the machine-readable desk projection (minimal v1 schema)."""
+    return {
+        "summary": {"awaiting_merge": len(rows)},
+        "tasks": [
+            {
+                "id": row["task"].get("id"),
+                "title": row["task"].get("title"),
+                "state": current_state(row["task"]),
+                "risk_score": row["score"],
+                "factors": row["factors"],
+                "gaps": row["gaps"],
+                "evidence": row["bundle"],
+            }
+            for row in rows
+        ],
+    }
+
+
+def _run_eligibility(args: argparse.Namespace) -> int:
+    """Emit the zero-review eligibility projection."""
     policy = track_record.load_policy(args.policy)
-    project_slug = telemetry.derive_project_slug()
+    project_slug = project_id.derive_project_slug()
     report: dict[str, dict] = {}
     for work_class in ("trivial", "normal", "critical"):
         report[work_class] = track_record.class_eligibility(
@@ -80,6 +314,64 @@ def main() -> int:
     ):
         print(line)
     return 0
+
+
+def _run_risk_view(args: argparse.Namespace) -> int:
+    """Emit the risk-ranked awaiting_merge view."""
+    backend = create_backend(
+        queue_file=args.queue_file, history_file=args.history_file
+    )
+    data = backend.load(verify=False)
+    queue = data["queue"]
+
+    desk_tasks = [t for t in queue if current_state(t) == "awaiting_merge"]
+    rows: list[dict[str, object]] = []
+
+    for task in desk_tasks:
+        plan_path = _plan_path(task, args.plans_dir)
+        plan_data = (
+            plan_parser.parse_frontmatter(plan_path)
+            if plan_path.exists()
+            else {}
+        )
+        required = _required_verdicts(plan_data)
+        bundle, failed_verdicts, missing_verdicts = _build_evidence_bundle(
+            task["id"], required
+        )
+        latest_stage, telemetry_tests_failed = _telemetry_signals(task["id"])
+        signals = _signals_for_task(
+            task, plan_data, bundle, latest_stage, telemetry_tests_failed
+        )
+        score, factors = risk.score(signals)
+        gaps = missing_verdicts + failed_verdicts
+
+        rows.append(
+            {
+                "task": task,
+                "plan_data": plan_data,
+                "bundle": bundle,
+                "score": score,
+                "factors": factors,
+                "gaps": gaps,
+            }
+        )
+
+    # Deterministic ordering: risk descending, then task id for stable ties.
+    rows.sort(key=lambda r: (-r["score"], r["task"].get("id", "")))
+
+    if args.json:
+        print(json.dumps(_json_projection(rows), indent=2, default=str))
+        return 0
+
+    _render_human(rows)
+    return 0
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    if args.eligibility:
+        return _run_eligibility(args)
+    return _run_risk_view(args)
 
 
 if __name__ == "__main__":
