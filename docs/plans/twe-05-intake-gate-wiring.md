@@ -9,7 +9,7 @@ security_review: required
 security_review_reason: this is the enforcement wall — it makes a failing, un-acked plan unable to enter the queue through any intake path. A bypass (a path that mutates the queue before validating, or an ack parsed too loosely) defeats the gate; fail-closed ordering (validate before mutate) on `add`/`init-queue`/`sync` must be verified.
 docs_sync: required
 docs_sync_reason: `aet-work add` gains validation it never had; `init-queue` and `sync` intake behavior changes. The "every door into the queue enforces the same bar" contract must be documented.
-status: approved
+status: merged
 ---
 
 # Plan: Intake-Gate Wiring — Validate Fail-Closed in `add` / `init-queue` / `sync`
@@ -83,5 +83,5 @@ Revert the merge commit. `init-queue` returns to its standalone structural call;
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: None*
