@@ -4,7 +4,7 @@ This document defines the canonical pipeline stages and the work-class routing t
 
 ## Work Classes
 
-Every incoming request is classified into one of three work classes before any skill runs.
+Every incoming request is classified into one of three work classes before any skill runs. `work_class` is also a stored, machine-readable task attribute: an optional plan-frontmatter key (`trivial`, `normal`, or `critical`) that `aet-work sync` validates and copies onto the task record, defaulting to `unclassified` when absent. The stored value is used by downstream readers (risk score, zero-review track record) rather than the routing decision itself.
 
 | Class        | Trigger Examples                                | Pipeline                                                | Plans?           | QA Gate           |
 | ------------ | ----------------------------------------------- | ------------------------------------------------------- | ---------------- | ----------------- |
