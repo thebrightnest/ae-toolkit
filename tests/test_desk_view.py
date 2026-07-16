@@ -137,8 +137,14 @@ def _desk_json(queue_file: str, history_file: str, plans_dir: str) -> dict:
 
 @pytest.fixture(autouse=True)
 def _isolate_reports_dir(monkeypatch, tmp_path):
-    """Point AET_REPORTS_DIR at a per-test tmp dir."""
+    """Point the evidence and telemetry archives at per-test tmp dirs.
+
+    Isolating ``AET_TELEMETRY_ARCHIVE_DIR`` keeps the telemetry-signal path
+    hermetic — otherwise the desk reads the real ``~/.aet`` archive and a live
+    run logged under a colliding task id could perturb the risk score.
+    """
     monkeypatch.setenv("AET_REPORTS_DIR", str(tmp_path / "reports"))
+    monkeypatch.setenv("AET_TELEMETRY_ARCHIVE_DIR", str(tmp_path / "telemetry"))
 
 
 class TestDeskListsOnlyAwaitingMerge:
@@ -381,3 +387,55 @@ class TestDeskDispatcher:
         payload = json.loads(proc.stdout)
         assert payload["summary"]["awaiting_merge"] == 1
         assert payload["tasks"][0]["id"] == "t1"
+
+
+class TestDeskTelemetrySignals:
+    def test_files_modified_and_tests_failed_raise_risk(self, tmp_path):
+        _write_plan(tmp_path, "t1")
+        # Two stage records for t1: the later end_time wins (3 files, not 5).
+        # Two test_run records: the highest tests_failed drives the signal.
+        _append_telemetry(
+            tmp_path,
+            "t1",
+            {
+                "type": "stage",
+                "task_id": "t1",
+                "end_time": "2026-07-16T00:01:00Z",
+                "files_modified": ["a.py", "b.py", "c.py", "d.py", "e.py"],
+            },
+            {
+                "type": "stage",
+                "task_id": "t1",
+                "end_time": "2026-07-16T00:05:00Z",
+                "files_modified": ["a.py", "b.py", "c.py"],
+            },
+            {"type": "test_run", "task_id": "t1", "tests_failed": 2},
+            {"type": "test_run", "task_id": "t1", "tests_failed": 4},
+        )
+        # A different task's telemetry must not leak into t1's signals.
+        _append_telemetry(
+            tmp_path,
+            "other",
+            {
+                "type": "stage",
+                "task_id": "other",
+                "end_time": "2026-07-16T09:00:00Z",
+                "files_modified": ["z.py"],
+            },
+        )
+        queue_file = _write_queue(
+            tmp_path,
+            [
+                {
+                    "id": "t1",
+                    "state": "awaiting_merge",
+                    "title": "One",
+                    "plan_file": str(_plan_path(tmp_path, "t1")),
+                }
+            ],
+        )
+        history_file = _write_history(tmp_path)
+        payload = _desk_json(queue_file, history_file, str(tmp_path / "plans"))
+        factors = payload["tasks"][0]["factors"]
+        assert "files_modified=3" in factors
+        assert "tests_failed>0" in factors
