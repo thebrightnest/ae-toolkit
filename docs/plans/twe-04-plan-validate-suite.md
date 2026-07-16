@@ -8,7 +8,7 @@ security_review: skipped
 security_review_reason: read-only validator — parses plan/PRD/ADR markdown and reports pass/fail; writes nothing and opens no network. It becomes an enforcement wall only once twe-05 wires it into the intake paths, where the fail-closed behavior is security-reviewed.
 docs_sync: required
 docs_sync_reason: new user-facing `aet plan validate` subcommand and the `⚠️ VALIDATE ACK` authoring convention; planners need both documented.
-status: approved
+status: merged
 ---
 
 # Plan: `aet plan validate` — Four-Family Check Suite + Ack Escape Hatch
@@ -90,7 +90,5 @@ Revert the merge commit. `aet plan validate` is a new read-only command; removin
 
 ---
 
-⚠️ VALIDATE ACK: rtrace — this plan is a slice of roadmap-p4; requirements R-1–R-3, R-6–R-10, and R-12–R-14 are covered by sibling `twe-*` plans
-
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*

@@ -8,7 +8,7 @@ security_review: required
 security_review_reason: this plan defines the autonomous-merge must-stop boundary in governance and scrubs the self-merge ambiguity from aet-ship. The wording must close the gap the 2026-07-15 audit exploited, not re-open it — mis-scoped or ambiguous governance here silently re-enables the bypass, so the review verifies the boundary is stated fail-closed and unambiguous.
 docs_sync: skipped
 docs_sync_reason: the deliverable IS the governance documentation (the ADR-005 extension's CONVENTIONS mirror + aet-ship skill wording); there is no separate code change for aet-sync-docs to reconcile docs against.
-status: approved
+status: merged
 ---
 
 # Plan: Autonomous-Merge Governance — ADR-005 Extension Mirror + `aet-ship` Merge-Neutral Hygiene
@@ -80,5 +80,5 @@ Revert the merge commit. The governance text and skill wording return to their p
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*

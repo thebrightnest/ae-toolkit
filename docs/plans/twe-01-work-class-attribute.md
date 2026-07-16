@@ -8,7 +8,7 @@ security_review: skipped
 security_review_reason: adds an authored plan-time attribute plus intake validation of its value; no new writer, trust boundary, or network surface. Fail-safe by design — a missing or invalid value never becomes zero-review-eligible (missing → `unclassified`).
 docs_sync: required
 docs_sync_reason: `work_class` becomes a documented plan-frontmatter key; the CONTEXT.md glossary and `docs/PIPELINE.md` change from "work class = the Trivial/Normal/Critical routing tiers" to "work class = a recorded machine-readable attribute" — a user-facing authoring contract.
-status: approved
+status: merged
 ---
 
 # Plan: `work_class` — Recorded Plan-Time Attribute + Intake Validation
@@ -80,5 +80,5 @@ Revert the merge commit. `work_class` is additive and optional; absent it, every
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*

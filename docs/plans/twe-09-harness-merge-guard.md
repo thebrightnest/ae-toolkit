@@ -8,7 +8,7 @@ security_review: required
 security_review_reason: this is the enforcement mechanism for the exit-end merge boundary. A guard that fails open, misidentifies the active harness, or is trivially bypassable defeats the whole wall. The fail-closed (refuse under auto/bypass mode) and fail-safe (unsupported harness → named gap, never silent pass) behaviors are the security-critical guarantees the review must verify.
 docs_sync: required
 docs_sync_reason: introduces new `aet-setup` behavior (active-harness detection + a generated merge-guard artifact) and a harness-adapter interface; the setup skill and checklist change and must stay in sync with the code.
-status: approved
+status: merged
 ---
 
 # Plan: Per-Provider Merge-Guard — `aet setup` Harness Detection + Adapter Interface + Claude Code Guard
@@ -91,5 +91,5 @@ Revert the merge commit. The generator and adapter are removed; any already-gene
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*
