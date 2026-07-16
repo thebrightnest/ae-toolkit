@@ -470,9 +470,26 @@ function Badge({ children, variant = "default", className = "", ...props }) {
     destructive: "border-transparent bg-destructive text-destructive-foreground",
     success: "border-transparent bg-emerald-100 text-emerald-800",
     warning: "border-transparent bg-amber-100 text-amber-800",
+    quarantined: "border-transparent bg-rose-100 text-rose-800",
     outline: "text-foreground",
   };
   return <span className={`${base} ${variants[variant]} ${className}`} {...props}>{children}</span>;
+}
+
+function TaskStateBadge({ state }) {
+  // Render a task lifecycle state with a stable color (nsr-02).
+  const variants = {
+    planned: "outline",
+    ready: "success",
+    blocked: "warning",
+    in_progress: "secondary",
+    awaiting_merge: "secondary",
+    merged: "success",
+    abandoned: "destructive",
+    failed: "destructive",
+    quarantined: "quarantined",
+  };
+  return <Badge variant={variants[state] || "outline"}>{state || "—"}</Badge>;
 }
 
 function Select({ children, className = "", ...props }) {
