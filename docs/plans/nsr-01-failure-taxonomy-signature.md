@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - twe-07-exit-gate-rehearsal
 pipeline: standard
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: pure classification/hashing module over already-captured session output; no new writer, network, secret, or trust boundary. Signatures are one-way digests, not executed.
 docs_sync: skipped
@@ -78,4 +78,5 @@ Revert the merge commit. The module is standalone and imported by nothing until 
 
 ---
 
-*Stage: reviewed*
+*Stage: merged*
+*Next step: run `aet-work`*
