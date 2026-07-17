@@ -97,6 +97,12 @@ def _submit(args: argparse.Namespace) -> int:
     if not isinstance(record, dict):
         return _fail(f"evidence payload must be a JSON object ({evidence_file})")
 
+    # Stamp tree_hash before validating so the skill writer contract (which
+    # does not require tree_hash) stays unchanged — ADR-025.
+    if "tree_hash" not in record:
+        root = evidence.telemetry.resolve_repo_root()
+        record = {**record, "tree_hash": evidence.verifier.working_tree_hash(str(root))}
+
     try:
         evidence.validate_verdict(record, stage)
     except (evidence.VerdictValidationError, evidence.VerdictValueError) as exc:
