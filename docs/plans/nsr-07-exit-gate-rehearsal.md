@@ -81,5 +81,5 @@ Revert the merge commit. Fixtures, the rehearsal test, and the audit doc are add
 
 ---
 
-*Stage: implemented*
-*Next step: aet-review / aet-ship*
+*Stage: synced*
+*Next step: aet-ship*
