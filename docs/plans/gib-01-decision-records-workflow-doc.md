@@ -81,4 +81,5 @@ Revert the merge commit. No runtime effect; ADR-014 returns to Accepted, roadmap
 
 ---
 
-_Stage: plan-approved_
+_Stage: implemented_
+*Next step: run `aet-qa`_

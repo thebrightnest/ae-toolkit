@@ -37,7 +37,7 @@ Do **not** write an ADR for:
 - [011 — Work State Is Recorded Forward, Not Derived on Read](011-forward-only-deterministic-work-state.md)
 - [012 — Direct Telemetry Archive and Per-Task Logs](012-direct-telemetry-archive.md)
 - [013 — Work Queue Is an Ephemeral Sprint Board, Plans Are the Source of Truth](013-queue-as-ephemeral-sprint-board.md)
-- [014 — Optional GitHub Issues Adapter for the Work Queue](014-optional-github-issues-adapter.md)
+- [014 — Optional GitHub Issues Adapter for the Work Queue](014-optional-github-issues-adapter.md) *(superseded by ADR-032)*
 - [015 — Telemetry-Driven Skill Improvements](015-telemetry-driven-skill-improvements.md)
 - [016 — Distribute AE Toolkit as a System, Not Individual Skills](016-distribute-as-system-not-individual-skills.md)
 - [017 — Remove aet-discover from AE Toolkit](017-remove-aet-discover.md)
@@ -52,6 +52,9 @@ Do **not** write an ADR for:
 - [026 — Slim Markdown Quality Gates](026-slim-markdown-quality-gates.md)
 - [027 — Main Hygiene Halts Unattended Runs](027-main-hygiene-halts-unattended.md)
 - [028 — Work Class Is a Recorded Attribute; Zero-Review Auto-Merge Is Policy-Gated and Off by Default](028-work-class-attribute-and-zero-review-policy.md)
+- [032 — GitHub Issues Is a Projection, Not a Backend](032-github-issues-projection-not-backend.md)
+- [033 — Projections Fail Open; Storage Fails Closed](033-projections-fail-open-storage-fail-closed.md)
+- [034 — Settled-ness Is Derived from Versioned Plan Data](034-settled-from-versioned-plan-data.md)
 
 ## Format
 
