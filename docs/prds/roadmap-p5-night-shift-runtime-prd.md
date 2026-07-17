@@ -92,6 +92,22 @@ The five open questions are resolved and folded into the plans and ADR-030/031:
 
 **Scope-validation finding, recorded:** the triage session is *runtime* judgment, which brushes ADR-020's "no runtime conditionals in the engine." Reconciled in ADR-030 — failure is inherently runtime; the breaker's counting/quarantine is deterministic code, and triage is an explicit, sanctioned session whose verdict the engine merely enforces (like a review stage), not a hidden engine branch. `quarantined` plus the five failure terms were added to the CONTEXT.md glossary; no terminology or code-ground-truth conflicts remain.
 
+## Divergence Summary
+
+*Recorded: 2026-07-17 — Branch: nsr-03-circuit-breaker*
+
+### Changed from plan
+
+- **Persistence (R-6):** the systemic tally is persisted through a new `BreakerStore` class in `aet-work/lib/breaker.py` using direct git plumbing, rather than by extending `aet-work/lib/backends/git_refs_backend.py` as the plan listed. The no-new-backend requirement is still satisfied; the shape just moved from the backend module into the breaker module.
+
+### Added (unplanned)
+
+- **`tests/test_orchestrator.py` compatibility updates:** existing orchestrator test mocks were updated to return the new 4-tuple `(exit_code, usage, session_dir, tail)` and to patch `_spawn_session_with_tail`, required by the refactor that exposes the session tail for failure classification.
+
+### Deferred
+
+- None.
+
 ---
 
 *Stage: synced*
