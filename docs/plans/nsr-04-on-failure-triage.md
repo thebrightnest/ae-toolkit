@@ -6,7 +6,7 @@ blocked_by:
   - nsr-02-quarantined-state
   - nsr-03-circuit-breaker
 pipeline: standard
-status: approved
+status: merged
 security_review: required
 security_review_reason: introduces a new autonomous agent session (triage) that runs unattended and can requeue work; the triage prompt and its verdict parsing are load-bearing. Review confirms it fails closed (an errored/unparseable triage falls back to the deterministic classifier and stays breaker-bounded, never an unbounded retry loop) and that it never merges or grants work.
 docs_sync: required
@@ -86,5 +86,5 @@ Revert the merge commit. The `--on-failure` default disappears and failures fall
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: None*
