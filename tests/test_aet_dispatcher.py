@@ -188,6 +188,8 @@ class TestRunMapping(_IsolatedBinDir):
             "full",
             "--task-timeout",
             "600",
+            "--stall-timeout",
+            "120",
             "--cli-bin",
             "/bin/cli",
         ]
@@ -206,6 +208,8 @@ class TestRunMapping(_IsolatedBinDir):
                 "full",
                 "--task-timeout",
                 "600",
+                "--stall-timeout",
+                "120",
                 "--cli-bin",
                 "/bin/cli",
             ],

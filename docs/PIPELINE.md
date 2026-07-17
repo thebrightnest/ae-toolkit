@@ -46,6 +46,15 @@ The stage sequence, skill bindings, evidence gates, and session grouping are **d
 
 At standard isolation the session groups are `[plan-approved, implemented]` → `[qa-complete]` → `[reviewed, secure]`. `aet-ship` merges after `synced`; `merged` is a queue state (see Legal Transitions), not a stage. The planning footers `plan-draft`, `prd-approved`, and `scope-validated` belong to the PRD pipeline (`aet-plan` / `aet-validate-scope`), upstream of the engine stage machine — they are not workflow stages.
 
+## Session Liveness
+
+The orchestrator distinguishes a slow-but-alive session from a genuinely wedged one by watching stdout silence, not just the clock.
+
+- **`--stall-timeout`** (default 300 s) is the primary liveness control. A lightweight watchdog thread inside the single-plan session runner stamps `last_output` on every emitted line and terminates the process group when `now - last_output > stall_timeout`. The failure is classified `timeout` (nsr-01), the same class as a wall-clock kill.
+- **`--task-timeout`** (default 7200 s) is the coarse wall-clock backstop. It is retained for the pathological cases a silence watchdog cannot see: a process that holds the pipe open but emits nothing readable, or one that streams forever. Its default is raised well above `--stall-timeout` so the watchdog fires in normal operation.
+
+A session that keeps emitting progress lines past `--stall-timeout` but under `--task-timeout` is left running. A session that emits nothing is killed by whichever threshold is reached first.
+
 ## Recorded-Forward State
 
 Workflow state is **recorded at transition time and trusted on read**.

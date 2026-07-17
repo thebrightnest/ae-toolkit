@@ -15,6 +15,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -220,8 +221,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--task-timeout",
         type=int,
-        default=3600,
-        help="Per-task wall-clock timeout in seconds (default: 3600).",
+        default=7200,
+        help="Per-task wall-clock timeout in seconds (default: 7200).",
+    )
+    parser.add_argument(
+        "--stall-timeout",
+        type=int,
+        default=300,
+        help="Stdout-silence timeout in seconds before a session is killed (default: 300).",
     )
     parser.add_argument(
         "--heartbeat-interval",
@@ -566,7 +573,12 @@ def _require_passing_verdict(
     return True
 
 
-def _run_with_live_tee(cmd: list[str], cwd: str, env: dict) -> tuple[int, str]:
+def _run_with_live_tee(
+    cmd: list[str],
+    cwd: str,
+    env: dict,
+    stall_timeout: float = 300,
+) -> tuple[int, str]:
     """Spawn a session: echo its output live, keep a bounded tail buffer.
 
     Stage sessions run up to ~1 hour, so ``capture_output=True`` is not an
@@ -574,6 +586,10 @@ def _run_with_live_tee(cmd: list[str], cwd: str, env: dict) -> tuple[int, str]:
     reader loop mirrors each line to the terminal as it arrives AND keeps the
     last ~256 KB (usage blocks are emitted at exit). Returns
     ``(exit_code, tail_text)``.
+
+    A watchdog thread monitors stdout silence. If no line arrives for
+    ``stall_timeout`` seconds, the process group is terminated and the result
+    is classified as a timeout (nsr-01), the same class as a wall-clock kill.
     """
     proc = subprocess.Popen(
         cmd,
@@ -583,22 +599,66 @@ def _run_with_live_tee(cmd: list[str], cwd: str, env: dict) -> tuple[int, str]:
         stderr=subprocess.STDOUT,
         text=True,
         errors="replace",
+        start_new_session=True,
     )
     chunks: collections.deque[str] = collections.deque()
     buffered = 0
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        sys.stdout.write(line)
-        sys.stdout.flush()
-        chunks.append(line)
-        buffered += len(line)
-        while buffered > usage_lib.TAIL_SCAN_BYTES and chunks:
-            buffered -= len(chunks.popleft())
-    return proc.wait(), "".join(chunks)
+    last_output = time.monotonic()
+    last_output_lock = threading.Lock()
+    stop_watchdog = threading.Event()
+    cause_lock = threading.Lock()
+    cause: str | None = None
+
+    def _watchdog() -> None:
+        nonlocal cause
+        poll_interval = 0.1
+        while not stop_watchdog.wait(timeout=poll_interval):
+            if proc.poll() is not None:
+                return
+            if _shutdown_requested:
+                with cause_lock:
+                    cause = "shutdown"
+                _terminate_process_group(proc, timeout=10)
+                return
+            with last_output_lock:
+                elapsed = time.monotonic() - last_output
+            if elapsed > stall_timeout:
+                with cause_lock:
+                    cause = "stall"
+                _terminate_process_group(proc, timeout=10)
+                return
+
+    watchdog = threading.Thread(target=_watchdog, daemon=True)
+    watchdog.start()
+
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            with last_output_lock:
+                last_output = time.monotonic()
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            chunks.append(line)
+            buffered += len(line)
+            while buffered > usage_lib.TAIL_SCAN_BYTES and chunks:
+                buffered -= len(chunks.popleft())
+    finally:
+        stop_watchdog.set()
+        watchdog.join(timeout=5)
+
+    exit_code = proc.wait()
+    with cause_lock:
+        if cause == "stall":
+            return -9, "".join(chunks)
+    return exit_code, "".join(chunks)
 
 
 def _spawn_session(
-    adapter, cmd: list[str], worktree_dir: str, env: dict
+    adapter,
+    cmd: list[str],
+    worktree_dir: str,
+    env: dict,
+    stall_timeout: float = 300,
 ) -> tuple[int, dict | None, Path | None]:
     """Run one agent session, returning ``(exit_code, usage, session_dir)``.
 
@@ -607,11 +667,17 @@ def _spawn_session(
     ``session_dir`` is the resolved kimi wire dir (``None`` for non-kimi CLIs
     and unresolvable sessions); it feeds wire-log test-run extraction.
     """
-    return _spawn_session_with_tail(adapter, cmd, worktree_dir, env)[:3]
+    return _spawn_session_with_tail(
+        adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
+    )[:3]
 
 
 def _spawn_session_with_tail(
-    adapter, cmd: list[str], worktree_dir: str, env: dict
+    adapter,
+    cmd: list[str],
+    worktree_dir: str,
+    env: dict,
+    stall_timeout: float = 300,
 ) -> tuple[int, dict | None, Path | None, str]:
     """Run one agent session, returning ``(exit_code, usage, session_dir, tail)``.
 
@@ -619,7 +685,9 @@ def _spawn_session_with_tail(
     The public ``run_stage``/``run_stage_group`` functions call this helper and
     record signatures when a *task* and *backend* are provided.
     """
-    exit_code, output = _run_with_live_tee(cmd, worktree_dir, env)
+    exit_code, output = _run_with_live_tee(
+        cmd, worktree_dir, env, stall_timeout=stall_timeout
+    )
     usage = None
     if adapter.usage_mode is not None:
         usage = usage_lib.parse_usage(adapter.name, output)
@@ -642,6 +710,7 @@ def run_stage(
     verdict_kind: str | None = None,
     task: dict | None = None,
     backend=None,
+    stall_timeout: float = 300,
 ) -> tuple[int, dict | None, Path | None]:
     """Spawn a single stage session, returning ``(exit_code, usage, session_dir)``.
 
@@ -674,7 +743,9 @@ def run_stage(
         )
 
     print(f"   Invoking: {' '.join(cmd)}")
-    exit_code, usage, session_dir, output = _spawn_session_with_tail(adapter, cmd, worktree_dir, env)
+    exit_code, usage, session_dir, output = _spawn_session_with_tail(
+        adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
+    )
     if exit_code != 0 and task is not None:
         _record_failure_on_task(
             backend,
@@ -738,6 +809,7 @@ def run_stage_group(
     workflow: Workflow,
     task: dict | None = None,
     backend=None,
+    stall_timeout: float = 300,
 ) -> tuple[int, dict | None, Path | None]:
     """Spawn one session that runs every stage in the group sequentially.
 
@@ -779,7 +851,9 @@ def run_stage_group(
             )
 
     print(f"   Invoking group: {' '.join(cmd)}")
-    exit_code, usage, session_dir, output = _spawn_session_with_tail(adapter, cmd, worktree_dir, env)
+    exit_code, usage, session_dir, output = _spawn_session_with_tail(
+        adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
+    )
     if exit_code != 0 and task is not None:
         _record_failure_on_task(
             backend,
@@ -841,6 +915,7 @@ def process_task(
     worktree_dir: str | None = None,
     workflow: Workflow | None = None,
     backend=None,
+    stall_timeout: float = 300,
 ) -> bool:
     """Process a single task through all its stage groups.
 
@@ -986,6 +1061,7 @@ def process_task(
                     workflow=workflow,
                     task=task,
                     backend=backend,
+                    stall_timeout=stall_timeout,
                 )
                 end_time = telemetry.iso_now()
                 _emit_stage_session(
@@ -1095,6 +1171,7 @@ def process_task(
                 verdict_kind=kind,
                 task=task,
                 backend=backend,
+                stall_timeout=stall_timeout,
             )
             end_time = telemetry.iso_now()
             _emit_stage_session(
@@ -1702,6 +1779,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     adapter.bin,
                     "--isolation",
                     args.isolation,
+                    "--stall-timeout",
+                    str(getattr(args, "stall_timeout", 300)),
                 ]
 
                 proc = subprocess.Popen(cmd, env=env, start_new_session=True)
@@ -2001,6 +2080,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             worktree_dir=worktree_dir,
             workflow=wf,
             backend=backend,
+            stall_timeout=getattr(args, "stall_timeout", 300),
         )
         exit_code = 0 if success else 1
 

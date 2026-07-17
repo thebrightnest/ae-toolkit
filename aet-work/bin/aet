@@ -130,12 +130,19 @@ def _parse_run_args(args: list[str]) -> list[str]:
     max_jobs = "4"
     isolation = "standard"
     task_timeout: str | None = None
+    stall_timeout: str | None = None
     cli_bin: str | None = None
 
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("--max-jobs", "--isolation", "--task-timeout", "--cli-bin"):
+        if arg in (
+            "--max-jobs",
+            "--isolation",
+            "--task-timeout",
+            "--stall-timeout",
+            "--cli-bin",
+        ):
             if i + 1 >= len(args):
                 print(f"error: {arg} requires a value", file=sys.stderr)
                 sys.exit(2)
@@ -146,6 +153,8 @@ def _parse_run_args(args: list[str]) -> list[str]:
                 isolation = value
             elif arg == "--task-timeout":
                 task_timeout = value
+            elif arg == "--stall-timeout":
+                stall_timeout = value
             else:
                 cli_bin = value
             i += 2
@@ -156,6 +165,8 @@ def _parse_run_args(args: list[str]) -> list[str]:
     out = ["--max-jobs", max_jobs, "--isolation", isolation]
     if task_timeout is not None:
         out.extend(["--task-timeout", task_timeout])
+    if stall_timeout is not None:
+        out.extend(["--stall-timeout", stall_timeout])
     if cli_bin is not None:
         out.extend(["--cli-bin", cli_bin])
     return out
