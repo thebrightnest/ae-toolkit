@@ -3203,7 +3203,7 @@ class TestQaFreshnessInjection(unittest.TestCase):
 
         # Patch the spawn (not subprocess.Popen) so the real git calls the
         # freshness check makes still run against the temp repo.
-        def fake_spawn(adapter, cmd, worktree_dir, env):
+        def fake_spawn(adapter, cmd, worktree_dir, env, **kwargs):
             captured["cmd"] = cmd
             captured["env"] = env
             return 0, None, None, ""
@@ -3250,7 +3250,7 @@ class TestQaFreshnessInjection(unittest.TestCase):
     def _capture_run_stage_group(self, repo: str) -> dict:
         captured: dict = {}
 
-        def fake_spawn(adapter, cmd, worktree_dir, env):
+        def fake_spawn(adapter, cmd, worktree_dir, env, **kwargs):
             captured["cmd"] = cmd
             captured["env"] = env
             return 0, None, None, ""
