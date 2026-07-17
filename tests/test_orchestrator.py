@@ -3206,9 +3206,9 @@ class TestQaFreshnessInjection(unittest.TestCase):
         def fake_spawn(adapter, cmd, worktree_dir, env):
             captured["cmd"] = cmd
             captured["env"] = env
-            return 0, None, None
+            return 0, None, None, ""
 
-        with patch.object(orchestrator, "_spawn_session", side_effect=fake_spawn):
+        with patch.object(orchestrator, "_spawn_session_with_tail", side_effect=fake_spawn):
             orchestrator.run_stage(
                 _FAKE_ADAPTER,
                 repo,
@@ -3253,7 +3253,7 @@ class TestQaFreshnessInjection(unittest.TestCase):
         def fake_spawn(adapter, cmd, worktree_dir, env):
             captured["cmd"] = cmd
             captured["env"] = env
-            return 0, None, None
+            return 0, None, None, ""
 
         stages = [
             WorkflowStage(
@@ -3269,7 +3269,7 @@ class TestQaFreshnessInjection(unittest.TestCase):
             execution_policy=ExecutionPolicy(session_groups=[["reviewed"]]),
             routing=Routing(default={"harness": "test", "model": None}, by_stage={}),
         )
-        with patch.object(orchestrator, "_spawn_session", side_effect=fake_spawn):
+        with patch.object(orchestrator, "_spawn_session_with_tail", side_effect=fake_spawn):
             orchestrator.run_stage_group(
                 _FAKE_ADAPTER,
                 repo,

@@ -62,16 +62,16 @@ docs_sync_reason: the per-task and systemic breaker thresholds and the "quaranti
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] New source coverage — `tests/test_circuit_breaker.py` covers `aet-work/lib/breaker.py`:
+- [x] `make validate` passes; full suite passes
+- [x] New source coverage — `tests/test_circuit_breaker.py` covers `aet-work/lib/breaker.py`:
   - `test_same_signature_thrice_quarantines`
   - `test_differing_signatures_do_not_quarantine`
   - `test_systemic_trip_at_n_distinct_tasks`
   - `test_canceled_excluded_from_tallies`
   - `test_breaker_counts_persist_across_reload` (integration, git-refs)
-- [ ] R-trace coverage: R-4/R-5 by tasks 1,3; R-6 by task 2; R-13 by task 4; no unknown R-ids
-- [ ] Distinguish test types: unit (breaker decisions) + integration (git-refs persistence + `run_batch` stop-spawn)
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-4/R-5 by tasks 1,3; R-6 by task 2; R-13 by task 4; no unknown R-ids
+- [x] Distinguish test types: unit (breaker decisions) + integration (git-refs persistence + `run_batch` stop-spawn)
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -83,5 +83,5 @@ Revert the merge commit. Without the breaker, failures fall back to the pre-nsr 
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run aet-qa*
