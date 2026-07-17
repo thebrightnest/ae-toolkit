@@ -7,7 +7,7 @@ blocked_by:
   - nsr-05-stall-watchdog
   - nsr-06-per-task-cost-rollup
 pipeline: standard
-status: draft
+status: approved
 security_review: skipped
 security_review_reason: a rehearsal harness (fixtures + an unattended run) plus an audit write-up; it exercises existing behavior and adds no product code path, writer, or trust boundary.
 docs_sync: skipped
@@ -81,5 +81,5 @@ Revert the merge commit. Fixtures, the rehearsal test, and the audit doc are add
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: aet-ship*
