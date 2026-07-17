@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - nsr-01-failure-taxonomy-signature
 pipeline: standard
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: reuses frh-03's existing process-group kill primitive (`_terminate_process_group`) on a new liveness trigger; no new trust boundary, network, or writer. The watchdog only ever terminates a stalled child, never spawns or grants.
 docs_sync: required
@@ -80,5 +80,5 @@ Revert the merge commit. Timeout handling falls back to wall-clock-only exactly 
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*
