@@ -40,10 +40,10 @@ docs_sync_reason: the per-task and systemic breaker thresholds and the "quaranti
 
 ## Task List
 
-1. Create `aet-work/lib/breaker.py`: per-task `should_quarantine_task`, systemic `systemic_tripped`, threshold constants — M (traces: R-4, R-5)
-2. Persist per-task `failure_signatures` on the task record and the systemic tally to `refs/aet/breaker` via the git-refs backend — M (traces: R-6)
-3. Wire the breaker into `run_batch`/finalize: per-task hit ⇒ `→ quarantined`; systemic trip ⇒ `stop_spawn` + drain + named report — M (traces: R-4, R-5)
-4. Tests: `tests/test_circuit_breaker.py` (new) — M (traces: R-4, R-5, R-6, R-13)
+1. ✓ Create `aet-work/lib/breaker.py`: per-task `should_quarantine_task`, systemic `systemic_tripped`, threshold constants — M (traces: R-4, R-5)
+2. ✓ Persist per-task `failure_signatures` on the task record and the systemic tally to `refs/aet/breaker` via the git-refs backend — M (traces: R-6) [Changed: systemic tally persisted through `BreakerStore` in `aet-work/lib/breaker.py` rather than `aet-work/lib/backends/git_refs_backend.py`]
+3. ✓ Wire the breaker into `run_batch`/finalize: per-task hit ⇒ `→ quarantined`; systemic trip ⇒ `stop_spawn` + drain + named report — M (traces: R-4, R-5)
+4. ✓ Tests: `tests/test_circuit_breaker.py` (new) — M (traces: R-4, R-5, R-6, R-13) [Changed: also updated `tests/test_orchestrator.py` mocks for the new `_spawn_session_with_tail` signature]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -83,5 +83,5 @@ Revert the merge commit. Without the breaker, failures fall back to the pre-nsr 
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
