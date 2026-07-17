@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - twe-07-exit-gate-rehearsal
 pipeline: standard
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: read-only aggregation of telemetry already on disk, written to the task's own ledger record via the sanctioned path; no new writer, network, or trust boundary. The value is inert data — explicitly no code path reads it to gate or kill.
 docs_sync: required
@@ -78,5 +78,5 @@ Revert the merge commit. The per-task `cost` field stops being written; per-run 
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*

@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - twe-07-exit-gate-rehearsal
 pipeline: standard
-status: approved
+status: merged
 security_review: skipped
 security_review_reason: adds one terminal-until-human state to the transition table; all writes still route through `aet-state` (sole-writer preserved). No new writer, network, or trust boundary. Fail-safe — the state is non-actionable, so a mis-set never causes autonomous action.
 docs_sync: required
@@ -85,5 +85,5 @@ Revert the merge commit. The state is additive and unset by any code until nsr-0
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*
