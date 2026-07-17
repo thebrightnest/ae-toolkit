@@ -1088,13 +1088,15 @@ _BATCH_ACTIONABLE_STATES = frozenset({"ready", "in_progress"})
 
 # Stranded non-terminal states, in the order they should appear in the leftover
 # report. Terminal states (merged/abandoned) are excluded: a fully terminal
-# queue is a clean completion, not a leftover.
-_BATCH_LEFTOVER_STATES = ("awaiting_merge", "blocked", "planned", "failed")
+# queue is a clean completion, not a leftover. ``quarantined`` is non-actionable
+# and must be surfaced so a human can un-quarantine it (nsr-02).
+_BATCH_LEFTOVER_STATES = ("awaiting_merge", "blocked", "planned", "failed", "quarantined")
 _BATCH_LEFTOVER_LABELS = {
     "awaiting_merge": "awaiting merge",
     "blocked": "blocked",
     "planned": "planned",
     "failed": "failed",
+    "quarantined": "quarantined",
 }
 
 

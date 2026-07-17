@@ -64,12 +64,17 @@ transition:  blocked → ready              (last blocker reached terminal)
 transition:  ready → in_progress          (branch + worktree recorded)
 transition:  in_progress.stage advances   (tdd → implement → qa → review → cso → sync-docs)
 transition:  in_progress → awaiting_merge (pipeline exited 0; NOT terminal)
+transition:  in_progress → quarantined    (deterministic failure; human un-quarantine)
+transition:  failed → quarantined         (deterministic failure; human un-quarantine)
+transition:  quarantined → ready          (human un-quarantine after fix)
+transition:  quarantined → abandoned      (human gives up; TERMINAL)
 transition:  awaiting_merge → merged      (TERMINAL; merge_commit verified once)
 transition:  any → abandoned (reason)     (TERMINAL)
 transition:  in_progress → failed         (needs inspection; may re-enter)
+transition:  ready → failed               (needs inspection; may re-enter)
 ```
 
-Terminal states are `merged` and `abandoned`. Only terminal states satisfy blockers. `awaiting_merge` deliberately does **not** satisfy blockers.
+Terminal states are `merged` and `abandoned`. Only terminal states satisfy blockers. `awaiting_merge` and `quarantined` deliberately do **not** satisfy blockers; `quarantined` is non-actionable and is never auto-retried.
 
 ## Intake Contract
 

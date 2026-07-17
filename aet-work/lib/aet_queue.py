@@ -264,6 +264,7 @@ STATES = {
     "merged",
     "abandoned",
     "failed",
+    "quarantined",
 }
 
 TERMINAL_STATES = {"merged", "abandoned"}
@@ -278,11 +279,12 @@ LEGAL_TRANSITIONS: dict[str | None, set[str]] = {
     "planned": {"blocked", "ready", "in_progress", "abandoned"},
     "blocked": {"ready", "abandoned"},
     "ready": {"in_progress", "failed", "abandoned"},
-    "in_progress": {"in_progress", "awaiting_merge", "failed", "abandoned"},
+    "in_progress": {"in_progress", "awaiting_merge", "failed", "quarantined", "abandoned"},
     "awaiting_merge": {"merged", "abandoned"},
     "merged": set(),
     "abandoned": set(),
-    "failed": {"in_progress", "ready", "blocked", "abandoned"},
+    "failed": {"in_progress", "ready", "blocked", "quarantined", "abandoned"},
+    "quarantined": {"ready", "abandoned"},
 }
 
 # Legacy status -> canonical state mapping used only on read. New code and

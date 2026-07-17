@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - twe-07-exit-gate-rehearsal
 pipeline: standard
-status: draft
+status: approved
 security_review: skipped
 security_review_reason: adds one terminal-until-human state to the transition table; all writes still route through `aet-state` (sole-writer preserved). No new writer, network, or trust boundary. Fail-safe — the state is non-actionable, so a mis-set never causes autonomous action.
 docs_sync: required
@@ -39,12 +39,12 @@ docs_sync_reason: `quarantined` is a user-facing task state — `docs/PIPELINE.m
 
 ## Task List
 
-1. Add `quarantined` and its transitions to `LEGAL_TRANSITIONS` (`aet-work/lib/aet_queue.py`) — S (traces: R-3)
-2. Teach `aet-state` transition-validation + derived-state reconciliation about `quarantined` (self-reconciling) — S (traces: R-3)
-3. Exclude `quarantined` from `has_actionable_tasks` and the `run_batch` spawn selector — S (traces: R-3)
-4. Render `quarantined` in the panel state view — S (traces: R-3)
-5. Docs: `docs/PIPELINE.md` Legal Transitions gains `quarantined` and the un-quarantine path (CONTEXT.md glossary already carries it from scope-validation) — S (traces: R-3)
-6. Tests: `tests/test_quarantined_state.py` (new) — M (traces: R-3, R-13)
+1. ✓ Add `quarantined` and its transitions to `LEGAL_TRANSITIONS` (`aet-work/lib/aet_queue.py`) — S (traces: R-3)
+2. ✓ Teach `aet-state` transition-validation + derived-state reconciliation about `quarantined` (self-reconciling) — S (traces: R-3)
+3. ✓ Exclude `quarantined` from `has_actionable_tasks` and the `run_batch` spawn selector — S (traces: R-3)
+4. ✓ Render `quarantined` in the panel state view — S (traces: R-3)
+5. ✓ Docs: `docs/PIPELINE.md` Legal Transitions gains `quarantined` and the un-quarantine path (CONTEXT.md glossary already carries it from scope-validation) — S (traces: R-3)
+6. ✓ Tests: `tests/test_quarantined_state.py` (new) — M (traces: R-3, R-13)
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -65,15 +65,15 @@ docs_sync_reason: `quarantined` is a user-facing task state — `docs/PIPELINE.m
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] New source coverage — `tests/test_quarantined_state.py`:
+- [x] `make validate` passes; full suite passes
+- [x] New source coverage — `tests/test_quarantined_state.py`:
   - `test_quarantined_legal_targets` (`in_progress`/`failed` → `quarantined`)
   - `test_quarantined_legal_sources` (`quarantined` → `ready`/`abandoned` only)
   - `test_quarantined_to_in_progress_rejected`
   - `test_quarantined_not_actionable` (spawn selector never picks it)
-- [ ] R-trace coverage: R-3 by tasks 1–5; R-13 (this slice) by task 6; no unknown R-ids
-- [ ] Distinguish test types: unit (transition table) + integration (`aet-state` end-to-end transition)
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-3 by tasks 1–5; R-13 (this slice) by task 6; no unknown R-ids
+- [x] Distinguish test types: unit (transition table) + integration (`aet-state` end-to-end transition)
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -85,5 +85,5 @@ Revert the merge commit. The state is additive and unset by any code until nsr-0
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
