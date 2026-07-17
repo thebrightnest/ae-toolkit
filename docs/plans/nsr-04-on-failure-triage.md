@@ -86,5 +86,5 @@ Revert the merge commit. The `--on-failure` default disappears and failures fall
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
