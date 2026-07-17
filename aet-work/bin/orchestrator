@@ -767,7 +767,7 @@ def run_stage(
                 stage=current_stage,
                 verdict_recorded=verdict_kind is not None,
                 shutdown=_shutdown_requested,
-                killed_by_timeout=False,
+                killed_by_timeout=exit_code == -9,
             ),
             current_stage,
             output,
@@ -875,7 +875,7 @@ def run_stage_group(
                 stage=stages[0].name,
                 verdict_recorded=False,
                 shutdown=_shutdown_requested,
-                killed_by_timeout=False,
+                killed_by_timeout=exit_code == -9,
             ),
             stages[0].name,
             output,
@@ -1526,6 +1526,29 @@ def _maybe_auto_merge(task: dict, queue_file: str, repo_root: str) -> bool:
     return track_record.perform_auto_merge(task, queue_file, repo_root)
 
 
+def _write_task_cost(
+    backend,
+    queue_file: str,
+    task_id: str,
+    logger: telemetry.RunLogger | None,
+) -> None:
+    """Roll up per-task cost from telemetry and write it to the ledger record.
+
+    Null is preserved (analytics-only): when every stage record was null, the
+    field is omitted rather than written as a pair of nulls.
+    """
+    if logger is None:
+        return
+    queue = backend.load()["queue"]
+    task = next((t for t in queue if t.get("id") == task_id), None)
+    if task is None:
+        return
+    tokens, usd = _task_usage_aggregates(logger, task_id)
+    if tokens is not None or usd is not None:
+        task["cost"] = {"tokens": tokens, "usd": usd}
+        backend.save(queue)
+
+
 def _finalize_task(
     backend,
     queue_file: str,
@@ -1564,14 +1587,8 @@ def _finalize_task(
         if from_state == "awaiting_merge":
             return {"successes": 1, "failures": 0, "stop_spawn": False}
         # Roll up per-task cost from this run's telemetry and write it to the
-        # ledger record before transition. Null is preserved (analytics-only):
-        # when every stage record was null, the field is omitted rather than
-        # written as a pair of nulls.
-        if task and logger is not None:
-            tokens, usd = _task_usage_aggregates(logger, task_id)
-            if tokens is not None or usd is not None:
-                task["cost"] = {"tokens": tokens, "usd": usd}
-                backend.save(queue)
+        # ledger record before transition.
+        _write_task_cost(backend, queue_file, task_id, logger)
         if task and _maybe_auto_merge(task, queue_file, repo_root):
             return {"successes": 1, "failures": 0, "stop_spawn": False}
         print(f"   ✅ {task_id} awaiting merge")
@@ -1600,6 +1617,19 @@ def _finalize_task(
     queue = backend.load()["queue"]
     task = next((t for t in queue if t.get("id") == task_id), None)
     from_state = current_state(task) if task else "in_progress"
+
+    # Roll up per-task cost for incident tasks too (nsr-07).
+    _write_task_cost(backend, queue_file, task_id, logger)
+
+    # Stall/task-timeout failures are terminal: leave the task failed rather
+    # than requeue it. The child process records the TIMEOUT class on the
+    # task's failure_signatures ledger; read that back after the reload above.
+    last_entry = (task.get("failure_signatures") or [])[-1:] if task else []
+    entry = last_entry[0] if last_entry else {}
+    if entry.get("class") == failure_lib.FailureClass.TIMEOUT.value:
+        print(f"   ⏱️  {task_id} killed by timeout; leaving failed")
+        _mark_failed(backend, queue_file, task_id, from_state)
+        return {"successes": 0, "failures": 1, "stop_spawn": False}
 
     # Circuit breaker has absolute precedence over triage routing (nsr-03).
     if task and breaker.should_quarantine_task(task):
@@ -2247,6 +2277,18 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             stall_timeout=getattr(args, "stall_timeout", 300),
         )
         exit_code = 0 if success else 1
+
+        # Roll up per-task cost from this child's telemetry and persist it on the
+        # queued task record. The batch parent later seals state, but cost must
+        # be captured by the process that generated the stage records (nsr-07).
+        if real_task is not None:
+            queue = backend.load()["queue"]
+            queue_task = next((t for t in queue if t.get("id") == task_id), None)
+            if queue_task:
+                tokens, usd = _task_usage_aggregates(logger, task_id)
+                if tokens is not None or usd is not None:
+                    queue_task["cost"] = {"tokens": tokens, "usd": usd}
+                    backend.save(queue)
 
         # For top-level run-one on a queued task, mirror run_batch and transition
         # the task to awaiting_merge on success so aet-state record-merge can run.
