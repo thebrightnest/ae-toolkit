@@ -86,5 +86,5 @@ Revert the merge commit. The `--on-failure` default disappears and failures fall
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
