@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.2.0] — 2026-07-17
+
+### Added
+
+- **Night-shift runtime resilience suite** — Phase 5 adds per-task and systemic circuit breakers, a stall watchdog on event silence, failure-taxonomy classification, `--on-failure=triage` requeue/quarantine routing, a quarantined task state, and per-task cost rollup to the ledger (nsr-01…07).
+- **Phase 5 exit-gate rehearsal** — end-to-end unattended rehearsal that injects failure and stall scenarios and verifies the orchestrator routes them correctly (nsr-07).
+- **`aet plan validate` four-family check suite** — validate plans against structure, scope, dependency, and traceability rules from the CLI (twe-04).
+- **Intake fail-closed gates** — `aet add`, `init-queue`, and `sync` now run the plan-validate suite and reject malformed plans at intake (twe-05).
+- **Zero-review mechanism** — optional auto-merge eligibility based on track-record, with `desk --eligibility`, policy configuration, and an orchestrator hook; off by default (twe-06).
+- **`aet desk` risk-ranked awaiting-merge view** — sort tasks by risk and bundle merge evidence for easier ship decisions (twe-02).
+- **`aet desk` actions** — merge and abandon tasks directly from the desk TUI (twe-03).
+- **Per-provider merge-guard harness** — detect provider-specific merge guards and adapt ship behavior, starting with a Claude adapter (twe-09).
+- **Work-class plan attribute** — plans now record `work_class` and intake validates it, enabling richer routing and risk scoring (twe-01).
+- **Phase 4 exit-gate rehearsal** — end-to-end rehearsal with an audit doc capturing the unattended run evidence (twe-07).
+- **Autonomous-merge governance** — documented fail-closed governance and ship merge-neutral hygiene for future auto-merge paths (twe-08).
+
+### Changed
+
+- **Validation-freshness guard** — `aet gate submit` now stamps `tree_hash` before validating the submit payload, preventing stale verdicts from being accepted.
+- **Worktree-aware install tests** — `aet install` tests now pass when invoked from inside a git worktree.
+
+### Documentation
+
+- Added Phase 4 and Phase 5 plan sets and PRDs (twe-01..09, nsr-01..07).
+- Synced multiple plans to implementation reality after closure.
+
+---
+
 ## [1.1.0] — 2026-07-15
 
 ### Added
