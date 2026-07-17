@@ -6,7 +6,7 @@ blocked_by:
   - nsr-02-quarantined-state
   - nsr-03-circuit-breaker
 pipeline: standard
-status: draft
+status: approved
 security_review: required
 security_review_reason: introduces a new autonomous agent session (triage) that runs unattended and can requeue work; the triage prompt and its verdict parsing are load-bearing. Review confirms it fails closed (an errored/unparseable triage falls back to the deterministic classifier and stays breaker-bounded, never an unbounded retry loop) and that it never merges or grants work.
 docs_sync: required
@@ -65,16 +65,16 @@ docs_sync_reason: `--on-failure={triage|continue|halt}` is a new operator-facing
 
 ## Validation Steps
 
-- [ ] `make validate` passes; full suite passes
-- [ ] New source coverage — `tests/test_on_failure_triage.py` covers `aet-work/lib/triage.py` + the routing:
+- [x] `make validate` passes; full suite passes
+- [x] New source coverage — `tests/test_on_failure_triage.py` covers `aet-work/lib/triage.py` + the routing:
   - `test_triage_requeues_flaky_environment` (`failed → ready`)
   - `test_triage_quarantines_design`
   - `test_triage_error_falls_back_to_classifier_default` (fail-closed)
   - `test_triage_requeue_bounded_by_breaker` (no loop past threshold)
   - `test_on_failure_continue_matches_legacy` / `test_on_failure_halt_stops_shift`
-- [ ] R-trace coverage: R-7 by tasks 1–4; R-8 by task 3; R-13 by task 5; no unknown R-ids
-- [ ] Distinguish test types: unit (`triage.py` prompt/parse) + integration (finalize routing + `aet-state` requeue)
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-7 by tasks 1–4; R-8 by task 3; R-13 by task 5; no unknown R-ids
+- [x] Distinguish test types: unit (`triage.py` prompt/parse) + integration (finalize routing + `aet-state` requeue)
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -86,5 +86,5 @@ Revert the merge commit. The `--on-failure` default disappears and failures fall
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

@@ -352,6 +352,28 @@ Run `aet-evolve --toolkit` periodically (monthly, or after every 5 retros) to sc
 
 The orchestrator writes execution telemetry directly to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/`. Run `aet mine-learnings` periodically to scan the archive for recurring patterns (dependency issues, repeated loops, stage failures, review noise) and propose toolkit-level skill edits.
 
+## Runtime Failure Handling
+
+`aet run` accepts `--on-failure={triage|continue|halt}` (default `triage`). Skills and agents that invoke the batch runner may rely on this default, so new skills should document when they need a non-default mode.
+
+### Failure taxonomy
+
+All task failures are classified into one of five classes before routing:
+
+- `environment` — missing tool/dependency, network, auth, or permission problem.
+- `flaky` — non-deterministic test or transient runtime failure.
+- `design` — assertion, lint/style, type, name, or syntax error.
+- `timeout` — killed by wall-clock or silence timeout.
+- `canceled` — killed by signal or orchestrator shutdown.
+
+### Routing modes
+
+- `triage` (default): spawn a triage session that emits `{class, action: requeue|quarantine}`. `requeue` transitions `failed → ready`; `quarantine` transitions to `quarantined`. An errored or unparseable verdict falls back to the nsr-01 default action.
+- `continue`: mark `failed` and keep spawning new tasks.
+- `halt`: mark `failed` and stop spawning new tasks.
+
+The per-task circuit breaker overrides every mode: three identical signatures on one task always quarantine it.
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. No separate version field in frontmatter.

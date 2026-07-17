@@ -23,10 +23,13 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
      --cli-bin $(which kimi) \
      --isolation standard \
      --max-jobs 4 \
+     --on-failure triage \
      > aet-work.log 2>&1 &
    ```
 
    The orchestrator handles CLI detection, worktree management, parallel execution, and stage advancement automatically. It prints the telemetry archive path when the run finishes.
+
+   **Failure handling:** `--on-failure={triage|continue|halt}` (default `triage`). `triage` spawns a cheap triage session that decides whether to requeue a transient failure or quarantine a design defect; `continue` marks the task failed and keeps spawning new tasks; `halt` stops the shift on the first failure.
 
 4. **Per-plan pipeline override:**
 

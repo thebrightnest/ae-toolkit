@@ -129,6 +129,7 @@ def _parse_run_args(args: list[str]) -> list[str]:
     """Build orchestrator flags from user-provided ``run``/``run-one`` args."""
     max_jobs = "4"
     isolation = "standard"
+    on_failure: str | None = None
     task_timeout: str | None = None
     stall_timeout: str | None = None
     cli_bin: str | None = None
@@ -139,6 +140,7 @@ def _parse_run_args(args: list[str]) -> list[str]:
         if arg in (
             "--max-jobs",
             "--isolation",
+            "--on-failure",
             "--task-timeout",
             "--stall-timeout",
             "--cli-bin",
@@ -151,6 +153,8 @@ def _parse_run_args(args: list[str]) -> list[str]:
                 max_jobs = value
             elif arg == "--isolation":
                 isolation = value
+            elif arg == "--on-failure":
+                on_failure = value
             elif arg == "--task-timeout":
                 task_timeout = value
             elif arg == "--stall-timeout":
@@ -163,6 +167,8 @@ def _parse_run_args(args: list[str]) -> list[str]:
             sys.exit(2)
 
     out = ["--max-jobs", max_jobs, "--isolation", isolation]
+    if on_failure is not None:
+        out.extend(["--on-failure", on_failure])
     if task_timeout is not None:
         out.extend(["--task-timeout", task_timeout])
     if stall_timeout is not None:
