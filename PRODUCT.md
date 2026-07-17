@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.1.0
+## Current Version: 1.2.0
 
-Last updated: 2026-07-15
+Last updated: 2026-07-17
 
 ---
 
@@ -16,7 +16,7 @@ Last updated: 2026-07-15
 
 Turn ideas into actionable, validated plans.
 
-- **aet-plan** — PRD creation, goal clarification, and atomic `plan.md` generation.
+- **aet-plan** — PRD creation, goal clarification, atomic `plan.md` generation, and a `validate` command that checks plans against structure, scope, dependency, and traceability rules.
 - **aet-pipeline-plan** — End-to-end planning pipeline that runs discovery, planning, and scope validation in sequence.
 - **aet-validate-scope** — Stress-test plans against the existing domain model, terminology, and documented decisions.
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, and an optional GitHub Issues or git-refs backend for team-wide visibility.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, and night-shift runtime resilience including circuit breakers, stall watchdog, failure taxonomy, and triage routing.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -41,7 +41,7 @@ Verify code before it ships.
 
 Land code cleanly and document releases.
 
-- **aet-ship** — Pre-merge validation, PR creation, and merge verification.
+- **aet-ship** — Pre-merge validation, PR creation, merge verification, and provider-specific merge-guard harness detection.
 - **aet-release-prep** — Release preparation: commit analysis, changelog updates, and version bump suggestions.
 - **aet-sync-docs** — Sync PRD and `plan.md` to reflect what was actually built.
 
@@ -70,6 +70,14 @@ Keep projects and the toolkit itself healthy.
 ---
 
 ## What's New
+
+### What's New in v1.2.0
+
+- **Night-shift runtime resilience** — unattended runs now recover from stalls, overloads, and failures with circuit breakers, a stall watchdog, failure-taxonomy routing, and quarantine support.
+- **Fail-closed plan intake** — `aet-work` rejects malformed plans at `add`, `init-queue`, and `sync` using the new `aet plan validate` check suite.
+- **Optional zero-review auto-merge** — `desk --eligibility` and a track-record policy can let trusted, low-risk tasks merge without manual review; disabled by default.
+- **Better ship decisions from `aet desk`** — risk-ranked awaiting-merge view, evidence bundles, and direct merge/abandon actions.
+- **Smarter merge guards** — `aet-ship` detects provider-specific merge-guard requirements and adapts behavior accordingly.
 
 ### What's New in v1.1.0
 
