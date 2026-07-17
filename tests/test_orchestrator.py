@@ -84,6 +84,7 @@ def _make_args(repo_root: str, plan_file: str) -> argparse.Namespace:
         cli_bin="echo",
         isolation="standard",
         max_jobs=4,
+        on_failure="continue",
     )
 
 
@@ -1890,6 +1891,7 @@ class TestProcessGroupKill(unittest.TestCase):
                 max_jobs=1,
                 task_timeout=2,
                 heartbeat_interval=999,
+                on_failure="continue",
             )
             # The task times out, so the orchestrator reports failure.
             exit_code = orchestrator.run_batch(args, adapter)
@@ -2507,6 +2509,7 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
             max_jobs=max_jobs,
             task_timeout=60,
             heartbeat_interval=999,
+            on_failure="continue",
         )
 
     def test_batch_exits_with_report_when_only_awaiting_merge_remains(self):
@@ -2732,6 +2735,7 @@ class TestBatchIntegrityRefusal(unittest.TestCase):
                 max_jobs=1,
                 task_timeout=60,
                 heartbeat_interval=60,
+                on_failure="continue",
             )
             env = {
                 "AET_TELEMETRY_ARCHIVE_DIR": os.path.join(repo_root, "telemetry")

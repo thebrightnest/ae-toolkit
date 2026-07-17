@@ -262,6 +262,15 @@ class TestRunMapping(_IsolatedBinDir):
         self.assertEqual(rc, 2)
         mock_exec.assert_not_called()
 
+    def test_run_maps_on_failure_flag(self):
+        """`aet run --on-failure` forwards the flag to the orchestrator."""
+        rc, _, exec_argv = self._capture_exec(
+            ["aet", "run", "--on-failure", "halt"]
+        )
+        self.assertEqual(rc, 0)
+        self.assertIn("--on-failure", exec_argv)
+        self.assertEqual(exec_argv[exec_argv.index("--on-failure") + 1], "halt")
+
 
 class TestAetErrorPaths(_IsolatedBinDir):
     """Unknown subcommands and missing siblings fail with clear errors."""

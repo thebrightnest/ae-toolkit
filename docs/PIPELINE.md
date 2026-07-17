@@ -55,6 +55,30 @@ The orchestrator distinguishes a slow-but-alive session from a genuinely wedged 
 
 A session that keeps emitting progress lines past `--stall-timeout` but under `--task-timeout` is left running. A session that emits nothing is killed by whichever threshold is reached first.
 
+## Failure Handling
+
+The night-shift runtime classifies every task failure with the nsr-01 taxonomy and routes it according to the `--on-failure` mode passed to `aet run` (default `triage`).
+
+### Failure taxonomy
+
+| Class           | Meaning                                              | Typical signals                                  |
+| --------------- | ---------------------------------------------------- | ------------------------------------------------ |
+| `environment`   | Missing tool, dependency, network, auth, or permission | `command not found`, `connection refused`, ...   |
+| `flaky`         | Non-deterministic test or transient runtime issue    | Non-zero exit with no design-side signal         |
+| `design`        | Code/test/design defect                              | Assertion failure, lint/style failure, type/name/syntax error |
+| `timeout`       | Killed by `--task-timeout` or `--stall-timeout`      | Wall-clock or silence timeout                    |
+| `canceled`      | Killed by signal or orchestrator shutdown            | `SIGINT`/`SIGTERM`, graceful shutdown            |
+
+### `--on-failure` modes
+
+| Mode        | Behavior                                                                                                 |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| `triage`    | Spawn a cheap triage session with the failure tail + class + signature. `requeue` ⇒ `failed → ready`; `quarantine` ⇒ `quarantined`. Fail-closed: an errored or unparseable verdict falls back to the nsr-01 default action. |
+| `continue`  | Mark the task `failed` and keep spawning new tasks. No triage session.                                   |
+| `halt`      | Mark the task `failed` and stop spawning new tasks; drain running tasks and exit non-zero.               |
+
+The per-task circuit breaker (nsr-03) has absolute precedence: the third identical signature on a single task always quarantines it, regardless of the triage verdict or mode. The triage session only decides *action*; the breaker key stays deterministic so identical failures always collide.
+
 ## Recorded-Forward State
 
 Workflow state is **recorded at transition time and trusted on read**.

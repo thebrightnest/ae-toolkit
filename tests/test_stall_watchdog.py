@@ -199,6 +199,7 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
                 task_timeout=1,
                 stall_timeout=999,
                 heartbeat_interval=999,
+                on_failure="continue",
             )
 
             with patch.object(
@@ -231,6 +232,7 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
                 task_timeout=999,
                 stall_timeout=1,
                 heartbeat_interval=999,
+                on_failure="continue",
             )
 
             with patch.object(
