@@ -80,5 +80,5 @@ Revert the merge commit. Timeout handling falls back to wall-clock-only exactly 
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
