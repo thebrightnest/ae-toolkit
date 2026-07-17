@@ -78,5 +78,4 @@ Revert the merge commit. The module is standalone and imported by nothing until 
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: reviewed*
