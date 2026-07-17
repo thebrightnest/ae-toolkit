@@ -23,7 +23,9 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
+import breaker  # noqa: E402
 import evidence  # noqa: E402
+import failure as failure_lib  # noqa: E402
 import plan_parser  # noqa: E402
 import telemetry  # noqa: E402
 import track_record  # noqa: E402
@@ -605,6 +607,18 @@ def _spawn_session(
     ``session_dir`` is the resolved kimi wire dir (``None`` for non-kimi CLIs
     and unresolvable sessions); it feeds wire-log test-run extraction.
     """
+    return _spawn_session_with_tail(adapter, cmd, worktree_dir, env)[:3]
+
+
+def _spawn_session_with_tail(
+    adapter, cmd: list[str], worktree_dir: str, env: dict
+) -> tuple[int, dict | None, Path | None, str]:
+    """Run one agent session, returning ``(exit_code, usage, session_dir, tail)``.
+
+    The bounded ``tail`` is used by the circuit breaker to classify failures.
+    The public ``run_stage``/``run_stage_group`` functions call this helper and
+    record signatures when a *task* and *backend* are provided.
+    """
     exit_code, output = _run_with_live_tee(cmd, worktree_dir, env)
     usage = None
     if adapter.usage_mode is not None:
@@ -612,7 +626,7 @@ def _spawn_session(
     session_dir = None
     if adapter.name == "kimi":
         session_dir = usage_lib.resolve_kimi_session_dir_from_output(output)
-    return exit_code, usage, session_dir
+    return exit_code, usage, session_dir, output
 
 
 def run_stage(
@@ -626,8 +640,14 @@ def run_stage(
     task_id: str | None = None,
     run_id: str | None = None,
     verdict_kind: str | None = None,
+    task: dict | None = None,
+    backend=None,
 ) -> tuple[int, dict | None, Path | None]:
-    """Spawn a single stage session, returning ``(exit_code, usage, session_dir)``."""
+    """Spawn a single stage session, returning ``(exit_code, usage, session_dir)``.
+
+    When *task* and *backend* are provided, a non-zero exit records a failure
+    signature on the task's ledger record for the circuit breaker (nsr-03).
+    """
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
     prompt = build_prompt(
         skills, plan_file, current_stage, next_stage,
@@ -654,7 +674,23 @@ def run_stage(
         )
 
     print(f"   Invoking: {' '.join(cmd)}")
-    return _spawn_session(adapter, cmd, worktree_dir, env)
+    exit_code, usage, session_dir, output = _spawn_session_with_tail(adapter, cmd, worktree_dir, env)
+    if exit_code != 0 and task is not None:
+        _record_failure_on_task(
+            backend,
+            task,
+            _classify_failure(
+                exit_code=exit_code,
+                tail=output,
+                stage=current_stage,
+                verdict_recorded=verdict_kind is not None,
+                shutdown=_shutdown_requested,
+                killed_by_timeout=False,
+            ),
+            current_stage,
+            output,
+        )
+    return exit_code, usage, session_dir
 
 
 def build_stage_group_prompt(
@@ -700,12 +736,16 @@ def run_stage_group(
     run_id: str | None = None,
     *,
     workflow: Workflow,
+    task: dict | None = None,
+    backend=None,
 ) -> tuple[int, dict | None, Path | None]:
     """Spawn one session that runs every stage in the group sequentially.
 
     Returns ``(exit_code, usage, session_dir)``; usage covers the whole group
     session and ``session_dir`` is the resolved kimi wire dir (``None`` for
-    non-kimi CLIs and unresolvable sessions).
+    non-kimi CLIs and unresolvable sessions). When *task* and *backend* are
+    provided, a non-zero exit records a failure signature on the task's ledger
+    record using the first stage's name (nsr-03).
     """
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
     prompt = build_stage_group_prompt(
@@ -739,7 +779,23 @@ def run_stage_group(
             )
 
     print(f"   Invoking group: {' '.join(cmd)}")
-    return _spawn_session(adapter, cmd, worktree_dir, env)
+    exit_code, usage, session_dir, output = _spawn_session_with_tail(adapter, cmd, worktree_dir, env)
+    if exit_code != 0 and task is not None:
+        _record_failure_on_task(
+            backend,
+            task,
+            _classify_failure(
+                exit_code=exit_code,
+                tail=output,
+                stage=stages[0].name,
+                verdict_recorded=False,
+                shutdown=_shutdown_requested,
+                killed_by_timeout=False,
+            ),
+            stages[0].name,
+            output,
+        )
+    return exit_code, usage, session_dir
 
 
 def stage_enabled(stage: WorkflowStage, plan_fm: dict) -> bool:
@@ -784,6 +840,7 @@ def process_task(
     logger: telemetry.RunLogger | None = None,
     worktree_dir: str | None = None,
     workflow: Workflow | None = None,
+    backend=None,
 ) -> bool:
     """Process a single task through all its stage groups.
 
@@ -927,6 +984,8 @@ def process_task(
                     task_id=task_id,
                     run_id=logger.run_id,
                     workflow=workflow,
+                    task=task,
+                    backend=backend,
                 )
                 end_time = telemetry.iso_now()
                 _emit_stage_session(
@@ -1034,6 +1093,8 @@ def process_task(
                 task_id=task_id,
                 run_id=logger.run_id,
                 verdict_kind=kind,
+                task=task,
+                backend=backend,
             )
             end_time = telemetry.iso_now()
             _emit_stage_session(
@@ -1153,6 +1214,83 @@ def format_leftover_report(counts: dict[str, int]) -> str:
         if state in counts
     ]
     return ", ".join(parts)
+
+
+def _classify_failure(
+    *,
+    exit_code: int,
+    tail: str,
+    stage: str,
+    verdict_recorded: bool,
+    shutdown: bool,
+    killed_by_timeout: bool,
+) -> failure_lib.FailureClass:
+    """Classify a finished session using the nsr-01 taxonomy."""
+    return failure_lib.classify(
+        exit_code=exit_code,
+        tail=tail,
+        stage=stage,
+        verdict_recorded=verdict_recorded,
+        shutdown=shutdown,
+        killed_by_timeout=killed_by_timeout,
+    )
+
+
+def _record_failure_on_task(
+    backend,
+    task: dict,
+    failure_class: failure_lib.FailureClass,
+    stage: str,
+    tail: str,
+    timestamp: str | None = None,
+) -> str | None:
+    """Record a failure signature on *task* when it is countable.
+
+    ``canceled`` failures are skipped (ADR-030). Returns the computed signature
+    when recorded, otherwise ``None``.
+    """
+    sig = failure_lib.signature(stage=stage, tail=tail)
+    if not breaker.append_failure_if_countable(task, failure_class, sig, timestamp=timestamp):
+        return None
+    # Persist the updated task record if a backend is available.
+    if backend is not None:
+        queue = backend.load()["queue"]
+        for qt in queue:
+            if qt.get("id") == task.get("id"):
+                qt["failure_signatures"] = task.get("failure_signatures", [])
+                break
+        backend.save(queue)
+    return sig
+
+
+def _mark_quarantined(
+    backend, queue_file: str, task_id: str, from_state: str | None
+) -> bool:
+    """Mark a task as quarantined through the canonical state transition.
+
+    Returns ``True`` when the transition succeeded.
+    """
+    if from_state is None:
+        from_state = "in_progress"
+    aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+    result = subprocess.run(
+        [
+            sys.executable,
+            aet_state_bin,
+            "transition",
+            task_id,
+            from_state,
+            "quarantined",
+            queue_file,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        print(f"   🚫 {task_id} quarantined (circuit breaker)")
+        return True
+    print(f"   ⚠️  Could not transition {task_id} to quarantined: {result.stderr.strip()}")
+    return False
 
 
 def _mark_failed(
@@ -1309,6 +1447,9 @@ def _finalize_task(
         queue = backend.load()["queue"]
         task = next((t for t in queue if t.get("id") == task_id), None)
         from_state = current_state(task) if task else "in_progress"
+        if task and breaker.should_quarantine_task(task):
+            if _mark_quarantined(backend, queue_file, task_id, from_state):
+                return {"successes": 0, "failures": 1, "stop_spawn": True}
         _mark_failed(backend, queue_file, task_id, from_state)
         return {"successes": 0, "failures": 1, "stop_spawn": True}
 
@@ -1319,6 +1460,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     repo_root = args.repo_root
     max_jobs = min(args.max_jobs, 8)
     backend = _make_backend(queue_file)
+    breaker_store = breaker.BreakerStore(repo_root)
+    systemic_tally = breaker_store.load()
 
     logger = telemetry.RunLogger(repo_root)
     start_time = telemetry.iso_now()
@@ -1351,6 +1494,29 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         )
         print(f"   📁 Telemetry: {logger.run_dir}")
         return 0
+
+    # If a prior shift already tripped the systemic breaker, stop before
+    # spawning anything. The tally persists across shifts (R-6).
+    if breaker.systemic_tripped(systemic_tally):
+        report = breaker.systemic_report(systemic_tally)
+        print(f"⛔ {report}")
+        end_time = telemetry.iso_now()
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=0,
+                outcome="failure",
+                exit_code=1,
+                task_ids=[],
+                final_stage=None,
+            )
+        )
+        print(f"   📁 Telemetry: {logger.run_dir}")
+        return 1
 
     print("🚀 Batch orchestrator starting")
     print(f"   Queue: {queue_file}")
@@ -1426,7 +1592,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         print(f"   Telemetry: {logger.run_dir}")
 
     def _cleanup_task(task_id: str, ret: int) -> None:
-        nonlocal successes, failures, stop_spawn
+        nonlocal successes, failures, stop_spawn, systemic_tally
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
         deltas = _finalize_task(
@@ -1436,6 +1602,26 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         failures += deltas["failures"]
         if deltas["stop_spawn"]:
             stop_spawn = True
+        # Update the systemic breaker tally on every failure. A signature that
+        # reaches the threshold across distinct tasks stops the shift.
+        if ret != 0:
+            queue = backend.load()["queue"]
+            task = next((t for t in queue if t.get("id") == task_id), None)
+            if task is not None:
+                seen_sigs = {
+                    entry.get("signature")
+                    for entry in task.get("failure_signatures", [])
+                    if entry.get("signature")
+                }
+                for sig in seen_sigs:
+                    systemic_tally = breaker.update_systemic_tally(
+                        systemic_tally, task_id, sig
+                    )
+                breaker_store.save(systemic_tally)
+                if breaker.systemic_tripped(systemic_tally):
+                    report = breaker.systemic_report(systemic_tally)
+                    print(f"⛔ {report}")
+                    stop_spawn = True
         remove_worktree(repo_root, task_id)
 
     try:
@@ -1782,12 +1968,28 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             _record_run_one_in_queue(backend, queue_file, queued_task_id, worktree_rel, queued_task_id)
             task_id = queued_task_id
 
-        task = {
-            "id": task_id,
-            "title": task_id,
-            "plan_file": plan_file,
-            "stage": os.environ.get("AET_STAGE") or None,
-        }
+        # Prefer the real queued task record so failure signatures are
+        # persisted on the ledger (nsr-03). Fall back to a synthetic record for
+        # manual run-one invocations that are not tracked in the queue.
+        real_task = None
+        if os.path.exists(queue_file):
+            queue = backend.load()["queue"]
+            real_task = next((t for t in queue if t.get("id") == task_id), None)
+        env_stage = os.environ.get("AET_STAGE") or None
+        if real_task is not None:
+            task = real_task
+            task["plan_file"] = plan_file
+            # Batch children pass AET_STAGE so a stale footer does not fool
+            # process_task; prefer the env value over whatever is on record.
+            if env_stage:
+                task["stage"] = env_stage
+        else:
+            task = {
+                "id": task_id,
+                "title": task_id,
+                "plan_file": plan_file,
+                "stage": env_stage,
+            }
 
         print(f"📁 Telemetry: {logger.run_dir}")
         success = process_task(
@@ -1798,6 +2000,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             logger=logger,
             worktree_dir=worktree_dir,
             workflow=wf,
+            backend=backend,
         )
         exit_code = 0 if success else 1
 
