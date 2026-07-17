@@ -445,6 +445,36 @@ def _usage_aggregates(logger: telemetry.RunLogger) -> tuple[int | None, float | 
     return (total_tokens if have_tokens else None, total_cost if have_cost else None)
 
 
+def _task_usage_aggregates(
+    logger: telemetry.RunLogger, task_id: str
+) -> tuple[int | None, float | None]:
+    """Sum token/cost over ``task_id``'s stage records; all-null -> ``(None, None)``.
+
+    Mirrors ``_usage_aggregates`` but filtered to a single task. The result is
+    written to the task's ledger record at close and is analytics-only: no
+    control path reads it (ADR-031).
+    """
+    total_tokens = 0
+    total_cost = 0.0
+    have_tokens = False
+    have_cost = False
+    path = logger.task_log_path(task_id)
+    if not path.exists():
+        return (None, None)
+    for record in telemetry.read_jsonl(path):
+        if record.get("type") != "stage":
+            continue
+        if record.get("task_id") != task_id:
+            continue
+        if record.get("token_count") is not None:
+            total_tokens += record["token_count"]
+            have_tokens = True
+        if record.get("cost_estimate") is not None:
+            total_cost += record["cost_estimate"]
+            have_cost = True
+    return (total_tokens if have_tokens else None, total_cost if have_cost else None)
+
+
 def _load_checking_verdict(task_id: str, kind: str, repo_root: str) -> dict:
     """Read and schema-validate a checking verdict from the evidence home.
 
@@ -1209,14 +1239,20 @@ def _maybe_auto_merge(task: dict, queue_file: str, repo_root: str) -> bool:
 
 
 def _finalize_task(
-    backend, queue_file: str, task_id: str, ret: int, repo_root: str | None = None
+    backend,
+    queue_file: str,
+    task_id: str,
+    ret: int,
+    repo_root: str | None = None,
+    logger: telemetry.RunLogger | None = None,
 ) -> dict[str, int | bool]:
     """Finalize a single task after its child process exits.
 
-    All state changes go through ``aet-state transition``; the orchestrator
-    never performs a blind ``backend.save`` here. Removing the unmutated save
-    closes the lost-update window where a concurrent ``set-stage`` between a
-    load and a save would silently revert the child's stage record.
+    State changes go through ``aet-state transition``; the orchestrator avoids
+    blind ``backend.save`` calls for state. The one exception is the analytics-
+    only ``cost`` field, which is rolled up from stage telemetry and written to
+    the task's ledger record before the transition so it is preserved when the
+    task is later sealed. No control path reads ``cost`` (ADR-031).
     """
     aet_state_bin = str(_SCRIPT_DIR / "aet-state")
     repo_root = repo_root or os.path.dirname(os.path.dirname(queue_file))
@@ -1236,6 +1272,15 @@ def _finalize_task(
         from_state = current_state(task) if task else "in_progress"
         if from_state == "awaiting_merge":
             return {"successes": 1, "failures": 0, "stop_spawn": False}
+        # Roll up per-task cost from this run's telemetry and write it to the
+        # ledger record before transition. Null is preserved (analytics-only):
+        # when every stage record was null, the field is omitted rather than
+        # written as a pair of nulls.
+        if task and logger is not None:
+            tokens, usd = _task_usage_aggregates(logger, task_id)
+            if tokens is not None or usd is not None:
+                task["cost"] = {"tokens": tokens, "usd": usd}
+                backend.save(queue)
         if task and _maybe_auto_merge(task, queue_file, repo_root):
             return {"successes": 1, "failures": 0, "stop_spawn": False}
         print(f"   ✅ {task_id} awaiting merge")
@@ -1384,7 +1429,9 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         nonlocal successes, failures, stop_spawn
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
-        deltas = _finalize_task(backend, queue_file, task_id, ret, repo_root=repo_root)
+        deltas = _finalize_task(
+            backend, queue_file, task_id, ret, repo_root=repo_root, logger=logger
+        )
         successes += deltas["successes"]
         failures += deltas["failures"]
         if deltas["stop_spawn"]:
@@ -1772,6 +1819,10 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                             _mark_failed(backend, queue_file, task_id, from_state)
                             exit_code = 1
                         else:
+                            tokens, usd = _task_usage_aggregates(logger, task_id)
+                            if tokens is not None or usd is not None:
+                                queue_task["cost"] = {"tokens": tokens, "usd": usd}
+                                backend.save(queue)
                             if _maybe_auto_merge(queue_task, queue_file, repo_root):
                                 pass  # perform_auto_merge prints success/failure.
                             else:
