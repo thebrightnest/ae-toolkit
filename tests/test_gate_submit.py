@@ -197,6 +197,54 @@ class TestGateSubmit(unittest.TestCase):
             self.assertIn("does not match", err)
             self.assertFalse(dest.exists(), "mismatched verdict must not be written")
 
+    def test_submit_stamps_tree_hash_when_absent(self):
+        """Payloads following the skill writer contract (no tree_hash) are accepted."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "qa.json"
+            record = _qa_payload()
+            del record["tree_hash"]
+            payload = self._write_payload(tmp, record)
+            with patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            self.assertTrue(dest.is_file(), "verdict file was not written")
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertIn("tree_hash", written)
+            self.assertNotEqual(written["tree_hash"], "")
+
+    def test_submit_preserves_explicit_tree_hash(self):
+        """An explicit tree_hash supplied by the caller is not overwritten."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "qa.json"
+            payload = self._write_payload(tmp, _qa_payload(tree_hash="abc123"))
+            with patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["tree_hash"], "abc123")
+
 
 class TestGateDispatcherRouting(unittest.TestCase):
     """`aet gate submit` reaches aet-work/bin/gate through the dispatcher."""
