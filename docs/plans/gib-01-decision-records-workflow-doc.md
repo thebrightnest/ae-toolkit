@@ -18,6 +18,8 @@ docs_sync_reason: this task *is* the documentation change (ADRs + workflow + roa
 - Everything downstream cites these records. Cheap and first, mirroring the `rdm-01` pattern for Phase 0.
 - Grounded in doc 09 (`content/fable-review/09-2026-07-10-roadmap.md`) and doc 10 (`10-2026-07-12-two-mode-reframe.md`).
 
+⚠️ VALIDATE ACK: scope — ADRs 032/033/034 are authored by this plan (task 1); their paths are forward-declarations of files this plan creates, not references to existing decisions. Same pattern as rdm-01, which created 020/021.
+
 ## Intake Triage
 
 - [x] Confirmed this is a **feature or enhancement**, not a reproducible defect
