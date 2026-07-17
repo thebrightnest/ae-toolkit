@@ -7,7 +7,11 @@ blocked_by:
   - nsr-05-stall-watchdog
   - nsr-06-per-task-cost-rollup
 pipeline: standard
+<<<<<<< HEAD
 status: approved
+=======
+status: merged
+>>>>>>> 41168d6 (chore(nsr-07-exit-gate-rehearsal): mark plan as merged after closure)
 security_review: skipped
 security_review_reason: a rehearsal harness (fixtures + an unattended run) plus an audit write-up; it exercises existing behavior and adds no product code path, writer, or trust boundary.
 docs_sync: skipped
@@ -81,5 +85,5 @@ Revert the merge commit. Fixtures, the rehearsal test, and the audit doc are add
 
 ---
 
-*Stage: synced*
-*Next step: aet-ship*
+*Stage: merged*
+*Next step: run `aet-work`*
