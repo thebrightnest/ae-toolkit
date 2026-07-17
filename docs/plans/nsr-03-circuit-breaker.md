@@ -83,5 +83,5 @@ Revert the merge commit. Without the breaker, failures fall back to the pre-nsr 
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
