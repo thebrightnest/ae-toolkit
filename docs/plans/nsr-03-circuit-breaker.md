@@ -5,7 +5,7 @@ blocked_by:
   - nsr-01-failure-taxonomy-signature
   - nsr-02-quarantined-state
 pipeline: standard
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: bookkeeping over deterministic signatures plus a state transition already validated by `aet-state`; no new writer beyond the sanctioned transition, no network, no secret. The breaker only ever *stops* work (quarantine / stop-spawn), never grants it — fail-safe by direction.
 docs_sync: required
@@ -83,5 +83,5 @@ Revert the merge commit. Without the breaker, failures fall back to the pre-nsr 
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: None*
