@@ -43,6 +43,7 @@ def _make_args(repo_root: str, plan_file: str) -> argparse.Namespace:
         cli_bin="echo",
         isolation="standard",
         max_jobs=4,
+        on_failure="continue",
     )
 
 
@@ -327,6 +328,7 @@ class TestRunBatchBackend(unittest.TestCase):
                 cli_bin="echo",
                 isolation="standard",
                 max_jobs=4,
+                on_failure="halt",
             )
 
             with patch.dict(
@@ -402,6 +404,7 @@ class TestRunBatchBackend(unittest.TestCase):
                 cli_bin="echo",
                 isolation="standard",
                 max_jobs=4,
+                on_failure="halt",
             )
 
             with patch.dict(

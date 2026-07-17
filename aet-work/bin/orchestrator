@@ -30,6 +30,7 @@ import failure as failure_lib  # noqa: E402
 import plan_parser  # noqa: E402
 import telemetry  # noqa: E402
 import track_record  # noqa: E402
+import triage  # noqa: E402
 import usage as usage_lib  # noqa: E402
 import wirelog  # noqa: E402
 from aet_queue import (  # noqa: E402
@@ -235,6 +236,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=60,
         help="Seconds between heartbeat log lines (default: 60).",
+    )
+    parser.add_argument(
+        "--on-failure",
+        choices=["triage", "continue", "halt"],
+        default="triage",
+        help=(
+            "What to do when a task fails in batch mode: triage (default) "
+            "requeues transient failures; continue marks failed and keeps "
+            "spawning; halt stops the shift on the first failure."
+        ),
     )
     return parser
 
@@ -1323,12 +1334,21 @@ def _record_failure_on_task(
 ) -> str | None:
     """Record a failure signature on *task* when it is countable.
 
-    ``canceled`` failures are skipped (ADR-030). Returns the computed signature
-    when recorded, otherwise ``None``.
+    Stores the signature together with the deterministic class, stage, and a
+    bounded tail preview so the finalize path can consult a triage session
+    without re-running the failed stage (nsr-04). ``canceled`` failures are
+    skipped (ADR-030). Returns the computed signature when recorded, otherwise
+    ``None``.
     """
     sig = failure_lib.signature(stage=stage, tail=tail)
     if not breaker.append_failure_if_countable(task, failure_class, sig, timestamp=timestamp):
         return None
+    # Enrich the latest signature entry with triage inputs. The breaker only
+    # cares about ``signature``; extra keys are ignored for counting.
+    entry = task.get("failure_signatures", [])[-1]
+    entry["class"] = failure_class.value
+    entry["stage"] = stage
+    entry["tail_preview"] = tail[-1500:] if tail else ""
     # Persist the updated task record if a backend is available.
     if backend is not None:
         queue = backend.load()["queue"]
@@ -1338,6 +1358,59 @@ def _record_failure_on_task(
                 break
         backend.save(queue)
     return sig
+
+
+# Fail-closed fallback when the triage session errors or returns an unparseable
+# verdict. The deterministic classifier's class drives the default action.
+_TRIAGE_DEFAULT_ACTIONS: dict[str, str] = {
+    failure_lib.FailureClass.ENVIRONMENT.value: "requeue",
+    failure_lib.FailureClass.FLAKY.value: "requeue",
+    failure_lib.FailureClass.TIMEOUT.value: "requeue",
+    failure_lib.FailureClass.DESIGN.value: "quarantine",
+    failure_lib.FailureClass.CANCELED.value: "quarantine",
+}
+
+
+def _consult_triage_session(
+    adapter,
+    repo_root: str,
+    worktree_dir: str,
+    *,
+    task_id: str,
+    stage: str,
+    failure_class: failure_lib.FailureClass,
+    tail: str,
+    signature: str,
+    stall_timeout: float = 300,
+) -> dict | None:
+    """Spawn a triage session and return its parsed verdict, or ``None``.
+
+    A ``None`` result (spawn error, non-zero exit, or unparseable output) tells
+    the caller to fall back to the deterministic classifier default.
+    """
+    prompt = triage.build_triage_prompt(
+        task_id=task_id,
+        stage=stage,
+        failure_class=failure_class.value,
+        tail=tail,
+        signature=signature,
+    )
+    try:
+        cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
+    except Exception:  # pragma: no cover - defensive fallback
+        return None
+    env = os.environ.copy()
+    env["AET_EXECUTION_MODE"] = "unattended"
+    env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    try:
+        exit_code, _usage, _session_dir, output = _spawn_session_with_tail(
+            adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
+        )
+    except Exception:  # pragma: no cover - defensive fallback
+        return None
+    if exit_code != 0:
+        return None
+    return triage.parse_triage_verdict(output)
 
 
 def _mark_quarantined(
@@ -1460,6 +1533,9 @@ def _finalize_task(
     ret: int,
     repo_root: str | None = None,
     logger: telemetry.RunLogger | None = None,
+    on_failure: str = "triage",
+    adapter=None,
+    worktree_dir: str | None = None,
 ) -> dict[str, int | bool]:
     """Finalize a single task after its child process exits.
 
@@ -1519,16 +1595,88 @@ def _finalize_task(
             _mark_failed(backend, queue_file, task_id, from_state)
             return {"successes": 0, "failures": 1, "stop_spawn": True}
         return {"successes": 1, "failures": 0, "stop_spawn": False}
-    else:
-        print(f"   ❌ {task_id} failed (exit {ret})")
-        queue = backend.load()["queue"]
-        task = next((t for t in queue if t.get("id") == task_id), None)
-        from_state = current_state(task) if task else "in_progress"
-        if task and breaker.should_quarantine_task(task):
-            if _mark_quarantined(backend, queue_file, task_id, from_state):
-                return {"successes": 0, "failures": 1, "stop_spawn": True}
-        _mark_failed(backend, queue_file, task_id, from_state)
+
+    print(f"   ❌ {task_id} failed (exit {ret})")
+    queue = backend.load()["queue"]
+    task = next((t for t in queue if t.get("id") == task_id), None)
+    from_state = current_state(task) if task else "in_progress"
+
+    # Circuit breaker has absolute precedence over triage routing (nsr-03).
+    if task and breaker.should_quarantine_task(task):
+        if _mark_quarantined(backend, queue_file, task_id, from_state):
+            return {"successes": 0, "failures": 1, "stop_spawn": True}
+
+    # Establish the canonical failed state. All non-breaker failure modes route
+    # from here so transitions stay legal (failed -> ready, failed -> quarantined).
+    _mark_failed(backend, queue_file, task_id, from_state)
+    queue = backend.load()["queue"]
+    task = next((t for t in queue if t.get("id") == task_id), None)
+    failed_state = current_state(task) if task else "failed"
+
+    if on_failure == "halt":
         return {"successes": 0, "failures": 1, "stop_spawn": True}
+
+    if on_failure == "continue":
+        return {"successes": 0, "failures": 1, "stop_spawn": False}
+
+    # on_failure == "triage" (default).
+    last_entry = (task.get("failure_signatures") or [])[-1:] if task else []
+    entry = last_entry[0] if last_entry else {}
+    failure_class_name = entry.get("class", failure_lib.FailureClass.ENVIRONMENT.value)
+    stage = entry.get("stage", "")
+    tail = entry.get("tail_preview", "")
+    signature = entry.get("signature", "")
+
+    verdict = None
+    if adapter is not None and worktree_dir is not None:
+        try:
+            failure_class = failure_lib.FailureClass(failure_class_name)
+        except ValueError:
+            failure_class = failure_lib.FailureClass.ENVIRONMENT
+        verdict = _consult_triage_session(
+            adapter,
+            repo_root,
+            worktree_dir,
+            task_id=task_id,
+            stage=stage,
+            failure_class=failure_class,
+            tail=tail,
+            signature=signature,
+        )
+
+    action = verdict.get("action") if verdict else None
+    if action is None:
+        # Fail-closed: unparseable or errored triage falls back to the
+        # deterministic classifier default (nsr-01).
+        action = _TRIAGE_DEFAULT_ACTIONS.get(failure_class_name, "requeue")
+        print(f"   ⚠️  Triage for {task_id} failed closed; using {action} ({failure_class_name})")
+
+    if action == "quarantine":
+        if _mark_quarantined(backend, queue_file, task_id, failed_state):
+            return {"successes": 0, "failures": 1, "stop_spawn": True}
+        # If quarantine transition fails, fall through to requeue/failed.
+
+    # action == "requeue" (or quarantine transition failed): failed -> ready.
+    result = subprocess.run(
+        [
+            sys.executable,
+            aet_state_bin,
+            "transition",
+            task_id,
+            failed_state,
+            "ready",
+            queue_file,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        print(f"   🔄 {task_id} requeued")
+        return {"successes": 0, "failures": 0, "stop_spawn": False}
+    print(
+        f"   ⚠️  Could not transition {task_id} to ready: {result.stderr.strip()}; leaving failed"
+    )
+    return {"successes": 0, "failures": 1, "stop_spawn": False}
 
 
 def run_batch(args: argparse.Namespace, adapter) -> int:
@@ -1672,8 +1820,22 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         nonlocal successes, failures, stop_spawn, systemic_tally
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
+        queue = backend.load()["queue"]
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        worktree_rel = task.get("worktree") if task else None
+        worktree_dir = (
+            os.path.join(repo_root, worktree_rel) if worktree_rel else None
+        )
         deltas = _finalize_task(
-            backend, queue_file, task_id, ret, repo_root=repo_root, logger=logger
+            backend,
+            queue_file,
+            task_id,
+            ret,
+            repo_root=repo_root,
+            logger=logger,
+            on_failure=getattr(args, "on_failure", "triage"),
+            adapter=adapter,
+            worktree_dir=worktree_dir,
         )
         successes += deltas["successes"]
         failures += deltas["failures"]
@@ -1781,6 +1943,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     args.isolation,
                     "--stall-timeout",
                     str(getattr(args, "stall_timeout", 300)),
+                    "--on-failure",
+                    getattr(args, "on_failure", "triage"),
                 ]
 
                 proc = subprocess.Popen(cmd, env=env, start_new_session=True)

@@ -289,6 +289,7 @@ class TestOrchestratorBreakerWiring:
             isolation="minimal",
             task_timeout=3600,
             heartbeat_interval=60,
+            on_failure="continue",
         )
 
         class FakeAdapter:
