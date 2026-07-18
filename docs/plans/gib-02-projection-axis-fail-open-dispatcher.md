@@ -83,5 +83,5 @@ Revert the merge commit. Storage backend selection returns to the prior enum; th
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-cso`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
