@@ -285,7 +285,23 @@ Phase 6 also moved the roadmap's governing metric (human minutes at the two ends
 - **Bulk remote writes.** Reconcile can mass-mutate a repo's issues. Dry-run by default (R-17) is the mitigation; getting it wrong is noisy and public in a shared repo.
 - **Fail-open masking real breakage.** A projection that silently warns forever is a board that quietly rots. Mitigation: reconcile surfaces drift, and the warning names the projection and the cause.
 
+## Divergence Summary
+
+*Recorded: 2026-07-18 — Branch: gib-02-projection-axis-fail-open-dispatcher*
+
+### Changed from plan
+
+- None. The gib-02 plan intent matches the branch diff within naming/organization tolerance.
+
+### Added (unplanned)
+
+- None. The branch contains only the projection-axis and fail-open-dispatcher work scoped to gib-02.
+
+### Deferred
+
+- **R-6 through R-19** remain unimplemented in this branch. They are scheduled for downstream tasks: gib-05 (board machinery), gib-06 (commands and command reshaping), and any follow-ups required for the live rehearsal, ADRs, and roadmap shelving recorded in R-18.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*

@@ -177,12 +177,22 @@ Create/modify files. Always:
 
 Run `aet configure-backend` to write `.agents/aet-work.json`:
 
-- `task_backend`: `git-refs` (default), `json` (documented opt-out for non-git or unconfigured contexts), or `github`.
-- For `github`, detect `repo` from `git remote origin` (or prompt), then create `aet:*` labels via `gh`.
-- If `gh` is missing or unauthenticated, warn and record the gap.
+- `task_backend`: `git-refs` (default) or `json` (documented opt-out for non-git or unconfigured contexts). A forge is never a storage backend.
+- Projections are configured on the orthogonal `projections` axis:
+
+  ```json
+  {
+    "task_backend": "git-refs",
+    "projections": [
+      { "type": "github", "repo": "owner/name", "label_prefix": "aet" }
+    ]
+  }
+  ```
+
+- Projection failures are caught and warned by the dispatcher; storage writes remain fail-closed.
 - Backend switches are forward-only; history is not migrated.
 
-Schema: `task_backend`, optional `github.repo`, `github.label_prefix`, and `github.labels_created`. See `aet-work/references/github-backend.md` for the label contract, `gh` requirements, and sync behavior.
+Schema: `task_backend` ∈ {`git-refs`, `json`}, optional `projections` list. See `aet-work/references/github-backend.md` for the label contract, `gh` requirements, and sync behavior.
 
 ### Step 7: Validate
 
