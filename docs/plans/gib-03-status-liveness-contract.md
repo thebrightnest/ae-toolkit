@@ -3,7 +3,7 @@ id: gib-03-status-liveness-contract
 size: M
 blocked_by: []
 pipeline: standard
-status: draft
+status: merged
 security_review: required
 security_review_reason: makes `status` a required, validated intake field and changes how `init-queue` decides settled-ness. A wrong grandfathering rule either hard-fails the queue rebuild on legacy plans (the frh-17/18 failure mode) or admits terminal work as live; the intake gate is the correctness boundary and must be verified against the real 203-plan corpus.
 docs_sync: required
@@ -82,5 +82,4 @@ Revert the merge commit. `status` reverts to optional; `init-queue` reverts to t
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*

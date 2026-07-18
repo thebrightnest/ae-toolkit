@@ -3,7 +3,7 @@ id: gib-01-decision-records-workflow-doc
 size: M
 blocked_by: []
 pipeline: minimal
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: authors ADRs, a workflow doc, and a roadmap edit under docs/; no runtime code, no trust boundary, no dependency surface. Pure decision record.
 docs_sync: skipped
@@ -81,4 +81,4 @@ Revert the merge commit. No runtime effect; ADR-014 returns to Accepted, roadmap
 
 ---
 
-_Stage: reviewed_
+_Stage: merged_
