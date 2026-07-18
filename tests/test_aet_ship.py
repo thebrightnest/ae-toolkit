@@ -17,6 +17,8 @@ _spec = importlib.util.spec_from_loader(
 ship = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ship)
 
+import aet_queue as aet_queue_module  # noqa: E402
+
 
 class MockResult:
     def __init__(self, returncode, stdout="", stderr=""):
@@ -91,11 +93,12 @@ class TestShipClosure(unittest.TestCase):
             ),
             ("git", "add", plan_abs): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
-            ("git", "commit", "-m", "chore(t1): mark plan as merged after closure"): (
+            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (
                 0,
                 "",
                 "",
             ),
+            ("git", "push"): (0, "", ""),
         }
 
     def test_ship_records_merge_updates_plan_and_removes_task(self):
@@ -110,12 +113,18 @@ class TestShipClosure(unittest.TestCase):
                 str(self.queue_path),
             ],
         ):
+            mock = _subprocess_mock(self._success_responses())
             with patch.object(
                 ship.aet_state.subprocess,
                 "run",
-                side_effect=_subprocess_mock(self._success_responses()),
+                side_effect=mock,
             ):
-                rc = ship.main()
+                with patch.object(
+                    aet_queue_module.subprocess,
+                    "run",
+                    side_effect=mock,
+                ):
+                    rc = ship.main()
 
         self.assertEqual(rc, 0)
 
@@ -149,12 +158,18 @@ class TestShipClosure(unittest.TestCase):
                 str(self.queue_path),
             ],
         ):
+            mock = _subprocess_mock(self._success_responses())
             with patch.object(
                 ship.aet_state.subprocess,
                 "run",
-                side_effect=_subprocess_mock(self._success_responses()),
+                side_effect=mock,
             ):
-                rc = ship.main()
+                with patch.object(
+                    aet_queue_module.subprocess,
+                    "run",
+                    side_effect=mock,
+                ):
+                    rc = ship.main()
 
         self.assertEqual(rc, 0)
         self.assertEqual(self.plan_path.read_text(encoding="utf-8"), original_content)
@@ -176,12 +191,18 @@ class TestShipClosure(unittest.TestCase):
                 str(self.plan_path),
             ],
         ):
+            mock = _subprocess_mock(self._success_responses())
             with patch.object(
                 ship.aet_state.subprocess,
                 "run",
-                side_effect=_subprocess_mock(self._success_responses()),
+                side_effect=mock,
             ):
-                rc = ship.main()
+                with patch.object(
+                    aet_queue_module.subprocess,
+                    "run",
+                    side_effect=mock,
+                ):
+                    rc = ship.main()
 
         self.assertEqual(rc, 0)
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))

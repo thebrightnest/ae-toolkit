@@ -5,7 +5,7 @@ The Agentic Engineering Toolkit uses a local work queue to coordinate sequential
 ## Language
 
 **Work Queue / Sprint Board**:
-The ephemeral, gitignored active list of tasks stored in `.agents/work-queue.json`. It holds only the current sprint; approved plans are not added automatically.
+The ephemeral, gitignored active list of tasks stored in `.agents/work-queue.json`. It is rebuilt from committed plan files: only plans whose frontmatter `status` is `queued` are sprint members. Approved plans (`status: approved`) and draft plans (`status: draft`) live on the board but are not in the sprint.
 _Avoid_: issue tracker, backlog.
 
 **Task**:
@@ -49,8 +49,9 @@ The product requirements document that generated the plan, referenced from the p
 - A **Task** may have zero or more **Blockers**.
 - A **Task** may be a **Blocker** for zero or more **Dependents**.
 - A **Dependent** becomes `ready` only when all its **Blockers** have a **Terminal State**; the writer promotes it forward when the last blocker reaches terminal.
-- A plan with `status: approved` is part of the **Plan Backlog** until it is explicitly added to the **Work Queue**.
+- A plan with `status: approved` is part of the **Plan Backlog** until it is explicitly promoted to `status: queued`; only `status: queued` plans are loaded into the **Work Queue**.
 - A plan is closed when its `status` is `merged` or `abandoned`; at that point it no longer appears in the **Work Queue**.
+- Closure updates the plan file (`status` and `*Stage:*`) and the change is committed and pushed so the terminal state is versioned and reproducible across clones.
 
 ## Example dialogue
 

@@ -16,6 +16,8 @@ _spec = importlib.util.spec_from_loader(
 aet_state = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(aet_state)
 
+import aet_queue as aet_queue_module  # noqa: E402
+
 
 class MockResult:
     def __init__(self, returncode, stdout="", stderr=""):
@@ -309,7 +311,8 @@ class TestRecordMerge(unittest.TestCase):
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
             ("git", "add", plan_abs): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
-            ("git", "commit", "-m", "chore(t1): mark plan as merged after closure"): (0, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
+            ("git", "push"): (0, "", ""),
         }
 
         args = aet_state.argparse.Namespace(
@@ -322,8 +325,10 @@ class TestRecordMerge(unittest.TestCase):
             merge_commit=None,
         )
 
-        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            rc = aet_state.cmd_record_merge(args)
+        mock = _subprocess_mock(responses)
+        with patch.object(aet_state.subprocess, "run", side_effect=mock):
+            with patch.object(aet_queue_module.subprocess, "run", side_effect=mock):
+                rc = aet_state.cmd_record_merge(args)
 
         self.assertEqual(rc, 0)
         content = plan_path.read_text(encoding="utf-8")
@@ -336,6 +341,132 @@ class TestRecordMerge(unittest.TestCase):
         self.assertEqual(live["tasks"], [])
         task = self._load_task()
         self.assertEqual(task["state"], "merged")
+
+    def test_record_merge_pushes_status_commit(self):
+        """record-merge pushes the status commit so closure is versioned."""
+        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        plan_path = plan_dir / "t1.md"
+        plan_path.write_text(
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "---\n\n"
+            "*Stage: awaiting_merge*\n",
+            encoding="utf-8",
+        )
+        self.queue["tasks"][0]["plan_file"] = str(plan_path)
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
+
+        plan_abs = str(plan_path.resolve())
+        pushed = []
+
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (
+                0,
+                "",
+                "",
+            ),
+            ("git", "add", plan_abs): (0, "", ""),
+            ("git", "diff", "--cached", "--quiet"): (1, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
+            ("git", "push"): (0, "", ""),
+        }
+
+        def tracking_mock(cmd, **kwargs):
+            args = tuple(cmd)
+            if args == ("git", "push"):
+                pushed.append(args)
+            rc, out, err = responses.get(args, (1, "", ""))
+            return MockResult(rc, out, err)
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=str(self.queue_file_path),
+            dry_run=False,
+            plan=str(plan_path),
+            branch=None,
+            merge_commit=None,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=tracking_mock):
+            with patch.object(
+                aet_queue_module.subprocess, "run", side_effect=tracking_mock
+            ):
+                rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 0)
+        self.assertIn(("git", "push"), pushed)
+
+    def test_push_failure_is_recoverable_and_idempotent(self):
+        """A push failure leaves the local commit intact; re-run succeeds."""
+        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        plan_path = plan_dir / "t1.md"
+        plan_path.write_text(
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "---\n\n"
+            "*Stage: awaiting_merge*\n",
+            encoding="utf-8",
+        )
+        self.queue["tasks"][0]["plan_file"] = str(plan_path)
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
+
+        plan_abs = str(plan_path.resolve())
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (
+                0,
+                "",
+                "",
+            ),
+            ("git", "add", plan_abs): (0, "", ""),
+            ("git", "diff", "--cached", "--quiet"): (1, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
+            ("git", "push"): (1, "", "network unreachable"),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=str(self.queue_file_path),
+            dry_run=False,
+            plan=str(plan_path),
+            branch=None,
+            merge_commit=None,
+        )
+
+        mock = _subprocess_mock(responses)
+        with patch.object(aet_state.subprocess, "run", side_effect=mock):
+            with patch.object(aet_queue_module.subprocess, "run", side_effect=mock):
+                rc = aet_state.cmd_record_merge(args)
+
+        # Push failure is reported as non-zero but the local commit is intact.
+        self.assertNotEqual(rc, 0)
+        content = plan_path.read_text(encoding="utf-8")
+        self.assertIn("status: merged", content)
+        self.assertIn("*Stage: merged*", content)
+
+        # Simulate re-run with connectivity restored. The status update is
+        # idempotent (no diff), so only the push is attempted and succeeds.
+        responses[("git", "push")] = (0, "", "")
+        responses[("git", "diff", "--cached", "--quiet")] = (0, "", "")
+        with patch.object(aet_state.subprocess, "run", side_effect=mock):
+            with patch.object(aet_queue_module.subprocess, "run", side_effect=mock):
+                rc = aet_state.cmd_record_merge(args)
+        self.assertEqual(rc, 0)
 
     def test_record_merge_with_plan_dry_run_does_not_mutate_plan(self):
         """record-merge --plan --dry-run reports without updating the plan."""

@@ -95,15 +95,20 @@ def main() -> int:
     final_queue: list[dict] = []
     preserved = 0
     skipped_settled = 0
+    skipped_non_sprint = 0
     for task in queue:
         pf = task.get("plan_file")
         # Settled-ness is derived from committed plan data (status frontmatter),
         # not from the local gitignored history log. A missing plan file cannot
         # be classified as settled; it is reported as drift below.
         pf_path = Path(pf) if pf else None
-        if pf_path and pf_path.is_file() and plan_validate.is_settled_plan(pf_path):
-            skipped_settled += 1
-            continue
+        if pf_path and pf_path.is_file():
+            if plan_validate.is_settled_plan(pf_path):
+                skipped_settled += 1
+                continue
+            if not plan_validate.is_sprint_member(pf_path):
+                skipped_non_sprint += 1
+                continue
         final_queue.append(task)
         if pf:
             preserved += 1
@@ -160,7 +165,8 @@ def main() -> int:
 
     print(
         f"\n✅ Sync complete: 0 new tasks added, {preserved} existing tasks preserved, "
-        f"{skipped_settled} skipped (already settled), {drifted} drifted tasks reported."
+        f"{skipped_settled} skipped (already settled), {skipped_non_sprint} skipped (not in sprint), "
+        f"{drifted} drifted tasks reported."
     )
     backend.close()
     return 0

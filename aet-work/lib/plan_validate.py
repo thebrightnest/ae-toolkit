@@ -163,6 +163,22 @@ def is_settled_plan(plan: Path) -> bool:
     return status in TERMINAL_PLAN_STATUSES
 
 
+SPRINT_STATUSES = frozenset({"queued"})
+
+
+def is_sprint_member(plan: Path) -> bool:
+    """Return True when a plan is part of the current sprint.
+
+    Sprint membership is derived from committed plan status. Only plans whose
+    frontmatter ``status`` is ``queued`` are included in the live queue; plans
+    with ``status: draft`` or ``status: approved`` are on the board but not in
+    the sprint, and terminal/statusless plans are excluded.
+    """
+    data = plan_parser.parse_frontmatter(plan)
+    status = data.get("status")
+    return isinstance(status, str) and status in SPRINT_STATUSES
+
+
 # ---------------------------------------------------------------------------
 # (a) Structural
 # ---------------------------------------------------------------------------

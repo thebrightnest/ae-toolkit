@@ -27,7 +27,7 @@ import project_id  # noqa: E402
 import risk  # noqa: E402
 import telemetry  # noqa: E402
 import track_record  # noqa: E402
-from aet_queue import current_state  # noqa: E402
+from aet_queue import current_state, update_plan_status  # noqa: E402
 from backends.factory import create_backend  # noqa: E402
 
 # Load aet-state as a module so desk actions can reuse queue mutations and
@@ -454,7 +454,7 @@ def _run_abandon(args: argparse.Namespace) -> int:
     plan_path = task.get("plan_file")
     if plan_path and Path(plan_path).exists():
         try:
-            aet_state.update_plan_status(plan_path, "abandoned")
+            update_plan_status(plan_path, "abandoned")
         except ValueError as exc:
             print(
                 f"Abandoned recorded, but plan update failed: {exc}",

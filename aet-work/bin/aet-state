@@ -8,7 +8,6 @@ validates transition legality, and updates footers + queue JSON atomically.
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -382,70 +381,6 @@ def cmd_set_stage(args):
     return 0
 
 
-def update_plan_footer(plan_path, stage):
-    """Atomically update the _Stage: ..._ footer in a plan or PRD file."""
-    path = Path(plan_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Plan file not found: {plan_path}")
-
-    content = path.read_text(encoding="utf-8")
-    # Detect existing emphasis style; default to asterisk for new files.
-    style_match = re.search(r"(?m)^([_\*])Stage:.*([_\*])$", content)
-    emph = style_match.group(1) if style_match else "*"
-
-    # Replace existing stage line (underscore or asterisk style)
-    new_content = re.sub(
-        r"(?m)^[_\*]Stage:.*[_\*]$",
-        f"{emph}Stage: {stage}{emph}",
-        content,
-    )
-    # If no stage line exists, append it before the final separator or at the end
-    if new_content == content:
-        # Check if there's a trailing separator
-        if content.rstrip().endswith("---"):
-            new_content = content.rstrip() + f"\n\n{emph}Stage: {stage}{emph}\n"
-        else:
-            new_content = content.rstrip() + f"\n\n---\n\n{emph}Stage: {stage}{emph}\n"
-
-    path.write_text(new_content, encoding="utf-8")
-
-
-def update_plan_frontmatter_status(plan_path, status):
-    """Update the `status` key in a markdown file's YAML frontmatter.
-
-    If a `status` key already exists, its value is replaced. If not, the key
-    is appended to the frontmatter block. The file is rewritten in place.
-    """
-    path = Path(plan_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Plan file not found: {plan_path}")
-
-    content = path.read_text(encoding="utf-8")
-    match = re.match(r"^(---\n)(.*?)(\n---\n)", content, re.DOTALL)
-    if not match:
-        raise ValueError(f"No YAML frontmatter found in {plan_path}")
-
-    frontmatter = match.group(2)
-    if re.search(r"^status:\s*", frontmatter, re.MULTILINE):
-        new_frontmatter = re.sub(
-            r"^(status:\s*).*$",
-            r"\1" + status,
-            frontmatter,
-            flags=re.MULTILINE,
-        )
-    else:
-        new_frontmatter = frontmatter.rstrip() + f"\nstatus: {status}"
-
-    new_content = content[: match.start(2)] + new_frontmatter + content[match.end(2):]
-    path.write_text(new_content, encoding="utf-8")
-
-
-def update_plan_status(plan_path, status):
-    """Update both the frontmatter status and the footer stage."""
-    update_plan_frontmatter_status(plan_path, status)
-    update_plan_footer(plan_path, status)
-
-
 def _derive_all_states(queue, cwd, history=None):
     """Return (task_by_id, derived) for every task in the queue.
 
@@ -777,9 +712,55 @@ def cmd_record_merge(args):
     """Resolve and record the merge commit for a task atomically."""
     backend = make_backend(args.queue)
     cwd = os.path.dirname(args.queue) if args.queue else "."
+    history_file = getattr(backend, "history_file", None)
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1
+
+    # Load task. If a previous record-merge already transitioned the task to
+    # merged but failed to push the plan status commit, retry only the plan
+    # closure push.
+    with queue_lib.queue_lock(args.queue):
+        data = backend.load()
+        queue = data["queue"]
+        task = find_task(queue, args.task_id)
+        sealed_task = None
+        if not task and history_file:
+            sealed_task = find_task(
+                queue_lib.read_history(history_file), args.task_id
+            )
+            if sealed_task and sealed_task.get("state") != "merged":
+                sealed_task = None
+
+        if not task and not sealed_task:
+            print(f"Task not found: {args.task_id}", file=sys.stderr)
+            return 1
+
+    if sealed_task:
+        explicit_plan = getattr(args, "plan", None)
+        plan_path = explicit_plan or sealed_task.get("plan_file")
+        if plan_path and Path(plan_path).exists():
+            rc = queue_lib.commit_and_push_status(
+                plan_path, "merged", task_id=args.task_id, cwd=cwd
+            )
+            if rc != 0:
+                print(
+                    f"Merge recorded locally, but plan closure could not be pushed "
+                    f"for {args.task_id}. Re-run record-merge to retry.",
+                    file=sys.stderr,
+                )
+                return rc
+        elif explicit_plan:
+            print(
+                f"Merge recorded, but explicit plan file not found: {explicit_plan}",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"Recorded merge for {args.task_id}: "
+            f"{sealed_task.get('merge_commit')} ({sealed_task.get('merge_strategy')})"
+        )
+        return 0
 
     # Resolve the merge commit against git before touching the queue.
     branch = getattr(args, "branch", None)
@@ -801,21 +782,10 @@ def cmd_record_merge(args):
         merge_commit = cli_merge_commit
         merge_strategy = "manual"
     else:
-        # Reload task inside the lock, but resolve the merge commit outside it
-        # so long git operations do not block other queue writers.
-        with queue_lib.queue_lock(args.queue):
-            data = backend.load()
-            queue = data["queue"]
-            task = find_task(queue, args.task_id)
-            if not task:
-                print(f"Task not found: {args.task_id}", file=sys.stderr)
-                return 1
-            branch = branch or task.get("branch")
-
+        branch = branch or task.get("branch")
         if not branch:
             print(f"Task {args.task_id} has no branch. Use --branch or --merge-commit.", file=sys.stderr)
             return 1
-
         merge_commit, merge_strategy = resolve_merge_commit(branch, cwd=cwd)
 
     if not merge_commit:
@@ -826,6 +796,7 @@ def cmd_record_merge(args):
         return 1
 
     with queue_lib.queue_lock(args.queue):
+        # Re-load in case another process changed the queue while we talked to git.
         data = backend.load()
         queue = data["queue"]
         task = find_task(queue, args.task_id)
@@ -871,32 +842,21 @@ def cmd_record_merge(args):
 
     # Terminal truth lives in the plan file. Update both frontmatter status and
     # footer stage when a plan path is provided or the task references an
-    # existing plan file.
+    # existing plan file, then commit and push so the closure is versioned.
     explicit_plan = getattr(args, "plan", None)
     plan_path = explicit_plan or task.get("plan_file")
     if plan_path and Path(plan_path).exists():
-        try:
-            update_plan_status(plan_path, "merged")
-        except ValueError as e:
-            print(f"Merge recorded, but plan update failed: {e}", file=sys.stderr)
-            return 1
-
-        # Commit the plan-file closure update so main stays clean after merges.
-        plan_abs = str(Path(plan_path).resolve())
-        rc, _, err = run_git("add", plan_abs, cwd=cwd)
+        rc = queue_lib.commit_and_push_status(
+            plan_path, "merged", task_id=args.task_id, cwd=cwd
+        )
         if rc != 0:
-            print(f"Merge recorded, but git add failed: {err}", file=sys.stderr)
-            return 1
-        rc, _, err = run_git("diff", "--cached", "--quiet", cwd=cwd)
-        if rc == 1:
-            commit_msg = f"chore({args.task_id}): mark plan as merged after closure"
-            rc, _, err = run_git("commit", "-m", commit_msg, cwd=cwd)
-            if rc != 0:
-                print(f"Merge recorded, but git commit failed: {err}", file=sys.stderr)
-                return 1
-        elif rc != 0:
-            print(f"Merge recorded, but git diff failed: {err}", file=sys.stderr)
-            return 1
+            # Local commit is intact; recoverable on re-run.
+            print(
+                f"Merge recorded locally, but plan closure could not be pushed "
+                f"for {args.task_id}. Re-run record-merge to retry.",
+                file=sys.stderr,
+            )
+            return rc
     elif explicit_plan:
         print(
             f"Merge recorded, but explicit plan file not found: {explicit_plan}",

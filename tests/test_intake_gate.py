@@ -55,7 +55,7 @@ def _make_plan(
 ) -> Path:
     """Write a plan markdown file with customizable frontmatter and body."""
     path = plans_dir / name
-    data = {"id": Path(name).stem, "size": "S", "status": "draft"}
+    data = {"id": Path(name).stem, "size": "S", "status": "queued"}
     data.update(frontmatter or {})
     lines = ["---"]
     for key, value in data.items():
@@ -358,7 +358,7 @@ class TestSyncIntakeGate(unittest.TestCase):
             plans_dir.mkdir(parents=True)
             plan = plans_dir / "bad.md"
             plan.write_text(
-                "---\nid: bad\nsize: S\nstatus: draft\n---\n\n# Bad\n", encoding="utf-8"
+                "---\nid: bad\nsize: S\nstatus: queued\n---\n\n# Bad\n", encoding="utf-8"
             )
             queue_file = _write_json_file({
                 "tasks": [{

@@ -55,7 +55,11 @@ def _make_history(tasks: list[dict]) -> str:
 def _make_plans_dir(plan_names: list[str]) -> tempfile.TemporaryDirectory:
     tmp = tempfile.TemporaryDirectory()
     for name in plan_names:
-        Path(tmp.name, name).write_text("# Plan\n", encoding="utf-8")
+        stem = Path(name).stem
+        Path(tmp.name, name).write_text(
+            f"---\nid: {stem}\nstatus: queued\n---\n\n# Plan\n",
+            encoding="utf-8",
+        )
     return tmp
 
 

@@ -84,7 +84,7 @@ def _ensure_default_prd(path: Path) -> None:
         )
 
 
-def make_plan(path, title, blocked_by=None, size="M", extra_body="", status="draft"):
+def make_plan(path, title, blocked_by=None, size="M", extra_body="", status="queued"):
     """Write a plan markdown file that passes the full intake validation suite.
 
     ``extra_body`` is inserted before the default task list/validation content so
@@ -962,7 +962,7 @@ class TestSync(unittest.TestCase):
         """sync validates existing queue entries and rejects invalid ones."""
         existing = self.plans_dir / "existing.md"
         existing.write_text(
-            "---\nid: existing\nsize: S\nstatus: draft\n---\n\n# Existing\n\n"
+            "---\nid: existing\nsize: S\nstatus: queued\n---\n\n# Existing\n\n"
             "## Blocked by\n- missing-link\n\n"
             "---\n\n*Stage: plan-approved*\n",
             encoding="utf-8",
