@@ -21,7 +21,7 @@ The canonical workflow state stored in `tasks[].state` while a task is in the qu
 _Avoid_: using `state` for terminal truth.
 
 **Status (plan lifecycle)**:
-The lifecycle value stored in a plan file's frontmatter: `draft`, `approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, or `abandoned`. It is the source of truth for whether a task is open or closed.
+The lifecycle value stored in a plan file's frontmatter: `draft`, `approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, or `abandoned`. It is the source of truth for whether a task is open or closed. New plans carry `status: draft`; intake validation requires any declared `status` to be from this set. Plans with no `status` field are grandfathered as legacy settled work.
 _Avoid_: using plan `status` for runtime scheduling decisions; use queue `state` while the task is active.
 
 **Blocker**:

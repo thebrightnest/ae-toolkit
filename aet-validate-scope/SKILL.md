@@ -186,14 +186,16 @@ After `validate` completes, conflicts are resolved, and the closure check passes
    *Next step: run `aet-work` (single-plan or multi-task queue)*
    ```
 
-2. Update the plan.md footer to:
+2. Update the plan.md frontmatter `status` to `approved` (it must stay in sync with the footer stage; this is the approval gate where both advance together).
+
+3. Update the plan.md footer to:
 
    ```
    *Stage: plan-approved*
    *Next step: run `aet-work`*
    ```
 
-3. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-work\`"`
+4. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-work\`"`
 
 ## Key Principles
 

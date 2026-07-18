@@ -84,7 +84,7 @@ def _ensure_default_prd(path: Path) -> None:
         )
 
 
-def make_plan(path, title, blocked_by=None, size="M", extra_body=""):
+def make_plan(path, title, blocked_by=None, size="M", extra_body="", status="draft"):
     """Write a plan markdown file that passes the full intake validation suite.
 
     ``extra_body`` is inserted before the default task list/validation content so
@@ -92,7 +92,7 @@ def make_plan(path, title, blocked_by=None, size="M", extra_body=""):
     still inheriting a PRD reference and other intake-valid boilerplate.
     """
     stem = path.stem
-    lines = ["---", f"id: {stem}", f"size: {size}"]
+    lines = ["---", f"id: {stem}", f"size: {size}", f"status: {status}"]
     if blocked_by:
         lines.append("blocked_by:")
         for blocker in blocked_by:
@@ -770,16 +770,9 @@ class TestInitQueue(unittest.TestCase):
         )
 
     def test_skips_settled_plans_from_history(self):
-        """init-queue does not re-add plans whose id or file is in work-history.jsonl."""
-        make_plan(self.plans_dir / "settled.md", "Settled task")
+        """init-queue skips plans whose committed status is terminal."""
+        make_plan(self.plans_dir / "settled.md", "Settled task", status="merged")
         make_plan(self.plans_dir / "active.md", "Active task")
-
-        settled_record = {
-            "id": "settled",
-            "plan_file": str(self.plans_dir / "settled.md"),
-            "state": "merged",
-        }
-        self.history_file.write_text(json.dumps(settled_record) + "\n", encoding="utf-8")
 
         result, _ = run_script(
             "init-queue",
@@ -945,15 +938,14 @@ class TestSync(unittest.TestCase):
         )
 
     def test_skips_settled_plans_from_history(self):
-        """sync does not add plans whose id or file is in work-history.jsonl."""
-        make_plan(self.plans_dir / "settled.md", "Settled task")
+        """sync skips existing queue entries whose committed status is terminal."""
+        make_plan(self.plans_dir / "settled.md", "Settled task", status="merged")
 
         settled_record = {
             "id": "settled",
             "plan_file": str(self.plans_dir / "settled.md"),
             "state": "merged",
         }
-        self.history_file.write_text(json.dumps(settled_record) + "\n", encoding="utf-8")
         # Seed queue with a settled task so sync has something to skip.
         self.queue_file.write_text(json.dumps({"tasks": [settled_record]}))
 
@@ -970,7 +962,7 @@ class TestSync(unittest.TestCase):
         """sync validates existing queue entries and rejects invalid ones."""
         existing = self.plans_dir / "existing.md"
         existing.write_text(
-            "---\nid: existing\nsize: S\n---\n\n# Existing\n\n"
+            "---\nid: existing\nsize: S\nstatus: draft\n---\n\n# Existing\n\n"
             "## Blocked by\n- missing-link\n\n"
             "---\n\n*Stage: plan-approved*\n",
             encoding="utf-8",
