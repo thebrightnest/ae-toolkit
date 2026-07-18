@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - gib-02-projection-axis-fail-open-dispatcher
 pipeline: standard
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: label mirroring through gib-02's fail-open dispatcher; one-way, read-nothing-back, and the only remote credential is the operator's own `gh` auth. No new trust boundary beyond the `gh` calls already present in the file; the write can never gate or block a local state change.
 docs_sync: required
@@ -81,5 +81,5 @@ Revert the merge commit. The projection loses `draft`/`backlog`/`quarantined` an
 
 ---
 
-*Stage: qa-complete*
+*Stage: merged*
 *Next step: run `aet-review`*
