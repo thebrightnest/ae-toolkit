@@ -26,6 +26,9 @@ STATE_LABELS: dict[str, str] = {
     "merged": "merged",
     "abandoned": "abandoned",
     "failed": "failed",
+    "quarantined": "quarantined",
+    "draft": "draft",
+    "backlog": "backlog",
 }
 
 _LABEL_COLORS: dict[str, str] = {
@@ -37,6 +40,9 @@ _LABEL_COLORS: dict[str, str] = {
     "merged": "0052CC",
     "abandoned": "000000",
     "failed": "D93F0B",
+    "quarantined": "D876E3",
+    "draft": "C2E0C6",
+    "backlog": "0052CC",
 }
 
 
@@ -65,9 +71,11 @@ class GitHubBackend(Projection):
         self.repo = repo
         self.label_prefix = label_prefix
         self.gh_path = gh_path
+        self._labels_ensured = False
 
     def on_add(self, task: dict[str, Any], is_new: bool) -> None:
         """Create a GitHub issue for a new task or update labels for an existing one."""
+        self._ensure_labels_once()
         if is_new:
             self._create_issue(task)
         else:
@@ -87,21 +95,26 @@ class GitHubBackend(Projection):
         """
         if to_state in {"merged", "abandoned"}:
             return
+        self._ensure_labels_once()
         task = self._find_task(task_id)
         if task is None:
             return
-        self._update_issue_labels(task)
+        self._update_issue_labels(task, from_state=from_state)
 
     def on_close(
         self, task_id: str, evidence: dict[str, Any] | None = None
     ) -> None:
         """Close the GitHub issue for a terminal task, if one exists."""
+        self._ensure_labels_once()
         task = self._find_task(task_id)
         if task is None:
             return
         issue_number = task.get("github_issue_number")
-        if issue_number is not None:
-            self._close_issue(issue_number)
+        if issue_number is None:
+            issue_number = self._find_issue_by_id(task_id)
+            if issue_number is None:
+                return
+        self._close_issue(issue_number)
 
     def ensure_labels(self) -> None:
         """Ensure every required AET state label exists in the repository."""
@@ -117,6 +130,12 @@ class GitHubBackend(Projection):
         Implemented in gib-05; the stub satisfies the Projection interface.
         """
         return
+
+    def _ensure_labels_once(self) -> None:
+        """Provision labels the first time the projection is used."""
+        if not self._labels_ensured:
+            self.ensure_labels()
+            self._labels_ensured = True
 
     # -------------------------------------------------------------------------
     # gh CLI helpers
@@ -165,6 +184,19 @@ class GitHubBackend(Projection):
             ]
         )
 
+    def _task_state(self, task: dict[str, Any]) -> str:
+        """Map a task to the label key that reflects its current projection.
+
+        Pre-sprint plan status drives the label; in-sprint queue state drives it
+        once the task has been queued.
+        """
+        status = task.get("status")
+        if status == "draft":
+            return "draft"
+        if status in {"approved", "backlog"}:
+            return "backlog"
+        return task.get("state") or "planned"
+
     def _state_label(self, state: str | None) -> str:
         """Map an AET state to its GitHub label."""
         return f"{self.label_prefix}:{STATE_LABELS.get(state or 'planned', 'planned')}"
@@ -173,7 +205,7 @@ class GitHubBackend(Projection):
         """Create a GitHub issue for ``task`` and record its URL/number."""
         title = task.get("title") or task.get("id", "task")
         body = self._task_body(task)
-        label = self._state_label(task.get("state"))
+        label = self._state_label(self._task_state(task))
 
         result = self._run_gh(
             [
@@ -243,26 +275,31 @@ class GitHubBackend(Projection):
             cmd.extend(["--remove-label", label])
         self._run_gh(cmd)
 
-    def _update_issue_labels(self, task: dict[str, Any]) -> None:
-        """Ensure the issue for ``task`` has exactly the label for its current state."""
+    def _update_issue_labels(
+        self, task: dict[str, Any], from_state: str | None = None
+    ) -> None:
+        """Ensure the issue for ``task`` has exactly the label for its projection."""
         issue_number = task.get("github_issue_number")
         if issue_number is None:
-            issue_number = self._find_issue_by_title(
-                task.get("title") or task.get("id", "")
-            )
+            issue_number = self._find_issue_by_id(task.get("id", ""))
             if issue_number is None:
                 return
             task["github_issue_number"] = issue_number
 
-        self._set_issue_labels(issue_number, task.get("state"))
+        current_labels = None
+        if from_state is not None:
+            current_labels = [self._state_label(from_state)]
+        self._set_issue_labels(
+            issue_number, self._task_state(task), current_labels=current_labels
+        )
 
     def _find_task(self, task_id: str) -> dict[str, Any] | None:
         """Return the queue entry for ``task_id`` from the local mirror, or None."""
         queue = read_queue(self.queue_file)
         return next((t for t in queue if t.get("id") == task_id), None)
 
-    def _find_issue_by_title(self, title: str) -> int | None:
-        """Find an open issue by title and return its number."""
+    def _find_issue_by_id(self, task_id: str) -> int | None:
+        """Find an open issue by its embedded ``aet-id`` marker."""
         result = self._run_gh(
             [
                 "issue",
@@ -272,24 +309,28 @@ class GitHubBackend(Projection):
                 "--state",
                 "open",
                 "--json",
-                "number,title",
+                "number,body",
                 "--search",
-                title,
+                f"aet-id: {task_id}",
             ]
         )
         issues = json.loads(result.stdout or "[]")
+        marker = f"<!-- aet-id: {task_id} -->"
         for issue in issues:
-            if issue.get("title") == title:
+            if marker in (issue.get("body") or ""):
                 return issue["number"]
         return None
 
     def _task_body(self, task: dict[str, Any]) -> str:
         plan_file = task.get("plan_file")
         title = task.get("title", task.get("id", "task"))
+        task_id = task.get("id", "task")
         parts = [f"# {title}"]
         if plan_file:
             parts.append("")
             parts.append(f"Plan file: {plan_file}")
             parts.append("")
             parts.append(f"<!-- plan-file: {plan_file} -->")
+        parts.append("")
+        parts.append(f"<!-- aet-id: {task_id} -->")
         return "\n".join(parts)
