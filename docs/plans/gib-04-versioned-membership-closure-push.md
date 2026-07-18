@@ -80,4 +80,4 @@ Revert the merge commit. Membership returns to local-file curation; closure retu
 
 ---
 
-_Stage: implemented_
+_Stage: qa-complete_
