@@ -43,8 +43,11 @@ Each AET state maps to exactly one GitHub label. `aet-setup` creates these label
 | `merged`         | `aet:merged`         | blue   |
 | `abandoned`      | `aet:abandoned`      | black  |
 | `failed`         | `aet:failed`         | orange |
+| `quarantined`    | `aet:quarantined`    | pink   |
+| `draft` (plan)   | `aet:draft`          | light green |
+| `approved`/`backlog` (plan) | `aet:backlog` | blue |
 
-When a task transitions, the backend removes the old AET label and adds the new one. Terminal tasks (`merged`, `abandoned`) close the corresponding issue.
+When a task transitions, the projection removes the old AET label and adds the new one. Terminal tasks (`merged`, `abandoned`) close the corresponding issue.
 
 ## Issue Format
 
