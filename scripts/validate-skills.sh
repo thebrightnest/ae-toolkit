@@ -173,7 +173,7 @@ link_re = re.compile(r"\[([^]]*)\]\(([^)]+)\)")
 broken = False
 for dirpath, dirnames, filenames in os.walk("."):
     if dirpath == ".":
-        dirnames[:] = [d for d in dirnames if d not in (".git", "content")]
+        dirnames[:] = [d for d in dirnames if d not in (".git", "content", ".worktrees")]
     for fname in filenames:
         if not fname.endswith(".md"):
             continue
