@@ -301,6 +301,20 @@ Phase 6 also moved the roadmap's governing metric (human minutes at the two ends
 
 - **R-6 through R-19** remain unimplemented in this branch. They are scheduled for downstream tasks: gib-05 (board machinery), gib-06 (commands and command reshaping), and any follow-ups required for the live rehearsal, ADRs, and roadmap shelving recorded in R-18.
 
+*Recorded: 2026-07-18 — Branch: gib-03-status-liveness-contract*
+
+### Changed from plan
+
+- **Corpus classifier guard:** The plan cited a 203-plan census (121 statusless, 81 merged, 1 draft, 1 approved). By implementation time the corpus had grown to 212 plans, so `test_corpus_classifier_matches_known_live_set` was updated to assert 120 statusless, 82 terminal, and 10 live plans. The guard's intent — exactly statusless + terminal plans are settled — is unchanged.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- None.
+
 ---
 
 *Stage: synced*
