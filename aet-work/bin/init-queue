@@ -254,8 +254,6 @@ def main() -> int:
 
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
     history_by_id = {t.get("id"): t for t in history if t.get("id")}
-    settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
-    settled_ids = {t.get("id") for t in history if t.get("id")}
 
     plan_files = sorted(plans_dir.glob("*.md"))
 
@@ -288,9 +286,10 @@ def main() -> int:
 
     for pf in plan_files:
         pf_str = str(pf)
-        task_id = pf.stem
 
-        if task_id in settled_ids or pf_str in settled_files:
+        # Settled-ness is derived from committed plan data (status frontmatter),
+        # not from the local gitignored history log.
+        if plan_validate.is_settled_plan(pf):
             skipped_settled += 1
             continue
 
@@ -315,13 +314,9 @@ def main() -> int:
 
     # Retain any queue entries whose plan file is temporarily missing rather
     # than silently dropping them; drift is reported by ``status`` / ``sync``.
-    # Skip tasks that are already settled in history.
     for task in queue:
         pf = task.get("plan_file")
         tid = task.get("id")
-        if tid in settled_ids or pf in settled_files:
-            skipped_settled += 1
-            continue
         if pf and pf not in seen_files:
             if reconcile_terminal_state(task, history_by_id, pf):
                 if tid not in history_by_id:

@@ -86,10 +86,6 @@ def main() -> int:
         print(f"⛔ {exc}", file=sys.stderr)
         return 1
     queue = data["queue"]
-    history = data["history"]
-
-    settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
-    settled_ids = {t.get("id") for t in history if t.get("id")}
 
     plan_files = sorted(plans_dir.glob("*.md"))
     plan_file_set = {str(pf) for pf in plan_files}
@@ -101,8 +97,11 @@ def main() -> int:
     skipped_settled = 0
     for task in queue:
         pf = task.get("plan_file")
-        task_id = task.get("id")
-        if task_id in settled_ids or pf in settled_files:
+        # Settled-ness is derived from committed plan data (status frontmatter),
+        # not from the local gitignored history log. A missing plan file cannot
+        # be classified as settled; it is reported as drift below.
+        pf_path = Path(pf) if pf else None
+        if pf_path and pf_path.is_file() and plan_validate.is_settled_plan(pf_path):
             skipped_settled += 1
             continue
         final_queue.append(task)
