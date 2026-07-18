@@ -328,7 +328,7 @@ class TestRecordMerge(unittest.TestCase):
         self.assertEqual(rc, 0)
         content = plan_path.read_text(encoding="utf-8")
         self.assertIn("status: merged", content)
-        self.assertIn("_Stage: merged_", content)
+        self.assertIn("*Stage: merged*", content)
 
         # Queue task should be sealed to history.
         with open(self.queue_file_path, "r", encoding="utf-8") as f:
