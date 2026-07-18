@@ -112,10 +112,10 @@ Use this checklist during every `/aet-setup` invocation. Every topic must be exp
 
 ## 15. Task Backend Configuration
 
-- [ ] `.agents/aet-work.json` exists with a valid `task_backend` (`git-refs` (default), `json`, or `github`)?
-- [ ] When `github` is selected, `repo` is set to `owner/repo`?
-- [ ] When `github` is selected, `aet:ready` and other `aet:*` labels exist (or a retry gap is documented)?
-- [ ] `gh` availability and authentication are verified before label creation?
+- [ ] `.agents/aet-work.json` exists with a valid `task_backend` (`git-refs` (default) or `json`)?
+- [ ] No `task_backend` value selects a forge as storage (`github`/`both` are rejected)?
+- [ ] Projections are configured on the orthogonal `projections` axis when a forge mirror is desired?
+- [ ] `gh` availability and authentication are verified before label creation (projection setup)?
 - [ ] Switching backends is documented as forward-only (no history migration)?
 
 ---

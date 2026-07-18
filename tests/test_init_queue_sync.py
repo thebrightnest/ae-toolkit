@@ -49,58 +49,6 @@ def run_script(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=N
     return result, log_file
 
 
-def run_script_with_backend(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=None):
-    """Run a queue script with a fake gh CLI on PATH for GitHub backend tests."""
-    env = os.environ.copy()
-    fake_bin = Path(cwd) / "fakebin"
-    fake_bin.mkdir(exist_ok=True)
-
-    fake_python3 = fake_bin / "python3"
-    python_log = Path(cwd) / "fake_python3_calls.txt"
-    fake_python3.write_text(
-        "#!/usr/bin/env python3\n"
-        "import sys, os\n"
-        f"log = {str(python_log)!r}\n"
-        "with open(log, 'a') as f:\n"
-        "    f.write(repr(sys.argv[1:]) + '\n')\n"
-        "print('{}')\n"
-    )
-    fake_python3.chmod(0o755)
-
-    gh_log = Path(cwd) / "fake_gh_calls.txt"
-    fake_gh = fake_bin / "gh"
-    fake_gh.write_text(
-        "#!/bin/sh\n"
-        f"printf '%s\\n' \"$*\" >> {str(gh_log)}\n"
-        'if [ "$1" = "issue" ] && [ "$2" = "create" ]; then\n'
-        "  echo 'https://github.com/owner/repo/issues/99'\n"
-        "fi\n"
-        'if [ "$1" = "issue" ] && [ "$2" = "view" ]; then\n'
-        '  echo \'{"labels": []}\'\n'
-        "fi\n"
-    )
-    fake_gh.chmod(0o755)
-
-    env["PATH"] = str(fake_bin) + os.pathsep + env["PATH"]
-    env["FAKE_PYTHON3_LOG"] = str(python_log)
-    env["FAKE_GH_LOG"] = str(gh_log)
-
-    cmd = [
-        sys.executable,
-        str(REPO_ROOT / "aet-work" / "bin" / script_name),
-        "--queue-file",
-        str(queue_file),
-        "--history-file",
-        str(history_file),
-        "--plans-dir",
-        str(plans_dir),
-    ]
-    if prds_dir is not None:
-        cmd += ["--prds-dir", str(prds_dir)]
-
-    result = subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True)
-    return result, python_log, gh_log
-
 
 def read_queue_dict(queue_file):
     """Read the queue file, returning the raw dict/list."""
@@ -1156,69 +1104,6 @@ class TestSync(unittest.TestCase):
         self.assertIn("ghost", result.stdout)
         self.assertEqual(tasks["ghost"]["state"], "in_progress")
 
-
-class TestSyncBackendAware(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.plans_dir = self.root / "plans"
-        self.prds_dir = self.root / "prds"
-        self.queue_file = self.root / "work-queue.json"
-        self.history_file = self.root / "work-history.jsonl"
-        self.plans_dir.mkdir()
-        self.prds_dir.mkdir()
-
-        agents_dir = self.root / ".agents"
-        agents_dir.mkdir()
-        (agents_dir / "aet-work.json").write_text(
-            '{"task_backend": "github", "github": {"repo": "owner/repo"}}',
-            encoding="utf-8",
-        )
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
-    def test_sync_does_not_create_github_issue_for_new_plan(self):
-        """sync never creates issues for plans not explicitly added to the queue."""
-        make_plan(self.plans_dir / "feat-001.md", "First task", size="S")
-
-        result, _python_log, gh_log = run_script_with_backend(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-        self.assertFalse(gh_log.exists())
-        tasks = read_tasks(self.queue_file)
-        self.assertEqual(tasks, [])
-
-    def test_sync_updates_github_label_for_existing_task(self):
-        """When GitHub backend is active, sync updates labels for existing tasks."""
-        existing_plan = self.plans_dir / "existing.md"
-        make_plan(existing_plan, "Existing task", size="S")
-        initial = {
-            "tasks": [
-                {
-                    "id": "existing",
-                    "title": "Existing task",
-                    "plan_file": str(existing_plan),
-                    "blocked_by": [],
-                    "blocks": [],
-                    "status": "in-progress",
-                    "state": "in_progress",
-                    "github_issue_number": 42,
-                }
-            ]
-        }
-        self.queue_file.write_text(json.dumps(initial))
-
-        result, _python_log, gh_log = run_script_with_backend(
-            "sync", self.root, self.queue_file, self.history_file, self.plans_dir, None
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-        self.assertTrue(gh_log.exists())
-        calls = gh_log.read_text(encoding="utf-8").strip().splitlines()
-        self.assertTrue(any("issue" in c and "edit" in c and "42" in c for c in calls), calls)
 
 
 if __name__ == "__main__":

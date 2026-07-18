@@ -54,24 +54,33 @@ aet-work-*.log
 
 ### 4. `.agents/aet-work.json` (task backend config)
 
-Created by `aet configure-backend` during `aet-setup` Step 6. Chooses the backend used by aet-work:
+Created by `aet configure-backend` during `aet-setup` Step 6. Chooses the storage backend used by aet-work:
 
 ```json
 {
-  "task_backend": "json",
-  "github": {
-    "repo": "owner/repo",
-    "label_prefix": "aet",
-    "labels_created": true
-  }
+  "task_backend": "git-refs"
 }
 ```
 
-- `task_backend`: `json` (default) or `github`.
-- `github.repo`: repository for the GitHub Issues adapter, detected from `git remote origin`.
-- `github.label_prefix`: defaults to `aet`; all state labels use this prefix.
-- `github.labels_created`: `true` after `aet-setup` has confirmed the `aet:*` labels exist.
+- `task_backend`: `git-refs` (default) or `json`. A forge is never a valid storage backend.
 - `switch_warning`: recorded when switching from one backend to another; switches are forward-only and do not migrate history.
+
+GitHub Issues mirroring is configured on the orthogonal `projections` axis:
+
+```json
+{
+  "task_backend": "git-refs",
+  "projections": [
+    { "type": "github", "repo": "owner/name", "label_prefix": "aet" }
+  ]
+}
+```
+
+- `projections`: list of one-way mirrors. Each entry has `type` and type-specific keys.
+- `projections[].repo`: repository for the GitHub Issues projection, `owner/name`.
+- `projections[].label_prefix`: defaults to `aet`; all state labels use this prefix.
+
+The projection dispatcher catches projection failures and warns on stderr; storage writes remain fail-closed.
 
 See `aet-work/references/github-backend.md` for the label contract, `gh` CLI requirements, issue body format, and GitHub-to-local sync behavior.
 
