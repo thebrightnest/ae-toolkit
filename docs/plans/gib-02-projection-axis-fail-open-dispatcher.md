@@ -3,7 +3,7 @@ id: gib-02-projection-axis-fail-open-dispatcher
 size: M
 blocked_by: []
 pipeline: standard
-status: draft
+status: merged
 security_review: required
 security_review_reason: changes backend selection (deletes `github`/`both` as storage) and introduces a fail-open dispatcher that inverts the fail-closed kernel rule. The security-critical property is that fail-open is scoped strictly to projections and cannot leak into a storage write — must be verified, not asserted.
 docs_sync: required
@@ -83,5 +83,4 @@ Revert the merge commit. Storage backend selection returns to the prior enum; th
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
