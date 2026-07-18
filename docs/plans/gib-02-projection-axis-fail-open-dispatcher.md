@@ -83,5 +83,5 @@ Revert the merge commit. Storage backend selection returns to the prior enum; th
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
