@@ -38,11 +38,11 @@ docs_sync_reason: `status` becomes a required plan-frontmatter field with a defi
 
 ## Task List
 
-1. `plan_validate`: require `status` from the lifecycle set; exempt statusless (legacy) plans — M (traces: R-6)
-2. `init-queue`/`sync`: derive settled-ness from committed status (+ statusless=settled); drop the history read from the settled decision — M (traces: R-7)
-3. `aet-plan` + `.agents/templates/plan-template.md`: emit/require `status: draft` at creation; document the lifecycle in CONTEXT.md — S (traces: R-6)
-4. `aet-validate-scope`: write `status: approved` to frontmatter when advancing the footer to `plan-approved` — S (traces: R-6)
-5. Tests: `tests/test_status_liveness_contract.py` (new), incl. the 203-plan corpus classifier guard — M (traces: R-6, R-7)
+1. ✓ `plan_validate`: require `status` from the lifecycle set; exempt statusless (legacy) plans — M (traces: R-6)
+2. ✓ `init-queue`/`sync`: derive settled-ness from committed status (+ statusless=settled); drop the history read from the settled decision — M (traces: R-7)
+3. ✓ `aet-plan` + `.agents/templates/plan-template.md`: emit/require `status: draft` at creation; document the lifecycle in CONTEXT.md — S (traces: R-6) [template already carried `status: draft` from an earlier change]
+4. ✓ `aet-validate-scope`: write `status: approved` to frontmatter when advancing the footer to `plan-approved` — S (traces: R-6)
+5. ✓ Tests: `tests/test_status_liveness_contract.py` (new), incl. the corpus classifier guard — M (traces: R-6, R-7) [Changed: census updated from 203 to 212 plans to match the current corpus]
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -82,4 +82,5 @@ Revert the merge commit. `status` reverts to optional; `init-queue` reverts to t
 
 ---
 
-*Stage: plan-approved*
+*Stage: synced*
+*Next step: run `aet-ship`*

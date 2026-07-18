@@ -26,6 +26,23 @@ from pathlib import Path
 
 import plan_parser
 
+# Plan lifecycle statuses (CONTEXT.md). A missing key is the legacy grandfathered
+# state; any present value must belong to this set.
+PLAN_LIFECYCLE_STATUSES = frozenset(
+    {
+        "draft",
+        "approved",
+        "queued",
+        "in_progress",
+        "awaiting_merge",
+        "merged",
+        "abandoned",
+    }
+)
+
+# Terminal plan statuses that end the lifecycle and satisfy blockers.
+TERMINAL_PLAN_STATUSES = frozenset({"merged", "abandoned"})
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -127,6 +144,23 @@ def _repo_root_for(plan: Path) -> Path:
         if plan.parent.name == "plans" and plan.parent.parent.name == "docs":
             return plan.parent.parent.parent
         return plan.parent.parent
+
+
+def is_settled_plan(plan: Path) -> bool:
+    """Return True when a plan is settled from committed frontmatter data.
+
+    A plan is settled when its ``status`` frontmatter is one of the terminal
+    lifecycle values, or when it has no ``status`` field at all (legacy
+    grandfathering). This function reads only the plan file; it does not use
+    the local gitignored history log.
+    """
+    data = plan_parser.parse_frontmatter(plan)
+    status = data.get("status")
+    if status is None:
+        return True
+    if not isinstance(status, str):
+        return False
+    return status in TERMINAL_PLAN_STATUSES
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +386,26 @@ def scope_findings(plan: Path, repo_root: Path) -> list[Finding]:
 
 
 # ---------------------------------------------------------------------------
+# (e) Status lifecycle
+# ---------------------------------------------------------------------------
+
+
+def status_findings(plan: Path) -> list[Finding]:
+    """Validate the plan ``status`` frontmatter lifecycle value.
+
+    A missing ``status`` key is exempt (legacy grandfathering). A present key
+    must be a string from ``PLAN_LIFECYCLE_STATUSES``.
+    """
+    data = plan_parser.parse_frontmatter(plan)
+    status = data.get("status")
+    if status is None:
+        return []
+    if not isinstance(status, str) or status not in PLAN_LIFECYCLE_STATUSES:
+        return [Finding("status", plan, f"invalid status: {status}")]
+    return []
+
+
+# ---------------------------------------------------------------------------
 # Top-level validate
 # ---------------------------------------------------------------------------
 
@@ -396,6 +450,7 @@ def validate(
     for plan in plans:
         findings.extend(rtrace_findings(plan, repo_root=repo_root, coverage=coverage))
         findings.extend(acceptance_findings(plan))
+        findings.extend(status_findings(plan))
         if repo_root:
             findings.extend(scope_findings(plan, repo_root))
 
