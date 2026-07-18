@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - gib-03-status-liveness-contract
 pipeline: standard
-status: draft
+status: merged
 security_review: required
 security_review_reason: changes which work `aet run` selects (membership derived from committed status, not a local file) and adds a network `git push` to the closure/commit path. A wrong derivation runs unscheduled work or silently empties the sprint; a push that half-applies could leave a task closed locally but live remotely. Both are correctness boundaries requiring verification.
 docs_sync: required
@@ -80,4 +80,4 @@ Revert the merge commit. Membership returns to local-file curation; closure retu
 
 ---
 
-_Stage: qa-complete_
+_Stage: merged_
