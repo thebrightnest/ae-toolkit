@@ -81,4 +81,5 @@ Revert the merge commit. The projection loses `draft`/`backlog`/`quarantined` an
 
 ---
 
-_Stage: plan-approved_
+_Stage: implemented_
+_Next step: run `aet-qa`_
