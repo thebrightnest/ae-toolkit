@@ -96,7 +96,7 @@ class TestConfigResolution(unittest.TestCase):
             clear=False,
         ):
             self._write_external("myproject/main", {"task_backend": "git-refs"})
-            self._write_in_tree({"task_backend": "github", "github": {"repo": "in/tree"}})
+            self._write_in_tree({"task_backend": "git-refs"})
             backend = create_backend(
                 config_path=str(self.project / ".agents" / "aet-work.json"),
                 queue_file=str(self.project / "work-queue.json"),

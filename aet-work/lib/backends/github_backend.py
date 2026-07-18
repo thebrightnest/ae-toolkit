@@ -1,18 +1,18 @@
-"""GitHub Issues backend for the aet-work queue."""
+"""GitHub Issues projection for the aet-work queue.
+
+This is a one-way mirror, not a storage backend. The local JSON queue (or the
+configured :class:`backends.base.TaskBackend`) remains the source of truth;
+this projection creates and labels GitHub issues to reflect task state.
+"""
 
 from __future__ import annotations
 
 import json
 import subprocess
-from pathlib import Path
 from typing import Any
 
-from aet_queue import (
-    read_history,
-    read_queue,
-    write_queue,
-)
-from backends.base import TaskBackend
+from aet_queue import read_queue
+from projections.base import Projection
 
 DEFAULT_LABEL_PREFIX = "aet"
 
@@ -41,14 +41,15 @@ _LABEL_COLORS: dict[str, str] = {
 
 
 class BackendError(RuntimeError):
-    """Raised when a GitHub backend operation fails."""
+    """Raised when a GitHub projection operation fails."""
 
 
-class GitHubBackend(TaskBackend):
-    """GitHub Issues adapter for the task backend interface.
+class GitHubBackend(Projection):
+    """GitHub Issues projection for the aet-work queue.
 
-    The local JSON queue remains the scheduling source of truth; this backend
-    mirrors tasks as GitHub issues and AET states as issue labels.
+    This class implements :class:`projections.base.Projection`. It no longer
+    implements :class:`backends.base.TaskBackend`; storage is handled by the
+    configured task backend (``json`` or ``git-refs``).
     """
 
     def __init__(
@@ -65,18 +66,12 @@ class GitHubBackend(TaskBackend):
         self.label_prefix = label_prefix
         self.gh_path = gh_path
 
-    def load(self, verify: bool = True) -> dict[str, Any]:
-        """Return queue and history from the local JSON mirror."""
-        return {
-            "queue": read_queue(self.queue_file, verify=verify),
-            "history": read_history(self.history_file),
-        }
-
-    def save(
-        self, queue: list[dict[str, Any]], wrapper: dict[str, Any] | None = None
-    ) -> None:
-        """Persist the queue to the local JSON mirror."""
-        write_queue(self.queue_file, queue, wrapper=wrapper)
+    def on_add(self, task: dict[str, Any], is_new: bool) -> None:
+        """Create a GitHub issue for a new task or update labels for an existing one."""
+        if is_new:
+            self._create_issue(task)
+        else:
+            self._update_issue_labels(task)
 
     def on_transition(
         self,
@@ -88,7 +83,7 @@ class GitHubBackend(TaskBackend):
         """Mirror a non-terminal transition to the GitHub issue labels.
 
         Terminal states (``merged``/``abandoned``) are handled by
-        ``close_task`` so the issue is closed rather than relabelled.
+        ``on_close`` so the issue is closed rather than relabelled.
         """
         if to_state in {"merged", "abandoned"}:
             return
@@ -97,7 +92,7 @@ class GitHubBackend(TaskBackend):
             return
         self._update_issue_labels(task)
 
-    def close_task(
+    def on_close(
         self, task_id: str, evidence: dict[str, Any] | None = None
     ) -> None:
         """Close the GitHub issue for a terminal task, if one exists."""
@@ -108,33 +103,6 @@ class GitHubBackend(TaskBackend):
         if issue_number is not None:
             self._close_issue(issue_number)
 
-    def plan_drift(self, plans_dir: str | Path) -> list[str]:
-        """Return plan files that are not present in queue or history."""
-        data = self.load()
-        queue = data["queue"]
-        history = data["history"]
-
-        queued_files = {t.get("plan_file") for t in queue if t.get("plan_file")}
-        settled_files = {t.get("plan_file") for t in history if t.get("plan_file")}
-        plan_files = sorted(Path(plans_dir).glob("*.md"))
-
-        return [
-            str(pf)
-            for pf in plan_files
-            if str(pf) not in queued_files and str(pf) not in settled_files
-        ]
-
-    def close(self) -> None:
-        """No-op: the gh CLI processes are short-lived."""
-        return
-
-    def sync_task(self, task: dict[str, Any], is_new: bool) -> None:
-        """Create a GitHub issue for a new task or update labels for an existing one."""
-        if is_new:
-            self._create_issue(task)
-        else:
-            self._update_issue_labels(task)
-
     def ensure_labels(self) -> None:
         """Ensure every required AET state label exists in the repository."""
         existing = {label["name"] for label in self._list_labels()}
@@ -142,6 +110,13 @@ class GitHubBackend(TaskBackend):
             label = f"{self.label_prefix}:{suffix}"
             if label not in existing:
                 self._create_label(label, state)
+
+    def reconcile(self) -> None:
+        """Heal drift between the local queue and GitHub Issues.
+
+        Implemented in gib-05; the stub satisfies the Projection interface.
+        """
+        return
 
     # -------------------------------------------------------------------------
     # gh CLI helpers

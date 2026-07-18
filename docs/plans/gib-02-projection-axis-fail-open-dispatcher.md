@@ -37,11 +37,11 @@ docs_sync_reason: the config schema gains a `projections` axis and loses `task_b
 
 ## Task List
 
-1. Add `Projection` interface + projection resolver reading `projections` config (external-first) — S (traces: R-1)
-2. Build the fail-open dispatcher: fan out, catch-and-warn per projection, never raise — M (traces: R-4, R-5)
-3. Remove `github`/`both` from `factory.py`; named error on unknown `task_backend`; reclass `GitHubBackend` off `TaskBackend` (stub methods move in gib-05) — M (traces: R-2)
-4. Update `aet-setup` SKILL/checklist/references: `task_backend` ∈ {git-refs, json}; document `projections` — S (traces: R-3)
-5. Tests: `tests/test_projection_dispatcher.py` (new) — M (traces: R-4, R-5)
+1. ✓ Add `Projection` interface + projection resolver reading `projections` config (external-first) — S (traces: R-1)
+2. ✓ Build the fail-open dispatcher: fan out, catch-and-warn per projection, never raise — M (traces: R-4, R-5)
+3. ✓ Remove `github`/`both` from `factory.py`; named error on unknown `task_backend`; reclass `GitHubBackend` off `TaskBackend` (stub methods move in gib-05) — M (traces: R-2)
+4. ✓ Update `aet-setup` SKILL/checklist/references: `task_backend` ∈ {git-refs, json}; document `projections` — S (traces: R-3)
+5. ✓ Tests: `tests/test_projection_dispatcher.py` (new) — M (traces: R-4, R-5)
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -83,4 +83,5 @@ Revert the merge commit. Storage backend selection returns to the prior enum; th
 
 ---
 
-_Stage: plan-approved_
+_Stage: synced_
+_Next step: run `aet-ship`_
