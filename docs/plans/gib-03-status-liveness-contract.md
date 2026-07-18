@@ -82,5 +82,5 @@ Revert the merge commit. `status` reverts to optional; `init-queue` reverts to t
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
