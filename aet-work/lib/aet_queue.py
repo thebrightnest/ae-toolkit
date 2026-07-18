@@ -6,10 +6,13 @@ import fcntl
 import hashlib
 import json
 import os
+import re
+import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Iterator
 
 # Tracks whether a queue file was read as a dict wrapper and, if so, its
@@ -556,3 +559,131 @@ def seal_terminal(queue_file: str, history_file: str, task_id: str) -> dict[str,
         append_history_record(history_file, task)
         write_queue(queue_file, live)
     return task
+
+
+# ---------------------------------------------------------------------------
+# Plan status/footer helpers
+# ---------------------------------------------------------------------------
+
+def update_plan_footer(plan_path: str | Path, stage: str) -> None:
+    """Atomically update the _Stage: ..._ footer in a plan or PRD file."""
+    path = Path(plan_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Plan file not found: {plan_path}")
+
+    content = path.read_text(encoding="utf-8")
+    # Detect existing emphasis style; default to asterisk for new files.
+    style_match = re.search(r"(?m)^([_\*])Stage:.*([_\*])$", content)
+    emph = style_match.group(1) if style_match else "*"
+
+    # Replace existing stage line (underscore or asterisk style)
+    new_content = re.sub(
+        r"(?m)^[_\*]Stage:.*[_\*]$",
+        f"{emph}Stage: {stage}{emph}",
+        content,
+    )
+    # If no stage line exists, append it before the final separator or at the end
+    if new_content == content:
+        # Check if there's a trailing separator
+        if content.rstrip().endswith("---"):
+            new_content = content.rstrip() + f"\n\n{emph}Stage: {stage}{emph}\n"
+        else:
+            new_content = content.rstrip() + f"\n\n---\n\n{emph}Stage: {stage}{emph}\n"
+
+    path.write_text(new_content, encoding="utf-8")
+
+
+def update_plan_frontmatter_status(plan_path: str | Path, status: str) -> None:
+    """Update the `status` key in a markdown file's YAML frontmatter.
+
+    If a ``status`` key already exists, its value is replaced. If not, the key
+    is appended to the frontmatter block. The file is rewritten in place.
+    """
+    path = Path(plan_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Plan file not found: {plan_path}")
+
+    content = path.read_text(encoding="utf-8")
+    match = re.match(r"^(---\n)(.*?)(\n---\n)", content, re.DOTALL)
+    if not match:
+        raise ValueError(f"No YAML frontmatter found in {plan_path}")
+
+    frontmatter = match.group(2)
+    if re.search(r"^status:\s*", frontmatter, re.MULTILINE):
+        new_frontmatter = re.sub(
+            r"^(status:\s*).*$",
+            r"\1" + status,
+            frontmatter,
+            flags=re.MULTILINE,
+        )
+    else:
+        new_frontmatter = frontmatter.rstrip() + f"\nstatus: {status}"
+
+    new_content = content[: match.start(2)] + new_frontmatter + content[match.end(2):]
+    path.write_text(new_content, encoding="utf-8")
+
+
+def update_plan_status(plan_path: str | Path, status: str) -> None:
+    """Update both the frontmatter status and the footer stage."""
+    update_plan_frontmatter_status(plan_path, status)
+    update_plan_footer(plan_path, status)
+
+
+def _run_git(*args: str, cwd: str | Path | None = None) -> tuple[int, str, str]:
+    """Run a git command; return (returncode, stdout, stderr)."""
+    try:
+        result = subprocess.run(
+            ["git", *args], capture_output=True, text=True, cwd=cwd, check=False
+        )
+    except FileNotFoundError:
+        return (127, "", "git not found")
+    return (result.returncode, result.stdout, result.stderr)
+
+
+def commit_and_push_status(
+    plan_path: str | Path,
+    status: str,
+    *,
+    task_id: str | None = None,
+    cwd: str | Path | None = None,
+) -> int:
+    """Update a plan's status, commit the change, and push it.
+
+    The local commit is preserved if the push fails, so the operation is
+    idempotent on re-run: the same status update produces no diff on a second
+    call, and a subsequent push will succeed once connectivity is restored.
+    """
+    path = Path(plan_path)
+    update_plan_status(path, status)
+
+    plan_abs = str(path.resolve())
+    rc, _, err = _run_git("add", plan_abs, cwd=cwd)
+    if rc != 0:
+        print(f"git add failed for {plan_abs}: {err}", file=sys.stderr)
+        return rc
+
+    rc, _, err = _run_git("diff", "--cached", "--quiet", cwd=cwd)
+    if rc == 0:
+        # Nothing staged; nothing to commit or push.
+        return 0
+    if rc != 1:
+        print(f"git diff failed: {err}", file=sys.stderr)
+        return rc
+
+    commit_task = task_id or path.stem
+    commit_msg = f"chore({commit_task}): mark plan as {status}"
+    rc, _, err = _run_git("commit", "-m", commit_msg, cwd=cwd)
+    if rc != 0:
+        print(f"git commit failed: {err}", file=sys.stderr)
+        return rc
+
+    rc, _, err = _run_git("push", cwd=cwd)
+    if rc != 0:
+        print(
+            f"Push failed after local commit; the commit is intact and the "
+            f"operation is idempotent on re-run: {err}",
+            file=sys.stderr,
+        )
+        return rc
+
+    return 0

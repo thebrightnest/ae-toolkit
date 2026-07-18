@@ -74,17 +74,17 @@ def parse_args() -> argparse.Namespace:
     return build_parser().parse_args()
 
 
-def git_merge_commit_for(task_id: str) -> str | None:
+def git_merge_commit_for(task_id: str, repo_root: str | Path | None = None) -> str | None:
     """Return the latest commit on origin/main whose message mentions ``task_id``.
 
     This is a best-effort reconciliation for squash-merged work: a task whose
     id appears in a commit on origin/main is treated as merged with that SHA.
     """
-    result = subprocess.run(
-        ["git", "log", "origin/main", "--format=%H", "--grep", task_id, "-n", "1"],
-        capture_output=True,
-        text=True,
-    )
+    cmd = ["git"]
+    if repo_root:
+        cmd.extend(["-C", str(repo_root)])
+    cmd.extend(["log", "origin/main", "--format=%H", "--grep", task_id, "-n", "1"])
+    result = subprocess.run(cmd, capture_output=True, text=True)
     sha = result.stdout.strip()
     return sha or None
 
@@ -113,6 +113,7 @@ def reconcile_terminal_state(
     task: dict,
     history_by_id: dict[str, dict],
     plan_file: str | Path | None = None,
+    repo_root: str | Path | None = None,
 ) -> bool:
     """If a task is terminal in history, git, or its plan footer, mark it terminal.
 
@@ -137,7 +138,7 @@ def reconcile_terminal_state(
         return True
 
     # Terminal in git history on origin/main.
-    merge_commit = git_merge_commit_for(tid)
+    merge_commit = git_merge_commit_for(tid, repo_root=repo_root)
     if merge_commit:
         task["state"] = "merged"
         task["merge_commit"] = merge_commit
@@ -157,6 +158,7 @@ def preserve_task_metadata(
     existing: dict,
     fresh: dict,
     history_by_id: dict[str, dict],
+    repo_root: str | Path | None = None,
 ) -> dict:
     """Preserve terminal state and metadata from an existing queue entry.
 
@@ -180,7 +182,7 @@ def preserve_task_metadata(
         fresh["merge_strategy"] = hist.get("merge_strategy")
     else:
         # Reconcile against git history on origin/main.
-        merge_commit = git_merge_commit_for(task_id)
+        merge_commit = git_merge_commit_for(task_id, repo_root=repo_root)
         if merge_commit:
             state = "merged"
             fresh["merge_commit"] = merge_commit
@@ -280,6 +282,7 @@ def main() -> int:
     preserved = 0
     added = 0
     skipped_settled = 0
+    skipped_non_sprint = 0
     reconciled_terminal = 0
     final_queue: list[dict] = []
     seen_files = set()
@@ -293,16 +296,23 @@ def main() -> int:
             skipped_settled += 1
             continue
 
+        # Sprint membership is derived from committed status. Only plans whose
+        # frontmatter status is ``queued`` belong in the live queue; approved or
+        # draft plans live on the board but are not in the sprint.
+        if not plan_validate.is_sprint_member(pf):
+            skipped_non_sprint += 1
+            continue
+
         if pf_str in existing_by_file:
             existing = existing_by_file[pf_str]
             fresh = new_task_from_plan(pf)
-            task = preserve_task_metadata(existing, fresh, history_by_id)
+            task = preserve_task_metadata(existing, fresh, history_by_id, repo_root=repo_root)
             preserved += 1
         else:
             task = new_task_from_plan(pf)
             added += 1
 
-        if reconcile_terminal_state(task, history_by_id, pf):
+        if reconcile_terminal_state(task, history_by_id, pf, repo_root=repo_root):
             tid = task.get("id")
             if tid not in history_by_id:
                 append_history_record(args.history_file, task)
@@ -318,7 +328,7 @@ def main() -> int:
         pf = task.get("plan_file")
         tid = task.get("id")
         if pf and pf not in seen_files:
-            if reconcile_terminal_state(task, history_by_id, pf):
+            if reconcile_terminal_state(task, history_by_id, pf, repo_root=repo_root):
                 if tid not in history_by_id:
                     append_history_record(args.history_file, task)
                 reconciled_terminal += 1
@@ -341,8 +351,8 @@ def main() -> int:
 
     print(
         f"✅ init-queue complete: {added} new tasks added, {preserved} existing tasks preserved, "
-        f"{skipped_settled} settled tasks skipped, {reconciled_terminal} reconciled as terminal, "
-        f"{len(final_queue)} active tasks."
+        f"{skipped_settled} settled tasks skipped, {skipped_non_sprint} non-sprint tasks skipped, "
+        f"{reconciled_terminal} reconciled as terminal, {len(final_queue)} active tasks."
     )
     backend.close()
     return 0

@@ -217,6 +217,8 @@ def _merge_subprocess_runner(cwd: str | None):
             return _Result(1, "", "")
         if cmd[0] == "git" and cmd[1] == "commit":
             return _Result(0, "", "")
+        if cmd[0] == "git" and cmd[1] == "push":
+            return _Result(0, "", "")
         # Fail closed on any unexpected external call so the test surfaces drift.
         raise AssertionError(f"Unexpected subprocess call in desk merge test: {cmd}")
 

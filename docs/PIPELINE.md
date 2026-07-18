@@ -87,6 +87,21 @@ Workflow state is **recorded at transition time and trusted on read**.
 - `aet-work status`, `aet-work next`, and the orchestrator project the stored `state` directly and make **zero git calls** on the read path.
 - `aet-state audit` reconciles stored state against git ground truth on demand; it is never invoked during normal operation.
 
+## Sprint Membership
+
+The live queue is an **ephemeral cache** rebuilt from committed plan truth (ADR-013).
+
+- `init-queue` scans `docs/plans/*.md` and includes only plans whose frontmatter `status` is `queued`.
+- `status: approved` and `status: draft` plans remain on the board but are excluded from the sprint.
+- `sync` removes any live task whose plan is no longer `queued` and adds newly `queued` plans.
+- `next` selects from the derived queue, so two clones produce the same sprint after a `git pull`.
+
+The queue `state` axis (`ready`, `blocked`, `in_progress`, …) remains the runtime scheduling signal; `ready`/`blocked` are still computed solely from `blocked_by` (R-12), never from labels or human edits.
+
+## Closure Push
+
+Terminal closure is versioned. `aet-state record-merge` updates the plan file frontmatter (`status: merged`) and footer (`*Stage: merged*`), commits the change, and pushes it. A push failure leaves the local commit intact and returns a recoverable error; re-running `record-merge` retries the push without duplicating queue history.
+
 ## Legal Transitions
 
 ```text

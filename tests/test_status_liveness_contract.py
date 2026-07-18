@@ -120,7 +120,7 @@ class TestSettledDecision(unittest.TestCase):
 
             _make_plan(plans_dir, "legacy.md")
             _make_plan(plans_dir, "merged.md", frontmatter={"status": "merged"})
-            _make_plan(plans_dir, "live.md", frontmatter={"status": "approved"})
+            _make_plan(plans_dir, "live.md", frontmatter={"status": "queued"})
 
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             subprocess.run(
