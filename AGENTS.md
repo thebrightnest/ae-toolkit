@@ -9,12 +9,13 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - **Content format:** Markdown with YAML frontmatter
 - **Build / packaging:** GNU Make + `zip`
 - **Quality:** markdownlint (staged/manual), ruff, pytest, custom skill-structure validator, workflow lint
-- **Dev dependencies:** `requirements-dev.txt` (install with `pip install -r requirements-dev.txt`); runtime code has no Python dependencies
+- **Dev dependencies:** `requirements-dev.txt` (install with `pip install -r requirements-dev.txt`); runtime dependencies follow ADR-037
 
 ## Directory Structure
 
 ```
-├── <skill-name>/           # One directory per skill
+├── src/aet/                # Versioned Python package for the aet CLI
+├── skills/                 # One directory per skill (content only)
 │   ├── SKILL.md            # Skill instructions (YAML frontmatter + markdown)
 │   ├── examples/           # Usage examples
 │   └── references/         # Detailed reference docs
@@ -29,6 +30,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 │   ├── learnings.jsonl
 │   └── work-queue.json
 ├── scripts/                # Validation and utility scripts
+├── tests/                  # pytest suite
 └── Makefile                # Dev orchestration
 ```
 
@@ -98,8 +100,9 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 ## Decision Log
 
-- **Markdown-only repo:** No package.json, runtime requirements.txt, etc. Quality tools are installed via pre-commit or system package manager.
-- **Dev-only Python dependencies:** `requirements-dev.txt` declares test-only dependencies (e.g., `pytest-xdist`). Runtime code remains dependency-free; install dev deps with `pip install -r requirements-dev.txt`.
-- **Directory-based distribution:** Skills are installed together from this repo via `npx skills add ... --all`. Individual `.skill` zip artifacts are no longer produced or tracked.
+- **Content + Python package repo:** The repository contains both skill content and an installable Python package (`src/aet/`). See ADR-036.
+- **Runtime dependency policy:** Standard library for glue; dependencies for formats, protocols, and UI; one dependency per plan with its own security review. See ADR-037.
+- **Directory-based distribution:** Skills are installed together from this repo via `npx skills add ... --all`. Individual `.skill` zip artifacts are no longer produced or tracked. See ADR-016 and ADR-018.
+- **Directory layout:** Skills live under `skills/` as pure content; all tool code lives under `src/aet/`. See ADR-038.
 - **No CI:** All gates local via pre-commit + Make. Keeps the repo portable and free of vendor lock-in.
 - **Trimmed tooling:** Dropped cspell, lychee, detect-secrets, and prettier. Cosmetic formatting (prettier) produced churn without catching real defects; the quality surface is structure (`validate-skills`), semantics (`skills-lint`, `validate-workflows`), and code (`ruff`, `pytest`). Markdownlint remains as a light, staged-only guard.
