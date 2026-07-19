@@ -53,6 +53,7 @@ class TestAetSpecTable(unittest.TestCase):
             "next",
             "sync",
             "report",
+            "reconcile",
             "init-queue",
             "state",
             "gate",
@@ -134,6 +135,15 @@ class TestAetExecRouting(_IsolatedBinDir):
             ["aet", "sprint", "add", "docs/plans/x.md"],
             self.skills_root / "aet-work" / "bin" / "sprint",
             ["sprint", "add", "docs/plans/x.md"],
+        )
+        self.assertEqual(rc, 0)
+
+    def test_reconcile_routes_to_aet_work_reconcile_binary(self):
+        """`aet reconcile` execs aet-work/bin/reconcile with args verbatim."""
+        rc = self._dispatch(
+            ["aet", "reconcile", "--apply"],
+            self.skills_root / "aet-work" / "bin" / "reconcile",
+            ["reconcile", "--apply"],
         )
         self.assertEqual(rc, 0)
 
