@@ -72,4 +72,5 @@ Revert the merge commit. The skill returns to prose/mining inputs only; the retr
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
