@@ -89,5 +89,4 @@ section edit — `git revert` restores the prior state cleanly.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
