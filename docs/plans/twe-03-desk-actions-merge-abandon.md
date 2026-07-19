@@ -8,7 +8,7 @@ security_review: required
 security_review_reason: introduces two commands that resolve a task id and then trigger a real merge/closure or a terminal `abandoned` transition. A weak id check could merge or abandon the wrong task; fail-closed resolution (reject unknown or non-`awaiting_merge` ids before any action) is the security-critical guard and must be verified.
 docs_sync: required
 docs_sync_reason: `aet desk merge <id>` / `aet desk abandon <id> --reason` are new user-facing actions on the review cockpit; user docs and the desk's command surface change.
-status: approved
+status: merged
 ---
 
 # Plan: `aet desk` Actions — `merge` (→ Closure Path) + `abandon`
