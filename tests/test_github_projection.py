@@ -75,6 +75,8 @@ class TestGitHubProjection(unittest.TestCase):
                         [f"aet:{STATE_LABELS[s]}" for s in STATE_LABELS]
                     )
                 )
+            if cmd[:3] == ["gh", "issue", "list"]:
+                return _completed(stdout=json.dumps([]))
             if cmd[:3] == ["gh", "issue", "create"]:
                 return _completed(
                     stdout="https://github.com/owner/repo/issues/42\n"
@@ -177,6 +179,8 @@ class TestGitHubProjection(unittest.TestCase):
             if cmd[:3] == ["gh", "label", "create"]:
                 created.append(cmd)
                 return _completed(stdout="")
+            if cmd[:3] == ["gh", "issue", "list"]:
+                return _completed(stdout=json.dumps([]))
             if cmd[:3] == ["gh", "issue", "create"]:
                 return _completed(
                     stdout="https://github.com/owner/repo/issues/42\n"
@@ -212,6 +216,8 @@ class TestGitHubProjection(unittest.TestCase):
                         [f"aet:{STATE_LABELS[s]}" for s in STATE_LABELS]
                     )
                 )
+            if cmd[:3] == ["gh", "issue", "list"]:
+                return _completed(stdout=json.dumps([]))
             if cmd[:3] == ["gh", "issue", "create"]:
                 return _completed(
                     stdout="https://github.com/owner/repo/issues/42\n"
