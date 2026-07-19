@@ -84,7 +84,7 @@ Revert the ADR commit; `AGENTS.md`'s Decision Log bullet reverts with it. No cod
 frontmatter and is read by `aet run`/`run-one`.
 
 | Value      | Behavior                                            |
-| ---------- | ---------------------------------------------------- |
+| ---------- | --------------------------------------------------- |
 | `standard` | Default grouping (TDD→implement→QA, review, CSO)    |
 | `minimal`  | All stages in one session; fastest, least isolation |
 | `full`     | One session per stage; slowest, maximum isolation   |
@@ -93,5 +93,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
