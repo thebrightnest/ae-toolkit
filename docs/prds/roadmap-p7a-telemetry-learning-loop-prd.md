@@ -80,7 +80,15 @@ The three open questions are resolved and folded into the plans and ADR-035 (`do
 - **Pipeline fields** — tll-01/02/03 `standard`, tll-04 `minimal` (docs-only + recorded procedure; not high-risk). All values valid.
 - **Decomposition finalized at four plans** (guardrail split from the anticipated two): tll-01 → tll-02 → tll-03 → tll-04, one strict chain.
 
+## Divergence Summary
+
+*Recorded: 2026-07-19 — Branch: tll-01-first-pass-rework-definitions*
+
+### Changed from plan
+
+- `Validation Steps` → merge verification: the plan listed `git merge-base --is-ancestor HEAD origin/main`, which would only be true after the branch is already merged. The actual verification used `git merge-base --is-ancestor origin/main HEAD` to confirm the branch is cleanly based on `origin/main`. No code changed; only the documented command operand order was corrected.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*
