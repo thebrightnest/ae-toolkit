@@ -150,6 +150,20 @@ _Avoid_: conflating with the queue's **Live Set** (active tasks in `.agents/work
 **Incomplete Run (panel)**:
 A run with no `last-run.json` and stale archive activity — crashed, abandoned, or quiet mid-stage. Always rendered with its last-activity time, never as "success" or "crashed".
 
+## Factory Metrics (ADR-035)
+
+**First-Pass Merge**:
+A settled task that reached `merged` with every verdict kind required by its plan's **Stage Routing Key** passing, no failed stage/test_run telemetry record, and no **Rework**. Computed retroactively from settled history + telemetry archive + gate evidence by one shared definition consumed by the desk, `aet metrics`, and the scoreboard. (ADR-035, refining ADR-028)
+_Avoid_: requiring verdicts for gates the plan routed to `skipped`; persisting a `first_pass` flag (derivation is query-side).
+
+**Rework**:
+Per task, the count of repeated stage runs (stage telemetry records beyond the first per stage name) plus `failed → *` re-entry transitions. A task with zero rework is a candidate **First-Pass Merge**. (ADR-035)
+_Avoid_: counting `failure_signatures` as rework (a separate signal), or a second definition outside the shared counting core.
+
+**Cost per Merged Task**:
+The sum of a task's stage telemetry (`token_count` / `cost_estimate`) across the whole **Telemetry Archive** — cross-run — reported with explicit coverage counts. Null-honest: all-null stays null (Kimi `usd` is null by design), never estimated. Distinct from **Per-Task Cost**, which is the settling-run rollup stored on the ledger record for desk display. Analytics only, per ADR-031. (ADR-035)
+_Avoid_: reading it from the ledger `cost` field (under-counts reworked tasks); treating it as a budget or control signal.
+
 ## Flagged ambiguities
 
 - “status” was used to mean both stored state and derived state. Resolved: `state` is the canonical stored value for active tasks; plan frontmatter `status` is the source of truth for lifecycle closure.
