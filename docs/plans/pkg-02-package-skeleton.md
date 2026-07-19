@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-01-decision-records
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Introduces pyproject.toml and a build backend — the repo's first packaging/build supply-chain surface (vgr-04 precedent for first-dependency review).
 docs_sync: required
@@ -92,5 +92,5 @@ removal cannot break existing behavior.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
