@@ -72,5 +72,5 @@ Revert the merge commit. The skill returns to prose/mining inputs only; the retr
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
