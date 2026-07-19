@@ -183,7 +183,35 @@ corrected.
   per plan, each with its own security review (vgr-04 precedent: first
   third-party dependency required one).
 
+## Divergence Summary
+
+_Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
+
+### pkg-02 — Changed from plan
+
+- None — tasks 1–5 landed as planned: `pyproject.toml` with hatchling backend
+  and zero runtime deps, `src/aet/__init__.py` with `__version__`, an
+  `install-editable` Makefile target wired into `lint-py`/`test` (so
+  `make validate` exercises the installed package transitively),
+  `requirements-dev.txt` absorbed into the `dev` optional-dependencies group,
+  `AGENTS.md` tooling references updated, and `tests/test_packaging.py`
+  covering import, version, and the console entry point. Task 6 (merge to
+  main) is pending the ship stage, as designed.
+
+### pkg-02 — Added (unplanned)
+
+- `tests/test_nightshift_rehearsal.py`: `stall_timeout` 1→5 — timing-margin
+  flake fix needed for the rehearsal test to stay green under parallel
+  (`pytest -n auto`) runs.
+- `tests/test_status_liveness_contract.py`: hardcoded census guard updated
+  (terminal 92→94, live 17→15) to match the plan corpus after pkg-01 closed
+  and pkg-02 entered the pipeline.
+
+### pkg-02 — Deferred
+
+- None.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+_Stage: scope-validated_
+_Next step: run `aet-work` (single-plan or multi-task queue)_
