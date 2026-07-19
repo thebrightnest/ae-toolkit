@@ -1,7 +1,7 @@
 ---
 id: tll-01-first-pass-rework-definitions
 size: M
-status: approved
+status: queued
 blocked_by: []
 pipeline: standard
 security_review: required
@@ -85,5 +85,5 @@ Revert the merge commit. `is_clean_merge` returns to requiring all four verdict 
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
