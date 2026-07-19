@@ -55,6 +55,9 @@ Do **not** write an ADR for:
 - [032 — GitHub Issues Is a Projection, Not a Backend](032-github-issues-projection-not-backend.md)
 - [033 — Projections Fail Open; Storage Fails Closed](033-projections-fail-open-storage-fail-closed.md)
 - [034 — Settled-ness Is Derived from Versioned Plan Data](034-settled-from-versioned-plan-data.md)
+- [036 — Repository Is Content Plus Python Package](036-repo-is-content-plus-python-package.md)
+- [037 — Runtime Dependency Policy](037-runtime-dependency-policy.md)
+- [038 — Directory Layout Change](038-directory-layout-change.md)
 
 ## Format
 
