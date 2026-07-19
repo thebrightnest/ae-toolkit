@@ -40,10 +40,10 @@ docs_sync_reason: Establishes the canonical metric projection shape (field names
 
 ## Task List
 
-1. `metrics.iter_settled_tasks` with `--since`-ready window filtering — S (traces: R-3)
-2. `metrics.task_cost` cross-run, null-honest — M (traces: R-3)
-3. `metrics.aggregate` projection (overall + data-driven class buckets; rates, rework, cost + coverage) — M (traces: R-3)
-4. Tests: `tests/test_metrics.py` (new) — M (traces: R-6)
+1. ✓ `metrics.iter_settled_tasks` with `--since`-ready window filtering — S (traces: R-3)
+2. ✓ `metrics.task_cost` cross-run, null-honest — M (traces: R-3)
+3. ✓ `metrics.aggregate` projection (overall + data-driven class buckets; rates, rework, cost + coverage) — M (traces: R-3)
+4. ✓ Tests: `tests/test_metrics.py` (new) — M (traces: R-6)
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -60,8 +60,8 @@ docs_sync_reason: Establishes the canonical metric projection shape (field names
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] New source coverage — `tests/test_metrics.py`:
+- [x] `make validate` passes
+- [x] New source coverage — `tests/test_metrics.py`:
   - `test_iter_settled_tasks_since_window_filters_on_settled_at`
   - `test_iter_settled_tasks_legacy_fallback_completed_at`
   - `test_task_cost_sums_stage_records_across_runs`
@@ -71,9 +71,9 @@ docs_sync_reason: Establishes the canonical metric projection shape (field names
   - `test_aggregate_cost_averages_and_usd_coverage_count`
   - `test_aggregate_empty_history_returns_zeroed_projection`
   - `test_aggregate_unknown_work_class_gets_own_bucket`
-- [ ] R-trace coverage: R-3 by tasks 1–3; R-6 by task 4; no unknown R-ids
-- [ ] Test types: unit (window filter, cost sums, projection shape) + integration (aggregate over synthetic history + telemetry archive fixtures, conftest `AET_TELEMETRY_ARCHIVE_DIR` isolation)
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-3 by tasks 1–3; R-6 by task 4; no unknown R-ids
+- [x] Test types: unit (window filter, cost sums, projection shape) + integration (aggregate over synthetic history + telemetry archive fixtures, conftest `AET_TELEMETRY_ARCHIVE_DIR` isolation)
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -85,5 +85,5 @@ Revert the merge commit. The new module and its tests disappear; no caller exist
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
