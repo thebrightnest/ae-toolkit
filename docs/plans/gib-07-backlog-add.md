@@ -5,7 +5,7 @@ blocked_by:
   - gib-05-board-projection-machinery
   - gib-06-command-groups-sprint-add
 pipeline: standard
-status: draft
+status: merged
 security_review: required
 security_review_reason: `aet backlog add` commits+pushes plan status and creates a real GitHub issue. A weak plan-id resolution could label or board the wrong plan; the issue creation must be idempotent by id so a re-run or a second clone never duplicates. The resolution and id-keyed creation are the correctness boundary.
 docs_sync: required
@@ -82,4 +82,4 @@ Revert the merge commit. `aet backlog add` disappears; the `backlog` group scaff
 
 ---
 
-*Stage: qa-complete*
+*Stage: merged*
