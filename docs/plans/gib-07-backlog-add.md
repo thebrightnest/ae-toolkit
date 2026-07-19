@@ -82,5 +82,4 @@ Revert the merge commit. `aet backlog add` disappears; the `backlog` group scaff
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
