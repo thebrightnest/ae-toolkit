@@ -5,7 +5,7 @@ blocked_by:
   - gib-07-backlog-add
   - gib-08-reconcile-command
 pipeline: standard
-status: draft
+status: merged
 security_review: skipped
 security_review_reason: a demonstration + write-up exercising the already-implemented, already-reviewed projection paths against a throwaway GitHub repo; it introduces no new runtime code path of its own (mirrors twe-07/nsr-07 exit-gate rehearsals).
 docs_sync: skipped
@@ -75,5 +75,5 @@ Revert the merge commit (removes the audit doc). No runtime effect; throwaway re
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs` (skipped via frontmatter)_
+_Stage: merged_
+_Next step: None_
