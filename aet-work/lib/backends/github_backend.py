@@ -65,12 +65,14 @@ class GitHubBackend(Projection):
         repo: str = "",
         label_prefix: str = DEFAULT_LABEL_PREFIX,
         gh_path: str = "gh",
+        plans_dir: str = "docs/plans",
     ) -> None:
         self.queue_file = queue_file
         self.history_file = history_file
         self.repo = repo
         self.label_prefix = label_prefix
         self.gh_path = gh_path
+        self.plans_dir = plans_dir
         self._labels_ensured = False
 
     def on_add(self, task: dict[str, Any], is_new: bool) -> None:
@@ -124,12 +126,76 @@ class GitHubBackend(Projection):
             if label not in existing:
                 self._create_label(label, state)
 
-    def reconcile(self) -> None:
-        """Heal drift between the local queue and GitHub Issues.
+    def reconcile(self, apply: bool = False) -> dict[str, Any]:
+        """Heal drift between committed plans and GitHub Issues (R-17).
 
-        Implemented in gib-05; the stub satisfies the Projection interface.
+        Dry-run by default. With ``apply=True``, creates missing issues,
+        corrects labels, and reopens hand-closed live issues. Orphan issues
+        are reported and never deleted.
         """
-        return
+        from projections import reconcile as reconcile_helpers
+
+        self._ensure_labels_once()
+        live_tasks, live_ids = reconcile_helpers.load_tasks(
+            self.plans_dir, self.queue_file, self.history_file
+        )
+        issues = self.list_issues(state="all")
+        drift = reconcile_helpers.compute_drift(
+            live_tasks,
+            live_ids,
+            issues,
+            self.label_prefix,
+            self._state_label,
+            self._task_state,
+        )
+
+        if apply:
+            for item in drift:
+                self._apply_drift_item(item, live_tasks)
+
+        return {
+            "apply": apply,
+            "live_plans": len(live_ids),
+            "issues_scanned": len(issues),
+            "drift": [self._drift_record(item) for item in drift],
+        }
+
+    def _apply_drift_item(self, item, live_tasks: dict[str, Any]) -> None:
+        """Apply one corrective write for a drift item."""
+        if item.drift_type == "missing":
+            task = live_tasks[item.plan_id]
+            self.on_add(task, is_new=True)
+        elif item.drift_type == "closed-live":
+            self._reopen_issue(item.issue_number)
+            task = live_tasks[item.plan_id]
+            self._set_issue_labels(
+                item.issue_number,
+                self._task_state(task),
+                current_labels=item.actual_labels,
+            )
+        elif item.drift_type == "mislabeled":
+            task = live_tasks[item.plan_id]
+            self._set_issue_labels(
+                item.issue_number,
+                self._task_state(task),
+                current_labels=item.actual_labels,
+            )
+        # orphan: report only, never delete
+
+    @staticmethod
+    def _drift_record(item) -> dict[str, Any]:
+        """Return a JSON-serializable drift record."""
+        record: dict[str, Any] = {
+            "type": item.drift_type,
+            "plan_id": item.plan_id,
+        }
+        if item.issue_number is not None:
+            record["issue_number"] = item.issue_number
+        if item.expected_label is not None:
+            record["expected_label"] = item.expected_label
+        if item.actual_labels is not None:
+            record["actual_labels"] = item.actual_labels
+        return record
 
     def _ensure_labels_once(self) -> None:
         """Provision labels the first time the projection is used."""
@@ -227,6 +293,37 @@ class GitHubBackend(Projection):
 
     def _close_issue(self, issue_number: int) -> None:
         self._run_gh(["issue", "close", str(issue_number), "--repo", self.repo])
+
+    def _reopen_issue(self, issue_number: int) -> None:
+        self._run_gh(["issue", "reopen", str(issue_number), "--repo", self.repo])
+
+    def list_issues(self, state: str = "all") -> list[dict[str, Any]]:
+        """Return issues with their labels and bodies.
+
+        The result is normalized so ``labels`` is a list of label names.
+        """
+        result = self._run_gh(
+            [
+                "issue",
+                "list",
+                "--repo",
+                self.repo,
+                "--state",
+                state,
+                "--json",
+                "number,labels,body,state",
+                "--limit",
+                "1000",
+            ]
+        )
+        issues = json.loads(result.stdout or "[]")
+        for issue in issues:
+            issue["labels"] = [
+                label["name"]
+                for label in issue.get("labels", [])
+                if isinstance(label, dict)
+            ]
+        return issues
 
     def _set_issue_labels(
         self, issue_number: int, state: str, current_labels: list[str] | None = None

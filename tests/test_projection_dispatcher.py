@@ -49,7 +49,7 @@ class FailingProjection(Projection):
     def ensure_labels(self):
         raise RuntimeError(f"{self._name} ensure_labels failed")
 
-    def reconcile(self):
+    def reconcile(self, apply=False):
         raise RuntimeError(f"{self._name} reconcile failed")
 
 
@@ -73,8 +73,8 @@ class NoOpProjection(Projection):
     def ensure_labels(self):
         self.calls.append(("ensure_labels",))
 
-    def reconcile(self):
-        self.calls.append(("reconcile",))
+    def reconcile(self, apply=False):
+        self.calls.append(("reconcile", apply))
 
 
 class TestProjectionDispatcher(unittest.TestCase):
@@ -116,7 +116,7 @@ class TestProjectionDispatcher(unittest.TestCase):
         )
         self.assertEqual(ok.calls[2], ("on_close", "t1", {"state": "merged"}))
         self.assertEqual(ok.calls[3], ("ensure_labels",))
-        self.assertEqual(ok.calls[4], ("reconcile",))
+        self.assertEqual(ok.calls[4], ("reconcile", False))
 
 
 class TestProjectionStorageSeparation(unittest.TestCase):
