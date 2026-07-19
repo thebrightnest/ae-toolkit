@@ -72,7 +72,7 @@ Revert the commit amending pkg-06; pkg-06 reverts to its pre-amendment state (ba
 frontmatter and is read by `aet run`/`run-one`.
 
 | Value      | Behavior                                            |
-| ---------- | ---------------------------------------------------- |
+| ---------- | --------------------------------------------------- |
 | `standard` | Default grouping (TDD→implement→QA, review, CSO)    |
 | `minimal`  | All stages in one session; fastest, least isolation |
 | `full`     | One session per stage; slowest, maximum isolation   |
