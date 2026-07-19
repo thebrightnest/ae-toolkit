@@ -82,5 +82,5 @@ The three open questions are resolved and folded into the plans and ADR-035 (`do
 
 ---
 
-*Stage: prd-approved*
-*Next step: run `aet-validate-scope`*
+*Stage: scope-validated*
+*Next step: run `aet-work` (single-plan or multi-task queue)*
