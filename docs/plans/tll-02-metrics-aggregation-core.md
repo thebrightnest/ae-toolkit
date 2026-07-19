@@ -87,3 +87,7 @@ Revert the merge commit. The new module and its tests disappear; no caller exist
 
 *Stage: merged*
 *Next step: run `aet-work`*
+
+---
+
+*Stage: merged*
