@@ -1,7 +1,7 @@
 ---
 id: tll-02-metrics-aggregation-core
 size: M
-status: approved
+status: queued
 blocked_by:
   - tll-01-first-pass-rework-definitions
 pipeline: standard
@@ -85,5 +85,5 @@ Revert the merge commit. The new module and its tests disappear; no caller exist
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
