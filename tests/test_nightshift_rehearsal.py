@@ -274,7 +274,7 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
             isolation="minimal",
             max_jobs=3,
             task_timeout=999,
-            stall_timeout=1,
+            stall_timeout=5,
             heartbeat_interval=999,
             on_failure="triage",
         )

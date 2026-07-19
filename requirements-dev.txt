@@ -1,3 +1,0 @@
-# Development dependencies only — not required at runtime.
-# Install with: pip install -r requirements-dev.txt
-pytest-xdist
