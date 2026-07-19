@@ -199,7 +199,7 @@ class TestSettledDecision(unittest.TestCase):
         )
 
         # Hardcoded census regression guard. Update when the corpus changes.
-        self.assertEqual(len(plan_files), 229)
+        self.assertEqual(len(plan_files), 238)
         self.assertEqual(len(statusless), 120)
-        self.assertEqual(len(terminal), 95)
-        self.assertEqual(len(live), 14)
+        self.assertEqual(len(terminal), 97)
+        self.assertEqual(len(live), 21)
