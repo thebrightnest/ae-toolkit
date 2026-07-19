@@ -75,5 +75,5 @@ Classified as **feature/enhancement** (reorganization + promotion), not a reprod
 
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*
