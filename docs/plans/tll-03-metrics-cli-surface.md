@@ -83,5 +83,5 @@ Revert the merge commit. The dispatcher row, binary, tests, and doc section disa
 
 ---
 
-*Stage: tdd-complete*
-*Next step: run `aet-implement`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

@@ -151,6 +151,46 @@ aet-work report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
 This prints run and task counts, wall-clock time, the average isolation level,
 and environment issues.
 
+## Cross-task metrics (`aet metrics`)
+
+`aet report` is run-centric; for cross-run settled-task analytics use:
+
+```bash
+aet metrics                          # human report over all settled history
+aet metrics --since 2026-07-01       # only tasks settled on/after a date
+aet metrics --json                   # machine-readable projection
+aet metrics --history-file path.jsonl  # default .agents/work-history.jsonl
+```
+
+The human report has three sections — **First-pass merge rate**, **Rework**,
+**Cost per merged task** — each with an `overall` line plus one row per work
+class present in the history (tasks without a `work_class` land in
+`unclassified`).
+
+The `--json` projection is the canonical output of
+`aet-work/lib/metrics.py::aggregate`:
+
+```json
+{
+  "since": "2026-07-01",
+  "overall": { "settled": 0, "merged": 0, "first_pass": 0, "first_pass_rate": null, "rework": 0, "cost": { ... } },
+  "classes": { "<work_class>": { ...same bucket shape... } }
+}
+```
+
+Null and coverage semantics:
+
+- `first_pass_rate` is `null` when a bucket has no merged tasks; the human
+  report renders nulls as `-`.
+- Cost fields (`tokens_total`, `tokens_avg_per_merged`, `usd_total`,
+  `usd_avg_per_merged`) are `null` when no telemetry values exist;
+  `usd_known_tasks` counts how many merged tasks contributed a USD estimate,
+  shown in the human report as `(n known)`.
+- An empty or missing history is a valid state, not an error: the human
+  report prints `No settled tasks found` and `--json` prints the zeroed
+  projection, both with exit code 0. The only exit-code-1 path is a malformed
+  `--since` (expected `YYYY-MM-DD`).
+
 ## Telemetry during test runs
 
 The toolkit's pytest suite spawns the real orchestrator, but it never writes to
