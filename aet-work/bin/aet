@@ -35,6 +35,7 @@ SUBCOMMANDS = {
     "next": {"target": ("aet-work", "next"), "mode": "exec"},
     "sync": {"target": ("aet-work", "sync"), "mode": "exec"},
     "report": {"target": ("aet-work", "report"), "mode": "exec"},
+    "reconcile": {"target": ("aet-work", "reconcile"), "mode": "exec"},
     "init-queue": {"target": ("aet-work", "init-queue"), "mode": "exec"},
     "state": {"target": ("aet-work", "aet-state"), "mode": "exec"},
     "gate": {"target": ("aet-work", "gate"), "mode": "exec"},

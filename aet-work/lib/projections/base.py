@@ -44,5 +44,5 @@ class Projection(ABC):
         """Ensure any required external labels exist."""
 
     @abstractmethod
-    def reconcile(self) -> None:
+    def reconcile(self, apply: bool = False) -> dict[str, Any] | None:
         """Heal drift between the local queue and the external mirror."""

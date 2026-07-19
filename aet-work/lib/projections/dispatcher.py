@@ -47,8 +47,21 @@ class ProjectionDispatcher:
     def ensure_labels(self) -> None:
         self._call_each("ensure_labels")
 
-    def reconcile(self) -> None:
-        self._call_each("reconcile")
+    def reconcile(self, apply: bool = False) -> list[dict[str, Any] | None]:
+        """Fan out reconcile to every projection and collect their reports."""
+        results: list[dict[str, Any] | None] = []
+        for projection in self.projections:
+            name = type(projection).__name__
+            try:
+                method = getattr(projection, "reconcile")
+                results.append(method(apply=apply))
+            except Exception as exc:  # noqa: BLE001 - fail-open is the contract
+                print(
+                    f"warning: projection {name} failed during reconcile: {exc}",
+                    file=sys.stderr,
+                )
+                results.append(None)
+        return results
 
     def _call_each(self, method_name: str, *args: Any, **kwargs: Any) -> None:
         for projection in self.projections:
