@@ -85,5 +85,5 @@ Revert the merge commit. The new module and its tests disappear; no caller exist
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
