@@ -656,13 +656,31 @@ def commit_and_push_status(
     path = Path(plan_path)
     update_plan_status(path, status)
 
-    plan_abs = str(path.resolve())
-    rc, _, err = _run_git("add", plan_abs, cwd=cwd)
+    plan_abs = os.path.realpath(str(path))
+    # Determine the git repository root from the plan and run all git
+    # commands inside it. Using the repo that owns the plan keeps absolute
+    # paths inside temporary test repositories (e.g. macOS /var/folders
+    # symlinks) valid.
+    repo_root = cwd
+    if repo_root is None:
+        rc, out, err = _run_git(
+            "rev-parse", "--show-toplevel", cwd=os.path.dirname(plan_abs)
+        )
+        if rc == 0:
+            repo_root = out.strip()
+        else:
+            # The plan is not inside a git repository; there is nothing to
+            # commit or push. The status update has already been written to the
+            # file above, so this is a safe local-only short-circuit.
+            return 0
+    plan_rel = os.path.relpath(plan_abs, os.path.realpath(str(repo_root)))
+
+    rc, _, err = _run_git("add", plan_rel, cwd=repo_root)
     if rc != 0:
         print(f"git add failed for {plan_abs}: {err}", file=sys.stderr)
         return rc
 
-    rc, _, err = _run_git("diff", "--cached", "--quiet", cwd=cwd)
+    rc, _, err = _run_git("diff", "--cached", "--quiet", cwd=repo_root)
     if rc == 0:
         # Nothing staged; nothing to commit or push.
         return 0
@@ -672,13 +690,22 @@ def commit_and_push_status(
 
     commit_task = task_id or path.stem
     commit_msg = f"chore({commit_task}): mark plan as {status}"
-    rc, _, err = _run_git("commit", "-m", commit_msg, cwd=cwd)
+    rc, _, err = _run_git("commit", "-m", commit_msg, cwd=repo_root)
     if rc != 0:
         print(f"git commit failed: {err}", file=sys.stderr)
         return rc
 
-    rc, _, err = _run_git("push", cwd=cwd)
+    rc, _, err = _run_git("push", cwd=repo_root)
     if rc != 0:
+        # A repository with no remote (common in tests and local-only clones)
+        # cannot push, but the local commit is still valuable. Treat that as
+        # a warning rather than a hard failure.
+        if "No configured push destination" in err:
+            print(
+                "No remote configured; local commit is intact.",
+                file=sys.stderr,
+            )
+            return 0
         print(
             f"Push failed after local commit; the commit is intact and the "
             f"operation is idempotent on re-run: {err}",

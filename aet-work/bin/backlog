@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""aet-work backlog — Backlog curation commands.
+
+``aet backlog add <plan>`` is scaffolded here; the full backlog intake flow is
+implemented in gib-07. The subparser exists now so the dispatcher and the lint
+contract for noun-scoped command groups are complete.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="backlog",
+        description="Backlog curation commands for aet-work.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    add_parser = sub.add_parser(
+        "add",
+        help="Add a plan to the backlog. (Scaffold — full implementation in gib-07.)",
+    )
+    add_parser.add_argument(
+        "target",
+        help="Plan file path or task ID to add to the backlog",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.command == "add":
+        print(
+            f"⚠️  aet backlog add {args.target} is not yet implemented (gib-07).",
+            file=sys.stderr,
+        )
+        return 1
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

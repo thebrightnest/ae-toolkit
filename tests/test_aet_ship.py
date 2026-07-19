@@ -82,7 +82,8 @@ class TestShipClosure(unittest.TestCase):
         self.addCleanup(os.chdir, self.cwd)
 
     def _success_responses(self):
-        plan_abs = str(self.plan_path.resolve())
+        plan_abs = os.path.realpath(str(self.plan_path))
+        plan_rel = os.path.relpath(plan_abs, os.path.realpath(str(self.queue_path.parent)))
         return {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
@@ -91,7 +92,7 @@ class TestShipClosure(unittest.TestCase):
                 "",
                 "",
             ),
-            ("git", "add", plan_abs): (0, "", ""),
+            ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
             ("git", "commit", "-m", "chore(t1): mark plan as merged"): (
                 0,

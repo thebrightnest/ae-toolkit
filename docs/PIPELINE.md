@@ -154,10 +154,10 @@ Each live task record in `.agents/work-queue.json` carries the fields needed by 
 
 | Field | Writer | Description |
 | ----- | ------ | ----------- |
-| `id` | `aet-work add/sync` | Plan identifier, matching the plan filename stem. |
+| `id` | `aet sprint add/sync` | Plan identifier, matching the plan filename stem. |
 | `state` | `aet-state transition` | Canonical lifecycle state (see Legal Transitions). |
 | `stage` | orchestrator | Sub-state of `in_progress` (e.g., `implement`, `qa`). |
-| `plan_file` | `aet-work add/sync` | Relative path to the plan markdown file. |
+| `plan_file` | `aet sprint add/sync` | Relative path to the plan markdown file. |
 | `branch` / `worktree` | orchestrator | Git branch and checkout path for isolated execution. |
 | `cost` | orchestrator | **Analytics-only** per-task token/cost rollup written at task close. See below. |
 

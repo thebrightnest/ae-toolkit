@@ -40,7 +40,7 @@ AE Toolkit has three layers. **Skills decide, the `aet` CLI does, and state reme
 ```mermaid
 flowchart TB
     A["<b>1 · Skills</b> — the workflow brain<br/>aet-plan · aet-prime · aet-implement · aet-review<br/>aet-qa · aet-ship · aet-evolve · …<br/><i>Your agent reads these to decide and judge</i>"]
-    B["<b>2 · aet CLI</b> — the operational hands<br/>aet run · aet next · aet add · aet state<br/>aet status · aet ship · aet retro · aet mine-learnings<br/><i>Deterministic commands that do the mechanical work</i>"]
+    B["<b>2 · aet CLI</b> — the operational hands<br/>aet run · aet next · aet sprint add · aet state<br/>aet status · aet ship · aet retro · aet mine-learnings<br/><i>Deterministic commands that do the mechanical work</i>"]
     C["<b>3 · State</b> — the memory<br/>Task queue (local JSON · git-refs · GitHub Issues)<br/>Telemetry archive · Git worktrees and branches<br/><i>Where work and evidence live</i>"]
 
     A -->|"skill directs the agent to run CLI commands"| B
