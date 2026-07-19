@@ -81,5 +81,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-_Stage: tdd-complete_
-_Next step: run `aet-implement`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
