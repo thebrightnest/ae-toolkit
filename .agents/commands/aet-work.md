@@ -77,6 +77,9 @@ Same rules as `aet run`: run in background with a long or disabled timeout. Sing
 
 ## Skill vs. CLI Namespace
 
+<!-- aet-lint: off -->
+The table below documents namespace mapping; strings in backticks are labels, not shell commands.
+
 | Skill / Concept | CLI Entry Point | Notes |
 | --------------- | --------------- | ----- |
 | `aet-evolve` | **No CLI subcommand.** Activate as a skill. Use `aet retro` (telemetry retro) or run the `retro` + `system-evolve` procedure manually. | `aet evolve` fails. |
@@ -90,3 +93,4 @@ Same rules as `aet run`: run in background with a long or disabled timeout. Sing
 
 - ❌ Typing `aet evolve` as if it were a CLI subcommand.
 - ❌ Treating skill activations (`aet-evolve`, `aet-qa`) as shell commands.
+<!-- aet-lint: on -->
