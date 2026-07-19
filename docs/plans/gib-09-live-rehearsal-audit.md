@@ -77,7 +77,3 @@ Revert the merge commit (removes the audit doc). No runtime effect; throwaway re
 
 _Stage: merged_
 _Next step: None_
-
----
-
-_Stage: merged_
