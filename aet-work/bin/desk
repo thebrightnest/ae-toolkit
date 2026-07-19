@@ -40,16 +40,6 @@ _aet_state_spec = importlib.util.spec_from_loader(
 aet_state = importlib.util.module_from_spec(_aet_state_spec)
 _aet_state_spec.loader.exec_module(aet_state)
 
-# Verdict kinds that are always required before a task can safely merge.
-_ALWAYS_REQUIRED_VERDICTS = ("qa", "review")
-
-# Optional gate verdicts and the plan-frontmatter key that controls them.
-_GATE_ROUTING_KEYS: dict[str, str] = {
-    "cso": "security_review",
-    "sync-docs": "docs_sync",
-}
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Review cockpit for awaiting_merge tasks."
@@ -132,15 +122,6 @@ def _plan_path(task: dict, plans_dir: str) -> Path:
         if path.is_absolute():
             return path
     return Path(plans_dir) / f"{task.get('id', '')}.md"
-
-
-def _required_verdicts(plan_data: dict[str, object]) -> list[str]:
-    """Return the required verdict kinds for a task from its plan routing keys."""
-    required = list(_ALWAYS_REQUIRED_VERDICTS)
-    for kind, key in _GATE_ROUTING_KEYS.items():
-        if plan_data.get(key) != "skipped":
-            required.append(kind)
-    return required
 
 
 def _load_evidence(task_id: str, kind: str) -> dict[str, object] | None:
@@ -482,7 +463,7 @@ def _run_risk_view(args: argparse.Namespace) -> int:
             if plan_path.exists()
             else {}
         )
-        required = _required_verdicts(plan_data)
+        required = plan_parser.required_verdict_kinds(plan_data)
         bundle, failed_verdicts, missing_verdicts = _build_evidence_bundle(
             task["id"], required
         )

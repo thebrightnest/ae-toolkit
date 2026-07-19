@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import evidence  # noqa: I001
+import plan_parser  # noqa: I001
 import telemetry  # noqa: I001
 
 REQUIRED_VERDICT_KINDS = ("qa", "review", "cso", "sync-docs")
@@ -82,41 +83,85 @@ def _has_failed_stage(records: Iterable[dict[str, Any]]) -> bool:
     return False
 
 
-def _has_repeated_stage(records: Iterable[dict[str, Any]]) -> bool:
-    """Return True if any stage name appears more than once."""
-    seen: set[str] = set()
+def _repeated_stage_count(records: Iterable[dict[str, Any]]) -> int:
+    """Return the number of stage/test_run records beyond the first per stage."""
+    counts: dict[str, int] = {}
     for record in records:
         stage = record.get("stage")
         if isinstance(stage, str):
-            if stage in seen:
-                return True
-            seen.add(stage)
-    return False
+            counts[stage] = counts.get(stage, 0) + 1
+    return sum(max(0, count - 1) for count in counts.values())
+
+
+def _has_repeated_stage(records: Iterable[dict[str, Any]]) -> bool:
+    """Return True if any stage name appears more than once."""
+    return _repeated_stage_count(records) > 0
+
+
+def _failed_reentry_count(history: list[dict[str, Any]]) -> int:
+    """Return the number of history transitions that re-enter after failure."""
+    return sum(1 for entry in history if entry.get("from") == "failed")
 
 
 def _has_reentry_from_failed(history: list[dict[str, Any]]) -> bool:
     """Return True if the task was ever re-started after entering failed."""
-    entered_failed = False
-    for entry in history:
-        if entry.get("from") == "failed" or entry.get("to") == "failed":
-            entered_failed = True
-        if entered_failed and entry.get("from") == "failed":
-            return True
-    return False
+    return _failed_reentry_count(history) > 0
+
+
+def rework_count(
+    task: dict[str, Any],
+    archive_dir: str | Path | None = None,
+    project_slug: str | None = None,
+) -> int:
+    """Return the total rework count for a task.
+
+    Rework is the sum of:
+      - repeated stage/test_run records beyond the first per stage name
+      - history transitions with ``from == "failed"``
+    """
+    task_id = task.get("id")
+    records: Iterable[dict[str, Any]] = []
+    if task_id:
+        records = iter_telemetry_task_records(
+            task_id=task_id,
+            archive_dir=archive_dir,
+            project_slug=project_slug,
+        )
+    history = task.get("history", [])
+    return _repeated_stage_count(records) + _failed_reentry_count(history)
 
 
 def _required_verdicts_pass(
-    task_id: str,
+    task: dict[str, Any],
     project_slug: str | None,
     reports_dir: str | Path | None,
 ) -> bool:
     """Return True when every required verdict file exists and is 'pass'.
 
+    Required verdict kinds are derived from the task's plan file so they
+    respect routing-aware gate rules. If the plan file is missing or unreadable,
+    fall back to the historical ``REQUIRED_VERDICT_KINDS`` default (all four
+    gates) to preserve existing behavior for legacy settled tasks.
+
     Uses the canonical archive path (not the run-time env-var precedence) so
     historical ledger reads are not redirected by a current stage's evidence
     environment.
     """
-    for kind in REQUIRED_VERDICT_KINDS:
+    plan_file = task.get("plan_file")
+    if plan_file:
+        try:
+            plan_data = plan_parser.parse_frontmatter(Path(plan_file))
+            required_kinds = plan_parser.required_verdict_kinds(plan_data)
+        except OSError:
+            required_kinds = list(REQUIRED_VERDICT_KINDS)
+    else:
+        required_kinds = list(REQUIRED_VERDICT_KINDS)
+
+    task_id = task.get("id")
+    if not task_id:
+        return False
+
+    for kind in required_kinds:
         path = evidence.evidence_path(
             task_id=task_id,
             kind=kind,
@@ -156,7 +201,7 @@ def is_clean_merge(
         return False
 
     if not _required_verdicts_pass(
-        task_id=task_id, project_slug=project_slug, reports_dir=reports_dir
+        task=task, project_slug=project_slug, reports_dir=reports_dir
     ):
         return False
 
