@@ -85,5 +85,5 @@ Revert the merge commit. `is_clean_merge` returns to requiring all four verdict 
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

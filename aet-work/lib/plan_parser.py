@@ -327,6 +327,26 @@ def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[
 # non-empty ``<key>_reason`` recording the plan-time judgment.
 ROUTING_GATE_KEYS = ("security_review", "docs_sync")
 
+# Map from verdict kind to the plan-frontmatter routing key that controls it.
+VERDICT_GATE_KEYS: dict[str, str] = {
+    "cso": "security_review",
+    "sync-docs": "docs_sync",
+}
+
+
+def required_verdict_kinds(plan_data: dict[str, Any]) -> list[str]:
+    """Return the required verdict kinds for a task from its parsed frontmatter.
+
+    ``qa`` and ``review`` are always required. A gated kind is required unless
+    its routing key is explicitly set to ``skipped``. A missing routing key
+    defaults to required — the standing fail-safe.
+    """
+    required = ["qa", "review"]
+    for kind, key in VERDICT_GATE_KEYS.items():
+        if plan_data.get(key) != "skipped":
+            required.append(kind)
+    return required
+
 
 def _routing_key_error(data: dict[str, Any]) -> str | None:
     """Validate the gate-routing keys of one plan's frontmatter.
