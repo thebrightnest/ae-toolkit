@@ -2,6 +2,41 @@
 
 Detailed procedures for `aet` commands. The skill file describes the mental model; this file describes the mechanics.
 
+## `backlog add`
+
+Put a plan on the board. This is the entry point for making a plan visible in GitHub Issues.
+
+**Procedure:**
+
+1. Resolve `<plan>` to a plan file in `docs/plans/` (by path or by id).
+2. Refuse if the plan's `status` is not `draft` or `approved`.
+3. Commit and push the plan's status (draft stays draft; approved stays approved).
+4. Call the configured projection to create exactly one issue keyed by plan id, labeled:
+   - `aet:draft` for `status: draft`
+   - `aet:backlog` for `status: approved`
+5. If the issue already exists — because the command was re-run or run from a second clone — reconcile its label instead of creating a duplicate.
+
+**Fail semantics:**
+
+- Plan resolution and the status commit fail closed (the command exits non-zero).
+- Projection failures warn on stderr but do not fail the command or roll back the commit (R-4).
+
+**When to use:** After `aet-pipeline-plan` produces a plan file and you want it visible on the backlog board.
+
+## `sprint add`
+
+Promote an approved plan into the runnable sprint.
+
+**Procedure:**
+
+1. Resolve `<plan>` to a plan file in `docs/plans/` (by path or by id).
+2. Validate the plan and refuse unless its stage is `plan-approved`.
+3. Set `status: queued`, commit, and push.
+4. Add the task to `.agents/work-queue.json`, computing `ready` or `blocked` from `blocked_by`.
+5. Call the configured projection to relabel the issue to `aet:ready` or `aet:blocked`.
+
+**When to use:** When you deliberately choose to work on an approved plan now. This is the only human scheduling act in the loop.
+
 ## `run`
 
 AFK loop with OS-level process isolation and parallel execution. Invokes the centralized aet-work/bin/orchestrator Python script, which spawns fresh agent sessions per pipeline stage. Independent tasks execute simultaneously—each in its own git worktree—up to a configurable concurrency cap. Context leakage between skills is eliminated by session isolation.

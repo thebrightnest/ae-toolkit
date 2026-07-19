@@ -268,8 +268,21 @@ class GitHubBackend(Projection):
         return f"{self.label_prefix}:{STATE_LABELS.get(state or 'planned', 'planned')}"
 
     def _create_issue(self, task: dict[str, Any]) -> None:
-        """Create a GitHub issue for ``task`` and record its URL/number."""
-        title = task.get("title") or task.get("id", "task")
+        """Create a GitHub issue for ``task`` and record its URL/number.
+
+        Creation is idempotent by plan id: if an issue already exists for this
+        task, the issue is reconciled to the current label instead of creating a
+        duplicate. This makes ``aet backlog add`` safe to re-run and safe across
+        clones (R-10, R-13).
+        """
+        task_id = task.get("id", "task")
+        existing_number = self._find_issue_by_id(task_id)
+        if existing_number is not None:
+            task["github_issue_number"] = existing_number
+            self._update_issue_labels(task)
+            return
+
+        title = task.get("title") or task_id
         body = self._task_body(task)
         label = self._state_label(self._task_state(task))
 

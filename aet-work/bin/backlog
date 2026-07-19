@@ -1,15 +1,30 @@
 #!/usr/bin/env python3
 """aet-work backlog — Backlog curation commands.
 
-``aet backlog add <plan>`` is scaffolded here; the full backlog intake flow is
-implemented in gib-07. The subparser exists now so the dispatcher and the lint
-contract for noun-scoped command groups are complete.
+``aet backlog add <plan>`` puts a plan on the GitHub board. It resolves the
+plan by id, commits and pushes the plan's status, then calls the configured
+projection to create or reconcile exactly one issue keyed by plan id.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+import plan_parser  # noqa: E402
+from aet_queue import commit_and_push_status  # noqa: E402
+from backends.factory import resolve_config  # noqa: E402
+from projections.dispatcher import resolve_projections  # noqa: E402
+
+# Plans accepted by the backlog entry point. Draft and approved plans both
+# belong on the board; queued/in-progress plans are sprint members and are
+# promoted through ``aet sprint add`` instead.
+_BACKLOG_STATUSES = {"draft", "approved"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,24 +36,101 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_parser = sub.add_parser(
         "add",
-        help="Add a plan to the backlog. (Scaffold — full implementation in gib-07.)",
+        help="Add a plan to the backlog.",
     )
     add_parser.add_argument(
         "target",
         help="Plan file path or task ID to add to the backlog",
     )
+    add_parser.add_argument(
+        "--plans-dir",
+        default="docs/plans",
+        help="Directory containing atomic plan markdown files",
+    )
+    add_parser.add_argument(
+        "--config",
+        default=".agents/aet-work.json",
+        help="Path to aet-work backend configuration",
+    )
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    if args.command == "add":
-        print(
-            f"⚠️  aet backlog add {args.target} is not yet implemented (gib-07).",
-            file=sys.stderr,
-        )
-        return 1
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
+
+
+def resolve_plan(target: str, plans_dir: Path) -> Path | None:
+    """Resolve ``target`` to a plan file path.
+
+    If ``target`` is an existing path, use it directly. Otherwise treat it as
+    a task ID and look for ``<target>.md`` in ``plans_dir``.
+    """
+    as_path = Path(target)
+    if as_path.is_file():
+        return as_path
+
+    candidate = plans_dir / f"{target}.md"
+    if candidate.is_file():
+        return candidate
+
+    return None
+
+
+def _fail(message: str) -> int:
+    print(f"⛔ {message}", file=sys.stderr)
     return 1
+
+
+def _task_from_plan(plan_file: Path) -> dict:
+    """Build a minimal task record for projection from a plan file."""
+    data = plan_parser.parse_frontmatter(plan_file)
+    task_id = data.get("id", plan_file.stem)
+    return {
+        "id": task_id,
+        "title": plan_parser.title_from_plan(plan_file),
+        "status": data.get("status"),
+        "plan_file": str(plan_file),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.command != "add":
+        return 1
+
+    plans_dir = Path(args.plans_dir)
+    plan_file = resolve_plan(args.target, plans_dir)
+    if plan_file is None:
+        return _fail(f"No plan found for '{args.target}' in {plans_dir}")
+
+    data = plan_parser.parse_frontmatter(plan_file)
+    status = data.get("status")
+    if status not in _BACKLOG_STATUSES:
+        return _fail(
+            f"Refusing to add {plan_file.name}: plan status is "
+            f"'{status or 'unknown'}'; only 'draft' or 'approved' plans may be "
+            f"added to the backlog."
+        )
+
+    # Commit and push first: the board must never show a status that is not
+    # committed (R-8). This fails closed so a git or network problem aborts
+    # before any remote write.
+    rc = commit_and_push_status(plan_file, status)
+    if rc != 0:
+        return _fail(
+            f"Backlog add failed for {plan_file.name}: could not commit/push "
+            f"status update. Fix the git state and re-run `aet backlog add`."
+        )
+
+    # The projection is fail-open: a missing ``gh`` or network problem warns
+    # but does not block the commit+push above (R-4).
+    config = resolve_config(args.config)
+    projections = resolve_projections(config)
+    task = _task_from_plan(plan_file)
+    projections.on_add(task, is_new=True)
+
+    print(f"✓ Added {plan_file.name} to the backlog as aet:{status}.")
+    return 0
 
 
 if __name__ == "__main__":
