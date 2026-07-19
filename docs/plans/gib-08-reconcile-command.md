@@ -80,4 +80,4 @@ Revert the merge commit. The reconcile command disappears; the projection still 
 
 ---
 
-_Stage: implemented_
+_Stage: qa-complete_
