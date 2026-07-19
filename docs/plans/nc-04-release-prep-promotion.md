@@ -3,7 +3,7 @@ id: nc-04-release-prep-promotion
 size: S
 blocked_by: []
 pipeline: minimal
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: This ticket only edits pkg-06's plan-document content; no code lands here. pkg-06's own security_review key is itself being corrected by this ticket (task 4) since the amended disposition is no longer a pure relocation.
 docs_sync: skipped
