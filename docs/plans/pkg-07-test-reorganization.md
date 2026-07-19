@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-03-lib-extraction
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Test-only file renames and conftest cleanup; no production code or dependency changes.
 docs_sync: skipped
@@ -85,5 +85,5 @@ config.
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
