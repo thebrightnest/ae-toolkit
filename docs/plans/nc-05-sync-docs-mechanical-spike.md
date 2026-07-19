@@ -3,7 +3,7 @@ id: nc-05-sync-docs-mechanical-spike
 size: M
 blocked_by: []
 pipeline: minimal
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Investigation and audit-doc output only; no code lands here.
 docs_sync: skipped
