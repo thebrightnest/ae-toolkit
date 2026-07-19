@@ -3,7 +3,7 @@ id: pkg-01-decision-records
 size: S
 blocked_by: []
 pipeline: minimal
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Docs-only ADRs; no code, dependency, or config surface changes.
 docs_sync: skipped
@@ -89,5 +89,5 @@ section edit — `git revert` restores the prior state cleanly.
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
