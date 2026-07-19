@@ -15,7 +15,7 @@ docs_sync_reason: aet-work/panel/README.md and panel references in docs must poi
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-2, R-3).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-2, R-3).
 Move `aet-work/panel/` (`serve`, `index.html`, README) into the package as
 `aet/panel/`, expose it as a subcommand, and keep the panel's localhost JSON
 API byte-identical. Framework swap is explicitly NOT in this plan (pkg-12).

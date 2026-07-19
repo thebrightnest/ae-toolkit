@@ -15,7 +15,7 @@ docs_sync_reason: CONVENTIONS.md Skill Binaries section and SKILL.md invocation 
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-8).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-8).
 Nineteen `argparse` binaries each re-implement parser setup, and the multicall
 dispatcher exists only to exec between them. Consolidate into one Typer
 application: subcommands register directly, the exec-dispatch and

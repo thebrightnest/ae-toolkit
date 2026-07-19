@@ -15,7 +15,7 @@ docs_sync_reason: Makefile tooling table and AGENTS.md tooling reference must ma
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-2,
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-2,
 R-4). Roadmap phase A1, first step. Create the installable package shell that
 later extraction plans fill in. No tool code moves in this plan; the goal is
 that `pip install -e .` works and `make validate` exercises the installed

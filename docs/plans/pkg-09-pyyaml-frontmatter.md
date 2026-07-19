@@ -15,7 +15,7 @@ docs_sync_reason: PRD R-6 divergence notes (any accepted-input differences vs. t
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-6).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-6).
 `src/aet/plan_parser.py` hand-parses YAML frontmatter (see
 `_frontmatter_body` / `parse_frontmatter`). Replace the YAML subset parser
 with PyYAML (`yaml.safe_load`), keeping the same accepted/rejected inputs.

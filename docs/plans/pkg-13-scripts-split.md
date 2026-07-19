@@ -15,7 +15,7 @@ docs_sync_reason: AGENTS.md directory structure and CONVENTIONS.md must describe
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-10).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 `scripts/` mixes repo-maintenance tooling (`validate-skills.sh`,
 `skills-lint`, `test-*.sh`) with one-off data migrations
 (`migrate-plans-to-frontmatter.py`, `migrate-telemetry-slugs.py`) and stray

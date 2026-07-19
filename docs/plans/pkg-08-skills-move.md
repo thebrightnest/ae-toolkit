@@ -16,7 +16,7 @@ docs_sync_reason: README skill table, CONVENTIONS.md project structure, and AGEN
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-5,
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-5,
 R-11). With all code extracted (pkg-03/04/05/06), skill directories are pure
 content. Move them under `skills/`, update every path-owning tool, and add the
 validator rule that keeps skills code-free permanently. The

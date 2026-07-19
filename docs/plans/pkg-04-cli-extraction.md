@@ -15,7 +15,7 @@ docs_sync_reason: docs/CONVENTIONS.md "Skill Binaries" section describes aet-wor
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-2, R-3).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-2, R-3).
 Move the 16 `aet-work/bin` binaries into `src/aet/cli/` as importable modules
 with `main()` functions. The multicall dispatcher (`aet-work/bin/aet`) keeps
 exec-dispatching in this plan — only its targets move. `aet install`, the PATH
