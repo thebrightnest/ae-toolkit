@@ -5,8 +5,8 @@ blocked_by:
   - pkg-04-cli-extraction
 pipeline: standard
 status: queued
-security_review: skipped
-security_review_reason: Pure relocation of ship/retro/setup binaries into the package; no behavior or dependency changes.
+security_review: required
+security_review_reason: Task 5 is no longer a pure relocation once amended; it adds a new CLI subcommand surface and a full bash-to-Python behavior port, which is behavior-review relevant even without a new dependency.
 docs_sync: required
 docs_sync_reason: SKILL.md Prerequisites sections and CONVENTIONS.md references to per-skill bin/ dirs must be updated in the same change.
 ---
@@ -16,12 +16,16 @@ docs_sync_reason: SKILL.md Prerequisites sections and CONVENTIONS.md references 
 ## Context
 
 PRD: `docs/prds/aet-package-extraction-prd.md` (R-2, R-3,
-R-11). The dispatcher's `SUBCOMMANDS` currently reaches into three other skill
-directories: `aet-ship/bin/ship`, `aet-evolve/bin/{aet-retro,mine-learnings}`,
+R-11) and `docs/prds/namespace-consolidation-prd.md` (R-4). The dispatcher's
+`SUBCOMMANDS` currently reaches into three other skill directories:
+`aet-ship/bin/ship`, `aet-evolve/bin/{aet-retro,mine-learnings}`,
 `aet-setup/bin/{configure-task-backend,harness-guard,hooks}`, plus
 `aet-setup/lib/harness_guard.py`. Move all of them into `src/aet/cli/` /
 `src/aet/`, completing the rule "no Python inside skill directories" and
-enabling the old dispatcher file to be deleted.
+enabling the old dispatcher file to be deleted. Task 5 now also traces R-4:
+`aet-release-prep/release-prep.sh` is promoted into the package as
+`aet release-prep` rather than relocated, satisfying R-4's acceptance criterion
+that no executable script remains at the skill root.
 
 ## Intake Triage
 
@@ -44,10 +48,16 @@ enabling the old dispatcher file to be deleted.
    `aet-work` to reference the installed `aet` entry point (no repo-relative
    bin paths); update `docs/CONVENTIONS.md` canonical-installer paragraph — S
    (traces: R-11)
-5. Move `aet-release-prep/release-prep.sh` → `scripts/release-prep.sh` (bash
-   helper, not a Python subcommand — repo tooling, not package code); update
-   the invocation reference in `aet-release-prep/SKILL.md` — S (traces: R-2,
-   R-11)
+5. Port `aet-release-prep/release-prep.sh`'s logic (version-source detection
+   across `package.json`/`VERSION`/git-tag with `v`-prefix stripping, commit
+   classification including conventional-commit prefixes and keyword fallbacks,
+   semver bump calculation including prerelease-stripping, JSON output) with
+   equivalent behavior to a new `aet release-prep` Python subcommand at
+   `src/aet/cli/release_prep.py`; delete `aet-release-prep/release-prep.sh`
+   entirely — no relocation, since R-4's acceptance criterion requires no
+   executable script remaining at the skill root; update the invocation
+   reference in `aet-release-prep/SKILL.md` Step 1 from the script path to
+   `aet release-prep` — M (traces: R-2, R-4, R-11)
 6. Update affected tests (`test_aet_ship.py`, `test_aet_retro.py`,
    `test_hooks_install.py`, `test_aet_setup_backend_config.py`,
    `test_aet_setup_examples.py`, dispatcher tests) — M (traces: R-3)
@@ -81,7 +91,8 @@ enabling the old dispatcher file to be deleted.
 - `aet-setup/bin/{configure-task-backend,harness-guard,hooks}` → `src/aet/cli/`
 - `aet-setup/lib/harness_guard.py` → `src/aet/harness_guard.py`
 - `aet-work/bin/aet` → `src/aet/cli/main.py`
-- `aet-release-prep/release-prep.sh` → `scripts/release-prep.sh`
+- `aet-release-prep/release-prep.sh` (deleted)
+- `src/aet/cli/release_prep.py` (new)
 - `Makefile`
 - `aet-ship/SKILL.md`, `aet-evolve/SKILL.md`, `aet-setup/SKILL.md`,
   `aet-work/SKILL.md` (Prerequisites sections),
@@ -101,9 +112,13 @@ enabling the old dispatcher file to be deleted.
 - [ ] All dispatcher subcommands (`aet ship`, `aet retro`,
   `aet mine-learnings`, `aet hooks`, `aet harness-guard`,
   `aet configure-backend`) behave identically
+- [ ] `tests/test_release_prep.py` passes, covering version-source detection
+  across all three sources, commit classification including keyword fallbacks,
+  and bump calculation including prerelease-stripping
+- [ ] `aet-release-prep/release-prep.sh` no longer exists post-merge
 - [ ] `make validate` green
-- [ ] R-trace coverage: R-2 by tasks 1–2, 5; R-3 by tasks 3, 6; R-11 by tasks
-  4–5; no unknown R-ids cited
+- [ ] R-trace coverage: R-2 by tasks 1–2, 5; R-3 by tasks 3, 6; R-4 by task 5;
+  R-11 by tasks 4–5; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
