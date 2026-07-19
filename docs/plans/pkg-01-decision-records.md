@@ -73,14 +73,14 @@ ADR must explicitly reverse that stance.
 
 ## Validation Steps
 
-- [ ] `make validate` passes (docs-only change)
-- [ ] Each ADR names the decision it supersedes/amends and its Status section
+- [x] `make validate` passes (docs-only change)
+- [x] Each ADR names the decision it supersedes/amends and its Status section
   links the superseded artifact
-- [ ] `AGENTS.md` decision log no longer contains the strings "Markdown-only
+- [x] `AGENTS.md` decision log no longer contains the strings "Markdown-only
   repo" or "no requirements.txt" as active decisions
-- [ ] R-trace coverage: R-1 covered by tasks 1–4; no unknown R-ids cited
-- [ ] No new source files introduced (docs-only) — test coverage requirement n/a
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-1 covered by tasks 1–4; no unknown R-ids cited
+- [x] No new source files introduced (docs-only) — test coverage requirement n/a
+- [x] Merge verified: `git merge-base --is-ancestor origin/main HEAD`
 
 ## Rollback Plan
 
@@ -89,5 +89,5 @@ section edit — `git revert` restores the prior state cleanly.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
