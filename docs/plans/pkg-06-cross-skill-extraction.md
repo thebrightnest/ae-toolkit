@@ -72,8 +72,8 @@ that no executable script remains at the skill root.
 ### Batching Check
 
 - [x] One cohesive sweep completing the "no code in skills" rule; kept
-  separate from pkg-04 because the source-of-truth review domain differs
-  (aet-work vs. the satellite skills).
+      separate from pkg-04 because the source-of-truth review domain differs
+      (aet-work vs. the satellite skills).
 
 ## Rejected Alternatives
 
@@ -104,21 +104,21 @@ that no executable script remains at the skill root.
 ## Validation Steps
 
 - [ ] `find aet-work aet-ship aet-evolve aet-setup aet-release-prep -name "*.py" -o -name "*.sh" -o -type d -name bin -o -type d -name lib`
-  returns nothing
+      returns nothing
 - [ ] `tests/test_aet_ship.py`, `tests/test_aet_retro.py`,
-  `tests/test_hooks_install.py`, `tests/test_aet_multicall.py` (named,
-  existing) pass against package locations
+      `tests/test_hooks_install.py`, `tests/test_aet_multicall.py` (named,
+      existing) pass against package locations
 - [ ] `make install-skills` completes using the installed `aet install`
 - [ ] All dispatcher subcommands (`aet ship`, `aet retro`,
-  `aet mine-learnings`, `aet hooks`, `aet harness-guard`,
-  `aet configure-backend`) behave identically
+      `aet mine-learnings`, `aet hooks`, `aet harness-guard`,
+      `aet configure-backend`) behave identically
 - [ ] `tests/test_release_prep.py` passes, covering version-source detection
-  across all three sources, commit classification including keyword fallbacks,
-  and bump calculation including prerelease-stripping
+      across all three sources, commit classification including keyword fallbacks,
+      and bump calculation including prerelease-stripping
 - [ ] `aet-release-prep/release-prep.sh` no longer exists post-merge
 - [ ] `make validate` green
 - [ ] R-trace coverage: R-2 by tasks 1–2, 5; R-3 by tasks 3, 6; R-4 by task 5;
-  R-11 by tasks 4–5; no unknown R-ids cited
+      R-11 by tasks 4–5; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -129,5 +129,5 @@ revert restores the targets they point at.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+_Stage: plan-approved_
+_Next step: run `aet-work`_
