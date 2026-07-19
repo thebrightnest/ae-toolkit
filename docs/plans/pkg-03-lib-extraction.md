@@ -15,7 +15,7 @@ docs_sync_reason: PRD R-2/R-3 traceability must record where each lib module lan
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-2, R-3,
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-2, R-3,
 R-4). Move all 28 modules of `aet-work/lib/` into `src/aet/` as real package
 modules, rewrite every import site (bin scripts, tests, panel, scripts/), and
 delete the `sys.path.insert` hacks. Behavior-preserving: same public functions,

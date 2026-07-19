@@ -15,7 +15,7 @@ docs_sync_reason: Panel README/telemetry-guide must reflect the new server stack
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-9).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-9).
 `src/aet/panel/serve.py` is a raw `BaseHTTPRequestHandler` with string-matched
 routing. Move it to a small framework (FastAPI + uvicorn, or Starlette —
 decide at implementation; both satisfy R-9), keeping routes, JSON API shape,

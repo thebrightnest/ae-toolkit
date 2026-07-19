@@ -15,7 +15,7 @@ docs_sync_reason: Internal test layout is not described in PRD/user docs beyond 
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-4).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-4).
 ~80 flat test files mirror nothing. Reorganize `tests/` into domain packages
 mirroring `src/aet/` and finish the conftest cleanup started in pkg-03.
 

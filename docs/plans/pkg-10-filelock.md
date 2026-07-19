@@ -15,7 +15,7 @@ docs_sync_reason: Any stale-lock behavior differences vs. the hand-rolled implem
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-7).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-7).
 `src/aet/aet_queue.py` (queue) and `src/aet/worktree.py` do their own
 lock-file handling (see `.agents/work-queue.json.lock`). Replace with the
 `filelock` package, preserving timeout/stale-lock behavior observed by the

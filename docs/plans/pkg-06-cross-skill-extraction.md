@@ -15,7 +15,7 @@ docs_sync_reason: SKILL.md Prerequisites sections and CONVENTIONS.md references 
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-2, R-3,
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-2, R-3,
 R-11). The dispatcher's `SUBCOMMANDS` currently reaches into three other skill
 directories: `aet-ship/bin/ship`, `aet-evolve/bin/{aet-retro,mine-learnings}`,
 `aet-setup/bin/{configure-task-backend,harness-guard,hooks}`, plus

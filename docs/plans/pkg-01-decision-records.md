@@ -14,7 +14,7 @@ docs_sync_reason: The diff is itself the decision documentation; there is no cod
 
 ## Context
 
-PRD: [aet-package-extraction](../prds/aet-package-extraction-prd.md) (R-1).
+PRD: `docs/prds/aet-package-extraction-prd.md` (R-1).
 Roadmap phase A0. Three stale decisions must be formally superseded before any
 code moves: "markdown-only repo" and "runtime code has no Python dependencies"
 (`AGENTS.md` decision log), and ADR-016's "not changing the directory layout"
@@ -29,14 +29,14 @@ ADR must explicitly reverse that stance.
 
 ## Task List
 
-1. Write `docs/adr/036-repo-is-content-plus-python-package.md` — supersedes
+1. Write `036-repo-is-content-plus-python-package.md` under `docs/adr/` — supersedes
    "markdown-only repo"; records src layout (`src/aet/`, `skills/`, `tests/`,
    `scripts/`) and that the tool is a versioned Python package — S (traces: R-1)
-2. Write `docs/adr/037-runtime-dependency-policy.md` — supersedes "no runtime
+2. Write `037-runtime-dependency-policy.md` under `docs/adr/` — supersedes "no runtime
    dependencies"; principle: stdlib for glue, dependencies for formats,
    protocols, and UI; each new dependency gets its own plan + security review
    (vgr-04 precedent) — S (traces: R-1)
-3. Write `docs/adr/038-directory-layout-change.md` — amends ADR-016's layout
+3. Write `038-directory-layout-change.md` under `docs/adr/` — amends ADR-016's layout
    caveat; explicitly reverses roadmap-p2's "no merging of binaries into one
    Python program" non-goal; records that skills become pure content under
    `skills/` — S (traces: R-1)
@@ -66,9 +66,9 @@ ADR must explicitly reverse that stance.
 
 ## Files to Modify
 
-- `docs/adr/036-repo-is-content-plus-python-package.md` (new)
-- `docs/adr/037-runtime-dependency-policy.md` (new)
-- `docs/adr/038-directory-layout-change.md` (new)
+- `036-repo-is-content-plus-python-package.md` under `docs/adr/` (new)
+- `037-runtime-dependency-policy.md` under `docs/adr/` (new)
+- `038-directory-layout-change.md` under `docs/adr/` (new)
 - `AGENTS.md` (decision log section only)
 
 ## Validation Steps
