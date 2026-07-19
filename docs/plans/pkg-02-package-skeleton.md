@@ -90,5 +90,5 @@ removal cannot break existing behavior.
 
 ---
 
-*Stage: queued*
+*Stage: plan-approved*
 *Next step: run `aet-work`*

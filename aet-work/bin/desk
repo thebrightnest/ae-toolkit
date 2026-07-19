@@ -454,7 +454,7 @@ def _run_abandon(args: argparse.Namespace) -> int:
     plan_path = task.get("plan_file")
     if plan_path and Path(plan_path).exists():
         try:
-            update_plan_status(plan_path, "abandoned")
+            update_plan_status(plan_path, "abandoned", footer_stage="abandoned")
         except ValueError as exc:
             print(
                 f"Abandoned recorded, but plan update failed: {exc}",

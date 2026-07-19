@@ -138,10 +138,10 @@ class TestSprintAdd(unittest.TestCase):
 
             self.assertEqual(rc, 0)
 
-            # Plan file promoted to queued.
+            # Plan file promoted to queued; footer pipeline stage is preserved.
             plan_text = plan.read_text(encoding="utf-8")
             self.assertIn("status: queued", plan_text)
-            self.assertIn("_Stage: queued_", plan_text)
+            self.assertIn("_Stage: plan-approved_", plan_text)
 
             # Commit was made.
             result = subprocess.run(

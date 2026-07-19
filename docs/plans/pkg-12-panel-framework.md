@@ -89,5 +89,5 @@ can be dropped in the same revert.
 
 ---
 
-*Stage: queued*
+*Stage: plan-approved*
 *Next step: run `aet-work`*

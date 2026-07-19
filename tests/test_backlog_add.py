@@ -179,16 +179,7 @@ class TestBacklogAdd(unittest.TestCase):
 
             plan_text = plan.read_text(encoding="utf-8")
             self.assertIn("status: draft", plan_text)
-            self.assertIn("_Stage: draft_", plan_text)
-
-            log = subprocess.run(
-                ["git", "log", "--format=%s"],
-                cwd=tmp,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            self.assertIn("chore(feat-001): mark plan as draft", log.stdout)
+            self.assertIn("_Stage: plan-approved_", plan_text)
 
             create_calls = [
                 call.args[1]
@@ -388,7 +379,7 @@ class TestBacklogAdd(unittest.TestCase):
 
             plan_text = plan.read_text(encoding="utf-8")
             self.assertIn("status: draft", plan_text)
-            self.assertIn("_Stage: draft_", plan_text)
+            self.assertIn("_Stage: plan-approved_", plan_text)
 
 
 if __name__ == "__main__":

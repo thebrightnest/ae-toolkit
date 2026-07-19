@@ -89,5 +89,5 @@ section edit — `git revert` restores the prior state cleanly.
 
 ---
 
-*Stage: queued*
+*Stage: plan-approved*
 *Next step: run `aet-work`*

@@ -108,5 +108,5 @@ new layout before this plan is considered done.
 
 ---
 
-*Stage: queued*
+*Stage: plan-approved*
 *Next step: run `aet-work`*
