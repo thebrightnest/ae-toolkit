@@ -5,7 +5,7 @@ blocked_by:
   - pkg-05-panel-extraction
   - pkg-06-cross-skill-extraction
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Content-only relocation plus validator/Makefile path updates; no runtime behavior or dependency changes.
 docs_sync: required
@@ -108,5 +108,5 @@ new layout before this plan is considered done.
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
