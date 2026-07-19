@@ -741,7 +741,8 @@ def cmd_record_merge(args):
         plan_path = explicit_plan or sealed_task.get("plan_file")
         if plan_path and Path(plan_path).exists():
             rc = queue_lib.commit_and_push_status(
-                plan_path, "merged", task_id=args.task_id, cwd=cwd
+                plan_path, "merged", task_id=args.task_id, cwd=cwd,
+                footer_stage="merged",
             )
             if rc != 0:
                 print(
@@ -847,7 +848,8 @@ def cmd_record_merge(args):
     plan_path = explicit_plan or task.get("plan_file")
     if plan_path and Path(plan_path).exists():
         rc = queue_lib.commit_and_push_status(
-            plan_path, "merged", task_id=args.task_id, cwd=cwd
+            plan_path, "merged", task_id=args.task_id, cwd=cwd,
+            footer_stage="merged",
         )
         if rc != 0:
             # Local commit is intact; recoverable on re-run.

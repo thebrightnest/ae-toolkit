@@ -114,5 +114,5 @@ revert restores the targets they point at.
 
 ---
 
-*Stage: queued*
+*Stage: plan-approved*
 *Next step: run `aet-work`*

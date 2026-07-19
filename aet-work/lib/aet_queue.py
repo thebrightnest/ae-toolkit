@@ -623,10 +623,19 @@ def update_plan_frontmatter_status(plan_path: str | Path, status: str) -> None:
     path.write_text(new_content, encoding="utf-8")
 
 
-def update_plan_status(plan_path: str | Path, status: str) -> None:
-    """Update both the frontmatter status and the footer stage."""
+def update_plan_status(
+    plan_path: str | Path, status: str, *, footer_stage: str | None = None
+) -> None:
+    """Update the frontmatter status and optionally the footer stage.
+
+    The footer stage is a pipeline-stage breadcrumb (e.g. ``plan-approved``,
+    ``implemented``) and is only touched when the caller explicitly supplies
+    ``footer_stage``.  Lifecycle status values such as ``queued`` must never
+    overwrite the pipeline stage.
+    """
     update_plan_frontmatter_status(plan_path, status)
-    update_plan_footer(plan_path, status)
+    if footer_stage is not None:
+        update_plan_footer(plan_path, footer_stage)
 
 
 def _run_git(*args: str, cwd: str | Path | None = None) -> tuple[int, str, str]:
@@ -646,15 +655,19 @@ def commit_and_push_status(
     *,
     task_id: str | None = None,
     cwd: str | Path | None = None,
+    footer_stage: str | None = None,
 ) -> int:
     """Update a plan's status, commit the change, and push it.
 
     The local commit is preserved if the push fails, so the operation is
     idempotent on re-run: the same status update produces no diff on a second
     call, and a subsequent push will succeed once connectivity is restored.
+
+    ``footer_stage`` is only supplied when the terminal closure should also
+    update the pipeline-stage breadcrumb in the plan footer (e.g. ``merged``).
     """
     path = Path(plan_path)
-    update_plan_status(path, status)
+    update_plan_status(path, status, footer_stage=footer_stage)
 
     plan_abs = os.path.realpath(str(path))
     # Determine the git repository root from the plan and run all git

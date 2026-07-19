@@ -83,5 +83,5 @@ state migration is needed either direction.
 
 ---
 
-*Stage: queued*
+*Stage: plan-approved*
 *Next step: run `aet-work`*
