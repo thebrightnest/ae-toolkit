@@ -3,7 +3,7 @@ id: nc-01-namespace-taxonomy-adr
 size: M
 blocked_by: []
 pipeline: minimal
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Docs-only ADR; no code, dependency, or config surface changes.
 docs_sync: required
