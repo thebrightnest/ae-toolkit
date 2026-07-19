@@ -75,5 +75,5 @@ Revert the merge commit (removes the audit doc). No runtime effect; throwaway re
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
