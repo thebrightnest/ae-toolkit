@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""aet-work metrics — Cross-task metrics over settled history.
+
+Prints the canonical ``metrics.aggregate`` projection: first-pass merge rate,
+rework, and cost per merged task, overall and per work class. An empty or
+missing history is a valid state (rc 0), not an error.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_LIB_DIR = _SCRIPT_DIR.parent / "lib"
+sys.path.insert(0, str(_LIB_DIR))
+
+import metrics  # noqa: E402
+
+
+def _fmt_rate(bucket: dict) -> str:
+    rate = bucket["first_pass_rate"]
+    if rate is None:
+        return "- (no merged tasks)"
+    return f"{rate * 100:.1f}% ({bucket['first_pass']}/{bucket['merged']} merged)"
+
+
+def _fmt_rework(bucket: dict) -> str:
+    return str(bucket["rework"])
+
+
+def _fmt_cost(bucket: dict) -> str:
+    cost = bucket["cost"]
+    tokens = cost["tokens_avg_per_merged"]
+    usd = cost["usd_avg_per_merged"]
+    tokens_s = f"{tokens:.0f} tokens" if tokens is not None else "-"
+    usd_s = f"${usd:.4f}" if usd is not None else "-"
+    return f"{tokens_s} / {usd_s} usd ({cost['usd_known_tasks']} known)"
+
+
+def _render_section(title: str, projection: dict, fmt) -> list[str]:
+    lines = [title]
+    rows = [("overall", projection["overall"])]
+    rows.extend(projection["classes"].items())
+    width = max(len(name) for name, _ in rows)
+    for name, bucket in rows:
+        lines.append(f"  {name.ljust(width)}  {fmt(bucket)}")
+    return lines
+
+
+def _render_human(projection: dict) -> str:
+    lines = ["Metrics over settled tasks", ""]
+    for title, fmt in (
+        ("First-pass merge rate", _fmt_rate),
+        ("Rework", _fmt_rework),
+        ("Cost per merged task", _fmt_cost),
+    ):
+        lines.extend(_render_section(title, projection, fmt))
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Report cross-task metrics over settled history."
+    )
+    parser.add_argument(
+        "--history-file",
+        default=".agents/work-history.jsonl",
+        help="Path to work-history.jsonl",
+    )
+    parser.add_argument(
+        "--since",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Only include tasks settled on or after this date",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the machine-readable projection instead of the human report",
+    )
+    return parser
+
+
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.since is not None:
+        try:
+            metrics._parse_date(args.since)
+        except ValueError:
+            print(
+                f"⛔ invalid --since '{args.since}' (expected YYYY-MM-DD)",
+                file=sys.stderr,
+            )
+            return 1
+    projection = metrics.aggregate(args.history_file, since=args.since)
+    if args.json:
+        print(json.dumps(projection, indent=2))
+        return 0
+    if projection["overall"]["settled"] == 0:
+        print("No settled tasks found in the selected window.")
+        return 0
+    print(_render_human(projection))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

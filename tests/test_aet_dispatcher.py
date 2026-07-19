@@ -53,6 +53,7 @@ class TestAetSpecTable(unittest.TestCase):
             "next",
             "sync",
             "report",
+            "metrics",
             "reconcile",
             "init-queue",
             "state",
