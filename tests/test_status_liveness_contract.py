@@ -201,9 +201,7 @@ class TestSettledDecision(unittest.TestCase):
         # Hardcoded census regression guard. Update when the corpus changes.
         self.assertEqual(len(plan_files), 212)
         self.assertEqual(len(statusless), 120)
-        self.assertEqual(len(terminal), 89)
-        self.assertEqual(len(live), 3)
+        self.assertEqual(len(terminal), 91)
+        self.assertEqual(len(live), 1)
         live_names = {pf.name for pf in live}
-        self.assertIn("gib-07-backlog-add.md", live_names)
-        self.assertIn("gib-09-live-rehearsal-audit.md", live_names)
         self.assertIn("twe-03-desk-actions-merge-abandon.md", live_names)
