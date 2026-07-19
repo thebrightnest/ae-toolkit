@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-03-lib-extraction
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Adds the filelock runtime dependency and changes concurrency behavior — requires review of stale-lock semantics.
 docs_sync: required
@@ -83,5 +83,5 @@ state migration is needed either direction.
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
