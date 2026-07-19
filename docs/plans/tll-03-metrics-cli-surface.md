@@ -83,5 +83,5 @@ Revert the merge commit. The dispatcher row, binary, tests, and doc section disa
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
