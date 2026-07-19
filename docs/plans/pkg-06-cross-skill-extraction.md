@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-04-cli-extraction
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Pure relocation of ship/retro/setup binaries into the package; no behavior or dependency changes.
 docs_sync: required
@@ -114,5 +114,5 @@ revert restores the targets they point at.
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
