@@ -37,11 +37,11 @@ docs_sync_reason: Changes the canonical definition of "clean merge" that the des
 
 ## Task List
 
-1. `plan_parser.required_verdict_kinds` + `VERDICT_GATE_KEYS` — S (traces: R-1)
-2. `track_record`: routing-aware `_required_verdicts_pass` with fail-safe fallback for missing plans — M (traces: R-1)
-3. `track_record.rework_count` + shared counting core behind `_has_repeated_stage` / `_has_reentry_from_failed` — M (traces: R-2)
-4. Desk: delete local routing rule, import from `plan_parser` — S (traces: R-1)
-5. Tests: `tests/test_track_record_routing.py` (new) — M (traces: R-6)
+1. ✓ `plan_parser.required_verdict_kinds` + `VERDICT_GATE_KEYS` — S (traces: R-1)
+2. ✓ `track_record`: routing-aware `_required_verdicts_pass` with fail-safe fallback for missing plans — M (traces: R-1)
+3. ✓ `track_record.rework_count` + shared counting core behind `_has_repeated_stage` / `_has_reentry_from_failed` — M (traces: R-2)
+4. ✓ Desk: delete local routing rule, import from `plan_parser` — S (traces: R-1)
+5. ✓ Tests: `tests/test_track_record_routing.py` (new) — M (traces: R-6)
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -60,8 +60,8 @@ docs_sync_reason: Changes the canonical definition of "clean merge" that the des
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] New/changed coverage — `tests/test_track_record_routing.py`:
+- [x] `make validate` passes
+- [x] New/changed coverage — `tests/test_track_record_routing.py`:
   - `test_required_verdict_kinds_defaults_to_all_four`
   - `test_required_verdict_kinds_excludes_skipped_gates`
   - `test_is_clean_merge_clean_when_routed_away_gate_verdict_absent`
@@ -71,9 +71,9 @@ docs_sync_reason: Changes the canonical definition of "clean merge" that the des
   - `test_rework_count_failed_reentry_transitions`
   - `test_rework_count_zero_for_single_pass_task`
   - `test_desk_eligibility_matches_shared_definition` (desk `--eligibility` count equals the shared predicate over the same fixtures)
-- [ ] R-trace coverage: R-1 by tasks 1, 2, 4; R-2 by task 3; R-6 by task 5; no unknown R-ids
-- [ ] Test types: unit (verdict rule, rework counters) + integration (clean-merge over synthetic history + telemetry + evidence, desk agreement)
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-1 by tasks 1, 2, 4; R-2 by task 3; R-6 by task 5; no unknown R-ids
+- [x] Test types: unit (verdict rule, rework counters) + integration (clean-merge over synthetic history + telemetry + evidence, desk agreement)
+- [x] Merge verified: `git merge-base --is-ancestor origin/main HEAD` [Changed: operand order corrected from the plan's reversed command; confirms branch is based on origin/main]
 
 ## Rollback Plan
 
@@ -85,5 +85,5 @@ Revert the merge commit. `is_clean_merge` returns to requiring all four verdict 
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
