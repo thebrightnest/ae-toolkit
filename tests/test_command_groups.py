@@ -296,12 +296,15 @@ class TestSprintAdd(unittest.TestCase):
 
 class TestBacklogGroup(unittest.TestCase):
     def test_backlog_group_registered(self):
-        """The backlog binary parses `add` and reports its scaffold status."""
-        stderr = io.StringIO()
-        with patch.object(sys, "stderr", stderr):
-            rc = backlog.main(["add", "feat-001"])
-        self.assertEqual(rc, 1)
-        self.assertIn("not yet implemented", stderr.getvalue())
+        """The backlog binary parses `add` and resolves unknown plans."""
+        with tempfile.TemporaryDirectory() as tmp:
+            plans_dir = Path(tmp) / "docs" / "plans"
+            plans_dir.mkdir(parents=True)
+            stderr = io.StringIO()
+            with patch.object(sys, "stderr", stderr):
+                rc = backlog.main(["add", "feat-001", "--plans-dir", str(plans_dir)])
+            self.assertEqual(rc, 1)
+            self.assertIn("No plan found", stderr.getvalue())
 
 
 class TestTopLevelAddRetired(unittest.TestCase):
