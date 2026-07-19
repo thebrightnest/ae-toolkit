@@ -32,7 +32,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 ## Prerequisites
 
-`aet mine-learnings` must be on `PATH`. The installer lives in the aet-work skill, so aet-work must be installed. Run `aet install` from the installed aet-work skill (`~/.agents/skills/aet-work/bin/aet install`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+`aet mine-learnings` and `aet metrics` must be on `PATH`. The installer lives in the aet-work skill, so aet-work must be installed. Run `aet install` from the installed aet-work skill (`~/.agents/skills/aet-work/bin/aet install`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 The orchestrator writes telemetry directly to `~/.aet/telemetry/`; no manual ingestion step is required.
 
@@ -104,12 +104,13 @@ One-shot retro generation from telemetry. Run this after an `aet run` batch or a
 **Procedure:**
 
 1. Ensure `aet mine-learnings` is on `PATH`.
-2. Run `aet retro`.
-3. Review `docs/retros/YYYY-MM-DD-aet-retro.md`.
-4. Route project-level findings into the current project's queue.
-5. Route AET-level findings through `system-evolve` and append a learning.
+2. Run `aet metrics --json` to collect quantitative evidence. If a previous `docs/retros/YYYY-MM-DD-aet-retro.md` exists, pass `--since <date of that retro>` to narrow the window. Cite the returned first-pass rate, rework count, and cost-per-merged-task values when proposing skill or workflow edits, alongside the qualitative patterns from `aet mine-learnings`.
+3. Run `aet retro`.
+4. Review `docs/retros/YYYY-MM-DD-aet-retro.md`.
+5. Route project-level findings into the current project's queue.
+6. Route AET-level findings through `system-evolve` and append a learning.
 
-See `references/aet-retro.md` for full usage and flags.
+Metrics *inform* proposals; they do not trigger automatic edits. See `references/aet-retro.md` for full usage and flags.
 
 ### `aet mine-learnings`
 

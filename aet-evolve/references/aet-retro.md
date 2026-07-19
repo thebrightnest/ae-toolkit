@@ -35,6 +35,19 @@ The script lives at aet-evolve/bin/aet-retro; `aet install` puts the `aet` dispa
 - `--output PATH` — write the retro to a specific file.
 - `--no-mine` — skip `aet mine-learnings` and only use the current project's recent telemetry.
 
+## Metrics Evidence Step
+
+Before running `aet retro`, gather quantitative context with `aet metrics`:
+
+```bash
+aet metrics --json
+```
+
+- `--json` — print the machine-readable projection (first-pass rate, rework count, cost per merged task) instead of the human report.
+- `--since YYYY-MM-DD` — only include tasks settled on or after this date. Use the date of the most recent `docs/retros/YYYY-MM-DD-aet-retro.md` to scope the metrics window to new work.
+
+Cite the returned values when proposing skill or workflow edits. Metrics are advisory only; they inform but do not trigger automatic changes.
+
 ## Expected Output
 
 A retro markdown file with:
