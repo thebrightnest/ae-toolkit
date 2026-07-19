@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - gib-05-board-projection-machinery
 pipeline: standard
-status: draft
+status: merged
 security_review: required
 security_review_reason: reconcile can mass-mutate a repo's GitHub issues (create/relabel/reopen). A wrong diff or a non-dry-run default could noisily corrupt a shared team board. Dry-run-by-default and the drift-detection logic are the safety boundary and must be verified.
 docs_sync: required
@@ -80,4 +80,4 @@ Revert the merge commit. The reconcile command disappears; the projection still 
 
 ---
 
-_Stage: qa-complete_
+_Stage: merged_
