@@ -4,7 +4,7 @@ size: L
 blocked_by:
   - pkg-04-cli-extraction
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: New process-spawning/detaching code; must not weaken the existing per-task timeout/stall-watchdog kill semantics.
 docs_sync: required
