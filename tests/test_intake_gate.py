@@ -25,7 +25,7 @@ def _load_script(name: str):
     return mod
 
 
-add = _load_script("add")
+sprint = _load_script("sprint")
 init_queue = _load_script("init-queue")
 sync = _load_script("sync")
 
@@ -130,13 +130,16 @@ class TestAddIntakeGate(unittest.TestCase):
             plans_dir.mkdir(parents=True)
             # Missing id is a structural failure.
             bad = plans_dir / "bad.md"
-            bad.write_text("---\nsize: S\n---\n\n# Bad\n", encoding="utf-8")
+            bad.write_text(
+                "---\nsize: S\n---\n\n# Bad\n\n---\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
             stderr = io.StringIO()
             with patch.object(sys, "stderr", stderr):
-                rc = add.main([
+                rc = sprint.main(["add",
                     str(bad),
                     "--queue-file", queue_file,
                     "--history-file", history_file,
@@ -160,7 +163,7 @@ class TestAddIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -195,7 +198,7 @@ class TestAddIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -218,7 +221,7 @@ class TestAddIntakeGate(unittest.TestCase):
             plan = plans_dir / "partial.md"
             plan.write_text(
                 "---\nsize: S\n---\n\n# Partial\n\n## Phase One\n\n## Phase Two\n\n"
-                "⚠️ VALIDATE ACK: structural — acked reason\n",
+                "⚠️ VALIDATE ACK: structural — acked reason\n\n---\n\n_Stage: plan-approved_\n",
                 encoding="utf-8",
             )
             queue_file = _write_json_file([])
@@ -226,7 +229,7 @@ class TestAddIntakeGate(unittest.TestCase):
 
             stderr = io.StringIO()
             with patch.object(sys, "stderr", stderr):
-                rc = add.main([
+                rc = sprint.main(["add",
                     str(plan),
                     "--queue-file", queue_file,
                     "--history-file", history_file,
@@ -253,7 +256,7 @@ class TestAddIntakeGate(unittest.TestCase):
 
             stderr = io.StringIO()
             with patch.object(sys, "stderr", stderr):
-                rc = add.main([
+                rc = sprint.main(["add",
                     str(plan),
                     "--queue-file", queue_file,
                     "--history-file", history_file,
@@ -279,7 +282,7 @@ class TestAddIntakeGate(unittest.TestCase):
 
             stderr = io.StringIO()
             with patch.object(sys, "stderr", stderr):
-                rc = add.main([
+                rc = sprint.main(["add",
                     str(bad),
                     "--queue-file", queue_file,
                     "--history-file", history_file,

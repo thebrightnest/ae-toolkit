@@ -41,7 +41,7 @@ This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet s
 
 This means:
 
-- Approved plans do **not** automatically enter the sprint. Use `aet add` to curate the queue.
+- Approved plans do **not** automatically enter the sprint. Use `aet sprint add` to curate the queue.
 - `aet review` reads plan files and reports their status without mutating the queue.
 - `aet status` reports only the active sprint, not every approved plan.
 - Plan drift is informational, not a hard gate.
@@ -67,7 +67,7 @@ The `git-refs` backend carries the equivalent protection. Its envelope ref (`ref
 ### Queue lifecycle
 
 1. Plan is authored with `status: approved`.
-2. User runs `aet add docs/plans/FEAT-001.md` → task appears in queue as `planned`.
+2. User runs `aet sprint add docs/plans/FEAT-001.md` → task appears in queue as `ready` (or `blocked` if it has pending blockers).
 3. `aet next` or `aet run` transitions it through `in_progress` and its stage sub-states.
 4. Task reaches `awaiting_merge`.
 5. PR is opened and merged.
@@ -127,16 +127,20 @@ See [`references/github-backend.md`](references/github-backend.md) for the full 
 
 ## Commands
 
-### `add`
+### `sprint add`
 
-Add a single approved plan to the sprint board.
+Promote a single approved plan into the runnable sprint.
 
 ```bash
-aet add docs/plans/FEAT-001.md
-aet add FEAT-001
+aet sprint add docs/plans/FEAT-001.md
+aet sprint add FEAT-001
 ```
 
-Accepts a plan file path or a task ID. Refuses terminal plans (`merged`, `abandoned`) and settled tasks. Idempotent. Blockers already settled in `work-history.jsonl` do not count toward `pending_blockers` — a plan whose blockers have all merged enters as `ready`, never deadlocked.
+Accepts a plan file path or a task ID. Refuses plans that are not `plan-approved`, terminal plans (`merged`, `abandoned`), and settled tasks. Sets the plan frontmatter to `status: queued`, commits and pushes the change, then adds the task to the ephemeral queue. Blockers already settled in `work-history.jsonl` do not count toward `pending_blockers` — a plan whose blockers have all merged enters as `ready`, never deadlocked.
+
+### `backlog add`
+
+Scaffolded for gib-07; full backlog intake is not yet implemented.
 
 ### `review`
 

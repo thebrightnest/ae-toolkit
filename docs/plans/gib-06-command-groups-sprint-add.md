@@ -87,4 +87,4 @@ Revert the merge commit. Top-level `aet add` returns; `sprint`/`backlog` groups 
 
 ---
 
-_Stage: plan-approved_
+_Stage: qa-complete_

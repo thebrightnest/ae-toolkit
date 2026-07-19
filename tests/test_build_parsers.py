@@ -18,7 +18,8 @@ _REPO_ROOT = Path(__file__).parent.parent
 
 _BINS = {
     "status": _REPO_ROOT / "aet-work" / "bin" / "status",
-    "add": _REPO_ROOT / "aet-work" / "bin" / "add",
+    "sprint": _REPO_ROOT / "aet-work" / "bin" / "sprint",
+    "backlog": _REPO_ROOT / "aet-work" / "bin" / "backlog",
     "review": _REPO_ROOT / "aet-work" / "bin" / "review",
     "next": _REPO_ROOT / "aet-work" / "bin" / "next",
     "sync": _REPO_ROOT / "aet-work" / "bin" / "sync",
@@ -51,11 +52,20 @@ class TestBuildParserExposure(unittest.TestCase):
         args = parser.parse_args([])
         self.assertEqual(args.queue_file, ".agents/work-queue.json")
 
-    def test_add_build_parser_returns_parser_with_known_flag(self):
-        module = _load_bin("bp_add", _BINS["add"])
+    def test_sprint_build_parser_returns_parser_with_add_subcommand(self):
+        module = _load_bin("bp_sprint", _BINS["sprint"])
         parser = module.build_parser()
         self.assertIsInstance(parser, argparse.ArgumentParser)
-        args = parser.parse_args(["docs/plans/x.md"])
+        args = parser.parse_args(["add", "docs/plans/x.md"])
+        self.assertEqual(args.command, "add")
+        self.assertEqual(args.target, "docs/plans/x.md")
+
+    def test_backlog_build_parser_returns_parser_with_add_subcommand(self):
+        module = _load_bin("bp_backlog", _BINS["backlog"])
+        parser = module.build_parser()
+        self.assertIsInstance(parser, argparse.ArgumentParser)
+        args = parser.parse_args(["add", "docs/plans/x.md"])
+        self.assertEqual(args.command, "add")
         self.assertEqual(args.target, "docs/plans/x.md")
 
     def test_review_build_parser_returns_parser_with_known_flag(self):
