@@ -1,7 +1,7 @@
 ---
 id: tll-04-evolve-metrics-learning-loop
 size: S
-status: approved
+status: queued
 blocked_by:
   - tll-03-metrics-cli-surface
 pipeline: minimal
@@ -72,5 +72,5 @@ Revert the merge commit. The skill returns to prose/mining inputs only; the retr
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
