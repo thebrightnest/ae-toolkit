@@ -4,7 +4,7 @@ size: S
 blocked_by:
   - pkg-03-lib-extraction
 pipeline: minimal
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Repo-hygiene reorganization of maintenance scripts; no runtime or dependency changes.
 docs_sync: required
@@ -82,5 +82,5 @@ PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
