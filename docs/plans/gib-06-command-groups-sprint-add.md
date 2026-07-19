@@ -5,7 +5,7 @@ blocked_by:
   - gib-04-versioned-membership-closure-push
   - gib-05-board-projection-machinery
 pipeline: standard
-status: draft
+status: merged
 security_review: required
 security_review_reason: retires the top-level `aet add` command and reroutes it under `aet sprint add`, which commits+pushes plan status and relabels a real issue. A weak id resolution could promote the wrong plan into the runnable sprint; skills-lint must still pass or CI enforcement of the docs↔code contract breaks. Both the resolution path and the lint parity are correctness boundaries.
 docs_sync: required
@@ -87,4 +87,4 @@ Revert the merge commit. Top-level `aet add` returns; `sprint`/`backlog` groups 
 
 ---
 
-_Stage: qa-complete_
+_Stage: merged_
