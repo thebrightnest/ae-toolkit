@@ -4,7 +4,7 @@ size: L
 blocked_by:
   - pkg-02-package-skeleton
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Pure relocation of existing code with import rewrites; no new dependencies, behavior, or trust-boundary changes.
 docs_sync: required
@@ -118,5 +118,5 @@ the old layout returns wholesale. No data or state files are touched.
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
