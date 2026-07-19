@@ -1,7 +1,7 @@
 ---
 id: tll-03-metrics-cli-surface
 size: M
-status: approved
+status: queued
 blocked_by:
   - tll-02-metrics-aggregation-core
 pipeline: standard
@@ -83,5 +83,5 @@ Revert the merge commit. The dispatcher row, binary, tests, and doc section disa
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
