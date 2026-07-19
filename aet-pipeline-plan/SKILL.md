@@ -115,10 +115,10 @@ If the user's request contains implementation directives (e.g., "make", "change"
 4. Update CONTEXT.md and propose ADRs as needed
 5. Update plan footers to `scope-validated` / `plan-approved`
 
-**Step 3 — commit plans, then aet add + sync:**
+**Step 3 — commit plans, then aet sprint add + sync:**
 
-1. **Commit the plan files (and PRD/ADR) before queueing.** Stage and commit the new `docs/plans/*.md` files, the PRD (`docs/prds/{feature}-prd.md`), and any ADR/`CONTEXT.md` changes so they are tracked in git before entering the queue. This satisfies the `aet add` intake durability guard, which refuses untracked plans, and makes the happy path durable by construction. (Planning artifacts only — this does not create implementation branches or commits.)
-2. Run `aet add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. Only explicitly added plans enter `.agents/work-queue.json`; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
+1. **Commit the plan files (and PRD/ADR) before queueing.** Stage and commit the new `docs/plans/*.md` files, the PRD (`docs/prds/{feature}-prd.md`), and any ADR/`CONTEXT.md` changes so they are tracked in git before entering the queue. This satisfies the `aet sprint add` intake durability guard, which refuses untracked plans, and makes the happy path durable by construction. (Planning artifacts only — this does not create implementation branches or commits.)
+2. Run `aet sprint add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. Only explicitly added plans enter `.agents/work-queue.json`; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
 3. Run `aet sync` to reconcile existing queue entries, recompute reverse `blocks` edges, and report plan drift. Sync never auto-adds new plans.
 4. Preserve all existing queue entries and their states
 5. Run `aet status` and verify:
@@ -130,7 +130,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
 - `docs/prds/{feature}-prd.md` — stage: `scope-validated`
 - `docs/plans/*.md` — stage: `plan-approved`
-- `.agents/work-queue.json` — curated via `aet add` and reconciled via `aet sync`, ready for aet-work
+- `.agents/work-queue.json` — curated via `aet sprint add` and reconciled via `aet sync`, ready for aet-work
 
 ## Completion Protocol
 

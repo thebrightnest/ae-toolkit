@@ -92,7 +92,7 @@ def _clear_run_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys):
-    """A foreign live lease makes `aet-work add` refuse before writing."""
+    """A foreign live lease makes `aet sprint add` refuse before writing."""
     _clear_run_env(monkeypatch)
     qf = tmp_path / ".agents" / "work-queue.json"
     hf = tmp_path / ".agents" / "work-history.jsonl"
@@ -103,8 +103,9 @@ def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys)
     # A live lease owned by a different run (our PID is alive, run_id is foreign).
     acquire_lease(str(qf), "foreign-run")
 
-    add = _load_bin("add")
-    rc = add.main([
+    sprint = _load_bin("sprint")
+    rc = sprint.main([
+        "add",
         str(plan),
         "--queue-file", str(qf),
         "--history-file", str(hf),
@@ -159,8 +160,9 @@ def test_force_overrides_lease_with_warning(tmp_path, monkeypatch, capsys):
 
     acquire_lease(str(qf), "foreign-run")
 
-    add = _load_bin("add")
-    rc = add.main([
+    sprint = _load_bin("sprint")
+    rc = sprint.main([
+        "add",
         str(plan),
         "--queue-file", str(qf),
         "--history-file", str(hf),
@@ -407,13 +409,13 @@ def test_sync_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
 
 
 def test_add_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
-    add = _load_bin("add")
+    sprint = _load_bin("sprint")
     qf = _tampered_queue(tmp_path)
     plans_dir = tmp_path / "plans"
     plan = _write_plan(plans_dir, "t2")
     monkeypatch.chdir(tmp_path)
 
-    rc = add.main([plan.stem, "--queue-file", str(qf), "--plans-dir", str(plans_dir)])
+    rc = sprint.main(["add", plan.stem, "--queue-file", str(qf), "--plans-dir", str(plans_dir)])
 
     _assert_clean_refusal(rc, capsys.readouterr().err)
 

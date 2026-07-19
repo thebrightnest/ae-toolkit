@@ -58,6 +58,20 @@ class TestRule1Errors(unittest.TestCase):
         rc, out = run_lint("--legacy=warn", str(_FIXTURES / "unknown-flag.md"))
         self.assertIn("error: unknown subcommand 'bogus-substate' for 'aet state'", out)
 
+    def test_command_group_subcommands_pass(self):
+        """`aet sprint add` and `aet backlog add` validate against their subparsers."""
+        rc, out = run_lint("--legacy=error", str(_FIXTURES / "command-groups.md"))
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("error:", out)
+
+    def test_unknown_command_group_subcommand_fails(self):
+        """Invalid `aet sprint <sub>` choices are rejected."""
+        rc, out = run_lint(
+            "--legacy=error", str(_FIXTURES / "unknown-command-group-subcommand.md")
+        )
+        self.assertEqual(rc, 1, out)
+        self.assertIn("error: unknown subcommand 'remove' for 'aet sprint'", out)
+
     def test_placeholder_tokens_pass(self):
         """<...>, $VAR, $(...), ${VAR}, ... pass as opaque values."""
         rc, out = run_lint("--legacy=warn", str(_FIXTURES / "placeholders.md"))

@@ -3,6 +3,7 @@
 import importlib.machinery
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -304,12 +305,13 @@ class TestRecordMerge(unittest.TestCase):
         with open(self.queue_file_path, "w", encoding="utf-8") as f:
             json.dump(self.queue, f)
 
-        plan_abs = str(plan_path.resolve())
+        plan_abs = os.path.realpath(str(plan_path))
+        plan_rel = os.path.relpath(plan_abs, os.path.realpath(self.tmpdir.name))
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
-            ("git", "add", plan_abs): (0, "", ""),
+            ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
             ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
             ("git", "push"): (0, "", ""),
@@ -361,7 +363,8 @@ class TestRecordMerge(unittest.TestCase):
         with open(self.queue_file_path, "w", encoding="utf-8") as f:
             json.dump(self.queue, f)
 
-        plan_abs = str(plan_path.resolve())
+        plan_abs = os.path.realpath(str(plan_path))
+        plan_rel = os.path.relpath(plan_abs, os.path.realpath(self.tmpdir.name))
         pushed = []
 
         responses = {
@@ -372,7 +375,7 @@ class TestRecordMerge(unittest.TestCase):
                 "",
                 "",
             ),
-            ("git", "add", plan_abs): (0, "", ""),
+            ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
             ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
             ("git", "push"): (0, "", ""),
@@ -423,7 +426,8 @@ class TestRecordMerge(unittest.TestCase):
         with open(self.queue_file_path, "w", encoding="utf-8") as f:
             json.dump(self.queue, f)
 
-        plan_abs = str(plan_path.resolve())
+        plan_abs = os.path.realpath(str(plan_path))
+        plan_rel = os.path.relpath(plan_abs, os.path.realpath(self.tmpdir.name))
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
@@ -432,7 +436,7 @@ class TestRecordMerge(unittest.TestCase):
                 "",
                 "",
             ),
-            ("git", "add", plan_abs): (0, "", ""),
+            ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
             ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
             ("git", "push"): (1, "", "network unreachable"),
