@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-03-lib-extraction
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Adds PyYAML as the package's first runtime dependency — supply-chain review per vgr-04 precedent.
 docs_sync: required
@@ -82,5 +82,5 @@ drop the pin in the same revert.
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
