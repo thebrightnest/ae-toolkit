@@ -1,4 +1,4 @@
-.PHONY: help install-skills install-binaries add-skill lint format validate install-hooks test lint-py
+.PHONY: help install-skills install-binaries add-skill lint format validate install-hooks test lint-py install-editable
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
 SKILLS_DIR ?= $(HOME)/.agents/skills
@@ -7,8 +7,19 @@ REPO_DIR := $(shell pwd)
 SKILLS := $(filter-out README.md Makefile scripts .git .gitignore docs .agents content .claude, $(wildcard *))
 MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null | while read -r f; do [ -f "$$f" ] && printf '%s ' "$$f"; done || find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
 
+VENV := .venv
+PYTHON := $(VENV)/bin/python3
+PIP := $(VENV)/bin/pip
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+$(PYTHON):
+	@python3 -m venv $(VENV)
+
+install-editable: $(PYTHON) ## Ensure the aet package is installed editable (plain pip; uv optional)
+	@$(PYTHON) -c "import aet" 2>/dev/null || $(PIP) install -e '.[dev]'
+	@echo "✓ Editable install verified"
 
 install-skills: ## Symlink all skills from this repo to ~/.agents/skills/ and put binaries on PATH
 	@for skill in $(SKILLS); do \
@@ -59,16 +70,15 @@ format: ## Format all markdown files with prettier
 	@npx prettier@3.1.0 --write $(MARKDOWN_FILES)
 	@echo "✓ Format complete"
 
-lint-py: ## Run ruff on Python files
-	@command -v ruff >/dev/null 2>&1 || { echo "ruff not installed. Install it: pip install ruff"; exit 1; }
-	@ruff check .
+lint-py: install-editable ## Run ruff on Python files
+	@$(PYTHON) -m ruff check .
 	@echo "✓ Python lint passed"
 
-test: ## Run pytest suite (parallel if pytest-xdist is installed)
-	@if python3 -c "import xdist" 2>/dev/null; then \
-		python3 -m pytest tests/ -q -n auto; \
+test: install-editable ## Run pytest suite (parallel if pytest-xdist is installed)
+	@if $(PYTHON) -c "import xdist" 2>/dev/null; then \
+		$(PYTHON) -m pytest tests/ -q -n auto; \
 	else \
-		python3 -m pytest tests/ -q; \
+		$(PYTHON) -m pytest tests/ -q; \
 	fi
 	@echo "✓ Tests passed"
 

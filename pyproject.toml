@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aet"
+version = "0.1.0"
+description = "Agentic Engineering Toolkit CLI"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-xdist",
+    "ruff",
+]
+
+[project.scripts]
+aet = "aet.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aet"]

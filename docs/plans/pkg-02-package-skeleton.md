@@ -28,21 +28,23 @@ package (initially an empty `aet` package).
 
 ## Task List
 
-1. Create `pyproject.toml`: project metadata (`aet`, version `0.1.0`), src
+1. ✓ Create `pyproject.toml`: project metadata (`aet`, version `0.1.0`), src
    layout config, zero runtime dependencies for now, optional-dependencies
    group `dev` absorbing `requirements-dev.txt` (pytest, pytest-xdist, ruff);
    build backend hatchling — S (traces: R-2)
-2. Create `src/aet/__init__.py` with `__version__` — S (traces: R-2)
-3. Update `Makefile`: `make test`/`make validate` ensure the package is
+2. ✓ Create `src/aet/__init__.py` with `__version__` — S (traces: R-2)
+3. ✓ Update `Makefile`: `make test`/`make validate` ensure the package is
    installed editable (`pip install -e .[dev]` or `uv pip install -e .[dev]`);
    document plain-pip path (no uv requirement, per PRD technical notes) — S
-   (traces: R-4)
-4. Delete `requirements-dev.txt`; update `AGENTS.md` tooling references and
+   (traces: R-4) [implemented as a dedicated `install-editable` target that
+   `lint-py`/`test` depend on; `validate` inherits it transitively]
+4. ✓ Delete `requirements-dev.txt`; update `AGENTS.md` tooling references and
    pre-commit/dev-install instructions to `pip install -e .[dev]` — S
-   (traces: R-4)
-5. Add `tests/test_packaging.py`: package imports, `__version__` present,
+   (traces: R-4) [pre-commit config held no pip/requirements references — only
+   AGENTS.md needed updating]
+5. ✓ Add `tests/test_packaging.py`: package imports, `__version__` present,
    console entry point declared in pyproject metadata — S (traces: R-2)
-6. Merge branch to main and verify integration — S
+6. Merge branch to main and verify integration — S [pending `aet-ship` stage]
 
 **Size definitions:**
 
@@ -90,5 +92,5 @@ removal cannot break existing behavior.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

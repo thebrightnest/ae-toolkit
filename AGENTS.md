@@ -9,7 +9,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - **Content format:** Markdown with YAML frontmatter
 - **Build / packaging:** GNU Make + `zip`
 - **Quality:** markdownlint (staged/manual), ruff, pytest, custom skill-structure validator, workflow lint
-- **Dev dependencies:** `requirements-dev.txt` (install with `pip install -r requirements-dev.txt`); runtime dependencies follow ADR-037
+- **Dev dependencies:** `pyproject.toml` optional-dependencies group `dev` (install with `pip install -e .[dev]`); runtime dependencies follow ADR-037
 
 ## Directory Structure
 
@@ -41,6 +41,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 | `make help`             | Show all available targets                                                           |
 | `make install-skills`   | Symlink all skills to `~/.agents/skills/`                                            |
 | `make add-skill NAME=x` | Scaffold a new skill directory                                                       |
+| `make install-editable` | Ensure the `aet` package is installed editable in the local venv                     |
 | `make lint`             | Run markdownlint on all markdown files (manual / staged-only)                        |
 | `make lint-py`          | Run ruff on Python files                                                             |
 | `make test`             | Run pytest suite                                                                     |
