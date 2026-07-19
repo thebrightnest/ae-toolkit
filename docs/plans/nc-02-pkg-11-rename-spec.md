@@ -4,7 +4,7 @@ size: S
 blocked_by:
   - nc-01-namespace-taxonomy-adr
 pipeline: minimal
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: This ticket only edits pkg-11's plan-document content (task list, context, files-to-modify); no code lands here. pkg-11's own security_review already covers the eventual rename implementation.
 docs_sync: skipped
