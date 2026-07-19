@@ -45,7 +45,8 @@ class TestAetSpecTable(unittest.TestCase):
     def test_spec_covers_all_operational_subcommands(self):
         """SUBCOMMANDS lists every operational toolkit command from R-1."""
         expected = {
-            "add",
+            "sprint",
+            "backlog",
             "desk",
             "review",
             "status",
@@ -126,6 +127,38 @@ class TestAetExecRouting(_IsolatedBinDir):
             ["aet-state", "audit"],
         )
         self.assertEqual(rc, 0)
+
+    def test_sprint_routes_to_aet_work_sprint_binary(self):
+        """`aet sprint add <plan>` execs aet-work/bin/sprint with args verbatim."""
+        rc = self._dispatch(
+            ["aet", "sprint", "add", "docs/plans/x.md"],
+            self.skills_root / "aet-work" / "bin" / "sprint",
+            ["sprint", "add", "docs/plans/x.md"],
+        )
+        self.assertEqual(rc, 0)
+
+    def test_backlog_routes_to_aet_work_backlog_binary(self):
+        """`aet backlog add <plan>` execs aet-work/bin/backlog with args verbatim."""
+        rc = self._dispatch(
+            ["aet", "backlog", "add", "docs/plans/x.md"],
+            self.skills_root / "aet-work" / "bin" / "backlog",
+            ["backlog", "add", "docs/plans/x.md"],
+        )
+        self.assertEqual(rc, 0)
+
+    def test_top_level_add_is_unknown_subcommand(self):
+        """Bare `aet add` is no longer a valid subcommand."""
+        import io
+
+        stderr = io.StringIO()
+        with patch.object(sys, "argv", ["aet", "add", "docs/plans/x.md"]):
+            with patch.object(sys, "stderr", stderr):
+                with self._bin_env():
+                    with patch.object(aet.os, "execvp") as mock_exec:
+                        rc = aet.main()
+        self.assertEqual(rc, 2)
+        mock_exec.assert_not_called()
+        self.assertIn("unknown subcommand 'add'", stderr.getvalue())
 
     def test_ship_routes_cross_skill(self):
         """`aet ship t1 plan.md` execs aet-ship/bin/ship via the skills root."""

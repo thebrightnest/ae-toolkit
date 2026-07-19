@@ -14,15 +14,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parent.parent
-_ADD_PY = _REPO_ROOT / "aet-work" / "bin" / "add"
+_SPRINT_PY = _REPO_ROOT / "aet-work" / "bin" / "sprint"
 _REVIEW_PY = _REPO_ROOT / "aet-work" / "bin" / "review"
 _STATUS_PY = _REPO_ROOT / "aet-work" / "bin" / "status"
 
-_add_spec = importlib.util.spec_from_loader(
-    "add", importlib.machinery.SourceFileLoader("add", str(_ADD_PY))
+_sprint_spec = importlib.util.spec_from_loader(
+    "sprint", importlib.machinery.SourceFileLoader("sprint", str(_SPRINT_PY))
 )
-add = importlib.util.module_from_spec(_add_spec)
-_add_spec.loader.exec_module(add)
+sprint = importlib.util.module_from_spec(_sprint_spec)
+_sprint_spec.loader.exec_module(sprint)
 
 _review_spec = importlib.util.spec_from_loader(
     "review", importlib.machinery.SourceFileLoader("review", str(_REVIEW_PY))
@@ -127,7 +127,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -153,7 +153,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(blocker),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -161,7 +161,7 @@ class TestAddCommand(unittest.TestCase):
             ])
             self.assertEqual(rc, 0)
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -187,7 +187,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 "feat-002",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -213,7 +213,7 @@ class TestAddCommand(unittest.TestCase):
 
             stderr = io.StringIO()
             with patch.object(sys, "stderr", stderr):
-                rc = add.main([
+                rc = sprint.main(["add",
                     str(plan),
                     "--queue-file", queue_file,
                     "--history-file", history_file,
@@ -239,7 +239,7 @@ class TestAddCommand(unittest.TestCase):
 
             stderr = io.StringIO()
             with patch.object(sys, "stderr", stderr):
-                rc = add.main([
+                rc = sprint.main(["add",
                     str(plan),
                     "--queue-file", queue_file,
                     "--history-file", history_file,
@@ -259,7 +259,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 "nonexistent",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -278,7 +278,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc1 = add.main([
+            rc1 = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -286,7 +286,7 @@ class TestAddCommand(unittest.TestCase):
             ])
             self.assertEqual(rc1, 0)
 
-            rc2 = add.main([
+            rc2 = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -307,7 +307,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -333,11 +333,11 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            self.assertEqual(add.main([
+            self.assertEqual(sprint.main(["add",
                 str(blocker), "--queue-file", queue_file,
                 "--history-file", history_file, "--plans-dir", str(plans_dir),
             ]), 0)
-            self.assertEqual(add.main([
+            self.assertEqual(sprint.main(["add",
                 str(dependent), "--queue-file", queue_file,
                 "--history-file", history_file, "--plans-dir", str(plans_dir),
             ]), 0)
@@ -362,7 +362,7 @@ class TestAddCommand(unittest.TestCase):
             history_file = _make_history([])
 
             for p in (ready_plan, blocker, blocked_plan):
-                self.assertEqual(add.main([
+                self.assertEqual(sprint.main(["add",
                     str(p), "--queue-file", queue_file,
                     "--history-file", history_file, "--plans-dir", str(plans_dir),
                 ]), 0)
@@ -392,7 +392,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([{"id": "feat-399", "state": "merged"}])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -421,11 +421,11 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([{"id": "feat-499", "state": "merged"}])
 
-            self.assertEqual(add.main([
+            self.assertEqual(sprint.main(["add",
                 str(live), "--queue-file", queue_file,
                 "--history-file", history_file, "--plans-dir", str(plans_dir),
             ]), 0)
-            self.assertEqual(add.main([
+            self.assertEqual(sprint.main(["add",
                 str(dependent), "--queue-file", queue_file,
                 "--history-file", history_file, "--plans-dir", str(plans_dir),
             ]), 0)
@@ -455,7 +455,7 @@ class TestAddCommand(unittest.TestCase):
 
             stderr = io.StringIO()
             with patch.object(sys, "stderr", stderr):
-                rc = add.main([
+                rc = sprint.main(["add",
                     str(plan),
                     "--queue-file", queue_file,
                     "--history-file", history_file,
@@ -478,7 +478,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
@@ -501,7 +501,7 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = add.main([
+            rc = sprint.main(["add",
                 str(plan),
                 "--allow-untracked",
                 "--queue-file", queue_file,

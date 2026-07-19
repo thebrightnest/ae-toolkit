@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""aet-work add — Add a plan to the work queue.
+"""aet-work sprint — Sprint membership commands.
 
-Accepts a plan file path or a task ID. Inserts the task as ``ready`` (no
-blockers) or ``blocked`` (pending blockers), rebuilds reverse ``blocks``
-edges, preserves existing queue metadata, and rejects terminal plans.
+``aet sprint add <plan>`` promotes an approved plan into the runnable sprint:
+it sets the plan frontmatter to ``status: queued``, commits and pushes that
+change, adds the task to the ephemeral work queue, and mirrors the ready/blocked
+state to any configured projection (e.g. GitHub Issues labels).
 """
 
 from __future__ import annotations
@@ -19,49 +20,62 @@ _LIB_DIR = _SCRIPT_DIR.parent / "lib"
 sys.path.insert(0, str(_LIB_DIR))
 
 import plan_validate  # noqa: E402
-from aet_queue import QueueIntegrityError, build_blocks, lease_guard  # noqa: E402
-from backends.factory import create_backend  # noqa: E402
+from aet_queue import (  # noqa: E402
+    QueueIntegrityError,
+    build_blocks,
+    commit_and_push_status,
+    lease_guard,
+)
+from backends.factory import create_backend, resolve_config  # noqa: E402
 from plan_parser import new_task_from_plan, stage_from_plan  # noqa: E402
+from projections.dispatcher import resolve_projections  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Add a plan to the work queue as planned."
+        prog="sprint",
+        description="Sprint membership commands for aet-work.",
     )
-    parser.add_argument(
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    add_parser = sub.add_parser(
+        "add",
+        help="Promote an approved plan into the sprint.",
+    )
+    add_parser.add_argument(
         "target",
-        help="Plan file path or task ID to add",
+        help="Plan file path or task ID to promote",
     )
-    parser.add_argument(
+    add_parser.add_argument(
         "--queue-file",
         default=".agents/work-queue.json",
         help="Path to work-queue.json",
     )
-    parser.add_argument(
+    add_parser.add_argument(
         "--history-file",
         default=".agents/work-history.jsonl",
         help="Path to work-history.jsonl",
     )
-    parser.add_argument(
+    add_parser.add_argument(
         "--plans-dir",
         default="docs/plans",
         help="Directory containing atomic plan markdown files",
     )
-    parser.add_argument(
+    add_parser.add_argument(
         "--config",
         default=".agents/aet-work.json",
         help="Path to aet-work backend configuration",
     )
-    parser.add_argument(
+    add_parser.add_argument(
         "--force",
         action="store_true",
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     )
-    parser.add_argument(
+    add_parser.add_argument(
         "--allow-untracked",
         action="store_true",
         help=(
-            "Queue the plan even if its file is not tracked in git. By default "
+            "Promote the plan even if its file is not tracked in git. By default "
             "an untracked plan is refused so aet-work can retrieve it from "
             "origin/main; use this only for a throwaway spike."
         ),
@@ -116,76 +130,29 @@ def plan_is_untracked(plan_file: Path) -> bool:
     return tracked.returncode != 0
 
 
+def _fail(message: str) -> int:
+    print(f"⛔ {message}", file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     plans_dir = Path(args.plans_dir)
     plan_file = resolve_plan(args.target, plans_dir)
 
     if plan_file is None:
-        print(f"❌ No plan found for '{args.target}' in {plans_dir}", file=sys.stderr)
-        return 1
-
-    stage = stage_from_plan(plan_file)
-    if stage in ("merged", "abandoned"):
-        print(
-            f"⛔ Refusing to add {plan_file.name}: plan stage is '{stage}'.",
-            file=sys.stderr,
-        )
-        return 1
-
-    if not args.allow_untracked and plan_is_untracked(plan_file):
-        print(
-            f"⛔ Refusing to add {plan_file.name}: the plan file is not tracked "
-            f"in git. Commit it first so aet-work can retrieve it from "
-            f"origin/main (it builds task worktrees there); pass "
-            f"--allow-untracked to queue a throwaway spike anyway.",
-            file=sys.stderr,
-        )
-        return 1
-
-    # Validate the target plan in the context of every plan in plans_dir so
-    # blocker references resolve, but only report findings for the target plan.
-    all_plan_files = sorted(plans_dir.glob("*.md"))
-    if plan_file not in all_plan_files:
-        all_plan_files.append(plan_file)
-    # Settled history ids are valid blocker references even when the plan file
-    # is gone, so include them in the structural cross-reference set.
-    settled_ids: set[str] = set()
-    if Path(args.history_file).exists():
-        for line in Path(args.history_file).read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if record.get("id"):
-                settled_ids.add(record["id"])
-
-    findings = plan_validate.validate(all_plan_files, extra_known_ids=settled_ids)
-    plan_texts = {pf: pf.read_text(errors="ignore") for pf in all_plan_files}
-    findings = plan_validate.apply_acks(findings, plan_texts)
-    unacked = [f for f in findings if f.plan == plan_file and not f.acked]
-    if unacked:
-        print(
-            f"⛔ Refusing to add {plan_file.name}: intake validation failed.",
-            file=sys.stderr,
-        )
-        for finding in unacked:
-            print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
-        return 1
+        return _fail(f"No plan found for '{args.target}' in {plans_dir}")
 
     backend = create_backend(
         config_path=args.config,
         queue_file=args.queue_file,
         history_file=args.history_file,
     )
+    projections = resolve_projections(resolve_config(args.config))
+
     try:
         data = backend.load()
     except QueueIntegrityError as exc:
-        # Mutating command: fail closed with a one-line refusal, not a
-        # traceback. The error message names the recovery path (ADR-024).
         print(f"⛔ {exc}", file=sys.stderr)
         backend.close()
         return 1
@@ -204,22 +171,86 @@ def main(argv: list[str] | None = None) -> int:
 
     settled_ids = {t.get("id") for t in history if t.get("id")}
     if plan_file.stem in settled_ids:
+        backend.close()
+        return _fail(
+            f"Refusing to promote {plan_file.name}: task is already settled in history."
+        )
+
+    stage = stage_from_plan(plan_file)
+    if stage != "plan-approved":
+        backend.close()
+        return _fail(
+            f"Refusing to promote {plan_file.name}: plan stage is '{stage or 'unknown'}'; "
+            f"only 'plan-approved' plans may enter the sprint."
+        )
+
+    if not args.allow_untracked and plan_is_untracked(plan_file):
+        backend.close()
+        return _fail(
+            f"Refusing to promote {plan_file.name}: the plan file is not tracked "
+            f"in git. Commit it first so aet-work can retrieve it from "
+            f"origin/main (it builds task worktrees there); pass "
+            f"--allow-untracked to queue a throwaway spike anyway."
+        )
+
+    # Validate the target plan in the context of every plan in plans_dir so
+    # blocker references resolve, but only report findings for the target plan.
+    all_plan_files = sorted(plans_dir.glob("*.md"))
+    if plan_file not in all_plan_files:
+        all_plan_files.append(plan_file)
+    # Settled history ids are valid blocker references even when the plan file
+    # is gone, so include them in the structural cross-reference set.
+    settled_ids = set()
+    if Path(args.history_file).exists():
+        for line in Path(args.history_file).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if record.get("id"):
+                settled_ids.add(record["id"])
+
+    findings = plan_validate.validate(all_plan_files, extra_known_ids=settled_ids)
+    plan_texts = {pf: pf.read_text(errors="ignore") for pf in all_plan_files}
+    findings = plan_validate.apply_acks(findings, plan_texts)
+    unacked = [f for f in findings if f.plan == plan_file and not f.acked]
+    if unacked:
+        backend.close()
         print(
-            f"⛔ Refusing to add {plan_file.name}: task is already settled in history.",
+            f"⛔ Refusing to promote {plan_file.name}: intake validation failed.",
             file=sys.stderr,
         )
-        backend.close()
+        for finding in unacked:
+            print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
         return 1
 
+    # Promote the plan to sprint member before touching the queue. The commit
+    # is the durable source of truth; the queue is rebuilt from it.
+    rc = commit_and_push_status(plan_file, "queued")
+    if rc != 0:
+        backend.close()
+        return _fail(
+            f"Plan promotion failed for {plan_file.name}: could not commit/push "
+            f"status update. Fix the git state and re-run `aet sprint add`."
+        )
+
     task = new_task_from_plan(plan_file, settled_ids=settled_ids)
+    task["status"] = "queued"
     queue.append(task)
     build_blocks(queue)
+
     if not lease_guard(args.queue_file, force=args.force):
         backend.close()
         return 1
+
     backend.save(queue)
-    print(f"✓ Added {plan_file.name} to the queue as {task['state']}.")
+    projections.on_add(task, is_new=True)
     backend.close()
+
+    print(f"✓ Promoted {plan_file.name} to the sprint as {task['state']}.")
     return 0
 
 

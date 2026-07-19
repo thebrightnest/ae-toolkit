@@ -27,7 +27,8 @@ from pathlib import Path
 # orchestrator flag mapping from the frh-05 aet-work dispatcher. "internal"
 # is handled inside this file — `install` is the one such subcommand (R-1).
 SUBCOMMANDS = {
-    "add": {"target": ("aet-work", "add"), "mode": "exec"},
+    "sprint": {"target": ("aet-work", "sprint"), "mode": "exec"},
+    "backlog": {"target": ("aet-work", "backlog"), "mode": "exec"},
     "desk": {"target": ("aet-work", "desk"), "mode": "exec"},
     "review": {"target": ("aet-work", "review"), "mode": "exec"},
     "status": {"target": ("aet-work", "status"), "mode": "exec"},
