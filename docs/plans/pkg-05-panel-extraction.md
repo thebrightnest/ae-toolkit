@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-04-cli-extraction
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Pure relocation of the panel server and static assets; no route, API, or dependency changes.
 docs_sync: required
@@ -90,5 +90,5 @@ removed in the same revert.
 
 ---
 
-*Stage: plan-approved*
+*Stage: queued*
 *Next step: run `aet-work`*
