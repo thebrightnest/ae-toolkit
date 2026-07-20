@@ -3,7 +3,7 @@ id: nc-05-sync-docs-mechanical-spike
 size: M
 blocked_by: []
 pipeline: minimal
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Investigation and audit-doc output only; no code lands here.
 docs_sync: skipped
@@ -83,5 +83,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: reviewed*
+*Stage: merged*
 *Next step: run `aet-sync-docs`*
