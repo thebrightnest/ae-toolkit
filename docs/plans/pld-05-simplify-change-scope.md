@@ -5,7 +5,7 @@ blocked_by:
   - pld-03-port-prose-assertions
   - pld-04-plans-lint-corpus
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Changes the condition under which the only safety net skips pytest entirely; landing it before its blockers, or widening the prose classifier by mistake, silently under-tests every prose-only change.
 docs_sync: required
