@@ -9,9 +9,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from aet import plan_parser, plan_validate
 
 _REPO_ROOT = Path(__file__).parents[2]
+
+pytestmark = pytest.mark.xdist_group("orchestrator")
 
 
 def _make_plan(

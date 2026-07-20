@@ -11,6 +11,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.xdist_group("orchestrator")
+
 _ORCHESTRATOR_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
 _spec = importlib.util.spec_from_loader(
     "orchestrator", importlib.machinery.SourceFileLoader("orchestrator", str(_ORCHESTRATOR_PY))

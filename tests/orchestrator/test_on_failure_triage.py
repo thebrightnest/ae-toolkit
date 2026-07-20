@@ -11,6 +11,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 # Ensure src/aet is on the path.
 from aet import failure, triage
 
@@ -20,6 +22,8 @@ _orchestrator_loader = importlib.machinery.SourceFileLoader("orchestrator", str(
 _spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(orchestrator)
+
+pytestmark = pytest.mark.xdist_group("orchestrator")
 
 
 PER_TASK_BREAKER_THRESHOLD = 3
