@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).parents[2]
-SCRIPT = REPO_ROOT / "aet-setup" / "bin" / "configure-task-backend"
+SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "configure-backend.py"
 
 
 from aet.backends.factory import create_backend  # noqa: E402

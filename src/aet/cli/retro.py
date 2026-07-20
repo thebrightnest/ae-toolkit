@@ -201,9 +201,9 @@ def recent_project_records(
 
 def run_mine_learnings(archive_dir: Path) -> str:
     """Run mine-learnings --propose against the telemetry archive."""
-    # Resolve the sibling binary directly: the legacy `mine-learnings` PATH
-    # name is pruned by `aet install`, so a PATH lookup is no longer safe.
-    mine_learnings_bin = Path(__file__).resolve().parent / "mine-learnings"
+    # Resolve the sibling package binary directly: the legacy `mine-learnings`
+    # PATH name is pruned by `aet install`, so a PATH lookup is no longer safe.
+    mine_learnings_bin = Path(__file__).resolve().parent / "mine-learnings.py"
     cmd = [str(mine_learnings_bin), "--propose"]
     env = os.environ.copy()
     env["AET_TELEMETRY_ARCHIVE_DIR"] = str(archive_dir)

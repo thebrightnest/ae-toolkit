@@ -211,10 +211,8 @@ Run the pre-merge validation gate.
         AET skill binaries must be installed before merge verification can close the task.
         The installer lives in the aet-work skill, so aet-work must be installed.
         Install options:
-          - Run aet install from the installed aet-work skill
-            ~/.agents/skills/aet-work/bin/aet install
-          - From this repo: make install-skills
-          - Manually: add the skill bin directories (e.g. ~/.agents/skills/aet-ship/bin) to PATH.
+          - Run `aet install`
+          - From this repo: `make install-skills`
     ```
 
     Then run the closure command:

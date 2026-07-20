@@ -27,9 +27,7 @@ from pathlib import Path
 
 # Load aet-state as a module so we can reuse its merge-resolution and
 # queue-mutation logic rather than duplicating it.
-_AET_STATE_PY = (
-    Path(__file__).resolve().parent.parent.parent / "src" / "aet" / "cli" / "aet-state.py"
-)
+_AET_STATE_PY = Path(__file__).resolve().parent / "aet-state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state",
     importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY)),

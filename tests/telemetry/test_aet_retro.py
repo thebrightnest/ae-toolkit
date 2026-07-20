@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parents[2]
-_RETRO_PY = _REPO_ROOT / "aet-evolve" / "bin" / "aet-retro"
+_RETRO_PY = _REPO_ROOT / "src" / "aet" / "cli" / "retro.py"
 
 _spec = importlib.util.spec_from_loader(
     "aet_retro_reader", importlib.machinery.SourceFileLoader("aet_retro_reader", str(_RETRO_PY))

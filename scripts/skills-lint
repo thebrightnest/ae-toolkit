@@ -3,7 +3,7 @@
 
 Reads `aet` command lines from code spans in skill/scaffolding markdown and
 validates them against the same sources of truth the dispatcher executes:
-`aet-work/bin/aet`'s SUBCOMMANDS spec and each target binary's build_parser().
+`src/aet/cli/main.py`'s SUBCOMMANDS spec and each target binary's build_parser().
 
 Rule 1 (error): unknown `aet` subcommand, or unknown flag for its target parser.
 Rule 2 (legacy): command-position legacy names (`aet-work`, `aet-state`, ...)
@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DISPATCHER = REPO_ROOT / "aet-work" / "bin" / "aet"
+DISPATCHER = REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 
 # Fenced code block info strings whose contents are shell command lines.
 SHELL_LANGS = {"", "bash", "sh", "console"}
@@ -62,7 +62,7 @@ FENCE_OPEN_RE = re.compile(r"^```\s*(\S*)")
 
 
 def load_dispatcher():
-    """Load aet-work/bin/aet and return its SUBCOMMANDS spec."""
+    """Load src/aet/cli/main.py and return its SUBCOMMANDS spec."""
     spec = importlib.util.spec_from_loader(
         "skills_lint_dispatcher",
         importlib.machinery.SourceFileLoader("skills_lint_dispatcher", str(DISPATCHER)),

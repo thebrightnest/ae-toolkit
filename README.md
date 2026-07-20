@@ -76,10 +76,10 @@ npx skills add https://github.com/thebrightnest/ae-toolkit --all -a claude-code
 
 Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
 
-AET skills ship with a single `aet` binary that dispatches to every helper (`aet state`, `aet run`, `aet mine-learnings`, etc.). After installing skills, put it on `PATH` by running the installer from the `aet-work` skill:
+AET skills ship with a single `aet` binary that dispatches to every helper (`aet state`, `aet run`, `aet mine-learnings`, etc.). After installing skills, put it on `PATH` by running the installer:
 
 ```bash
-~/.agents/skills/aet-work/bin/aet install
+aet install
 ```
 
 Or invoke via your agent's skill command (e.g., `/aet-setup install-binaries` in Claude Code). The installer symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes the retired legacy binary names. If `~/.local/bin` is not on your `PATH`, add it to your shell profile — after that, `aet` maintains its own link.

@@ -1,4 +1,4 @@
-"""Behavior-driven tests for aet-work/bin/add and src/aet/cli/review.py."""
+"""Behavior-driven tests for src/aet/cli/backlog.py and src/aet/cli/review.py."""
 
 from __future__ import annotations
 

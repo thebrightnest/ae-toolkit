@@ -33,9 +33,9 @@ _BINS = {
     "reconcile": _REPO_ROOT / "src" / "aet" / "cli" / "reconcile.py",
     "metrics": _REPO_ROOT / "src" / "aet" / "cli" / "metrics.py",
     "validate-workflows": _REPO_ROOT / "src" / "aet" / "cli" / "validate-workflows.py",
-    "ship": _REPO_ROOT / "aet-ship" / "bin" / "ship",
-    "aet-retro": _REPO_ROOT / "aet-evolve" / "bin" / "aet-retro",
-    "mine-learnings": _REPO_ROOT / "aet-evolve" / "bin" / "mine-learnings",
+    "ship": _REPO_ROOT / "src" / "aet" / "cli" / "ship.py",
+    "aet-retro": _REPO_ROOT / "src" / "aet" / "cli" / "retro.py",
+    "mine-learnings": _REPO_ROOT / "src" / "aet" / "cli" / "mine-learnings.py",
 }
 
 

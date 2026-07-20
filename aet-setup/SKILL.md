@@ -45,7 +45,7 @@ Put the `aet` dispatcher on `PATH` so skills like aet-work, aet-ship, and aet-ev
 1. Run the installer from the installed aet-work skill:
 
    ```bash
-   ~/.agents/skills/aet-work/bin/aet install
+   aet install
    ```
 
    It symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes the retired legacy binary names.
@@ -246,7 +246,7 @@ Create `docs/references/` at project root for task-specific reference documents 
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
-**AET skill binaries:** If the project uses aet-work, aet-ship, or aet-evolve, ensure their helper binaries are on `PATH`. Run the `aet install` helper from the installed aet-work skill (`~/.agents/skills/aet-work/bin/aet install`). `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
+**AET skill binaries:** If the project uses aet-work, aet-ship, or aet-evolve, ensure the `aet` dispatcher is on `PATH`. Run `aet install`. `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
 
 ### Type Safety
 
@@ -400,7 +400,7 @@ aet-work-*.log
 When setting up a project, install a harness-level merge guard that blocks `gh pr merge` at the provider's tool-call layer. This is the only surface that refuses the command under session auto/bypass mode.
 
 - Detect the active harness from workspace markers (`.claude/` → `claude-code`, `.kimi-code/` → `kimi`).
-- Use the lightweight adapter registry in `aet-setup/lib/harness_guard.py` to map `harness_id → adapter`.
+- Use the lightweight adapter registry in `src/aet/harness_guard.py` to map `harness_id → adapter`.
 - Run `aet harness-guard install` (or the equivalent setup step) to generate the provider-specific guard.
 - Unsupported/undetected harnesses must fail safe: print a named gap and exit non-zero — never silently pass.
 - Generated guards are Mode-1 config (under `.claude/`, gitignorable) and non-clobbering.
