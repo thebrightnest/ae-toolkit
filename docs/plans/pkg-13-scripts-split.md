@@ -82,5 +82,5 @@ PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 
 ---
 
-*Stage: tdd-complete*
-*Next step: run `aet-implement`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
