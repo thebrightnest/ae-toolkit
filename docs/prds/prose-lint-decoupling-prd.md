@@ -4,9 +4,9 @@
 
 `make validate` is this repo's only safety net — CI is ruled out on cost
 (GitHub charges for Actions) — so the gate has to be complete and fast at the
-same time. The prose-only fast path built on 2026-07-20 (`src/aet/change_scope.py`, on
-branch `validate-doc-fast-path` and not yet merged to main at the time of
-writing) delivers the speed, but only by enumerating five test modules that assert
+same time. The prose-only fast path shipped on 2026-07-20 (`src/aet/change_scope.py`,
+merged to main 2026-07-21) delivers the speed, but only by enumerating five
+test modules that assert
 against the repo's own Markdown, policed by an AST-based guard test that
 re-derives the list from the test tree. That enumeration exists for one reason:
 documentation invariants are currently expressed as pytest assertions. Every
