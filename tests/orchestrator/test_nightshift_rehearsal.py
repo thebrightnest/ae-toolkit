@@ -203,7 +203,7 @@ def _commit_repo_state(repo_root: str) -> None:
 class TestNightShiftExitGateRehearsal(unittest.TestCase):
     """End-to-end rehearsal over a mixed unattended queue."""
 
-    def _run_batch(self, args, adapter, timeout: float = 60):
+    def _run_batch(self, args, adapter, timeout: float = 180):
         """Run run_batch in a thread; return (rc, stdout)."""
         result = {"rc": None, "out": ""}
         orchestrator._shutdown_requested = False

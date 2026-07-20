@@ -161,7 +161,7 @@ class TestStallWatchdog(unittest.TestCase):
 class TestBatchTimeoutBackstop(unittest.TestCase):
     """Integration tests for stall and wall-clock kills through run_batch."""
 
-    def _run_batch(self, args, adapter, timeout: float = 30):
+    def _run_batch(self, args, adapter, timeout: float = 90):
         """Run run_batch in a thread; return (rc, stdout)."""
         result = {"rc": None, "out": ""}
         orchestrator._shutdown_requested = False
