@@ -8,9 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-import metrics
+from aet import metrics
 
 # Load the metrics CLI script (no .py extension) as a module. The loader name
 # must not collide with the lib `metrics` module the CLI imports.
@@ -211,5 +209,9 @@ class TestCliRegisteredInDispatcher:
 
         repo_root = Path(__file__).parent.parent
         assert rc == 0
-        assert Path(captured["path"]) == repo_root / "aet-work" / "bin" / "metrics"
-        assert captured["argv"] == ["metrics", "--json"]
+        assert Path(captured["path"]) == Path(sys.executable)
+        assert captured["argv"] == [
+            sys.executable,
+            str(repo_root / "aet-work" / "bin" / "metrics"),
+            "--json",
+        ]

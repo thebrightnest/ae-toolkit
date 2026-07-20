@@ -126,13 +126,13 @@ class TestProjectSlugContract(unittest.TestCase):
     """The reader's slug derivation is literally the writer's — no second implementation."""
 
     def test_reader_imports_writers_derive_project_slug(self):
-        import telemetry
+        from aet import telemetry
 
         self.assertIsNotNone(aet_retro.derive_project_slug)
         self.assertIs(aet_retro.derive_project_slug, telemetry.derive_project_slug)
 
     def test_reader_and_writer_slug_match_for_temp_repo(self):
-        import telemetry
+        from aet import telemetry
 
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "myrepo"
@@ -156,7 +156,7 @@ class TestProjectSlugContract(unittest.TestCase):
                         ["--archive-dir", tmp, "--no-mine", "--output", str(output)]
                     )
         self.assertEqual(rc, 1)
-        self.assertIn("aet-work", stderr.getvalue())
+        self.assertIn("aet", stderr.getvalue())
         self.assertFalse(output.exists())
 
 

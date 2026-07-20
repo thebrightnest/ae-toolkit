@@ -16,14 +16,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Load shared libraries.
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import plan_validate  # noqa: E402
-from aet_queue import QueueIntegrityError, build_blocks, lease_guard  # noqa: E402
-from backends.factory import create_backend  # noqa: E402
+from aet import plan_validate  # noqa: E402
+from aet.backends.factory import create_backend  # noqa: E402
+from aet.queue import QueueIntegrityError, build_blocks, lease_guard  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

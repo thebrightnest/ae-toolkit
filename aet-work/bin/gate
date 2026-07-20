@@ -18,10 +18,7 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import evidence  # noqa: E402
+from aet import evidence  # noqa: E402
 
 
 class _GateParser(argparse.ArgumentParser):

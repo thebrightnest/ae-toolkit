@@ -1,14 +1,11 @@
-"""Tests for aet-work/lib/wirelog.py — test-invocation extraction from kimi wire logs."""
+"""Tests for src/aet/wirelog.py — test-invocation extraction from kimi wire logs."""
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-import wirelog
+from aet import wirelog
 
 
 def _tool_call_line(uuid, command, time_ms, name="Bash"):

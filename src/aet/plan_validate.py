@@ -24,7 +24,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-import plan_parser
+from aet import plan_parser
 
 # Plan lifecycle statuses (CONTEXT.md). A missing key is the legacy grandfathered
 # state; any present value must belong to this set.

@@ -347,7 +347,7 @@ class TestBackendAwareValidate(unittest.TestCase):
 class TestBackendDefaultHooks(unittest.TestCase):
     def test_default_transition_hooks_are_safe(self):
         """The base backend provides no-op on_transition and close_task hooks."""
-        from backends.json_backend import JsonBackend
+        from aet.backends.json_backend import JsonBackend
 
         with tempfile.TemporaryDirectory() as tmpdir:
             queue_file = str(Path(tmpdir) / "work-queue.json")

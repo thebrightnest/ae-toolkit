@@ -36,9 +36,9 @@ _status_spec = importlib.util.spec_from_loader(
 status = importlib.util.module_from_spec(_status_spec)
 _status_spec.loader.exec_module(status)
 
-# The bin scripts above put aet-work/lib on sys.path; the workflow loader
+# The bin scripts above put src/aet on sys.path; the workflow loader
 # lives there.
-from workflow import load_workflow  # noqa: E402
+from aet.workflow import load_workflow  # noqa: E402
 
 
 def _write_json_file(data) -> str:

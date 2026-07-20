@@ -2,17 +2,14 @@
 
 import json
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-from aet_queue import STATES
-from backends.github_backend import STATE_LABELS, BackendError, GitHubBackend
-from projections.base import Projection
+from aet.backends.github_backend import STATE_LABELS, BackendError, GitHubBackend
+from aet.projections.base import Projection
+from aet.queue import STATES
 
 
 def _completed(stdout: str = "", returncode: int = 0, stderr: str = ""):
@@ -66,7 +63,7 @@ class TestGitHubProjection(unittest.TestCase):
         expected = STATES | {"draft", "backlog"}
         self.assertEqual(set(STATE_LABELS), expected)
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_create_issue_embeds_plan_id_marker(self, mock_run):
         def side_effect(cmd, **kwargs):
             if cmd[:3] == ["gh", "label", "list"]:
@@ -105,7 +102,7 @@ class TestGitHubProjection(unittest.TestCase):
         self.assertIn("<!-- aet-id: feat-001 -->", body)
         self.assertIn("aet:draft", create_call)
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_issue_identity_is_plan_id_not_title(self, mock_run):
         """A refreshed task is matched by the aet-id marker, not by title."""
 
@@ -168,7 +165,7 @@ class TestGitHubProjection(unittest.TestCase):
         self.assertIn("7", edit_calls[0])
         self.assertEqual(task["github_issue_number"], 7)
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_ensure_labels_runs_on_first_use(self, mock_run):
         existing = ["aet:ready"]
         created = []
@@ -205,7 +202,7 @@ class TestGitHubProjection(unittest.TestCase):
         missing = {f"aet:{STATE_LABELS[s]}" for s in STATE_LABELS}
         self.assertEqual(created_names, missing - set(existing))
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_draft_and_backlog_labels_from_plan_status(self, mock_run):
         """Backlog add labels issues by plan status, not queue state."""
 
@@ -243,7 +240,7 @@ class TestGitHubProjection(unittest.TestCase):
                 create_call = mock_run.call_args[0][0]
                 self.assertEqual(self._issued_label(create_call), expected_label)
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_transition_relabels_and_removes_prior(self, mock_run):
         _write_queue(
             self.queue_file,
@@ -287,7 +284,7 @@ class TestGitHubProjection(unittest.TestCase):
         self.assertIn("aet:in-progress", labels)
         self.assertIn("aet:ready", labels)
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_terminal_closes_issue(self, mock_run):
         _write_queue(
             self.queue_file,
@@ -325,7 +322,7 @@ class TestGitHubProjection(unittest.TestCase):
         self.assertEqual(len(close_calls), 1)
         self.assertIn("11", close_calls[0])
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_on_transition_skips_terminal_states(self, mock_run):
         _write_queue(
             self.queue_file,
@@ -343,7 +340,7 @@ class TestGitHubProjection(unittest.TestCase):
 
         mock_run.assert_not_called()
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_missing_gh_cli_raises_clear_error(self, mock_run):
         mock_run.side_effect = FileNotFoundError("No such file or directory: 'gh'")
 
@@ -352,7 +349,7 @@ class TestGitHubProjection(unittest.TestCase):
 
         self.assertIn("gh auth login", str(ctx.exception))
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_failed_gh_command_raises_clear_error(self, mock_run):
         mock_run.return_value = _completed(
             returncode=1,

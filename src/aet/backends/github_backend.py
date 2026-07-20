@@ -11,8 +11,8 @@ import json
 import subprocess
 from typing import Any
 
-from aet_queue import read_queue
-from projections.base import Projection
+from aet.projections.base import Projection
+from aet.queue import read_queue
 
 DEFAULT_LABEL_PREFIX = "aet"
 
@@ -133,7 +133,7 @@ class GitHubBackend(Projection):
         corrects labels, and reopens hand-closed live issues. Orphan issues
         are reported and never deleted.
         """
-        from projections import reconcile as reconcile_helpers
+        from aet.projections import reconcile as reconcile_helpers
 
         self._ensure_labels_once()
         live_tasks, live_ids = reconcile_helpers.load_tasks(

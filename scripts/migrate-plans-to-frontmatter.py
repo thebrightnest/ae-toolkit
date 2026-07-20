@@ -18,12 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# Load shared plan parsing helpers from aet-work/lib.
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "aet-work" / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-from plan_parser import build_ticket_map, title_from_plan  # noqa: E402
+from aet.plan_parser import build_ticket_map, title_from_plan  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants

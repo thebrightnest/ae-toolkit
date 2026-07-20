@@ -1,13 +1,9 @@
 """Tests for cli_adapter module."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
 import unittest
 
-from cli_adapter import CLIAdapter, resolve_cli_adapter
+from aet.cli_adapter import CLIAdapter, resolve_cli_adapter
 
 
 class TestCLIAdapter(unittest.TestCase):

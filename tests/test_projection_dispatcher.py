@@ -10,12 +10,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-from backends.factory import resolve_config
-from backends.json_backend import JsonBackend
-from projections.base import Projection
-from projections.dispatcher import ProjectionDispatcher, resolve_projections
+from aet.backends.factory import resolve_config
+from aet.backends.json_backend import JsonBackend
+from aet.projections.base import Projection
+from aet.projections.dispatcher import ProjectionDispatcher, resolve_projections
 
 
 class _CaptureStderr:

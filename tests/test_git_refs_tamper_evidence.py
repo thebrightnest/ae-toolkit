@@ -23,7 +23,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from backends.git_refs_backend import (
+
+from aet.backends.git_refs_backend import (
     ENVELOPE_REF,
     TASKS_REF_PREFIX,
     GitRefsBackend,

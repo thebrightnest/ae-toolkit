@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from usage import _MAX_WIRE_LINE_CHARS
+from aet.usage import _MAX_WIRE_LINE_CHARS
 
 # Test-runner match list (v1). A Bash command matching any of these patterns
 # counts as a test invocation. Scope classification lives in

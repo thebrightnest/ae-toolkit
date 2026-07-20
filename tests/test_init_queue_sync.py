@@ -9,8 +9,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
-import plan_parser  # noqa: E402
+from aet import plan_parser  # noqa: E402
 
 
 def run_script(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=None):

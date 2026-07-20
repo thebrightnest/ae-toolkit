@@ -15,13 +15,20 @@ tracked tree.
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
 import sys
 from pathlib import Path
 
-_LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import harness_guard  # noqa: E402
+# harness_guard moves into the aet package in pkg-06; until then load the
+# existing module directly from aet-setup/lib without modifying sys.path.
+_HARNESS_GUARD_PY = Path(__file__).resolve().parent.parent / "lib" / "harness_guard.py"
+_spec = importlib.util.spec_from_loader(
+    "harness_guard",
+    importlib.machinery.SourceFileLoader("harness_guard", str(_HARNESS_GUARD_PY)),
+)
+harness_guard = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(harness_guard)
 
 if __name__ == "__main__":
     sys.exit(harness_guard.main())

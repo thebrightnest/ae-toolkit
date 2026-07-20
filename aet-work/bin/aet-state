@@ -13,12 +13,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Make aet-work/lib importable so we can load the queue library and backend factory.
-_LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import aet_queue as queue_lib  # noqa: E402
-from backends.factory import create_backend  # noqa: E402, I001
+from aet import queue as queue_lib  # noqa: E402
+from aet.backends.factory import create_backend  # noqa: E402, I001
 
 _INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
 

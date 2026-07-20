@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
-"""Tests for aet-work/lib/telemetry.py — standard-library only."""
+"""Tests for src/aet/telemetry.py — standard-library only."""
 
-import importlib.util
 import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-TELEMETRY_PY = Path(__file__).resolve().parents[1] / "aet-work" / "lib" / "telemetry.py"
-
-spec = importlib.util.spec_from_file_location("telemetry", TELEMETRY_PY)
-telemetry = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(telemetry)
+from aet import telemetry
 
 
 class TestStageRecord(unittest.TestCase):

@@ -13,9 +13,11 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
-import evidence  # noqa: I001
-import plan_parser  # noqa: I001
-import telemetry  # noqa: I001
+from aet import (
+    evidence,  # noqa: I001
+    plan_parser,  # noqa: I001
+    telemetry,  # noqa: I001
+)
 
 REQUIRED_VERDICT_KINDS = ("qa", "review", "cso", "sync-docs")
 

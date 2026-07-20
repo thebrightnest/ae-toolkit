@@ -1,7 +1,7 @@
 """Workflow-as-data: schema, packaged default, and loader.
 
 A workflow file (``<repo_root>/.agents/workflows/<name>.json`` overriding the
-packaged ``aet-work/workflows/<name>.json``) declares the stage sequence,
+packaged ``src/aet/workflows/<name>.json``) declares the stage sequence,
 per-stage skill bindings, evidence verdict kinds, session grouping, and
 routing as per-project data. Succession is list order — linear only.
 """
@@ -13,12 +13,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import evidence
+from aet import evidence
 
 SUPPORTED_VERSION = 1
 VALID_ISOLATION_LEVELS = {"minimal", "standard", "full"}
 
-_PACKAGED_DIR = Path(__file__).resolve().parent.parent / "workflows"
+_PACKAGED_DIR = Path(__file__).resolve().parent / "workflows"
 
 _STAGE_KEYS = {"name", "skills", "evidence", "gate_key"}
 _EXECUTION_POLICY_KEYS = {"session_groups"}
@@ -126,7 +126,7 @@ def load_workflow(repo_root: str | Path, workflow_name: str = "software") -> Wor
     """Load and validate a workflow definition.
 
     Resolution order: ``<repo_root>/.agents/workflows/<name>.json`` first,
-    then the packaged ``aet-work/workflows/<name>.json``.
+    then the packaged ``src/aet/workflows/<name>.json``.
 
     Raises:
         WorkflowError: the file is missing, unreadable, or structurally invalid.

@@ -3,7 +3,6 @@
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,11 +11,10 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).parent.parent
 SCRIPT = REPO_ROOT / "aet-setup" / "bin" / "configure-task-backend"
 
-sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
 
-from backends.factory import create_backend  # noqa: E402
-from backends.git_refs_backend import GitRefsBackend  # noqa: E402
-from backends.json_backend import JsonBackend  # noqa: E402
+from aet.backends.factory import create_backend  # noqa: E402
+from aet.backends.git_refs_backend import GitRefsBackend  # noqa: E402
+from aet.backends.json_backend import JsonBackend  # noqa: E402
 
 
 class TestConfigResolution(unittest.TestCase):

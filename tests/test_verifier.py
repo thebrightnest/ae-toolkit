@@ -1,16 +1,12 @@
 """Tests for verifier module."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
-from verifier import read_plan_stage, verify_stage_advancement
+from aet.verifier import read_plan_stage, verify_stage_advancement
 
 
 class TestVerifier(unittest.TestCase):
@@ -118,7 +114,7 @@ class TestVerifyStageAdvancement(unittest.TestCase):
             self._init_git_repo(repo_root)
             self._commit_on_feature_branch(repo_root)
 
-            with mock.patch("verifier.time", create=True) as mock_time:
+            with mock.patch("aet.verifier.time", create=True) as mock_time:
                 ok, msg = verify_stage_advancement(
                     "plan-approved", repo_root, "implemented"
                 )

@@ -60,18 +60,25 @@ error() {
   exit 1
 }
 
-skills_root() {
-  # This script lives at <skills-root>/<skill>/bin/<script>; resolve the
-  # skills root so we can import aet-work/lib/project_id.py regardless of
-  # whether we are running from the repo or an installed skills directory.
-  cd "$(dirname "$0")/../.." && pwd
+_bootstrap_pythonpath() {
+  # After the lib extraction, configure-backend imports the installed aet
+  # package. When run from a source checkout without the package installed in
+  # the system python, prepend <repo-root>/src to PYTHONPATH.
+  python3 -c "import aet" 2>/dev/null && return 0
+  local script_dir repo_root
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  repo_root="$(cd "$script_dir/../.." && pwd)"
+  if [ -f "$repo_root/src/aet/__init__.py" ]; then
+    export PYTHONPATH="$repo_root/src${PYTHONPATH:+:$PYTHONPATH}"
+  fi
 }
 
+_bootstrap_pythonpath
+
 derive_project_slug() {
-  PYTHONPATH="$(skills_root)/aet-work/lib" python3 - "$PROJECT_ROOT" <<'PY'
-import os, sys
-sys.path.insert(0, os.environ.get("PYTHONPATH", ""))
-from project_id import derive_project_slug
+  python3 - "$PROJECT_ROOT" <<'PY'
+import sys
+from aet.project_id import derive_project_slug
 print(derive_project_slug(sys.argv[1] if len(sys.argv) > 1 else None))
 PY
 }

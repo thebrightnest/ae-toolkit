@@ -9,8 +9,8 @@ Reads:
 - ~/.aet/telemetry/<main-worktree-dir>/<worktree-label>/{date}/{run-id}/{task-id}.jsonl
   for the current project (per-task structured telemetry, as decided in ADR-012)
 
-The project slug is imported from the telemetry writer
-(aet-work/lib/telemetry.py: derive_project_slug) — readers never re-derive it.
+The project slug is imported from the installed aet package
+(aet.project_id: derive_project_slug) — readers never re-derive it.
 
 Writes a markdown retro to docs/retros/ by default.
 """
@@ -30,17 +30,7 @@ from pathlib import Path
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 DEFAULT_LOOKBACK_DAYS = 7
 
-# The telemetry writer (sibling aet-work skill) is the single source of truth
-# for the project slug and archive layout. Readers import its
-# derive_project_slug instead of re-deriving — a second, origin-URL-based
-# derivation drifted from the writer once already (tele-07).
-_TELEMETRY_LIB_DIR = Path(__file__).resolve().parents[2] / "aet-work" / "lib"
-if _TELEMETRY_LIB_DIR.is_dir() and str(_TELEMETRY_LIB_DIR) not in sys.path:
-    sys.path.insert(0, str(_TELEMETRY_LIB_DIR))
-try:
-    from telemetry import derive_project_slug
-except ImportError:
-    derive_project_slug = None
+from aet.project_id import derive_project_slug  # noqa: E402
 
 # Heuristic signals that a finding belongs to the AET toolkit rather than the
 # project being built. Keep this list small and project-agnostic.
@@ -368,9 +358,8 @@ def main(argv: list[str] | None = None) -> int:
         project_slug = args.project_slug
     elif derive_project_slug is None:
         print(
-            "error: cannot derive the project slug — sibling skill 'aet-work' "
-            f"(expected at {_TELEMETRY_LIB_DIR}) is missing; install the full "
-            "AE Toolkit or pass --project-slug explicitly.",
+            "error: cannot derive the project slug — the installed 'aet' package "
+            "is missing; install the full AE Toolkit or pass --project-slug explicitly.",
             file=sys.stderr,
         )
         return 1

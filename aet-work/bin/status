@@ -13,15 +13,12 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-from aet_queue import (  # noqa: E402
+from aet.backends.factory import create_backend  # noqa: E402
+from aet.queue import (  # noqa: E402
     QueueIntegrityError,
     current_state,
     pending_blockers,
 )
-from backends.factory import create_backend  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

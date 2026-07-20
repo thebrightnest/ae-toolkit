@@ -98,8 +98,10 @@ class TestAetExecRouting(_IsolatedBinDir):
 
     def _expect_exec(self, expected_bin, expected_argv):
         def mock_execvp(path, argv):
-            self.assertEqual(Path(path), expected_bin)
-            self.assertEqual(argv, expected_argv)
+            self.assertEqual(Path(path), Path(sys.executable))
+            self.assertEqual(
+                argv, [sys.executable, str(expected_bin), *expected_argv[1:]]
+            )
             raise SystemExit(0)
 
         return mock_execvp
@@ -221,6 +223,9 @@ class TestRunMapping(_IsolatedBinDir):
                     rc = aet.main()
         return rc, captured.get("path"), captured.get("argv")
 
+    def _expected_run_argv(self, *extra):
+        return [sys.executable, str(_REPO_ROOT / "aet-work" / "bin" / "orchestrator"), *extra]
+
     def test_run_with_all_flags(self):
         """`aet run <flags>` execs the orchestrator with the mapped argv."""
         argv = [
@@ -239,11 +244,10 @@ class TestRunMapping(_IsolatedBinDir):
         ]
         rc, path, exec_argv = self._capture_exec(argv)
         self.assertEqual(rc, 0)
-        self.assertEqual(Path(path), _REPO_ROOT / "aet-work" / "bin" / "orchestrator")
+        self.assertEqual(Path(path), Path(sys.executable))
         self.assertEqual(
             exec_argv,
-            [
-                "orchestrator",
+            self._expected_run_argv(
                 "--queue-file",
                 ".agents/work-queue.json",
                 "--max-jobs",
@@ -256,7 +260,7 @@ class TestRunMapping(_IsolatedBinDir):
                 "120",
                 "--cli-bin",
                 "/bin/cli",
-            ],
+            ),
         )
 
     def test_run_defaults(self):
@@ -265,15 +269,14 @@ class TestRunMapping(_IsolatedBinDir):
         self.assertEqual(rc, 0)
         self.assertEqual(
             exec_argv,
-            [
-                "orchestrator",
+            self._expected_run_argv(
                 "--queue-file",
                 ".agents/work-queue.json",
                 "--max-jobs",
                 "4",
                 "--isolation",
                 "standard",
-            ],
+            ),
         )
 
     def test_run_one_maps_plan_positional(self):
@@ -284,8 +287,7 @@ class TestRunMapping(_IsolatedBinDir):
         self.assertEqual(rc, 0)
         self.assertEqual(
             exec_argv,
-            [
-                "orchestrator",
+            self._expected_run_argv(
                 "--plan-file",
                 "docs/plans/FEAT-001.md",
                 "--max-jobs",
@@ -294,7 +296,7 @@ class TestRunMapping(_IsolatedBinDir):
                 "standard",
                 "--cli-bin",
                 "/bin/kimi",
-            ],
+            ),
         )
 
     def test_run_one_without_plan_exits_2(self):
