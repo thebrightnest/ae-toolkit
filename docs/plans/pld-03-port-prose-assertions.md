@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pld-02-docs-lint-engine
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Relocation of existing documentation assertions into the rules file; no runtime, dependency, or execution-path changes beyond the already-reviewed pld-02 engine.
 docs_sync: skipped
