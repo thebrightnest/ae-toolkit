@@ -129,4 +129,5 @@ revert restores the targets they point at.
 
 ---
 
-_Stage: reviewed_
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
