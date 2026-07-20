@@ -27,18 +27,21 @@ with PyYAML (`yaml.safe_load`), keeping the same accepted/rejected inputs.
 
 ## Task List
 
-1. Add `pyyaml` to `pyproject.toml` runtime dependencies — S (traces: R-6)
-2. Rewrite `parse_frontmatter` (and private helpers) in
+1. ✓ Add `pyyaml` to `pyproject.toml` runtime dependencies — S (traces: R-6)
+2. ✓ Rewrite `parse_frontmatter` (and private helpers) in
    `src/aet/plan_parser.py` to use `yaml.safe_load`; preserve the None/empty
    contract for missing or unclosed frontmatter and for non-mapping values — M
-   (traces: R-6)
-3. Migrate `tests/test_plan_validate.py` / parser tests: every existing case
+   (traces: R-6) [Changed: added `_normalize_frontmatter_body` shim to keep the
+   existing `docs/plans/*.md` corpus parsing without editing merged plan files]
+3. ✓ Migrate `tests/test_plan_validate.py` / parser tests: every existing case
    must pass unmodified; add cases for inputs the hand-rolled parser accepted
    but `safe_load` rejects (or vice versa) and pin the chosen behavior — S
-   (traces: R-6)
-4. Record any intentional accepted-input differences in the PRD divergence
+   (traces: R-6) [Added: typed-scalar, nested mapping, non-mapping top-level,
+   and empty-scalar edge cases in `tests/test_init_queue_sync.py`]
+4. ✓ Record any intentional accepted-input differences in the PRD divergence
    note and in `references/` for the plan frontmatter contract — S (traces: R-6)
-5. Merge branch to main and verify integration — S
+   [Added: `aet-work/references/frontmatter-contract.md`]
+5. [Deferred: pending the ship stage] Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -82,5 +85,5 @@ drop the pin in the same revert.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
