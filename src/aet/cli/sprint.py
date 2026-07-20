@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work sprint — Sprint membership commands.
 
 ``aet sprint add <plan>`` promotes an approved plan into the runnable sprint:
@@ -132,7 +131,7 @@ def _fail(message: str) -> int:
     return 1
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None):
     args = parse_args(argv)
     plans_dir = Path(args.plans_dir)
     plan_file = resolve_plan(args.target, plans_dir)

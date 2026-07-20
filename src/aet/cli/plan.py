@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work plan — plan-quality commands.
 
 ``aet plan validate`` runs the four-family check suite and applies the
@@ -98,7 +97,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None):
     args = build_parser().parse_args(argv)
     if args.command == "validate":
         return cmd_validate(args)

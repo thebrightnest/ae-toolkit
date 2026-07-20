@@ -1,4 +1,4 @@
-"""Tests for aet-work/bin/gate — the fail-closed gate verdict writer."""
+"""Tests for src/aet/cli/gate.py — the fail-closed gate verdict writer."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parent.parent
-_GATE_BIN = _REPO_ROOT / "aet-work" / "bin" / "gate"
+_GATE_BIN = _REPO_ROOT / "src" / "aet" / "cli" / "gate.py"
 _AET_BIN = _REPO_ROOT / "aet-work" / "bin" / "aet"
 
 _gate_spec = importlib.util.spec_from_loader(
@@ -247,7 +247,7 @@ class TestGateSubmit(unittest.TestCase):
 
 
 class TestGateDispatcherRouting(unittest.TestCase):
-    """`aet gate submit` reaches aet-work/bin/gate through the dispatcher."""
+    """`aet gate submit` reaches src/aet/cli/gate.py through the dispatcher."""
 
     def test_gate_submit_routed_through_aet_dispatcher(self):
         with tempfile.TemporaryDirectory() as tmpdir:

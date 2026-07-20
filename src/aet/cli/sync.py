@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work sync — Append-only sync of docs/plans/*.md into the work queue.
 
 Loads the existing queue and settled history log, appends only newly created
@@ -52,12 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def parse_args(argv) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     queue_file = args.queue_file
     history_file = args.history_file
     plans_dir = Path(args.plans_dir)

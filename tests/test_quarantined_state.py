@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-_AET_STATE_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
+_AET_STATE_PY = Path(__file__).parent.parent / "src" / "aet" / "cli" / "aet-state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
 )
@@ -22,7 +22,7 @@ _queue_spec = importlib.util.spec_from_loader(
 aet_queue = importlib.util.module_from_spec(_queue_spec)
 _queue_spec.loader.exec_module(aet_queue)
 
-_ORCHESTRATOR_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
+_ORCHESTRATOR_PY = Path(__file__).parent.parent / "src" / "aet" / "cli" / "orchestrator.py"
 _orchestrator_spec = importlib.util.spec_from_loader(
     "orchestrator", importlib.machinery.SourceFileLoader("orchestrator", str(_ORCHESTRATOR_PY))
 )

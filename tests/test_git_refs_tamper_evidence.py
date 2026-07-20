@@ -31,7 +31,7 @@ from aet.backends.git_refs_backend import (
     GitRefsIntegrityError,
 )
 
-_AET_STATE_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
+_AET_STATE_PY = Path(__file__).parent.parent / "src" / "aet" / "cli" / "aet-state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state_tamper",
     importlib.machinery.SourceFileLoader("aet_state_tamper", str(_AET_STATE_PY)),
@@ -39,7 +39,7 @@ _spec = importlib.util.spec_from_loader(
 aet_state = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(aet_state)
 
-_STATUS_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "status"
+_STATUS_PY = Path(__file__).parent.parent / "src" / "aet" / "cli" / "status.py"
 _status_spec = importlib.util.spec_from_loader(
     "aet_status_tamper",
     importlib.machinery.SourceFileLoader("aet_status_tamper", str(_STATUS_PY)),

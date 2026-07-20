@@ -34,6 +34,8 @@ Rules:
 
 Skills may include executable helpers in `<skill>/bin/`. These are installed into the agent's skills directory when the toolkit is installed with `npx skills ... --all`, but they are **not** automatically added to `PATH`.
 
+The `aet-work` operational binaries (`status`, `sprint`, `aet-state`, `orchestrator`, etc.) have been extracted into importable Python modules under `src/aet/cli/<name>.py` as part of the staged package extraction. The multicall dispatcher remains at `aet-work/bin/aet` during the transition and is re-exported by the `aet.cli` package, so the installed console script (`aet = "aet.cli:main"`) and the bootstrap executable behave identically.
+
 Rules:
 
 - Skill instructions must invoke helper binaries through the `aet` dispatcher (e.g. `aet state record-merge`), not by hardcoded agent-specific paths or retired binary names.

@@ -15,7 +15,7 @@ from unittest.mock import patch
 from aet import failure, triage
 
 # Load the orchestrator script (no .py extension) as a module.
-_ORCHESTRATOR_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
+_ORCHESTRATOR_BIN = Path(__file__).parent.parent / "src" / "aet" / "cli" / "orchestrator.py"
 _orchestrator_loader = importlib.machinery.SourceFileLoader("orchestrator", str(_ORCHESTRATOR_BIN))
 _spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)

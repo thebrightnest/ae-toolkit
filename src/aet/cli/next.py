@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work next — Pick the next stored-ready task.
 
 Reads stored state, warns about plan drift without blocking, and
@@ -42,8 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def parse_args(argv) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def report_plan_drift(queue: list[dict], history: list[dict], plans_dir: Path) -> None:
@@ -127,7 +126,7 @@ def transition_task(backend, task: dict) -> bool:
     result = subprocess.run(
         [
             sys.executable,
-            str(_SCRIPT_DIR / "aet-state"),
+            str(_SCRIPT_DIR / "aet-state.py"),
             "transition",
             task_id,
             from_state,
@@ -150,8 +149,8 @@ def transition_task(backend, task: dict) -> bool:
     return True
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     backend = create_backend(
         queue_file=args.queue_file, history_file=args.history_file
     )

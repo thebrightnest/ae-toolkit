@@ -337,7 +337,7 @@ class TestPruneArchive(unittest.TestCase):
 
     def test_report_prune_cli_dry_run_smoke(self):
         old = self._seed_run("proj", "2026-05-01", "old-run", 60)
-        report_bin = Path(__file__).parent.parent / "aet-work" / "bin" / "report"
+        report_bin = Path(__file__).parent.parent / "src" / "aet" / "cli" / "report.py"
         result = subprocess.run(
             [sys.executable, str(report_bin), "--prune", "7"],
             capture_output=True,

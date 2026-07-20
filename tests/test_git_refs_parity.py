@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-_AET_STATE_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
+_AET_STATE_PY = Path(__file__).parent.parent / "src" / "aet" / "cli" / "aet-state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state_parity",
     importlib.machinery.SourceFileLoader("aet_state_parity", str(_AET_STATE_PY)),

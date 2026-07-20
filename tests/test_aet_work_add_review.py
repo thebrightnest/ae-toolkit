@@ -1,4 +1,4 @@
-"""Behavior-driven tests for aet-work/bin/add and aet-work/bin/review."""
+"""Behavior-driven tests for aet-work/bin/add and src/aet/cli/review.py."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SPRINT_PY = _REPO_ROOT / "aet-work" / "bin" / "sprint"
-_REVIEW_PY = _REPO_ROOT / "aet-work" / "bin" / "review"
-_STATUS_PY = _REPO_ROOT / "aet-work" / "bin" / "status"
+_SPRINT_PY = _REPO_ROOT / "src" / "aet" / "cli" / "sprint.py"
+_REVIEW_PY = _REPO_ROOT / "src" / "aet" / "cli" / "review.py"
+_STATUS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "status.py"
 
 _sprint_spec = importlib.util.spec_from_loader(
     "sprint", importlib.machinery.SourceFileLoader("sprint", str(_SPRINT_PY))

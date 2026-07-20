@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work gate — fail-closed verdict writer for the checking skills.
 
 ``gate submit`` is the sole sanctioned writer of gate evidence verdicts
@@ -122,7 +121,7 @@ def _submit(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None):
     try:
         args = build_parser().parse_args(argv)
     except SystemExit as exc:

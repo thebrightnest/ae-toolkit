@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-_ORCHESTRATOR_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
+_ORCHESTRATOR_PY = Path(__file__).parent.parent / "src" / "aet" / "cli" / "orchestrator.py"
 _spec = importlib.util.spec_from_loader(
     "orchestrator", importlib.machinery.SourceFileLoader("orchestrator", str(_ORCHESTRATOR_PY))
 )

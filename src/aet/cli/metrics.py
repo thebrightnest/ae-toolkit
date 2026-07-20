@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work metrics — Cross-task metrics over settled history.
 
 Prints the canonical ``metrics.aggregate`` projection: first-pass merge rate,
@@ -82,12 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def parse_args(argv) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     if args.since is not None:
         try:
             metrics._parse_date(args.since)

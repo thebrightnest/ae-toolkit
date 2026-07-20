@@ -81,11 +81,14 @@ class TestAetSpecTable(unittest.TestCase):
                 self.assertTrue(bin_name)
 
     def test_spec_targets_exist_in_repo(self):
-        """Every spec target resolves to a real binary in the repo layout."""
+        """Every spec target resolves to a real runnable file in the repo layout."""
         for name, spec in aet.SUBCOMMANDS.items():
             skill_dir, bin_name = spec["target"]
             with self.subTest(name=name):
-                binary = _REPO_ROOT / skill_dir / "bin" / bin_name
+                if skill_dir == "aet.cli":
+                    binary = _REPO_ROOT / "src" / "aet" / "cli" / f"{bin_name}.py"
+                else:
+                    binary = _REPO_ROOT / skill_dir / "bin" / bin_name
                 self.assertTrue(binary.is_file(), f"missing {binary}")
 
 
@@ -115,46 +118,46 @@ class TestAetExecRouting(_IsolatedBinDir):
                     return aet.main()
 
     def test_status_routes_to_aet_work_status(self):
-        """`aet status --queue-file foo.json` execs aet-work/bin/status verbatim."""
+        """`aet status --queue-file foo.json` execs src/aet/cli/status.py verbatim."""
         rc = self._dispatch(
             ["aet", "status", "--queue-file", "foo.json"],
-            self.skills_root / "aet-work" / "bin" / "status",
+            self.skills_root / "src" / "aet" / "cli" / "status.py",
             ["status", "--queue-file", "foo.json"],
         )
         self.assertEqual(rc, 0)
 
     def test_state_routes_to_aet_state_binary(self):
-        """`aet state audit` execs aet-work/bin/aet-state with args verbatim."""
+        """`aet state audit` execs src/aet/cli/aet-state.py with args verbatim."""
         rc = self._dispatch(
             ["aet", "state", "audit"],
-            self.skills_root / "aet-work" / "bin" / "aet-state",
+            self.skills_root / "src" / "aet" / "cli" / "aet-state.py",
             ["aet-state", "audit"],
         )
         self.assertEqual(rc, 0)
 
     def test_sprint_routes_to_aet_work_sprint_binary(self):
-        """`aet sprint add <plan>` execs aet-work/bin/sprint with args verbatim."""
+        """`aet sprint add <plan>` execs src/aet/cli/sprint.py with args verbatim."""
         rc = self._dispatch(
             ["aet", "sprint", "add", "docs/plans/x.md"],
-            self.skills_root / "aet-work" / "bin" / "sprint",
+            self.skills_root / "src" / "aet" / "cli" / "sprint.py",
             ["sprint", "add", "docs/plans/x.md"],
         )
         self.assertEqual(rc, 0)
 
     def test_reconcile_routes_to_aet_work_reconcile_binary(self):
-        """`aet reconcile` execs aet-work/bin/reconcile with args verbatim."""
+        """`aet reconcile` execs src/aet/cli/reconcile.py with args verbatim."""
         rc = self._dispatch(
             ["aet", "reconcile", "--apply"],
-            self.skills_root / "aet-work" / "bin" / "reconcile",
+            self.skills_root / "src" / "aet" / "cli" / "reconcile.py",
             ["reconcile", "--apply"],
         )
         self.assertEqual(rc, 0)
 
     def test_backlog_routes_to_aet_work_backlog_binary(self):
-        """`aet backlog add <plan>` execs aet-work/bin/backlog with args verbatim."""
+        """`aet backlog add <plan>` execs src/aet/cli/backlog.py with args verbatim."""
         rc = self._dispatch(
             ["aet", "backlog", "add", "docs/plans/x.md"],
-            self.skills_root / "aet-work" / "bin" / "backlog",
+            self.skills_root / "src" / "aet" / "cli" / "backlog.py",
             ["backlog", "add", "docs/plans/x.md"],
         )
         self.assertEqual(rc, 0)
@@ -224,7 +227,7 @@ class TestRunMapping(_IsolatedBinDir):
         return rc, captured.get("path"), captured.get("argv")
 
     def _expected_run_argv(self, *extra):
-        return [sys.executable, str(_REPO_ROOT / "aet-work" / "bin" / "orchestrator"), *extra]
+        return [sys.executable, str(_REPO_ROOT / "src" / "aet" / "cli" / "orchestrator.py"), *extra]
 
     def test_run_with_all_flags(self):
         """`aet run <flags>` execs the orchestrator with the mapped argv."""
@@ -394,6 +397,46 @@ class TestAetIntegration(_IsolatedBinDir):
                 env=env,
             )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class TestPackageEntryPoint(unittest.TestCase):
+    """The installed console script resolves to the same dispatcher interface."""
+
+    def _import_aet_cli_from_repo(self):
+        """Import aet.cli from the repo under test.
+
+        ``tests/conftest.py`` already puts the worktree ``src`` directory at the
+        front of ``sys.path`` and propagates it via ``PYTHONPATH``, so the
+        normal import resolves to the code under test without mutating already
+        loaded modules.
+        """
+        import aet.cli
+
+        return aet.cli
+
+    def test_aet_cli_re_exports_dispatcher_main(self):
+        """aet.cli:main is the dispatcher main exposed for the entry point."""
+        aet_cli = self._import_aet_cli_from_repo()
+
+        self.assertTrue(callable(aet_cli.main))
+        self.assertIn("status", aet_cli.SUBCOMMANDS)
+        self.assertEqual(aet_cli.SUBCOMMANDS["status"]["target"], ("aet.cli", "status"))
+
+    def test_aet_cli_subprocess_entry_point_runs_dispatcher(self):
+        """The editable-install console script loads aet.cli and prints usage."""
+        import subprocess
+
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(_REPO_ROOT / "src")
+        result = subprocess.run(
+            [str(Path(sys.executable).parent / "aet")],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("usage: aet", result.stderr)
+        self.assertIn("subcommands:", result.stderr)
 
 
 if __name__ == "__main__":

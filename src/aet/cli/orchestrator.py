@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Unified orchestrator for the Agentic Engineering Toolkit.
 
 Usage:
@@ -169,7 +168,7 @@ def _record_stage(task: dict, stage: str, repo_root: str) -> bool:
     task_id = task.get("id")
     queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
     if task_id and os.path.exists(queue_file):
-        aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+        aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
         result = subprocess.run(
             [
                 sys.executable,
@@ -248,8 +247,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def parse_args(argv) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def _freshness_clause(decision: str) -> str:
@@ -1420,7 +1419,7 @@ def _mark_quarantined(
     """
     if from_state is None:
         from_state = "in_progress"
-    aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+    aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
     result = subprocess.run(
         [
             sys.executable,
@@ -1455,7 +1454,7 @@ def _mark_failed(
     """
     if from_state is None:
         from_state = "in_progress"
-    aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+    aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
     result = subprocess.run(
         [
             sys.executable,
@@ -1566,7 +1565,7 @@ def _finalize_task(
     the task's ledger record before the transition so it is preserved when the
     task is later sealed. No control path reads ``cost`` (ADR-031).
     """
-    aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+    aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
     repo_root = repo_root or os.path.dirname(os.path.dirname(queue_file))
     if ret == 0:
         queue = backend.load()["queue"]
@@ -1912,7 +1911,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # Transition the task to in_progress through the sole writer so
                 # stored state reflects that it has been picked up.
                 from_state = current_state(task) or "ready"
-                aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+                aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
                 result = subprocess.run(
                     [
                         sys.executable,
@@ -2099,7 +2098,7 @@ def _record_run_one_in_queue(
         if from_state is None:
             from_state = "planned"
 
-        aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+        aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
         result = subprocess.run(
             [
                 sys.executable,
@@ -2313,7 +2312,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                             if _maybe_auto_merge(queue_task, queue_file, repo_root):
                                 pass  # perform_auto_merge prints success/failure.
                             else:
-                                aet_state_bin = str(_SCRIPT_DIR / "aet-state")
+                                aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
                                 result = subprocess.run(
                                     [
                                         sys.executable,
@@ -2367,8 +2366,8 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             release_lease(queue_file, logger.run_id)
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     adapter = resolve_cli_adapter(args.cli_bin)
 
     print(f"🤖 Orchestrator using {adapter.name} ({adapter.bin})")

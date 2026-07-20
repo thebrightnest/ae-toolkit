@@ -35,23 +35,28 @@ new locations.
 
 ## Task List
 
-1. Move each `aet-work/bin` binary to `src/aet/cli/<name>.py` with logic inside
+1. ✓ Move each `aet-work/bin` binary to `src/aet/cli/<name>.py` with logic inside
    a `main(argv=None)`; keep `if __name__ == "__main__"` entry — L (traces: R-2)
-2. Update the dispatcher `SUBCOMMANDS` targets to the package locations; the
+2. ✓ Update the dispatcher `SUBCOMMANDS` targets to the package locations; the
    dispatcher file itself stays at `aet-work/bin/aet` until pkg-06 — M
    (traces: R-3)
-3. Add console entry points in `pyproject.toml` for the dispatcher (`aet`) and
+3. ✓ Add console entry points in `pyproject.toml` for the dispatcher (`aet`) and
    verify `aet install` + `_ensure_path_link()` resolve the running script
    correctly from an editable install — M (traces: R-3)
-4. Update skills-lint's parser-tree validation to the new module paths;
+   [Changed: `aet = "aet.cli:main"` was already declared in pkg-03; pkg-04
+   implemented `src/aet/cli/__init__.py` and verified the editable-install
+   script instead of adding the declaration itself.]
+4. ✓ Update skills-lint's parser-tree validation to the new module paths;
    `make validate` must still gate documented `aet` invocations (roadmap-p2
    reality-gap gate preserved) — M (traces: R-3)
-5. Update `docs/CONVENTIONS.md` "Skill Binaries" section to describe the
+5. ✓ Update `docs/CONVENTIONS.md` "Skill Binaries" section to describe the
    package layout; SKILL.md Prerequisites sections stay as-is (they reference
    `aet` subcommands, not paths) — S (traces: R-3)
-6. Update affected tests (dispatcher, multicall, install, command-groups,
+6. ✓ Update affected tests (dispatcher, multicall, install, command-groups,
    cli-adapter tests) to the new locations — M (traces: R-3)
-7. Merge branch to main and verify integration — S
+   [Changed: additional parser and entry-point smoke tests were added, and
+   cross-cutting import-path fixes touched more files than originally listed.]
+7. [Deferred: pending ship stage] Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -85,17 +90,18 @@ new locations.
 
 ## Validation Steps
 
-- [ ] `make validate` green, including skills-lint against the new parser tree
-- [ ] `tests/test_aet_multicall.py` and `tests/test_aet_dispatcher.py` (named,
+- [x] `make validate` green, including skills-lint against the new parser tree
+- [x] `tests/test_aet_multicall.py` and `tests/test_aet_dispatcher.py` (named,
   existing) cover the moved dispatcher spec; `tests/test_aet_install.py`
   covers `aet install` from the editable install
-- [ ] Every existing subcommand (`aet status`, `aet desk`, `aet gate`, ...)
+- [x] Every existing subcommand (`aet status`, `aet desk`, `aet gate`, ...)
   runs identically; spot-check `aet state --help` output unchanged
-- [ ] `~/.local/bin/aet` symlink target resolves after `aet install`; isolation
+- [x] `~/.local/bin/aet` symlink target resolves after `aet install`; isolation
   fixtures (`AET_BIN_DIR` per-test tmp dir) still pass
   (`tests/test_telemetry_isolation.py` stays green — see learning 2026-07-15)
-- [ ] R-trace coverage: R-2 by task 1; R-3 by tasks 2–6; no unknown R-ids cited
+- [x] R-trace coverage: R-2 by task 1; R-3 by tasks 2–6; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+  [Deferred: merge happens during the ship stage.]
 
 ## Rollback Plan
 
@@ -104,5 +110,5 @@ the same revert. No state or user-facing behavior changes to roll back.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

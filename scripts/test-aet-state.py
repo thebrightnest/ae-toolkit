@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Tests for aet-work/bin/aet-state — standard-library only."""
+"""Tests for src/aet/cli/aet-state.py — standard-library only."""
 
 import tempfile
 import unittest
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
-AET_STATE_PY = Path(__file__).resolve().parents[1] / "aet-work" / "bin" / "aet-state"
+AET_STATE_PY = Path(__file__).resolve().parents[1] / "src" / "aet" / "cli" / "aet-state.py"
 
 aet_state = SourceFileLoader("aet_state", str(AET_STATE_PY)).load_module()
 

@@ -27,14 +27,14 @@ REPO_ROOT = Path(__file__).parent.parent
 FIXTURE_PATH = REPO_ROOT / "tests" / "fixtures" / "workflows" / "content.json"
 
 # Load the lint script (no .py extension) as a module.
-_LINT_BIN = REPO_ROOT / "aet-work" / "bin" / "validate-workflows"
+_LINT_BIN = REPO_ROOT / "src" / "aet" / "cli" / "validate-workflows.py"
 _lint_loader = importlib.machinery.SourceFileLoader("validate_workflows", str(_LINT_BIN))
 _lint_spec = importlib.util.spec_from_loader("validate_workflows", _lint_loader)
 validate_workflows = importlib.util.module_from_spec(_lint_spec)
 _lint_spec.loader.exec_module(validate_workflows)
 
 # Load the orchestrator script (no .py extension) as a module.
-_ORCHESTRATOR_BIN = REPO_ROOT / "aet-work" / "bin" / "orchestrator"
+_ORCHESTRATOR_BIN = REPO_ROOT / "src" / "aet" / "cli" / "orchestrator.py"
 _orch_loader = importlib.machinery.SourceFileLoader("orchestrator", str(_ORCHESTRATOR_BIN))
 _orch_spec = importlib.util.spec_from_loader("orchestrator", _orch_loader)
 orchestrator = importlib.util.module_from_spec(_orch_spec)

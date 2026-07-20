@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work desk — Review cockpit.
 
 Default mode lists every task in the ``awaiting_merge`` state, riskiest first,
@@ -31,7 +30,7 @@ from aet.queue import current_state, update_plan_status  # noqa: E402
 
 # Load aet-state as a module so desk actions can reuse queue mutations and
 # plan-footer updates rather than re-implementing closure logic.
-_AET_STATE_PY = _SCRIPT_DIR / "aet-state"
+_AET_STATE_PY = _SCRIPT_DIR / "aet-state.py"
 _aet_state_spec = importlib.util.spec_from_loader(
     "aet_state_desk",
     importlib.machinery.SourceFileLoader("aet_state_desk", str(_AET_STATE_PY)),
@@ -495,8 +494,8 @@ def _run_risk_view(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
-    args = build_parser().parse_args()
+def main(argv: list[str] | None = None):
+    args = build_parser().parse_args(argv)
     if args.command == "merge":
         return _run_merge(args)
     if args.command == "abandon":

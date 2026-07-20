@@ -1,9 +1,10 @@
-#!/usr/bin/env python3
 """aet-state — Owns queue mutations, stage transitions, and footer updates.
 
 Standard-library Python only. Derives status from ground truth (git, filesystem),
 validates transition legality, and updates footers + queue JSON atomically.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -935,8 +936,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main():
-    args = build_parser().parse_args()
+def main(argv: list[str] | None = None):
+    args = build_parser().parse_args(argv)
 
     try:
         if args.command == "audit":

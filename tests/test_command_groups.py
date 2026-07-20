@@ -15,8 +15,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SPRINT_PY = _REPO_ROOT / "aet-work" / "bin" / "sprint"
-_BACKLOG_PY = _REPO_ROOT / "aet-work" / "bin" / "backlog"
+_SPRINT_PY = _REPO_ROOT / "src" / "aet" / "cli" / "sprint.py"
+_BACKLOG_PY = _REPO_ROOT / "src" / "aet" / "cli" / "backlog.py"
 _AET_PY = _REPO_ROOT / "aet-work" / "bin" / "aet"
 
 _sprint_spec = importlib.util.spec_from_loader(

@@ -26,8 +26,8 @@ from aet.queue import (  # noqa: E402
 
 
 def _load_bin(name: str):
-    """Load an extension-less aet-work bin script as a module."""
-    path = REPO_ROOT / "aet-work" / "bin" / name
+    """Load an aet CLI module from the extracted package."""
+    path = REPO_ROOT / "src" / "aet" / "cli" / f"{name}.py"
     loader = SourceFileLoader(f"aet_bin_{name}", str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     mod = importlib.util.module_from_spec(spec)
