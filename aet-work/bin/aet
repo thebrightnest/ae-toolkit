@@ -18,10 +18,44 @@ Two pieces of PATH ownership live in this file itself (R-5, R-11):
 
 from __future__ import annotations
 
-import importlib
+# Bootstrap guard: when this script is invoked directly from a source
+# checkout (e.g. via the shebang), the interpreter may be system Python
+# which lacks the AE Toolkit's dependencies. Re-exec under the repo's
+# virtual environment when available so subcommands can import aet.*.
+# In a pip-installed environment the imports succeed and this is a no-op.
 import os
 import sys
 from pathlib import Path
+
+_REQUIRED_IMPORTS = ("filelock", "yaml", "aet")
+
+
+def _can_import_aet() -> bool:
+    for name in _REQUIRED_IMPORTS:
+        try:
+            __import__(name)
+        except Exception:
+            return False
+    return True
+
+
+if not _can_import_aet():
+    here = Path(__file__).resolve()
+    candidate_roots = [
+        here.parent.parent,  # repo root from aet-work/bin/aet
+        Path.cwd(),  # invoked via relative path from repo root
+    ]
+    venv_path = os.environ.get("VIRTUAL_ENV")
+    if venv_path:
+        candidate_roots.insert(0, Path(venv_path))
+    for root in candidate_roots:
+        venv_python = root / ".venv" / "bin" / "python"
+        if not venv_python.exists():
+            venv_python = root / "bin" / "python"
+        if venv_python.exists():
+            os.execv(str(venv_python), [str(venv_python), str(here)] + sys.argv[1:])
+
+import importlib  # noqa: E402
 
 # Subcommand spec: name -> {"target": ("<skill-dir>", "<bin-name>"), "mode": ...}
 # mode "exec" forwards argv verbatim; "run"/"run-one" carry the documented
