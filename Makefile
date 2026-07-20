@@ -11,6 +11,10 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
+# What pytest runs. `validate` narrows this to the doc-coupled modules when the
+# change set is prose-only; every other entry point runs the whole suite.
+PYTEST_TARGETS ?= tests/
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
@@ -76,18 +80,19 @@ lint-py: install-editable ## Run ruff on Python files
 
 test: install-editable ## Run pytest suite (parallel if pytest-xdist is installed)
 	@if $(PYTHON) -c "import xdist" 2>/dev/null; then \
-		$(PYTHON) -m pytest tests/ -q -n auto --dist=loadgroup; \
+		$(PYTHON) -m pytest $(PYTEST_TARGETS) -q -n auto --dist=loadgroup; \
 	else \
-		$(PYTHON) -m pytest tests/ -q; \
+		$(PYTHON) -m pytest $(PYTEST_TARGETS) -q; \
 	fi
 	@echo "✓ Tests passed"
 
-validate: ## Run all quality checks, fail-fast (lint-py + workflow-lint + skills-lint + skill-structure, pytest last)
+validate: install-editable ## Run all quality checks, fail-fast; pytest narrows to the doc-coupled tests when only prose changed
 	@$(MAKE) lint-py
 	@$(PYTHON) ./src/aet/cli/validate-workflows.py
 	@$(PYTHON) ./scripts/skills-lint --legacy=error
 	@./scripts/validate-skills.sh
-	@$(MAKE) test
+	@$(PYTHON) -m aet.change_scope --explain
+	@$(MAKE) test PYTEST_TARGETS="$$($(PYTHON) -m aet.change_scope)"
 	@echo "✓ All validation checks passed"
 
 install-hooks: ## Install pre-commit hooks
