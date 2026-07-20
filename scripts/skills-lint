@@ -3,7 +3,7 @@
 
 Reads `aet` command lines from code spans in skill/scaffolding markdown and
 validates them against the same sources of truth the dispatcher executes:
-`aet-work/bin/aet`'s SUBCOMMANDS spec and each target binary's build_parser().
+`src/aet/cli/main.py`'s SUBCOMMANDS spec and each target binary's build_parser().
 
 Rule 1 (error): unknown `aet` subcommand, or unknown flag for its target parser.
 Rule 2 (legacy): command-position legacy names (`aet-work`, `aet-state`, ...)

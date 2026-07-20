@@ -129,5 +129,4 @@ revert restores the targets they point at.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
