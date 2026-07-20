@@ -83,5 +83,5 @@ state migration is needed either direction.
 
 ---
 
-*Stage: tdd-complete*
-*Next step: run `aet-implement`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
