@@ -3,7 +3,7 @@ id: nc-07-roadmap-resync-injection
 size: S
 blocked_by: []
 pipeline: minimal
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Docs-only roadmap edit; no code, dependency, or config surface changes.
 docs_sync: skipped
@@ -84,5 +84,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: reviewed*
+*Stage: merged*
 *Next step: ship (docs_sync skipped per plan frontmatter)*
