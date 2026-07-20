@@ -292,6 +292,29 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 
 - Task 5 (merge branch to main and verify integration): pending the ship stage.
 
+### pkg-10-filelock — Changed from plan
+
+- The target file named in the plan (`src/aet/aet_queue.py`) was already
+  renamed to `src/aet/queue.py` by pkg-03-lib-extraction; the locking refactor
+  was applied to the current path.
+- `src/aet/worktree.py` did not contain its own lock implementation; it only
+  ignores the queue lock sidecar in `check_main_hygiene`, so no worktree code
+  changes were required.
+- Hand-rolled `fcntl.flock` locking in `src/aet/queue.py` was replaced by
+  `filelock.FileLock`, preserving the same `<queue_file>.lock` sidecar path,
+  blocking acquisition, and process-level reentrancy.
+
+### pkg-10-filelock — Added (unplanned)
+
+- `pyproject.toml` runtime dependency: `filelock>=3.16,<4`.
+- Regression tests in `tests/test_concurrent_state.py` asserting the lock
+  sidecar persists after release and that a stale sidecar without a live holder
+  does not block acquisition.
+
+### pkg-10-filelock — Deferred
+
+- None.
+
 ---
 
 _Stage: synced_
