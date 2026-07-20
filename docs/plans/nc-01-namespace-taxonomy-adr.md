@@ -3,7 +3,7 @@ id: nc-01-namespace-taxonomy-adr
 size: M
 blocked_by: []
 pipeline: minimal
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Docs-only ADR; no code, dependency, or config surface changes.
 docs_sync: required
@@ -93,5 +93,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
