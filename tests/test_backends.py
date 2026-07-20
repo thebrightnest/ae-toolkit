@@ -1,20 +1,16 @@
 """Tests for aet-work backend abstraction."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
 import json
 import subprocess
 import tempfile
 import unittest
 from abc import ABC
+from pathlib import Path
 
-from backends.base import TaskBackend
-from backends.factory import UnknownBackendError, create_backend
-from backends.git_refs_backend import GitRefsBackend
-from backends.json_backend import JsonBackend
+from aet.backends.base import TaskBackend
+from aet.backends.factory import UnknownBackendError, create_backend
+from aet.backends.git_refs_backend import GitRefsBackend
+from aet.backends.json_backend import JsonBackend
 
 
 class TestTaskBackend(unittest.TestCase):

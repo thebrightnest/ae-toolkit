@@ -1,7 +1,8 @@
 """Tests for the failure taxonomy classifier and normalized signature."""
 
 import pytest
-from failure import FailureClass, classify, signature
+
+from aet.failure import FailureClass, classify, signature
 
 
 def test_classify_shutdown_is_canceled():

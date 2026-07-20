@@ -16,8 +16,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import evidence
-import verifier
+from aet import evidence, verifier
 
 _EVIDENCE_ENV_VARS = (
     "AET_EVIDENCE_PATH",
@@ -122,7 +121,7 @@ class TestDefaultIsCodePath(unittest.TestCase):
         self.assertFalse(evidence.default_is_code_path(".agents/learnings.jsonl"))
 
     def test_source_and_config_are_code(self):
-        self.assertTrue(evidence.default_is_code_path("aet-work/lib/evidence.py"))
+        self.assertTrue(evidence.default_is_code_path("src/aet/evidence.py"))
         self.assertTrue(evidence.default_is_code_path("tests/test_x.py"))
         self.assertTrue(evidence.default_is_code_path("Makefile"))
 

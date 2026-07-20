@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import track_record
+from aet import track_record
 
 
 def _task_settled_at(task: dict[str, Any]) -> str | None:

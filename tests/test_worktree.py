@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import worktree
+from aet import worktree
 
 
 class TestCopyUntrackedFiles(unittest.TestCase):

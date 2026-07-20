@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import plan_parser
-from aet_queue import TERMINAL_STATES, read_history, read_queue
+from aet import plan_parser
+from aet.queue import TERMINAL_STATES, read_history, read_queue
 
 
 @dataclass

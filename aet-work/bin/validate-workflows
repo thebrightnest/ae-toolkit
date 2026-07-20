@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Merge-time lint for workflow-as-data files.
 
-Validates the packaged ``aet-work/workflows/*.json`` and, when present, the
+Validates the packaged ``src/aet/workflows/*.json`` and, when present, the
 repo's ``.agents/workflows/*.json``. Reuses workflow.py's validation core so
 the two cannot drift, then adds the merge-time-only check the runtime loader
 deliberately skips: every bound skill must resolve to a
@@ -19,13 +19,7 @@ import json
 import sys
 from pathlib import Path
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import workflow as workflow_module  # noqa: E402
-
-_PACKAGED_WORKFLOWS_DIR = _SCRIPT_DIR.parent / "workflows"
+from aet import workflow as workflow_module
 
 
 def lint_workflow_file(path: Path, repo_root: Path) -> list[str]:
@@ -54,7 +48,7 @@ def lint_workflow_file(path: Path, repo_root: Path) -> list[str]:
 
 def workflow_files(repo_root: Path) -> list[Path]:
     """Packaged workflow files plus any repo-level workflow files."""
-    files = sorted(_PACKAGED_WORKFLOWS_DIR.glob("*.json"))
+    files = sorted(workflow_module._PACKAGED_DIR.glob("*.json"))
     repo_dir = repo_root / ".agents" / "workflows"
     if repo_dir.is_dir():
         files.extend(sorted(repo_dir.glob("*.json")))

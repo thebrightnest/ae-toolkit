@@ -10,9 +10,10 @@ import os
 import subprocess
 from pathlib import Path
 
-import breaker
 import pytest
-from failure import FailureClass, classify, signature
+
+from aet import breaker
+from aet.failure import FailureClass, classify, signature
 
 _ORCHESTRATOR_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
 _orchestrator_spec = importlib.util.spec_from_loader(

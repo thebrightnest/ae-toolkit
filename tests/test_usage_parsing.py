@@ -1,15 +1,11 @@
-"""Tests for aet-work/lib/usage.py — parsing agent CLI headless usage output."""
+"""Tests for src/aet/usage.py — parsing agent CLI headless usage output."""
 
 import json
-import sys
 import tempfile
+import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-import unittest
-
-from usage import parse_usage, resolve_kimi_session_dir_from_output
+from aet.usage import parse_usage, resolve_kimi_session_dir_from_output
 
 # Trimmed from real `claude -p --output-format json` output captured 2026-07-12:
 # a single-line JSON array whose final element (type "result") carries `usage`

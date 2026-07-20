@@ -10,12 +10,11 @@ Subcommands:
             the push when a task branch is missing required gate evidence.
 
 Standard-library only. The gate logic is not reinvented here: the check reuses
-the shared evidence / plan / workflow contract from the sibling ``aet-work/lib``
+the shared evidence / plan / workflow contract from the installed ``aet`` package
 so task-branch detection, required-stage resolution, and verdict paths stay
-consistent with the orchestrator. The whole toolkit installs as siblings under
-one skills root, so the shim's ``aet hooks check`` call works in any repo where
-``aet`` is on PATH — including a Mode-1 client repo that commits nothing about
-AET (R-9/R-10).
+consistent with the orchestrator. The shim's ``aet hooks check`` call works in any
+repo where ``aet`` is on PATH — including a Mode-1 client repo that commits
+nothing about AET (R-9/R-10).
 """
 
 from __future__ import annotations
@@ -26,14 +25,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Reuse the shared contract from aet-work/lib (sibling skill directory).
-_LIB_DIR = Path(__file__).resolve().parent.parent.parent / "aet-work" / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import evidence  # noqa: E402
-import plan_parser  # noqa: E402
-import telemetry  # noqa: E402
-from workflow import load_workflow  # noqa: E402
+from aet import (
+    evidence,  # noqa: E402
+    plan_parser,  # noqa: E402
+    telemetry,  # noqa: E402
+)
+from aet.workflow import load_workflow  # noqa: E402
 
 # Marker embedded in every shim this tool generates. ``install`` rewrites a
 # hook only when this marker is present; a hook without it is left untouched.

@@ -13,8 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-import telemetry
-import verifier
+from aet import telemetry, verifier
 
 DEFAULT_REPORTS_DIR = Path.home() / ".aet" / "reports"
 

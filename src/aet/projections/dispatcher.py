@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-from projections.base import Projection
+from aet.projections.base import Projection
 
 
 class ProjectionDispatcher:
@@ -86,7 +86,7 @@ def resolve_projections(config: dict[str, Any]) -> ProjectionDispatcher:
     for entry in config.get("projections", []):
         ptype = entry.get("type")
         if ptype == "github":
-            from backends.github_backend import GitHubBackend
+            from aet.backends.github_backend import GitHubBackend
 
             repo = entry.get("repo") or config.get("github", {}).get("repo", "")
             label_prefix = (

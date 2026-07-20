@@ -15,7 +15,7 @@ _spec = importlib.util.spec_from_loader(
 aet_state = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(aet_state)
 
-_AET_QUEUE_PY = Path(__file__).parent.parent / "aet-work" / "lib" / "aet_queue.py"
+_AET_QUEUE_PY = Path(__file__).parent.parent / "src" / "aet" / "queue.py"
 _queue_spec = importlib.util.spec_from_loader(
     "aet_queue", importlib.machinery.SourceFileLoader("aet_queue", str(_AET_QUEUE_PY))
 )

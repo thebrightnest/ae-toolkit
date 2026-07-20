@@ -9,8 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import plan_parser
-import plan_validate
+from aet import plan_parser, plan_validate
 
 _REPO_ROOT = Path(__file__).parent.parent
 
@@ -201,5 +200,5 @@ class TestSettledDecision(unittest.TestCase):
         # Hardcoded census regression guard. Update when the corpus changes.
         self.assertEqual(len(plan_files), 238)
         self.assertEqual(len(statusless), 120)
-        self.assertEqual(len(terminal), 97)
-        self.assertEqual(len(live), 21)
+        self.assertEqual(len(terminal), 101)
+        self.assertEqual(len(live), 17)

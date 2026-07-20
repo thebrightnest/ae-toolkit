@@ -38,27 +38,28 @@ same CLI behavior, same test suite expectations.
 
 1. `git mv aet-work/lib/*.py aet-work/lib/backends aet-work/lib/projections`
    into `src/aet/` preserving module names (`aet/queue.py`,
-   `aet/backends/*`, `aet/projections/*`, ...); decide mechanical renames
-   (`aet_queue.py` → `aet/queue.py`) and record them in the PRD divergence
-   note — L (traces: R-2)
+   `aet/backends/*`, `aet/projections/*`, ...); `aet_queue.py` renamed to
+   `aet/queue.py` and recorded in the PRD divergence note — L (traces: R-2)
+   [Changed: pre-approved rename to avoid `aet.aet_queue` stutter]
 2. Rewrite intra-package imports to `from aet.x import ...` (absolute) — M
-   (traces: R-3)
+   (traces: R-3) ✓
 3. Update all bin scripts (`aet-work/bin/*`, `aet-ship/bin/ship`,
    `aet-evolve/bin/*`, `aet-setup/bin/*`) to drop `sys.path.insert` and import
-   the installed package — M (traces: R-3)
+   the installed package — M (traces: R-3) ✓
 4. Update `aet-work/panel/serve` and `scripts/test-*.py` import sites — S
-   (traces: R-3)
+   (traces: R-3) ✓ (`panel/serve` and `scripts/test-aet-state.py` required no
+   changes)
 5. Update `tests/conftest.py` (remove lib `sys.path` insertion; keep isolation
    fixtures) and every test file's imports; verify no bare `import telemetry`
-   style imports remain — L (traces: R-4)
+   style imports remain — L (traces: R-4) ✓
 6. Move `aet-work/workflows/` → `src/aet/workflows/` as package data (declare
    in `pyproject.toml`); fix `_PACKAGED_DIR` in `src/aet/workflow.py`
    (`Path(__file__).parent / "workflows"`); update the **Workflow** glossary
-   path in `CONTEXT.md` — S (traces: R-2, R-3)
+   path in `CONTEXT.md` — S (traces: R-2, R-3) ✓
 7. Delete now-empty `aet-work/lib/` and `aet-setup/lib/` (harness_guard moves
    in pkg-06; leave its shim until then — record in divergence note) — S
-   (traces: R-2)
-8. Merge branch to main and verify integration — S
+   (traces: R-2) [Deferred: `aet-setup/lib/harness_guard.py` stays until pkg-06]
+8. Merge branch to main and verify integration — S [Deferred: pending ship]
 
 **Size definitions:**
 
@@ -97,19 +98,23 @@ same CLI behavior, same test suite expectations.
 
 ## Validation Steps
 
-- [ ] `grep -rn "sys.path.insert" aet-work aet-ship aet-evolve aet-setup src/`
+- [x] `grep -rn "sys.path.insert" aet-work aet-ship aet-evolve aet-setup src/`
   returns nothing
-- [ ] `grep -rln "^import telemetry\|^from telemetry\|^import aet_queue" tests/`
+- [x] `grep -rln "^import telemetry\|^from telemetry\|^import aet_queue" tests/`
   returns nothing (spot-check: bare-module imports gone)
-- [ ] Full pytest suite passes unmodified in behavior — the existing ~80 test
-  files (e.g. `tests/test_backends.py`, `tests/test_telemetry.py`,
-  `tests/test_orchestrator.py`) are the named coverage for every moved module;
-  no new source behavior is introduced, so no new tests are required
-- [ ] `make validate` green (lint-py + skills-lint + workflow lint + validator)
-- [ ] `aet status`, `aet report` run identically from the repo checkout
-- [ ] R-trace coverage: R-2 by tasks 1, 6, 7; R-3 by tasks 2–4, 6; R-4 by task 5; no
-  unknown R-ids cited
+- [x] Full pytest suite passes unmodified in behavior — `make test`: 901 passed,
+  1 skipped; the existing ~80 test files are the named coverage for every moved
+  module; no new source behavior is introduced, so no new tests are required
+- [x] `make validate` green (lint-py + skills-lint + workflow lint + validator)
+- [ ] `aet status`, `aet report` run identically from the repo checkout — the
+  pip-installed `aet` console entry point is currently broken
+  (`pyproject.toml` → missing `src/aet/cli.py`); the `aet-work/bin/aet`
+  dispatcher still works and was updated to bootstrap `PYTHONPATH` for source
+  checkouts
+- [x] R-trace coverage: R-2 by tasks 1, 6, 7; R-3 by tasks 2–4, 6; R-4 by task 5;
+  no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+  [Deferred: pending ship]
 
 ## Rollback Plan
 
@@ -118,5 +123,5 @@ the old layout returns wholesale. No data or state files are touched.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

@@ -11,18 +11,17 @@ import importlib.util
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-import evidence  # noqa: E402
-import telemetry  # noqa: E402
-from cli_adapter import CLIAdapter  # noqa: E402
-from workflow import load_workflow  # noqa: E402
+from aet import (  # noqa: E402
+    evidence,
+    telemetry,
+)
+from aet.cli_adapter import CLIAdapter  # noqa: E402
+from aet.workflow import load_workflow  # noqa: E402
 
 REPO_ROOT = Path(__file__).parent.parent
 FIXTURE_PATH = REPO_ROOT / "tests" / "fixtures" / "workflows" / "content.json"
@@ -36,7 +35,6 @@ _lint_spec.loader.exec_module(validate_workflows)
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = REPO_ROOT / "aet-work" / "bin" / "orchestrator"
-sys.path.insert(0, str(_ORCHESTRATOR_BIN.parent))
 _orch_loader = importlib.machinery.SourceFileLoader("orchestrator", str(_ORCHESTRATOR_BIN))
 _orch_spec = importlib.util.spec_from_loader("orchestrator", _orch_loader)
 orchestrator = importlib.util.module_from_spec(_orch_spec)

@@ -2,19 +2,16 @@
 
 import copy
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-import workflow as workflow_module  # noqa: E402
-from workflow import WorkflowError, load_workflow  # noqa: E402
+from aet import workflow as workflow_module  # noqa: E402
+from aet.workflow import WorkflowError, load_workflow  # noqa: E402
 
 REPO_ROOT = Path(__file__).parent.parent
 
-PACKAGED_PATH = REPO_ROOT / "aet-work" / "workflows" / "software.json"
+PACKAGED_PATH = REPO_ROOT / "src" / "aet" / "workflows" / "software.json"
 
 
 def packaged_document():

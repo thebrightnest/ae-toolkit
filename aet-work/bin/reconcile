@@ -15,11 +15,8 @@ from pathlib import Path
 from typing import Any
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-from backends.factory import resolve_config  # noqa: E402
-from projections.dispatcher import resolve_projections  # noqa: E402
+from aet.backends.factory import resolve_config  # noqa: E402
+from aet.projections.dispatcher import resolve_projections  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

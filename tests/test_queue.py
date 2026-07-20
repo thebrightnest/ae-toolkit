@@ -1,15 +1,11 @@
 """Tests for queue module."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
 import json
 import tempfile
 import unittest
+from pathlib import Path
 
-from aet_queue import (
+from aet.queue import (
     get_next_unblocked,
     has_pending_tasks,
     read_history,

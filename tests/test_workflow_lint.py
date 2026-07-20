@@ -23,7 +23,7 @@ _spec = importlib.util.spec_from_loader("validate_workflows", _loader)
 validate_workflows = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(validate_workflows)
 
-PACKAGED_PATH = REPO_ROOT / "aet-work" / "workflows" / "software.json"
+PACKAGED_PATH = REPO_ROOT / "src" / "aet" / "workflows" / "software.json"
 
 
 def packaged_document():

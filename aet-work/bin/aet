@@ -18,6 +18,7 @@ Two pieces of PATH ownership live in this file itself (R-5, R-11):
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 from pathlib import Path
@@ -181,9 +182,42 @@ def _parse_run_args(args: list[str]) -> list[str]:
     return out
 
 
-def _exec(binary: Path, argv: list[str]) -> int:
+def _ensure_aet_importable() -> None:
+    """Bootstrap PYTHONPATH for repo checkouts when ``aet`` is not installed.
+
+    After the lib extraction, skill binaries import the installed ``aet``
+    package. When the dispatcher runs from a source checkout (e.g. tests or
+    a worktree) without the package being installed in the invoked Python,
+    prepend ``<repo-root>/src`` to PYTHONPATH so the package is discoverable.
+    If ``aet`` is already importable, this is a no-op.
+    """
     try:
-        os.execvp(str(binary), argv)
+        importlib.import_module("aet")
+        return
+    except ImportError:
+        pass
+
+    repo_root = _skills_root()
+    src_dir = repo_root / "src"
+    if (src_dir / "aet" / "__init__.py").is_file():
+        current = os.environ.get("PYTHONPATH", "")
+        if current:
+            os.environ["PYTHONPATH"] = f"{src_dir}{os.pathsep}{current}"
+        else:
+            os.environ["PYTHONPATH"] = str(src_dir)
+
+
+def _exec(binary: Path, argv: list[str]) -> int:
+    """Run *binary* with the same Python interpreter as the dispatcher.
+
+    Using ``sys.executable`` instead of ``execvp`` keeps the target binary in
+    the same Python environment that is running the dispatcher. This matters
+    after the lib extraction: skill binaries import the installed ``aet``
+    package, and letting the script shebang pick a different interpreter (e.g.
+    the system python) would make the package disappear.
+    """
+    try:
+        os.execvp(sys.executable, [sys.executable, str(binary), *argv[1:]])
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 0
 
@@ -330,6 +364,7 @@ def main() -> int:
         return _install(argv[2:])
 
     _ensure_path_link()
+    _ensure_aet_importable()
     binary = _resolve_target(spec)
     _, bin_name = spec["target"]
 

@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-from backends.github_backend import STATE_LABELS, GitHubBackend
+from aet.backends.github_backend import STATE_LABELS, GitHubBackend
 
 
 def _completed(stdout: str = "", returncode: int = 0, stderr: str = ""):
@@ -92,7 +89,7 @@ class TestBoardReconcile(unittest.TestCase):
         """Return all gh argv lists issued during a test."""
         return [call.args[0] for call in mock_run.call_args_list]
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_dryrun_reports_missing_issues_and_mutates_nothing(self, mock_run):
         """A dry run prints missing drift and never creates or edits issues."""
         _make_plan(self.plans_dir, "feat-001.md", status="approved")
@@ -118,7 +115,7 @@ class TestBoardReconcile(unittest.TestCase):
         self.assertEqual(report["drift"][0]["plan_id"], "feat-001")
         self.assertEqual(report["drift"][0]["expected_label"], "aet:backlog")
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_apply_creates_missing_and_corrects_labels(self, mock_run):
         """--apply creates missing issues and relabels mislabeled ones."""
         _make_plan(self.plans_dir, "feat-001.md", status="approved")
@@ -159,7 +156,7 @@ class TestBoardReconcile(unittest.TestCase):
         self.assertIn("aet:ready", edit_calls[0])
         self.assertIn("--remove-label", edit_calls[0])
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_reports_hand_closed_live_issue(self, mock_run):
         """A live plan whose issue was hand-closed is reported; --apply reopens it."""
         _make_plan(self.plans_dir, "feat-003.md", status="queued")
@@ -194,7 +191,7 @@ class TestBoardReconcile(unittest.TestCase):
         self.assertEqual(len(reopen_calls), 1)
         self.assertIn("8", reopen_calls[0])
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_orphan_issue_reported_not_deleted(self, mock_run):
         """An issue for a non-live plan is reported and never deleted."""
         _make_plan(self.plans_dir, "feat-004.md", status="merged")
@@ -217,7 +214,7 @@ class TestBoardReconcile(unittest.TestCase):
         self.assertEqual(report["drift"][0]["type"], "orphan")
         self.assertEqual(report["drift"][0]["plan_id"], "feat-099")
 
-    @mock.patch("backends.github_backend.subprocess.run")
+    @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_second_apply_is_empty(self, mock_run):
         """After a successful --apply, the next reconcile reports no drift."""
         _make_plan(self.plans_dir, "feat-005.md", status="approved")

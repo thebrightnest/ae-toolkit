@@ -4,7 +4,7 @@
 Reads both structured JSONL records and narrative markdown reports so it can
 surface patterns the toolkit authors did not explicitly instrument.
 
-Archive layout (as written by aet-work/lib/telemetry.py; the project slug is
+Archive layout (as written by src/aet/telemetry.py; the project slug is
 <main-worktree-dir>/<worktree-label>):
     ~/.aet/telemetry/{project-dir}/{worktree-label}/{date}/{run-id}/
         ├── last-run.json

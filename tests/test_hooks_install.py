@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import evidence
+from aet import evidence
 
 _REPO_ROOT = Path(__file__).parent.parent
 _HOOKS_BIN = _REPO_ROOT / "aet-setup" / "bin" / "hooks"
@@ -254,8 +254,11 @@ class TestDispatchRouting(unittest.TestCase):
             with patch.object(aet.os, "execvp", mock_execvp):
                 rc = aet.main()
         self.assertEqual(rc, 0)
-        self.assertEqual(captured["path"], _REPO_ROOT / "aet-setup" / "bin" / "hooks")
-        self.assertEqual(captured["argv"], ["hooks", "install"])
+        self.assertEqual(captured["path"], Path(sys.executable))
+        self.assertEqual(
+            captured["argv"],
+            [sys.executable, str(_REPO_ROOT / "aet-setup" / "bin" / "hooks"), "install"],
+        )
 
 
 if __name__ == "__main__":

@@ -13,9 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
-
-from backends.github_backend import GitHubBackend
+from aet.backends.github_backend import GitHubBackend
 
 _REPO_ROOT = Path(__file__).parent.parent
 _BACKLOG_PY = _REPO_ROOT / "aet-work" / "bin" / "backlog"
@@ -37,7 +35,7 @@ def _completed(stdout: str = "", returncode: int = 0, stderr: str = ""):
 
 
 def _label_list_response() -> str:
-    from backends.github_backend import STATE_LABELS
+    from aet.backends.github_backend import STATE_LABELS
 
     return json.dumps([{"name": f"aet:{suffix}"} for suffix in STATE_LABELS.values()])
 

@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import telemetry
+from aet import telemetry
 
 
 def test_default_env_points_into_pytest_tmp(tmp_path):

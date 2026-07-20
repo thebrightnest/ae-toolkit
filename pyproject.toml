@@ -23,3 +23,4 @@ aet = "aet.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aet"]
+include = ["src/aet/workflows/*.json"]

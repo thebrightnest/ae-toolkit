@@ -12,10 +12,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import evidence
-import telemetry
-from cli_adapter import CLIAdapter
-from workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
+from aet import evidence, telemetry
+from aet.cli_adapter import CLIAdapter
+from aet.workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"

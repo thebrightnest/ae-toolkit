@@ -3,7 +3,6 @@
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,7 +10,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 SCRIPT = REPO_ROOT / "aet-setup" / "bin" / "configure-task-backend"
 
-sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
 
 
 class TestConfigureTaskBackend(unittest.TestCase):
@@ -90,8 +88,8 @@ class TestConfigureTaskBackend(unittest.TestCase):
     def test_factory_no_config_fallback_remains_json(self):
         # Guards the rejected factory-level flip: aet-setup writes git-refs by
         # default, but the no-config factory fallback must stay JsonBackend.
-        from backends.factory import create_backend
-        from backends.json_backend import JsonBackend
+        from aet.backends.factory import create_backend
+        from aet.backends.json_backend import JsonBackend
 
         backend = create_backend(
             config_path=str(self.project / "missing.json"),

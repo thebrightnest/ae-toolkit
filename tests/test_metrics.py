@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import metrics
+from aet import metrics
 
 
 def _write_history(path: Path, tasks: list[dict]) -> None:
