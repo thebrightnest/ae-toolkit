@@ -1,4 +1,4 @@
-"""Integration tests for scripts/migrate-telemetry-slugs.py.
+"""Integration tests for scripts/archive/migrate-telemetry-slugs.py.
 
 The script is exercised via subprocess against a tmp fixture archive — never
 the real ``~/.aet`` tree. Flags ``--archive``/``--reports`` point both roots
