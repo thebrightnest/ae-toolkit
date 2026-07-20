@@ -163,14 +163,21 @@ def _run_scenario(repo: Path, backend: str) -> dict[str, dict]:
     return {"live": _by_id(data["queue"]), "settled": _by_id(settled)}
 
 
-@pytest.fixture
-def snapshots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, dict]:
-    """Run the scenario for both backends and return both snapshots."""
+@pytest.fixture(scope="module")
+def snapshots(tmp_path_factory: pytest.TempPathFactory) -> dict[str, dict]:
+    """Run the scenario for both backends and return both snapshots.
+
+    Module-scoped: the scenario shells out to real ``git`` to build two repos,
+    and every test only reads the resulting snapshot, so one run serves the
+    whole file.
+    """
     results: dict[str, dict] = {}
-    for backend in ("json", "git-refs"):
-        repo = _init_merged_repo(tmp_path / backend)
-        monkeypatch.chdir(repo)
-        results[backend] = _run_scenario(repo, backend)
+    base = tmp_path_factory.mktemp("parity")
+    with pytest.MonkeyPatch.context() as mp:
+        for backend in ("json", "git-refs"):
+            repo = _init_merged_repo(base / backend)
+            mp.chdir(repo)
+            results[backend] = _run_scenario(repo, backend)
     return results
 
 

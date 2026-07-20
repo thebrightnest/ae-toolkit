@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parents[1]
-_AET_PY = _REPO_ROOT / "aet-work" / "bin" / "aet"
+_AET_PY = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 
 _aet_spec = importlib.util.spec_from_loader(
     "aet_run_dispatch",
