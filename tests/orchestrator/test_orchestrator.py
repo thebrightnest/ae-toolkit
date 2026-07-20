@@ -18,6 +18,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 # Ensure the aet-work lib is on the path before importing telemetry.
 from aet import evidence, telemetry
 from aet.cli_adapter import CLIAdapter, resolve_cli_adapter
@@ -29,6 +31,8 @@ _orchestrator_loader = importlib.machinery.SourceFileLoader("orchestrator", str(
 _spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(orchestrator)
+
+pytestmark = pytest.mark.xdist_group("orchestrator")
 
 
 _FAKE_ADAPTER = CLIAdapter(

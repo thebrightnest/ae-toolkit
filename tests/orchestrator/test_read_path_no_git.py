@@ -18,6 +18,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+pytestmark = pytest.mark.xdist_group("orchestrator")
+
 _REPO_ROOT = Path(__file__).parents[2]
 _STATUS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "status.py"
 _NEXT_PY = _REPO_ROOT / "src" / "aet" / "cli" / "next.py"

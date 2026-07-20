@@ -3,6 +3,27 @@
 Usage:
     orchestrator --queue-file .agents/work-queue.json
     orchestrator --plan-file docs/plans/FEAT-001-plan.md
+
+Daemonization design (Open Question #3, nc-06-run-daemonization):
+
+The orchestrator itself is process-attachment-agnostic: it reads stdin/stdout
+normally and relies on the dispatcher to decide whether to wait for it.  When
+invoked with ``--log-file`` the orchestrator redirects its own stdout/stderr to
+that file so the log is authoritative even if the parent dispatcher exits.  The
+dispatcher performs the actual detach by spawning the orchestrator with
+``subprocess.Popen(..., start_new_session=True)`` and immediately returning.
+This keeps all fork/session-leader logic in one place (the dispatcher) while the
+orchestrator remains a well-behaved Python program that can still be run
+interactively for debugging.
+
+Run metadata lives under ``.agents/runs/<run-id>/``:
+
+* ``output.log`` — stdout/stderr of the orchestrator
+* ``pid`` — orchestrator pid, written after startup
+* ``started`` — ISO timestamp
+
+The per-task ``--task-timeout`` and ``--stall-timeout`` watchdog logic is
+untouched by this change; only the launch presentation layer changed.
 """
 
 from __future__ import annotations
@@ -106,6 +127,68 @@ def _make_backend(queue_file: str):
     """
     history_file = str(Path(queue_file).with_name("work-history.jsonl"))
     return create_backend(queue_file=queue_file, history_file=history_file)
+
+
+def _runs_dir(repo_root: str) -> Path:
+    """Return the canonical directory for detached-run metadata."""
+    return Path(repo_root) / ".agents" / "runs"
+
+
+def _run_dir(repo_root: str, run_id: str) -> Path:
+    """Return the per-run metadata directory for ``run_id``."""
+    return _runs_dir(repo_root) / run_id
+
+
+def _write_run_metadata(repo_root: str, run_id: str) -> None:
+    """Persist pid and started timestamp for an active detached run.
+
+    Best-effort: any filesystem failure is logged but does not block the run.
+    """
+    rdir = _run_dir(repo_root, run_id)
+    try:
+        rdir.mkdir(parents=True, exist_ok=True)
+        (rdir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+        (rdir / "started").write_text(telemetry.iso_now(), encoding="utf-8")
+    except OSError as exc:
+        print(f"   ⚠️  Could not write run metadata for {run_id}: {exc}")
+
+
+def _write_returncode(repo_root: str, run_id: str, exit_code: int) -> None:
+    """Persist the orchestrator's exit code so ``aet run --follow`` can mirror it.
+
+    Best-effort: any filesystem failure is logged but does not block the run.
+    """
+    rc_file = _run_dir(repo_root, run_id) / "returncode"
+    try:
+        rc_file.parent.mkdir(parents=True, exist_ok=True)
+        rc_file.write_text(str(exit_code), encoding="utf-8")
+    except OSError as exc:
+        print(f"   ⚠️  Could not write returncode for {run_id}: {exc}")
+
+
+def _redirect_output(log_file: str | None) -> None:
+    """Redirect stdout/stderr to ``log_file`` when in detached-run mode.
+
+    The original stdout/stderr file descriptors are duplicated so tracebacks
+    during early startup still have somewhere to go.  ``log_file`` is created
+    if it does not exist and appended to if it does (supports ``--follow`` on
+    a restarted run).
+    """
+    if not log_file:
+        return
+    try:
+        # Ensure the log directory exists before reopening fds.
+        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+        log = open(log_file, "a", buffering=1, encoding="utf-8")
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(log.fileno(), sys.stdout.fileno())
+        os.dup2(log.fileno(), sys.stderr.fileno())
+        # Keep the file object alive so the interpreter does not close the fd.
+        sys._aet_run_log = log  # type: ignore[attr-defined]
+    except OSError as exc:
+        print(f"   ⚠️  Could not redirect output to {log_file}: {exc}", file=sys.stderr)
+
 
 
 def read_plan_pipeline(plan_file: str) -> str | None:
@@ -233,6 +316,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=60,
         help="Seconds between heartbeat log lines (default: 60).",
+    )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Run identifier used for telemetry and run metadata.",
+    )
+    parser.add_argument(
+        "--log-file",
+        default=None,
+        help="Redirect stdout/stderr to this file (detached-run mode).",
     )
     parser.add_argument(
         "--on-failure",
@@ -1715,7 +1808,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     breaker_store = breaker.BreakerStore(repo_root)
     systemic_tally = breaker_store.load()
 
-    logger = telemetry.RunLogger(repo_root)
+    logger = telemetry.RunLogger(repo_root, run_id=getattr(args, "run_id", None))
     start_time = telemetry.iso_now()
     task_ids: list[str] = []
 
@@ -2137,7 +2230,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     repo_root = args.repo_root
     plan_file = args.plan_file
 
-    run_id = os.environ.get("AET_RUN_ID")
+    run_id = getattr(args, "run_id", None) or os.environ.get("AET_RUN_ID")
     logger = telemetry.RunLogger(repo_root, run_id=run_id)
     # Ensure every subprocess (aet-state calls and stage sessions) inherits this
     # run id so their queue mutations pass the lease check.
@@ -2370,12 +2463,26 @@ def main(argv: list[str] | None = None):
     args = parse_args(argv)
     adapter = resolve_cli_adapter(args.cli_bin)
 
-    print(f"🤖 Orchestrator using {adapter.name} ({adapter.bin})")
+    repo_root = args.repo_root
+    run_id = args.run_id
+    if run_id:
+        _redirect_output(args.log_file)
+        _write_run_metadata(repo_root, run_id)
 
-    if args.queue_file:
-        return run_batch(args, adapter)
-    else:
-        return run_single(args, adapter)
+    print(f"🤖 Orchestrator using {adapter.name} ({adapter.bin})")
+    if run_id:
+        print(f"   Run ID: {run_id}")
+
+    exit_code = 1
+    try:
+        if args.queue_file:
+            exit_code = run_batch(args, adapter)
+        else:
+            exit_code = run_single(args, adapter)
+    finally:
+        if run_id:
+            _write_returncode(repo_root, run_id, exit_code)
+    return exit_code
 
 
 if __name__ == "__main__":

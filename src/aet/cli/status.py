@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -69,6 +70,42 @@ def _render_table(headers: list[str], rows: list[list[str]]) -> list[str]:
     return [fmt(headers), separator, *(fmt(row) for row in rows)]
 
 
+def _is_process_alive(pid: int) -> bool:
+    """Return True if ``pid`` is still running."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
+def _active_runs(runs_dir: Path) -> list[dict]:
+    """List detached runs under ``runs_dir`` whose pid is still alive."""
+    runs: list[dict] = []
+    if not runs_dir.is_dir():
+        return runs
+    for entry in sorted(runs_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        pid_file = entry / "pid"
+        started_file = entry / "started"
+        if not pid_file.is_file():
+            continue
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+        except ValueError:
+            continue
+        if not _is_process_alive(pid):
+            continue
+        started = ""
+        if started_file.is_file():
+            started = started_file.read_text(encoding="utf-8").strip()
+        runs.append({"id": entry.name, "pid": pid, "started": started})
+    return runs
+
+
 def _queue_updated_at(queue_file: str) -> str | None:
     """Return the wrapper's queue_updated_at for JSON-backed queues, else None."""
     try:
@@ -81,7 +118,7 @@ def _queue_updated_at(queue_file: str) -> str | None:
     return None
 
 
-def _json_projection(queue: list[dict], queue_file: str) -> dict:
+def _json_projection(queue: list[dict], queue_file: str, runs_dir: Path) -> dict:
     """Build the machine-readable status projection (minimal v1 schema)."""
     counts: dict[str, int] = {}
     for task in queue:
@@ -89,6 +126,7 @@ def _json_projection(queue: list[dict], queue_file: str) -> dict:
         counts[category] = counts.get(category, 0) + 1
     return {
         "queue_updated_at": _queue_updated_at(queue_file),
+        "active_runs": _active_runs(runs_dir),
         "summary": counts,
         "tasks": [
             {
@@ -125,9 +163,10 @@ def main(argv: list[str] | None = None):
         queue = backend.load(verify=False)["queue"]
         integrity_failed = True
     plans_dir = Path(args.plans_dir)
+    runs_dir = Path.cwd() / ".agents" / "runs"
 
     if args.json:
-        print(json.dumps(_json_projection(queue, args.queue_file), indent=2))
+        print(json.dumps(_json_projection(queue, args.queue_file, runs_dir), indent=2))
         return 0
 
     orphaned = [] if integrity_failed else backend.plan_drift(plans_dir)
@@ -156,6 +195,15 @@ def main(argv: list[str] | None = None):
     print("\nQueue summary (active tasks only):")
     for state, count in counts.items():
         print(f"  {state}: {count}")
+
+    active_runs = _active_runs(runs_dir)
+    print("\nActive detached runs:")
+    if active_runs:
+        for run in active_runs:
+            started = f" (started {run['started']})" if run["started"] else ""
+            print(f"  - {run['id']} (PID {run['pid']}){started}")
+    else:
+        print("  None.")
 
     terminal = {"merged", "abandoned"}
     active_ids = {t.get("id") for t in queue}
