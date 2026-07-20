@@ -118,5 +118,5 @@ the old layout returns wholesale. No data or state files are touched.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
