@@ -205,7 +205,11 @@ class TestAetExecRouting(_IsolatedBinDir):
 
 
 class TestRunMapping(_IsolatedBinDir):
-    """run/run-one map user flags to the documented orchestrator argv."""
+    """run/run-one map user flags to the documented orchestrator argv.
+
+    Since nc-06-run-daemonization the default is detached spawn; the blocking
+    exec path is preserved under ``--foreground``.
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -229,11 +233,12 @@ class TestRunMapping(_IsolatedBinDir):
     def _expected_run_argv(self, *extra):
         return [sys.executable, str(_REPO_ROOT / "src" / "aet" / "cli" / "orchestrator.py"), *extra]
 
-    def test_run_with_all_flags(self):
-        """`aet run <flags>` execs the orchestrator with the mapped argv."""
+    def test_run_with_all_flags_foreground(self):
+        """`aet run --foreground <flags>` execs the orchestrator with mapped argv."""
         argv = [
             "aet",
             "run",
+            "--foreground",
             "--max-jobs",
             "2",
             "--isolation",
@@ -266,9 +271,9 @@ class TestRunMapping(_IsolatedBinDir):
             ),
         )
 
-    def test_run_defaults(self):
-        """`aet run` with no flags produces the default orchestrator argv."""
-        rc, _, exec_argv = self._capture_exec(["aet", "run"])
+    def test_run_defaults_foreground(self):
+        """`aet run --foreground` produces the default orchestrator argv."""
+        rc, _, exec_argv = self._capture_exec(["aet", "run", "--foreground"])
         self.assertEqual(rc, 0)
         self.assertEqual(
             exec_argv,
@@ -282,10 +287,10 @@ class TestRunMapping(_IsolatedBinDir):
             ),
         )
 
-    def test_run_one_maps_plan_positional(self):
-        """`aet run-one <plan>` maps the plan positional to --plan-file."""
+    def test_run_one_maps_plan_positional_foreground(self):
+        """`aet run-one --foreground <plan>` maps the plan positional to --plan-file."""
         rc, _, exec_argv = self._capture_exec(
-            ["aet", "run-one", "docs/plans/FEAT-001.md", "--cli-bin", "/bin/kimi"]
+            ["aet", "run-one", "docs/plans/FEAT-001.md", "--foreground", "--cli-bin", "/bin/kimi"]
         )
         self.assertEqual(rc, 0)
         self.assertEqual(
@@ -311,14 +316,44 @@ class TestRunMapping(_IsolatedBinDir):
         self.assertEqual(rc, 2)
         mock_exec.assert_not_called()
 
-    def test_run_maps_on_failure_flag(self):
-        """`aet run --on-failure` forwards the flag to the orchestrator."""
+    def test_run_maps_on_failure_flag_foreground(self):
+        """`aet run --foreground --on-failure` forwards the flag to the orchestrator."""
         rc, _, exec_argv = self._capture_exec(
-            ["aet", "run", "--on-failure", "halt"]
+            ["aet", "run", "--foreground", "--on-failure", "halt"]
         )
         self.assertEqual(rc, 0)
         self.assertIn("--on-failure", exec_argv)
         self.assertEqual(exec_argv[exec_argv.index("--on-failure") + 1], "halt")
+
+    def test_run_spawns_detached_by_default(self):
+        """`aet run` with no flags spawns the orchestrator detached."""
+        captured = {}
+
+        def fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            mock = unittest.mock.MagicMock()
+            mock.pid = 12345
+            return mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with patch.object(sys, "argv", ["aet", "run"]):
+                    with self._bin_env():
+                        with patch.object(aet.subprocess, "Popen", side_effect=fake_popen) as popen_mock:
+                            with patch.object(aet, "_generate_run_id", return_value="run-detached-abc"):
+                                rc = aet.main()
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 0)
+            popen_mock.assert_called_once()
+            self.assertEqual(captured["kwargs"]["start_new_session"], True)
+            self.assertIn("--run-id", captured["cmd"])
+            self.assertIn("run-detached-abc", captured["cmd"])
+            self.assertIn("--log-file", captured["cmd"])
 
 
 class TestAetErrorPaths(_IsolatedBinDir):

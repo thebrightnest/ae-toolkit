@@ -1,0 +1,204 @@
+"""Tests for the orchestrator's detached-run mode (nc-06-run-daemonization)."""
+
+from __future__ import annotations
+
+import importlib.util
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from aet.cli_adapter import CLIAdapter
+
+_FAKE_ADAPTER = CLIAdapter(
+    name="test",
+    bin="echo",
+    prompt_flag="-p",
+    workdir_flag=None,
+    headless_flag=None,
+)
+
+_ORCHESTRATOR_BIN = Path(__file__).parents[1] / "src" / "aet" / "cli" / "orchestrator.py"
+_orchestrator_loader = importlib.machinery.SourceFileLoader(
+    "orchestrator_daemonize", str(_ORCHESTRATOR_BIN)
+)
+_spec = importlib.util.spec_from_loader("orchestrator_daemonize", _orchestrator_loader)
+orchestrator = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(orchestrator)
+
+
+class TestRunPaths(unittest.TestCase):
+    def test_runs_dir_is_under_agents(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            self.assertEqual(
+                orchestrator._runs_dir(repo_root),
+                Path(repo_root) / ".agents" / "runs",
+            )
+
+    def test_run_dir_is_named_by_run_id(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            self.assertEqual(
+                orchestrator._run_dir(repo_root, "run-abc"),
+                Path(repo_root) / ".agents" / "runs" / "run-abc",
+            )
+
+
+class TestRunMetadata(unittest.TestCase):
+    def test_write_run_metadata_creates_pid_and_started_files(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            run_id = "run-test-metadata"
+            orchestrator._write_run_metadata(repo_root, run_id)
+            rdir = orchestrator._run_dir(repo_root, run_id)
+            self.assertTrue(rdir.is_dir())
+            self.assertEqual((rdir / "pid").read_text(encoding="utf-8"), str(os.getpid()))
+            self.assertTrue((rdir / "started").read_text(encoding="utf-8"))
+
+    def test_write_run_metadata_is_best_effort_on_bad_path(self):
+        # A non-existent parent deep under a file should not raise.
+        with tempfile.TemporaryDirectory() as repo_root:
+            bad_path = os.path.join(repo_root, "not-a-dir", "runs")
+            with patch.object(orchestrator.Path, "mkdir", side_effect=OSError("boom")):
+                # _write_run_metadata prints a warning and swallows the error.
+                orchestrator._write_run_metadata(bad_path, "run-x")
+
+
+class TestOutputRedirection(unittest.TestCase):
+    def test_redirect_output_appends_to_log_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log_file = os.path.join(tmp, "output.log")
+            Path(log_file).write_text("existing\n", encoding="utf-8")
+            old_stdout_fd = os.dup(sys.stdout.fileno())
+            old_stderr_fd = os.dup(sys.stderr.fileno())
+            try:
+                orchestrator._redirect_output(log_file)
+                print("after redirection")
+                sys.stderr.write("stderr line\n")
+                sys.stdout.flush()
+                sys.stderr.flush()
+            finally:
+                os.dup2(old_stdout_fd, sys.stdout.fileno())
+                os.dup2(old_stderr_fd, sys.stderr.fileno())
+                os.close(old_stdout_fd)
+                os.close(old_stderr_fd)
+                if hasattr(sys, "_aet_run_log"):
+                    del sys._aet_run_log
+            content = Path(log_file).read_text(encoding="utf-8")
+            self.assertIn("existing", content)
+            self.assertIn("after redirection", content)
+            self.assertIn("stderr line", content)
+
+    def test_redirect_output_noop_when_log_file_absent(self):
+        old_stdout_fd = os.dup(sys.stdout.fileno())
+        old_stderr_fd = os.dup(sys.stderr.fileno())
+        try:
+            orchestrator._redirect_output(None)
+            self.assertEqual(os.fstat(sys.stdout.fileno()).st_ino, os.fstat(old_stdout_fd).st_ino)
+            self.assertEqual(os.fstat(sys.stderr.fileno()).st_ino, os.fstat(old_stderr_fd).st_ino)
+        finally:
+            os.close(old_stdout_fd)
+            os.close(old_stderr_fd)
+
+
+class TestArgumentParser(unittest.TestCase):
+    def test_parser_accepts_run_id_and_log_file(self):
+        args = orchestrator.parse_args(
+            [
+                "--plan-file",
+                "docs/plans/x.md",
+                "--run-id",
+                "run-123",
+                "--log-file",
+                "/tmp/run.log",
+            ]
+        )
+        self.assertEqual(args.run_id, "run-123")
+        self.assertEqual(args.log_file, "/tmp/run.log")
+
+
+class TestMainUsesRunId(unittest.TestCase):
+    def test_main_redirects_output_and_writes_metadata_when_run_id_given(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = Path(repo_root, "docs", "plans", "demo.md")
+            plan_file.parent.mkdir(parents=True, exist_ok=True)
+            plan_file.write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                encoding="utf-8",
+            )
+            run_id = "run-main-test"
+            log_file = os.path.join(repo_root, ".agents", "runs", run_id, "output.log")
+
+            with patch.object(
+                orchestrator, "resolve_cli_adapter", return_value=_FAKE_ADAPTER
+            ):
+                with patch.object(orchestrator, "run_single", return_value=0) as mock_run:
+                    with patch.object(
+                        orchestrator, "_redirect_output"
+                    ) as mock_redirect:
+                        with patch.object(
+                            orchestrator, "_write_run_metadata"
+                        ) as mock_metadata:
+                            with patch.dict(
+                                os.environ,
+                                {"AET_EXECUTION_MODE": "unattended"},
+                                clear=False,
+                            ):
+                                rc = orchestrator.main(
+                                    [
+                                        "--plan-file",
+                                        str(plan_file),
+                                        "--repo-root",
+                                        repo_root,
+                                        "--run-id",
+                                        run_id,
+                                        "--log-file",
+                                        log_file,
+                                        "--cli-bin",
+                                        "echo",
+                                    ]
+                                )
+
+            self.assertEqual(rc, 0)
+            mock_run.assert_called_once()
+            mock_redirect.assert_called_once_with(log_file)
+            mock_metadata.assert_called_once_with(repo_root, run_id)
+
+
+class TestRunLoggerInheritsRunId(unittest.TestCase):
+    def test_run_single_uses_args_run_id(self):
+        with tempfile.TemporaryDirectory() as archive_dir:
+            with tempfile.TemporaryDirectory() as repo_root:
+                plan_file = Path(repo_root, "docs", "plans", "demo.md")
+                plan_file.parent.mkdir(parents=True, exist_ok=True)
+                plan_file.write_text(
+                    "---\nid: demo\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                    encoding="utf-8",
+                )
+                args = orchestrator.parse_args(
+                    [
+                        "--plan-file",
+                        str(plan_file),
+                        "--repo-root",
+                        repo_root,
+                        "--run-id",
+                        "run-inherited",
+                        "--cli-bin",
+                        "echo",
+                    ]
+                )
+                with patch.dict(
+                    os.environ,
+                    {"AET_EXECUTION_MODE": "unattended", "AET_TELEMETRY_ARCHIVE_DIR": archive_dir},
+                    clear=True,
+                ):
+                    with patch.object(orchestrator, "process_task", return_value=True):
+                        orchestrator.run_single(args, None)
+
+                log_file = Path(archive_dir)
+                run_dirs = list(log_file.rglob("run-inherited"))
+                self.assertTrue(run_dirs, "telemetry run dir should use the supplied run_id")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -10,32 +10,47 @@ Reference for invoking the local `aet` CLI and the AET skill pipeline in this re
 
 ## `aet run` — Batch Queue Execution
 
-`aet run` is the orchestrator. It spawns headless agent sessions per task and can run for **tens of minutes to hours**. Never invoke it as a short foreground command.
+`aet run` starts the orchestrator in a **detached process** by default. It assigns a run ID, redirects output to `.agents/runs/<run-id>/output.log`, prints the ID, and returns immediately.
 
 ### Procedure
 
-1. Run it in the background with an explicit long timeout:
+1. Run it as a normal foreground command:
 
    ```bash
-   # Preferred: disable timeout entirely for long batches
-   Bash(run_in_background=true, disable_timeout=true, command="aet run", description="AET batch queue run")
-
-   # Alternative if the tool requires a timeout
-   Bash(run_in_background=true, timeout=7200, command="aet run", description="AET batch queue run")
+   aet run
    ```
 
-2. Report the background task ID to the user.
-3. Poll with `TaskOutput(task_id=..., block=false)` or wait for the automatic completion notification.
-4. If the user asks for status while it runs, use `TaskOutput` — do not spawn a second `aet run`.
+2. The command prints the run ID and exits as soon as the orchestrator process is spawned.
+3. Follow the run's output with:
+
+   ```bash
+   aet run --follow <run-id>
+   ```
+
+4. Check on active runs with:
+
+   ```bash
+   aet status
+   ```
+
+### Flags
+
+- `--foreground` — block and inherit the orchestrator's stdout/stderr exactly like the pre-daemonization behavior. Use only for debugging.
+- `--follow <run-id>` — attach to and tail a running or already-completed run's log.
+- `--max-jobs`, `--isolation`, `--on-failure`, `--task-timeout`, `--stall-timeout`, `--cli-bin` — forwarded to the orchestrator unchanged.
 
 ### Anti-Patterns
 
-- ❌ Running `aet run` as a foreground command with the default 60–300 s timeout.
-- ❌ Letting the user believe the command hung when it was only killed by timeout.
+- ❌ Running `aet run --foreground` for long batches unless you are actively debugging.
+- ❌ Spawning a second `aet run` because the first one is still running; use `aet status` or `aet run --follow <id>` instead.
 
 ## `aet run-one` — Single Task Execution
 
-Same rules as `aet run`: run in background with a long or disabled timeout. Single tasks can still take 10–60 minutes.
+Same detached behavior as `aet run`: runs in the background by default, prints a run ID, and can be followed with `aet run-one --follow <run-id>`. Use `--foreground` only for debugging.
+
+## `aet status` — Queue and Run State
+
+Shows the work queue plus any active detached runs (run ID, PID, and start time).
 
 ## `aet ship` — From `awaiting_merge` to Closed
 
