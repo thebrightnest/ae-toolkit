@@ -28,18 +28,20 @@ PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 
 ## Task List
 
-1. Inventory `scripts/`; classify each as maintenance (stays), migration
+1. ✓ Inventory `scripts/`; classify each as maintenance (stays), migration
    (archive), or misplaced test (move to `tests/`) — S (traces: R-10)
-2. Delete the two misplaced pytest modules at the root of `scripts/` (both
+2. ✓ Delete the two misplaced pytest modules at the root of `scripts/` (both
    are already duplicated by `tests/test_aet_state.py` and
    `tests/test_telemetry.py`) — S (traces: R-10)
-3. Archive the one-off migrations to `scripts/archive/` with a README noting
+3. ✓ Archive the one-off migrations to `scripts/archive/` with a README noting
    the release they shipped in; decide `aet migrate` vs. archive (default:
    archive — the migrations have already run; record if reversed) — S
    (traces: R-10)
-4. Update `AGENTS.md` and `docs/CONVENTIONS.md` directory descriptions and
-   any `Makefile` references — S (traces: R-10)
-5. Merge branch to main and verify integration — S
+4. ✓ Update `AGENTS.md` and `docs/CONVENTIONS.md` directory descriptions and
+   any `Makefile` references [Changed: Makefile had no references to the moved
+   paths, so only AGENTS.md and CONVENTIONS.md were updated] — S (traces: R-10)
+5. [Deferred: merge to main and verify integration is pending the ship stage]
+   Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -82,4 +84,5 @@ PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 
 ---
 
-*Stage: reviewed*
+*Stage: synced*
+*Next step: run `aet-ship`*
