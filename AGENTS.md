@@ -29,7 +29,8 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 │   ├── templates/
 │   ├── learnings.jsonl
 │   └── work-queue.json
-├── scripts/                # Validation and utility scripts
+├── scripts/                # Maintenance tooling (validation, hooks, release guards)
+│   └── archive/            # One-off migrations that have already run
 ├── tests/                  # pytest suite
 └── Makefile                # Dev orchestration
 ```

@@ -23,11 +23,11 @@ This is an enhancement to the toolkit's own tooling, not a reproducible defect r
 
 ## Tasks
 
-1. **Migration script** — M (`scripts/migrate-plans-to-frontmatter.py`)
+1. **Migration script** — M (`scripts/archive/migrate-plans-to-frontmatter.py`)
 
    For each plan lacking frontmatter, add `id` (stem), `size` (from an existing S/M/L label, else `M`), and `blocked_by` inferred **only from unambiguous inter-plan references**. Intra-plan "Task N blocks Task M" text is NOT promoted to an inter-plan edge. Emit a per-plan inference record: recovered / unresolved / flagged-for-review. Dry-run by default.
 
-2. **Rebuild + backfill driver** — M (`scripts/migrate-plans-to-frontmatter.py` driver mode)
+2. **Rebuild + backfill driver** — M (`scripts/archive/migrate-plans-to-frontmatter.py` driver mode)
 
    Re-ingest the corpus via the fail-closed `sync` into the new schema; for already-merged work run `aet-state record-merge` to resolve real squash SHAs; `fods-07` seals them into `work-history.jsonl`. Idempotent.
 

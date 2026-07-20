@@ -315,6 +315,26 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 
 - None.
 
+### pkg-13-scripts-split — Changed from plan
+
+- Task 2 (misplaced pytest modules): the plan originally proposed moving
+  `scripts/test-aet-state.py` and `scripts/test-telemetry.py` into `tests/`;
+  they were deleted instead because `tests/test_aet_state.py` and
+  `tests/test_telemetry.py` already cover the same behavior.
+- Task 4 (doc references): the plan included `Makefile` references, but the
+  Makefile had no references to the moved paths, so only `AGENTS.md` and
+  `docs/CONVENTIONS.md` were updated.
+
+### pkg-13-scripts-split — Added (unplanned)
+
+- `tests/test_scripts_layout.py`: new acceptance test encoding the intended
+  `scripts/` layout after the split.
+- Path-reference updates in other plans/docs/tests that pointed to the old
+  `scripts/` locations for the migrated files.
+
+### pkg-13-scripts-split — Deferred
+
+- Task 5 (merge branch to main and verify integration): pending the ship stage.
 ---
 
 _Stage: synced_

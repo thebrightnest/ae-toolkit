@@ -47,8 +47,8 @@ cp .agents/work-archive.json .agents/work-archive.json.pre-fods-backup 2>/dev/nu
 If plan files do not yet have frontmatter, run the migration helper:
 
 ```bash
-python3 scripts/migrate-plans-to-frontmatter.py --plans-dir docs/plans --dry-run
-python3 scripts/migrate-plans-to-frontmatter.py --plans-dir docs/plans --apply
+python3 scripts/archive/migrate-plans-to-frontmatter.py --plans-dir docs/plans --dry-run
+python3 scripts/archive/migrate-plans-to-frontmatter.py --plans-dir docs/plans --apply
 ```
 
 Review the reconciliation report it emits. Every plan must have:
