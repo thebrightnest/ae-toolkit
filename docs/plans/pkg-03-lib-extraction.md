@@ -118,5 +118,5 @@ the old layout returns wholesale. No data or state files are touched.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
