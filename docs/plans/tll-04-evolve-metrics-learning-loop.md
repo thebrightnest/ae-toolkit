@@ -72,5 +72,5 @@ Revert the merge commit. The skill returns to prose/mining inputs only; the retr
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: None*

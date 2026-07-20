@@ -84,4 +84,4 @@ frontmatter and is read by `aet run`/`run-one`.
 ---
 
 *Stage: merged*
-*Next step: run `aet-sync-docs`*
+*Next step: None*
