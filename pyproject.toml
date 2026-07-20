@@ -21,6 +21,10 @@ dev = [
 [project.scripts]
 aet = "aet.cli:main"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/aet"]
 include = ["src/aet/workflows/*.json"]
