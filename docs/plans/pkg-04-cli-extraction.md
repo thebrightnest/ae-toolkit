@@ -4,7 +4,7 @@ size: L
 blocked_by:
   - pkg-03-lib-extraction
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Pure relocation of existing CLI modules behind the same dispatcher; no new dependencies or behavior changes.
 docs_sync: required
@@ -110,5 +110,5 @@ the same revert. No state or user-facing behavior changes to roll back.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
