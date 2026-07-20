@@ -73,15 +73,15 @@ API byte-identical. Framework swap is explicitly NOT in this plan (pkg-12).
 
 ## Validation Steps
 
-- [ ] `tests/test_panel_serve.py` (named, existing) passes against
+- [x] `tests/test_panel_serve.py` (named, existing) passes against
   `src/aet/panel/serve.py` — covers server module relocation
-- [ ] `scripts/test-panel-live-runs.mjs` and `test-panel-plan-detail.mjs`
+- [x] `scripts/test-panel-live-runs.mjs` and `test-panel-plan-detail.mjs`
   (named, existing integration tests) pass against the new launch path
-- [ ] Panel JSON API responses byte-identical before/after (spot-check
+- [x] Panel JSON API responses byte-identical before/after (spot-check
   `/` and one telemetry endpoint)
-- [ ] `make validate` green
-- [ ] R-trace coverage: R-2 by tasks 1, 4; R-3 by tasks 2, 3; no unknown R-ids
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `make validate` green
+- [x] R-trace coverage: R-2 by tasks 1, 4; R-3 by tasks 2, 3; no unknown R-ids
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -90,5 +90,5 @@ removed in the same revert.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
