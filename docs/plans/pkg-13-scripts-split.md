@@ -30,9 +30,9 @@ PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 
 1. Inventory `scripts/`; classify each as maintenance (stays), migration
    (archive), or misplaced test (move to `tests/`) — S (traces: R-10)
-2. Move `scripts/test-aet-state.py` and `scripts/test-telemetry.py` into
-   `tests/` as proper pytest modules (or delete if fully duplicated by
-   existing tests — verify first) — S (traces: R-10)
+2. Delete the two misplaced pytest modules at the root of `scripts/` (both
+   are already duplicated by `tests/test_aet_state.py` and
+   `tests/test_telemetry.py`) — S (traces: R-10)
 3. Archive the one-off migrations to `scripts/archive/` with a README noting
    the release they shipped in; decide `aet migrate` vs. archive (default:
    archive — the migrations have already run; record if reversed) — S
@@ -62,7 +62,7 @@ PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 
 ## Files to Modify
 
-- `scripts/test-aet-state.py`, `scripts/test-telemetry.py` → `tests/`
+- `scripts/` root test modules → already covered by `tests/test_aet_state.py` and `tests/test_telemetry.py` (delete)
 - `scripts/migrate-*.py` → `scripts/archive/`
 - `scripts/archive/README.md` (new)
 - `AGENTS.md`, `docs/CONVENTIONS.md`, `Makefile` (references)
@@ -72,7 +72,7 @@ PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 - [ ] `make validate` green; relocated test modules run under pytest
 - [ ] `scripts/` contains only maintenance tooling referenced by `Makefile` or
   docs; every remaining file has a named caller
-- [ ] No references to moved paths remain (`grep -rn "scripts/test-\|scripts/migrate-" Makefile docs/ .agents/`)
+- [ ] No references to moved paths remain (`grep -rnE "scripts/(test-aet-state\.py|test-telemetry\.py|migrate-plans-to-frontmatter\.py|migrate-telemetry-slugs\.py)" Makefile docs/ .agents/`)
 - [ ] R-trace coverage: R-10 by tasks 1–4; no unknown R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -82,5 +82,5 @@ PRD: `docs/prds/aet-package-extraction-prd.md` (R-10).
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: tdd-complete*
+*Next step: run `aet-implement`*

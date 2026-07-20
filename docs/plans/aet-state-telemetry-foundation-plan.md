@@ -78,18 +78,18 @@ The orchestrator (Phase 1) will be built on top of these primitives.
 | `aet-work/lib/telemetry.py`                   | Create. Telemetry log writer and schemas.                |
 | `aet-work/SKILL.md`                           | Update. Document `report`, derived state, telemetry log. |
 | `aet-work/references/telemetry-log-schema.md` | Create. Reference doc for log schema.                    |
-| `scripts/test-aet-state.py`                   | Create. Unit tests for state derivation.                 |
-| `scripts/test-telemetry.py`                   | Create. Unit tests for telemetry module.                 |
+| `tests/test_aet_state.py`                   | Create. Unit tests for state derivation.                 |
+| `tests/test_telemetry.py`                   | Create. Unit tests for telemetry module.                 |
 
 ## Validation Steps
 
 - [ ] `make lint` passes
 - [ ] `make format-check` passes
-- [ ] `python3 scripts/test-aet-state.py` passes
-- [ ] `python3 scripts/test-telemetry.py` passes
+- [ ] `python3 tests/test_aet_state.py` passes
+- [ ] `python3 tests/test_telemetry.py` passes
 - [ ] For each new source file introduced by this plan, name the test that will cover it
-  - `scripts/aet-state.py` → `scripts/test-aet-state.py`
-  - `aet-work/lib/telemetry.py` → `scripts/test-telemetry.py`
+  - `scripts/aet-state.py` → `tests/test_aet_state.py`
+  - `aet-work/lib/telemetry.py` → `tests/test_telemetry.py`
 - [ ] Distinguish test types: unit tests (single layer), integration tests (cross-layer), API boundary tests (frontend ↔ backend contract)
   - All tests in this plan are unit tests.
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
@@ -98,7 +98,7 @@ The orchestrator (Phase 1) will be built on top of these primitives.
 
 1. Revert the branch merge.
 2. Restore previous `aet-work/SKILL.md` from git history.
-3. Delete new files: `scripts/aet-state.py`, `aet-work/lib/telemetry.py`, `aet-work/references/telemetry-log-schema.md`, `scripts/test-aet-state.py`, `scripts/test-telemetry.py`.
+3. Delete new files: `scripts/aet-state.py`, `aet-work/lib/telemetry.py`, `aet-work/references/telemetry-log-schema.md`, `tests/test_aet_state.py`, `tests/test_telemetry.py`.
 4. Re-run `make validate` to confirm baseline.
 
 ---

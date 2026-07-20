@@ -65,8 +65,8 @@ This plan introduces the physical archive file and wires it into `aet-work clean
 - [ ] After archiving, `.agents/work-queue.json` contains no terminal tasks
 - [ ] Archive preserves all original fields: `id`, `title`, `plan_file`, `status`, `merge_commit`, `completed_at`, `merged_at`, `branch`, `worktree`, `blocked_by`, `blocks`
 - [ ] For each new source file introduced by this plan, name the test that will cover it:
-  - `aet-work/lib/queue.py` → covered by `scripts/test-aet-state.py` (archive read/write roundtrip)
-  - `aet-work/bin/aet-state` → covered by `scripts/test-aet-state.py` (archive subcommand integration)
+  - `aet-work/lib/queue.py` → covered by `tests/test_aet_state.py` (archive read/write roundtrip)
+  - `aet-work/bin/aet-state` → covered by `tests/test_aet_state.py` (archive subcommand integration)
 
 ## Rollback Plan
 

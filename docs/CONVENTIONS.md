@@ -19,6 +19,14 @@ Each skill lives in its own directory at the repository root:
 
 Skills are installed together from this repository via `npx skills add ... --all`. The pipeline only works when the whole system is present.
 
+## Maintenance Scripts
+
+`scripts/` contains repository-maintenance tooling: validation scripts, git
+hooks, and release guards. One-off data migrations that have already been
+applied are archived in `scripts/archive/` with a README explaining the release
+they shipped in. Do not add new migrations to the root of `scripts/`; either
+archive them after use or turn them into reusable maintenance scripts.
+
 ## Package-Deliverable Rules
 
 AE Toolkit is installed together, not à la carte. Skills may reference shared conventions, cross-skill rules, and toolkit-level docs because the whole system is present at runtime.

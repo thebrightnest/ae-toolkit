@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "migrate-telemetry-slugs.py"
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "archive" / "migrate-telemetry-slugs.py"
 
 OLD_SLUG = "thebrightnest/ae-toolkit"
 NEW_SLUG = "aiskills/main"
