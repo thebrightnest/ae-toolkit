@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pld-01-governance-as-data-adr
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: New parser reading a repo-controlled rules file into the validate gate; must use yaml.safe_load and must not evaluate rule content, or a rules file becomes an execution vector.
 docs_sync: required
