@@ -3,7 +3,7 @@ id: pld-01-governance-as-data-adr
 size: S
 blocked_by: []
 pipeline: minimal
-status: draft
+status: approved
 security_review: skipped
 security_review_reason: Decision record only; no code, runtime, or dependency changes.
 docs_sync: required
@@ -35,9 +35,9 @@ script keeps its single job; governance rules do not move into it.
 
 ## Task List
 
-1. Write `docs/adr/040-documentation-invariants-as-data.md`: the principle
-   (documentation invariants are declared as data and enforced by a lint
-   stage, never asserted in the unit-test suite), the four-pattern rule
+1. Write ADR-040 (`040-documentation-invariants-as-data.md`) recording the
+   principle — documentation invariants are declared as data and enforced by a
+   lint stage, never asserted in the unit-test suite — the four-pattern rule
    grammar (`must_contain`, `must_not_contain`, section-scoped variants, path
    assertions), and the `skills-lint` boundary — S (traces: R-1)
 2. Record the rejected alternatives that this workstream already considered so
@@ -79,7 +79,7 @@ the implementation attached.
 
 ## Files to Modify
 
-- `docs/adr/040-documentation-invariants-as-data.md` (new)
+- `040-documentation-invariants-as-data.md`, new, in `docs/adr/`
 - `docs/adr/README.md`
 
 ## Validation Steps
@@ -103,5 +103,5 @@ pld-02 begins.
 
 ---
 
-*Stage: plan-draft*
-*Next step: run `aet-validate-scope`*
+*Stage: plan-approved*
+*Next step: run `aet-work`*
