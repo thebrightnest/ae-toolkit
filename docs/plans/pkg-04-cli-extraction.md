@@ -104,5 +104,5 @@ the same revert. No state or user-facing behavior changes to roll back.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
