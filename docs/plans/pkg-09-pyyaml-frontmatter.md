@@ -82,5 +82,4 @@ drop the pin in the same revert.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
