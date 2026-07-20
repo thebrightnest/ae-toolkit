@@ -25,7 +25,7 @@ import os from "node:os";
 import path from "node:path";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const SERVE = path.resolve("aet-work/panel/serve");
+const SERVE = path.resolve("src/aet/panel/serve.py");
 const CDP_PORT = 9223;
 
 const RUN_LIVE_EMPTY = "1a1a1a1a-0000-4000-8000-000000000001";

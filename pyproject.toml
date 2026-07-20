@@ -30,4 +30,4 @@ python_files = "test_*.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aet"]
-include = ["src/aet/workflows/*.json"]
+include = ["src/aet/workflows/*.json", "src/aet/panel/index.html"]

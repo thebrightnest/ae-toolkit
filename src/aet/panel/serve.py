@@ -5,8 +5,9 @@ Opens the panel in your default browser; the page reads the archive through
 a tiny localhost-only JSON API. No dependencies beyond the Python stdlib.
 
 Usage:
-    python3 aet-work/panel/serve            # serve + open browser
-    python3 aet-work/panel/serve --no-open  # serve only, print the URL
+    aet panel                               # serve + open browser
+    aet panel --no-open                     # serve only, print the URL
+    python3 -m aet.panel.serve --no-open    # direct module invocation
 """
 
 import json
