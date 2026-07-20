@@ -124,4 +124,4 @@ the old layout returns wholesale. No data or state files are touched.
 ---
 
 *Stage: merged*
-*Next step: run `aet-ship`*
+*Next step: None*
