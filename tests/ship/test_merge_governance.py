@@ -9,7 +9,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
 CONVENTIONS_MD = REPO_ROOT / "docs" / "CONVENTIONS.md"
-AET_SHIP_SKILL = REPO_ROOT / "aet-ship" / "SKILL.md"
+AET_SHIP_SKILL = REPO_ROOT / "skills" / "aet-ship" / "SKILL.md"
 ADR_029 = REPO_ROOT / "docs" / "adr" / "029-autonomous-merge-fail-closed.md"
 
 

@@ -108,5 +108,5 @@ new layout before this plan is considered done.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

@@ -89,8 +89,9 @@ class VariantRepoTestCase(unittest.TestCase):
         workflow_dir.mkdir(parents=True, exist_ok=True)
         variant_path = workflow_dir / "content.json"
         shutil.copy(FIXTURE_PATH, variant_path)
+        skills_dir = self.repo_root / "skills"
         for skill in VARIANT_SKILLS:
-            skill_md = self.repo_root / skill / "SKILL.md"
+            skill_md = skills_dir / skill / "SKILL.md"
             skill_md.parent.mkdir(parents=True, exist_ok=True)
             skill_md.write_text(
                 f"---\nname: {skill}\ndescription: stub\n---\n", encoding="utf-8"
@@ -187,8 +188,9 @@ class TestVariantTraversal(unittest.TestCase):
         workflow_dir = Path(repo_root, ".agents", "workflows")
         workflow_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(FIXTURE_PATH, workflow_dir / "content.json")
+        skills_dir = Path(repo_root, "skills")
         for skill in VARIANT_SKILLS:
-            skill_md = Path(repo_root, skill, "SKILL.md")
+            skill_md = skills_dir / skill / "SKILL.md"
             skill_md.parent.mkdir(parents=True, exist_ok=True)
             skill_md.write_text(
                 f"---\nname: {skill}\ndescription: stub\n---\n", encoding="utf-8"
