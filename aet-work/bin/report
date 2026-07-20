@@ -16,10 +16,7 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import telemetry  # noqa: E402
+from aet import telemetry  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -70,7 +67,7 @@ def _leased_run_id() -> str | None:
     queue_file = Path(".agents/work-queue.json")
     if not queue_file.is_file():
         return None
-    import aet_queue as queue_lib  # noqa: PLC0415
+    from aet import queue as queue_lib  # noqa: PLC0415
 
     lease = queue_lib.read_lease(str(queue_file))
     if isinstance(lease, dict):

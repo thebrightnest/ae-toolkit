@@ -22,7 +22,6 @@ _desk_spec = importlib.util.spec_from_loader(
 desk = importlib.util.module_from_spec(_desk_spec)
 _desk_spec.loader.exec_module(desk)
 
-sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
 
 
 def _plan_path(tmp_path: Path, plan_id: str) -> Path:

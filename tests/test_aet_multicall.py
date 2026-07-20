@@ -58,16 +58,32 @@ class TestNestedCommandGroupDispatch(_IsolatedBinDir):
             ["aet", "sprint", "add", "docs/plans/feat-001.md"]
         )
         self.assertEqual(rc, 0)
-        self.assertEqual(Path(path), _REPO_ROOT / "aet-work" / "bin" / "sprint")
-        self.assertEqual(argv, ["sprint", "add", "docs/plans/feat-001.md"])
+        self.assertEqual(Path(path), Path(sys.executable))
+        self.assertEqual(
+            argv,
+            [
+                sys.executable,
+                str(_REPO_ROOT / "aet-work" / "bin" / "sprint"),
+                "add",
+                "docs/plans/feat-001.md",
+            ],
+        )
 
     def test_backlog_add_forwards_to_backlog_binary(self):
         rc, path, argv = self._capture_exec(
             ["aet", "backlog", "add", "docs/plans/feat-001.md"]
         )
         self.assertEqual(rc, 0)
-        self.assertEqual(Path(path), _REPO_ROOT / "aet-work" / "bin" / "backlog")
-        self.assertEqual(argv, ["backlog", "add", "docs/plans/feat-001.md"])
+        self.assertEqual(Path(path), Path(sys.executable))
+        self.assertEqual(
+            argv,
+            [
+                sys.executable,
+                str(_REPO_ROOT / "aet-work" / "bin" / "backlog"),
+                "add",
+                "docs/plans/feat-001.md",
+            ],
+        )
 
     def test_sprint_with_flags_forwards_verbatim(self):
         rc, path, argv = self._capture_exec(
@@ -81,18 +97,33 @@ class TestNestedCommandGroupDispatch(_IsolatedBinDir):
             ]
         )
         self.assertEqual(rc, 0)
-        self.assertEqual(Path(path), _REPO_ROOT / "aet-work" / "bin" / "sprint")
+        self.assertEqual(Path(path), Path(sys.executable))
         self.assertEqual(
             argv,
-            ["sprint", "add", "--queue-file", "q.json", "feat-001"],
+            [
+                sys.executable,
+                str(_REPO_ROOT / "aet-work" / "bin" / "sprint"),
+                "add",
+                "--queue-file",
+                "q.json",
+                "feat-001",
+            ],
         )
 
     def test_state_audit_still_forwards_verbatim(self):
         """The existing `aet state <sub>` nesting remains intact."""
         rc, path, argv = self._capture_exec(["aet", "state", "audit", "q.json"])
         self.assertEqual(rc, 0)
-        self.assertEqual(Path(path), _REPO_ROOT / "aet-work" / "bin" / "aet-state")
-        self.assertEqual(argv, ["aet-state", "audit", "q.json"])
+        self.assertEqual(Path(path), Path(sys.executable))
+        self.assertEqual(
+            argv,
+            [
+                sys.executable,
+                str(_REPO_ROOT / "aet-work" / "bin" / "aet-state"),
+                "audit",
+                "q.json",
+            ],
+        )
 
 
 if __name__ == "__main__":

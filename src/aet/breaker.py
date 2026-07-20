@@ -45,7 +45,7 @@ def append_failure_if_countable(
     """
     # Import here to avoid a hard dependency on failure.py for pure tests.
     try:
-        from failure import FailureClass
+        from aet.failure import FailureClass
     except ImportError:  # pragma: no cover - defensive fallback
         FailureClass = None
 

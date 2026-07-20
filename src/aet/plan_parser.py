@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from aet_queue import append_history  # noqa: E402
+from aet.queue import append_history  # noqa: E402
 
 
 def _unquote_scalar(value: str) -> str:

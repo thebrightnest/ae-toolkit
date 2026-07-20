@@ -19,21 +19,21 @@ import threading
 import time
 from pathlib import Path
 
-# Add lib to path
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import breaker  # noqa: E402
-import evidence  # noqa: E402
-import failure as failure_lib  # noqa: E402
-import plan_parser  # noqa: E402
-import telemetry  # noqa: E402
-import track_record  # noqa: E402
-import triage  # noqa: E402
-import usage as usage_lib  # noqa: E402
-import wirelog  # noqa: E402
-from aet_queue import (  # noqa: E402
+from aet import (  # noqa: E402
+    breaker,
+    evidence,
+    plan_parser,
+    telemetry,
+    track_record,
+    triage,
+    wirelog,
+)
+from aet import failure as failure_lib  # noqa: E402
+from aet import usage as usage_lib  # noqa: E402
+from aet.backends.factory import create_backend  # noqa: E402
+from aet.cli_adapter import resolve_cli_adapter  # noqa: E402
+from aet.queue import (  # noqa: E402
     LEGAL_TRANSITIONS,
     QueueIntegrityError,
     acquire_lease,
@@ -42,18 +42,16 @@ from aet_queue import (  # noqa: E402
     queue_lock,
     release_lease,
 )
-from aet_queue import (  # noqa: E402
+from aet.queue import (  # noqa: E402
     has_pending_tasks as queue_has_pending_tasks,
 )
-from backends.factory import create_backend  # noqa: E402
-from cli_adapter import resolve_cli_adapter  # noqa: E402
-from verifier import (  # noqa: E402
+from aet.verifier import (  # noqa: E402
     read_plan_stage,
     verify_branch_has_commits,
     verify_stage_advancement,
 )
-from workflow import Workflow, WorkflowError, WorkflowStage, load_workflow  # noqa: E402
-from worktree import (  # noqa: E402
+from aet.workflow import Workflow, WorkflowError, WorkflowStage, load_workflow  # noqa: E402
+from aet.worktree import (  # noqa: E402
     check_main_hygiene,
     copy_untracked_files,
     create_worktree,

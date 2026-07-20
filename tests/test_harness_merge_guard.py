@@ -1,5 +1,7 @@
 """Tests for the per-provider merge guard harness detection and adapters."""
 
+import importlib.machinery
+import importlib.util
 import json
 import os
 import subprocess
@@ -10,11 +12,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 SCRIPT = REPO_ROOT / "aet-setup" / "bin" / "harness-guard"
-LIB_DIR = REPO_ROOT / "aet-setup" / "lib"
+_HARNESS_GUARD_PY = REPO_ROOT / "aet-setup" / "lib" / "harness_guard.py"
 
-sys.path.insert(0, str(LIB_DIR))
-
-import harness_guard  # noqa: E402
+_spec = importlib.util.spec_from_loader(
+    "harness_guard",
+    importlib.machinery.SourceFileLoader("harness_guard", str(_HARNESS_GUARD_PY)),
+)
+harness_guard = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(harness_guard)
 
 
 class TestHarnessDetection(unittest.TestCase):

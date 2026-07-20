@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 # Re-export the neutral identity helper so existing callers keep working.
-from project_id import derive_project_slug, resolve_repo_root  # noqa: F401
+from aet.project_id import derive_project_slug, resolve_repo_root  # noqa: F401
 
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"

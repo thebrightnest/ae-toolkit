@@ -10,8 +10,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
-import plan_validate  # noqa: E402
+from aet import plan_validate  # noqa: E402
 
 
 def make_plan(

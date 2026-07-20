@@ -8,7 +8,6 @@ import importlib.util
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,7 +15,6 @@ from unittest.mock import patch
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
-sys.path.insert(0, str(_ORCHESTRATOR_BIN.parent))
 _orchestrator_loader = importlib.machinery.SourceFileLoader(
     "orchestrator", str(_ORCHESTRATOR_BIN)
 )
@@ -24,7 +22,7 @@ _spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(orchestrator)
 
-from cli_adapter import CLIAdapter  # noqa: E402
+from aet.cli_adapter import CLIAdapter  # noqa: E402
 
 _FAKE_ADAPTER = CLIAdapter(
     name="test",

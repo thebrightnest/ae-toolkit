@@ -21,13 +21,9 @@ import shutil
 import sys
 from pathlib import Path, PurePosixPath
 
-# Load archive-root helpers from aet-work/lib (env-aware defaults).
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "aet-work" / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-from evidence import reports_dir  # noqa: E402
-from telemetry import archive_dir  # noqa: E402
+from aet.evidence import reports_dir  # noqa: E402
+from aet.telemetry import archive_dir  # noqa: E402
 
 MAX_SLUG_SEGMENTS = 2
 

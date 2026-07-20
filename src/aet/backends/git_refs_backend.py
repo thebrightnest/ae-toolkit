@@ -27,8 +27,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from aet_queue import QueueIntegrityError, read_history
-from backends.base import TaskBackend
+from aet.backends.base import TaskBackend
+from aet.queue import QueueIntegrityError, read_history
 
 TASKS_REF_PREFIX = "refs/aet/tasks/"
 ENVELOPE_REF = "refs/aet/meta/queue"
@@ -285,7 +285,7 @@ class GitRefsBackend(TaskBackend):
         re-imported ``queue`` module would self-deadlock (see ``base.py``).
         Ref mutation is still atomic under git's own ref locks.
         """
-        from aet_queue import append_history_record
+        from aet.queue import append_history_record
 
         data = self.load()
         task = next(

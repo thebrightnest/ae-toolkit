@@ -5,12 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from aet_queue import (
+from aet.backends.base import TaskBackend
+from aet.queue import (
     read_history,
     read_queue,
     write_queue,
 )
-from backends.base import TaskBackend
 
 
 class JsonBackend(TaskBackend):

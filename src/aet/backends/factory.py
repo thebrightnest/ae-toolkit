@@ -7,9 +7,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-from backends.git_refs_backend import GitRefsBackend
-from backends.json_backend import JsonBackend
-from project_id import derive_project_slug
+from aet.backends.git_refs_backend import GitRefsBackend
+from aet.backends.json_backend import JsonBackend
+from aet.project_id import derive_project_slug
 
 DEFAULT_CONFIG_PATH = ".agents/aet-work.json"
 

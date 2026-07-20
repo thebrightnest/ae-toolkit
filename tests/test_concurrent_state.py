@@ -14,7 +14,7 @@ import time
 import unittest
 from pathlib import Path
 
-import aet_queue as queue_lib
+from aet import queue as queue_lib
 
 _AET_STATE_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
 _spec = importlib.util.spec_from_loader(

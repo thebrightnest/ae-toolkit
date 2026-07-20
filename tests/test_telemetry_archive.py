@@ -15,9 +15,8 @@ from pathlib import Path
 
 EVOLVE_BIN_DIR = Path(__file__).parent.parent / "aet-evolve" / "bin"
 WORK_LIB_DIR = Path(__file__).parent.parent / "aet-work" / "lib"
-sys.path.insert(0, str(WORK_LIB_DIR))
 
-import telemetry  # noqa: E402
+from aet import telemetry  # noqa: E402
 
 
 def _load_module(module_name: str, script_path: Path):

@@ -115,7 +115,7 @@ A schema-validated JSON verdict written by a checking skill (qa, review, cso, sy
 _Avoid_: treating a footer stage string as proof a stage passed.
 
 **Workflow**:
-A named, versioned data file defining one linear stage sequence with its skill and evidence bindings (packaged default `aet-work/workflows/<name>.json`, overridable per repo in `.agents/workflows/`). Selected by the plan frontmatter key `workflow:` (default `software`). Stage vocabulary comes from the workflow; lifecycle **State** stays frozen in code.
+A named, versioned data file defining one linear stage sequence with its skill and evidence bindings (packaged default `src/aet/workflows/<name>.json`, overridable per repo in `.agents/workflows/`). Selected by the plan frontmatter key `workflow:` (default `software`). Stage vocabulary comes from the workflow; lifecycle **State** stays frozen in code.
 _Avoid_: calling lifecycle states "workflow state"; using "work class" for a workflow name (work class = a recorded machine-readable task attribute, one of `trivial`/`normal`/`critical`/`unclassified`, authored in plan frontmatter).
 
 **Stage Routing Key**:

@@ -18,17 +18,16 @@ import sys
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_LIB_DIR = _SCRIPT_DIR.parent / "lib"
-sys.path.insert(0, str(_LIB_DIR))
-
-import evidence  # noqa: E402
-import plan_parser  # noqa: E402
-import project_id  # noqa: E402
-import risk  # noqa: E402
-import telemetry  # noqa: E402
-import track_record  # noqa: E402
-from aet_queue import current_state, update_plan_status  # noqa: E402
-from backends.factory import create_backend  # noqa: E402
+from aet import (  # noqa: E402
+    evidence,
+    plan_parser,
+    project_id,
+    risk,
+    telemetry,
+    track_record,
+)
+from aet.backends.factory import create_backend  # noqa: E402
+from aet.queue import current_state, update_plan_status  # noqa: E402
 
 # Load aet-state as a module so desk actions can reuse queue mutations and
 # plan-footer updates rather than re-implementing closure logic.

@@ -17,7 +17,7 @@ _spec = importlib.util.spec_from_loader(
 ship = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ship)
 
-import aet_queue as aet_queue_module  # noqa: E402
+from aet import queue as aet_queue_module  # noqa: E402
 
 
 class MockResult:

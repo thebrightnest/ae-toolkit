@@ -13,11 +13,12 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
-import plan_parser  # noqa: E402
-import project_id  # noqa: E402
-import telemetry  # noqa: E402
-import track_record  # noqa: E402
+from aet import (  # noqa: E402
+    plan_parser,
+    project_id,
+    telemetry,
+    track_record,
+)
 
 REPO_ROOT = Path(__file__).parent.parent
 _DESK_PY = REPO_ROOT / "aet-work" / "bin" / "desk"

@@ -1,12 +1,7 @@
 """pytest configuration for orchestrator tests."""
 
-import sys
-from pathlib import Path
 
 import pytest
-
-# Add aet-work/lib to the import path
-sys.path.insert(0, str(Path(__file__).parent.parent / "aet-work" / "lib"))
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +18,7 @@ def _isolate_telemetry_archive(monkeypatch, tmp_path):
     wipes the env var; without the module-level patch those calls fall back to
     the real archive.
     """
-    import telemetry
+    from aet import telemetry
 
     archive = tmp_path / "telemetry-archive"
     monkeypatch.setenv("AET_TELEMETRY_ARCHIVE_DIR", str(archive))

@@ -11,11 +11,11 @@ from __future__ import annotations
 import json
 import multiprocessing
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
-from backends.git_refs_backend import (
+
+from aet.backends.git_refs_backend import (
     ENVELOPE_REF,
     TASKS_REF_PREFIX,
     GitRefsBackend,
@@ -161,8 +161,7 @@ def _concurrent_worker(repo_root: str, task_id: str, marker: str) -> None:
     Runs in a child process. Reconstructs the backend from ``repo_root`` so it
     is independent of the parent's interpreter state.
     """
-    sys.path.insert(0, str(Path(repo_root) / "aet-work" / "lib"))
-    from backends.git_refs_backend import GitRefsBackend as _Backend  # noqa: E402
+    from aet.backends.git_refs_backend import GitRefsBackend as _Backend  # noqa: E402
 
     backend = _Backend(
         queue_file=str(Path(repo_root) / ".agents" / "work-queue.json"),

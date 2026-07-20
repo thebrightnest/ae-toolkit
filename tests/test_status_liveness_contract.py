@@ -9,8 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import plan_parser
-import plan_validate
+from aet import plan_parser, plan_validate
 
 _REPO_ROOT = Path(__file__).parent.parent
 

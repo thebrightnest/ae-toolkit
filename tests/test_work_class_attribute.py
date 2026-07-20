@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO_ROOT / "aet-work" / "lib"))
-import plan_parser  # noqa: E402
+from aet import plan_parser  # noqa: E402
 
 
 def make_plan(path: Path, work_class: str | None = None) -> None:
