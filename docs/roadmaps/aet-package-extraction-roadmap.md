@@ -56,16 +56,23 @@ change, no new dependencies in this phase** — pure relocation.
 - [ ] `aet-work/lib/*` → `aet/` core modules (queue, backends, telemetry,
       breaker, workflow, verifier, plan parsing, ...)
 - [ ] `aet-work/bin/*` → `aet/cli/` subcommand modules; multicall dispatcher kept
-      as thin compatibility layer during transition
+      as thin compatibility layer during transition. The orchestrator/status
+      daemonization work (`nc-06`) is part of this relocation and depends on
+      **pkg-04**, not pkg-06.
 - [ ] `aet-ship/bin/ship`, `aet-evolve/bin/*`, `aet-setup/bin/*`,
-      `aet-setup/lib/harness_guard.py` → corresponding `aet/cli/` / `aet/` modules
+      `aet-setup/lib/harness_guard.py`, and `aet-release-prep/release-prep.sh`
+      → corresponding `aet/cli/` / `aet/` modules (`release-prep.sh` promoted
+      into the package as a Python subcommand, not relocated as a bash script).
+      If `nc-05`'s spike concludes aet-sync-docs has a separable mechanical
+      slice, that slice is added here as well.
 - [ ] `aet-work/panel/` → `aet/panel/`
 - [ ] All `sys.path.insert` hacks deleted; real package imports
 - [ ] `make validate` green; `aet install` and all subcommands work from an
       editable install exactly as before
 
-**Done when:** no Python file remains inside any skill directory; the full test
-suite passes unmodified in behavior (import paths may change).
+**Done when:** no Python file or executable script remains inside any skill
+directory; the full test suite passes unmodified in behavior (import paths may
+change).
 
 ### Phase A2 — Test suite modernization
 
@@ -100,7 +107,9 @@ Each is an independent atomic plan; order by pain, not by list position.
 - [ ] PyYAML replaces hand-rolled frontmatter/YAML parsing (`plan_parser.py`)
 - [ ] `filelock` replaces hand-rolled queue/worktree locking
 - [ ] Typer (or Click) consolidates the 19 argparse binaries; multicall
-      dispatcher and `SUBCOMMANDS` exec-dispatch deleted
+      dispatcher and `SUBCOMMANDS` exec-dispatch deleted. Must follow the
+      taxonomy in ADR-039 and land before pkg-11 is implemented, since pkg-11
+      carries the CLI rename spec (`nc-02`).
 - [ ] Panel server moved off raw `BaseHTTPRequestHandler` onto a small framework
 
 **Done when (per item):** hand-rolled implementation deleted, tests green,
@@ -141,8 +150,8 @@ becomes a PRD when Track B opens.
 
 | Phase | State | Notes |
 | --- | --- | --- |
-| A0 — ADRs | pending | Docs-only; start here |
-| A1 — Package extraction | pending | Blocked by A0 |
+| A0 — ADRs | Accepted | ADR-036/037/038 recorded; pkg-01 merged |
+| A1 — Package extraction | In Progress | pkg-02/A1a merged; pkg-03–pkg-06 queued |
 | A2 — Test modernization | pending | Blocked by A1 |
 | A3 — Skills move | pending | Blocked by A1 |
 | A4 — Dependency adoption | pending | Blocked by A1; items independent |
