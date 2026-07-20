@@ -83,5 +83,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
