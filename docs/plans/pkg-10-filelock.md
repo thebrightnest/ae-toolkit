@@ -83,5 +83,5 @@ state migration is needed either direction.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
