@@ -4,7 +4,7 @@ size: L
 blocked_by:
   - pkg-04-cli-extraction
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: New process-spawning/detaching code; must not weaken the existing per-task timeout/stall-watchdog kill semantics.
 docs_sync: required
@@ -104,5 +104,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
