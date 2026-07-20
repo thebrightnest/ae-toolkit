@@ -12,6 +12,8 @@ requires-python = ">=3.10"
 dependencies = [
     "pyyaml>=6.0.2",
     "filelock>=3.16,<4",
+    "starlette>=0.40.0",
+    "uvicorn>=0.32.0",
 ]
 
 [project.optional-dependencies]

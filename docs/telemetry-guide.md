@@ -122,7 +122,8 @@ them directly**.
 ## Reviewing a single run
 
 For a visual overview, launch the telemetry panel — a single HTML file plus a
-tiny stdlib-only server that lets the browser read the archive directly:
+small Starlette + uvicorn server that lets the browser read the archive
+directly:
 
 ```bash
 aet panel                        # serves panel + ~/.aet/telemetry, opens your browser
@@ -261,10 +262,10 @@ path traversal. To roll back, replay the dry-run output inverted
 ## Panel implementation notes
 
 The panel is implemented as a single self-contained `src/aet/panel/index.html`
-(React 18 UMD, Babel standalone, Tailwind Play CDN) plus a stdlib-only server
-in `src/aet/panel/serve.py`. There is no build step. The server is
-localhost-only, refuses path traversal, and exposes two JSON endpoints:
-`GET /api/list` (files plus run directories with activity mtimes) and
-`GET /api/file?p=<relpath>`. The `aet panel` subcommand dispatches to the same
-module, so editable installs, wheels, and direct source invocation all serve
-the bundled HTML identically.
+(React 18 UMD, Babel standalone, Tailwind Play CDN) plus a Starlette server in
+`src/aet/panel/serve.py` run by uvicorn. There is no build step. The server is
+localhost-only (bound to `127.0.0.1`), refuses path traversal, and exposes two
+JSON endpoints: `GET /api/list` (files plus run directories with activity
+mtimes) and `GET /api/file?p=<relpath>`. The `aet panel` subcommand dispatches
+to the same module, so editable installs, wheels, and direct source invocation
+all serve the bundled HTML identically.
