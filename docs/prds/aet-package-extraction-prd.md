@@ -268,6 +268,30 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 
 - Task 7 (merge branch to main and verify integration): pending the ship stage.
 
+### pkg-09-pyyaml-frontmatter — Changed from plan
+
+- Added a small compatibility shim (`_normalize_frontmatter_body`) that quotes
+  scalar values containing YAML-structural characters (`:`, `` ` ``, `#`, flow
+  collection chars, etc.) before calling `yaml.safe_load`.  This keeps the
+  existing `docs/plans/*.md` corpus parsing to the same values without editing
+  merged plans that use Markdown backticks or unquoted colons in
+  `security_review_reason` / `docs_sync_reason` prose.
+- `blocked_by:` with an empty scalar is normalized back to `[]` so the intake
+  contract stays identical to the hand-rolled parser.
+
+### pkg-09-pyyaml-frontmatter — Added (unplanned)
+
+- `aet-work/references/frontmatter-contract.md`: formal reference for the plan
+  frontmatter contract, the PyYAML shim, and the accepted/rejected-input
+  differences versus the hand-rolled parser.
+- `tests/test_init_queue_sync.py`: edge-case coverage for typed YAML scalars
+  (int, bool, null), nested mappings, non-mapping top-level frontmatter, and
+  empty scalars.
+
+### pkg-09-pyyaml-frontmatter — Deferred
+
+- Task 5 (merge branch to main and verify integration): pending the ship stage.
+
 ---
 
 _Stage: synced_
