@@ -28,15 +28,15 @@ Verified directly against `aet-work/bin/orchestrator`: per-task `--task-timeout`
 
 ## Task List
 
-1. Choose the daemonization mechanism (Open Question #3, an implementation-time call, not decided by this plan): fork/detach, a daemon-lockfile-plus-follow scheme, or supervising via the existing panel server. Document the choice and rationale directly in the code (module docstring of the modified orchestrator entry point) — M (traces: R-6)
-2. Modify the orchestrator's entry point (post-pkg-04: `src/aet/cli/orchestrator.py`) to support a detached run mode: assign a run ID, redirect stdout/stderr to a log keyed by that ID, and leave the existing per-task `--task-timeout`/`--stall-timeout` watchdog logic internally unchanged — L (traces: R-6)
-3. Modify the dispatcher's `mode: "run"`/`"run-one"` handling (`aet-work/bin/aet`, pre-pkg-06 location) to spawn the orchestrator detached by default instead of calling the shared `_exec()`/`os.execvp` path: print the run ID and return immediately (exit 0). Do not modify `_exec()` itself — it is shared by every other `exec`-mode subcommand; add a new, separate code path specific to `run`/`run-one` — M (traces: R-6)
-4. Add a `--foreground` flag to `run`/`run-one` that preserves today's exact blocking behavior (routes to the existing `_exec()` call, unchanged) — for debugging — S (traces: R-6)
-5. Add `aet run --follow <run-id>` to attach to and tail a running or already-completed run's output by ID — M (traces: R-6)
-6. Extend `aet status` (post-pkg-04: `src/aet/cli/status.py`) to surface active run ID(s), if any, alongside its existing queue-state output — S (traces: R-6)
-7. Rewrite `.agents/commands/aet-work.md`'s `aet run` / `aet run-one` sections (lines 11-38): remove the manual `Bash(run_in_background=..., disable_timeout=...)` instructions and their anti-patterns list; document the new default-detached behavior, `aet run --follow <id>`, `aet status`, and `--foreground` — M (traces: R-6, R-7)
-8. Add/update tests in `tests/test_orchestrator_daemonize.py` (run-id generation and uniqueness; detached spawn returns promptly without waiting for orchestrator completion; `--follow` attaches correctly to both an in-progress and an already-completed run; `--foreground` reproduces the pre-change blocking behavior exactly) and `tests/test_aet_run_dispatch.py` (dispatcher routes to detached-spawn by default and to `_exec()` only under `--foreground`; existing task-timeout/stall-watchdog tests still pass unchanged post-relocation) — M (traces: R-6)
-9. Merge branch to main and verify integration — S
+1. ✓ Choose the daemonization mechanism (Open Question #3, an implementation-time call, not decided by this plan): fork/detach, a daemon-lockfile-plus-follow scheme, or supervising via the existing panel server. Document the choice and rationale directly in the code (module docstring of the modified orchestrator entry point) — M (traces: R-6)
+2. ✓ Modify the orchestrator's entry point (post-pkg-04: `src/aet/cli/orchestrator.py`) to support a detached run mode: assign a run ID, redirect stdout/stderr to a log keyed by that ID, and leave the existing per-task `--task-timeout`/`--stall-timeout` watchdog logic internally unchanged — L (traces: R-6)
+3. ✓ Modify the dispatcher's `mode: "run"`/`"run-one"` handling (`aet-work/bin/aet`, pre-pkg-06 location) to spawn the orchestrator detached by default instead of calling the shared `_exec()`/`os.execvp` path: print the run ID and return immediately (exit 0). Do not modify `_exec()` itself — it is shared by every other `exec`-mode subcommand; add a new, separate code path specific to `run`/`run-one` — M (traces: R-6)
+4. ✓ Add a `--foreground` flag to `run`/`run-one` that preserves today's exact blocking behavior (routes to the existing `_exec()` call, unchanged) — for debugging — S (traces: R-6)
+5. ✓ Add `aet run --follow <run-id>` to attach to and tail a running or already-completed run's output by ID — M (traces: R-6)
+6. ✓ Extend `aet status` (post-pkg-04: `src/aet/cli/status.py`) to surface active run ID(s), if any, alongside its existing queue-state output — S (traces: R-6)
+7. ✓ Rewrite `.agents/commands/aet-work.md`'s `aet run` / `aet run-one` sections (lines 11-38): remove the manual `Bash(run_in_background=..., disable_timeout=...)` instructions and their anti-patterns list; document the new default-detached behavior, `aet run --follow <id>`, `aet status`, and `--foreground` — M (traces: R-6, R-7)
+8. ✓ Add/update tests in `tests/test_orchestrator_daemonize.py` (run-id generation and uniqueness; detached spawn returns promptly without waiting for orchestrator completion; `--follow` attaches correctly to both an in-progress and an already-completed run; `--foreground` reproduces the pre-change blocking behavior exactly) and `tests/test_aet_run_dispatch.py` (dispatcher routes to detached-spawn by default and to `_exec()` only under `--foreground`; existing task-timeout/stall-watchdog tests still pass unchanged post-relocation) — M (traces: R-6) [Changed: also updated `tests/cli/test_aet_dispatcher.py` for default-detached regression coverage and `scripts/skills-lint` to include dispatcher-only `--foreground`/`--follow` flags.]
+9. [Deferred: merge is handled by the next pipeline stage, `aet-ship`] Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -104,5 +104,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*

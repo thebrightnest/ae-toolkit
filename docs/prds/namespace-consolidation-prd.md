@@ -73,6 +73,22 @@ The 2026-07-19 tooling-usage retro exposed three agent-facing frictions — `aet
 
 Classified as **feature/enhancement** (reorganization + promotion), not a reproducible defect — confirmed at pipeline intake 2026-07-19. The underlying defects (foreground timeout, doc drift) are captured as requirements R-6/R-7 rather than bug reports because the fix is structural.
 
+## Divergence Summary
+
+*Recorded: 2026-07-20 — Branch: nc-06-run-daemonization*
+
+### Changed from plan
+
+- Task 8 (tests): In addition to the two planned new test files, the existing `tests/cli/test_aet_dispatcher.py` was updated so the run/run-one mapping tests exercise the new default-detached path through mocked `subprocess.Popen` and keep the legacy `_exec()` path covered under `--foreground`.
+
+### Added (unplanned)
+
+- `scripts/skills-lint`: Extended the `run`/`run-one` grammar with dispatcher-only flags `--foreground` and `--follow` so the skill-instruction linter recognizes them as valid even though the orchestrator parser does not declare them.
+
+### Deferred
+
+- Task 9 (merge to main and integration verification): intentionally left for the `aet-ship` stage.
+
 ---
 
 *Stage: synced*
