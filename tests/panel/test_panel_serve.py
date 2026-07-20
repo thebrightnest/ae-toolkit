@@ -1,6 +1,6 @@
-"""Tests for aet-work/panel/serve — the /api/list dirs payload (lvp-01).
+"""Tests for aet.panel.serve — the /api/list dirs payload (lvp-01).
 
-The panel server is an extensionless stdlib script; load it via importlib and
+The panel server lives in the ``aet.panel`` package; load it via importlib and
 exercise it through its public interface: real HTTP requests against a
 ThreadingHTTPServer bound to a tmp archive.
 """
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parents[2]
-SERVE_PATH = REPO_ROOT / "aet-work" / "panel" / "serve"
+SERVE_PATH = REPO_ROOT / "src" / "aet" / "panel" / "serve.py"
 
 
 def _load_serve():

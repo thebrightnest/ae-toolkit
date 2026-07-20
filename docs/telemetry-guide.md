@@ -125,11 +125,13 @@ For a visual overview, launch the telemetry panel — a single HTML file plus a
 tiny stdlib-only server that lets the browser read the archive directly:
 
 ```bash
-python3 aet-work/panel/serve   # serves panel + ~/.aet/telemetry, opens your browser
+aet panel                        # serves panel + ~/.aet/telemetry, opens your browser
+python3 -m aet.panel.serve       # direct module invocation (same behavior)
 ```
 
-(You can also open `aet-work/panel/index.html` directly and pick the telemetry
-folder manually, but the launcher is the intended path.)
+The panel source lives in `src/aet/panel/`. You can also open
+`src/aet/panel/index.html` directly and pick the telemetry folder manually,
+but the launcher is the intended path.
 
 In-flight runs are first-class in served mode (lvp-01): a just-started run
 appears on load even before its first stage record lands, and any run without
@@ -255,3 +257,14 @@ path traversal. To roll back, replay the dry-run output inverted
 | `mine-learnings` finds no patterns                    | Run more tasks or extend the date range.                                          |
 | Dependency warmup does not run                        | Verify `.agents/aet-work.json` exists and the source paths are correct.           |
 | Junk projects (`tests`, `tmp*`) appear in the archive | Pre-thp-01 pollution from test runs; the suite is isolated now — delete the dirs. |
+
+## Panel implementation notes
+
+The panel is implemented as a single self-contained `src/aet/panel/index.html`
+(React 18 UMD, Babel standalone, Tailwind Play CDN) plus a stdlib-only server
+in `src/aet/panel/serve.py`. There is no build step. The server is
+localhost-only, refuses path traversal, and exposes two JSON endpoints:
+`GET /api/list` (files plus run directories with activity mtimes) and
+`GET /api/file?p=<relpath>`. The `aet panel` subcommand dispatches to the same
+module, so editable installs, wheels, and direct source invocation all serve
+the bundled HTML identically.

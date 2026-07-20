@@ -268,6 +268,26 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 
 - Task 7 (merge branch to main and verify integration): pending the ship stage.
 
+### pkg-05-panel-extraction — Changed from plan
+
+- Task 3 (test updates): `test-panel-plan-detail.mjs` empty-state check was
+  made conditional (with a 5s timeout) because the live-archive `T/tmp`
+  `run_summary`-only fixture it depended on is no longer reliably present.
+  This matches the pre-existing fixture-drift learning recorded on
+  2026-07-13; the check still runs when the fixture is present, and the
+  harness otherwise proceeds with zero console errors.
+- Task 3 path: `tests/test_panel_serve.py` was reorganized to
+  `tests/panel/test_panel_serve.py` as part of the domain-mirrored test
+  layout; the import/spawn sites were updated to match.
+
+### pkg-05-panel-extraction — Added (unplanned)
+
+- None.
+
+### pkg-05-panel-extraction — Deferred
+
+- Task 5 (merge branch to main and verify integration): pending the ship stage.
+
 ### pkg-09-pyyaml-frontmatter — Changed from plan
 
 - Added a small compatibility shim (`_normalize_frontmatter_body`) that quotes
