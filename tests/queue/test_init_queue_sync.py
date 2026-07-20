@@ -193,7 +193,8 @@ class TestFrontmatterParser(unittest.TestCase):
             encoding="utf-8",
         )
         data = plan_parser.parse_frontmatter(plan)
-        # Malformed inline list falls back to raw string for validation to reject.
+        # The compatibility shim quotes the malformed inline list so PyYAML
+        # accepts it; downstream validation rejects a non-list blocked_by.
         self.assertIsInstance(data["blocked_by"], str)
 
     def test_parse_frontmatter_block_list(self):
@@ -223,6 +224,65 @@ class TestFrontmatterParser(unittest.TestCase):
         )
         data = plan_parser.parse_frontmatter(plan)
         self.assertEqual(data["blocked_by"], [])
+
+    def test_parse_frontmatter_non_mapping_top_level_returns_empty(self):
+        """A frontmatter body that parses to a list/scalar is treated as missing."""
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "- one\n"
+            "- two\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(plan_parser.parse_frontmatter(plan), {})
+
+    def test_parse_frontmatter_preserves_yaml_typed_scalars(self):
+        """PyYAML returns native types; downstream validation rejects mis-typed values."""
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "id: feat-001\n"
+            "size: M\n"
+            "priority: 1\n"
+            "enabled: true\n"
+            "owner: null\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["priority"], 1)
+        self.assertIs(data["enabled"], True)
+        self.assertIsNone(data["owner"])
+
+    def test_parse_frontmatter_preserves_nested_mappings(self):
+        """PyYAML supports mappings under keys that the hand-rolled parser ignored."""
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "id: feat-001\n"
+            "size: M\n"
+            "config:\n"
+            "  key: value\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertEqual(data["config"], {"key": "value"})
+
+    def test_parse_frontmatter_empty_scalar_becomes_none(self):
+        """An explicit empty scalar is None in YAML, not an empty list."""
+        plan = self.root / "feat-001.md"
+        plan.write_text(
+            "---\n"
+            "id: feat-001\n"
+            "size: M\n"
+            "review_url:\n"
+            "---\n\n# One\n",
+            encoding="utf-8",
+        )
+        data = plan_parser.parse_frontmatter(plan)
+        self.assertIsNone(data["review_url"])
 
     def test_explicit_frontmatter_blocked_by_detection(self):
         """has_explicit_frontmatter_blocked_by is True only when the key is declared."""

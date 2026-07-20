@@ -6,67 +6,13 @@ import re
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from aet.queue import append_history  # noqa: E402
 
-
-def _unquote_scalar(value: str) -> str:
-    """Strip matching surrounding quotes from a YAML scalar value.
-
-    Does not process YAML escape sequences; the contract does not require them.
-    """
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-        return value[1:-1]
-    return value
-
-
-def _parse_scalar(value: str) -> str:
-    """Parse a YAML scalar value after the colon.
-
-    Handles empty strings, bare words, and single/double-quoted strings.
-    The value passed in is everything after ``key:``.
-    """
-    return _unquote_scalar(value)
-
-
-def _parse_inline_list(value: str) -> list[str] | None:
-    """Parse an inline YAML list ``[a, 'b', "c"]``.
-
-    Returns a list of string items, or ``None`` if the syntax is malformed
-    (unclosed quotes, unmatched brackets, etc.).
-    """
-    value = value.strip()
-    if not (value.startswith("[") and value.endswith("]")):
-        return None
-    inner = value[1:-1]
-
-    items: list[str] = []
-    current: list[str] = []
-    in_single = False
-    in_double = False
-
-    for ch in inner:
-        if ch == "'" and not in_double:
-            in_single = not in_single
-            current.append(ch)
-        elif ch == '"' and not in_single:
-            in_double = not in_double
-            current.append(ch)
-        elif ch == "," and not in_single and not in_double:
-            item = "".join(current).strip()
-            if item:
-                items.append(_unquote_scalar(item))
-            current = []
-        else:
-            current.append(ch)
-
-    if in_single or in_double:
-        return None
-
-    item = "".join(current).strip()
-    if item:
-        items.append(_unquote_scalar(item))
-    return items
+# Characters that make a plain YAML scalar invalid or ambiguous.  Values
+# containing these must be quoted before PyYAML can parse them as strings.
+_SCALAR_SPECIAL_RE = re.compile(r"[:>#`|%@!&*{}[\],]")
 
 
 def _frontmatter_body(path: Path) -> str | None:
@@ -83,77 +29,102 @@ def _frontmatter_body(path: Path) -> str | None:
     return parts[1]
 
 
+def _yaml_scalar_needs_quoting(value: str) -> bool:
+    """Return True if ``value`` must be quoted to be a YAML string scalar."""
+    value = value.strip()
+    if not value or value == "[]":
+        return False
+    # Already quoted.
+    if (value.startswith('"') and value.endswith('"')) or (
+        value.startswith("'") and value.endswith("'")
+    ):
+        return False
+    # Inline flow collections are parsed by PyYAML directly.
+    if (value.startswith("[") and value.endswith("]")) or (
+        value.startswith("{") and value.endswith("}")
+    ):
+        return False
+    # Plain scalars cannot contain or start with these characters.
+    if _SCALAR_SPECIAL_RE.search(value):
+        return True
+    if value[0] in "|>%":
+        return True
+    return False
+
+
+def _normalize_frontmatter_scalar(value: str) -> str:
+    """Return a YAML-safe representation of a scalar frontmatter value.
+
+    Quotes the value when PyYAML would otherwise misinterpret it as structure.
+    Unquoted values keep their original spacing so ``key: value`` remains valid.
+    """
+    stripped = value.strip()
+    if not stripped or stripped == "[]":
+        return value
+    if _yaml_scalar_needs_quoting(stripped):
+        escaped = stripped.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return value
+
+
+def _normalize_frontmatter_body(body: str) -> str:
+    """Make a hand-rolled frontmatter body valid YAML for PyYAML.
+
+    Quotes scalar values that contain characters which would otherwise be
+    misinterpreted as YAML structure.  This preserves the existing plan
+    corpus (which uses Markdown backticks and unquoted colons in prose
+    fields) without re-implementing a YAML parser.
+    """
+    lines: list[str] = []
+    for raw_line in body.splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            lines.append(raw_line)
+            continue
+        if stripped.startswith("- "):
+            indent = raw_line[: len(raw_line) - len(raw_line.lstrip())]
+            item = stripped[2:]
+            lines.append(f"{indent}- {_normalize_frontmatter_scalar(item)}")
+            continue
+        if ":" not in stripped:
+            lines.append(raw_line)
+            continue
+        key_part, sep, value_part = raw_line.partition(":")
+        normalized = _normalize_frontmatter_scalar(value_part)
+        if normalized != value_part:
+            # Ensure a single space separates the colon from the quoted value.
+            lines.append(f"{key_part}{sep} {normalized.lstrip()}")
+        else:
+            lines.append(f"{key_part}{sep}{normalized}")
+    return "\n".join(lines)
+
+
 def parse_frontmatter(path: Path) -> dict[str, Any]:
-    """Parse the YAML frontmatter contract for a plan file.
+    """Parse the YAML frontmatter of a plan file using PyYAML.
 
-    Supported subset:
+    Returns an empty dict when the file has no frontmatter, the fence is
+    unclosed, the YAML is malformed, or the top-level value is not a mapping.
 
-      - Top-level scalar keys: ``key: value``
-      - Empty lists: ``key:`` or ``key: []``
-      - Inline string lists: ``key: [a, 'b', "c"]``
-      - Block string lists:
-        ``key:\n  - a\n  - b``
-
-    Returns an empty dict when no frontmatter is present. Values that cannot
-    be parsed cleanly are returned as raw strings so downstream validation can
-    reject them.
+    The ``blocked_by`` key is defaulted to an empty list when absent so the
+    rest of the intake contract can rely on its presence.
     """
     body = _frontmatter_body(path)
     if body is None:
         return {}
 
-    data: dict[str, Any] = {}
-    current_key: str | None = None
-    current_indent = 0
+    normalized = _normalize_frontmatter_body(body)
+    try:
+        data = yaml.safe_load(normalized)
+    except yaml.YAMLError:
+        return {}
 
-    for raw_line in body.splitlines():
-        stripped = raw_line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
+    if not isinstance(data, dict):
+        return {}
 
-        # A list item belongs to the most recent key if it is indented more
-        # than that key was, or if it is the immediate continuation of a block
-        # list we have already started.
-        if stripped.startswith("- "):
-            if current_key is None:
-                continue
-            # Accept block list items regardless of indentation; YAML allows
-            # any indentation under a key as long as it is consistent.
-            item = _parse_scalar(stripped[2:])
-            if not isinstance(data.get(current_key), list):
-                data[current_key] = []
-            data[current_key].append(item)
-            continue
-
-        if ":" not in stripped:
-            continue
-
-        key, _, value = stripped.partition(":")
-        key = key.strip()
-        value = value.strip()
-
-        # Detect whether this line is actually a continuation value for an
-        # indented block scalar. The contract does not use block scalars, so
-        # any line that is more indented than the current key and does not
-        # start with ``-`` is ignored.
-        line_indent = len(raw_line) - len(raw_line.lstrip())
-        if current_key is not None and line_indent > current_indent and not stripped.startswith("-"):
-            continue
-
-        current_key = key
-        current_indent = line_indent
-
-        if not value:
-            data[key] = []
-        elif value == "[]":
-            data[key] = []
-        elif value.startswith("["):
-            parsed = _parse_inline_list(value)
-            data[key] = parsed if parsed is not None else value
-        else:
-            data[key] = _parse_scalar(value)
-
-    if "blocked_by" not in data:
+    # The hand-rolled parser treated ``blocked_by:`` (empty scalar) as an
+    # empty list.  PyYAML returns None for an empty scalar, so normalize it
+    # back to the contract default (covers missing key too).
+    if data.get("blocked_by") is None:
         data["blocked_by"] = []
 
     return data
