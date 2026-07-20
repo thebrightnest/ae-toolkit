@@ -37,9 +37,9 @@ docs_sync_reason: The skill's documented retro flow changes (new evidence step);
 
 ## Task List
 
-1. `aet-evolve/SKILL.md`: Prerequisites + `aet retro` evidence step consuming `aet metrics --json` — S (traces: R-5)
-2. `aet-evolve/references/aet-retro.md`: flag documentation — S (traces: R-5)
-3. Recorded cycle: run `aet metrics` on the real ledger/telemetry and write `docs/retros/<date>-aet-metrics-cycle.md` with cited values and routed finding(s) — S (traces: R-7)
+1. ✓ `aet-evolve/SKILL.md`: Prerequisites + `aet retro` evidence step consuming `aet metrics --json` — S (traces: R-5)
+2. ✓ `aet-evolve/references/aet-retro.md`: flag documentation — S (traces: R-5)
+3. ✓ Recorded cycle: run `aet metrics` on the real ledger/telemetry and write `docs/retros/<date>-aet-metrics-cycle.md` with cited values and routed finding(s) — S (traces: R-7)
 
 **Size definitions:** S ≤ 2 hr / ≤ 3 files / ≤ 100 lines; M ≤ 1 day / ≤ 5 files / ≤ 200 lines; L must be split.
 
@@ -56,11 +56,11 @@ docs_sync_reason: The skill's documented retro flow changes (new evidence step);
 
 ## Validation Steps
 
-- [ ] `make validate` passes — in particular skills-lint parses the new `aet metrics` invocations in `aet-evolve` markdown against the real argparse tree (requires tll-03 merged)
-- [ ] Documented procedure coverage: the `aet retro` section names the metrics evidence step; no invocation uses a flag absent from `bin/metrics`' parser (`--json`, `--since` only)
-- [ ] The retro record exists under `docs/retros/`, cites actual command output values, and routes at least one finding or records an explicit evidence-backed "no change warranted"
-- [ ] R-trace coverage: R-5 by tasks 1–2; R-7 by task 3; no unknown R-ids
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `make validate` passes — in particular skills-lint parses the new `aet metrics` invocations in `aet-evolve` markdown against the real argparse tree (requires tll-03 merged)
+- [x] Documented procedure coverage: the `aet retro` section names the metrics evidence step; no invocation uses a flag absent from `bin/metrics`' parser (`--json`, `--since` only)
+- [x] The retro record exists under `docs/retros/`, cites actual command output values, and routes at least one finding or records an explicit evidence-backed "no change warranted"
+- [x] R-trace coverage: R-5 by tasks 1–2; R-7 by task 3; no unknown R-ids
+- [x] Merge verified: `git merge-base --is-ancestor origin/main HEAD`
 
 ## Rollback Plan
 
@@ -72,5 +72,5 @@ Revert the merge commit. The skill returns to prose/mining inputs only; the retr
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
