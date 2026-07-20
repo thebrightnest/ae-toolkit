@@ -201,9 +201,25 @@ def _commit_repo_state(repo_root: str) -> None:
 
 
 class TestNightShiftExitGateRehearsal(unittest.TestCase):
-    """End-to-end rehearsal over a mixed unattended queue."""
+    """End-to-end rehearsal over a mixed unattended queue.
 
-    def _run_batch(self, args, adapter, timeout: float = 180):
+    The shift is expensive — it waits out a real stall-watchdog kill and drives
+    the breaker to trip — and every test below only reads the resulting queue
+    state, so the batch runs once for the whole class.
+    """
+
+    queue_file: str
+    run_out: str
+
+    @classmethod
+    def setUpClass(cls):
+        """Run the one shift the whole class asserts against."""
+        _repo_root, queue_file, args, adapter = cls._setup_repo()
+        cls.queue_file = queue_file
+        _rc, cls.run_out = cls._run_batch(args, adapter, timeout=300)
+
+    @staticmethod
+    def _run_batch(args, adapter, timeout: float = 300):
         """Run run_batch in a thread; return (rc, stdout)."""
         result = {"rc": None, "out": ""}
         orchestrator._shutdown_requested = False
@@ -220,13 +236,14 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
         if thread.is_alive():
             orchestrator._shutdown_requested = True
             thread.join(timeout=5)
-            self.fail("run_batch did not finish within timeout")
+            raise AssertionError("run_batch did not finish within timeout")
         return result["rc"], result["out"]
 
-    def _setup_repo(self):
+    @classmethod
+    def _setup_repo(cls):
         """Create a temp repo with fixtures, fake CLI, and a three-task queue."""
         repo_root = tempfile.mkdtemp(prefix="nsr-07-rehearsal-")
-        self.addCleanup(lambda: subprocess.run(["rm", "-rf", repo_root]))
+        cls.addClassCleanup(lambda: subprocess.run(["rm", "-rf", repo_root]))
 
         _init_git_repo(repo_root)
         _copy_fixtures(repo_root)
@@ -263,7 +280,7 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
 
         # Ensure the fake claude is first on PATH for spawned children.
         new_path = f"{fake_cli.parent}{os.pathsep}{os.environ.get('PATH', '')}"
-        self.enterContext(patch.dict(os.environ, {"PATH": new_path}))
+        cls.enterClassContext(patch.dict(os.environ, {"PATH": new_path}))
 
         adapter = orchestrator.resolve_cli_adapter(str(fake_cli))
         args = argparse.Namespace(
@@ -280,29 +297,21 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
         )
         return repo_root, queue_file, args, adapter
 
-    def _load_queue(self, queue_file: str) -> dict[str, dict]:
-        """Return tasks indexed by id."""
-        queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
+    def _load_queue(self) -> dict[str, dict]:
+        """Return the shift's final tasks indexed by id."""
+        queue = json.loads(Path(self.queue_file).read_text(encoding="utf-8"))["tasks"]
         return {t["id"]: t for t in queue}
 
     def test_mixed_queue_finishes_unattended(self):
         """The healthy task reaches awaiting_merge and the shift does not hang."""
-        _repo_root, queue_file, args, adapter = self._setup_repo()
-
-        rc, out = self._run_batch(args, adapter, timeout=60)
-
-        by_id = self._load_queue(queue_file)
+        by_id = self._load_queue()
 
         self.assertEqual(by_id["nightshift-healthy"]["state"], "awaiting_merge")
-        self.assertIn("awaiting merge", out)
+        self.assertIn("awaiting merge", self.run_out)
 
     def test_deterministic_failure_quarantined_by_breaker(self):
         """The deterministic failure ends quarantined after the breaker trips."""
-        _repo_root, queue_file, args, adapter = self._setup_repo()
-
-        self._run_batch(args, adapter, timeout=60)
-
-        by_id = self._load_queue(queue_file)
+        by_id = self._load_queue()
 
         self.assertEqual(
             by_id["nightshift-deterministic-failure"]["state"], "quarantined"
@@ -310,11 +319,7 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
 
     def test_stall_killed_and_classified_timeout(self):
         """The stall fixture is killed and its failure class is timeout."""
-        _repo_root, queue_file, args, adapter = self._setup_repo()
-
-        self._run_batch(args, adapter, timeout=60)
-
-        task = self._load_queue(queue_file)["nightshift-stall"]
+        task = self._load_queue()["nightshift-stall"]
         # The stall task is either quarantined by the breaker or still failed;
         # either way the recorded failure class is timeout.
         self.assertIn(task["state"], {"quarantined", "failed"})
@@ -327,11 +332,7 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
 
     def test_both_incidents_costed_on_ledger(self):
         """Both incident tasks carry a per-task cost figure on the ledger."""
-        _repo_root, queue_file, args, adapter = self._setup_repo()
-
-        self._run_batch(args, adapter, timeout=60)
-
-        by_id = self._load_queue(queue_file)
+        by_id = self._load_queue()
 
         for task_id in (
             "nightshift-deterministic-failure",
