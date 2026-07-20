@@ -1,4 +1,4 @@
-"""Tests for `aet hooks install` / `aet hooks check` (aet-setup/bin/hooks).
+"""Tests for `aet hooks install` / `aet hooks check` (src/aet/cli/hooks.py).
 
 The generated pre-push shim is exercised as a real artifact: tests install it
 into a temp git repo and execute it as a subprocess, and `hooks check` is
@@ -23,8 +23,8 @@ from unittest.mock import patch
 from aet import evidence
 
 _REPO_ROOT = Path(__file__).parents[2]
-_HOOKS_BIN = _REPO_ROOT / "aet-setup" / "bin" / "hooks"
-_AET_PY = _REPO_ROOT / "aet-work" / "bin" / "aet"
+_HOOKS_BIN = _REPO_ROOT / "src" / "aet" / "cli" / "hooks.py"
+_AET_PY = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 
 _hooks_spec = importlib.util.spec_from_loader(
     "aet_hooks", importlib.machinery.SourceFileLoader("aet_hooks", str(_HOOKS_BIN))
@@ -240,7 +240,7 @@ class TestDispatchRouting(unittest.TestCase):
     def test_hooks_install_routed_through_aet_dispatcher(self):
         spec = aet.SUBCOMMANDS.get("hooks")
         self.assertIsNotNone(spec, "SUBCOMMANDS must gain a 'hooks' row")
-        self.assertEqual(spec["target"], ("aet-setup", "hooks"))
+        self.assertEqual(spec["target"], ("aet.cli", "hooks"))
         self.assertEqual(spec["mode"], "exec")
 
         captured = {}
@@ -257,7 +257,7 @@ class TestDispatchRouting(unittest.TestCase):
         self.assertEqual(captured["path"], Path(sys.executable))
         self.assertEqual(
             captured["argv"],
-            [sys.executable, str(_REPO_ROOT / "aet-setup" / "bin" / "hooks"), "install"],
+            [sys.executable, str(_REPO_ROOT / "src" / "aet" / "cli" / "hooks.py"), "install"],
         )
 
 

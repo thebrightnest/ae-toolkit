@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parents[2]
-_MINE_LEARNINGS_PY = _REPO_ROOT / "aet-evolve" / "bin" / "mine-learnings"
+_MINE_LEARNINGS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "mine-learnings.py"
 
 _spec = importlib.util.spec_from_loader(
     "mine_learnings_walk",

@@ -20,8 +20,8 @@ _spec = importlib.util.spec_from_loader("metrics_cli", _metrics_loader)
 metrics_cli = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(metrics_cli)
 
-# Load the multicall dispatcher (no .py extension) for the registration test.
-_AET_BIN = Path(__file__).parents[2] / "aet-work" / "bin" / "aet"
+# Load the multicall dispatcher for the registration test.
+_AET_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "main.py"
 _aet_loader = importlib.machinery.SourceFileLoader("aet_dispatcher", str(_AET_BIN))
 _aet_spec = importlib.util.spec_from_loader("aet_dispatcher", _aet_loader)
 aet_dispatcher = importlib.util.module_from_spec(_aet_spec)

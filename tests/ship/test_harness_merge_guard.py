@@ -11,8 +11,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
-SCRIPT = REPO_ROOT / "aet-setup" / "bin" / "harness-guard"
-_HARNESS_GUARD_PY = REPO_ROOT / "aet-setup" / "lib" / "harness_guard.py"
+SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "harness-guard.py"
+_HARNESS_GUARD_PY = REPO_ROOT / "src" / "aet" / "harness_guard.py"
 
 _spec = importlib.util.spec_from_loader(
     "harness_guard",

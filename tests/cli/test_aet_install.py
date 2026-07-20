@@ -1,4 +1,4 @@
-"""Tests for `aet install` and on-invocation self-repair (aet-work/bin/aet).
+"""Tests for `aet install` and on-invocation self-repair (src/aet/cli/main.py).
 
 All tests isolate the bin dir via ``AET_BIN_DIR`` pointed at a temp dir —
 nothing ever writes to the real ``~/.local/bin``.
@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parents[2]
-_AET_PY = _REPO_ROOT / "aet-work" / "bin" / "aet"
+_AET_PY = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 _SCRIPT = _AET_PY.resolve()
 
 _aet_spec = importlib.util.spec_from_loader(

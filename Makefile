@@ -21,7 +21,7 @@ install-editable: $(PYTHON) ## Ensure the aet package is installed editable (pla
 	@$(PYTHON) -c "import aet" 2>/dev/null || $(PIP) install -e '.[dev]'
 	@echo "✓ Editable install verified"
 
-install-skills: ## Symlink all skills from this repo to ~/.agents/skills/ and put binaries on PATH
+install-skills: install-editable ## Symlink all skills from this repo to ~/.agents/skills/ and put binaries on PATH
 	@for skill in $(SKILLS); do \
 		if [ -d "$$skill" ] && [ -f "$$skill/SKILL.md" ]; then \
 			if [ -L "$(SKILLS_DIR)/$$skill" ]; then \
@@ -34,10 +34,10 @@ install-skills: ## Symlink all skills from this repo to ~/.agents/skills/ and pu
 			fi; \
 		fi; \
 	done
-	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-work/bin/aet install
+	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" aet install
 
-install-binaries: ## Symlink skill binaries from installed skill dirs onto PATH
-	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" ./aet-work/bin/aet install
+install-binaries: install-editable ## Symlink skill binaries from installed skill dirs onto PATH
+	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" aet install
 
 add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 	@if [ -z "$(NAME)" ]; then \

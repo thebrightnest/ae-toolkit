@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-_SHIP_PY = Path(__file__).parents[2] / "aet-ship" / "bin" / "ship"
+_SHIP_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "ship.py"
 _spec = importlib.util.spec_from_loader(
     "aet_ship", importlib.machinery.SourceFileLoader("aet_ship", str(_SHIP_PY))
 )
@@ -42,7 +42,7 @@ def _subprocess_mock(responses):
 
 
 class TestShipClosure(unittest.TestCase):
-    """Behavior-driven tests for aet-ship/bin/ship."""
+    """Behavior-driven tests for src/aet/cli/ship.py."""
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()

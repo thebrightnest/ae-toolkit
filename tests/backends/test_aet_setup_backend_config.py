@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
-SCRIPT = REPO_ROOT / "aet-setup" / "bin" / "configure-task-backend"
+SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "configure-backend.py"
 
 
 

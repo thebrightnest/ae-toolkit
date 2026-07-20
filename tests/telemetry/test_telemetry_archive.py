@@ -13,8 +13,7 @@ import time
 import unittest
 from pathlib import Path
 
-EVOLVE_BIN_DIR = Path(__file__).parents[2] / "aet-evolve" / "bin"
-WORK_LIB_DIR = Path(__file__).parents[2] / "aet-work" / "lib"
+EVOLVE_BIN_DIR = Path(__file__).parents[2] / "src" / "aet" / "cli"
 
 from aet import telemetry  # noqa: E402
 
@@ -31,7 +30,7 @@ def _load_module(module_name: str, script_path: Path):
     return module
 
 
-mine_learnings = _load_module("mine_learnings", EVOLVE_BIN_DIR / "mine-learnings")
+mine_learnings = _load_module("mine_learnings", EVOLVE_BIN_DIR / "mine-learnings.py")
 
 
 def _write_jsonl(path: Path, records: list[dict]) -> None:

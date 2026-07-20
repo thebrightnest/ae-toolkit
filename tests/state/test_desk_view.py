@@ -373,7 +373,7 @@ class TestDeskDispatcher:
         proc = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "aet-work" / "bin" / "aet"),
+                str(REPO_ROOT / "src" / "aet" / "cli" / "main.py"),
                 "desk",
                 "--json",
                 "--queue-file", queue_file,
