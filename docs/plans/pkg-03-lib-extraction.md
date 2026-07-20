@@ -47,7 +47,7 @@ same CLI behavior, same test suite expectations.
    `aet-evolve/bin/*`, `aet-setup/bin/*`) to drop `sys.path.insert` and import
    the installed package — M (traces: R-3) ✓
 4. Update `aet-work/panel/serve` and `scripts/test-*.py` import sites — S
-   (traces: R-3) ✓ (`panel/serve` and `scripts/test-aet-state.py` required no
+   (traces: R-3) ✓ (`panel/serve` and `tests/test_aet_state.py` required no
    changes)
 5. Update `tests/conftest.py` (remove lib `sys.path` insertion; keep isolation
    fixtures) and every test file's imports; verify no bare `import telemetry`
@@ -93,7 +93,7 @@ same CLI behavior, same test suite expectations.
 - `aet-work/bin/*` (import lines only)
 - `aet-ship/bin/ship`, `aet-evolve/bin/*`, `aet-setup/bin/*` (import lines only)
 - `aet-work/panel/serve` (import lines only)
-- `scripts/test-aet-state.py`, `scripts/test-telemetry.py` (import lines only)
+- `tests/test_aet_state.py`, `tests/test_telemetry.py` (import lines only)
 - `tests/conftest.py`, `tests/test_*.py` (import lines only)
 
 ## Validation Steps

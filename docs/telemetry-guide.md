@@ -209,12 +209,12 @@ slug — only the archive paths do — so migration is pure directory renames, a
 
 ```bash
 # dry-run first (default): lists every pending move, touches nothing
-scripts/migrate-telemetry-slugs.py thebrightnest/ae-toolkit aiskills/main
-scripts/migrate-telemetry-slugs.py thebrightnest/artifactsh artifactsh/main
+scripts/archive/migrate-telemetry-slugs.py thebrightnest/ae-toolkit aiskills/main
+scripts/archive/migrate-telemetry-slugs.py thebrightnest/artifactsh artifactsh/main
 
 # then apply
-scripts/migrate-telemetry-slugs.py thebrightnest/ae-toolkit aiskills/main --apply
-scripts/migrate-telemetry-slugs.py thebrightnest/artifactsh artifactsh/main --apply
+scripts/archive/migrate-telemetry-slugs.py thebrightnest/ae-toolkit aiskills/main --apply
+scripts/archive/migrate-telemetry-slugs.py thebrightnest/artifactsh artifactsh/main --apply
 ```
 
 The script renames the project dirs under **both** roots (`~/.aet/telemetry`

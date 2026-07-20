@@ -1,4 +1,4 @@
-"""Integration tests for scripts/migrate-telemetry-slugs.py.
+"""Integration tests for scripts/archive/migrate-telemetry-slugs.py.
 
 The script is exercised via subprocess against a tmp fixture archive — never
 the real ``~/.aet`` tree. Flags ``--archive``/``--reports`` point both roots
@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "migrate-telemetry-slugs.py"
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "archive" / "migrate-telemetry-slugs.py"
 
 OLD_SLUG = "thebrightnest/ae-toolkit"
 NEW_SLUG = "aiskills/main"

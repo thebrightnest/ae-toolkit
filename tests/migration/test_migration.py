@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
-MIGRATION_PY = REPO_ROOT / "scripts" / "migrate-plans-to-frontmatter.py"
+MIGRATION_PY = REPO_ROOT / "scripts" / "archive" / "migrate-plans-to-frontmatter.py"
 
 _spec = importlib.util.spec_from_loader(
     "migration", importlib.machinery.SourceFileLoader("migration", str(MIGRATION_PY))
