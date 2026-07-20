@@ -382,6 +382,7 @@ class TestAetIntegration(_IsolatedBinDir):
             env = {**os.environ, "AET_BIN_DIR": str(self.bin_dir)}
             result = subprocess.run(
                 [
+                    sys.executable,
                     str(_AET_PY),
                     "status",
                     "--queue-file",

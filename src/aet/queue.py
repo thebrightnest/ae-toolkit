@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
@@ -15,14 +14,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from filelock import FileLock
+
 # Tracks whether a queue file was read as a dict wrapper and, if so, its
 # non-task metadata so write_queue can preserve the envelope.
 _queue_wrappers: dict[str, dict[str, Any] | None] = {}
 
 # Reentrant file-lock state keyed by absolute queue path. These are kept at
 # module scope so nested ``queue_lock`` contexts in the same process reuse the
-# same open file description and therefore the same fcntl lock.
-_lock_files: dict[str, Any] = {}
+# same FileLock instance and therefore the same advisory lock.
+_lock_instances: dict[str, FileLock] = {}
 _lock_counters: dict[str, int] = {}
 
 
@@ -80,12 +81,17 @@ def queue_lock(queue_file: str) -> Iterator[None]:
 
     key = queue_abs
 
-    if key not in _lock_files:
-        _lock_files[key] = open(lock_path, "w", encoding="utf-8")
+    if key not in _lock_instances:
+        _lock_instances[key] = FileLock(lock_path)
         _lock_counters[key] = 0
 
     if _lock_counters[key] == 0:
-        fcntl.flock(_lock_files[key].fileno(), fcntl.LOCK_EX)
+        try:
+            _lock_instances[key].acquire()
+        except Exception:
+            del _lock_instances[key]
+            del _lock_counters[key]
+            raise
 
     _lock_counters[key] += 1
     try:
@@ -93,10 +99,11 @@ def queue_lock(queue_file: str) -> Iterator[None]:
     finally:
         _lock_counters[key] -= 1
         if _lock_counters[key] == 0:
-            fcntl.flock(_lock_files[key].fileno(), fcntl.LOCK_UN)
-            _lock_files[key].close()
-            del _lock_files[key]
-            del _lock_counters[key]
+            try:
+                _lock_instances[key].release()
+            finally:
+                del _lock_instances[key]
+                del _lock_counters[key]
 
 
 # ---------------------------------------------------------------------------

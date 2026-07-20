@@ -96,6 +96,33 @@ class TestQueueLock(unittest.TestCase):
                     tasks = queue_lib.read_queue(queue_path)
                     self.assertEqual(tasks, [])
 
+    def test_queue_lock_leaves_sidecar_file_on_disk(self):
+        """The lock sidecar is never unlinked; it must survive release."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = str(Path(tmpdir) / "work-queue.json")
+            Path(queue_path).write_text(json.dumps({"tasks": []}), encoding="utf-8")
+            lock_path = f"{queue_path}.lock"
+
+            with queue_lib.queue_lock(queue_path):
+                pass
+
+            self.assertTrue(
+                Path(lock_path).exists(),
+                "lock sidecar must persist after queue_lock exits",
+            )
+
+    def test_stale_lock_file_does_not_block_new_acquirer(self):
+        """A leftover lock file with no live holder must not block acquisition."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = str(Path(tmpdir) / "work-queue.json")
+            Path(queue_path).write_text(json.dumps({"tasks": []}), encoding="utf-8")
+            lock_path = f"{queue_path}.lock"
+            Path(lock_path).write_text("", encoding="utf-8")
+
+            with queue_lib.queue_lock(queue_path):
+                tasks = queue_lib.read_queue(queue_path)
+                self.assertEqual(tasks, [])
+
 
 class TestSetStageBackendRouting(unittest.TestCase):
     def test_set_stage_routes_through_backend_and_preserves_envelope(self):
