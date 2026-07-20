@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Merge-time lint for workflow-as-data files.
 
 Validates the packaged ``src/aet/workflows/*.json`` and, when present, the
@@ -55,7 +54,7 @@ def workflow_files(repo_root: Path) -> list[Path]:
     return files
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Lint workflow-as-data files.")
     parser.add_argument(
         "--repo-root",

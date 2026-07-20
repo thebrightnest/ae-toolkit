@@ -24,7 +24,7 @@ from aet.cli_adapter import CLIAdapter, resolve_cli_adapter
 from aet.workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
 
 # Load the orchestrator script (no .py extension) as a module.
-_ORCHESTRATOR_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
+_ORCHESTRATOR_BIN = Path(__file__).parent.parent / "src" / "aet" / "cli" / "orchestrator.py"
 _orchestrator_loader = importlib.machinery.SourceFileLoader("orchestrator", str(_ORCHESTRATOR_BIN))
 _spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)
@@ -748,7 +748,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                 check=True,
             )
 
-            aet_state_bin = str(Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state")
+            aet_state_bin = str(Path(__file__).parent.parent / "src" / "aet" / "cli" / "aet-state.py")
             result = subprocess.run(
                 [sys.executable, aet_state_bin, "record-merge", "demo", queue_file],
                 capture_output=True,
@@ -828,7 +828,7 @@ class TestOrchestratorLockedWrites(unittest.TestCase):
                 ],
             )
             backend = _SpyBackend(orchestrator._make_backend(queue_file))
-            aet_state_bin = str(Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state")
+            aet_state_bin = str(Path(__file__).parent.parent / "src" / "aet" / "cli" / "aet-state.py")
             real_subprocess_run = subprocess.run
 
             def fake_run(cmd, **kwargs):
@@ -911,7 +911,7 @@ class TestOrchestratorLockedWrites(unittest.TestCase):
                 )
 
                 aet_state_bin = str(
-                    Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
+                    Path(__file__).parent.parent / "src" / "aet" / "cli" / "aet-state.py"
                 )
 
                 def seal_task_and_succeed(*_args, **_kwargs):
@@ -2589,7 +2589,7 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
                 self._merge_external_blocker(repo_root, "blocker-branch")
 
                 aet_state_bin = str(
-                    Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
+                    Path(__file__).parent.parent / "src" / "aet" / "cli" / "aet-state.py"
                 )
 
                 def fake_popen(cmd, **kwargs):

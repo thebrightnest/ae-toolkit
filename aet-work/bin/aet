@@ -28,22 +28,22 @@ from pathlib import Path
 # orchestrator flag mapping from the frh-05 aet-work dispatcher. "internal"
 # is handled inside this file — `install` is the one such subcommand (R-1).
 SUBCOMMANDS = {
-    "sprint": {"target": ("aet-work", "sprint"), "mode": "exec"},
-    "backlog": {"target": ("aet-work", "backlog"), "mode": "exec"},
-    "desk": {"target": ("aet-work", "desk"), "mode": "exec"},
-    "review": {"target": ("aet-work", "review"), "mode": "exec"},
-    "status": {"target": ("aet-work", "status"), "mode": "exec"},
-    "next": {"target": ("aet-work", "next"), "mode": "exec"},
-    "sync": {"target": ("aet-work", "sync"), "mode": "exec"},
-    "report": {"target": ("aet-work", "report"), "mode": "exec"},
-    "metrics": {"target": ("aet-work", "metrics"), "mode": "exec"},
-    "reconcile": {"target": ("aet-work", "reconcile"), "mode": "exec"},
-    "init-queue": {"target": ("aet-work", "init-queue"), "mode": "exec"},
-    "state": {"target": ("aet-work", "aet-state"), "mode": "exec"},
-    "gate": {"target": ("aet-work", "gate"), "mode": "exec"},
-    "plan": {"target": ("aet-work", "plan"), "mode": "exec"},
-    "run": {"target": ("aet-work", "orchestrator"), "mode": "run"},
-    "run-one": {"target": ("aet-work", "orchestrator"), "mode": "run-one"},
+    "sprint": {"target": ("aet.cli", "sprint"), "mode": "exec"},
+    "backlog": {"target": ("aet.cli", "backlog"), "mode": "exec"},
+    "desk": {"target": ("aet.cli", "desk"), "mode": "exec"},
+    "review": {"target": ("aet.cli", "review"), "mode": "exec"},
+    "status": {"target": ("aet.cli", "status"), "mode": "exec"},
+    "next": {"target": ("aet.cli", "next"), "mode": "exec"},
+    "sync": {"target": ("aet.cli", "sync"), "mode": "exec"},
+    "report": {"target": ("aet.cli", "report"), "mode": "exec"},
+    "metrics": {"target": ("aet.cli", "metrics"), "mode": "exec"},
+    "reconcile": {"target": ("aet.cli", "reconcile"), "mode": "exec"},
+    "init-queue": {"target": ("aet.cli", "init-queue"), "mode": "exec"},
+    "state": {"target": ("aet.cli", "aet-state"), "mode": "exec"},
+    "gate": {"target": ("aet.cli", "gate"), "mode": "exec"},
+    "plan": {"target": ("aet.cli", "plan"), "mode": "exec"},
+    "run": {"target": ("aet.cli", "orchestrator"), "mode": "run"},
+    "run-one": {"target": ("aet.cli", "orchestrator"), "mode": "run-one"},
     "ship": {"target": ("aet-ship", "ship"), "mode": "exec"},
     "retro": {"target": ("aet-evolve", "aet-retro"), "mode": "exec"},
     "mine-learnings": {"target": ("aet-evolve", "mine-learnings"), "mode": "exec"},
@@ -117,9 +117,18 @@ def _usage() -> str:
 
 
 def _resolve_target(spec: dict) -> Path:
-    """Resolve a spec target via the skills-root sibling layout."""
+    """Resolve a spec target to a runnable path.
+
+    Skill targets use the existing ``<skill-dir>/bin/<bin-name>`` layout.
+    Package targets (``aet.cli``) resolve to ``src/aet/cli/<bin-name>.py``
+    under the repository root so the dispatcher can exec them through the
+    same Python interpreter.
+    """
     skill_dir, bin_name = spec["target"]
-    binary = _skills_root() / skill_dir / "bin" / bin_name
+    if skill_dir == "aet.cli":
+        binary = _skills_root() / "src" / "aet" / "cli" / f"{bin_name}.py"
+    else:
+        binary = _skills_root() / skill_dir / "bin" / bin_name
     if not binary.is_file():
         print(
             f"error: missing skill '{skill_dir}' (expected binary at {binary})",

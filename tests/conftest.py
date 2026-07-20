@@ -1,7 +1,25 @@
 """pytest configuration for orchestrator tests."""
 
+import os
+import sys
+from pathlib import Path
 
 import pytest
+
+# The host shell sets PYTHONPATH to the main checkout, which would make every
+# ``import aet`` resolve outside this worktree. Force the repo under test onto
+# sys.path first and propagate it to subprocesses before pytest imports tests.
+_REPO_ROOT = Path(__file__).parent.parent
+_WORKTREE_SRC = _REPO_ROOT / "src"
+if str(_WORKTREE_SRC) not in sys.path:
+    sys.path.insert(0, str(_WORKTREE_SRC))
+else:
+    sys.path.remove(str(_WORKTREE_SRC))
+    sys.path.insert(0, str(_WORKTREE_SRC))
+_prev_pythonpath = os.environ.get("PYTHONPATH", "")
+os.environ["PYTHONPATH"] = (
+    str(_WORKTREE_SRC) + (os.pathsep + _prev_pythonpath if _prev_pythonpath else "")
+)
 
 
 @pytest.fixture(autouse=True)

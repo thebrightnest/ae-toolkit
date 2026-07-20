@@ -16,7 +16,7 @@ from pathlib import Path
 
 from aet import queue as queue_lib
 
-_AET_STATE_PY = Path(__file__).parent.parent / "aet-work" / "bin" / "aet-state"
+_AET_STATE_PY = Path(__file__).parent.parent / "src" / "aet" / "cli" / "aet-state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
 )

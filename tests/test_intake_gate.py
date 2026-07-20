@@ -16,7 +16,7 @@ _REPO_ROOT = Path(__file__).parent.parent
 
 
 def _load_script(name: str):
-    path = _REPO_ROOT / "aet-work" / "bin" / name
+    path = _REPO_ROOT / "src" / "aet" / "cli" / f"{name}.py"
     spec = importlib.util.spec_from_loader(
         name, importlib.machinery.SourceFileLoader(name, str(path))
     )

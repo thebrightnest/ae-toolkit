@@ -16,7 +16,7 @@ from unittest import mock
 from aet.backends.github_backend import GitHubBackend
 
 _REPO_ROOT = Path(__file__).parent.parent
-_BACKLOG_PY = _REPO_ROOT / "aet-work" / "bin" / "backlog"
+_BACKLOG_PY = _REPO_ROOT / "src" / "aet" / "cli" / "backlog.py"
 
 _backlog_spec = importlib.util.spec_from_loader(
     "backlog", importlib.machinery.SourceFileLoader("backlog", str(_BACKLOG_PY))

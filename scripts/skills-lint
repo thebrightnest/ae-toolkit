@@ -75,16 +75,16 @@ def load_dispatcher():
 
 def load_parser(binary: Path):
     """Load a target binary's build_parser(); None for non-Python targets."""
-    first_line = binary.open().readline()
-    if "python" not in first_line:
-        return None
     name = "skills_lint_target_" + re.sub(r"\W", "_", str(binary))
     spec = importlib.util.spec_from_loader(
         name, importlib.machinery.SourceFileLoader(name, str(binary))
     )
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        return None
     if not hasattr(module, "build_parser"):
         return None
     return module.build_parser()
@@ -114,7 +114,10 @@ def build_grammars(subcommands):
     grammars = {}
     for name, spec in subcommands.items():
         skill_dir, bin_name = spec["target"]
-        binary = REPO_ROOT / skill_dir / "bin" / bin_name
+        if skill_dir == "aet.cli":
+            binary = REPO_ROOT / "src" / "aet" / "cli" / f"{bin_name}.py"
+        else:
+            binary = REPO_ROOT / skill_dir / "bin" / bin_name
         parser = load_parser(binary)
         grammars[name] = parser_grammar(parser) if parser is not None else None
     return grammars

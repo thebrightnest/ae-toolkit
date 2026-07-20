@@ -21,7 +21,7 @@ from aet import (  # noqa: E402
 )
 
 REPO_ROOT = Path(__file__).parent.parent
-_DESK_PY = REPO_ROOT / "aet-work" / "bin" / "desk"
+_DESK_PY = REPO_ROOT / "src" / "aet" / "cli" / "desk.py"
 
 _desk_spec = importlib.util.spec_from_loader(
     "desk_bin", importlib.machinery.SourceFileLoader("desk_bin", str(_DESK_PY))

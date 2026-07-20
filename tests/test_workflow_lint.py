@@ -1,4 +1,4 @@
-"""Tests for the merge-time workflow lint (aet-work/bin/validate-workflows).
+"""Tests for the merge-time workflow lint (src/aet/cli/validate-workflows.py).
 
 One failing fixture per lint rule, plus the packaged default green through
 the CLI entry point. The lint reuses workflow.py's validation core and adds
@@ -17,7 +17,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 
 # Load the lint script (no .py extension) as a module.
-_LINT_BIN = REPO_ROOT / "aet-work" / "bin" / "validate-workflows"
+_LINT_BIN = REPO_ROOT / "src" / "aet" / "cli" / "validate-workflows.py"
 _loader = importlib.machinery.SourceFileLoader("validate_workflows", str(_LINT_BIN))
 _spec = importlib.util.spec_from_loader("validate_workflows", _loader)
 validate_workflows = importlib.util.module_from_spec(_spec)

@@ -63,7 +63,7 @@ class TestNestedCommandGroupDispatch(_IsolatedBinDir):
             argv,
             [
                 sys.executable,
-                str(_REPO_ROOT / "aet-work" / "bin" / "sprint"),
+                str(_REPO_ROOT / "src" / "aet" / "cli" / "sprint.py"),
                 "add",
                 "docs/plans/feat-001.md",
             ],
@@ -79,7 +79,7 @@ class TestNestedCommandGroupDispatch(_IsolatedBinDir):
             argv,
             [
                 sys.executable,
-                str(_REPO_ROOT / "aet-work" / "bin" / "backlog"),
+                str(_REPO_ROOT / "src" / "aet" / "cli" / "backlog.py"),
                 "add",
                 "docs/plans/feat-001.md",
             ],
@@ -102,7 +102,7 @@ class TestNestedCommandGroupDispatch(_IsolatedBinDir):
             argv,
             [
                 sys.executable,
-                str(_REPO_ROOT / "aet-work" / "bin" / "sprint"),
+                str(_REPO_ROOT / "src" / "aet" / "cli" / "sprint.py"),
                 "add",
                 "--queue-file",
                 "q.json",
@@ -119,7 +119,7 @@ class TestNestedCommandGroupDispatch(_IsolatedBinDir):
             argv,
             [
                 sys.executable,
-                str(_REPO_ROOT / "aet-work" / "bin" / "aet-state"),
+                str(_REPO_ROOT / "src" / "aet" / "cli" / "aet-state.py"),
                 "audit",
                 "q.json",
             ],

@@ -84,7 +84,7 @@ test: install-editable ## Run pytest suite (parallel if pytest-xdist is installe
 
 validate: ## Run all quality checks, fail-fast (lint-py + workflow-lint + skills-lint + skill-structure, pytest last)
 	@$(MAKE) lint-py
-	@$(PYTHON) ./aet-work/bin/validate-workflows
+	@$(PYTHON) ./src/aet/cli/validate-workflows.py
 	@$(PYTHON) ./scripts/skills-lint --legacy=error
 	@./scripts/validate-skills.sh
 	@$(MAKE) test

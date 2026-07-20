@@ -238,6 +238,36 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 - Deletion of `aet-setup/lib/`: `aet-setup/lib/harness_guard.py` stays in place
   until pkg-06 moves it; the directory will be removed then.
 
+### pkg-04-cli-extraction — Changed from plan
+
+- Task 3 (console entry points): `pyproject.toml` already declared
+  `aet = "aet.cli:main"` from pkg-03; pkg-04 implemented
+  `src/aet/cli/__init__.py` to make the entry point functional and verified the
+  editable-install script, rather than adding the declaration itself.
+- Task 6 (affected tests): more test files were updated than originally listed,
+  including cross-cutting import-path fixes and added parser/entry-point smoke
+  tests across the suite.
+
+### pkg-04-cli-extraction — Added (unplanned)
+
+- `tests/conftest.py`: worktree-local `sys.path`/`PYTHONPATH` pinning so tests
+  import the repo-under-test instead of the host checkout's `aet` package.
+  This temporarily departs from R-4's "no `sys.path` manipulation in
+  `tests/conftest.py`" until the orchestrator's evidence-path/group-session env
+  issue is fixed.
+- `tests/test_build_parsers.py`: added parser smoke tests for the newly moved
+  modules (`desk`, `gate`, `plan`, `reconcile`, `metrics`,
+  `validate-workflows`).
+- `tests/test_aet_dispatcher.py`: added `TestPackageEntryPoint` verifying
+  `aet.cli:main` re-exports the dispatcher and the editable-install console
+  script runs.
+- `Makefile`, `aet-ship/bin/ship`, `scripts/test-aet-state.py`: path updates
+  required by the binary relocation.
+
+### pkg-04-cli-extraction — Deferred
+
+- Task 7 (merge branch to main and verify integration): pending the ship stage.
+
 ---
 
 _Stage: synced_

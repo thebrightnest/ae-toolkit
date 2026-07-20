@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work backlog — Backlog curation commands.
 
 ``aet backlog add <plan>`` puts a plan on the GitHub board. It resolves the
@@ -90,7 +89,7 @@ def _task_from_plan(plan_file: Path) -> dict:
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None):
     args = parse_args(argv)
     if args.command != "add":
         return 1

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work reconcile — Report and heal drift between plans and GitHub Issues.
 
 Scans committed live plans and the mirrored ``aet:*`` issues, prints the
@@ -57,8 +56,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def parse_args(argv) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def _format_report(report: dict[str, Any]) -> str:
@@ -101,8 +100,8 @@ def _format_report(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     config = resolve_config(args.config)
     dispatcher = resolve_projections(config)
 

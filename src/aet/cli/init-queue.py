@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work init-queue — Rebuild the work queue from docs/plans/*.md.
 
 Reads every atomic plan, validates the frontmatter contract, rebuilds
@@ -66,8 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def parse_args(argv) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def git_merge_commit_for(task_id: str, repo_root: str | Path | None = None) -> str | None:
@@ -221,8 +220,8 @@ def build_blocks(queue: list[dict]) -> None:
                 task_by_id[blocker].setdefault("blocks", []).append(task["id"])
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     queue_file = args.queue_file
     history_file = args.history_file
     plans_dir = Path(args.plans_dir)
