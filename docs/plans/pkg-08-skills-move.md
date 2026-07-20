@@ -108,5 +108,5 @@ new layout before this plan is considered done.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
