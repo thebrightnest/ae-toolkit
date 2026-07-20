@@ -105,5 +105,6 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - **Runtime dependency policy:** Standard library for glue; dependencies for formats, protocols, and UI; one dependency per plan with its own security review. See ADR-037.
 - **Directory-based distribution:** Skills are installed together from this repo via `npx skills add ... --all`. Individual `.skill` zip artifacts are no longer produced or tracked. See ADR-016 and ADR-018.
 - **Directory layout:** Skills live under `skills/` as pure content; all tool code lives under `src/aet/`. See ADR-038.
+- **CLI/skill namespace taxonomy:** Deterministic work becomes code/CLI (`aet <noun> <verb>`), judgment stays in skills, and collisions are resolved by atomic alias-free renames. See ADR-039.
 - **No CI:** All gates local via pre-commit + Make. Keeps the repo portable and free of vendor lock-in.
 - **Trimmed tooling:** Dropped cspell, lychee, detect-secrets, and prettier. Cosmetic formatting (prettier) produced churn without catching real defects; the quality surface is structure (`validate-skills`), semantics (`skills-lint`, `validate-workflows`), and code (`ruff`, `pytest`). Markdownlint remains as a light, staged-only guard.
