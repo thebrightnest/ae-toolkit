@@ -287,6 +287,8 @@ Phase 6 also moved the roadmap's governing metric (human minutes at the two ends
 
 ## Divergence Summary
 
+<!-- markdownlint-disable MD024 -->
+
 *Recorded: 2026-07-18 — Branch: gib-02-projection-axis-fail-open-dispatcher*
 
 ### Changed from plan
@@ -314,6 +316,8 @@ Phase 6 also moved the roadmap's governing metric (human minutes at the two ends
 ### Deferred
 
 - None.
+
+<!-- markdownlint-enable MD024 -->
 
 ---
 
