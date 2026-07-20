@@ -34,21 +34,21 @@ that no executable script remains at the skill root.
 
 ## Task List
 
-1. Move `aet-ship/bin/ship` → `src/aet/cli/ship.py`,
+1. [x] Move `aet-ship/bin/ship` → `src/aet/cli/ship.py`,
    `aet-evolve/bin/{aet-retro,mine-learnings}` → `src/aet/cli/`,
    `aet-setup/bin/{configure-task-backend,harness-guard,hooks}` →
    `src/aet/cli/`, each with `main()`; move `aet-setup/lib/harness_guard.py` →
    `src/aet/harness_guard.py` — M (traces: R-2)
-2. Move `aet-work/bin/aet` (dispatcher) → `src/aet/cli/main.py` with
+2. [x] Move `aet-work/bin/aet` (dispatcher) → `src/aet/cli/main.py` with
    `SUBCOMMANDS` targets fully inside the package; delete `aet-work/bin/` and
    the other skills' `bin/`/`lib/` dirs — M (traces: R-2)
-3. Update `Makefile` (`install-skills` invokes the installed `aet` entry point,
+3. [x] Update `Makefile` (`install-skills` invokes the installed `aet` entry point,
    not `./aet-work/bin/aet`) — S (traces: R-3)
-4. Update SKILL.md Prerequisites in `aet-ship`, `aet-evolve`, `aet-setup`,
+4. [x] Update SKILL.md Prerequisites in `aet-ship`, `aet-evolve`, `aet-setup`,
    `aet-work` to reference the installed `aet` entry point (no repo-relative
    bin paths); update `docs/CONVENTIONS.md` canonical-installer paragraph — S
    (traces: R-11)
-5. Port `aet-release-prep/release-prep.sh`'s logic (version-source detection
+5. [x] Port `aet-release-prep/release-prep.sh`'s logic (version-source detection
    across `package.json`/`VERSION`/git-tag with `v`-prefix stripping, commit
    classification including conventional-commit prefixes and keyword fallbacks,
    semver bump calculation including prerelease-stripping, JSON output) with
@@ -58,10 +58,10 @@ that no executable script remains at the skill root.
    executable script remaining at the skill root; update the invocation
    reference in `aet-release-prep/SKILL.md` Step 1 from the script path to
    `aet release-prep` — M (traces: R-2, R-4, R-11)
-6. Update affected tests (`test_aet_ship.py`, `test_aet_retro.py`,
+6. [x] Update affected tests (`test_aet_ship.py`, `test_aet_retro.py`,
    `test_hooks_install.py`, `test_aet_setup_backend_config.py`,
    `test_aet_setup_examples.py`, dispatcher tests) — M (traces: R-3)
-7. Merge branch to main and verify integration — S
+7. [Deferred: pending ship/merge stage] Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -129,5 +129,5 @@ revert restores the targets they point at.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*

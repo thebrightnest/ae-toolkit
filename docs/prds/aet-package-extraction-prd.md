@@ -335,6 +335,7 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 ### pkg-13-scripts-split — Deferred
 
 - Task 5 (merge branch to main and verify integration): pending the ship stage.
+
 ---
 
 _Stage: synced_
