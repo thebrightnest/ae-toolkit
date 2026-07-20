@@ -11,9 +11,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_INIT_QUEUE_PY = _REPO_ROOT / "aet-work" / "bin" / "init-queue"
-_NEXT_PY = _REPO_ROOT / "aet-work" / "bin" / "next"
-_SYNC_PY = _REPO_ROOT / "aet-work" / "bin" / "sync"
+_INIT_QUEUE_PY = _REPO_ROOT / "src" / "aet" / "cli" / "init-queue.py"
+_NEXT_PY = _REPO_ROOT / "src" / "aet" / "cli" / "next.py"
+_SYNC_PY = _REPO_ROOT / "src" / "aet" / "cli" / "sync.py"
 
 _spec = importlib.util.spec_from_loader(
     "init_queue",

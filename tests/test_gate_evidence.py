@@ -17,7 +17,7 @@ from aet.cli_adapter import CLIAdapter
 from aet.workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
 
 # Load the orchestrator script (no .py extension) as a module.
-_ORCHESTRATOR_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "orchestrator"
+_ORCHESTRATOR_BIN = Path(__file__).parent.parent / "src" / "aet" / "cli" / "orchestrator.py"
 _orchestrator_loader = importlib.machinery.SourceFileLoader(
     "orchestrator", str(_ORCHESTRATOR_BIN)
 )

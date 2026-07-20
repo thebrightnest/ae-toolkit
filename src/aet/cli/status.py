@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work status — Show the current state of the work queue.
 
 Checks plan drift against the active queue and the settled history log, reads
@@ -46,8 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def parse_args(argv) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def _display_category(task: dict) -> str:
@@ -106,8 +105,8 @@ def _json_projection(queue: list[dict], queue_file: str) -> dict:
     }
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     backend = create_backend(
         queue_file=args.queue_file, history_file=args.history_file
     )

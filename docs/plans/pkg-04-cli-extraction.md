@@ -104,5 +104,5 @@ the same revert. No state or user-facing behavior changes to roll back.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

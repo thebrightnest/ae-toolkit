@@ -17,16 +17,22 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).parent.parent
 
 _BINS = {
-    "status": _REPO_ROOT / "aet-work" / "bin" / "status",
-    "sprint": _REPO_ROOT / "aet-work" / "bin" / "sprint",
-    "backlog": _REPO_ROOT / "aet-work" / "bin" / "backlog",
-    "review": _REPO_ROOT / "aet-work" / "bin" / "review",
-    "next": _REPO_ROOT / "aet-work" / "bin" / "next",
-    "sync": _REPO_ROOT / "aet-work" / "bin" / "sync",
-    "report": _REPO_ROOT / "aet-work" / "bin" / "report",
-    "init-queue": _REPO_ROOT / "aet-work" / "bin" / "init-queue",
-    "aet-state": _REPO_ROOT / "aet-work" / "bin" / "aet-state",
-    "orchestrator": _REPO_ROOT / "aet-work" / "bin" / "orchestrator",
+    "status": _REPO_ROOT / "src" / "aet" / "cli" / "status.py",
+    "sprint": _REPO_ROOT / "src" / "aet" / "cli" / "sprint.py",
+    "backlog": _REPO_ROOT / "src" / "aet" / "cli" / "backlog.py",
+    "review": _REPO_ROOT / "src" / "aet" / "cli" / "review.py",
+    "next": _REPO_ROOT / "src" / "aet" / "cli" / "next.py",
+    "sync": _REPO_ROOT / "src" / "aet" / "cli" / "sync.py",
+    "report": _REPO_ROOT / "src" / "aet" / "cli" / "report.py",
+    "init-queue": _REPO_ROOT / "src" / "aet" / "cli" / "init-queue.py",
+    "aet-state": _REPO_ROOT / "src" / "aet" / "cli" / "aet-state.py",
+    "orchestrator": _REPO_ROOT / "src" / "aet" / "cli" / "orchestrator.py",
+    "desk": _REPO_ROOT / "src" / "aet" / "cli" / "desk.py",
+    "gate": _REPO_ROOT / "src" / "aet" / "cli" / "gate.py",
+    "plan": _REPO_ROOT / "src" / "aet" / "cli" / "plan.py",
+    "reconcile": _REPO_ROOT / "src" / "aet" / "cli" / "reconcile.py",
+    "metrics": _REPO_ROOT / "src" / "aet" / "cli" / "metrics.py",
+    "validate-workflows": _REPO_ROOT / "src" / "aet" / "cli" / "validate-workflows.py",
     "ship": _REPO_ROOT / "aet-ship" / "bin" / "ship",
     "aet-retro": _REPO_ROOT / "aet-evolve" / "bin" / "aet-retro",
     "mine-learnings": _REPO_ROOT / "aet-evolve" / "bin" / "mine-learnings",
@@ -118,6 +124,50 @@ class TestBuildParserExposure(unittest.TestCase):
         args = parser.parse_args(["--plan-file", "docs/plans/x.md"])
         self.assertEqual(args.plan_file, "docs/plans/x.md")
         self.assertEqual(args.isolation, "standard")
+
+    def test_desk_build_parser_returns_parser_with_known_flag(self):
+        module = _load_bin("bp_desk", _BINS["desk"])
+        parser = module.build_parser()
+        self.assertIsInstance(parser, argparse.ArgumentParser)
+        args = parser.parse_args([])
+        self.assertFalse(args.eligibility)
+
+    def test_gate_build_parser_returns_parser_with_known_flag(self):
+        module = _load_bin("bp_gate", _BINS["gate"])
+        parser = module.build_parser()
+        self.assertIsInstance(parser, argparse.ArgumentParser)
+        args = parser.parse_args(
+            ["submit", "--stage", "qa", "--verdict", "pass", "--evidence", "ev.json"]
+        )
+        self.assertEqual(args.command, "submit")
+        self.assertEqual(args.verdict, "pass")
+        self.assertEqual(args.evidence, "ev.json")
+
+    def test_plan_build_parser_returns_parser_with_known_flag(self):
+        module = _load_bin("bp_plan", _BINS["plan"])
+        parser = module.build_parser()
+        self.assertIsInstance(parser, argparse.ArgumentParser)
+        args = parser.parse_args(["validate", "docs/plans/x.md"])
+        self.assertEqual(args.command, "validate")
+        self.assertEqual(args.plans, ["docs/plans/x.md"])
+
+    def test_reconcile_build_parser_returns_parser_with_known_flag(self):
+        module = _load_bin("bp_reconcile", _BINS["reconcile"])
+        parser = module.build_parser()
+        self.assertIsInstance(parser, argparse.ArgumentParser)
+        args = parser.parse_args(["--apply"])
+        self.assertTrue(args.apply)
+
+    def test_metrics_build_parser_returns_parser_with_known_flag(self):
+        module = _load_bin("bp_metrics", _BINS["metrics"])
+        parser = module.build_parser()
+        self.assertIsInstance(parser, argparse.ArgumentParser)
+        args = parser.parse_args([])
+        self.assertEqual(args.history_file, ".agents/work-history.jsonl")
+
+    def test_validate_workflows_module_loads_and_has_main(self):
+        module = _load_bin("bp_validate_workflows", _BINS["validate-workflows"])
+        self.assertTrue(callable(module.main))
 
     def test_ship_build_parser_returns_parser_with_known_flag(self):
         module = _load_bin("bp_ship", _BINS["ship"])

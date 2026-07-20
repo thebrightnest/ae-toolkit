@@ -1,4 +1,4 @@
-"""Behavior-driven tests for aet-work/bin/init-queue and aet-work/bin/sync."""
+"""Behavior-driven tests for src/aet/cli/init-queue.py and src/aet/cli/sync.py."""
 
 import json
 import os
@@ -33,7 +33,7 @@ def run_script(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=N
 
     cmd = [
         sys.executable,
-        str(REPO_ROOT / "aet-work" / "bin" / script_name),
+        str(REPO_ROOT / "src" / "aet" / "cli" / f"{script_name}.py"),
         "--queue-file",
         str(queue_file),
         "--history-file",

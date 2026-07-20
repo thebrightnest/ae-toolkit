@@ -1,4 +1,4 @@
-"""Tests for the `aet metrics` CLI surface (aet-work/bin/metrics)."""
+"""Tests for the `aet metrics` CLI surface (src/aet/cli/metrics.py)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from aet import metrics
 
 # Load the metrics CLI script (no .py extension) as a module. The loader name
 # must not collide with the lib `metrics` module the CLI imports.
-_METRICS_BIN = Path(__file__).parent.parent / "aet-work" / "bin" / "metrics"
+_METRICS_BIN = Path(__file__).parent.parent / "src" / "aet" / "cli" / "metrics.py"
 _metrics_loader = importlib.machinery.SourceFileLoader(
     "metrics_cli", str(_METRICS_BIN)
 )
@@ -193,7 +193,7 @@ class TestCliInvalidSince:
 
 
 class TestCliRegisteredInDispatcher:
-    """`aet metrics` dispatches to aet-work/bin/metrics."""
+    """`aet metrics` dispatches to src/aet/cli/metrics.py."""
 
     def test_cli_registered_in_dispatcher(self, monkeypatch):
         captured = {}
@@ -212,6 +212,6 @@ class TestCliRegisteredInDispatcher:
         assert Path(captured["path"]) == Path(sys.executable)
         assert captured["argv"] == [
             sys.executable,
-            str(repo_root / "aet-work" / "bin" / "metrics"),
+            str(repo_root / "src" / "aet" / "cli" / "metrics.py"),
             "--json",
         ]

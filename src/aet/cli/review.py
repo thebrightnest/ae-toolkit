@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work review — Print a human-readable backlog review.
 
 Scans ``docs/plans/*.md``, reads the footer stage, and groups plans into:
@@ -79,7 +78,7 @@ def category_for_stage(stage: str | None, workflow: Workflow | None = None) -> s
     return LEGACY_BUCKETS.get(stage, "in-progress")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None):
     args = parse_args(argv)
     plans_dir = Path(args.plans_dir)
 

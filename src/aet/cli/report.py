@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """aet-work report — Print an execution telemetry summary.
 
 Scans the telemetry archive for the current project (or a given project/run)
@@ -58,8 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_args() -> argparse.Namespace:
-    return build_parser().parse_args()
+def parse_args(argv) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def _leased_run_id() -> str | None:
@@ -103,8 +102,8 @@ def _format_prune_report(result: dict, force: bool) -> str:
     return "\n".join(lines) + "\n"
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
 
     if args.prune is not None:
         root = telemetry.archive_dir() / args.project if args.project else None

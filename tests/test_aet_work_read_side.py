@@ -14,8 +14,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parent.parent
-_STATUS_PY = _REPO_ROOT / "aet-work" / "bin" / "status"
-_NEXT_PY = _REPO_ROOT / "aet-work" / "bin" / "next"
+_STATUS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "status.py"
+_NEXT_PY = _REPO_ROOT / "src" / "aet" / "cli" / "next.py"
 
 _status_spec = importlib.util.spec_from_loader(
     "status", importlib.machinery.SourceFileLoader("status", str(_STATUS_PY))
