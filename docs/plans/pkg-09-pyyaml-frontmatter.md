@@ -82,4 +82,5 @@ drop the pin in the same revert.
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
