@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pld-01-governance-as-data-adr
 pipeline: standard
-status: draft
+status: approved
 security_review: required
 security_review_reason: New parser reading a repo-controlled rules file into the validate gate; must use yaml.safe_load and must not evaluate rule content, or a rules file becomes an execution vector.
 docs_sync: required
@@ -16,7 +16,7 @@ docs_sync_reason: AGENTS.md command table and the validate-gate description gain
 ## Context
 
 PRD: `docs/prds/prose-lint-decoupling-prd.md` (R-2, R-3).
-Decision: `docs/adr/040-documentation-invariants-as-data.md` (pld-01).
+Decision: ADR-040, delivered by pld-01.
 
 Builds the engine the ADR specifies. No invariants move in this plan — porting
 is pld-03 — so this lands with the engine, its own tests, and an empty or
@@ -89,8 +89,7 @@ a hyphenated `aet docs-lint`.
 - [ ] Lint passes
 - [ ] Tests pass
 - [ ] R-trace coverage: R-2 by tasks 1–3, 5; R-3 by tasks 4–5
-- [ ] New source file `src/aet/docs_lint.py` is covered by
-      `tests/scripts/test_docs_lint.py`
+- [ ] New source `src/aet/docs_lint.py` is covered by `tests/scripts/test_docs_lint.py`
 - [ ] Test types: unit tests for the evaluator; one integration test asserting
       `make validate` invokes the stage and fails the gate on a rule violation
 - [ ] `aet docs lint` runs before pytest in `make validate`
@@ -107,5 +106,5 @@ restores the previous gate exactly; the pytest assertions are still live.
 
 ---
 
-*Stage: plan-draft*
-*Next step: run `aet-validate-scope`*
+*Stage: plan-approved*
+*Next step: run `aet-work`*

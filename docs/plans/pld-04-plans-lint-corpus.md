@@ -3,7 +3,7 @@ id: pld-04-plans-lint-corpus
 size: S
 blocked_by: []
 pipeline: standard
-status: draft
+status: approved
 security_review: skipped
 security_review_reason: Relocates an existing read-only corpus classifier into a validate stage; no new dependencies, no writes, no execution surface.
 docs_sync: required
@@ -124,5 +124,5 @@ gone.
 
 ---
 
-*Stage: plan-draft*
-*Next step: run `aet-validate-scope`*
+*Stage: plan-approved*
+*Next step: run `aet-work`*

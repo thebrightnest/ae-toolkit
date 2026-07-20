@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pld-02-docs-lint-engine
 pipeline: standard
-status: draft
+status: approved
 security_review: skipped
 security_review_reason: Relocation of existing documentation assertions into the rules file; no runtime, dependency, or execution-path changes beyond the already-reviewed pld-02 engine.
 docs_sync: skipped
@@ -16,7 +16,7 @@ docs_sync_reason: The validate-gate description and command table were updated b
 ## Context
 
 PRD: `docs/prds/prose-lint-decoupling-prd.md` (R-4).
-Decision: `docs/adr/040-documentation-invariants-as-data.md` (pld-01).
+Decision: ADR-040, delivered by pld-01.
 Engine: pld-02.
 
 Four test modules assert against the repo's own Markdown. Each assertion is one
@@ -113,5 +113,5 @@ still consults `DOC_COUPLED_TESTS` and remains correct either way.
 
 ---
 
-*Stage: plan-draft*
-*Next step: run `aet-validate-scope`*
+*Stage: plan-approved*
+*Next step: run `aet-work`*
