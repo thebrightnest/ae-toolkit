@@ -318,6 +318,7 @@ class TestInstallIntegration(InstallTestCase):
         plans_dir.mkdir()
         result = subprocess.run(
             [
+                sys.executable,
                 str(_AET_PY),
                 "status",
                 "--queue-file",
