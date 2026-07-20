@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 _INIT_QUEUE_PY = _REPO_ROOT / "src" / "aet" / "cli" / "init-queue.py"
 _NEXT_PY = _REPO_ROOT / "src" / "aet" / "cli" / "next.py"
 _SYNC_PY = _REPO_ROOT / "src" / "aet" / "cli" / "sync.py"
