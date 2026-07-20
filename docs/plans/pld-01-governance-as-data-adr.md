@@ -3,7 +3,7 @@ id: pld-01-governance-as-data-adr
 size: S
 blocked_by: []
 pipeline: minimal
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: Decision record only; no code, runtime, or dependency changes.
 docs_sync: required
