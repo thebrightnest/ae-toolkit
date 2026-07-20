@@ -200,5 +200,34 @@ class TestRunLoggerInheritsRunId(unittest.TestCase):
                 self.assertTrue(run_dirs, "telemetry run dir should use the supplied run_id")
 
 
+class TestMainWritesReturncode(unittest.TestCase):
+    def test_main_persists_returncode_for_detached_run(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            with patch.object(
+                orchestrator, "resolve_cli_adapter", return_value=_FAKE_ADAPTER
+            ):
+                with patch.object(
+                    orchestrator, "run_batch", return_value=42
+                ) as mock_run:
+                    rc = orchestrator.main(
+                        [
+                            "--queue-file",
+                            os.path.join(repo_root, ".agents", "work-queue.json"),
+                            "--repo-root",
+                            repo_root,
+                            "--run-id",
+                            "run-returncode",
+                        ]
+                    )
+
+            self.assertEqual(rc, 42)
+            mock_run.assert_called_once()
+            rc_file = (
+                Path(repo_root) / ".agents" / "runs" / "run-returncode" / "returncode"
+            )
+            self.assertTrue(rc_file.is_file())
+            self.assertEqual(rc_file.read_text(encoding="utf-8"), "42")
+
+
 if __name__ == "__main__":
     unittest.main()

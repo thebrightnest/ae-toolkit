@@ -153,6 +153,19 @@ def _write_run_metadata(repo_root: str, run_id: str) -> None:
         print(f"   ⚠️  Could not write run metadata for {run_id}: {exc}")
 
 
+def _write_returncode(repo_root: str, run_id: str, exit_code: int) -> None:
+    """Persist the orchestrator's exit code so ``aet run --follow`` can mirror it.
+
+    Best-effort: any filesystem failure is logged but does not block the run.
+    """
+    rc_file = _run_dir(repo_root, run_id) / "returncode"
+    try:
+        rc_file.parent.mkdir(parents=True, exist_ok=True)
+        rc_file.write_text(str(exit_code), encoding="utf-8")
+    except OSError as exc:
+        print(f"   ⚠️  Could not write returncode for {run_id}: {exc}")
+
+
 def _redirect_output(log_file: str | None) -> None:
     """Redirect stdout/stderr to ``log_file`` when in detached-run mode.
 
@@ -2460,10 +2473,16 @@ def main(argv: list[str] | None = None):
     if run_id:
         print(f"   Run ID: {run_id}")
 
-    if args.queue_file:
-        return run_batch(args, adapter)
-    else:
-        return run_single(args, adapter)
+    exit_code = 1
+    try:
+        if args.queue_file:
+            exit_code = run_batch(args, adapter)
+        else:
+            exit_code = run_single(args, adapter)
+    finally:
+        if run_id:
+            _write_returncode(repo_root, run_id, exit_code)
+    return exit_code
 
 
 if __name__ == "__main__":
