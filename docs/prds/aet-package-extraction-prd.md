@@ -211,7 +211,34 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 
 - None.
 
+### pkg-03-lib-extraction — Changed from plan
+
+- `aet_queue.py` → `aet/queue.py`: pre-approved mechanical rename to avoid the
+  `aet.aet_queue` stutter under the new package.
+- Installed `aet` console entry point is currently non-functional:
+  `pyproject.toml` declares `aet = "aet.cli:main"` but `src/aet/cli.py` does
+  not exist, so `aet status` / `aet report` fail when invoked through the
+  pip-installed script. The `aet-work/bin/aet` dispatcher still works (and now
+  bootstraps `PYTHONPATH` for source checkouts), so the CLI surface is usable.
+  This needs to be fixed before the package entry point can be considered
+  complete.
+
+### pkg-03-lib-extraction — Added (unplanned)
+
+- `aet-work/bin/aet` dispatcher changes: added `_ensure_aet_importable()` to
+  prepend `<repo-root>/src` to `PYTHONPATH` when the `aet` package is not
+  installed, and switched `_exec()` to run target binaries via
+  `sys.executable` so the same interpreter (and package) is used. This keeps
+  tests and source-checkout invocations working without requiring an editable
+  install on every call.
+
+### pkg-03-lib-extraction — Deferred
+
+- Task 8 (merge branch to main and verify integration): pending the ship stage.
+- Deletion of `aet-setup/lib/`: `aet-setup/lib/harness_guard.py` stays in place
+  until pkg-06 moves it; the directory will be removed then.
+
 ---
 
-_Stage: scope-validated_
-_Next step: run `aet-work` (single-plan or multi-task queue)_
+_Stage: synced_
+_Next step: run `aet-ship`_
