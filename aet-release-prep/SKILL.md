@@ -29,13 +29,13 @@ Automate release preparation by analyzing git commits since the last tag and gen
 
 ## Step 1: Analyze Commits Since Last Tag
 
-Run the helper script to get all commits since the last git tag:
+Run the release-prep subcommand to get all commits since the last git tag:
 
 ```bash
-"$(git rev-parse --show-toplevel)/aet-release-prep/release-prep.sh"
+aet release-prep
 ```
 
-The script outputs JSON with:
+The command outputs JSON with:
 
 - `lastTag` — The most recent git tag
 - `currentVersion` — Version from detected source (package.json, VERSION file, or latest tag)

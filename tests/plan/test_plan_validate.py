@@ -381,7 +381,7 @@ class TestPlanValidateRouting(unittest.TestCase):
 
     def _run_aet(self, cwd: Path, *args: str) -> subprocess.CompletedProcess:
         env = {**os.environ, "AET_BIN_DIR": str(self.bin_dir)}
-        cmd = [sys.executable, str(REPO_ROOT / "aet-work" / "bin" / "aet"), *args]
+        cmd = [sys.executable, str(REPO_ROOT / "src" / "aet" / "cli" / "main.py"), *args]
         return subprocess.run(
             cmd,
             cwd=str(cwd),

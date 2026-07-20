@@ -97,9 +97,9 @@ class TestRule2Legacy(unittest.TestCase):
         self.assertIn("error: legacy command 'aet-work'", out)
 
     def test_aet_bootstrap_path_validated_as_aet(self):
-        """./aet-work/bin/aet is the binary bootstrap, not a legacy path."""
+        """./src/aet/cli/main.py is the binary bootstrap, not a legacy path."""
         rc, out = run_lint("--legacy=error", str(_FIXTURES / "legacy.md"))
-        self.assertNotIn("aet-work/bin/aet'", out)
+        self.assertNotIn("src/aet/cli/main.py'", out)
 
 
 class TestEscapeMarkers(unittest.TestCase):

@@ -40,16 +40,14 @@ Rules:
 
 ## Skill Binaries
 
-Skills may include executable helpers in `<skill>/bin/`. These are installed into the agent's skills directory when the toolkit is installed with `npx skills ... --all`, but they are **not** automatically added to `PATH`.
-
-The `aet-work` operational binaries (`status`, `sprint`, `aet-state`, `orchestrator`, etc.) have been extracted into importable Python modules under `src/aet/cli/<name>.py` as part of the staged package extraction. The multicall dispatcher remains at `aet-work/bin/aet` during the transition and is re-exported by the `aet.cli` package, so the installed console script (`aet = "aet.cli:main"`) and the bootstrap executable behave identically.
+Skills are pure content (markdown instructions, examples, and references). All executable helpers have been extracted into importable Python modules under `src/aet/cli/<name>.py`. There are no executable scripts inside skill directories.
 
 Rules:
 
-- Skill instructions must invoke helper binaries through the `aet` dispatcher (e.g. `aet state record-merge`), not by hardcoded agent-specific paths or retired binary names.
-- Skills that depend on binaries must include a **Prerequisites** section telling the user how to install them onto `PATH`.
-- The canonical installer is `aet install`, implemented in the `aet-work/bin/aet` dispatcher and bootstrapped by path (`~/.agents/skills/aet-work/bin/aet install`). It symlinks `aet` into `~/.local/bin` (or `AET_BIN_DIR`) and prunes the retired legacy binary names.
-- `make install-skills` in this repo runs the installer automatically for the local development workflow.
+- Skill instructions must invoke helpers through the `aet` dispatcher (e.g. `aet state record-merge`), not by hardcoded agent-specific paths or retired binary names.
+- Skills that depend on helpers must include a **Prerequisites** section telling the user how to install the `aet` dispatcher onto `PATH`.
+- The canonical installer is `aet install`, implemented in `src/aet/cli/main.py` and exposed through the installed console script (`aet = "aet.cli:main"`). It symlinks `aet` into `~/.local/bin` (or `AET_BIN_DIR`) and prunes the retired legacy binary names.
+- `make install-skills` in this repo runs `aet install` automatically for the local development workflow.
 
 ## AET Backend Configuration
 

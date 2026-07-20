@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parents[2]
 _GATE_BIN = _REPO_ROOT / "src" / "aet" / "cli" / "gate.py"
-_AET_BIN = _REPO_ROOT / "aet-work" / "bin" / "aet"
+_AET_BIN = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 
 _gate_spec = importlib.util.spec_from_loader(
     "gate_bin", importlib.machinery.SourceFileLoader("gate_bin", str(_GATE_BIN))

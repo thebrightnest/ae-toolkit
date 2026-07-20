@@ -33,7 +33,7 @@ If a stage is found, print at the start of execution: `"📍 Current stage: {sta
 
 ## Prerequisites
 
-This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet init-queue`, `aet sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. The installer lives in this skill: run `aet install` from the installed aet-work skill (`~/.agents/skills/aet-work/bin/aet install`) once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet init-queue`, `aet sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. Run `aet install` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 ## Mental Model: Plan Files Are the Source of Truth
 

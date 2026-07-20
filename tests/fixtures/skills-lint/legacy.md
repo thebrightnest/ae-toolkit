@@ -9,5 +9,5 @@ aet-state audit
 Bootstrap of the binary itself is validated as an `aet` invocation:
 
 ```bash
-./aet-work/bin/aet status --queue-file .agents/work-queue.json
+./src/aet/cli/main.py status --queue-file .agents/work-queue.json
 ```

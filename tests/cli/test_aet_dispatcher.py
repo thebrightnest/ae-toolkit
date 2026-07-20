@@ -1,4 +1,4 @@
-"""Tests for the aet multicall dispatcher (aet-work/bin/aet).
+"""Tests for the aet multicall dispatcher (src/aet/cli/main.py).
 
 Every test that calls ``aet.main()`` isolates the bin dir via
 ``AET_BIN_DIR`` pointed at a temp dir: ``main()`` runs the on-invocation
@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parents[2]
-_AET_PY = _REPO_ROOT / "aet-work" / "bin" / "aet"
+_AET_PY = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 
 _aet_spec = importlib.util.spec_from_loader(
     "aet_dispatcher",
@@ -67,6 +67,7 @@ class TestAetSpecTable(unittest.TestCase):
             "configure-backend",
             "hooks",
             "harness-guard",
+            "release-prep",
             "install",
         }
         self.assertEqual(set(aet.SUBCOMMANDS), expected)
@@ -176,30 +177,30 @@ class TestAetExecRouting(_IsolatedBinDir):
         mock_exec.assert_not_called()
         self.assertIn("unknown subcommand 'add'", stderr.getvalue())
 
-    def test_ship_routes_cross_skill(self):
-        """`aet ship t1 plan.md` execs aet-ship/bin/ship via the skills root."""
+    def test_ship_routes_to_package(self):
+        """`aet ship t1 plan.md` execs src/aet/cli/ship.py."""
         rc = self._dispatch(
             ["aet", "ship", "t1", "docs/plans/t1.md"],
-            self.skills_root / "aet-ship" / "bin" / "ship",
+            self.skills_root / "src" / "aet" / "cli" / "ship.py",
             ["ship", "t1", "docs/plans/t1.md"],
         )
         self.assertEqual(rc, 0)
 
-    def test_retro_routes_to_aet_evolve(self):
-        """`aet retro` execs aet-evolve/bin/aet-retro."""
+    def test_retro_routes_to_package(self):
+        """`aet retro` execs src/aet/cli/retro.py."""
         rc = self._dispatch(
             ["aet", "retro"],
-            self.skills_root / "aet-evolve" / "bin" / "aet-retro",
-            ["aet-retro"],
+            self.skills_root / "src" / "aet" / "cli" / "retro.py",
+            ["retro"],
         )
         self.assertEqual(rc, 0)
 
-    def test_configure_backend_routes_to_aet_setup(self):
-        """`aet configure-backend` execs aet-setup/bin/configure-task-backend."""
+    def test_configure_backend_routes_to_package(self):
+        """`aet configure-backend` execs src/aet/cli/configure-backend.py."""
         rc = self._dispatch(
             ["aet", "configure-backend"],
-            self.skills_root / "aet-setup" / "bin" / "configure-task-backend",
-            ["configure-task-backend"],
+            self.skills_root / "src" / "aet" / "cli" / "configure-backend.py",
+            ["configure-backend"],
         )
         self.assertEqual(rc, 0)
 
@@ -210,10 +211,6 @@ class TestRunMapping(_IsolatedBinDir):
     Since nc-06-run-daemonization the default is detached spawn; the blocking
     exec path is preserved under ``--foreground``.
     """
-
-    @classmethod
-    def setUpClass(cls):
-        _aet_spec.loader.exec_module(aet)
 
     def _capture_exec(self, argv):
         """Run main() with execvp captured; return (rc, path, argv)."""
@@ -401,7 +398,7 @@ class TestAetErrorPaths(_IsolatedBinDir):
                                     aet.main()
         self.assertEqual(ctx.exception.code, 1)
         mock_exec.assert_not_called()
-        self.assertIn("aet-ship", stderr.getvalue())
+        self.assertIn("aet.cli", stderr.getvalue())
 
 
 class TestAetIntegration(_IsolatedBinDir):

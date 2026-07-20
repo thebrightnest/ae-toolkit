@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """aet multicall dispatcher — single entry point for the AE Toolkit.
 
-Maps ``aet <subcommand>`` to the underlying skill binaries via exec-based
+Maps ``aet <subcommand>`` to the underlying CLI modules via exec-based
 1:1 dispatch with zero behavior change. The module-level ``SUBCOMMANDS``
 spec is the shared source of truth: the dispatcher executes it and tooling
 (e.g. skills-lint) validates against it, so new subcommands are one-row
@@ -46,7 +46,7 @@ def _can_import_aet() -> bool:
 if not _can_import_aet():
     here = Path(__file__).resolve()
     candidate_roots = [
-        here.parent.parent,  # repo root from aet-work/bin/aet
+        here.parent.parent.parent.parent,  # repo root from src/aet/cli/main.py
         Path.cwd(),  # invoked via relative path from repo root
     ]
     venv_path = os.environ.get("VIRTUAL_ENV")
@@ -82,16 +82,17 @@ SUBCOMMANDS = {
     "plan": {"target": ("aet.cli", "plan"), "mode": "exec"},
     "run": {"target": ("aet.cli", "orchestrator"), "mode": "run"},
     "run-one": {"target": ("aet.cli", "orchestrator"), "mode": "run-one"},
-    "ship": {"target": ("aet-ship", "ship"), "mode": "exec"},
-    "retro": {"target": ("aet-evolve", "aet-retro"), "mode": "exec"},
-    "mine-learnings": {"target": ("aet-evolve", "mine-learnings"), "mode": "exec"},
+    "ship": {"target": ("aet.cli", "ship"), "mode": "exec"},
+    "retro": {"target": ("aet.cli", "retro"), "mode": "exec"},
+    "mine-learnings": {"target": ("aet.cli", "mine-learnings"), "mode": "exec"},
     "configure-backend": {
-        "target": ("aet-setup", "configure-task-backend"),
+        "target": ("aet.cli", "configure-backend"),
         "mode": "exec",
     },
-    "hooks": {"target": ("aet-setup", "hooks"), "mode": "exec"},
-    "harness-guard": {"target": ("aet-setup", "harness-guard"), "mode": "exec"},
-    "install": {"target": ("aet-work", "aet"), "mode": "internal"},
+    "hooks": {"target": ("aet.cli", "hooks"), "mode": "exec"},
+    "harness-guard": {"target": ("aet.cli", "harness-guard"), "mode": "exec"},
+    "release-prep": {"target": ("aet.cli", "release_prep"), "mode": "exec"},
+    "install": {"target": ("aet.cli", "main"), "mode": "internal"},
 }
 
 # The seven legacy PATH names `aet install` removes (R-5). Pruning
@@ -141,11 +142,11 @@ def _bin_dir() -> Path:
 
 def _skills_root() -> Path:
     """Return the installed-skills root (AET_SKILLS_DIR override, else
-    resolved script path, up three)."""
+    resolved script path, up four)."""
     override = os.environ.get("AET_SKILLS_DIR")
     if override:
         return Path(override)
-    return Path(__file__).resolve().parent.parent.parent
+    return Path(__file__).resolve().parent.parent.parent.parent
 
 
 def _usage() -> str:
@@ -157,7 +158,6 @@ def _usage() -> str:
 def _resolve_target(spec: dict) -> Path:
     """Resolve a spec target to a runnable path.
 
-    Skill targets use the existing ``<skill-dir>/bin/<bin-name>`` layout.
     Package targets (``aet.cli``) resolve to ``src/aet/cli/<bin-name>.py``
     under the repository root so the dispatcher can exec them through the
     same Python interpreter.
@@ -533,7 +533,7 @@ def _ensure_path_link() -> None:
 
 
 def main() -> int:
-    """Dispatch ``aet <subcommand>`` to the target skill binary."""
+    """Dispatch ``aet <subcommand>`` to the target CLI module."""
     argv = sys.argv
     if len(argv) < 2:
         print(_usage(), file=sys.stderr)
