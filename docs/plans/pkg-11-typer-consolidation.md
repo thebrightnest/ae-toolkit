@@ -8,7 +8,7 @@ status: queued
 security_review: required
 security_review_reason: Adds the typer runtime dependency and rewrites the entire CLI parsing surface — both supply-chain and behavior-review relevant.
 docs_sync: required
-docs_sync_reason: CONVENTIONS.md Skill Binaries section and SKILL.md invocation examples must be re-validated against the new parser tree.
+docs_sync_reason: CONVENTIONS.md Skill Binaries section and SKILL.md invocation examples must be re-validated against the new parser tree, including the ADR-039 renames of `review`/`plan`/`sync`.
 ---
 
 # Plan: Consolidate the CLI on Typer (A4)
@@ -16,6 +16,7 @@ docs_sync_reason: CONVENTIONS.md Skill Binaries section and SKILL.md invocation 
 ## Context
 
 PRD: `docs/prds/aet-package-extraction-prd.md` (R-8).
+Naming source of truth for this plan's rename work: `docs/adr/039-namespace-taxonomy.md` (R-1/R-2).
 Nineteen `argparse` binaries each re-implement parser setup, and the multicall
 dispatcher exists only to exec between them. Consolidate into one Typer
 application: subcommands register directly, the exec-dispatch and
@@ -43,19 +44,30 @@ preserved).
 2. Migrate each `src/aet/cli/*.py` subcommand from argparse to a Typer
    command, preserving flags, defaults, and help text; one commit group per
    domain (queue/orchestrator, state/gate, ship/retro/setup) — L (traces: R-8)
-3. Delete the exec-dispatch machinery: `SUBCOMMANDS` spec, os.exec plumbing,
+3. Implement the ADR-039 renames atomically: retire `aet review` in favor of
+   `aet gate review`, keep the top-level `plan` entry as a noun-scoped group
+   with `aet plan validate` as the deterministic validator (distinguishing it
+   from the `aet-plan` judgment skill), and retire `aet sync` in favor of
+   `aet queue sync`; remove old dispatcher entries in the same merge, extend
+   `scripts/skills-lint` to validate the new noun-scoped shape, sweep canonical
+   docs (`AGENTS.md`, `docs/CONVENTIONS.md`) and live skills
+   (`aet-validate-scope`, `aet-plan`, `aet-pipeline-plan`, `aet-work`) for old
+   names, and add a grep-guard regression test that fails if `aet review`, bare
+   `aet plan`, or `aet sync` reappears in live code or docs — M (traces: R-1,
+   R-2)
+4. Delete the exec-dispatch machinery: `SUBCOMMANDS` spec, os.exec plumbing,
    and legacy symlink pruning that only existed for multi-binary dispatch —
    keep `aet install` and `_ensure_path_link` (single-name PATH ownership is
    still required) — M (traces: R-8)
-4. Retarget skills-lint's parser-tree validation to introspect the Typer app;
+5. Retarget skills-lint's parser-tree validation to introspect the Typer app;
    the gate must still fail on any documented invocation the real CLI rejects — M
    (traces: R-8)
-5. Update CLI tests: `tests/test_aet_multicall.py` → app-tree tests;
+6. Update CLI tests: `tests/test_aet_multicall.py` → app-tree tests;
    `tests/test_command_groups.py`, `tests/test_cli_adapter.py`,
    `tests/test_aet_dispatcher.py` rewritten against the Typer runner; update
    `docs/CONVENTIONS.md` if any documented invocation changes — M
    (traces: R-8)
-6. Merge branch to main and verify integration — S
+7. Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -89,7 +101,12 @@ preserved).
 - `tests/test_aet_multicall.py`, `tests/test_aet_dispatcher.py`,
   `tests/test_command_groups.py`, `tests/test_cli_adapter.py`,
   `tests/test_aet_install.py`
-- `docs/CONVENTIONS.md` (if invocation examples change)
+- `docs/CONVENTIONS.md`
+- `AGENTS.md`
+- `aet-validate-scope/SKILL.md`
+- `aet-plan/SKILL.md`
+- `aet-pipeline-plan/SKILL.md`
+- `aet-work/SKILL.md`
 
 ## Validation Steps
 
@@ -101,9 +118,36 @@ preserved).
   (negative test named in `tests/test_skills_lint.py`)
 - [ ] Every subcommand's `--help` and flag behavior matches pre-migration
   (snapshot comparison scripted in the PR)
+- [ ] Old names (`review`, bare `plan`, `sync`) are absent from `aet --help` and
+  from every canonical doc post-merge
+- [ ] `skills-lint` fails on a deliberately reintroduced old-name invocation
 - [ ] `make validate` green
-- [ ] R-trace coverage: R-8 by tasks 1–5; no unknown R-ids cited
+- [ ] R-trace coverage: R-8 by tasks 1–2 and 4–6; R-1/R-2 by task 3; no unknown
+  R-ids cited
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+
+## Phase A1 Rename Audit
+
+Confirmed no other Phase A1 plan performs a CLI subcommand rename of `review`,
+`plan`, or `sync`:
+
+- `pkg-01-decision-records.md` — docs-only ADRs; no CLI surface.
+- `pkg-02-package-skeleton.md` — packaging skeleton; no CLI commands.
+- `pkg-03-lib-extraction.md` — module relocation; no subcommand rename.
+- `pkg-04-cli-extraction.md` — relocates `aet-work/bin/*` modules to
+  `src/aet/cli/*.py`; no command rename.
+- `pkg-05-panel-extraction.md` — panel server relocation; no CLI surface.
+- `pkg-06-cross-skill-extraction.md` — cross-skill bin extraction; no
+  `review`/`plan`/`sync` rename.
+- `pkg-07-test-reorganization.md` — test file renames only; no CLI subcommand
+  rename.
+- `pkg-08-skills-move.md` — content relocation; no CLI surface.
+- `pkg-09-pyyaml-frontmatter.md` — references `aet plan validate` and `aet sync`
+  in validation steps but does not rename them.
+- `pkg-10-filelock.md` — concurrency change; no command rename.
+- `pkg-12-panel-framework.md` — panel framework; no `review`/`plan`/`sync`
+  surface.
+- `pkg-13-scripts-split.md` — scripts reorganization; no CLI subcommand rename.
 
 ## Rollback Plan
 
