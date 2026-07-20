@@ -21,6 +21,8 @@ from aet.backends.git_refs_backend import (
     GitRefsBackend,
 )
 
+pytestmark = pytest.mark.xdist_group("orchestrator")
+
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(

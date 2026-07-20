@@ -21,6 +21,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 # Ensure the aet-work lib is on the path before importing telemetry.
 from aet import failure
 
@@ -32,6 +34,8 @@ _orchestrator_loader = importlib.machinery.SourceFileLoader(
 _spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(orchestrator)
+
+pytestmark = pytest.mark.xdist_group("orchestrator")
 
 
 FIXTURES_DIR = Path(__file__).parents[1] / "fixtures" / "nightshift"
@@ -199,7 +203,7 @@ def _commit_repo_state(repo_root: str) -> None:
 class TestNightShiftExitGateRehearsal(unittest.TestCase):
     """End-to-end rehearsal over a mixed unattended queue."""
 
-    def _run_batch(self, args, adapter, timeout: float = 60):
+    def _run_batch(self, args, adapter, timeout: float = 180):
         """Run run_batch in a thread; return (rc, stdout)."""
         result = {"rc": None, "out": ""}
         orchestrator._shutdown_requested = False

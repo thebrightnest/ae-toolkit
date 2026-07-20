@@ -24,7 +24,11 @@ from __future__ import annotations
 # virtual environment when available so subcommands can import aet.*.
 # In a pip-installed environment the imports succeed and this is a no-op.
 import os
+import secrets
+import string
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 _REQUIRED_IMPORTS = ("filelock", "yaml", "aet")
@@ -172,14 +176,20 @@ def _resolve_target(spec: dict) -> Path:
     return binary
 
 
-def _parse_run_args(args: list[str]) -> list[str]:
-    """Build orchestrator flags from user-provided ``run``/``run-one`` args."""
+def _parse_run_args(args: list[str]) -> tuple[list[str], dict[str, bool]]:
+    """Build orchestrator flags from user-provided ``run``/``run-one`` args.
+
+    Returns ``(orchestrator_flags, dispatcher_flags)``.  Dispatcher flags
+    control behavior that happens before the orchestrator is invoked
+    (``--foreground``, ``--follow``); everything else is forwarded verbatim.
+    """
     max_jobs = "4"
     isolation = "standard"
     on_failure: str | None = None
     task_timeout: str | None = None
     stall_timeout: str | None = None
     cli_bin: str | None = None
+    dispatcher_flags = {"foreground": False, "follow": None}
 
     i = 0
     while i < len(args):
@@ -209,6 +219,15 @@ def _parse_run_args(args: list[str]) -> list[str]:
             else:
                 cli_bin = value
             i += 2
+        elif arg == "--foreground":
+            dispatcher_flags["foreground"] = True
+            i += 1
+        elif arg == "--follow":
+            if i + 1 >= len(args):
+                print("error: --follow requires a run id", file=sys.stderr)
+                sys.exit(2)
+            dispatcher_flags["follow"] = args[i + 1]
+            i += 2
         else:
             print(f"error: unknown flag {arg}", file=sys.stderr)
             sys.exit(2)
@@ -222,7 +241,7 @@ def _parse_run_args(args: list[str]) -> list[str]:
         out.extend(["--stall-timeout", stall_timeout])
     if cli_bin is not None:
         out.extend(["--cli-bin", cli_bin])
-    return out
+    return out, dispatcher_flags
 
 
 def _ensure_aet_importable() -> None:
@@ -248,6 +267,131 @@ def _ensure_aet_importable() -> None:
             os.environ["PYTHONPATH"] = f"{src_dir}{os.pathsep}{current}"
         else:
             os.environ["PYTHONPATH"] = str(src_dir)
+
+
+def _generate_run_id() -> str:
+    """Return a short, collision-resistant run identifier."""
+    alphabet = string.ascii_lowercase + string.digits
+    suffix = "".join(secrets.choice(alphabet) for _ in range(8))
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    return f"run-{timestamp}-{suffix}"
+
+
+def _runs_dir() -> Path:
+    """Return the canonical detached-run metadata directory."""
+    return Path.cwd() / ".agents" / "runs"
+
+
+def _run_dir(run_id: str) -> Path:
+    """Return the per-run metadata directory."""
+    return _runs_dir() / run_id
+
+
+def _run_log_file(run_id: str) -> Path:
+    """Return the log file path for ``run_id``."""
+    return _run_dir(run_id) / "output.log"
+
+
+def _is_process_alive(pid: int) -> bool:
+    """Return True if ``pid`` is still running."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
+def _follow_run(run_id: str) -> int:
+    """Tail the log for ``run_id`` until the process exits.
+
+    Reads any existing log content first, then polls for new lines while the
+    pid file indicates the orchestrator is alive.  Exits with the same code as
+    the orchestrator when a ``returncode`` file is written, or 0 if the run
+    finished before follow started.
+    """
+    rdir = _run_dir(run_id)
+    log_file = rdir / "output.log"
+    pid_file = rdir / "pid"
+    rc_file = rdir / "returncode"
+
+    if not rdir.is_dir():
+        print(f"error: unknown run id '{run_id}'", file=sys.stderr)
+        return 1
+
+    # Stream existing content first.
+    if log_file.is_file():
+        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                print(line, end="")
+
+    if rc_file.is_file():
+        return int(rc_file.read_text(encoding="utf-8").strip() or "0")
+
+    pid: int | None = None
+    if pid_file.is_file():
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+        except ValueError:
+            pid = None
+
+    # Tail new content until the process exits.
+    with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+        # Seek to end if we already printed above; otherwise start at beginning.
+        if log_file.is_file():
+            f.seek(0, os.SEEK_END)
+        while True:
+            line = f.readline()
+            if line:
+                print(line, end="")
+                continue
+            if pid is not None and not _is_process_alive(pid):
+                # Give the orchestrator a moment to write its returncode file.
+                for _ in range(20):
+                    if rc_file.is_file():
+                        break
+                    time.sleep(0.1)
+                if rc_file.is_file():
+                    return int(rc_file.read_text(encoding="utf-8").strip() or "0")
+                # Process died without writing a returncode; treat as failure.
+                return 1
+            if pid is None and rc_file.is_file():
+                return int(rc_file.read_text(encoding="utf-8").strip() or "0")
+            time.sleep(0.1)
+
+
+def _spawn_detached(binary: Path, argv: list[str], run_id: str) -> int:
+    """Spawn *binary* detached and print the run ID.
+
+    The orchestrator stdout/stderr are redirected to the run log file.  The
+    dispatcher returns immediately with exit code 0 so the invoking session is
+    not blocked.
+    """
+    rdir = _run_dir(run_id)
+    rdir.mkdir(parents=True, exist_ok=True)
+    log_file = _run_log_file(run_id)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    env["AET_RUN_ID"] = run_id
+
+    with open(log_file, "a", buffering=1, encoding="utf-8") as log:
+        proc = subprocess.Popen(
+            [sys.executable, str(binary), *argv[1:]],
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            env=env,
+            cwd=os.getcwd(),
+        )
+        (rdir / "pid").write_text(str(proc.pid), encoding="utf-8")
+
+    print(f"🚀 Started run {run_id}")
+    print(f"   Log: {log_file}")
+    print(f"   Follow: aet run --follow {run_id}")
+    return 0
 
 
 def _exec(binary: Path, argv: list[str]) -> int:
@@ -415,11 +559,16 @@ def main() -> int:
         return _exec(binary, [bin_name, *argv[2:]])
 
     if mode == "run":
-        flags = _parse_run_args(argv[2:])
-        return _exec(
-            binary,
-            ["orchestrator", "--queue-file", ".agents/work-queue.json", *flags],
-        )
+        flags, dispatcher_flags = _parse_run_args(argv[2:])
+        if dispatcher_flags["follow"] is not None:
+            return _follow_run(dispatcher_flags["follow"])
+        argv_out = ["orchestrator", "--queue-file", ".agents/work-queue.json", *flags]
+        if dispatcher_flags["foreground"]:
+            return _exec(binary, argv_out)
+        run_id = _generate_run_id()
+        flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
+        argv_out = ["orchestrator", "--queue-file", ".agents/work-queue.json", *flags]
+        return _spawn_detached(binary, argv_out, run_id)
 
     if mode == "run-one":
         if len(argv) < 3 or argv[2].startswith("-"):
@@ -427,8 +576,16 @@ def main() -> int:
             print(_usage(), file=sys.stderr)
             return 2
         plan_file = argv[2]
-        flags = _parse_run_args(argv[3:])
-        return _exec(binary, ["orchestrator", "--plan-file", plan_file, *flags])
+        flags, dispatcher_flags = _parse_run_args(argv[3:])
+        if dispatcher_flags["follow"] is not None:
+            return _follow_run(dispatcher_flags["follow"])
+        argv_out = ["orchestrator", "--plan-file", plan_file, *flags]
+        if dispatcher_flags["foreground"]:
+            return _exec(binary, argv_out)
+        run_id = _generate_run_id()
+        flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
+        argv_out = ["orchestrator", "--plan-file", plan_file, *flags]
+        return _spawn_detached(binary, argv_out, run_id)
 
     print(f"error: unknown mode '{mode}' for subcommand '{subcommand}'", file=sys.stderr)
     return 2

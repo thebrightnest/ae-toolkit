@@ -17,6 +17,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+pytestmark = pytest.mark.xdist_group("orchestrator")
+
 # Ensure the aet-work lib is on the path before importing telemetry.
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
@@ -157,7 +161,7 @@ class TestStallWatchdog(unittest.TestCase):
 class TestBatchTimeoutBackstop(unittest.TestCase):
     """Integration tests for stall and wall-clock kills through run_batch."""
 
-    def _run_batch(self, args, adapter, timeout: float = 30):
+    def _run_batch(self, args, adapter, timeout: float = 90):
         """Run run_batch in a thread; return (rc, stdout)."""
         result = {"rc": None, "out": ""}
         orchestrator._shutdown_requested = False

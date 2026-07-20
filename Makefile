@@ -76,7 +76,7 @@ lint-py: install-editable ## Run ruff on Python files
 
 test: install-editable ## Run pytest suite (parallel if pytest-xdist is installed)
 	@if $(PYTHON) -c "import xdist" 2>/dev/null; then \
-		$(PYTHON) -m pytest tests/ -q -n auto; \
+		$(PYTHON) -m pytest tests/ -q -n auto --dist=loadgroup; \
 	else \
 		$(PYTHON) -m pytest tests/ -q; \
 	fi

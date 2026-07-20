@@ -119,7 +119,16 @@ def build_grammars(subcommands):
         else:
             binary = REPO_ROOT / skill_dir / "bin" / bin_name
         parser = load_parser(binary)
-        grammars[name] = parser_grammar(parser) if parser is not None else None
+        if parser is None:
+            grammars[name] = None
+            continue
+        flags, choices = parser_grammar(parser)
+        # Dispatcher-only flags for run/run-one are consumed before the
+        # orchestrator sees argv, so they are valid even though the target
+        # parser does not declare them (nc-06-run-daemonization).
+        if name in ("run", "run-one"):
+            flags.update({"--foreground", "--follow"})
+        grammars[name] = (flags, choices)
     return grammars
 
 
