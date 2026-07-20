@@ -75,7 +75,7 @@ Revert the commit amending the roadmap; the Status Tracker and Phase A1/A4 bulle
 frontmatter and is read by `aet run`/`run-one`.
 
 | Value      | Behavior                                            |
-| ---------- | ---------------------------------------------------- |
+|------------|-----------------------------------------------------|
 | `standard` | Default grouping (TDD→implement→QA, review, CSO)    |
 | `minimal`  | All stages in one session; fastest, least isolation |
 | `full`     | One session per stage; slowest, maximum isolation   |
@@ -84,5 +84,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: reviewed*
+*Next step: ship (docs_sync skipped per plan frontmatter)*
