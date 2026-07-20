@@ -86,7 +86,12 @@ def queue_lock(queue_file: str) -> Iterator[None]:
         _lock_counters[key] = 0
 
     if _lock_counters[key] == 0:
-        _lock_instances[key].acquire()
+        try:
+            _lock_instances[key].acquire()
+        except Exception:
+            del _lock_instances[key]
+            del _lock_counters[key]
+            raise
 
     _lock_counters[key] += 1
     try:
@@ -94,9 +99,11 @@ def queue_lock(queue_file: str) -> Iterator[None]:
     finally:
         _lock_counters[key] -= 1
         if _lock_counters[key] == 0:
-            _lock_instances[key].release()
-            del _lock_instances[key]
-            del _lock_counters[key]
+            try:
+                _lock_instances[key].release()
+            finally:
+                del _lock_instances[key]
+                del _lock_counters[key]
 
 
 # ---------------------------------------------------------------------------
