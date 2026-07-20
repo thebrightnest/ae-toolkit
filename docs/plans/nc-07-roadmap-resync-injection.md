@@ -85,4 +85,4 @@ frontmatter and is read by `aet run`/`run-one`.
 ---
 
 *Stage: merged*
-*Next step: ship (docs_sync skipped per plan frontmatter)*
+*Next step: None*
