@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-03-lib-extraction
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Test-only file renames and conftest cleanup; no production code or dependency changes.
 docs_sync: skipped
@@ -85,4 +85,4 @@ config.
 
 ---
 
-*Stage: reviewed*
+*Stage: merged*
