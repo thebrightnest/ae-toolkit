@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-04-cli-extraction
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Task 5 is no longer a pure relocation once amended; it adds a new CLI subcommand surface and a full bash-to-Python behavior port, which is behavior-review relevant even without a new dependency.
 docs_sync: required
@@ -129,5 +129,5 @@ revert restores the targets they point at.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
