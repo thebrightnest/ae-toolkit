@@ -4,7 +4,7 @@ Validates the packaged ``src/aet/workflows/*.json`` and, when present, the
 repo's ``.agents/workflows/*.json``. Reuses workflow.py's validation core so
 the two cannot drift, then adds the merge-time-only check the runtime loader
 deliberately skips: every bound skill must resolve to a
-``<repo_root>/<skill>/SKILL.md`` directory.
+``<repo_root>/skills/<skill>/SKILL.md`` directory.
 
 Output: one line per finding; exit 1 on any finding, exit 0 with a summary
 line when green. Runtime tolerance for unknown extension keys is preserved —
@@ -36,7 +36,7 @@ def lint_workflow_file(path: Path, repo_root: Path) -> list[str]:
     findings = []
     for stage in wf.stages:
         for skill in stage.skills:
-            skill_md = repo_root / skill / "SKILL.md"
+            skill_md = repo_root / "skills" / skill / "SKILL.md"
             if not skill_md.is_file():
                 findings.append(
                     f"{path}: stage {stage.name!r} binds unknown skill {skill!r} "

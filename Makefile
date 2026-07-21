@@ -4,7 +4,8 @@
 SKILLS_DIR ?= $(HOME)/.agents/skills
 BIN_DIR ?= $(HOME)/.local/bin
 REPO_DIR := $(shell pwd)
-SKILLS := $(filter-out README.md Makefile scripts .git .gitignore docs .agents content .claude, $(wildcard *))
+SKILL_ROOT := skills
+SKILLS := $(wildcard $(SKILL_ROOT)/*)
 MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null | while read -r f; do [ -f "$$f" ] && printf '%s ' "$$f"; done || find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
 
 VENV := .venv
@@ -28,13 +29,14 @@ install-editable: $(PYTHON) ## Ensure the aet package is installed editable (pla
 install-skills: install-editable ## Symlink all skills from this repo to ~/.agents/skills/ and put binaries on PATH
 	@for skill in $(SKILLS); do \
 		if [ -d "$$skill" ] && [ -f "$$skill/SKILL.md" ]; then \
-			if [ -L "$(SKILLS_DIR)/$$skill" ]; then \
-				echo "✓ $$skill already linked"; \
-			elif [ -e "$(SKILLS_DIR)/$$skill" ]; then \
-				echo "⚠ $$skill exists in $(SKILLS_DIR) but is not a symlink. Skipping."; \
+			skill_name=$$(basename "$$skill"); \
+			if [ -L "$(SKILLS_DIR)/$$skill_name" ]; then \
+				echo "✓ $$skill_name already linked"; \
+			elif [ -e "$(SKILLS_DIR)/$$skill_name" ]; then \
+				echo "⚠ $$skill_name exists in $(SKILLS_DIR) but is not a symlink. Skipping."; \
 			else \
-				ln -s "$(REPO_DIR)/$$skill" "$(SKILLS_DIR)/$$skill"; \
-				echo "✓ Linked $$skill"; \
+				ln -s "$(REPO_DIR)/$$skill" "$(SKILLS_DIR)/$$skill_name"; \
+				echo "✓ Linked $$skill_name"; \
 			fi; \
 		fi; \
 	done
@@ -48,23 +50,23 @@ add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 		echo "Usage: make add-skill NAME=my-skill"; \
 		exit 1; \
 	fi
-	@mkdir -p "$(NAME)/examples" "$(NAME)/references"
-	@echo "---" > "$(NAME)/SKILL.md"
-	@echo "name: $(NAME)" >> "$(NAME)/SKILL.md"
-	@echo "description: Describe what this skill does and when to use it. Be specific about triggers." >> "$(NAME)/SKILL.md"
-	@echo "---" >> "$(NAME)/SKILL.md"
-	@echo "" >> "$(NAME)/SKILL.md"
-	@echo "# $(NAME)" >> "$(NAME)/SKILL.md"
-	@echo "" >> "$(NAME)/SKILL.md"
-	@echo "## When to Use" >> "$(NAME)/SKILL.md"
-	@echo "" >> "$(NAME)/SKILL.md"
-	@echo "Describe the specific situations where this skill should be invoked." >> "$(NAME)/SKILL.md"
-	@echo "" >> "$(NAME)/SKILL.md"
-	@echo "## Instructions" >> "$(NAME)/SKILL.md"
-	@echo "" >> "$(NAME)/SKILL.md"
-	@echo "Write the skill instructions here. Keep it concise." >> "$(NAME)/SKILL.md"
+	@mkdir -p "$(SKILL_ROOT)/$(NAME)/examples" "$(SKILL_ROOT)/$(NAME)/references"
+	@echo "---" > "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "name: $(NAME)" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "description: Describe what this skill does and when to use it. Be specific about triggers." >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "---" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "# $(NAME)" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "## When to Use" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "Describe the specific situations where this skill should be invoked." >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "## Instructions" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "" >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
+	@echo "Write the skill instructions here. Keep it concise." >> "$(SKILL_ROOT)/$(NAME)/SKILL.md"
 	@echo "✓ Created skill: $(NAME)"
-	@echo "✓ Edit $(NAME)/SKILL.md to add your skill logic"
+	@echo "✓ Edit $(SKILL_ROOT)/$(NAME)/SKILL.md to add your skill logic"
 
 lint: ## Run markdownlint on all markdown files
 	@npx markdownlint-cli2@0.17.2 --config .markdownlint.yaml $(MARKDOWN_FILES)

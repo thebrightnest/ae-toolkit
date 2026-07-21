@@ -356,6 +356,24 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 
 - Task 5 (merge branch to main and verify integration): pending the ship stage.
 
+### pkg-08-skills-move — Changed from plan
+
+- Task 1 (`npx skills add` discovery verification): the finding was recorded in
+  the synced `docs/plans/pkg-08-skills-move.md` rather than in a separate PR
+  description. Discovery was verified with `npx skills add <repo> --all --list`,
+  which found all 20 skills under `skills/`.
+- Task 4 / "Files to Modify": test paths were already domain-mirrored under
+  `tests/scripts/` from earlier phases; the plan's root-level test file paths
+  were stale but the same tests were updated.
+
+### pkg-08-skills-move — Added (unplanned)
+
+- None.
+
+### pkg-08-skills-move — Deferred
+
+- Task 7 (merge branch to main and verify integration): pending the ship stage.
+
 ### pkg-12-panel-framework — Changed from plan
 
 - Task 3 (test updates): `tests/test_panel_serve.py` was reorganized to

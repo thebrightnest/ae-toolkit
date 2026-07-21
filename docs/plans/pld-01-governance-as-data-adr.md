@@ -3,7 +3,7 @@ id: pld-01-governance-as-data-adr
 size: S
 blocked_by: []
 pipeline: minimal
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Decision record only; no code, runtime, or dependency changes.
 docs_sync: required
@@ -35,17 +35,17 @@ script keeps its single job; governance rules do not move into it.
 
 ## Task List
 
-1. Write ADR-040 (`040-documentation-invariants-as-data.md`) recording the
+1. ✓ Write ADR-040 (`040-documentation-invariants-as-data.md`) recording the
    principle — documentation invariants are declared as data and enforced by a
    lint stage, never asserted in the unit-test suite — the four-pattern rule
    grammar (`must_contain`, `must_not_contain`, section-scoped variants, path
    assertions), and the `skills-lint` boundary — S (traces: R-1)
-2. Record the rejected alternatives that this workstream already considered so
+2. ✓ Record the rejected alternatives that this workstream already considered so
    they do not silently re-open: extending `skills-lint`, keeping the checks as
    Python in a standalone script, and marker-based pytest selection — S
    (traces: R-1)
-3. Index the ADR in `docs/adr/README.md` — S (traces: R-1)
-4. Merge branch to main and verify integration — S
+3. ✓ Index the ADR in `docs/adr/README.md` — S (traces: R-1)
+4. [Deferred: merge belongs to ship stage] Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -84,13 +84,13 @@ the implementation attached.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint`)
-- [ ] Tests pass
-- [ ] R-trace coverage: R-1 covered by tasks 1–3
-- [ ] No new source files introduced, so no new test coverage is required
-- [ ] ADR states the grammar precisely enough that pld-02 can implement it
+- [x] Lint passes (`make lint`)
+- [ ] Tests pass (skipped: only non-code files changed since QA green)
+- [x] R-trace coverage: R-1 covered by tasks 1–3
+- [x] No new source files introduced, so no new test coverage is required
+- [x] ADR states the grammar precisely enough that pld-02 can implement it
       without further design decisions
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to `aet-ship`)
 
 ## Rollback Plan
 
@@ -103,5 +103,5 @@ pld-02 begins.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: merged*
+*Next step: None*
