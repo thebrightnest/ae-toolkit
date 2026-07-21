@@ -56,39 +56,52 @@ If the user states a goal imperatively ("I want X removed"), treat it as a plann
 
 ## Task Size Guardrails
 
-Every task produced by this skill must fit within a single agent coding session. Oversized tasks cause context bloat, quality degradation, and abandoned sessions. Enforce the dual-limit model at both the story and task level.
+Every task produced by this skill must fit within a single agent coding session. Oversized tasks cause context bloat, quality degradation, and abandoned sessions. Enforce the context-budget + coherence model at both the story and task level.
 
-### Dual-Limit Model
+### Guardrail Model
 
-| Layer                   | Human-Time Limit | AI-Complexity Limit            |
-| ----------------------- | ---------------- | ------------------------------ |
-| Story (PRD → ticket)    | ≤ 2 days         | ≤ 10 files OR ≤ 500 diff lines |
-| Task (ticket → plan.md) | ≤ 4 agent-hours  | ≤ 8 files OR ≤ 300 diff lines  |
+A plan/task is oversized when **any** of the following are true:
 
-A task **fails** if **either** limit is exceeded. AI-complexity is the operative limit; human-time is a sanity check against human-scale estimates (weeks, sprints) leaking into agent plans.
+1. **Task-list length** (validator-enforced proxy for expected diff size):
+   - Task: > 300 task-list lines, enforced by `validate_size()`. A task list that long is almost certainly a > 300-line diff.
+2. **Story-level diff guidance** (skill-level only, not validator-enforced):
+   - Story: > 500 expected diff lines.
+3. **Human-time sanity check** (skill-level guidance, not validator-enforced):
+   - Story: > 2 human-days.
+   - Task: > 4 agent-hours.
+4. **Subsystem coherence** (skill-level guidance):
+   - Touches files in more than 2 distinct subsystems. A _subsystem_ is a bounded module or layer with its own ownership boundary — in this repo, for example: `src/aet/` (CLI code + its tests), `skills/` (skill content), `.agents/` (workflow infrastructure), `docs/` (documentation). Edits spanning two of these (e.g., code and its tests) are one coherent change; three or more usually signal multiple concerns.
+   - Requires maintaining more than one major architectural invariant at a time.
+5. **Context budget** (skill-level guidance):
+   - Loading the plan + all files to modify + relevant tests would exceed ~30k tokens for a task or ~50k tokens for a story.
+
+The task-list-length check remains the only hard intake check. File count is no longer a rejection criterion; it is folded into the coherence and context-budget checks.
 
 ### Auto-Split Procedure
 
-When a task exceeds either limit:
+When a task exceeds any limit:
 
 1. Identify natural vertical-slice boundaries:
    - By user-visible behavior (e.g., "user can register" vs "user can reset password")
    - By data entity (e.g., "user schema" vs "order schema")
    - By layer dependency (e.g., "backend API" before "frontend form")
+   - By subsystem boundary (e.g., `src/aet/` changes separate from `skills/` changes)
 2. Split the task into independently implementable children.
-3. Re-evaluate each child against both limits. Repeat recursively.
+3. Re-evaluate each child against the full model. Repeat recursively.
 4. **Max split depth = 3.** If a child still fails after 3 splits, mark it `⚠️ ATOMIC OVERSIZED` and surface it for explicit user approval.
 5. Document parent/child relationships with `Split from: {parent-id}` and suffix IDs (`01a`, `01b`).
 
 ### Size Labels
 
-Use S/M/L labels on every task. L is a mandatory split trigger.
+Use S/M/L labels on every task. L is a re-evaluation trigger, not an automatic split trigger.
 
-| Label | Human Time                          | Files | Diff Lines |
-| ----- | ----------------------------------- | ----- | ---------- |
-| S     | ≤ 2 hr                              | ≤ 3   | ≤ 100      |
-| M     | ≤ 1 day                             | ≤ 5   | ≤ 200      |
-| L     | > 1 day OR > 5 files OR > 200 lines | —     | —          |
+| Label | Human Time             | Diff Lines |
+| ----- | ---------------------- | ---------- |
+| S     | ≤ 2 hr                 | ≤ 100      |
+| M     | ≤ 1 day                | ≤ 200      |
+| L     | > 1 day OR > 200 lines | —          |
+
+An L task must be re-evaluated against the full model above and is split only if it actually exceeds a limit.
 
 ## Commands
 
@@ -134,7 +147,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 1. Read the approved PRD from `docs/prds/`.
 2. Create `docs/plans/` if it doesn't exist. Create tickets as markdown files in `docs/plans/` or push via MCP if configured. Atomic task plans MUST be saved to `docs/plans/{ticket-id}-plan.md`. Roadmaps, audits, and meta-plans MUST be saved to `docs/roadmaps/` or `docs/audits/` and will NOT be added to the work queue.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
-4. **Apply task size guardrails**. Evaluate each story against the dual-limit model (≤ 2 days human time; ≤ 10 files / 500 diff lines AI-complexity). Auto-split oversized stories recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
+4. **Apply task size guardrails**. Evaluate each story against the full guardrail model (≤ 2 days human time; ≤ 500 expected diff lines; ≤ 2 subsystems; ~50k-token context budget). Auto-split oversized stories recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 5. Define blocking relationships between tickets (directed acyclic graph).
 6. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort, size label (S/M/L), and the R-id(s) it satisfies (cited on each user story and acceptance criterion so coverage is visible at review time).
 7. **Plan file frontmatter contract.** Every `docs/plans/{ticket-id}-plan.md` must begin with YAML frontmatter:
@@ -243,7 +256,7 @@ From a ticket/story, produce a structured `plan.md` for implementation.
 4. **Validation strategy gate.** The self-validation strategy must list, for each new source file or module introduced by the plan, at least one specifically named test that will cover it. A strategy that only says "add tests" or "write tests for new behavior" without naming what is tested is flagged as incomplete and must be revised before the plan is saved as `plan-draft`.
    - Distinguish test types: **unit tests** (single layer), **integration tests** (cross-layer within backend or frontend), and **API boundary tests** (frontend ↔ backend contract for vertical slices that introduce both sides).
    - _Cross-Cutting Completeness framing:_ When a plan introduces new source files, verify each has a named test in the validation strategy.
-5. **Apply task size guardrails** to the task list. Evaluate each task against the dual-limit model (≤ 4 agent-hours; ≤ 8 files / 300 diff lines). Auto-split oversized tasks into subtasks with explicit dependencies. Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
+5. **Apply task size guardrails** to the task list. Evaluate each task against the full guardrail model (≤ 4 agent-hours; ≤ 300 task-list lines; ≤ 2 subsystems; ~30k-token context budget). Auto-split oversized tasks into subtasks with explicit dependencies. Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 6. **Self-consistency lint.** Before saving the plan, run these checks on the produced plan.md. Print the result for each check as `PASS`, `WARN`, or `FAIL`.
 
    - **Check 1 — Prose constraints in code blocks:** Scan the plan for constraints, requirements, or business rules stated in prose (outside code blocks). Verify each one is represented inside a code block, task list item, or explicit file edit. If a prose constraint has no corresponding code artifact, flag it.

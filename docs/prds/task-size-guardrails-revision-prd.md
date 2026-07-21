@@ -110,7 +110,15 @@ The existing Batching Rule in `docs/CONVENTIONS.md` is retained unchanged as the
 2. ~~Should the context-budget guidance include a token-count heuristic?~~ **Resolved: Yes.** Use ~30k tokens for a task and ~50k tokens for a story as approximate planning guidance, with the caveat that actual model behavior varies.
 3. ~~Should existing plans be re-evaluated under the new model?~~ **Resolved: No.** Existing approved plans are grandfathered; the revised model applies to plans created after adoption.
 
+## Divergence Summary
+
+*Recorded: 2026-07-21 — Branch: tgr-01-skill-convention-update*
+
+### Deferred
+
+- **Validator code changes (R-6):** `src/aet/plan_parser.py::validate_size()` and `tests/queue/test_init_queue_sync.py` updates were deferred to plan `tgr-02-validator-test-update`. This plan covers only the skill and documentation updates; mixing validator code changes here would exceed the session-complexity target and blur review scope.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*
