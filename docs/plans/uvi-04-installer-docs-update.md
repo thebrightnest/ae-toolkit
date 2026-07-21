@@ -24,11 +24,11 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ## Task List
 
-1. Rewrite README "Quick Start" section to lead with the curl one-liner — S (traces: R-1, R-14)
-2. Move the existing pip/npx/manual instructions under "Manual install" or "Development" — S (traces: R-12, R-14)
-3. Document installer flags (`--tag`, `--agent`, `--bin-dir`, `--skills-dir`, `--repo`, `--dry-run`) — S (traces: R-2)
-4. Add a short troubleshooting note for "`~/.local/bin` not on PATH" — S (traces: existing behavior)
-5. Run `make lint` on markdown files — S
+1. [x] Rewrite README "Quick Start" section to lead with the curl one-liner — S (traces: R-1, R-14)
+2. [x] Move the existing pip/npx/manual instructions under "Manual install" or "Development" — S (traces: R-12, R-14)
+3. [x] Document installer flags (`--tag`, `--agent`, `--bin-dir`, `--skills-dir`, `--repo`, `--dry-run`) — S (traces: R-2)
+4. [x] Add a short troubleshooting note for "`~/.local/bin` not on PATH" — S (traces: existing behavior)
+5. [x] Run `make lint` on markdown files — S
 
 **Size definitions:**
 
@@ -53,10 +53,10 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ## Validation Steps
 
-- [ ] `make lint` passes
-- [ ] All relative internal links in README still resolve
-- [ ] R-trace coverage: every in-scope R-id is covered by ≥ 1 task; no task cites an unknown R-id
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `make lint` passes
+- [x] All relative internal links in README still resolve
+- [x] R-trace coverage: every in-scope R-id is covered by ≥ 1 task; no task cites an unknown R-id
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -64,5 +64,5 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
