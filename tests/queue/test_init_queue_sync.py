@@ -459,6 +459,29 @@ class TestFrontmatterIntake(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("big", {t["id"] for t in read_tasks(self.queue_file)})
 
+    def test_many_files_within_task_limit_is_accepted(self):
+        """A plan listing more than 8 files but <=300 task-list lines is accepted."""
+        file_lines = ["## Files to Modify"] + [
+            f"- `src/module_{i}.py`" for i in range(10)
+        ]
+        make_plan(
+            self.plans_dir / "many_files.md",
+            "Many files",
+            size="M",
+            extra_body="\n".join(file_lines),
+        )
+
+        result, _ = run_script(
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("many_files", {t["id"] for t in read_tasks(self.queue_file)})
+
     def test_emitted_task_has_state_pending_blockers_history(self):
         """Intake emits the fods-02 schema: state, pending_blockers, history."""
         make_plan(self.plans_dir / "ready.md", "Ready", size="S")
