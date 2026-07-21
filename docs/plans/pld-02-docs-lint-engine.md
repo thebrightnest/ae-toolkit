@@ -106,5 +106,5 @@ restores the previous gate exactly; the pytest assertions are still live.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-ship`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
