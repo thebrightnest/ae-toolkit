@@ -22,7 +22,13 @@ class SetupSkillsTestCase(unittest.TestCase):
         self.repo_root = Path(aet.__file__).resolve().parent.parent.parent.parent
 
     def _run_setup_skills(self, *args, env=None):
-        """Run `aet setup skills <args>` through the Typer app; returns Result."""
+        """Run `aet setup skills <args>` through the Typer app; returns Result.
+
+        Forces ``AET_REPO_ROOT`` to the test repo root so tests are not
+        coupled to whatever the orchestrator (or shell) happens to have set.
+        """
+        env = dict(env or {})
+        env.setdefault("AET_REPO_ROOT", str(self.repo_root))
         return run_typer(aet.app, ["setup", "skills", *args], env=env)
 
     def _first_repo_skill(self):
@@ -138,6 +144,25 @@ class TestSetupSkillsAutoDetect(SetupSkillsTestCase):
                 link = agent_dir / skill.name
                 self.assertTrue(link.is_symlink(), f"{link} is not a symlink")
                 self.assertEqual(link.resolve(), skill.resolve())
+
+
+class TestSetupSkillsRepoRootEnv(SetupSkillsTestCase):
+    """``AET_REPO_ROOT`` overrides filesystem inference."""
+
+    def test_aet_repo_root_overrides_inferred_root(self):
+        other_root = Path(self.tmp.name) / "other-repo"
+        fake_skill = other_root / "skills" / "fake-skill"
+        fake_skill.mkdir(parents=True)
+        (fake_skill / "SKILL.md").write_text("---\n", encoding="utf-8")
+
+        result = self._run_setup_skills(
+            "--skills-dir", str(self.skills_dir),
+            env={"AET_REPO_ROOT": str(other_root)},
+        )
+        self.assertEqual(result.exit_code, 0, result.stderr)
+        link = self.skills_dir / "fake-skill"
+        self.assertTrue(link.is_symlink(), f"{link} is not a symlink")
+        self.assertEqual(link.resolve(), fake_skill.resolve())
 
 
 class TestSetupSkillsHelp(SetupSkillsTestCase):

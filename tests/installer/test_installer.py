@@ -13,6 +13,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 INSTALLER = REPO_ROOT / "scripts" / "install.sh"
 
 
+def _current_branch() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
 def run_installer(*args: str, env: dict[str, str] | None = None, check: bool = False):
     """Run the installer script with the given args and return the result."""
     merged_env = os.environ.copy()
@@ -111,7 +122,7 @@ class TestInstallerSmoke:
             run_installer(
                 "--repo", str(REPO_ROOT),
                 "--agent", "generic",
-                "--tag", "main",
+                "--tag", _current_branch(),
                 env=env,
                 check=True,
             )
@@ -134,15 +145,16 @@ class TestInstallerSmoke:
             assert "Agentic Engineering Toolkit" in help_result.stdout
 
             # skills are linked from the cloned repo
-            setup_skill = skills_dir / "aet-setup" / "SKILL.md"
-            assert setup_skill.is_symlink(), f"{setup_skill} is not a symlink"
+            setup_skill_dir = skills_dir / "aet-setup"
+            assert setup_skill_dir.is_symlink(), f"{setup_skill_dir} is not a symlink"
+            setup_skill = setup_skill_dir / "SKILL.md"
             assert setup_skill.resolve().is_file(), f"{setup_skill.resolve()} is not a file"
 
             # idempotent re-run exits zero
             rerun = run_installer(
                 "--repo", str(REPO_ROOT),
                 "--agent", "generic",
-                "--tag", "main",
+                "--tag", _current_branch(),
                 env=env,
                 check=True,
             )
