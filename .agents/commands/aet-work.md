@@ -54,34 +54,35 @@ Shows the work queue plus any active detached runs (run ID, PID, and start time)
 
 ## `aet ship` — From `awaiting_merge` to Closed
 
-`aet ship gate` runs the pre-merge gate. PR creation and merge are still human/agent steps. Closure happens **after** the PR is merged via the `ship` helper.
+`aet ship` is the unified shipping workflow. It runs the pre-merge gate and opens a PR in one command. After the PR is merged, `aet ship close` records closure.
 
 ### Procedure
 
-1. When tasks are `awaiting_merge`, run the pre-merge gate for each task:
+1. When a task is `awaiting_merge`, run the unified ship command:
 
    ```bash
-   aet ship gate docs/plans/pkg-01-decision-records.md
+   aet ship docs/plans/pkg-01-decision-records.md
    ```
 
-2. Open the PR (e.g., with `gh pr create`), including the scope-audit section from the gate output. Report the PR URL.
-3. Wait for the user to confirm the PR is merged (e.g., "merge PR and verify").
-4. Run the closure helper:
+   This runs `aet ship gate` followed by `aet ship open`. If the gate fails, resolve the issue before re-running.
+
+2. Wait for the user to confirm the PR is merged (e.g., "merge PR and verify").
+3. Run the closure command:
 
    ```bash
-   ship record-merge <task-id> docs/plans/<task-id>.md
+   aet ship close <task-id> docs/plans/<task-id>.md
    ```
 
    Example:
 
    ```bash
-   ship record-merge pkg-01-decision-records docs/plans/pkg-01-decision-records.md
+   aet ship close pkg-01-decision-records docs/plans/pkg-01-decision-records.md
    ```
 
-5. If `ship` refuses because the task's `branch` field is null, use the `--branch` or `--merge-commit` override:
+4. If `aet ship close` refuses because the task's `branch` field is null, use the `--branch` or `--merge-commit` override:
 
    ```bash
-   ship record-merge --branch <branch-name> <task-id> docs/plans/<task-id>.md
+   aet ship close --branch <branch-name> <task-id> docs/plans/<task-id>.md
    ```
 
 ### Anti-Patterns
@@ -100,7 +101,7 @@ The table below documents namespace mapping; strings in backticks are labels, no
 | `aet-evolve` | **No CLI subcommand.** Activate as a skill. Use `aet retro` (telemetry retro) or run the `retro` + `system-evolve` procedure manually. | `aet evolve` fails. |
 | `aet-plan` | `aet plan` | Creates/updates plans. |
 | `aet-work` | `aet run`, `aet run-one`, `aet status`, `aet next`, `aet sync`, `aet state`, etc. | The `aet-work` skill owns the queue/orchestrator. |
-| `aet-ship` | `aet ship gate` (pre-merge gate) + `ship record-merge` (closure) | Two-step workflow. |
+| `aet-ship` | `aet ship` (gate + open) and `aet ship close` (post-merge closure) | Unified workflow; skill is judgment residue only. |
 | `aet-qa` | No direct CLI; invoked inside the pipeline. | |
 | `aet-review` | No direct CLI; invoked inside the pipeline or via skill activation. | |
 

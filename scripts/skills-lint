@@ -213,6 +213,11 @@ def command_segments(line: str):
     return segments
 
 
+# Subcommands whose first positional argument may be a plan/file path when it
+# is not a known subcommand (e.g. `aet ship <plan_file>` runs gate + open).
+_DEFAULT_PATH_SUBCOMMANDS = {"ship"}
+
+
 def validate_aet_args(args, subcommands, grammars):
     """Validate the argv after `aet`; return list of error strings."""
     if not args:
@@ -238,6 +243,10 @@ def validate_aet_args(args, subcommands, grammars):
         elif choices and not checked_choice:
             checked_choice = True
             if token not in choices:
+                if sub in _DEFAULT_PATH_SUBCOMMANDS:
+                    # First positional argument is treated as the default plan
+                    # file path; do not require it to match a subcommand name.
+                    continue
                 errors.append(f"unknown subcommand '{token}' for 'aet {sub}'")
     return errors
 
