@@ -173,8 +173,25 @@ def _ensure_path_link() -> None:
         pass
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from importlib.metadata import version as get_version
+
+        typer.echo(f"aet {get_version('aet')}")
+        raise typer.Exit()
+
+
 @app.callback()
-def _main_callback(ctx: typer.Context) -> None:
+def _main_callback(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show the version and exit.",
+        is_eager=True,
+        callback=_version_callback,
+    ),
+) -> None:
     """On every non-install invocation, verify/repair the ``aet`` symlink."""
     if ctx.invoked_subcommand != "install":
         _ensure_path_link()
