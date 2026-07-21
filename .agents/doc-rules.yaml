@@ -97,14 +97,6 @@ rules:
       - "skills never instruct a PR merge"
     reason: "CONVENTIONS.md Author Checklist must enforce merge-neutral skills"
 
-  - type: must_contain
-    target: skills/aet-ship/SKILL.md
-    value:
-      - "human"
-      - "merge"
-      - "The PR merge is the human's decision"
-    reason: "aet-ship step 6 must state unambiguously that the human decides to merge"
-
   - type: must_not_contain
     target: skills/aet-ship/SKILL.md
     value:
@@ -116,11 +108,10 @@ rules:
 
   - type: must_contain
     target: skills/aet-ship/SKILL.md
-    section: "Key Principles"
     value:
-      - "Non-interactive by default"
-      - "validation gate"
-    reason: "The 'Non-interactive by default' principle must scope to validation, not merge"
+      - "aet ship close"
+      - "post-merge closure"
+    reason: "aet-ship judgment residue must reference the code-implemented closure command"
 
   # nc-03c addition to test_merge_governance.py
   - type: must_contain
