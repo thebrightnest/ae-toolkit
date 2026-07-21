@@ -1,7 +1,7 @@
 ---
 id: uvi-01-aet-setup-skills-command
 size: M
-status: approved
+status: queued
 blocked_by: []
 pipeline: standard
 security_review: required
