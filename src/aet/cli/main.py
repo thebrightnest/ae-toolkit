@@ -98,7 +98,7 @@ SUBCOMMANDS = {
     "install": {"target": ("aet.cli", "main"), "mode": "internal"},
 }
 
-# The seven legacy PATH names `aet install` removes (R-5). Pruning
+# The legacy PATH names `aet install` removes (R-5, R-7). Pruning
 # only ever removes symlinks that resolve into a skills directory.
 LEGACY_NAMES = (
     "aet-work",
@@ -108,6 +108,7 @@ LEGACY_NAMES = (
     "mine-learnings",
     "configure-task-backend",
     "install-aet-binaries",
+    "ship",
 )
 
 # Directories (relative to $HOME) the standalone installer searches for

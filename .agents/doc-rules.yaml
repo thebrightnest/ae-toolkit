@@ -122,6 +122,14 @@ rules:
       - "validation gate"
     reason: "The 'Non-interactive by default' principle must scope to validation, not merge"
 
+  # nc-03c addition to test_merge_governance.py
+  - type: must_contain
+    target: .agents/commands/aet-work.md
+    value:
+      - "merge is the human's decision"
+      - "Trying to merge the PR yourself"
+    reason: "The canonical aet-work command doc must state that the human decides to merge"
+
   # tests/test_scripts_layout.py
   - type: path_exists
     target: scripts/archive/migrate-plans-to-frontmatter.py
