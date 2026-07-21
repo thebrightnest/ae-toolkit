@@ -85,14 +85,14 @@ curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scrip
 
 #### Installer options
 
-| Flag | Description | Example |
-| ---- | ----------- | ------- |
-| `--tag <tag>` | Install a tagged release (default: latest semver tag, falling back to `main`) | `--tag v1.3.0` |
-| `--agent <agent>` | Target one agent directory: `claude-code`, `kimi`, `cursor`, or `generic` | `--agent claude-code` |
-| `--bin-dir <dir>` | Target `PATH` directory for the `aet` symlink (default: `~/.local/bin`) | `--bin-dir ~/.bin` |
-| `--skills-dir <dir>` | Override the skills directory (default: auto-detect) | `--skills-dir ~/.claude/skills` |
-| `--repo <url\|path>` | Clone from a different source (default: GitHub main repo) | `--repo /path/to/local/clone` |
-| `--dry-run` | Print planned actions without making changes | `--dry-run` |
+| Flag                 | Description                                                                   | Example                         |
+| -------------------- | ----------------------------------------------------------------------------- | ------------------------------- |
+| `--tag <tag>`        | Install a tagged release (default: latest semver tag, falling back to `main`) | `--tag v1.3.0`                  |
+| `--agent <agent>`    | Target one agent directory: `claude-code`, `kimi`, `cursor`, or `generic`     | `--agent claude-code`           |
+| `--bin-dir <dir>`    | Target `PATH` directory for the `aet` symlink (default: `~/.local/bin`)       | `--bin-dir ~/.bin`              |
+| `--skills-dir <dir>` | Override the skills directory (default: auto-detect)                          | `--skills-dir ~/.claude/skills` |
+| `--repo <url\|path>` | Clone from a different source (default: GitHub main repo)                     | `--repo /path/to/local/clone`   |
+| `--dry-run`          | Print planned actions without making changes                                  | `--dry-run`                     |
 
 #### Troubleshooting
 
@@ -187,8 +187,8 @@ All skills follow the same markdown-based format. The agent reads the YAML front
 
 These are the components of the AE Toolkit system. They are installed together; the pipeline only works when all of them are present.
 
-| Skill                                                      | Description                                                                                                                                                                               |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Skill                                                             | Description                                                                                                                                                                               |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [aet-setup](./skills/aet-setup)                                   | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. |
 | [aet-extract-stack](./skills/aet-extract-stack)                   | Extract proven infrastructure, DevOps, and automation setup from an existing project into a reusable, sanitized scaffold. Inverse of aet-setup.                                           |
 | [aet-plan](./skills/aet-plan)                                     | PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Prevents misalignment before any code is written.                           |
@@ -213,8 +213,8 @@ These are the components of the AE Toolkit system. They are installed together; 
 
 These skills orchestrate the full toolkit workflow:
 
-| Skill                                    | Description                                                                                               |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Skill                                           | Description                                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | [aet-pipeline-plan](./skills/aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → plan → validate-scope with hard human gates.                  |
 | [aet-work](./skills/aet-work)                   | Work queue management with unified orchestrator. Runs plans with session-isolated, evidence-gated stages. |
 

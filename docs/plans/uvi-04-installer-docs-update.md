@@ -64,5 +64,5 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
