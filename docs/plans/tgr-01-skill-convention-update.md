@@ -3,7 +3,7 @@ id: tgr-01-skill-convention-update
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Changes skill instructions that control how agents scope work; mis-scoping can affect security-sensitive changes.
 docs_sync: required
