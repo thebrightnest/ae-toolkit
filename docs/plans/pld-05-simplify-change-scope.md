@@ -114,5 +114,5 @@ suite.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run aet-ship*

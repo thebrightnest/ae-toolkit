@@ -12,8 +12,8 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-# What pytest runs. `validate` narrows this to the doc-coupled modules when the
-# change set is prose-only; every other entry point runs the whole suite.
+# What pytest runs. `validate` skips pytest when the change set is prose-only;
+# every other entry point runs the whole suite.
 PYTEST_TARGETS ?= tests/
 
 help: ## Show this help
@@ -88,7 +88,7 @@ test: install-editable ## Run pytest suite (parallel if pytest-xdist is installe
 	fi
 	@echo "✓ Tests passed"
 
-validate: install-editable ## Run all quality checks, fail-fast; pytest narrows to the doc-coupled tests when only prose changed
+validate: install-editable ## Run all quality checks, fail-fast; pytest is skipped when only prose changed
 	@$(MAKE) lint-py
 	@$(PYTHON) ./src/aet/cli/validate-workflows.py
 	@$(PYTHON) ./scripts/skills-lint --legacy=error
@@ -96,7 +96,12 @@ validate: install-editable ## Run all quality checks, fail-fast; pytest narrows 
 	@$(PYTHON) -m aet.cli.main plans lint
 	@$(PYTHON) -m aet.cli.main docs lint
 	@$(PYTHON) -m aet.change_scope --explain
-	@$(MAKE) test PYTEST_TARGETS="$$($(PYTHON) -m aet.change_scope)"
+	@targets=$$($(PYTHON) -m aet.change_scope); \
+	if [ -n "$$targets" ]; then \
+		$(MAKE) test PYTEST_TARGETS="$$targets"; \
+	else \
+		echo "→ Skipping pytest (prose-only change)"; \
+	fi
 	@echo "✓ All validation checks passed"
 
 install-hooks: ## Install pre-commit hooks

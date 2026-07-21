@@ -27,6 +27,14 @@ applied are archived in `scripts/archive/` with a README explaining the release
 they shipped in. Do not add new migrations to the root of `scripts/`; either
 archive them after use or turn them into reusable maintenance scripts.
 
+### Validate Gate
+
+`make validate` is the repo's only safety net. It runs every check, fail-fast.
+When a change touches nothing but prose, pytest is skipped entirely; the
+remaining lint stages still run. This fast path is safe only because no test
+module reads Markdown from the checkout outside `tests/`. Any new test that
+does so will fail the regression guard in `tests/test_change_scope.py`.
+
 ## Package-Deliverable Rules
 
 AE Toolkit is installed together, not à la carte. Skills may reference shared conventions, cross-skill rules, and toolkit-level docs because the whole system is present at runtime.

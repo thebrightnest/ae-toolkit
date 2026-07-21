@@ -1,9 +1,8 @@
 """Tests for the validate gate's change-scope decision.
 
-The gate narrows pytest to :data:`change_scope.DOC_COUPLED_TESTS` when a change
-is prose-only. That is safe only while the list stays complete, so the guard
-test below re-derives it from the test tree and fails when a module starts
-reading the repo's own Markdown without being listed.
+The gate skips pytest entirely when a change is prose-only. That is only safe
+while no test module reads the repo's own Markdown, so the regression guard
+below fails whenever a module starts doing so.
 """
 
 from __future__ import annotations
@@ -122,32 +121,20 @@ def _reads_repo_markdown(path: Path) -> bool:
     return False
 
 
-class TestDocCoupledListIsComplete:
-    """The allowlist must match what the test tree actually reads."""
+class TestNoRepoMarkdownReaders:
+    """Prose-only changes skip pytest, so tests must not read repo Markdown."""
 
-    def test_every_repo_markdown_reader_is_listed(self):
-        found = {
+    def test_no_module_under_tests_reads_repo_markdown(self):
+        readers = {
             str(p.relative_to(REPO_ROOT))
             for p in TESTS_DIR.rglob("test_*.py")
             if _reads_repo_markdown(p)
         }
-        listed = set(change_scope.DOC_COUPLED_TESTS)
-
-        unlisted = found - listed
-        assert not unlisted, (
-            "These test modules read the repo's Markdown but are missing from "
-            f"change_scope.DOC_COUPLED_TESTS: {sorted(unlisted)}. Add them, or "
-            "the prose-only fast path will skip them."
+        assert not readers, (
+            "These test modules read the repo's Markdown outside tests/: "
+            f"{sorted(readers)}. A prose-only change skips pytest, so any "
+            "such coupling reintroduces a silent under-test risk."
         )
-
-    def test_listed_modules_exist_and_still_read_markdown(self):
-        for rel in change_scope.DOC_COUPLED_TESTS:
-            path = REPO_ROOT / rel
-            assert path.exists(), f"{rel} is listed but does not exist"
-            assert _reads_repo_markdown(path), (
-                f"{rel} no longer reads repo Markdown; drop it from "
-                "change_scope.DOC_COUPLED_TESTS"
-            )
 
 
 class TestIsCodePath:
@@ -180,9 +167,9 @@ class TestIsCodePath:
 
 
 class TestDecide:
-    """The decision is fail-safe: only a known, all-prose change set narrows."""
+    """The decision is fail-safe: only a known, all-prose change set skips pytest."""
 
-    def test_all_prose_narrows_to_docs(self):
+    def test_all_prose_decides_docs(self):
         assert change_scope.decide(["README.md", "docs/plans/x.md"]) == change_scope.DOCS
 
     def test_one_code_path_forces_full(self):
@@ -194,10 +181,3 @@ class TestDecide:
 
     def test_empty_change_set_forces_full(self):
         assert change_scope.decide([]) == change_scope.FULL
-
-    def test_targets_follow_the_decision(self):
-        assert change_scope.pytest_targets(change_scope.FULL) == change_scope.ALL_TESTS
-        assert (
-            change_scope.pytest_targets(change_scope.DOCS)
-            == change_scope.DOC_COUPLED_TESTS
-        )
