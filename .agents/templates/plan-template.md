@@ -39,11 +39,11 @@ Link to the PRD and any relevant prior decisions.
 
 **Size definitions:**
 
-- **S**: ≤ 2 hr human time / ≤ 3 files / ≤ 100 diff lines
-- **M**: ≤ 1 day human time / ≤ 5 files / ≤ 200 diff lines
-- **L**: > 1 day OR > 5 files OR > 200 lines — **must be split before implementation**
+- **S**: ≤ 2 hr human time / ≤ 100 expected diff lines
+- **M**: ≤ 1 day human time / ≤ 200 expected diff lines
+- **L**: > 1 day OR > 200 lines — re-evaluate against the full guardrail model; split only if a limit is actually exceeded
 
-If a task exceeds the agent session limit (≤ 4 hr / ≤ 8 files / ≤ 300 lines), split it into subtasks and document the relationship with `Split from: {parent-task-id}`.
+If a task exceeds the intake limit (> 300 task-list lines) or the skill-level checks (> 4 agent-hours, > 2 subsystems, ~30k-token context budget), split it into subtasks and document the relationship with `Split from: {parent-task-id}`.
 
 ### Renderer / UI Tasks (if applicable)
 

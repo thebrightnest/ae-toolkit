@@ -74,6 +74,10 @@ Introduce enforceable size limits into all AE Toolkit planning skills so that no
 2. ~~Should `aet-implement` also enforce the guardrail at runtime?~~ **Resolved: Yes.** `aet-implement` must refuse to start a task whose `plan.md` contains an `ATOMIC OVERSIZED` marker without explicit user override (`--force` or interactive confirmation).
 3. ~~Should split tasks share a common prefix in their IDs?~~ **Resolved: Yes, suffix convention `a`, `b`, `c`.** Example: `feat-auth-01` splits into `feat-auth-01a` and `feat-auth-01b`. This preserves lexicographic sort order and makes sibling relationships obvious at a glance.
 
+## Revision Note
+
+This PRD was superseded by `docs/prds/task-size-guardrails-revision-prd.md`. New plans created after the revision follow the context-budget + coherence model documented there. Existing approved plans remain valid and are not re-evaluated retroactively.
+
 ---
 
 _Stage: prd-approved_
