@@ -160,5 +160,5 @@ the allowlist plus its guard get deleted rather than maintained.
 
 ---
 
-*Stage: prd-draft*
-*Next step: review and approve, then run `aet-validate-scope`*
+*Stage: synced*
+*Next step: run `aet-ship`*

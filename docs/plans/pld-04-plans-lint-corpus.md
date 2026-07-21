@@ -44,15 +44,15 @@ tax into the new stage.
 
 ## Task List
 
-1. Add a corpus classifier check as `aet plans lint`, reusing `plan_parser` and
+1. ✓ Add a corpus classifier check as `aet plans lint`, reusing `plan_parser` and
    `plan_validate` so the classification logic has exactly one implementation —
    S (traces: R-5)
-2. Wire the stage into `make validate` ahead of pytest, alongside the other
+2. ✓ Wire the stage into `make validate` ahead of pytest, alongside the other
    cheap checks — S (traces: R-5)
-3. Report violations per offending plan file — which plan, its `status`, and
+3. ✓ Report violations per offending plan file — which plan, its `status`, and
    why it misclassifies — rather than as a set-difference dump — S
    (traces: R-5)
-4. Decide the hardcoded census's fate rather than porting it: drop it in favour
+4. ✓ Decide the hardcoded census's fate rather than porting it: drop it in favour
    of the divergence assertion, or replace it with a check that does not need
    editing whenever a plan is added (for example, asserting that no plan
    carries an unrecognized `status`). Record the choice in the plan before
@@ -63,13 +63,13 @@ tax into the new stage.
      unrecognized `status` is surfaced as an explicit "invalid status" finding
      rather than a census mismatch, removing the need to edit Python whenever
      the corpus grows.
-5. Remove `test_corpus_classifier_matches_known_live_set` from
+5. ✓ Remove `test_corpus_classifier_matches_known_live_set` from
    `tests/orchestrator/test_status_liveness_contract.py`, leaving the module's
    temp-dir unit tests intact, and drop the now-unused `_REPO_ROOT / "docs"`
    anchor — S (traces: R-5)
-6. Cover the stage in `tests/plan/test_plans_lint.py` using temp corpora: a
+6. ✓ Cover the stage in `tests/plan/test_plans_lint.py` using temp corpora: a
    clean corpus, a misclassifying plan, and an empty corpus — S (traces: R-5)
-7. Merge branch to main and verify integration — S
+7. [Deferred: awaits `aet-ship`] Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -107,15 +107,15 @@ tax into the new stage.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] R-trace coverage: R-5 covered by tasks 1–6
-- [ ] Any new source file is covered by `tests/plan/test_plans_lint.py`
-- [ ] Test types: unit tests over temp corpora; one integration check that
+- [x] Lint passes
+- [x] Tests pass
+- [x] R-trace coverage: R-5 covered by tasks 1–6
+- [x] Any new source file is covered by `tests/plan/test_plans_lint.py`
+- [x] Test types: unit tests over temp corpora; one integration check that
       `make validate` fails when a plan in the real corpus misclassifies
-- [ ] Introducing a misclassifying plan fails `make validate` with a message
+- [x] Introducing a misclassifying plan fails `make validate` with a message
       naming that plan file
-- [ ] `test_status_liveness_contract.py` no longer reads the real corpus
+- [x] `test_status_liveness_contract.py` no longer reads the real corpus
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -130,4 +130,5 @@ gone.
 
 ---
 
-*Stage: reviewed*
+*Stage: synced*
+*Next step: run `aet-ship`*
