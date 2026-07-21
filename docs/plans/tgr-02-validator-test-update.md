@@ -27,9 +27,9 @@ docs_sync_reason: Validator behavior change must be reflected in the docs update
 
 ## Task List
 
-1. Update `src/aet/plan_parser.py` `validate_size()` to drop the file-count intake limit and remove the now-unused `count_files_to_modify()` — M (traces: R-2, R-3, R-6)
-2. Update `tests/queue/test_init_queue_sync.py` to match the revised validator behavior, including a new test pinning that a plan listing more than 8 files but ≤ 300 task-list lines is accepted — M (traces: R-2, R-6)
-3. Run `make test` and `make validate` — S (traces: R-6)
+1. [x] Update `src/aet/plan_parser.py` `validate_size()` to drop the file-count intake limit and remove the now-unused `count_files_to_modify()` — M (traces: R-2, R-3, R-6)
+2. [x] Update `tests/queue/test_init_queue_sync.py` to match the revised validator behavior, including a new test pinning that a plan listing more than 8 files but ≤ 300 task-list lines is accepted — M (traces: R-2, R-6)
+3. [x] Run `make test` and `make validate` — S (traces: R-6)
 
 **Size definitions:**
 
@@ -62,11 +62,11 @@ Before finalizing this plan, confirm it should not be merged with related plans:
 
 ## Validation Steps
 
-- [ ] `make test` passes
-- [ ] `make validate` passes
-- [ ] R-trace coverage: every in-scope R-id is covered by ≥ 1 task or explicitly deferred with a reason; no task cites an unknown R-id
-- [ ] No new source files introduced by this plan; existing `validate_size()` behavior remains under test
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `make test` passes
+- [x] `make validate` passes
+- [x] R-trace coverage: every in-scope R-id is covered by ≥ 1 task or explicitly deferred with a reason; no task cites an unknown R-id
+- [x] No new source files introduced by this plan; existing `validate_size()` behavior remains under test
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -86,5 +86,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
