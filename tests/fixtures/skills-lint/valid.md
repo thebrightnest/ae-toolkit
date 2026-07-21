@@ -12,7 +12,7 @@ Multiple commands in one block:
 
 ```sh
 cd repo && aet retro --lookback-days 7
-aet ship t1 docs/plans/t1.md
+aet ship record-merge t1 docs/plans/t1.md
 ```
 
 Unlabeled fence:

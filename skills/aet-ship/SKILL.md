@@ -42,117 +42,23 @@ Run the pre-merge validation gate.
 
 **Procedure:**
 
-1. **Fetch origin and determine PR base**
+1. **Run the pre-merge gate in code**
 
-   All base calculations use `origin/main`, not local `main`, so a stale or ahead local `main` cannot leak into the PR diff.
+   Steps 1–9 of the pre-merge gate (fetch/rebase, clean-tree check, test suite, coverage audit, plan-completion check, stage-aware review/CSO skip logic, critical-class verify-evidence gate, and scope audit) are implemented in `aet ship gate`. Run:
 
-   1. Run `git fetch origin`
-   2. Compute:
-
-      ```bash
-      merge_base=$(git merge-base HEAD origin/main)
-      origin_main=$(git rev-parse origin/main)
-      ```
-
-   3. If `merge_base == origin_main`:
-      - The branch is independent. Set `pr_base="origin/main"`.
-   4. Else:
-
-      - The branch is stacked. Find the nearest named ancestor:
-
-        ```bash
-        git log --oneline --decorate --ancestry-path "$merge_base"..HEAD
-        ```
-
-      - Exclude `HEAD` and remote refs. The last commit decorated with a local branch ref is the parent branch.
-      - Set `pr_base=<parent-branch>`.
-
-2. **Rebase independent branches onto `origin/main`**
-
-   Only independent branches need to be rebased. Stacked branches keep their parent base.
-
-   - If `pr_base == "origin/main"` and `merge_base != origin_main`:
-
-     - The branch is independent but not based on the current `origin/main`.
-     - Attempt:
-
-       ```bash
-       git rebase --onto origin/main "$merge_base" "$(git branch --show-current)"
-       ```
-
-     - If conflicts occur, **STOP** and print:
-
-       ```
-       ⛔ Rebase onto origin/main produced conflicts.
-          Resolve them manually, then run aet-ship again.
-       ```
-
-     - Do not proceed until the rebase is clean.
-
-   - If `pr_base` is a feature branch, do not rebase onto `origin/main`.
-
-3. **Ensure clean working tree**
-
-   Check `git status --short`. If there are uncommitted changes, stop and ask whether to stash, commit, or abort.
-
-4. **Run test suite** — unit, integration, type-check, lint. Must all pass.
-
-5. **Coverage audit** — check coverage didn't drop below threshold. Flag if it did.
-
-6. **Plan completion check** — verify all tasks in `docs/plans/{ticket}-plan.md` are addressed
-
-7. **Stage-aware review / CSO gate**
-
-   Read the plan.md footer `*Stage:*`. The implementation pipeline (`aet run` / `run-one`) already advances plans through `reviewed` → `secure` → `synced`, so `aet-ship` must not duplicate that work.
-
-   - If stage is `synced` or `secure`: skip both `aet-review` and `aet-cso`.
-   - If stage is `reviewed`: run `aet-cso` only if the diff touches auth, data, API, or dependencies.
-   - If stage is `qa-complete` or earlier: run `aet-review`, then run `aet-cso` if the diff touches auth, data, API, or dependencies.
-
-   For each skipped step, print: `⏭️ Skipping {skill}: plan stage is already {stage}.`
-
-8. **Critical-class `aet-verify` evidence gate** — if the active plan's `*Work class:*` is `critical`, require `aet-verify` evidence attached:
-
-   - Look for an evidence file at `.agents/verify/{ticket}-evidence.md` (or `.agents/verify/{ticket}-evidence/` if multiple captures)
-   - Evidence must include: mode used (foundation/feature/reproduction), command/output/screenshot, timestamp, and verifier signature (agent session or human)
-   - If no evidence is attached: **STOP** and print:
-
-     ```
-     ⛔ Pipeline paused at aet-ship.
-     Critical-class task requires aet-verify evidence.
-     Attach evidence at .agents/verify/{ticket}-evidence.md before shipping.
-     ```
-
-   - Do not open the PR until evidence is present
-
-9. **Scope audit**
-
-   Run `git diff "$pr_base" --name-only` and check for files that are unlikely to belong to this task:
-
-   - `docs/plans/*.md` or `docs/prds/*.md` files that are not this task's own plan or associated PRD
-
-   Build a `Scope audit` section for the PR body:
-
-   ```
-   ## Scope audit
-
-   Files changed outside this task's expected scope:
-
-   - docs/plans/OTHER-01-plan.md
-   - .agents/work-queue.json
+   ```bash
+   aet ship gate <plan_file>
    ```
 
-   If no out-of-scope files are found, omit the section or print `✅ Scope audit: no unexpected files detected.`
+   If the gate reports a stop condition, resolve it before continuing.
 
-   This is a warning, not a hard gate. Continue opening the PR so the reviewer can see the audit.
+2. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
 
-10. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
+3. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
 
-11. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
+4. **Push branch**
 
-12. **Push branch**
-
-    - If the branch was rebased in step 2, push with force-with-lease:
+    - If the gate rebased the branch onto `origin/main`, push with force-with-lease:
 
       ```bash
       git push --force-with-lease
@@ -164,7 +70,7 @@ Run the pre-merge validation gate.
       git push
       ```
 
-13. **Open PR** against the base determined in step 1:
+5. **Open PR** against the base determined by the gate:
 
     ```bash
     gh pr create --base "$pr_base" ...
@@ -173,7 +79,7 @@ Run the pre-merge validation gate.
     PR body must include:
 
     - Links to plan.md and PRD
-    - Scope audit section (from step 9) if any files were flagged
+    - Scope audit section (from the gate output) if any files were flagged
     - A stacked-PR warning if `pr_base` is not `origin/main`
 
     **Stacked PR warning:**
@@ -196,7 +102,7 @@ Run the pre-merge validation gate.
 
     > **Version bump is not handled here.** Release versioning is the responsibility of a future `aet-release` skill. Do not commit `chore(release)` or VERSION changes on feature branches.
 
-14. **Merge Verification and Terminal Closure** — `aet-ship` is the single owner of task closure after merge verification. **The PR merge is the human's decision**; the skill only runs after the human indicates the PR has been merged:
+6. **Merge Verification and Terminal Closure** — `aet-ship` is the single owner of task closure after merge verification. **The PR merge is the human's decision**; the skill only runs after the human indicates the PR has been merged:
 
     First, confirm the `ship` helper is available:
 
@@ -218,7 +124,7 @@ Run the pre-merge validation gate.
     Then run the closure command:
 
     ```bash
-    ship <task_id> <plan_file>
+    ship record-merge <task_id> <plan_file>
     ```
 
     This command:
@@ -254,7 +160,7 @@ Run the pre-merge validation gate.
     - Offer to open the PR in the browser for manual verification.
     - Exit with non-zero status.
 
-15. **Safe Branch Deletion** — only run if the closure command succeeded:
+7. **Safe Branch Deletion** — only run if the closure command succeeded:
     - Regular merge: `git branch -d <branch>`
     - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)
     - Delete the remote branch: `git push origin --delete <branch>`

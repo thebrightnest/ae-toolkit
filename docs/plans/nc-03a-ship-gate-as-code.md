@@ -26,16 +26,16 @@ Source: `docs/prds/namespace-consolidation-prd.md`, R-3. `Split from: nc-03 (aet
 
 ## Task List
 
-1. Add an `aet ship gate` subcommand in `src/aet/cli/ship.py` (plain argparse subparser, matching the current pre-Typer convention every other `src/aet/cli/*.py` module uses — pkg-11's later Typer migration sweeps this up like every other file, no special handling needed here), scaffolding `tests/test_ship_gate.py` alongside it — M (traces: R-3)
-2. Port fetch + PR-base computation and conditional rebase (SKILL.md steps 1-2: `git fetch origin`; merge-base/stacked-branch detection; rebase independent branches onto `origin/main`, **STOP** on conflict) to code — M (traces: R-3)
-3. Port the clean-working-tree check (step 3: `git status --short`; stop and prompt stash/commit/abort on dirty tree) — S (traces: R-3)
-4. Port test-suite invocation and coverage audit (steps 4-5) with structured pass/fail and coverage-delta reporting — M (traces: R-3)
-5. Port the plan-completion check (step 6: verify every task in `docs/plans/{ticket}-plan.md` is addressed) — S (traces: R-3)
-6. Port the stage-aware review/CSO-skip logic (step 7: read the plan footer `*Stage:*`; skip `aet-review`/`aet-cso` per the documented rule; print the existing `⏭️ Skipping {skill}: plan stage is already {stage}.` message) — M (traces: R-3)
-7. Port the critical-class `aet-verify` evidence gate (step 8: check `.agents/verify/{ticket}-evidence.md` or `.agents/verify/{ticket}-evidence/` for mode/command/output/timestamp/signature; **STOP** with the existing message if absent) — S (traces: R-3)
-8. Port the scope audit (step 9: `git diff "$pr_base" --name-only`; flag out-of-scope `docs/plans/*.md`/`docs/prds/*.md`; build the `## Scope audit` PR-body section text as structured output for `nc-03b` to consume) — S (traces: R-3)
-9. Trim `aet-ship/SKILL.md` steps 1-9, replacing them with a pointer: "see `aet ship gate` (code)" — S (traces: R-3)
-10. Merge branch to main and verify integration — S
+1. [x] Add an `aet ship gate` subcommand in `src/aet/cli/ship.py` (plain argparse subparser, matching the current pre-Typer convention every other `src/aet/cli/*.py` module uses — pkg-11's later Typer migration sweeps this up like every other file, no special handling needed here), scaffolding `tests/test_ship_gate.py` alongside it — M (traces: R-3)
+2. [x] Port fetch + PR-base computation and conditional rebase (SKILL.md steps 1-2: `git fetch origin`; merge-base/stacked-branch detection; rebase independent branches onto `origin/main`, **STOP** on conflict) to code — M (traces: R-3)
+3. [x] Port the clean-working-tree check (step 3: `git status --short`; stop and prompt stash/commit/abort on dirty tree) — S (traces: R-3)
+4. [x] Port test-suite invocation and coverage audit (steps 4-5) with structured pass/fail and coverage-delta reporting — M (traces: R-3) [Changed: hardened command execution with `shlex.split` + `shell=False`]
+5. [x] Port the plan-completion check (step 6: verify every task in `docs/plans/{ticket}-plan.md` is addressed) — S (traces: R-3)
+6. [x] Port the stage-aware review/CSO-skip logic (step 7: read the plan footer `*Stage:*`; skip `aet-review`/`aet-cso` per the documented rule; print the existing `⏭️ Skipping {skill}: plan stage is already {stage}.` message) — M (traces: R-3)
+7. [x] Port the critical-class `aet-verify` evidence gate (step 8: check `.agents/verify/{ticket}-evidence.md` or `.agents/verify/{ticket}-evidence/` for mode/command/output/timestamp/signature; **STOP** with the existing message if absent) — S (traces: R-3)
+8. [x] Port the scope audit (step 9: `git diff "$pr_base" --name-only`; flag out-of-scope `docs/plans/*.md`/`docs/prds/*.md`; build the `## Scope audit` PR-body section text as structured output for `nc-03b` to consume) — S (traces: R-3)
+9. [x] Trim `aet-ship/SKILL.md` steps 1-9, replacing them with a pointer: "see `aet ship gate` (code)" — S (traces: R-3)
+10. [ ] Merge branch to main and verify integration — S [Deferred: left for `aet-ship` stage]
 
 **Size definitions:**
 
@@ -74,12 +74,12 @@ Source: `docs/prds/namespace-consolidation-prd.md`, R-3. `Split from: nc-03 (aet
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] R-trace coverage: R-3 (gate portion) covered by tasks 1–9; no unknown R-ids cited
-- [ ] Named tests per new file: `tests/test_ship_gate.py` covers `aet ship gate` — one test per ported check (rebase-conflict-stop, dirty-tree-stop, test-failure-stop, coverage-drop-flag, incomplete-plan-flag, stage-skip-logic for each of `synced`/`reviewed`/`qa-complete`, missing-evidence-stop for critical-class, scope-audit-flag) plus one happy-path all-checks-pass test
-- [ ] Test types: unit tests (each check in isolation, git/gh calls mocked); integration test (full gate run against a scratch git repo fixture)
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] Lint passes
+- [x] Tests pass
+- [x] R-trace coverage: R-3 (gate portion) covered by tasks 1–9; no unknown R-ids cited
+- [x] Named tests per new file: `tests/test_ship_gate.py` covers `aet ship gate` — one test per ported check (rebase-conflict-stop, dirty-tree-stop, test-failure-stop, coverage-drop-flag, incomplete-plan-flag, stage-skip-logic for each of `synced`/`reviewed`/`qa-complete`, missing-evidence-stop for critical-class, scope-audit-flag) plus one happy-path all-checks-pass test
+- [x] Test types: unit tests (each check in isolation, git/gh calls mocked); integration test (full gate run against a scratch git repo fixture)
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` [Deferred: left for `aet-ship` stage]
 
 ## Rollback Plan
 
@@ -100,5 +100,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
