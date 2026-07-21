@@ -2,8 +2,7 @@
 
 ``make validate`` is this repo's only safety net — there is no CI — so the
 default is always the full suite. This module allows exactly one narrowing:
-when a change touches nothing but prose, pytest runs the handful of test
-modules that read the repo's own Markdown instead of all of ``tests/``.
+when a change touches nothing but prose, pytest is skipped entirely.
 
 Fail-safe by construction. An unreadable change set, an unrecognized path, and
 an empty diff all resolve to :data:`FULL`.
@@ -18,14 +17,6 @@ from aet import evidence
 
 FULL = "full"
 DOCS = "docs"
-
-ALL_TESTS = ("tests/",)
-
-# Test modules that assert against the repo's real Markdown rather than against
-# fixtures, so a prose-only edit can genuinely break them. Kept honest by
-# tests/test_change_scope.py, which fails when a module starts reading repo
-# Markdown without being listed here.
-DOC_COUPLED_TESTS = ()
 
 BASE_REF = "origin/main"
 
@@ -107,10 +98,6 @@ def decide(paths: list[str] | None) -> str:
     return DOCS
 
 
-def pytest_targets(decision: str) -> tuple[str, ...]:
-    return DOC_COUPLED_TESTS if decision == DOCS else ALL_TESTS
-
-
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     paths = changed_paths()
@@ -119,15 +106,15 @@ def main(argv: list[str] | None = None) -> int:
     if "--explain" in argv:
         if decision == DOCS:
             print(
-                f"→ prose-only change ({len(paths)} paths): running "
-                f"{len(DOC_COUPLED_TESTS)} doc-coupled test modules"
+                f"→ prose-only change ({len(paths)} paths): skipping pytest"
             )
         else:
             count = "undetermined" if paths is None else len(paths)
             print(f"→ full suite (changed paths: {count})")
         return 0
 
-    print(" ".join(pytest_targets(decision)))
+    # Empty output tells the Makefile to skip the pytest step.
+    print("tests/" if decision == FULL else "")
     return 0
 
 
