@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""aet-ship — Pre-merge gate and post-merge closure for AE Toolkit tasks.
+"""aet-ship — Pre-merge gate, PR creation, and post-merge closure for AE Toolkit tasks.
 
 Usage:
   ship gate <plan_file>               Run the pre-merge gate (steps 1-9).
+  ship open <plan_file>               Run the gate and open a PR.
   ship record-merge <task_id> <plan_file> [queue_file]
   ship <task_id> <plan_file> [queue_file]   Legacy alias for record-merge.
 
-The pre-merge gate is implemented in code; the PR creation and merge closure
+The pre-merge gate and PR creation are implemented in code; the merge closure
 steps still follow aet-ship/SKILL.md.
 """
 
@@ -20,6 +21,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -34,6 +36,26 @@ _spec = importlib.util.spec_from_loader(
 )
 aet_state = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(aet_state)
+
+
+class GateResult:
+    """Structured result of the pre-merge gate for reuse by ``ship open``."""
+
+    def __init__(
+        self,
+        ok: bool,
+        pr_base: str,
+        rebased: bool,
+        scope_audit: list[str],
+        dry_run: bool,
+        message: str = "",
+    ):
+        self.ok = ok
+        self.pr_base = pr_base
+        self.rebased = rebased
+        self.scope_audit = scope_audit
+        self.dry_run = dry_run
+        self.message = message
 
 
 def cmd_ship(args):
@@ -89,29 +111,114 @@ def _determine_pr_base() -> str:
     return "origin/main"
 
 
-def _rebase_independent_branch(pr_base: str, dry_run: bool) -> tuple[bool, str]:
-    """Rebase independent branches onto origin/main; return (ok, message)."""
+def _rebase_independent_branch(pr_base: str, dry_run: bool) -> tuple[bool, str, bool]:
+    """Rebase independent branches onto origin/main; return (ok, message, rebased)."""
     if pr_base != "origin/main":
-        return True, "Stacked branch; keeping parent base."
+        return True, "Stacked branch; keeping parent base.", False
     merge_base = _run_git("merge-base", "HEAD", "origin/main").stdout.strip()
     origin_main = _run_git("rev-parse", "origin/main").stdout.strip()
     if merge_base == origin_main:
-        return True, "Already based on origin/main."
+        return True, "Already based on origin/main.", False
     branch = _run_git("branch", "--show-current").stdout.strip()
     if dry_run:
-        return True, f"Would rebase --onto origin/main {merge_base} {branch}"
+        return True, f"Would rebase --onto origin/main {merge_base} {branch}", False
     result = _run_git("rebase", "--onto", "origin/main", merge_base, branch, check=False)
     if result.returncode != 0:
         return False, (
             "⛔ Rebase onto origin/main produced conflicts.\n"
             "   Resolve them manually, then run aet-ship again."
-        )
-    return True, "Rebased onto origin/main."
+        ), False
+    return True, "Rebased onto origin/main.", True
 
 
 def _is_working_tree_clean() -> bool:
     result = _run_git("status", "--short", check=False)
     return result.returncode == 0 and not result.stdout.strip()
+
+
+def _run_gate(args: argparse.Namespace) -> GateResult:
+    """Execute gate checks and return a structured result for reuse."""
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        return GateResult(
+            ok=False,
+            pr_base="",
+            rebased=False,
+            scope_audit=[],
+            dry_run=args.dry_run,
+            message=f"Plan file not found: {plan_path}",
+        )
+
+    _fetch_origin()
+    pr_base = args.base or _determine_pr_base()
+
+    ok, message, rebased = _rebase_independent_branch(pr_base, args.dry_run)
+    if not ok:
+        return GateResult(
+            ok=False,
+            pr_base=pr_base,
+            rebased=False,
+            scope_audit=[],
+            dry_run=args.dry_run,
+            message=message,
+        )
+
+    if not _is_working_tree_clean():
+        return GateResult(
+            ok=False,
+            pr_base=pr_base,
+            rebased=rebased,
+            scope_audit=[],
+            dry_run=args.dry_run,
+            message="Working tree is dirty. Stash, commit, or abort before shipping.",
+        )
+
+    test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
+    test_result = subprocess.run(shlex.split(test_cmd), capture_output=True, text=True)
+    if test_result.returncode != 0:
+        return GateResult(
+            ok=False,
+            pr_base=pr_base,
+            rebased=rebased,
+            scope_audit=[],
+            dry_run=args.dry_run,
+            message=f"Test suite failed:\n{test_result.stdout}\n{test_result.stderr}",
+        )
+
+    coverage_cmd = os.environ.get("AET_SHIP_COVERAGE_CMD")
+    if coverage_cmd:
+        subprocess.run(shlex.split(coverage_cmd), capture_output=True, text=True)
+
+    work_class = _work_class_from_plan(plan_path)
+    if work_class == "critical":
+        task_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
+        evidence_paths = [
+            Path(".agents/verify") / f"{task_id}-evidence.md",
+            Path(".agents/verify") / f"{task_id}-evidence",
+        ]
+        if not any(p.exists() for p in evidence_paths):
+            return GateResult(
+                ok=False,
+                pr_base=pr_base,
+                rebased=rebased,
+                scope_audit=[],
+                dry_run=args.dry_run,
+                message=(
+                    "⛔ Pipeline paused at aet-ship.\n"
+                    "Critical-class task requires aet-verify evidence.\n"
+                    f"Attach evidence at .agents/verify/{task_id}-evidence.md before shipping."
+                ),
+            )
+
+    flagged = _scope_audit(plan_path, pr_base)
+    return GateResult(
+        ok=True,
+        pr_base=pr_base,
+        rebased=rebased,
+        scope_audit=flagged,
+        dry_run=args.dry_run,
+        message="Pre-merge gate passed.",
+    )
 
 
 def cmd_gate(args: argparse.Namespace) -> int:
@@ -121,93 +228,11 @@ def cmd_gate(args: argparse.Namespace) -> int:
         return _fail(f"Plan file not found: {plan_path}")
 
     print(f"Running pre-merge gate for {plan_path}")
-
-    print("1. Fetching origin and determining PR base...")
-    _fetch_origin()
-    pr_base = args.base or _determine_pr_base()
-    print(f"   PR base: {pr_base}")
-
-    print("2. Rebasing independent branches onto origin/main...")
-    ok, message = _rebase_independent_branch(pr_base, args.dry_run)
-    print(f"   {message}")
-    if not ok:
-        return 1
-
-    print("3. Ensuring clean working tree...")
-    if not _is_working_tree_clean():
-        return _fail(
-            "Working tree is dirty. Stash, commit, or abort before shipping."
-        )
-
-    print("4. Running test suite...")
-    test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
-    test_result = subprocess.run(
-        shlex.split(test_cmd), capture_output=True, text=True
-    )
-    if test_result.returncode != 0:
-        return _fail(
-            f"Test suite failed:\n{test_result.stdout}\n{test_result.stderr}"
-        )
-    print("   Test suite passed.")
-
-    print("5. Coverage audit...")
-    coverage_cmd = os.environ.get("AET_SHIP_COVERAGE_CMD")
-    if coverage_cmd:
-        coverage_result = subprocess.run(
-            shlex.split(coverage_cmd), capture_output=True, text=True
-        )
-        if coverage_result.returncode != 0:
-            print(
-                f"   ⚠️ Coverage dropped:\n{coverage_result.stdout}\n{coverage_result.stderr}"
-            )
-        else:
-            print(f"   Coverage audit passed:\n{coverage_result.stdout}")
-    else:
-        print("   ⚠️ No coverage command configured (set AET_SHIP_COVERAGE_CMD).")
-
-    print("6. Checking plan completion...")
-    unchecked = _unchecked_tasks(plan_path)
-    if unchecked:
-        print(f"   ⚠️ Plan has unchecked tasks: {', '.join(unchecked)}")
-    else:
-        print("   All plan tasks are addressed.")
-
-    print("7. Stage-aware review/CSO gate...")
-    stage = plan_parser.stage_from_plan(plan_path) or ""
-    _print_stage_skips(stage)
-
-    print("8. Checking critical-class verify evidence...")
-    work_class = _work_class_from_plan(plan_path)
-    if work_class == "critical":
-        task_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
-        evidence_paths = [
-            Path(".agents/verify") / f"{task_id}-evidence.md",
-            Path(".agents/verify") / f"{task_id}-evidence",
-        ]
-        if not any(p.exists() for p in evidence_paths):
-            return _fail(
-                "⛔ Pipeline paused at aet-ship.\n"
-                "Critical-class task requires aet-verify evidence.\n"
-                f"Attach evidence at .agents/verify/{task_id}-evidence.md before shipping."
-            )
-        print("   Verify evidence found.")
-    else:
-        print("   Not a critical-class task; skipping verify evidence gate.")
-
-    print("9. Running scope audit...")
-    flagged = _scope_audit(plan_path, pr_base)
-    if flagged:
-        print("   ## Scope audit")
-        print("")
-        print("   Files changed outside this task's expected scope:")
-        print("")
-        for path in flagged:
-            print(f"   - {path}")
-    else:
-        print("   ✅ Scope audit: no unexpected files detected.")
-
-    print("✅ Pre-merge gate passed.")
-    return 0
+    result = _run_gate(args)
+    if result.ok:
+        print("✅ Pre-merge gate passed.")
+        return 0
+    return _fail(result.message)
 
 
 def _work_class_from_plan(plan_path: Path) -> str:
@@ -275,6 +300,226 @@ def _print_stage_skips(stage: str) -> None:
     # qa-complete or earlier: run review, then conditional CSO.
 
 
+def _plan_task_count(plan_path: Path) -> int:
+    """Count checked/unchecked tasks under the plan's Task List section."""
+    content = plan_path.read_text(errors="ignore")
+    count = 0
+    in_tasks = False
+    for line in content.splitlines():
+        if line.strip().lower() in ("## task list", "### task list"):
+            in_tasks = True
+            continue
+        if in_tasks:
+            if line.startswith("##"):
+                break
+            stripped = line.strip()
+            if stripped.startswith("- [ ]") or stripped.startswith("- [x]"):
+                count += 1
+    return count
+
+
+def _commit_count(pr_base: str) -> int:
+    """Return the number of commits between pr_base and HEAD."""
+    result = _run_git("rev-list", "--count", f"{pr_base}..HEAD", check=False)
+    if result.returncode != 0:
+        return 0
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return 0
+
+
+def _commit_subjects(pr_base: str) -> list[str]:
+    """Return commit subjects in the pr_base..HEAD range."""
+    result = _run_git(
+        "log", f"{pr_base}..HEAD", "--pretty=format:%s", check=False
+    )
+    if result.returncode != 0:
+        return []
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _is_monolithic_commit(pr_base: str, plan_path: Path) -> bool:
+    """True when one commit covers the whole range while the plan has >1 task."""
+    return _commit_count(pr_base) == 1 and _plan_task_count(plan_path) > 1
+
+
+def _extract_prd_link(plan_path: Path) -> str | None:
+    """Return the PRD path referenced in the plan's Source line, if any."""
+    content = plan_path.read_text(errors="ignore")
+    for match in re.finditer(r"Source:\s*`?([^`\n]+?)`?", content):
+        candidate = match.group(1).strip()
+        if candidate.startswith("docs/prds/") and candidate.endswith(".md"):
+            return candidate
+    return None
+
+
+def _generate_changelog_entry(subjects: list[str], plan_path: Path) -> str:
+    """Build a PR/commit-trail changelog entry; never writes CHANGELOG.md."""
+    plan_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
+    title = plan_parser.title_from_plan(plan_path)
+    lines = ["## CHANGELOG entry", ""]
+    lines.append(
+        f"Derived from [{plan_path.name}]({plan_path}) — **{plan_id}**: {title}."
+    )
+    lines.append("")
+    if subjects:
+        lines.append("Commits in this PR:")
+        for subject in subjects:
+            lines.append(f"- {subject}")
+    else:
+        lines.append("(no commits in the PR range)")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _build_pr_body(
+    plan_path: Path,
+    pr_base: str,
+    scope_audit: list[str],
+    changelog_entry: str,
+) -> str:
+    """Assemble the PR body with links, scope audit, and stacked-PR warnings."""
+    parts: list[str] = []
+    prd = _extract_prd_link(plan_path)
+    parts.append(f"Plan: [{plan_path.name}]({plan_path})")
+    if prd:
+        parts.append(f"PRD: [{prd}]({prd})")
+    parts.append("")
+    parts.append(changelog_entry)
+
+    if scope_audit:
+        parts.append("## Scope audit")
+        parts.append("")
+        parts.append("Files changed outside this task's expected scope:")
+        for path in scope_audit:
+            parts.append(f"- {path}")
+        parts.append("")
+
+    if pr_base != "origin/main":
+        parts.append(f"⚠️ STACKED PR — base is `{pr_base}`, not main.")
+        parts.append("")
+        parts.append(f"After `{pr_base}` merges to main, run:")
+        parts.append(
+            "  git rebase main && git push --force-with-lease && gh pr edit --base main"
+        )
+        parts.append("before merging this PR.")
+        parts.append("")
+
+    return "\n".join(parts)
+
+
+def _push_branch(rebased: bool, dry_run: bool) -> tuple[bool, str]:
+    """Push the branch, using force-with-lease when the gate performed a rebase."""
+    if rebased:
+        cmd = ["git", "push", "--force-with-lease"]
+    else:
+        cmd = ["git", "push"]
+    if dry_run:
+        return True, f"Would run: {' '.join(cmd)}"
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result.returncode == 0, result.stdout + result.stderr
+
+
+def _create_pr(pr_base: str, title: str, body: str, dry_run: bool) -> tuple[bool, str]:
+    """Create a GitHub PR using ``gh pr create``."""
+    if dry_run:
+        return True, f"Would create PR against `{pr_base}` with title: {title}"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as body_file:
+        body_file.write(body)
+        body_path = body_file.name
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "create",
+                "--base",
+                pr_base,
+                "--title",
+                title,
+                "--body-file",
+                body_path,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode == 0, result.stdout + result.stderr
+    finally:
+        os.unlink(body_path)
+
+
+def _check_release_guard(pr_base: str) -> str | None:
+    """Block ``chore(release)`` commits and VERSION changes on feature branches."""
+    for subject in _commit_subjects(pr_base):
+        if re.match(r"^chore\(release\)", subject):
+            return (
+                f"Release guard: commit '{subject}' is a chore(release) on a feature branch."
+            )
+    diff = _run_git("diff", pr_base, "--name-only", check=False)
+    if diff.returncode == 0:
+        for line in diff.stdout.splitlines():
+            if line.strip() == "VERSION":
+                return "Release guard: VERSION file changed on a feature branch."
+    return None
+
+
+def cmd_open(args: argparse.Namespace) -> int:
+    """Run the gate and open a PR for a plan."""
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        return _fail(f"Plan file not found: {plan_path}")
+
+    print(f"Running aet ship open for {plan_path}")
+
+    result = _run_gate(args)
+    if not result.ok:
+        return _fail(f"Gate failed: {result.message}")
+    print("   Gate passed.")
+
+    guard_error = _check_release_guard(result.pr_base)
+    if guard_error:
+        return _fail(guard_error)
+
+    if _is_monolithic_commit(result.pr_base, plan_path):
+        return _fail(
+            "Monolithic commit detected: one commit spans the entire PR range "
+            "while the plan lists multiple tasks.\n"
+            "STOP and split the commit manually into logical pieces before opening the PR."
+        )
+
+    changelog_entry = _generate_changelog_entry(
+        _commit_subjects(result.pr_base), plan_path
+    )
+
+    print("Pushing branch...")
+    ok, output = _push_branch(result.rebased, args.dry_run)
+    if not ok:
+        return _fail(f"Push failed:\n{output}")
+    if output.strip():
+        print(f"   {output.strip()}")
+
+    plan_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
+    title = f"{plan_id}: {plan_parser.title_from_plan(plan_path)}"
+    body = _build_pr_body(plan_path, result.pr_base, result.scope_audit, changelog_entry)
+
+    print("Creating PR...")
+    ok, output = _create_pr(result.pr_base, title, body, args.dry_run)
+    if not ok:
+        return _fail(f"PR creation failed:\n{output}")
+    if output.strip():
+        print(f"   {output.strip()}")
+
+    if result.pr_base != "origin/main":
+        print(
+            f"⚠️  STACKED PR: this PR targets {result.pr_base}, not main.\n"
+            f"     After {result.pr_base} merges, rebase onto main and update the base before merging."
+        )
+
+    print("✅ aet ship open complete.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ship",
@@ -295,6 +540,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override the PR base branch/ref (default: origin/main or stacked parent).",
     )
     gate_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes.",
+    )
+
+    open_parser = sub.add_parser(
+        "open",
+        help="Run the gate and open a PR for the plan.",
+    )
+    open_parser.add_argument(
+        "plan",
+        help="Path to the plan markdown file.",
+    )
+    open_parser.add_argument(
+        "--base",
+        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+    )
+    open_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would be done without making changes.",
@@ -333,7 +596,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse arguments, mapping the legacy closure syntax to record-merge."""
     argv = list(argv or sys.argv[1:])
     # Backward compatibility: ship <task_id> <plan> [queue] => ship record-merge ...
-    if argv and argv[0] not in ("gate", "record-merge", "--help", "-h"):
+    if argv and argv[0] not in ("gate", "open", "record-merge", "--help", "-h"):
         argv.insert(0, "record-merge")
     return build_parser().parse_args(argv)
 
@@ -342,6 +605,8 @@ def main(argv: list[str] | None = None):
     args = parse_args(argv)
     if args.command == "gate":
         return cmd_gate(args)
+    if args.command == "open":
+        return cmd_open(args)
     if args.command == "record-merge":
         return cmd_ship(args)
     return _fail(f"Unknown command: {args.command}")

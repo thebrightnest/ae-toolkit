@@ -52,57 +52,19 @@ Run the pre-merge validation gate.
 
    If the gate reports a stop condition, resolve it before continuing.
 
-2. **Split commits** — ensure each commit is bisectable (one logical change). Split if needed.
+2. **Open the PR in code**
 
-3. **Generate CHANGELOG** — add entry based on commit messages and plan.md summary
-
-4. **Push branch**
-
-    - If the gate rebased the branch onto `origin/main`, push with force-with-lease:
-
-      ```bash
-      git push --force-with-lease
-      ```
-
-    - Otherwise, push normally:
-
-      ```bash
-      git push
-      ```
-
-5. **Open PR** against the base determined by the gate:
+    The remaining pre-PR steps (bisectable-commit check, CHANGELOG entry generation, push, and PR creation) are implemented in `aet ship open`. Run:
 
     ```bash
-    gh pr create --base "$pr_base" ...
+    aet ship open <plan_file>
     ```
 
-    PR body must include:
-
-    - Links to plan.md and PRD
-    - Scope audit section (from the gate output) if any files were flagged
-    - A stacked-PR warning if `pr_base` is not `origin/main`
-
-    **Stacked PR warning:**
-
-    If `pr_base` is a feature branch, prepend to the PR body:
-
-    ```
-    ⚠️ STACKED PR — base is `[parent-branch]`, not main.
-    After `[parent-branch]` merges to main, run:
-      git rebase main && git push --force-with-lease && gh pr edit --base main
-    before merging this PR.
-    ```
-
-    Print a terminal stop-note after PR creation:
-
-    ```
-    ⚠️  STACKED PR: this PR targets [parent-branch], not main.
-        After [parent-branch] merges, rebase onto main and update the base before merging.
-    ```
+    If `aet ship open` reports a stop condition (gate failure, monolithic commit, release-guard violation, push error, or PR creation error), resolve it before continuing.
 
     > **Version bump is not handled here.** Release versioning is the responsibility of a future `aet-release` skill. Do not commit `chore(release)` or VERSION changes on feature branches.
 
-6. **Merge Verification and Terminal Closure** — `aet-ship` is the single owner of task closure after merge verification. **The PR merge is the human's decision**; the skill only runs after the human indicates the PR has been merged:
+3. **Merge Verification and Terminal Closure** — `aet-ship` is the single owner of task closure after merge verification. **The PR merge is the human's decision**; the skill only runs after the human indicates the PR has been merged:
 
     First, confirm the `ship` helper is available:
 
@@ -160,7 +122,7 @@ Run the pre-merge validation gate.
     - Offer to open the PR in the browser for manual verification.
     - Exit with non-zero status.
 
-7. **Safe Branch Deletion** — only run if the closure command succeeded:
+4. **Safe Branch Deletion** — only run if the closure command succeeded:
     - Regular merge: `git branch -d <branch>`
     - Squash merge: `git branch -D <branch>` (force delete; original commits are not ancestors)
     - Delete the remote branch: `git push origin --delete <branch>`

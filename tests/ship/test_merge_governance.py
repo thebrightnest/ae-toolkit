@@ -44,7 +44,7 @@ class TestAutonomousMergeGovernance:
     def test_aet_ship_states_human_merge_boundary(self):
         """aet-ship step 6 must state unambiguously that the human decides to merge."""
         content = AET_SHIP_SKILL.read_text()
-        step_14 = content.split("6. **Merge Verification and Terminal Closure**")[1].lower()
+        step_14 = content.split("**Merge Verification and Terminal Closure**")[1].lower()
         # The merge action is the human's decision, not the agent's.
         assert "human" in step_14
         assert "merge" in step_14
