@@ -1,7 +1,7 @@
 ---
 id: uvi-01-aet-setup-skills-command
 size: M
-status: draft
+status: approved
 blocked_by: []
 pipeline: standard
 security_review: required
@@ -70,5 +70,5 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md). T
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_
