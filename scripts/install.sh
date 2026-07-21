@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# AE Toolkit one-line installer.
+# Usage: curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash
+# See docs/prds/uv-one-line-installer-prd.md for requirements.
+
+AET_DATA_DIR="${AET_DATA_DIR:-"$HOME/.local/share/ae-toolkit"}"
+AET_BIN_DIR="${AET_BIN_DIR:-"$HOME/.local/bin"}"
+AET_SKILLS_DIR="${AET_SKILLS_DIR:-}"
+REPO="${REPO:-"https://github.com/thebrightnest/ae-toolkit"}"
+TAG="${TAG:-}"
+AGENT="${AGENT:-}"
+DRY_RUN=false
+
+usage() {
+    cat <<EOF
+Usage: install.sh [OPTIONS]
+
+Install the AE Toolkit: bootstrap uv, clone the repo, install the aet CLI
+into a dedicated venv, link skills into agent directories, and symlink aet
+onto PATH.
+
+Options:
+  --tag <tag>         Install a tagged release (default: latest semver tag,
+                      falling back to main)
+  --agent <agent>     Target one agent: claude-code, kimi, cursor, generic
+  --bin-dir <dir>     Target PATH directory (default: ~/.local/bin)
+  --skills-dir <dir>  Override skills directory (default: auto-detect)
+  --repo <url|path>   Source to clone (default: GitHub main repo)
+  --dry-run           Print planned actions without executing
+  --help, -h          Show this message
+
+Environment variables:
+  AET_DATA_DIR        Persistent install path (default: ~/.local/share/ae-toolkit)
+  AET_BIN_DIR         PATH directory for the aet symlink
+  AET_SKILLS_DIR      Override skills directory
+  REPO                Default repo URL/path
+  TAG                 Default tag
+  AGENT               Default agent
+EOF
+}
+
+log() {
+    echo "  $*"
+}
+
+error() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --tag)
+            [[ $# -ge 2 ]] || error "--tag requires an argument"
+            TAG="$2"
+            shift 2
+            ;;
+        --agent)
+            [[ $# -ge 2 ]] || error "--agent requires an argument"
+            AGENT="$2"
+            shift 2
+            ;;
+        --bin-dir)
+            [[ $# -ge 2 ]] || error "--bin-dir requires an argument"
+            AET_BIN_DIR="$2"
+            shift 2
+            ;;
+        --skills-dir)
+            [[ $# -ge 2 ]] || error "--skills-dir requires an argument"
+            AET_SKILLS_DIR="$2"
+            shift 2
+            ;;
+        --repo)
+            [[ $# -ge 2 ]] || error "--repo requires an argument"
+            REPO="$2"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            error "unknown option: $1"
+            ;;
+    esac
+done
+
+case "$AGENT" in
+    ""|claude-code|kimi|cursor|generic) ;;
+    *) error "unknown agent '$AGENT'; expected claude-code, kimi, cursor, or generic" ;;
+esac
+
+REPO_DIR="$AET_DATA_DIR/repo"
+VENV_DIR="$AET_DATA_DIR/venv"
+AET_BIN="$VENV_DIR/bin/aet"
+
+ensure_uv() {
+    if command -v uv >/dev/null 2>&1; then
+        log "uv already on PATH"
+        return 0
+    fi
+
+    log "bootstrapping uv..."
+    if [[ "$DRY_RUN" == true ]]; then
+        log "would bootstrap uv via Astral installer"
+        return 0
+    fi
+
+    # The Astral installer writes to ~/.local/bin by default.
+    export UV_INSTALL_DIR="${UV_INSTALL_DIR:-"$HOME/.local/bin"}"
+    if ! curl -LsSf https://astral.sh/uv/install.sh | sh; then
+        error "failed to bootstrap uv"
+    fi
+    export PATH="$UV_INSTALL_DIR:$PATH"
+
+    if ! command -v uv >/dev/null 2>&1; then
+        error "uv bootstrap appeared to succeed but uv is not on PATH"
+    fi
+}
+
+resolve_tag() {
+    if [[ -n "$TAG" ]]; then
+        echo "$TAG"
+        return 0
+    fi
+
+    local latest
+    latest=$(git ls-remote --tags --sort=-v:refname "$REPO" 2>/dev/null | \
+        grep -E 'refs/tags/(v?[0-9]+\.[0-9]+\.[0-9]+)$' | \
+        head -n1 | \
+        sed 's|.*/||') || true
+
+    if [[ -n "$latest" ]]; then
+        echo "$latest"
+    else
+        echo "main"
+    fi
+}
+
+clone_or_update_repo() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log "would clone/update repo from $REPO to $REPO_DIR"
+        log "would checkout tag: $TAG"
+        return 0
+    fi
+
+    if [[ -d "$REPO_DIR/.git" ]]; then
+        log "updating existing clone at $REPO_DIR"
+        git -C "$REPO_DIR" fetch origin
+    else
+        log "cloning $REPO to $REPO_DIR"
+        rm -rf "$REPO_DIR"
+        git clone "$REPO" "$REPO_DIR"
+    fi
+
+    log "checking out $TAG"
+    git -C "$REPO_DIR" checkout "$TAG"
+}
+
+create_venv_and_install() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log "would create venv at $VENV_DIR"
+        log "would install aet from $REPO_DIR"
+        return 0
+    fi
+
+    if [[ ! -d "$VENV_DIR/bin" ]]; then
+        log "creating venv at $VENV_DIR"
+        uv venv "$VENV_DIR"
+    else
+        log "venv already exists at $VENV_DIR"
+    fi
+
+    log "installing aet from $REPO_DIR"
+    uv pip install --python "$VENV_DIR/bin/python" "$REPO_DIR"
+}
+
+install_skills() {
+    local skills_args=()
+    if [[ -n "$AET_SKILLS_DIR" ]]; then
+        skills_args+=("--skills-dir" "$AET_SKILLS_DIR")
+    elif [[ -n "$AGENT" ]]; then
+        skills_args+=("--agent" "$AGENT")
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log "would run: AET_REPO_ROOT=$REPO_DIR $AET_BIN setup skills ${skills_args[*]}"
+        return 0
+    fi
+
+    log "linking skills"
+    AET_REPO_ROOT="$REPO_DIR" "$AET_BIN" setup skills "${skills_args[@]}"
+}
+
+link_aet_binary() {
+    if [[ "$DRY_RUN" == true ]]; then
+        log "would symlink $AET_BIN_DIR/aet -> $AET_BIN"
+        return 0
+    fi
+
+    mkdir -p "$AET_BIN_DIR"
+    local link="$AET_BIN_DIR/aet"
+
+    if [[ -L "$link" ]]; then
+        if [[ "$(readlink "$link")" == "$AET_BIN" ]]; then
+            log "aet already linked -> $AET_BIN"
+        else
+            log "repointing stale symlink $link -> $AET_BIN"
+            ln -sf "$AET_BIN" "$link"
+        fi
+    elif [[ -e "$link" ]]; then
+        log "warning: $link exists and is not a symlink (skipping)"
+    else
+        log "linking $link -> $AET_BIN"
+        ln -s "$AET_BIN" "$link"
+    fi
+}
+
+print_summary() {
+    echo
+    echo "AE Toolkit installed."
+    echo "  repo:   $REPO_DIR"
+    echo "  venv:   $VENV_DIR"
+    echo "  bin:    $AET_BIN_DIR/aet"
+    if [[ -n "$AET_SKILLS_DIR" ]]; then
+        echo "  skills: $AET_SKILLS_DIR"
+    elif [[ -n "$AGENT" ]]; then
+        echo "  agent:  $AGENT"
+    fi
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "  (dry run — no changes made)"
+    fi
+}
+
+main() {
+    echo "Installing AE Toolkit..."
+    echo "  repo: $REPO"
+    echo "  data: $AET_DATA_DIR"
+    echo "  bin:  $AET_BIN_DIR"
+
+    ensure_uv
+    TAG=$(resolve_tag)
+    clone_or_update_repo
+    create_venv_and_install
+    install_skills
+    link_aet_binary
+    print_summary
+}
+
+main

@@ -1,4 +1,4 @@
-.PHONY: help install-skills install-binaries add-skill lint format validate install-hooks test lint-py install-editable
+.PHONY: help install-skills install-binaries add-skill lint format validate install-hooks test lint-py install-editable test-installer
 
 # Development symlink target. Override if your skills ecosystem uses a different path.
 SKILLS_DIR ?= $(HOME)/.agents/skills
@@ -88,6 +88,10 @@ test: install-editable ## Run pytest suite (parallel if pytest-xdist is installe
 	fi
 	@echo "✓ Tests passed"
 
+test-installer: install-editable ## Run installer smoke tests in isolation
+	@$(PYTHON) -m pytest tests/installer/test_installer.py -q
+	@echo "✓ Installer tests passed"
+
 validate: install-editable ## Run all quality checks, fail-fast; pytest is skipped when only prose changed
 	@$(MAKE) lint-py
 	@$(PYTHON) ./src/aet/cli/validate_workflows.py
@@ -102,6 +106,7 @@ validate: install-editable ## Run all quality checks, fail-fast; pytest is skipp
 	else \
 		echo "→ Skipping pytest (prose-only change)"; \
 	fi
+	@$(MAKE) test-installer
 	@echo "✓ All validation checks passed"
 
 install-hooks: ## Install pre-commit hooks
