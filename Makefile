@@ -91,6 +91,7 @@ validate: install-editable ## Run all quality checks, fail-fast; pytest narrows 
 	@$(PYTHON) ./src/aet/cli/validate-workflows.py
 	@$(PYTHON) ./scripts/skills-lint --legacy=error
 	@./scripts/validate-skills.sh
+	@$(PYTHON) -m aet.cli.main plans lint
 	@$(PYTHON) -m aet.change_scope --explain
 	@$(MAKE) test PYTEST_TARGETS="$$($(PYTHON) -m aet.change_scope)"
 	@echo "✓ All validation checks passed"

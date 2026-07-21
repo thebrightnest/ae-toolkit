@@ -57,6 +57,12 @@ tax into the new stage.
    editing whenever a plan is added (for example, asserting that no plan
    carries an unrecognized `status`). Record the choice in the plan before
    implementing — S (traces: R-5)
+   - **Decision:** Drop the hardcoded counts. The classifier already reports
+     every plan whose `is_settled_plan()` classification disagrees with its
+     committed `status`, so a per-plan divergence assertion is sufficient. An
+     unrecognized `status` is surfaced as an explicit "invalid status" finding
+     rather than a census mismatch, removing the need to edit Python whenever
+     the corpus grows.
 5. Remove `test_corpus_classifier_matches_known_live_set` from
    `tests/orchestrator/test_status_liveness_contract.py`, leaving the module's
    temp-dir unit tests intact, and drop the now-unused `_REPO_ROOT / "docs"`
@@ -124,5 +130,5 @@ gone.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

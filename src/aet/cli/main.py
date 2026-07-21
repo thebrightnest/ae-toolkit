@@ -80,6 +80,7 @@ SUBCOMMANDS = {
     "state": {"target": ("aet.cli", "aet-state"), "mode": "exec"},
     "gate": {"target": ("aet.cli", "gate"), "mode": "exec"},
     "plan": {"target": ("aet.cli", "plan"), "mode": "exec"},
+    "plans": {"target": ("aet.cli", "plans"), "mode": "exec"},
     "panel": {"target": ("aet.cli", "panel"), "mode": "exec"},
     "run": {"target": ("aet.cli", "orchestrator"), "mode": "run"},
     "run-one": {"target": ("aet.cli", "orchestrator"), "mode": "run-one"},
