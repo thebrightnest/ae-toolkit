@@ -39,22 +39,22 @@ is out of scope and must be raised separately.
 
 ## Task List
 
-1. Port `test_aet_qa.py` and `test_aet_review.py` assertions into
+1. [x] Port `test_aet_qa.py` and `test_aet_review.py` assertions into
    `.agents/doc-rules.yaml` as `must_contain` rules with reasons carried over
    from the existing assertion messages — S (traces: R-4)
-2. Port `test_merge_governance.py`, including the section-scoped rules against
+2. [x] Port `test_merge_governance.py`, including the section-scoped rules against
    `docs/CONVENTIONS.md` and the `must_not_contain` rules that keep
    `aet-ship/SKILL.md` free of self-merge directives — M (traces: R-4)
-3. Port `test_scripts_layout.py`: layout checks as `path_exists` /
+3. [x] Port `test_scripts_layout.py`: layout checks as `path_exists` /
    `path_absent`, README content as `must_contain` — S (traces: R-4)
-4. For each ported invariant, break the underlying prose and confirm
+4. [x] For each ported invariant, break the underlying prose and confirm
    `aet docs lint` fails; restore. A port is not complete without this
    demonstration — M (traces: R-4)
-5. Delete the four test modules and confirm no module under `tests/` still
+5. [x] Delete the four test modules and confirm no module under `tests/` still
    reads Markdown from the checkout outside `tests/` — S (traces: R-4)
-6. Remove the four modules from `change_scope.DOC_COUPLED_TESTS`, leaving only
+6. [x] Remove the four modules from `change_scope.DOC_COUPLED_TESTS`, leaving only
    the corpus module until pld-04 lands — S (traces: R-4)
-7. Merge branch to main and verify integration — S
+7. [ ] Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -91,13 +91,13 @@ is out of scope and must be raised separately.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] R-trace coverage: R-4 covered by tasks 1–6
-- [ ] No new source files introduced; rule coverage is demonstrated by task 4
-- [ ] Test types: the rules file replaces unit-level content assertions; the
+- [x] Lint passes
+- [x] Tests pass
+- [x] R-trace coverage: R-4 covered by tasks 1–6
+- [x] No new source files introduced; rule coverage is demonstrated by task 4
+- [x] Test types: the rules file replaces unit-level content assertions; the
       break-and-confirm pass in task 4 is the integration check
-- [ ] Every assertion in the four deleted modules maps to a rule, verified by
+- [x] Every assertion in the four deleted modules maps to a rule, verified by
       count and by reading the diff side by side
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -113,5 +113,5 @@ still consults `DOC_COUPLED_TESTS` and remains correct either way.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
