@@ -40,29 +40,7 @@ With optional flags to override sensible defaults.
 
 Put the `aet` dispatcher on `PATH` so skills like aet-work, aet-ship, and aet-evolve can invoke their helpers (`aet state`, `aet run`, `aet mine-learnings`, etc.).
 
-**Procedure:**
-
-1. Run the installer from the installed aet-work skill:
-
-   ```bash
-   aet install
-   ```
-
-   It symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes the retired legacy binary names.
-
-2. Verify the dispatcher is available:
-
-   ```bash
-   command -v aet
-   ```
-
-3. If `~/.local/bin` is not on `PATH`, tell the user to add it to their shell profile.
-
-**When to use:**
-
-- After installing skills via `npx skills`
-- When another AET skill reports that a helper binary is not on `PATH`
-- When setting up a new machine
+**Prerequisite:** `npx skills` copies skill markdown only; the `aet` Python package must be installed first. See [references/install-binaries.md](references/install-binaries.md) for the full procedure.
 
 ## Philosophy
 

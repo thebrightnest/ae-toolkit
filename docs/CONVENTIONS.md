@@ -54,8 +54,9 @@ Rules:
 
 - Skill instructions must invoke helpers through the `aet` dispatcher (e.g. `aet state record-merge`), not by hardcoded agent-specific paths or retired binary names.
 - Skills that depend on helpers must include a **Prerequisites** section telling the user how to install the `aet` dispatcher onto `PATH`.
+- `aet install` requires the `aet` Python package to be installed first. Skill installers must not assume that `npx skills` (which copies markdown content) installed the package; document `pip install` from the repo or PyPI as the prerequisite step.
 - The canonical installer is `aet install`, implemented in `src/aet/cli/main.py` and exposed through the installed console script (`aet = "aet.cli:main"`). It symlinks `aet` into `~/.local/bin` (or `AET_BIN_DIR`) and prunes the retired legacy binary names.
-- `make install-skills` in this repo runs `aet install` automatically for the local development workflow.
+- `make install-skills` in this repo installs the package editable and runs `aet install` automatically for the local development workflow.
 
 ## AET Backend Configuration
 

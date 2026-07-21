@@ -60,9 +60,28 @@ This is why `aet plan` doesn't exist: planning is judgment — a skill your agen
 
 ## Quick Start
 
-### Option 1: Install with `npx skills` (recommended)
+AE Toolkit has two parts: the **Python CLI package** (`aet`) and the **skill instructions** your agent reads. You need both for the pipeline to work.
 
-AE Toolkit is a single system, not a menu of independent skills. The pipeline skills are designed to work together — installing only one leaves you with broken handoffs and missing helper binaries. Install the whole toolkit:
+### 1. Install the Python package
+
+The `aet` command is a Python console script. Install it into an environment of your choice:
+
+```bash
+# Latest release from source
+pip install git+https://github.com/thebrightnest/ae-toolkit.git@v1.3.0
+```
+
+Or clone the repo and install editable for local development:
+
+```bash
+git clone https://github.com/thebrightnest/ae-toolkit.git
+cd ae-toolkit
+pip install -e ".[dev]"
+```
+
+### 2. Install the skills
+
+AE Toolkit is a single system, not a menu of independent skills. The pipeline skills are designed to work together — installing only one leaves you with broken handoffs and missing helpers. Install the whole toolkit:
 
 ```bash
 npx skills add https://github.com/thebrightnest/ae-toolkit --all
@@ -76,15 +95,19 @@ npx skills add https://github.com/thebrightnest/ae-toolkit --all -a claude-code
 
 Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
 
-AET skills ship with a single `aet` binary that dispatches to every helper (`aet state`, `aet run`, `aet mine-learnings`, etc.). After installing skills, put it on `PATH` by running the installer:
+`npx skills` copies skill markdown to your agent's skills directory; it does **not** install the Python CLI. Step 1 above is required for the commands below to exist.
+
+### 3. Put `aet` on `PATH`
+
+The `aet` package dispatches to every helper (`aet state`, `aet run`, `aet mine-learnings`, etc.). Link it into your bin directory:
 
 ```bash
 aet install
 ```
 
-Or invoke via your agent's skill command (e.g., `/aet-setup install-binaries` in Claude Code). The installer symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes the retired legacy binary names. If `~/.local/bin` is not on your `PATH`, add it to your shell profile — after that, `aet` maintains its own link.
+Or invoke via your agent's skill command (e.g., `/aet-setup install-binaries` in Claude Code). The installer symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes retired legacy binary names. If `~/.local/bin` is not on your `PATH`, add it to your shell profile — after that, `aet` maintains its own link.
 
-If you cloned this repo and are developing skills locally, `make install-skills` runs the installer automatically.
+If you cloned this repo and are developing skills locally, `make install-skills` installs the package, symlinks skills, and runs `aet install` automatically.
 
 ### Option 2: Manual install
 
