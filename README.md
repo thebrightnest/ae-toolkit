@@ -70,7 +70,7 @@ The installer bootstraps `uv`, clones the repo, installs the `aet` CLI into a de
 curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash
 ```
 
-Target a specific agent, or see what would happen first:
+Target a specific agent, preview changes, or pin a release:
 
 ```bash
 # Target one agent directory explicitly
@@ -78,9 +78,32 @@ curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scrip
 
 # Preview every planned action without making changes
 curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash -s -- --dry-run
+
+# Install a specific tag
+curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash -s -- --tag v1.3.0
 ```
 
-`~/.local/bin` must be on your `PATH`. The installer warns you if it is not, but leaves shell-profile editing to you.
+#### Installer options
+
+| Flag | Description | Example |
+| ---- | ----------- | ------- |
+| `--tag <tag>` | Install a tagged release (default: latest semver tag, falling back to `main`) | `--tag v1.3.0` |
+| `--agent <agent>` | Target one agent directory: `claude-code`, `kimi`, `cursor`, or `generic` | `--agent claude-code` |
+| `--bin-dir <dir>` | Target `PATH` directory for the `aet` symlink (default: `~/.local/bin`) | `--bin-dir ~/.bin` |
+| `--skills-dir <dir>` | Override the skills directory (default: auto-detect) | `--skills-dir ~/.claude/skills` |
+| `--repo <url\|path>` | Clone from a different source (default: GitHub main repo) | `--repo /path/to/local/clone` |
+| `--dry-run` | Print planned actions without making changes | `--dry-run` |
+
+#### Troubleshooting
+
+**`aet` command not found after install.** The installer symlinks `aet` into `~/.local/bin` (or the directory you passed to `--bin-dir`). If that directory is not on your `PATH`, add it to your shell profile:
+
+```bash
+# bash/zsh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
+```
+
+Then reload your profile (`source ~/.bashrc` or `source ~/.zshrc`) or open a new shell.
 
 ### Manual install
 
@@ -107,6 +130,12 @@ aet setup skills --skills-dir ~/.claude/skills
 
 # Preview what would happen without making changes
 aet setup skills --dry-run
+```
+
+Or install skills via `npx`:
+
+```bash
+npx skills add https://github.com/thebrightnest/ae-toolkit --all
 ```
 
 #### 3. Put `aet` on `PATH`
