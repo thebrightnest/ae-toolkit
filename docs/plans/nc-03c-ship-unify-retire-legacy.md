@@ -5,7 +5,7 @@ blocked_by:
   - nc-03a-ship-gate-as-code
   - nc-03b-ship-pr-creation-as-code
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Removes a live PATH symlink and edits the installer's legacy-prune list; a botched prune guard could remove or miss the wrong file.
 docs_sync: required
@@ -90,5 +90,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run aet-ship*
