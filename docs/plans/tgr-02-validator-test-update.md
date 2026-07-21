@@ -86,5 +86,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-cso`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
