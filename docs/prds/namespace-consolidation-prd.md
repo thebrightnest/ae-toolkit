@@ -89,6 +89,24 @@ Classified as **feature/enhancement** (reorganization + promotion), not a reprod
 
 - Task 9 (merge to main and integration verification): intentionally left for the `aet-ship` stage.
 
+## Divergence Summary — nc-03a ship gate
+
+*Recorded: 2026-07-21 — Branch: nc-03a-ship-gate-as-code*
+
+### Changed from plan
+
+- Task 4 (test-suite/coverage invocation): Hardened `AET_SHIP_TEST_CMD` and `AET_SHIP_COVERAGE_CMD` execution from `shell=True` to `shlex.split(cmd)` + `shell=False` after a security-audit finding. The functional behavior (configurable test/coverage commands) is unchanged.
+
+### Added (unplanned)
+
+- `.agents/commands/aet-work.md`: Updated ship workflow examples to `aet ship gate <plan>` and `ship record-merge ...`, correcting the pre-existing "`aet ship` opens the PR" drift (R-7).
+- `tests/cli/test_build_parsers.py`, `tests/fixtures/skills-lint/valid.md`, `tests/ship/test_merge_governance.py`: Updated to match the new `ship record-merge` subcommand syntax.
+- Security-audit report and verdict recorded under `/tmp/aet-reports/nc-03a-ship-gate-as-code/` and submitted via `aet gate submit`.
+
+### Deferred
+
+- Task 10 (merge branch to main and verify integration): intentionally left for the `aet-ship` stage.
+
 ---
 
 *Stage: synced*
