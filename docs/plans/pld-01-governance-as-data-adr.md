@@ -3,7 +3,7 @@ id: pld-01-governance-as-data-adr
 size: S
 blocked_by: []
 pipeline: minimal
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Decision record only; no code, runtime, or dependency changes.
 docs_sync: required
@@ -103,5 +103,5 @@ pld-02 begins.
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: None*
