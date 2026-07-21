@@ -95,5 +95,5 @@ _None; this is a new PRD._
 
 ---
 
-_Stage: prd-approved_
-_Next step: run `aet-validate-scope`_
+_Stage: scope-validated_
+_Next step: run `aet-work` (single-plan or multi-task queue)_
