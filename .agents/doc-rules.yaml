@@ -1,3 +1,152 @@
 # Documentation governance rules for `aet docs lint`.
 # Rules are evaluated in order; a missing target file fails closed.
-rules: []
+rules:
+  # tests/skills/test_aet_qa.py
+  - type: must_contain
+    target: skills/aet-qa/SKILL.md
+    value: "Default to impact-scoped tests"
+    reason: "SKILL.md should default to impact-scoped tests"
+
+  - type: must_contain
+    target: skills/aet-qa/SKILL.md
+    value: "git diff --name-only <pr-base>..HEAD"
+    reason: "SKILL.md should identify changed files with git diff"
+
+  - type: must_contain
+    target: skills/aet-qa/SKILL.md
+    value: "Full-suite fallback"
+    reason: "SKILL.md should define a full-suite fallback"
+
+  - type: must_contain
+    target: skills/aet-qa/SKILL.md
+    value:
+      - "test harness"
+      - "config"
+      - "shared fixtures"
+      - "dependency lockfiles"
+      - "files imported by many tests"
+    reason: "Full-suite fallback should mention the required conditions"
+
+  - type: must_contain
+    target: skills/aet-qa/SKILL.md
+    value: "Stage-failure triage"
+    reason: "SKILL.md should include a stage-failure triage checklist"
+
+  - type: must_contain
+    target: skills/aet-qa/SKILL.md
+    value:
+      - "command"
+      - "output"
+      - "Files touched"
+      - "Last successful stage"
+      - "environment variables"
+      - "reproduces outside"
+    reason: "Triage checklist should mention the required evidence fields"
+
+  - type: must_contain
+    target: skills/aet-qa/SKILL.md
+    value: "QA report"
+    reason: "Triage evidence should be appended to the QA report"
+
+  # tests/skills/test_aet_review.py
+  - type: must_contain
+    target: skills/aet-review/SKILL.md
+    value: "git diff <base>..HEAD"
+    reason: "SKILL.md should scope the review diff to the PR base"
+
+  - type: must_contain
+    target: skills/aet-review/SKILL.md
+    value:
+      - ".gitignore"
+      - "AGENTS.md"
+      - "docs/CONVENTIONS.md"
+    reason: "Noise filter should mention the required noise files"
+
+  - type: must_contain
+    target: skills/aet-review/SKILL.md
+    value: "explicitly modifies them"
+    reason: "Noise files should be in-scope only when explicitly modified"
+
+  # tests/ship/test_merge_governance.py
+  - type: path_exists
+    target: docs/adr/029-autonomous-merge-fail-closed.md
+    reason: "Expected ADR-029 to exist"
+
+  - type: must_contain
+    target: docs/adr/029-autonomous-merge-fail-closed.md
+    value:
+      - "ADR-005"
+      - "extends"
+      - "autonomous merge"
+      - "fail-closed"
+    reason: "ADR-029 must reference ADR-005, state it extends ADR-005, mention autonomous merge, and state fail-closed posture"
+
+  - type: must_contain
+    target: docs/CONVENTIONS.md
+    section: "Gates That Must Still Stop in Unattended Mode"
+    value:
+      - "Autonomous merge"
+      - "ADR-029"
+    reason: "CONVENTIONS.md must list autonomous merge as a must-stop gate and cite ADR-029"
+
+  - type: must_contain
+    target: docs/CONVENTIONS.md
+    section: "Author Checklist"
+    value:
+      - "Autonomous-merge is fail-closed"
+      - "skills never instruct a PR merge"
+    reason: "CONVENTIONS.md Author Checklist must enforce merge-neutral skills"
+
+  - type: must_not_contain
+    target: skills/aet-ship/SKILL.md
+    value:
+      - "gh pr merge"
+      - "self-merge"
+      - "merge the pr"
+      - "merge your own pr"
+    reason: "aet-ship must not instruct an agent to run gh pr merge or self-merge"
+
+  - type: must_contain
+    target: skills/aet-ship/SKILL.md
+    value:
+      - "aet ship close"
+      - "post-merge closure"
+    reason: "aet-ship judgment residue must reference the code-implemented closure command"
+
+  # nc-03c addition to test_merge_governance.py
+  - type: must_contain
+    target: .agents/commands/aet-work.md
+    value:
+      - "merge is the human's decision"
+      - "Trying to merge the PR yourself"
+    reason: "The canonical aet-work command doc must state that the human decides to merge"
+
+  # tests/test_scripts_layout.py
+  - type: path_exists
+    target: scripts/archive/migrate-plans-to-frontmatter.py
+    reason: "Migration scripts are archived"
+
+  - type: path_exists
+    target: scripts/archive/migrate-telemetry-slugs.py
+    reason: "Migration scripts are archived"
+
+  - type: path_absent
+    target: scripts/test-aet-state.py
+    reason: "Misplaced pytest modules removed"
+
+  - type: path_absent
+    target: scripts/test-telemetry.py
+    reason: "Misplaced pytest modules removed"
+
+  - type: path_exists
+    target: scripts/archive/README.md
+    reason: "Archive README documents releases"
+
+  - type: must_contain
+    target: scripts/archive/README.md
+    value:
+      - "v0.7.0"
+      - "v1.0.0"
+      - "migrate-plans-to-frontmatter.py"
+      - "migrate-telemetry-slugs.py"
+    reason: "Archive README documents releases"
