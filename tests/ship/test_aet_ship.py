@@ -103,12 +103,13 @@ class TestShipClosure(unittest.TestCase):
         }
 
     def test_ship_records_merge_updates_plan_and_removes_task(self):
-        """ship closes a task by updating the plan and sealing the queue entry."""
+        """aet ship close closes a task by updating the plan and sealing the queue entry."""
         with patch.object(
             sys,
             "argv",
             [
                 "ship",
+                "close",
                 "t1",
                 str(self.plan_path),
                 str(self.queue_path),
@@ -145,7 +146,7 @@ class TestShipClosure(unittest.TestCase):
         self.assertIn("settled_at", settled)
 
     def test_ship_dry_run_does_not_mutate(self):
-        """ship --dry-run reports success without changing plan or queue."""
+        """aet ship close --dry-run reports success without changing plan or queue."""
         original_content = self.plan_path.read_text(encoding="utf-8")
 
         with patch.object(
@@ -153,6 +154,7 @@ class TestShipClosure(unittest.TestCase):
             "argv",
             [
                 "ship",
+                "close",
                 "--dry-run",
                 "t1",
                 str(self.plan_path),
@@ -180,7 +182,7 @@ class TestShipClosure(unittest.TestCase):
         self.assertFalse(self.history_file.exists())
 
     def test_ship_defaults_queue_path(self):
-        """ship defaults the queue path to .agents/work-queue.json in cwd."""
+        """aet ship close defaults the queue path to .agents/work-queue.json in cwd."""
         os.chdir(self.tmpdir.name)
 
         with patch.object(
@@ -188,6 +190,7 @@ class TestShipClosure(unittest.TestCase):
             "argv",
             [
                 "ship",
+                "close",
                 "t1",
                 str(self.plan_path),
             ],
