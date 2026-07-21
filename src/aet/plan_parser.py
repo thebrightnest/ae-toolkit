@@ -199,21 +199,6 @@ def has_explicit_frontmatter_blocked_by(path: Path) -> bool:
     return bool(re.search(r"^blocked_by\s*:", body, re.M))
 
 
-def count_files_to_modify(path: Path) -> int:
-    """Count list items under ## Files to Modify or ## Files."""
-    content = path.read_text(errors="ignore")
-    match = re.search(
-        r"(?m)^##\s+(Files to Modify|Files)\s*\n(.*?)(?=\n## |\n---|\Z)",
-        content,
-        re.S,
-    )
-    if not match:
-        return 0
-    return len(
-        [line for line in match.group(2).splitlines() if re.match(r"^\s*[\-\*\d]", line.strip())]
-    )
-
-
 def task_list_line_count(path: Path) -> int:
     """Count non-empty lines under ## Task List."""
     content = path.read_text(errors="ignore")
@@ -232,12 +217,11 @@ def validate_size(path: Path) -> tuple[bool, str | None, bool]:
 
     Returns (ok, reason, has_oversized_warning).
     """
-    files = count_files_to_modify(path)
     lines = task_list_line_count(path)
-    oversized = files > 8 or lines > 300
+    oversized = lines > 300
     has_warning = "\u26a0\ufe0f ATOMIC OVERSIZED" in path.read_text(errors="ignore")
     if oversized and not has_warning:
-        return False, f"files={files}, task_list_lines={lines}", has_warning
+        return False, f"task_list_lines={lines}", has_warning
     return True, None, has_warning
 
 
