@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pkg-05-panel-extraction
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Adds a web-framework runtime dependency and rewrites the localhost HTTP surface — review of binding/serialization behavior required.
 docs_sync: required
@@ -93,5 +93,5 @@ can be dropped in the same revert.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
