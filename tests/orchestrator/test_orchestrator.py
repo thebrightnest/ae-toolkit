@@ -752,7 +752,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                 check=True,
             )
 
-            aet_state_bin = str(Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet-state.py")
+            aet_state_bin = str(Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py")
             result = subprocess.run(
                 [sys.executable, aet_state_bin, "record-merge", "demo", queue_file],
                 capture_output=True,
@@ -832,7 +832,7 @@ class TestOrchestratorLockedWrites(unittest.TestCase):
                 ],
             )
             backend = _SpyBackend(orchestrator._make_backend(queue_file))
-            aet_state_bin = str(Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet-state.py")
+            aet_state_bin = str(Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py")
             real_subprocess_run = subprocess.run
 
             def fake_run(cmd, **kwargs):
@@ -915,7 +915,7 @@ class TestOrchestratorLockedWrites(unittest.TestCase):
                 )
 
                 aet_state_bin = str(
-                    Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet-state.py"
+                    Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
                 )
 
                 def seal_task_and_succeed(*_args, **_kwargs):
@@ -2593,7 +2593,7 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
                 self._merge_external_blocker(repo_root, "blocker-branch")
 
                 aet_state_bin = str(
-                    Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet-state.py"
+                    Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
                 )
 
                 def fake_popen(cmd, **kwargs):

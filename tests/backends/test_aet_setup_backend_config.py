@@ -3,12 +3,13 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
-SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "configure-backend.py"
+SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "configure_backend.py"
 
 
 
@@ -25,7 +26,7 @@ class TestConfigureTaskBackend(unittest.TestCase):
 
     def run_script(self, args=None, env=None, cwd=None, input_text=None):
         """Run the configure helper and return CompletedProcess."""
-        cmd = [str(SCRIPT)]
+        cmd = [sys.executable, str(SCRIPT)]
         if args:
             cmd.extend(args)
         merged_env = os.environ.copy()
@@ -49,7 +50,7 @@ class TestConfigureTaskBackend(unittest.TestCase):
     def test_help_prints_usage(self):
         result = self.run_script(["--help"])
         self.assertEqual(result.returncode, 0)
-        self.assertIn("aet configure-backend", result.stdout)
+        self.assertIn("Configure the task backend", result.stdout)
 
     def test_json_backend_creates_config(self):
         result = self.run_script(["--backend", "json", "--non-interactive"])

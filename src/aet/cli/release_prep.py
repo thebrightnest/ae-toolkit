@@ -6,12 +6,12 @@ Outputs JSON with last tag, commits, version info, and suggested bump.
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import subprocess
-import sys
 from pathlib import Path
+
+import typer
 
 CONVENTIONAL_PATTERNS: list[tuple[str, str]] = [
     ("breaking", r"^[a-z]+\!:"),
@@ -202,25 +202,7 @@ def _count_by_type(commits: list[dict]) -> dict[str, int]:
     return counts
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="aet release-prep",
-        description="Analyze commits since the last tag and suggest a version bump.",
-    )
-    parser.add_argument(
-        "--repo-root",
-        type=Path,
-        default=None,
-        help="Repository root (default: current working directory).",
-    )
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point."""
-    args = build_parser().parse_args(argv)
-    repo_root = args.repo_root or Path.cwd()
-
+def _run(repo_root: Path) -> int:
     last_tag = _run_git("describe", "--tags", "--abbrev=0", cwd=repo_root) or None
     all_tags = _run_git("tag", "--list", "--sort=-v:refname", cwd=repo_root).splitlines()
 
@@ -268,5 +250,28 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def release_prep(
+    repo_root: Path | None = typer.Option(
+        None,
+        "--repo-root",
+        help="Repository root (default: current working directory).",
+    ),
+) -> None:
+    """Analyze commits since the last tag and suggest a version bump."""
+    rc = _run(repo_root or Path.cwd())
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return app(argv or [], standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

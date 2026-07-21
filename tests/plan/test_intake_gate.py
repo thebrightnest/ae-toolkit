@@ -2,32 +2,15 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
-import io
+import importlib
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
-_REPO_ROOT = Path(__file__).parents[2]
+from tests.cli._helpers import run_typer
 
-
-def _load_script(name: str):
-    path = _REPO_ROOT / "src" / "aet" / "cli" / f"{name}.py"
-    spec = importlib.util.spec_from_loader(
-        name, importlib.machinery.SourceFileLoader(name, str(path))
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-sprint = _load_script("sprint")
-init_queue = _load_script("init-queue")
-sync = _load_script("sync")
+aet = importlib.import_module("aet.cli.main")
 
 
 def _write_json_file(data) -> str:
@@ -137,17 +120,17 @@ class TestAddIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                rc = sprint.main(["add",
-                    str(bad),
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                ])
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(bad),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
 
-            self.assertNotEqual(rc, 0)
-            self.assertIn("missing id", stderr.getvalue().lower())
+            self.assertNotEqual(result.exit_code, 0)
+            self.assertIn("missing id", result.stderr.lower())
             with open(queue_file, "r", encoding="utf-8") as f:
                 self.assertEqual(json.load(f), [])
 
@@ -163,14 +146,16 @@ class TestAddIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
             ])
 
-            self.assertEqual(rc, 0)
+            self.assertEqual(result.exit_code, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
             self.assertEqual(len(queue), 1)
@@ -198,14 +183,16 @@ class TestAddIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
             ])
 
-            self.assertEqual(rc, 0)
+            self.assertEqual(result.exit_code, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
             self.assertEqual(len(queue), 1)
@@ -227,17 +214,17 @@ class TestAddIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                rc = sprint.main(["add",
-                    str(plan),
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                ])
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
 
-            self.assertNotEqual(rc, 0)
-            stderr_text = stderr.getvalue().lower()
+            self.assertNotEqual(result.exit_code, 0)
+            stderr_text = result.stderr.lower()
             self.assertIn("intake validation failed", stderr_text)
             # The structural failure is acked; the rtrace failure is not.
             self.assertIn("rtrace", stderr_text)
@@ -254,17 +241,17 @@ class TestAddIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                rc = sprint.main(["add",
-                    str(plan),
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                ])
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
 
-            self.assertNotEqual(rc, 0)
-            self.assertIn("work_class", stderr.getvalue())
+            self.assertNotEqual(result.exit_code, 0)
+            self.assertIn("work_class", result.stderr)
             with open(queue_file, "r", encoding="utf-8") as f:
                 self.assertEqual(json.load(f), [])
 
@@ -280,16 +267,16 @@ class TestAddIntakeGate(unittest.TestCase):
             original_bytes = Path(queue_file).read_bytes()
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                rc = sprint.main(["add",
-                    str(bad),
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                ])
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(bad),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
 
-            self.assertNotEqual(rc, 0)
+            self.assertNotEqual(result.exit_code, 0)
             self.assertEqual(Path(queue_file).read_bytes(), original_bytes)
 
 
@@ -308,19 +295,16 @@ class TestInitQueueIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                with patch.object(sys, "argv", [
-                    "init-queue",
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                    "--prds-dir", str(prds_dir),
-                ]):
-                    rc = init_queue.main()
+            result = run_typer(aet.app, [
+                "init-queue",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+                "--prds-dir", str(prds_dir),
+            ])
 
-            self.assertNotEqual(rc, 0)
-            self.assertIn("missing id", stderr.getvalue().lower())
+            self.assertNotEqual(result.exit_code, 0)
+            self.assertIn("missing id", result.stderr.lower())
             # Queue must not be mutated.
             with open(queue_file, "r", encoding="utf-8") as f:
                 self.assertEqual(json.load(f), [])
@@ -337,16 +321,15 @@ class TestInitQueueIntakeGate(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            with patch.object(sys, "argv", [
+            result = run_typer(aet.app, [
                 "init-queue",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
                 "--prds-dir", str(prds_dir),
-            ]):
-                rc = init_queue.main()
+            ])
 
-            self.assertEqual(rc, 0)
+            self.assertEqual(result.exit_code, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.assertEqual([t["id"] for t in data.get("tasks", [])], ["good"])
@@ -381,18 +364,16 @@ class TestSyncIntakeGate(unittest.TestCase):
             original_bytes = Path(queue_file).read_bytes()
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                with patch.object(sys, "argv", [
-                    "sync",
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                ]):
-                    rc = sync.main()
+            result = run_typer(aet.app, [
+                "queue",
+                "sync",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
 
-            self.assertNotEqual(rc, 0)
-            stderr_text = stderr.getvalue().lower()
+            self.assertNotEqual(result.exit_code, 0)
+            stderr_text = result.stderr.lower()
             # The full suite includes structural, rtrace, acceptance, scope.
             self.assertTrue(
                 "no prd reference" in stderr_text
@@ -429,15 +410,15 @@ class TestSyncIntakeGate(unittest.TestCase):
             })
             history_file = _make_history([])
 
-            with patch.object(sys, "argv", [
+            result = run_typer(aet.app, [
+                "queue",
                 "sync",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ]):
-                rc = sync.main()
+            ])
 
-            self.assertEqual(rc, 0)
+            self.assertEqual(result.exit_code, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             tasks = {t["id"]: t for t in data.get("tasks", [])}

@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).parents[2]
 _RETRO_PY = _REPO_ROOT / "src" / "aet" / "cli" / "retro.py"
-_MINE_LEARNINGS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "mine-learnings.py"
+_MINE_LEARNINGS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "mine_learnings.py"
 
 _retro_spec = importlib.util.spec_from_loader(
     "aet_retro", importlib.machinery.SourceFileLoader("aet_retro", str(_RETRO_PY))
@@ -175,6 +175,6 @@ class TestRunMineLearningsInvocation(unittest.TestCase):
         self.assertEqual(out, "patterns")
         self.assertEqual(
             captured["cmd"],
-            [str(_MINE_LEARNINGS_PY), "--propose"],
+            [sys.executable, str(_MINE_LEARNINGS_PY), "--propose"],
         )
         self.assertEqual(captured["env"].get("AET_TELEMETRY_ARCHIVE_DIR"), "/tmp/archive")

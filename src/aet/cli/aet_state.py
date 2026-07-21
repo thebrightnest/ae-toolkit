@@ -13,6 +13,9 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
+
+import typer
 
 from aet import queue as queue_lib  # noqa: E402
 from aet.backends.factory import create_backend  # noqa: E402, I001
@@ -335,7 +338,6 @@ def _set_stage(task, stage, by="orch"):
     previous_stage = task.get("stage")
     task["stage"] = stage
     queue_lib.append_history(task, previous_stage, stage, by, {"kind": "stage"})
-
 
 def cmd_set_stage(args):
     """Set the pipeline stage sub-state for a task in the queue."""
@@ -867,98 +869,184 @@ def cmd_record_merge(args):
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="aet-state",
-        description="Owns queue mutations, stage transitions, and footer updates.",
-    )
-    parser.add_argument("--dry-run", action="store_true", help="Show changes without applying them.")
-    parser.add_argument(
+app = typer.Typer()
+
+
+@app.command("audit")
+def audit(
+    queue: Optional[str] = typer.Argument(".agents/work-queue.json", help="Path to queue JSON."),
+) -> None:
+    """Reconcile stored state against git without mutating."""
+    args = argparse.Namespace(queue=queue)
+    rc = cmd_audit(args)
+    raise typer.Exit(rc)
+
+
+@app.command("heal")
+def heal(
+    queue: Optional[str] = typer.Argument(
+        ".agents/work-queue.json", help="Path to queue JSON."
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Apply proposed changes; otherwise dry-run."
+    ),
+    force: bool = typer.Option(
+        False,
         "--force",
-        action="store_true",
         help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Reconcile stored state against git and apply safe fixes."""
+    args = argparse.Namespace(queue=queue, apply=apply, force=force)
+    try:
+        rc = cmd_heal(args)
+    except _INTEGRITY_ERRORS as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        raise typer.Exit(1)
+    raise typer.Exit(rc)
+
+
+@app.command("validate")
+def validate(
+    task_id: str = typer.Argument(..., help="Task ID."),
+    from_stage: str = typer.Argument(..., help="Current stage."),
+    to_stage: str = typer.Argument(..., help="Target stage."),
+    queue: Optional[str] = typer.Argument(".agents/work-queue.json", help="Path to queue JSON."),
+) -> None:
+    """Check if a transition is legal."""
+    args = argparse.Namespace(task_id=task_id, from_stage=from_stage, to_stage=to_stage, queue=queue)
+    try:
+        rc = cmd_validate(args)
+    except _INTEGRITY_ERRORS as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        raise typer.Exit(1)
+    raise typer.Exit(rc)
+
+
+@app.command("transition")
+def transition(
+    task_id: str = typer.Argument(..., help="Task ID."),
+    from_stage: str = typer.Argument(..., help="Current stage."),
+    to_stage: str = typer.Argument(..., help="Target stage."),
+    queue: Optional[str] = typer.Argument(
+        ".agents/work-queue.json", help="Path to queue JSON."
+    ),
+    reason: Optional[str] = typer.Option(
+        None, "--reason", help="Reason for transition (used as history evidence)."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show changes without applying them."
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Validate legality, then apply state change."""
+    args = argparse.Namespace(
+        task_id=task_id,
+        from_stage=from_stage,
+        to_stage=to_stage,
+        queue=queue,
+        reason=reason,
+        dry_run=dry_run,
+        force=force,
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    try:
+        rc = cmd_transition(args)
+    except _INTEGRITY_ERRORS as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        raise typer.Exit(1)
+    raise typer.Exit(rc)
 
-    # audit
-    audit_parser = subparsers.add_parser("audit", help="Reconcile stored state against git without mutating.")
-    audit_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
 
-    # heal
-    heal_parser = subparsers.add_parser("heal", help="Reconcile stored state against git and apply safe fixes.")
-    heal_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
-    heal_parser.add_argument("--apply", action="store_true", help="Apply proposed changes; otherwise dry-run.")
+@app.command("set-stage")
+def set_stage(
+    task_id: str = typer.Argument(..., help="Task ID."),
+    stage: str = typer.Argument(..., help="Pipeline stage to record."),
+    queue: Optional[str] = typer.Argument(
+        ".agents/work-queue.json", help="Path to queue JSON."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show changes without applying them."
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Set the pipeline stage sub-state for an in-progress task."""
+    args = argparse.Namespace(task_id=task_id, stage=stage, queue=queue, dry_run=dry_run, force=force)
+    try:
+        rc = cmd_set_stage(args)
+    except _INTEGRITY_ERRORS as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        raise typer.Exit(1)
+    raise typer.Exit(rc)
 
-    # validate
-    validate_parser = subparsers.add_parser("validate", help="Check if a transition is legal.")
-    validate_parser.add_argument("task_id", help="Task ID.")
-    validate_parser.add_argument("from_stage", help="Current stage.")
-    validate_parser.add_argument("to_stage", help="Target stage.")
-    validate_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
 
-    # transition
-    transition_parser = subparsers.add_parser("transition", help="Validate legality, then apply state change.")
-    transition_parser.add_argument("task_id", help="Task ID.")
-    transition_parser.add_argument("from_stage", help="Current stage.")
-    transition_parser.add_argument("to_stage", help="Target stage.")
-    transition_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
-    transition_parser.add_argument("--reason", help="Reason for transition (used as history evidence).")
-
-    # set-stage
-    set_stage_parser = subparsers.add_parser(
-        "set-stage", help="Set the pipeline stage sub-state for an in-progress task."
-    )
-    set_stage_parser.add_argument("task_id", help="Task ID.")
-    set_stage_parser.add_argument("stage", help="Pipeline stage to record.")
-    set_stage_parser.add_argument("queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON.")
-
-    # record-merge
-    record_merge_parser = subparsers.add_parser(
-        "record-merge", help="Resolve and record the merge commit for a task."
-    )
-    record_merge_parser.add_argument("task_id", help="Task ID.")
-    record_merge_parser.add_argument(
-        "queue", nargs="?", default=".agents/work-queue.json", help="Path to queue JSON."
-    )
-    record_merge_parser.add_argument(
+@app.command("record-merge")
+def record_merge(
+    task_id: str = typer.Argument(..., help="Task ID."),
+    queue: Optional[str] = typer.Argument(
+        ".agents/work-queue.json", help="Path to queue JSON."
+    ),
+    branch: Optional[str] = typer.Option(
+        None,
         "--branch",
         help="Branch name to use for merge verification. Overrides the task's branch field.",
-    )
-    record_merge_parser.add_argument(
+    ),
+    merge_commit: Optional[str] = typer.Option(
+        None,
         "--merge-commit",
         help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
-    )
-    record_merge_parser.add_argument(
+    ),
+    plan: Optional[str] = typer.Option(
+        None,
         "--plan",
         help="Path to the plan markdown file. If omitted, uses the task's plan_file.",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show changes without applying them."
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Resolve and record the merge commit for a task."""
+    args = argparse.Namespace(
+        task_id=task_id,
+        queue=queue,
+        branch=branch,
+        merge_commit=merge_commit,
+        plan=plan,
+        dry_run=dry_run,
+        force=force,
     )
-
-    return parser
-
-
-def main(argv: list[str] | None = None):
-    args = build_parser().parse_args(argv)
-
     try:
-        if args.command == "audit":
-            return cmd_audit(args)
-        if args.command == "heal":
-            return cmd_heal(args)
-        if args.command == "validate":
-            return cmd_validate(args)
-        if args.command == "transition":
-            return cmd_transition(args)
-        if args.command == "set-stage":
-            return cmd_set_stage(args)
-        if args.command == "record-merge":
-            return cmd_record_merge(args)
+        rc = cmd_record_merge(args)
     except _INTEGRITY_ERRORS as exc:
-        # Fail closed with a deliberate message, not a traceback.
         print(f"⛔ {exc}", file=sys.stderr)
-        return 1
+        raise typer.Exit(1)
+    raise typer.Exit(rc)
 
-    return 1
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    try:
+        return app(argv, standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+    except Exception as exc:
+        if hasattr(exc, "exit_code"):
+            return int(exc.exit_code)
+        raise
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

@@ -30,7 +30,7 @@ def _load_module(module_name: str, script_path: Path):
     return module
 
 
-mine_learnings = _load_module("mine_learnings", EVOLVE_BIN_DIR / "mine-learnings.py")
+mine_learnings = _load_module("mine_learnings", EVOLVE_BIN_DIR / "mine_learnings.py")
 
 
 def _write_jsonl(path: Path, records: list[dict]) -> None:

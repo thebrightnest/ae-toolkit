@@ -17,7 +17,7 @@ docs_sync_reason: The skill instruction files ARE the deliverable; there is no s
 PRD: [plan-durability-hardening](../prds/plan-durability-hardening-prd.md) (R-2).
 Root: `docs/bugs/2026-07-14-aet-add-queues-untracked-plans.md` (Gap 3).
 
-The planning skills run `aet add`/`aet sync` with no commit step, so plans stay
+The planning skills run `aet add`/`aet queue sync` with no commit step, so plans stay
 uncommitted through intake — the process gap that let this session queue untracked
 plans. With the Gap-1 guard now refusing untracked plans, the happy path must
 commit plans _before_ `aet add`, or `aet add` will (correctly) refuse them. This

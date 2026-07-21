@@ -17,7 +17,6 @@ Writes a markdown retro to docs/retros/ by default.
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
@@ -26,6 +25,8 @@ import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import typer
 
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 DEFAULT_LOOKBACK_DAYS = 7
@@ -203,8 +204,8 @@ def run_mine_learnings(archive_dir: Path) -> str:
     """Run mine-learnings --propose against the telemetry archive."""
     # Resolve the sibling package binary directly: the legacy `mine-learnings`
     # PATH name is pruned by `aet install`, so a PATH lookup is no longer safe.
-    mine_learnings_bin = Path(__file__).resolve().parent / "mine-learnings.py"
-    cmd = [str(mine_learnings_bin), "--propose"]
+    mine_learnings_bin = Path(__file__).resolve().parent / "mine_learnings.py"
+    cmd = [sys.executable, str(mine_learnings_bin), "--propose"]
     env = os.environ.copy()
     env["AET_TELEMETRY_ARCHIVE_DIR"] = str(archive_dir)
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
@@ -314,48 +315,15 @@ def generate_retro(
     return "\n".join(lines)
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Generate a retro from AET telemetry, split by project-level and AET-level fixes."
-    )
-    parser.add_argument(
-        "--archive-dir",
-        type=Path,
-        default=DEFAULT_ARCHIVE_DIR,
-        help="Telemetry archive root (default: ~/.aet/telemetry).",
-    )
-    parser.add_argument(
-        "--project-slug",
-        type=str,
-        default=None,
-        help="Project slug in the telemetry archive (default: writer-derived <dir>/<label>).",
-    )
-    parser.add_argument(
-        "--lookback-days",
-        type=int,
-        default=DEFAULT_LOOKBACK_DAYS,
-        help="How many days of telemetry to read for the current project (default: 7).",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=None,
-        help="Retro output path (default: docs/retros/YYYY-MM-DD-aet-retro.md).",
-    )
-    parser.add_argument(
-        "--no-mine",
-        action="store_true",
-        help="Skip mine-learnings and only use the current project's recent telemetry.",
-    )
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point."""
-    args = build_parser().parse_args(argv)
-
-    if args.project_slug:
-        project_slug = args.project_slug
+def _run(
+    archive_dir: Path,
+    project_slug: str | None,
+    lookback_days: int,
+    output: Path | None,
+    no_mine: bool,
+) -> int:
+    if project_slug:
+        resolved_slug = project_slug
     elif derive_project_slug is None:
         print(
             "error: cannot derive the project slug — the installed 'aet' package "
@@ -364,33 +332,33 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     else:
-        project_slug = derive_project_slug()
+        resolved_slug = derive_project_slug()
     local_records = recent_project_records(
-        args.archive_dir, project_slug, lookback_days=args.lookback_days
+        archive_dir, resolved_slug, lookback_days=lookback_days
     )
     aet_findings, project_findings = categorize_records(local_records)
 
     telemetry_report = "Skipped mine-learnings (--no-mine)."
-    if not args.no_mine:
-        telemetry_report = run_mine_learnings(args.archive_dir)
+    if not no_mine:
+        telemetry_report = run_mine_learnings(archive_dir)
 
-    if args.output is None:
+    if output is None:
         output_dir = Path("docs/retros")
         output_dir.mkdir(parents=True, exist_ok=True)
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        args.output = output_dir / f"{date}-aet-retro.md"
+        output = output_dir / f"{date}-aet-retro.md"
 
     retro = generate_retro(
-        project_slug, project_findings, aet_findings, telemetry_report
+        resolved_slug, project_findings, aet_findings, telemetry_report
     )
-    args.output.write_text(retro, encoding="utf-8")
+    output.write_text(retro, encoding="utf-8")
 
     run_id = os.environ.get("AET_RUN_ID") or uuid.uuid4().hex
     task_id = os.environ.get("AET_TASK_ID") or "aet-retro"
     plan_file = os.environ.get("AET_PLAN_FILE") or "aet-retro"
     emit_learning_candidates(
-        archive_dir=args.archive_dir,
-        project_slug=project_slug,
+        archive_dir=archive_dir,
+        project_slug=resolved_slug,
         run_id=run_id,
         task_id=task_id,
         plan_file=plan_file,
@@ -398,9 +366,52 @@ def main(argv: list[str] | None = None) -> int:
         aet_findings=aet_findings,
     )
 
-    print(f"Wrote retro to {args.output}")
+    print(f"Wrote retro to {output}")
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def retro(
+    archive_dir: Path = typer.Option(
+        DEFAULT_ARCHIVE_DIR,
+        "--archive-dir",
+        help="Telemetry archive root (default: ~/.aet/telemetry).",
+    ),
+    project_slug: str | None = typer.Option(
+        None,
+        "--project-slug",
+        help="Project slug in the telemetry archive (default: writer-derived <dir>/<label>).",
+    ),
+    lookback_days: int = typer.Option(
+        DEFAULT_LOOKBACK_DAYS,
+        "--lookback-days",
+        help="How many days of telemetry to read for the current project (default: 7).",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        help="Retro output path (default: docs/retros/YYYY-MM-DD-aet-retro.md).",
+    ),
+    no_mine: bool = typer.Option(
+        False,
+        "--no-mine",
+        help="Skip mine-learnings and only use the current project's recent telemetry.",
+    ),
+) -> None:
+    """Generate a retro from AET telemetry, split by project-level and AET-level fixes."""
+    rc = _run(archive_dir, project_slug, lookback_days, output, no_mine)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return app(argv or [], standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

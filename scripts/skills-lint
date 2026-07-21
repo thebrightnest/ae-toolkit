@@ -23,15 +23,15 @@ from __future__ import annotations
 
 import argparse
 import glob
-import importlib.machinery
-import importlib.util
 import re
 import shlex
 import sys
 from pathlib import Path
 
+import click
+import typer
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DISPATCHER = REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 
 # Fenced code block info strings whose contents are shell command lines.
 SHELL_LANGS = {"", "bash", "sh", "console"}
@@ -61,74 +61,63 @@ INLINE_CODE_RE = re.compile(r"(`+)([^`\n]+?)\1")
 FENCE_OPEN_RE = re.compile(r"^```\s*(\S*)")
 
 
-def load_dispatcher():
-    """Load src/aet/cli/main.py and return its SUBCOMMANDS spec."""
-    spec = importlib.util.spec_from_loader(
-        "skills_lint_dispatcher",
-        importlib.machinery.SourceFileLoader("skills_lint_dispatcher", str(DISPATCHER)),
-    )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["skills_lint_dispatcher"] = module
-    spec.loader.exec_module(module)
-    return module.SUBCOMMANDS
+def load_app():
+    """Load the consolidated Click group from src/aet/cli/main.py."""
+    # Ensure the local package is importable when the script is run directly.
+    src_dir = str(REPO_ROOT / "src")
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+    import typer as _typer
+
+    from aet.cli.main import app as typer_app
+
+    return _typer.main.get_group(typer_app)
 
 
-def load_parser(binary: Path):
-    """Load a target binary's build_parser(); None for non-Python targets."""
-    name = "skills_lint_target_" + re.sub(r"\W", "_", str(binary))
-    spec = importlib.util.spec_from_loader(
-        name, importlib.machinery.SourceFileLoader(name, str(binary))
-    )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    try:
-        spec.loader.exec_module(module)
-    except Exception:
-        return None
-    if not hasattr(module, "build_parser"):
-        return None
-    return module.build_parser()
+def _click_group_grammar(group):
+    """Return (flags, choices) for a Click/Typer group.
 
-
-def parser_grammar(parser):
-    """Extract (valid flags, subcommand choices) from an argparse parser."""
-    import argparse as _argparse
-
+    flags: option strings declared on the group itself (e.g. callback options).
+    choices: names of commands registered directly on the group.
+    """
     flags: set[str] = set()
-    choices: set[str] = set()
-
-    def walk(p):
-        for action in p._actions:
-            flags.update(action.option_strings)
-            if isinstance(action, _argparse._SubParsersAction):
-                choices.update(action.choices)
-                for sub in action.choices.values():
-                    walk(sub)
-
-    walk(parser)
+    for param in group.params:
+        if hasattr(param, "opts"):
+            flags.update(param.opts)
+    choices = set(group.commands.keys())
     return flags, choices
 
 
-def build_grammars(subcommands):
-    """Map each subcommand to (flags, choices); None when unparseable."""
-    grammars = {}
-    for name, spec in subcommands.items():
-        skill_dir, bin_name = spec["target"]
-        if skill_dir == "aet.cli":
-            binary = REPO_ROOT / "src" / "aet" / "cli" / f"{bin_name}.py"
-        else:
-            binary = REPO_ROOT / skill_dir / "bin" / bin_name
-        parser = load_parser(binary)
-        if parser is None:
-            grammars[name] = None
-            continue
-        flags, choices = parser_grammar(parser)
-        # Dispatcher-only flags for run/run-one are consumed before the
-        # orchestrator sees argv, so they are valid even though the target
-        # parser does not declare them (nc-06-run-daemonization).
-        if name in ("run", "run-one"):
-            flags.update({"--foreground", "--follow"})
-        grammars[name] = (flags, choices)
+def _click_command_grammar(command):
+    """Return option strings declared on a Click/Typer command."""
+    flags: set[str] = set()
+    for param in command.params:
+        if hasattr(param, "opts"):
+            flags.update(param.opts)
+    return flags
+
+
+def build_grammars(app):
+    """Map each reachable command path to (flags, choices).
+
+    Paths are tuples of command names starting from the top-level app, e.g.
+    ('gate',) for the gate group, ('gate', 'review') for the review command.
+    For groups, choices are the names of subcommands. For commands, choices
+    is empty.
+    """
+    grammars: dict[tuple[str, ...], tuple[set[str], set[str]]] = {}
+
+    def walk(group, path: tuple[str, ...]):
+        flags, choices = _click_group_grammar(group)
+        grammars[path] = (flags, choices)
+        for name, command in group.commands.items():
+            child_path = path + (name,)
+            if isinstance(command, (click.core.Group, typer.core.TyperGroup)):
+                walk(command, child_path)
+            else:
+                grammars[child_path] = (_click_command_grammar(command), set())
+
+    walk(app, ())
     return grammars
 
 
@@ -218,47 +207,72 @@ def command_segments(line: str):
 _DEFAULT_PATH_SUBCOMMANDS = {"ship"}
 
 
-def validate_aet_args(args, subcommands, grammars):
+def _resolve_path(args: list[str], grammars: dict) -> tuple[tuple[str, ...], list[str]]:
+    """Resolve as much of args as a command-path walk; return (path, remainder).
+
+    Starting from the top-level group (path ()), consume tokens that name known
+    subcommands. Stop at the first token that is not a known subcommand of the
+    current group. The remainder are flags/arguments for the resolved command.
+    """
+    path: tuple[str, ...] = ()
+    current_flags, current_choices = grammars.get(path, (set(), set()))
+    i = 0
+    while i < len(args):
+        token = args[i]
+        if is_opaque(token):
+            i += 1
+            continue
+        if token in current_choices:
+            path = path + (token,)
+            current_flags, current_choices = grammars.get(path, (set(), set()))
+            i += 1
+        else:
+            break
+    return path, args[i:]
+
+
+def validate_aet_args(args, grammars):
     """Validate the argv after `aet`; return list of error strings."""
     if not args:
         return []
-    sub = args[0]
-    if is_opaque(sub):
+    head = args[0]
+    if is_opaque(head):
         return []
-    if sub not in subcommands:
-        return [f"unknown aet subcommand '{sub}'"]
-    grammar = grammars.get(sub)
-    if grammar is None:
-        return []  # non-Python target: no parser to validate flags against
-    flags, choices = grammar
+
+    top_flags, top_choices = grammars.get((), (set(), set()))
+    if head not in top_choices:
+        return [f"unknown aet subcommand '{head}'"]
+
+    path, remainder = _resolve_path(args, grammars)
+    flags, choices = grammars.get(path, (set(), set()))
     errors = []
     checked_choice = False
-    for token in args[1:]:
+    for token in remainder:
         if is_opaque(token):
             continue
         if is_flag_token(token):
             flag = token.split("=", 1)[0]
             if flag not in flags:
-                errors.append(f"unknown flag '{flag}' for 'aet {sub}'")
+                errors.append(f"unknown flag '{flag}' for 'aet {' '.join(path)}'".strip())
         elif choices and not checked_choice:
             checked_choice = True
             if token not in choices:
-                if sub in _DEFAULT_PATH_SUBCOMMANDS:
-                    # First positional argument is treated as the default plan
-                    # file path; do not require it to match a subcommand name.
+                if path and path[0] in _DEFAULT_PATH_SUBCOMMANDS and len(path) == 1:
+                    # First positional argument under a default-path group is
+                    # treated as the default plan file path.
                     continue
-                errors.append(f"unknown subcommand '{token}' for 'aet {sub}'")
+                errors.append(f"unknown subcommand '{token}' for 'aet {' '.join(path)}'".strip())
     return errors
 
 
-def validate_tokens(tokens, subcommands, grammars, legacy_mode):
+def validate_tokens(tokens, grammars, legacy_mode):
     """Validate one command-position token stream; return (severity, msg) list."""
     findings = []
     head = tokens[0]
     basename = head.rsplit("/", 1)[-1]
 
     if head == "aet" or basename == "aet":
-        for msg in validate_aet_args(tokens[1:], subcommands, grammars):
+        for msg in validate_aet_args(tokens[1:], grammars):
             findings.append(("error", msg))
         return findings
 
@@ -273,15 +287,13 @@ def validate_tokens(tokens, subcommands, grammars, legacy_mode):
     return findings
 
 
-def lint_file(path: Path, subcommands, grammars, legacy_mode):
+def lint_file(path: Path, grammars, legacy_mode):
     """Lint one markdown file; return (line_no, severity, message) findings."""
     findings = []
     text = path.read_text(encoding="utf-8")
     for line_no, span in extract_spans(text):
         for tokens in command_segments(span):
-            for severity, msg in validate_tokens(
-                tokens, subcommands, grammars, legacy_mode
-            ):
+            for severity, msg in validate_tokens(tokens, grammars, legacy_mode):
                 findings.append((line_no, severity, msg))
     return findings
 
@@ -311,16 +323,14 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     legacy_mode = "warning" if args.legacy == "warn" else "error"
-    subcommands = load_dispatcher()
-    grammars = build_grammars(subcommands)
+    app = load_app()
+    grammars = build_grammars(app)
 
     files = [Path(f) for f in args.files] if args.files else default_files()
     errors = 0
     warnings = 0
     for path in files:
-        for line_no, severity, msg in lint_file(
-            path, subcommands, grammars, legacy_mode
-        ):
+        for line_no, severity, msg in lint_file(path, grammars, legacy_mode):
             print(f"{path}:{line_no}: {severity}: {msg}")
             if severity == "error":
                 errors += 1

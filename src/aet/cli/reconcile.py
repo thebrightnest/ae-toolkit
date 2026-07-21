@@ -7,57 +7,16 @@ computed drift, and optionally applies corrective writes. Dry-run by default;
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
 from typing import Any
 
+import typer
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet.backends.factory import resolve_config  # noqa: E402
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Reconcile live plans with their GitHub issue mirrors.",
-    )
-    parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="Apply corrective writes (default is a dry run)",
-    )
-    parser.add_argument(
-        "--config",
-        default=".agents/aet-work.json",
-        help="Path to aet-work backend configuration",
-    )
-    parser.add_argument(
-        "--plans-dir",
-        default="docs/plans",
-        help="Directory containing atomic plan markdown files",
-    )
-    parser.add_argument(
-        "--queue-file",
-        default=".agents/work-queue.json",
-        help="Path to work-queue.json",
-    )
-    parser.add_argument(
-        "--history-file",
-        default=".agents/work-history.jsonl",
-        help="Path to work-history.jsonl",
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        dest="json_output",
-        help="Emit the raw reconcile report as JSON",
-    )
-    return parser
-
-
-def parse_args(argv) -> argparse.Namespace:
-    return build_parser().parse_args(argv)
 
 
 def _format_report(report: dict[str, Any]) -> str:
@@ -100,10 +59,16 @@ def _format_report(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
-    config = resolve_config(args.config)
-    dispatcher = resolve_projections(config)
+def _run(
+    apply: bool,
+    config: str,
+    plans_dir: Path,
+    queue_file: str,
+    history_file: str,
+    json_output: bool,
+) -> int:
+    config_data = resolve_config(config)
+    dispatcher = resolve_projections(config_data)
 
     if not dispatcher.projections:
         print(
@@ -112,9 +77,9 @@ def main(argv: list[str] | None = None):
         )
         return 0
 
-    reports = dispatcher.reconcile(apply=args.apply)
+    reports = dispatcher.reconcile(apply=apply)
 
-    if args.json_output:
+    if json_output:
         print(json.dumps(reports, indent=2))
         return 0
 
@@ -125,5 +90,53 @@ def main(argv: list[str] | None = None):
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def reconcile(
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Apply corrective writes (default is a dry run)",
+    ),
+    config: str = typer.Option(
+        ".agents/aet-work.json",
+        "--config",
+        help="Path to aet-work backend configuration",
+    ),
+    plans_dir: Path = typer.Option(
+        Path("docs/plans"),
+        "--plans-dir",
+        help="Directory containing atomic plan markdown files",
+    ),
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json",
+        "--queue-file",
+        help="Path to work-queue.json",
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl",
+        "--history-file",
+        help="Path to work-history.jsonl",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit the raw reconcile report as JSON",
+    ),
+) -> None:
+    """Reconcile live plans with their GitHub issue mirrors."""
+    rc = _run(apply, config, plans_dir, queue_file, history_file, json_output)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return app(argv or [], standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

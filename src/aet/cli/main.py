@@ -1,28 +1,17 @@
 #!/usr/bin/env python3
-"""aet multicall dispatcher — single entry point for the AE Toolkit.
+"""aet — single Typer app entry point for the AE Toolkit.
 
-Maps ``aet <subcommand>`` to the underlying CLI modules via exec-based
-1:1 dispatch with zero behavior change. The module-level ``SUBCOMMANDS``
-spec is the shared source of truth: the dispatcher executes it and tooling
-(e.g. skills-lint) validates against it, so new subcommands are one-row
-additions.
-
-Two pieces of PATH ownership live in this file itself (R-5, R-11):
-
-- ``aet install`` — links ``<bin-dir>/aet`` at the resolved running script
-  and prunes the seven legacy AET symlink names.
-- ``_ensure_path_link()`` — on every other invocation, silently creates or
-  repairs the ``aet`` symlink so toolkit updates never require re-running
-  an installer.
+All subcommands register directly on the ``app`` object below. The legacy
+``SUBCOMMANDS`` spec, os.exec dispatch, and multi-binary symlink pruning have
+been removed. ``aet install`` and ``_ensure_path_link`` remain because
+single-name PATH ownership is still required.
 """
 
 from __future__ import annotations
 
-# Bootstrap guard: when this script is invoked directly from a source
-# checkout (e.g. via the shebang), the interpreter may be system Python
-# which lacks the AE Toolkit's dependencies. Re-exec under the repo's
-# virtual environment when available so subcommands can import aet.*.
-# In a pip-installed environment the imports succeed and this is a no-op.
+# Bootstrap guard: when this script is invoked directly from a source checkout,
+# the interpreter may be system Python which lacks the AE Toolkit dependencies.
+# Re-exec under the repo's virtual environment when available.
 import os
 import secrets
 import string
@@ -46,8 +35,8 @@ def _can_import_aet() -> bool:
 if not _can_import_aet():
     here = Path(__file__).resolve()
     candidate_roots = [
-        here.parent.parent.parent.parent,  # repo root from src/aet/cli/main.py
-        Path.cwd(),  # invoked via relative path from repo root
+        here.parent.parent.parent.parent,
+        Path.cwd(),
     ]
     venv_path = os.environ.get("VIRTUAL_ENV")
     if venv_path:
@@ -61,80 +50,85 @@ if not _can_import_aet():
 
 import importlib  # noqa: E402
 
-# Subcommand spec: name -> {"target": ("<skill-dir>", "<bin-name>"), "mode": ...}
-# mode "exec" forwards argv verbatim; "run"/"run-one" carry the documented
-# orchestrator flag mapping from the frh-05 aet-work dispatcher. "internal"
-# is handled inside this file — `install` is the one such subcommand (R-1).
-SUBCOMMANDS = {
-    "sprint": {"target": ("aet.cli", "sprint"), "mode": "exec"},
-    "backlog": {"target": ("aet.cli", "backlog"), "mode": "exec"},
-    "desk": {"target": ("aet.cli", "desk"), "mode": "exec"},
-    "review": {"target": ("aet.cli", "review"), "mode": "exec"},
-    "status": {"target": ("aet.cli", "status"), "mode": "exec"},
-    "next": {"target": ("aet.cli", "next"), "mode": "exec"},
-    "sync": {"target": ("aet.cli", "sync"), "mode": "exec"},
-    "report": {"target": ("aet.cli", "report"), "mode": "exec"},
-    "metrics": {"target": ("aet.cli", "metrics"), "mode": "exec"},
-    "reconcile": {"target": ("aet.cli", "reconcile"), "mode": "exec"},
-    "init-queue": {"target": ("aet.cli", "init-queue"), "mode": "exec"},
-    "state": {"target": ("aet.cli", "aet-state"), "mode": "exec"},
-    "gate": {"target": ("aet.cli", "gate"), "mode": "exec"},
-    "plan": {"target": ("aet.cli", "plan"), "mode": "exec"},
-    "plans": {"target": ("aet.cli", "plans"), "mode": "exec"},
-    "docs": {"target": ("aet.cli", "docs"), "mode": "exec"},
-    "panel": {"target": ("aet.cli", "panel"), "mode": "exec"},
-    "run": {"target": ("aet.cli", "orchestrator"), "mode": "run"},
-    "run-one": {"target": ("aet.cli", "orchestrator"), "mode": "run-one"},
-    "ship": {"target": ("aet.cli", "ship"), "mode": "exec"},
-    "retro": {"target": ("aet.cli", "retro"), "mode": "exec"},
-    "mine-learnings": {"target": ("aet.cli", "mine-learnings"), "mode": "exec"},
-    "configure-backend": {
-        "target": ("aet.cli", "configure-backend"),
-        "mode": "exec",
-    },
-    "hooks": {"target": ("aet.cli", "hooks"), "mode": "exec"},
-    "harness-guard": {"target": ("aet.cli", "harness-guard"), "mode": "exec"},
-    "release-prep": {"target": ("aet.cli", "release_prep"), "mode": "exec"},
-    "install": {"target": ("aet.cli", "main"), "mode": "internal"},
-}
+import typer  # noqa: E402
 
-# The legacy PATH names `aet install` removes (R-5, R-7). Pruning
-# only ever removes symlinks that resolve into a skills directory.
-LEGACY_NAMES = (
-    "aet-work",
-    "aet-state",
-    "aet-retro",
-    "orchestrator",
-    "mine-learnings",
-    "configure-task-backend",
-    "install-aet-binaries",
-    "ship",
+# Import subcommand modules. Each module exposes an ``app`` attribute that is a
+# ``typer.Typer()`` instance registered under a top-level name below.
+# isort: off
+from aet.cli import (  # noqa: E402
+    aet_state,
+    backlog,
+    configure_backend,
+    desk,
+    docs,
+    gate,
+    harness_guard,
+    hooks,
+    init_queue,
+    metrics,
+    mine_learnings,
+    next as next_module,
+    panel,
+    plan,
+    plans,
+    reconcile,
+    release_prep,
+    report,
+    retro,
+    ship,
+    sprint,
+    status,
+    sync,
+    validate_workflows,
+)
+# isort: on
+
+app = typer.Typer(
+    help="Agentic Engineering Toolkit CLI",
+    no_args_is_help=True,
 )
 
-# Directories (relative to $HOME) the standalone installer searches for
-# skills; the prune guard uses the same roots so foreign links are safe.
-_SKILL_ROOT_CANDIDATES = (
-    ".claude/skills",
-    ".kimi/skills",
-    ".cursor/skills",
-    ".codex/skills",
-    ".windsurf/skills",
-    ".kilocode/skills",
-    ".agents/skills",
-)
+# Noun-scoped command groups.
+app.add_typer(aet_state.app, name="state", help="Queue mutations, stage transitions, and footer updates.")
+app.add_typer(backlog.app, name="backlog", help="Backlog curation commands.")
+app.add_typer(desk.app, name="desk", help="Review cockpit for awaiting_merge tasks.")
+app.add_typer(docs.app, name="docs", help="Documentation linting and syncing.")
+app.add_typer(gate.app, name="gate", help="Fail-closed verdict writer and review board renderer.")
+app.add_typer(hooks.app, name="hooks", help="Git hook installation and management.")
+app.add_typer(plan.app, name="plan", help="Plan-quality commands.")
+app.add_typer(plans.app, name="plans", help="Bulk plan operations and corpus linting.")
+app.add_typer(sync.app, name="queue", help="Work queue sync and related operations.")
+app.add_typer(ship.app, name="ship", help="Pre-merge gate, PR creation, and post-merge closure.")
+app.add_typer(sprint.app, name="sprint", help="Sprint queue management.")
+
+# Top-level single-word commands.
+app.add_typer(configure_backend.app, name="configure-backend")
+app.add_typer(harness_guard.app, name="harness-guard")
+app.add_typer(init_queue.app, name="init-queue")
+app.add_typer(metrics.app, name="metrics")
+app.add_typer(mine_learnings.app, name="mine-learnings")
+app.add_typer(next_module.app, name="next")
+app.add_typer(panel.app, name="panel")
+app.add_typer(reconcile.app, name="reconcile")
+app.add_typer(release_prep.app, name="release-prep")
+app.add_typer(report.app, name="report")
+app.add_typer(retro.app, name="retro")
+app.add_typer(status.app, name="status")
+app.add_typer(validate_workflows.app, name="validate-workflows")
+
+
+# ---------------------------------------------------------------------------
+# PATH ownership helpers (kept from the legacy dispatcher)
+# ---------------------------------------------------------------------------
 
 
 def _running_script() -> Path:
-    """Return the resolved path of this running copy (invoked copy wins)."""
+    """Return the resolved path of this running copy."""
     return Path(__file__).resolve()
 
 
 def _is_worktree_copy(script: Path) -> bool:
-    """True when the running copy lives under a ``.worktrees`` directory.
-
-    Pipeline worktrees are ephemeral: a global symlink pointed at one
-    dangles as soon as the worktree is removed after merge.
-    """
+    """True when the running copy lives under a ``.worktrees`` directory."""
     return ".worktrees" in script.parts
 
 
@@ -144,133 +138,49 @@ def _bin_dir() -> Path:
     return Path(override) if override else Path.home() / ".local" / "bin"
 
 
-def _skills_root() -> Path:
-    """Return the installed-skills root (AET_SKILLS_DIR override, else
-    resolved script path, up four)."""
-    override = os.environ.get("AET_SKILLS_DIR")
-    if override:
-        return Path(override)
-    return Path(__file__).resolve().parent.parent.parent.parent
+def _link_target_resolves_to(link: Path, script: Path) -> bool:
+    """True when ``link`` is a symlink already pointing at ``script``."""
+    target = Path(os.readlink(link))
+    if not target.is_absolute():
+        target = link.parent / target
+    return target.resolve() == script
 
 
-def _usage() -> str:
-    lines = ["usage: aet <subcommand> [args...]", "", "subcommands:"]
-    lines.extend(f"  {name}" for name in SUBCOMMANDS)
-    return "\n".join(lines)
+def _ensure_path_link() -> None:
+    """Silently create or repair the AET-managed ``aet`` symlink.
 
-
-def _resolve_target(spec: dict) -> Path:
-    """Resolve a spec target to a runnable path.
-
-    Package targets (``aet.cli``) resolve to ``src/aet/cli/<bin-name>.py``
-    under the repository root so the dispatcher can exec them through the
-    same Python interpreter.
-    """
-    skill_dir, bin_name = spec["target"]
-    if skill_dir == "aet.cli":
-        binary = _skills_root() / "src" / "aet" / "cli" / f"{bin_name}.py"
-    else:
-        binary = _skills_root() / skill_dir / "bin" / bin_name
-    if not binary.is_file():
-        print(
-            f"error: missing skill '{skill_dir}' (expected binary at {binary})",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return binary
-
-
-def _parse_run_args(args: list[str]) -> tuple[list[str], dict[str, bool]]:
-    """Build orchestrator flags from user-provided ``run``/``run-one`` args.
-
-    Returns ``(orchestrator_flags, dispatcher_flags)``.  Dispatcher flags
-    control behavior that happens before the orchestrator is invoked
-    (``--foreground``, ``--follow``); everything else is forwarded verbatim.
-    """
-    max_jobs = "4"
-    isolation = "standard"
-    on_failure: str | None = None
-    task_timeout: str | None = None
-    stall_timeout: str | None = None
-    cli_bin: str | None = None
-    dispatcher_flags = {"foreground": False, "follow": None}
-
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg in (
-            "--max-jobs",
-            "--isolation",
-            "--on-failure",
-            "--task-timeout",
-            "--stall-timeout",
-            "--cli-bin",
-        ):
-            if i + 1 >= len(args):
-                print(f"error: {arg} requires a value", file=sys.stderr)
-                sys.exit(2)
-            value = args[i + 1]
-            if arg == "--max-jobs":
-                max_jobs = value
-            elif arg == "--isolation":
-                isolation = value
-            elif arg == "--on-failure":
-                on_failure = value
-            elif arg == "--task-timeout":
-                task_timeout = value
-            elif arg == "--stall-timeout":
-                stall_timeout = value
-            else:
-                cli_bin = value
-            i += 2
-        elif arg == "--foreground":
-            dispatcher_flags["foreground"] = True
-            i += 1
-        elif arg == "--follow":
-            if i + 1 >= len(args):
-                print("error: --follow requires a run id", file=sys.stderr)
-                sys.exit(2)
-            dispatcher_flags["follow"] = args[i + 1]
-            i += 2
-        else:
-            print(f"error: unknown flag {arg}", file=sys.stderr)
-            sys.exit(2)
-
-    out = ["--max-jobs", max_jobs, "--isolation", isolation]
-    if on_failure is not None:
-        out.extend(["--on-failure", on_failure])
-    if task_timeout is not None:
-        out.extend(["--task-timeout", task_timeout])
-    if stall_timeout is not None:
-        out.extend(["--stall-timeout", stall_timeout])
-    if cli_bin is not None:
-        out.extend(["--cli-bin", cli_bin])
-    return out, dispatcher_flags
-
-
-def _ensure_aet_importable() -> None:
-    """Bootstrap PYTHONPATH for repo checkouts when ``aet`` is not installed.
-
-    After the lib extraction, skill binaries import the installed ``aet``
-    package. When the dispatcher runs from a source checkout (e.g. tests or
-    a worktree) without the package being installed in the invoked Python,
-    prepend ``<repo-root>/src`` to PYTHONPATH so the package is discoverable.
-    If ``aet`` is already importable, this is a no-op.
+    Best-effort and never fatal. Skipped on worktree copies and non-symlink
+    collisions.
     """
     try:
-        importlib.import_module("aet")
-        return
-    except ImportError:
+        bin_dir = _bin_dir()
+        link = bin_dir / "aet"
+        script = _running_script()
+        if _is_worktree_copy(script):
+            return
+        if link.is_symlink():
+            if _link_target_resolves_to(link, script):
+                return
+            link.unlink()
+        elif link.exists():
+            return
+        else:
+            bin_dir.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(script)
+    except OSError:
         pass
 
-    repo_root = _skills_root()
-    src_dir = repo_root / "src"
-    if (src_dir / "aet" / "__init__.py").is_file():
-        current = os.environ.get("PYTHONPATH", "")
-        if current:
-            os.environ["PYTHONPATH"] = f"{src_dir}{os.pathsep}{current}"
-        else:
-            os.environ["PYTHONPATH"] = str(src_dir)
+
+@app.callback()
+def _main_callback(ctx: typer.Context) -> None:
+    """On every non-install invocation, verify/repair the ``aet`` symlink."""
+    if ctx.invoked_subcommand != "install":
+        _ensure_path_link()
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator launch helpers (run / run-one)
+# ---------------------------------------------------------------------------
 
 
 def _generate_run_id() -> str:
@@ -308,30 +218,23 @@ def _is_process_alive(pid: int) -> bool:
 
 
 def _follow_run(run_id: str) -> int:
-    """Tail the log for ``run_id`` until the process exits.
-
-    Reads any existing log content first, then polls for new lines while the
-    pid file indicates the orchestrator is alive.  Exits with the same code as
-    the orchestrator when a ``returncode`` file is written, or 0 if the run
-    finished before follow started.
-    """
+    """Tail the log for ``run_id`` until the process exits."""
     rdir = _run_dir(run_id)
     log_file = rdir / "output.log"
     pid_file = rdir / "pid"
     rc_file = rdir / "returncode"
 
     if not rdir.is_dir():
-        print(f"error: unknown run id '{run_id}'", file=sys.stderr)
-        return 1
+        typer.echo(f"error: unknown run id '{run_id}'", err=True)
+        raise typer.Exit(1)
 
-    # Stream existing content first.
     if log_file.is_file():
         with open(log_file, "r", encoding="utf-8", errors="replace") as f:
             for line in f:
-                print(line, end="")
+                typer.echo(line, nl=False)
 
     if rc_file.is_file():
-        return int(rc_file.read_text(encoding="utf-8").strip() or "0")
+        raise typer.Exit(int(rc_file.read_text(encoding="utf-8").strip() or "0"))
 
     pid: int | None = None
     if pid_file.is_file():
@@ -340,38 +243,82 @@ def _follow_run(run_id: str) -> int:
         except ValueError:
             pid = None
 
-    # Tail new content until the process exits.
     with open(log_file, "r", encoding="utf-8", errors="replace") as f:
-        # Seek to end if we already printed above; otherwise start at beginning.
         if log_file.is_file():
             f.seek(0, os.SEEK_END)
         while True:
             line = f.readline()
             if line:
-                print(line, end="")
+                typer.echo(line, nl=False)
                 continue
             if pid is not None and not _is_process_alive(pid):
-                # Give the orchestrator a moment to write its returncode file.
                 for _ in range(20):
                     if rc_file.is_file():
                         break
                     time.sleep(0.1)
                 if rc_file.is_file():
-                    return int(rc_file.read_text(encoding="utf-8").strip() or "0")
-                # Process died without writing a returncode; treat as failure.
-                return 1
+                    raise typer.Exit(int(rc_file.read_text(encoding="utf-8").strip() or "0"))
+                raise typer.Exit(1)
             if pid is None and rc_file.is_file():
-                return int(rc_file.read_text(encoding="utf-8").strip() or "0")
+                raise typer.Exit(int(rc_file.read_text(encoding="utf-8").strip() or "0"))
             time.sleep(0.1)
 
 
-def _spawn_detached(binary: Path, argv: list[str], run_id: str) -> int:
-    """Spawn *binary* detached and print the run ID.
+def _ensure_aet_importable() -> None:
+    """Bootstrap PYTHONPATH for repo checkouts when ``aet`` is not installed."""
+    try:
+        importlib.import_module("aet")
+        return
+    except ImportError:
+        pass
 
-    The orchestrator stdout/stderr are redirected to the run log file.  The
-    dispatcher returns immediately with exit code 0 so the invoking session is
-    not blocked.
-    """
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+    src_dir = repo_root / "src"
+    if (src_dir / "aet" / "__init__.py").is_file():
+        current = os.environ.get("PYTHONPATH", "")
+        if current:
+            os.environ["PYTHONPATH"] = f"{src_dir}{os.pathsep}{current}"
+        else:
+            os.environ["PYTHONPATH"] = str(src_dir)
+
+
+def _orchestrator_path() -> Path:
+    """Return the path to the orchestrator module."""
+    return Path(__file__).resolve().parent / "orchestrator.py"
+
+
+def _build_orchestrator_flags(
+    max_jobs: int,
+    isolation: str,
+    on_failure: str | None,
+    task_timeout: int | None,
+    stall_timeout: int | None,
+    cli_bin: str | None,
+) -> list[str]:
+    """Build the forwarded flag list for the orchestrator."""
+    flags = ["--max-jobs", str(max_jobs), "--isolation", isolation]
+    if on_failure is not None:
+        flags.extend(["--on-failure", on_failure])
+    if task_timeout is not None:
+        flags.extend(["--task-timeout", str(task_timeout)])
+    if stall_timeout is not None:
+        flags.extend(["--stall-timeout", str(stall_timeout)])
+    if cli_bin is not None:
+        flags.extend(["--cli-bin", cli_bin])
+    return flags
+
+
+def _exec_orchestrator(argv: list[str]) -> int:
+    """Exec the orchestrator with the current Python interpreter."""
+    try:
+        os.execvp(sys.executable, [sys.executable, str(_orchestrator_path()), *argv])
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+    return 0
+
+
+def _spawn_detached(argv: list[str], run_id: str) -> int:
+    """Spawn the orchestrator detached and print the run ID."""
     rdir = _run_dir(run_id)
     rdir.mkdir(parents=True, exist_ok=True)
     log_file = _run_log_file(run_id)
@@ -382,7 +329,7 @@ def _spawn_detached(binary: Path, argv: list[str], run_id: str) -> int:
 
     with open(log_file, "a", buffering=1, encoding="utf-8") as log:
         proc = subprocess.Popen(
-            [sys.executable, str(binary), *argv[1:]],
+            [sys.executable, str(_orchestrator_path()), *argv],
             stdout=log,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
@@ -392,207 +339,122 @@ def _spawn_detached(binary: Path, argv: list[str], run_id: str) -> int:
         )
         (rdir / "pid").write_text(str(proc.pid), encoding="utf-8")
 
-    print(f"🚀 Started run {run_id}")
-    print(f"   Log: {log_file}")
-    print(f"   Follow: aet run --follow {run_id}")
+    typer.echo(f"🚀 Started run {run_id}")
+    typer.echo(f"   Log: {log_file}")
+    typer.echo(f"   Follow: aet run --follow {run_id}")
     return 0
 
 
-def _exec(binary: Path, argv: list[str]) -> int:
-    """Run *binary* with the same Python interpreter as the dispatcher.
+@app.command()
+def run(
+    foreground: bool = typer.Option(False, "--foreground", help="Run in foreground."),
+    follow: str | None = typer.Option(None, "--follow", help="Follow an existing run id."),
+    max_jobs: int = typer.Option(4, "--max-jobs", help="Max parallel tasks."),
+    isolation: str = typer.Option("standard", "--isolation", help="Isolation level."),
+    on_failure: str | None = typer.Option(None, "--on-failure", help="triage|continue|halt"),
+    task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
+    stall_timeout: int | None = typer.Option(None, "--stall-timeout", help="Silence timeout (s)."),
+    cli_bin: str | None = typer.Option(None, "--cli-bin", help="Agent CLI binary path."),
+) -> None:
+    """Run the orchestrator in batch mode."""
+    if follow is not None:
+        _follow_run(follow)
+        return
 
-    Using ``sys.executable`` instead of ``execvp`` keeps the target binary in
-    the same Python environment that is running the dispatcher. This matters
-    after the lib extraction: skill binaries import the installed ``aet``
-    package, and letting the script shebang pick a different interpreter (e.g.
-    the system python) would make the package disappear.
-    """
-    try:
-        os.execvp(sys.executable, [sys.executable, str(binary), *argv[1:]])
-    except SystemExit as exc:
-        return exc.code if isinstance(exc.code, int) else 0
+    flags = _build_orchestrator_flags(max_jobs, isolation, on_failure, task_timeout, stall_timeout, cli_bin)
+    argv = ["--queue-file", ".agents/work-queue.json", *flags]
 
+    if foreground:
+        raise typer.Exit(_exec_orchestrator(argv))
 
-def _link_target_resolves_to(link: Path, script: Path) -> bool:
-    """True when ``link`` is a symlink already pointing at ``script``."""
-    target = Path(os.readlink(link))
-    if not target.is_absolute():
-        target = link.parent / target
-    return target.resolve() == script
-
-
-def _skill_roots() -> list[Path]:
-    """Candidate skills directories for the prune guard (installer parity)."""
-    home = Path.home()
-    roots = [home / rel for rel in _SKILL_ROOT_CANDIDATES]
-    roots.append(_skills_root())
-    return roots
+    run_id = _generate_run_id()
+    flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
+    argv = ["--queue-file", ".agents/work-queue.json", *flags]
+    raise typer.Exit(_spawn_detached(argv, run_id))
 
 
-def _points_into_skill_dir(link: Path) -> bool:
-    """True when ``link`` is a symlink resolving into a skills directory."""
-    if not link.is_symlink():
-        return False
-    try:
-        target = Path(os.readlink(link))
-    except OSError:
-        return False
-    if not target.is_absolute():
-        target = link.parent / target
-    target = target.resolve()
-    for root in _skill_roots():
-        resolved = root.resolve()
-        if target == resolved or resolved in target.parents:
-            return True
-    return False
+@app.command("run-one")
+def run_one(
+    plan_file: str = typer.Argument(..., help="Plan file to run."),
+    foreground: bool = typer.Option(False, "--foreground", help="Run in foreground."),
+    follow: str | None = typer.Option(None, "--follow", help="Follow an existing run id."),
+    max_jobs: int = typer.Option(4, "--max-jobs", help="Max parallel tasks."),
+    isolation: str = typer.Option("standard", "--isolation", help="Isolation level."),
+    on_failure: str | None = typer.Option(None, "--on-failure", help="triage|continue|halt"),
+    task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
+    stall_timeout: int | None = typer.Option(None, "--stall-timeout", help="Silence timeout (s)."),
+    cli_bin: str | None = typer.Option(None, "--cli-bin", help="Agent CLI binary path."),
+) -> None:
+    """Run the orchestrator for a single plan."""
+    if follow is not None:
+        _follow_run(follow)
+        return
+
+    flags = _build_orchestrator_flags(max_jobs, isolation, on_failure, task_timeout, stall_timeout, cli_bin)
+    argv = ["--plan-file", plan_file, *flags]
+
+    if foreground:
+        raise typer.Exit(_exec_orchestrator(argv))
+
+    run_id = _generate_run_id()
+    flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
+    argv = ["--plan-file", plan_file, *flags]
+    raise typer.Exit(_spawn_detached(argv, run_id))
 
 
-def _prune_legacy(bin_dir: Path) -> None:
-    """Remove the seven legacy AET symlinks from ``bin_dir`` (R-5)."""
-    for name in LEGACY_NAMES:
-        link = bin_dir / name
-        if _points_into_skill_dir(link):
-            link.unlink()
-            print(f"  ✗ {name} (pruned legacy AET symlink)")
+# ---------------------------------------------------------------------------
+# install command (kept in main.py)
+# ---------------------------------------------------------------------------
 
 
-def _install(argv: list[str]) -> int:
-    """``aet install``: link ``aet`` into the bin dir and prune legacy names."""
-    bin_dir: Path | None = None
-    i = 0
-    while i < len(argv):
-        arg = argv[i]
-        if arg == "--bin-dir":
-            if i + 1 >= len(argv):
-                print("error: --bin-dir requires a value", file=sys.stderr)
-                return 2
-            bin_dir = Path(argv[i + 1])
-            i += 2
-        else:
-            print(f"error: unknown flag {arg}", file=sys.stderr)
-            return 2
-
-    if bin_dir is None:
-        bin_dir = _bin_dir()
-    bin_dir.mkdir(parents=True, exist_ok=True)
+@app.command()
+def install(
+    bin_dir: str | None = typer.Option(None, "--bin-dir", help="Target bin directory."),
+) -> None:
+    """Link ``aet`` into the bin dir."""
+    target_dir = Path(bin_dir) if bin_dir else _bin_dir()
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     script = _running_script()
     if _is_worktree_copy(script):
-        print(
+        typer.echo(
             f"  ⚠ refusing to link from an ephemeral worktree copy ({script});"
             " run install from the main checkout.",
-            file=sys.stderr,
+            err=True,
         )
-        return 1
-    link = bin_dir / "aet"
+        raise typer.Exit(1)
+
+    link = target_dir / "aet"
     if link.is_symlink():
         if _link_target_resolves_to(link, script):
-            print(f"  = aet already linked -> {script}")
+            typer.echo(f"  = aet already linked -> {script}")
         else:
             link.unlink()
             link.symlink_to(script)
-            print(f"  ✓ aet -> {script} (updated stale symlink)")
+            typer.echo(f"  ✓ aet -> {script} (updated stale symlink)")
     elif link.exists():
-        print(
-            f"  ⚠ aet exists in {bin_dir} and is not a symlink. Skipping.",
-            file=sys.stderr,
+        typer.echo(
+            f"  ⚠ aet exists in {target_dir} and is not a symlink. Skipping.",
+            err=True,
         )
     else:
         link.symlink_to(script)
-        print(f"  ✓ aet -> {script}")
+        typer.echo(f"  ✓ aet -> {script}")
 
-    _prune_legacy(bin_dir)
-
-    if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
-        print(f"\n⚠ {bin_dir} is not on your PATH. Add it to your shell profile:")
-        print(f'    export PATH="{bin_dir}:$PATH"')
-    return 0
-
-
-def _ensure_path_link() -> None:
-    """Silently create or repair the AET-managed ``aet`` symlink (R-11).
-
-    One readlink per invocation; best-effort and never fatal. Only the
-    ``aet`` symlink in the bin dir is ever touched — a non-symlink
-    collision is left alone, and shell profiles are never edited. Skipped
-    on ``install`` itself, which reports verbosely.
-    """
-    try:
-        bin_dir = _bin_dir()
-        link = bin_dir / "aet"
-        script = _running_script()
-        if _is_worktree_copy(script):
-            return  # ephemeral worktree copy — never a global install target
-        if link.is_symlink():
-            if _link_target_resolves_to(link, script):
-                return
-            link.unlink()
-        elif link.exists():
-            return  # non-symlink collision — never touch foreign files
-        else:
-            bin_dir.mkdir(parents=True, exist_ok=True)
-        link.symlink_to(script)
-    except OSError:
-        pass
+    if str(target_dir) not in os.environ.get("PATH", "").split(os.pathsep):
+        typer.echo(f"\n⚠ {target_dir} is not on your PATH. Add it to your shell profile:")
+        typer.echo(f'    export PATH="{target_dir}:$PATH"')
 
 
 def main() -> int:
-    """Dispatch ``aet <subcommand>`` to the target CLI module."""
-    argv = sys.argv
-    if len(argv) < 2:
-        print(_usage(), file=sys.stderr)
-        return 2
-
-    subcommand = argv[1]
-    spec = SUBCOMMANDS.get(subcommand)
-    if spec is None:
-        print(f"error: unknown subcommand '{subcommand}'", file=sys.stderr)
-        print(_usage(), file=sys.stderr)
-        return 2
-
-    mode = spec["mode"]
-    if mode == "internal":
-        return _install(argv[2:])
-
-    _ensure_path_link()
     _ensure_aet_importable()
-    binary = _resolve_target(spec)
-    _, bin_name = spec["target"]
-
-    if mode == "exec":
-        return _exec(binary, [bin_name, *argv[2:]])
-
-    if mode == "run":
-        flags, dispatcher_flags = _parse_run_args(argv[2:])
-        if dispatcher_flags["follow"] is not None:
-            return _follow_run(dispatcher_flags["follow"])
-        argv_out = ["orchestrator", "--queue-file", ".agents/work-queue.json", *flags]
-        if dispatcher_flags["foreground"]:
-            return _exec(binary, argv_out)
-        run_id = _generate_run_id()
-        flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
-        argv_out = ["orchestrator", "--queue-file", ".agents/work-queue.json", *flags]
-        return _spawn_detached(binary, argv_out, run_id)
-
-    if mode == "run-one":
-        if len(argv) < 3 or argv[2].startswith("-"):
-            print("error: run-one requires a plan file", file=sys.stderr)
-            print(_usage(), file=sys.stderr)
-            return 2
-        plan_file = argv[2]
-        flags, dispatcher_flags = _parse_run_args(argv[3:])
-        if dispatcher_flags["follow"] is not None:
-            return _follow_run(dispatcher_flags["follow"])
-        argv_out = ["orchestrator", "--plan-file", plan_file, *flags]
-        if dispatcher_flags["foreground"]:
-            return _exec(binary, argv_out)
-        run_id = _generate_run_id()
-        flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
-        argv_out = ["orchestrator", "--plan-file", plan_file, *flags]
-        return _spawn_detached(binary, argv_out, run_id)
-
-    print(f"error: unknown mode '{mode}' for subcommand '{subcommand}'", file=sys.stderr)
-    return 2
+    try:
+        app()
+    except SystemExit as exc:
+        if isinstance(exc.code, int):
+            return exc.code
+        return 0
+    return 0
 
 
 if __name__ == "__main__":

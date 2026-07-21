@@ -33,7 +33,7 @@ If a stage is found, print at the start of execution: `"📍 Current stage: {sta
 
 ## Prerequisites
 
-This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet init-queue`, `aet sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. Run `aet install` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet init-queue`, `aet queue sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. Run `aet install` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 ## Mental Model: Plan Files Are the Source of Truth
 
@@ -42,7 +42,7 @@ This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet s
 This means:
 
 - Approved plans do **not** automatically enter the sprint. Use `aet sprint add` to curate the queue.
-- `aet review` reads plan files and reports their status without mutating the queue.
+- `aet gate review` reads plan files and reports their status without mutating the queue.
 - `aet status` reports only the active sprint, not every approved plan.
 - Plan drift is informational, not a hard gate.
 
@@ -56,7 +56,7 @@ This means:
 
 ### Mutation guard
 
-While a batch or `run-one` is live, the orchestrator writes a run lease to `.agents/work-queue.lease` (gitignored). Mutating commands — `add`, `sync`, `init-queue`, and the `aet state` writers — refuse to run while another run holds a live lease, naming the owning run id. A lease whose process has exited is reclaimed as stale automatically.
+While a batch or `run-one` is live, the orchestrator writes a run lease to `.agents/work-queue.lease` (gitignored). Mutating commands — `add`, `aet queue sync`, `init-queue`, and the `aet state` writers — refuse to run while another run holds a live lease, naming the owning run id. A lease whose process has exited is reclaimed as stale automatically.
 
 Use `--force` only to deliberately override a lease you know is stale, or to make an urgent manual edit during a batch. It prints a loud warning and can corrupt a live run, so prefer re-running after the batch finishes.
 
@@ -113,7 +113,7 @@ The GitHub backend keeps the same local JSON queue as the scheduling source of t
 | `abandoned`      | `aet:abandoned`      |
 | `failed`         | `aet:failed`         |
 
-`aet next` picks the next open issue labeled `aet:ready` when GitHub mode is enabled. `aet sync` reconciles open issues with local plan files and treats manually closed issues as `abandoned`.
+`aet next` picks the next open issue labeled `aet:ready` when GitHub mode is enabled. `aet queue sync` reconciles open issues with local plan files and treats manually closed issues as `abandoned`.
 
 ### Backend switching
 
@@ -153,7 +153,7 @@ Scan all `docs/plans/*.md` files and print a human-readable status summary. Boar
 - **Closed:** `merged`, `abandoned`
 
 ```bash
-aet review
+aet gate review
 ```
 
 This reads plan footer stages; it does not modify the queue.
@@ -199,10 +199,10 @@ aet run-one docs/plans/FEAT-001.md
 Append-only reconciliation for plans already in or entering the queue. It does **not** auto-add every approved plan.
 
 ```bash
-aet sync
+aet queue sync
 ```
 
-Use `add` for explicit curation; use `sync` after queue edits or when resolving blocker DAGs.
+Use `add` for explicit curation; use `aet queue sync` after queue edits or when resolving blocker DAGs.
 
 ### `init-queue`
 

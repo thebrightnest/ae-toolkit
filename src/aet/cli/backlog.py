@@ -11,6 +11,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import typer
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_parser  # noqa: E402
 from aet.backends.factory import resolve_config  # noqa: E402
@@ -21,38 +23,6 @@ from aet.queue import commit_and_push_status  # noqa: E402
 # belong on the board; queued/in-progress plans are sprint members and are
 # promoted through ``aet sprint add`` instead.
 _BACKLOG_STATUSES = {"draft", "approved"}
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="backlog",
-        description="Backlog curation commands for aet-work.",
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    add_parser = sub.add_parser(
-        "add",
-        help="Add a plan to the backlog.",
-    )
-    add_parser.add_argument(
-        "target",
-        help="Plan file path or task ID to add to the backlog",
-    )
-    add_parser.add_argument(
-        "--plans-dir",
-        default="docs/plans",
-        help="Directory containing atomic plan markdown files",
-    )
-    add_parser.add_argument(
-        "--config",
-        default=".agents/aet-work.json",
-        help="Path to aet-work backend configuration",
-    )
-    return parser
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    return build_parser().parse_args(argv)
 
 
 def resolve_plan(target: str, plans_dir: Path) -> Path | None:
@@ -89,11 +59,7 @@ def _task_from_plan(plan_file: Path) -> dict:
     }
 
 
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
-    if args.command != "add":
-        return 1
-
+def _add(args: argparse.Namespace) -> int:
     plans_dir = Path(args.plans_dir)
     plan_file = resolve_plan(args.target, plans_dir)
     if plan_file is None:
@@ -129,5 +95,24 @@ def main(argv: list[str] | None = None):
     return 0
 
 
+app = typer.Typer()
+
+
+@app.command("add")
+def add(
+    target: str = typer.Argument(..., help="Plan file path or task ID to add to the backlog"),
+    plans_dir: str = typer.Option("docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"),
+    config: str = typer.Option(".agents/aet-work.json", "--config", help="Path to aet-work backend configuration"),
+) -> None:
+    """Add a plan to the backlog."""
+    args = argparse.Namespace(
+        target=target,
+        plans_dir=plans_dir,
+        config=config,
+    )
+    rc = _add(args)
+    raise typer.Exit(rc)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

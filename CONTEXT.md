@@ -57,7 +57,7 @@ The product requirements document that generated the plan, referenced from the p
 
 > **Dev:** “I added a new plan file. Why doesn’t `aet-work status` show it as `ready`?”
 >
-> **Expert:** “Approved plans are not added to the sprint automatically. Run `aet sprint add docs/plans/<id>.md` to put it in the queue; it will become `ready` if it has no blockers. Use `aet review` to see all approved plans that are not yet queued.”
+> **Expert:** “Approved plans are not added to the sprint automatically. Run `aet sprint add docs/plans/<id>.md` to put it in the queue; it will become `ready` if it has no blockers. Use `aet gate review` to see all approved plans that are not yet queued.”
 
 ## Forward-Only State Model (ADR-011, revised by ADR-013)
 

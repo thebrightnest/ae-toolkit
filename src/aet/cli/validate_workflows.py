@@ -13,10 +13,10 @@ the lint is the stricter merge-time judge, not a new runtime contract.
 
 from __future__ import annotations
 
-import argparse
 import json
-import sys
 from pathlib import Path
+
+import typer
 
 from aet import workflow as workflow_module
 
@@ -54,16 +54,7 @@ def workflow_files(repo_root: Path) -> list[Path]:
     return files
 
 
-def main(argv: list[str] | None = None):
-    parser = argparse.ArgumentParser(description="Lint workflow-as-data files.")
-    parser.add_argument(
-        "--repo-root",
-        default=".",
-        help="Repository root used for skill resolution (default: cwd)",
-    )
-    args = parser.parse_args(argv)
-
-    repo_root = Path(args.repo_root).resolve()
+def _run(repo_root: Path) -> int:
     files = workflow_files(repo_root)
 
     findings = []
@@ -79,5 +70,28 @@ def main(argv: list[str] | None = None):
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def validate_workflows(
+    repo_root: str = typer.Option(
+        ".",
+        "--repo-root",
+        help="Repository root used for skill resolution (default: cwd)",
+    ),
+) -> None:
+    """Lint workflow-as-data files."""
+    rc = _run(Path(repo_root).resolve())
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return app(argv or [], standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

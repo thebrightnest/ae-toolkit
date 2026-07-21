@@ -31,7 +31,7 @@ from aet.backends.git_refs_backend import (
     GitRefsIntegrityError,
 )
 
-_AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet-state.py"
+_AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state_tamper",
     importlib.machinery.SourceFileLoader("aet_state_tamper", str(_AET_STATE_PY)),

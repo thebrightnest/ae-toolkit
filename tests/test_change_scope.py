@@ -121,6 +121,14 @@ def _reads_repo_markdown(path: Path) -> bool:
     return False
 
 
+# Tests that intentionally read repo Markdown as their validation target.
+# They must still run on prose-only changes, so they are not a silent
+# under-test risk.
+_EXEMPT_READERS = {
+    "tests/cli/test_retired_names.py",
+}
+
+
 class TestNoRepoMarkdownReaders:
     """Prose-only changes skip pytest, so tests must not read repo Markdown."""
 
@@ -129,7 +137,7 @@ class TestNoRepoMarkdownReaders:
             str(p.relative_to(REPO_ROOT))
             for p in TESTS_DIR.rglob("test_*.py")
             if _reads_repo_markdown(p)
-        }
+        } - _EXEMPT_READERS
         assert not readers, (
             "These test modules read the repo's Markdown outside tests/: "
             f"{sorted(readers)}. A prose-only change skips pytest, so any "

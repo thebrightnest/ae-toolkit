@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
-SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "harness-guard.py"
+SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "harness_guard.py"
 _HARNESS_GUARD_PY = REPO_ROOT / "src" / "aet" / "harness_guard.py"
 
 _spec = importlib.util.spec_from_loader(
@@ -153,7 +153,7 @@ class TestHarnessGuardCLI(unittest.TestCase):
 
     def run_script(self, args=None, env=None, cwd=None, input_text=None):
         """Run the harness-guard helper and return CompletedProcess."""
-        cmd = [str(SCRIPT)]
+        cmd = [sys.executable, str(SCRIPT)]
         if args:
             cmd.extend(args)
         merged_env = os.environ.copy()

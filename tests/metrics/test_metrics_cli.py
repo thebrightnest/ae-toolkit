@@ -193,25 +193,9 @@ class TestCliInvalidSince:
 
 
 class TestCliRegisteredInDispatcher:
-    """`aet metrics` dispatches to src/aet/cli/metrics.py."""
+    """`aet metrics` is registered in the consolidated Typer app."""
 
     def test_cli_registered_in_dispatcher(self, monkeypatch):
-        captured = {}
-
-        def mock_execvp(path, exec_argv):
-            captured["path"] = path
-            captured["argv"] = exec_argv
-            raise SystemExit(0)
-
         monkeypatch.setattr(sys, "argv", ["aet", "metrics", "--json"])
-        monkeypatch.setattr(aet_dispatcher.os, "execvp", mock_execvp)
         rc = aet_dispatcher.main()
-
-        repo_root = Path(__file__).parents[2]
         assert rc == 0
-        assert Path(captured["path"]) == Path(sys.executable)
-        assert captured["argv"] == [
-            sys.executable,
-            str(repo_root / "src" / "aet" / "cli" / "metrics.py"),
-            "--json",
-        ]

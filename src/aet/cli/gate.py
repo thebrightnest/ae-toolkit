@@ -1,4 +1,4 @@
-"""aet-work gate — fail-closed verdict writer for the checking skills.
+"""aet-work gate — fail-closed verdict writer and review board renderer.
 
 ``gate submit`` is the sole sanctioned writer of gate evidence verdicts
 (G1). It schema-validates the payload against the stage schema, resolves
@@ -6,6 +6,12 @@ the destination through the canonical ``resolve_verdict_path`` precedence
 (ADR-023), and delegates the write to ``evidence.write_verdict``. Every
 failure path prints a named error to stderr and exits 1 — never a silent
 or partial write.
+
+``gate review`` prints a human-readable backlog review by scanning
+``docs/plans/*.md`` and grouping plans into columns from the loaded
+workflow (entry → approved, terminal skill-less → queued, everything
+else → in-progress), with legacy footer fallbacks when no workflow is
+available.
 """
 
 from __future__ import annotations
@@ -16,59 +22,101 @@ import os
 import sys
 from pathlib import Path
 
+import click
+import typer
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import evidence  # noqa: E402
+from aet.plan_parser import stage_from_plan, title_from_plan  # noqa: E402
+from aet.workflow import Workflow, WorkflowError, load_workflow  # noqa: E402
 
-
-class _GateParser(argparse.ArgumentParser):
-    """ArgumentParser that fails closed: named error on stderr, exit 1.
-
-    Argument errors are fail-closed exit-1 conditions like every other
-    ``gate submit`` failure (R-2), not argparse's default exit 2.
-    """
-
-    def error(self, message: str) -> None:
-        self.print_usage(sys.stderr)
-        print(f"error: {message}", file=sys.stderr)
-        sys.exit(1)
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = _GateParser(
-        prog="gate",
-        description="Fail-closed gate verdict writer.",
-    )
-    sub = parser.add_subparsers(
-        dest="command", required=True, parser_class=_GateParser
-    )
-    submit = sub.add_parser(
-        "submit",
-        help="Validate and write a stage verdict",
-        description="Validate a verdict payload against its stage schema "
-        "and write it to the canonical verdict path.",
-    )
-    submit.add_argument(
-        "--stage",
-        required=True,
-        help="Verdict stage: qa, review, cso, or sync-docs",
-    )
-    submit.add_argument(
-        "--verdict",
-        required=True,
-        choices=["pass", "fail"],
-        help="Declared verdict; must match the payload's verdict field",
-    )
-    submit.add_argument(
-        "--evidence",
-        required=True,
-        help="Path to the verdict JSON payload file",
-    )
-    return parser
+# Footer values that are not workflow stage names (queue states and
+# historical stage spellings) keep fixed board columns. Also the fallback
+# when no workflow can be loaded.
+LEGACY_BUCKETS: dict[str, str] = {
+    "plan-approved": "approved",
+    "approved": "approved",
+    "synced": "queued",
+    "queued": "queued",
+    "tdd-complete": "in-progress",
+    "implemented": "in-progress",
+    "qa-complete": "in-progress",
+    "reviewed": "in-progress",
+    "secure": "in-progress",
+    "synced-docs": "in-progress",
+    "in-progress": "in-progress",
+    "awaiting_merge": "awaiting-merge",
+    "merged": "closed",
+    "abandoned": "closed",
+}
 
 
 def _fail(message: str) -> int:
     print(f"error: {message}", file=sys.stderr)
     return 1
+
+
+def category_for_stage(stage: str | None, workflow: Workflow | None = None) -> str:
+    """Return the review category for a footer stage value.
+
+    When a workflow is loaded, stage names derive their column positionally:
+    entry stage → approved, terminal skill-less stage → queued, every other
+    stage (including unknown vocabularies from variant workflows) →
+    in-progress. Non-stage footer values and the no-workflow case use
+    ``LEGACY_BUCKETS``, with in-progress as the catch-all.
+    """
+    if not stage:
+        return "approved"
+    if workflow is not None:
+        if stage == workflow.entry_stage:
+            return "approved"
+        terminal = workflow.stages[-1]
+        if stage == terminal.name and not terminal.skills:
+            return "queued"
+        if stage in workflow.stage_map:
+            return "in-progress"
+    return LEGACY_BUCKETS.get(stage, "in-progress")
+
+
+def run_review(plans_dir: Path) -> int:
+    """Print a human-readable backlog review grouped by pipeline stage."""
+    if not plans_dir.is_dir():
+        print(f"❌ Plans directory not found: {plans_dir}", file=sys.stderr)
+        return 1
+
+    plan_files = sorted(plans_dir.glob("*.md"))
+
+    # Best-effort: a board renderer stays useful even when the workflow file
+    # is unreadable — LEGACY_BUCKETS renders the same board for the software
+    # workflow either way.
+    workflow = None
+    try:
+        workflow = load_workflow(Path.cwd())
+    except WorkflowError:
+        pass
+
+    categories: dict[str, list[tuple[str, str]]] = {
+        "approved": [],
+        "queued": [],
+        "in-progress": [],
+        "awaiting-merge": [],
+        "closed": [],
+    }
+
+    for pf in plan_files:
+        stage = stage_from_plan(pf)
+        category = category_for_stage(stage, workflow)
+        categories[category].append((pf.stem, title_from_plan(pf)))
+
+    for category in categories:
+        print(f"\n{category.replace('-', ' ').title()} ({len(categories[category])}):")
+        if categories[category]:
+            for task_id, title in categories[category]:
+                print(f"  - {task_id}: {title}")
+        else:
+            print("  None.")
+
+    return 0
 
 
 def _submit(args: argparse.Namespace) -> int:
@@ -121,15 +169,46 @@ def _submit(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None):
+app = typer.Typer()
+
+
+@app.command("submit")
+def submit(
+    stage: str = typer.Option(..., "--stage", help="Verdict stage: qa, review, cso, or sync-docs"),
+    verdict: str = typer.Option(..., "--verdict", help="Declared verdict; must match the payload's verdict field"),
+    evidence: str = typer.Option(..., "--evidence", help="Path to the verdict JSON payload file"),
+) -> None:
+    """Validate and write a stage verdict."""
+    args = argparse.Namespace(stage=stage, verdict=verdict, evidence=evidence)
+    rc = _submit(args)
+    raise typer.Exit(rc)
+
+
+@app.command("review")
+def review(
+    plans_dir: str = typer.Option(
+        "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
+    ),
+) -> None:
+    """Print a human-readable backlog review grouped by pipeline stage."""
+    rc = run_review(Path(plans_dir))
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
     try:
-        args = build_parser().parse_args(argv)
+        return app(argv, standalone_mode=False)
+    except (
+        click.exceptions.ClickException,
+        typer._click.exceptions.ClickException,
+    ) as exc:
+        exc.show()
+        return exc.exit_code
     except SystemExit as exc:
-        return exc.code if isinstance(exc.code, int) else 1
-    if args.command == "submit":
-        return _submit(args)
-    return 1
+        return exc.code if isinstance(exc.code, int) else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

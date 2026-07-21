@@ -20,38 +20,15 @@ always resolve external-first: AET_WORK_CONFIG env → ~/.aet/{slug}/config.json
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
 
+import typer
+
 from aet.project_id import derive_project_slug
 
 DEFAULT_BACKEND = "git-refs"
-
-
-def _usage() -> str:
-    return """Usage: aet configure-backend [options]
-
-Configure the task backend for aet-work.
-
-Options:
-  --backend json|git-refs
-                          Choose the task backend. Defaults to git-refs, the
-                          recommended backend: live tasks are stored as local
-                          git refs (refs/aet/tasks/*). json is the documented
-                          opt-out for non-git or unconfigured contexts.
-  --external-config       Write config to ~/.aet/{slug}/config.json instead of
-                          .agents/aet-work.json. Keeps AET config out of the
-                          shared repo (non-invasive setup).
-  --non-interactive       Fail if a required value is missing instead of prompting.
-  --help                  Show this help message.
-
-Examples:
-  aet configure-backend --non-interactive
-  aet configure-backend --backend json --non-interactive
-  aet configure-backend --backend git-refs --external-config --non-interactive
-"""
 
 
 def _log(msg: str) -> None:
@@ -83,40 +60,17 @@ def _read_existing_backend(path: Path | None) -> str:
         return ""
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="aet configure-backend",
-        description="Configure the task backend for aet-work.",
-        add_help=True,
-    )
-    parser.add_argument(
-        "--backend",
-        default=None,
-        help="Choose the task backend (default: git-refs).",
-    )
-    parser.add_argument(
-        "--external-config",
-        action="store_true",
-        help="Write config to ~/.aet/{slug}/config.json instead of .agents/aet-work.json.",
-    )
-    parser.add_argument(
-        "--non-interactive",
-        action="store_true",
-        help="Fail if a required value is missing instead of prompting.",
-    )
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-
+def _run(
+    backend: str | None,
+    external_config: bool,
+    non_interactive: bool,
+) -> int:
     project_root = Path.cwd()
     config_dir = project_root / ".agents"
     config_file = config_dir / "aet-work.json"
 
-    backend = args.backend
     if backend is None:
-        if args.non_interactive:
+        if non_interactive:
             backend = DEFAULT_BACKEND
         else:
             try:
@@ -132,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     external_config_file: Path | None = None
-    if args.external_config:
+    if external_config:
         slug = derive_project_slug()
         external_config_dir = Path.home() / ".aet" / slug
         external_config_dir.mkdir(parents=True, exist_ok=True)
@@ -185,5 +139,40 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def configure_backend(
+    backend: str | None = typer.Option(
+        None,
+        "--backend",
+        help="Choose the task backend (default: git-refs).",
+    ),
+    external_config: bool = typer.Option(
+        False,
+        "--external-config",
+        help="Write config to ~/.aet/{slug}/config.json instead of .agents/aet-work.json.",
+    ),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        help="Fail if a required value is missing instead of prompting.",
+    ),
+) -> None:
+    """Configure the task backend for aet-work."""
+    rc = _run(backend, external_config, non_interactive)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    try:
+        return app(argv, standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

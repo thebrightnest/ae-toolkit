@@ -8,12 +8,13 @@ It does **not** derive actionable status or promote tasks.
 
 from __future__ import annotations
 
-import argparse
 import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+
+import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
@@ -28,45 +29,6 @@ from aet.queue import (  # noqa: E402
     append_history_record,
     lease_guard,
 )
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Rebuild the work queue from docs/plans.")
-    parser.add_argument(
-        "--queue-file",
-        default=".agents/work-queue.json",
-        help="Path to work-queue.json",
-    )
-    parser.add_argument(
-        "--history-file",
-        default=".agents/work-history.jsonl",
-        help="Path to work-history.jsonl",
-    )
-    parser.add_argument(
-        "--plans-dir",
-        default="docs/plans",
-        help="Directory containing atomic plan markdown files",
-    )
-    parser.add_argument(
-        "--prds-dir",
-        default="docs/prds",
-        help="Directory containing PRD markdown files",
-    )
-    parser.add_argument(
-        "--config",
-        default=".agents/aet-work.json",
-        help="Path to aet-work backend configuration",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Override a live run lease and mutate the queue anyway (with a warning).",
-    )
-    return parser
-
-
-def parse_args(argv) -> argparse.Namespace:
-    return build_parser().parse_args(argv)
 
 
 def git_merge_commit_for(task_id: str, repo_root: str | Path | None = None) -> str | None:
@@ -220,15 +182,16 @@ def build_blocks(queue: list[dict]) -> None:
                 task_by_id[blocker].setdefault("blocks", []).append(task["id"])
 
 
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
-    queue_file = args.queue_file
-    history_file = args.history_file
-    plans_dir = Path(args.plans_dir)
-    prds_dir = Path(args.prds_dir)
-
+def _run(
+    queue_file: str,
+    history_file: str,
+    plans_dir: Path,
+    prds_dir: Path,
+    config: str,
+    force: bool,
+) -> int:
     backend = create_backend(
-        config_path=args.config,
+        config_path=config,
         queue_file=queue_file,
         history_file=history_file,
     )
@@ -310,7 +273,7 @@ def main(argv: list[str] | None = None):
         if reconcile_terminal_state(task, history_by_id, pf, repo_root=repo_root):
             tid = task.get("id")
             if tid not in history_by_id:
-                append_history_record(args.history_file, task)
+                append_history_record(history_file, task)
             reconciled_terminal += 1
             continue
 
@@ -325,7 +288,7 @@ def main(argv: list[str] | None = None):
         if pf and pf not in seen_files:
             if reconcile_terminal_state(task, history_by_id, pf, repo_root=repo_root):
                 if tid not in history_by_id:
-                    append_history_record(args.history_file, task)
+                    append_history_record(history_file, task)
                 reconciled_terminal += 1
                 continue
             final_queue.append(task)
@@ -338,7 +301,7 @@ def main(argv: list[str] | None = None):
     if source_prd is not None:
         wrapper["source_prd"] = str(source_prd)
 
-    if not lease_guard(queue_file, force=args.force):
+    if not lease_guard(queue_file, force=force):
         backend.close()
         return 1
 
@@ -353,5 +316,55 @@ def main(argv: list[str] | None = None):
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def init_queue(
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json",
+        "--queue-file",
+        help="Path to work-queue.json",
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl",
+        "--history-file",
+        help="Path to work-history.jsonl",
+    ),
+    plans_dir: Path = typer.Option(
+        Path("docs/plans"),
+        "--plans-dir",
+        help="Directory containing atomic plan markdown files",
+    ),
+    prds_dir: Path = typer.Option(
+        Path("docs/prds"),
+        "--prds-dir",
+        help="Directory containing PRD markdown files",
+    ),
+    config: str = typer.Option(
+        ".agents/aet-work.json",
+        "--config",
+        help="Path to aet-work backend configuration",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Rebuild the work queue from docs/plans."""
+    rc = _run(queue_file, history_file, plans_dir, prds_dir, config, force)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    try:
+        return app(argv, standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()
