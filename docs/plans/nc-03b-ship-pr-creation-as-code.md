@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - nc-03a-ship-gate-as-code
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: New code pushes branches and opens PRs via gh; behavior-review relevant (force-with-lease usage, PR body construction) even without a new dependency.
 docs_sync: required
@@ -85,5 +85,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
