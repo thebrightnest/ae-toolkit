@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import typer
@@ -10,7 +11,17 @@ app = typer.Typer(help="Setup and bootstrap commands.")
 
 
 def _repo_root() -> Path:
-    """Return the absolute path to the AE Toolkit repository root."""
+    """Return the absolute path to the AE Toolkit repository root.
+
+    The ``AET_REPO_ROOT`` environment variable overrides filesystem
+    inference so that the command works when ``aet`` is installed into a
+    dedicated venv (where ``__file__`` resolves to site-packages) and when
+    invoked from a git worktree (where ``__file__`` resolves to the
+    ephemeral worktree copy).
+    """
+    env_root = os.environ.get("AET_REPO_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
