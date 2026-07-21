@@ -4,7 +4,7 @@ size: L
 blocked_by:
   - pkg-06-cross-skill-extraction
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: New code runs git/gh operations (fetch, rebase, diff, evidence-file reads) and gates merge readiness; behavior-review relevant even without a new dependency.
 docs_sync: required
@@ -100,5 +100,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
