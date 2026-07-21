@@ -28,11 +28,11 @@ _SKILL_MD = textwrap.dedent("""\
 
 
 def _build_repo(tmp_path, skill_md, extra_files=None):
-    """Materialize a minimal repo: validator copy plus one demo skill."""
+    """Materialize a minimal repo: validator copy plus one demo skill under skills/."""
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
     shutil.copy(_SCRIPT_SOURCE, scripts_dir / "validate-skills.sh")
-    skill = tmp_path / "demo-skill"
+    skill = tmp_path / "skills" / "demo-skill"
     (skill / "examples").mkdir(parents=True)
     (skill / "references").mkdir(parents=True)
     (skill / "SKILL.md").write_text(skill_md)
@@ -53,7 +53,7 @@ def _run_validator(repo):
 
 
 def test_valid_relative_link_passes(tmp_path):
-    repo = _build_repo(tmp_path, _SKILL_MD, {"demo-skill/references/ref.md": "# Ref\n"})
+    repo = _build_repo(tmp_path, _SKILL_MD, {"skills/demo-skill/references/ref.md": "# Ref\n"})
     result = _run_validator(repo)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "All skill structure checks passed" in result.stdout
@@ -86,3 +86,16 @@ def test_code_block_http_and_anchor_links_are_skipped(tmp_path):
     repo = _build_repo(tmp_path, skill_md)
     result = _run_validator(repo)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_executable_code_in_skill_fails(tmp_path):
+    """Skills must be content-only: .py files are rejected."""
+    repo = _build_repo(
+        tmp_path,
+        _SKILL_MD,
+        {"skills/demo-skill/examples/helper.py": "print('not allowed')\n"},
+    )
+    result = _run_validator(repo)
+    assert result.returncode != 0
+    assert "executable code" in result.stdout.lower()
+    assert "helper.py" in result.stdout

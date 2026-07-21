@@ -92,7 +92,7 @@ Copy skill directories to your agent's skills folder, or paste the skill content
 
 ```bash
 # Agent-neutral standard
-cp -r aet-setup ~/.agents/skills/
+cp -r skills/aet-setup ~/.agents/skills/
 
 # Or simply open any SKILL.md and paste it into your chat
 ```
@@ -118,25 +118,25 @@ These are the components of the AE Toolkit system. They are installed together; 
 
 | Skill                                                      | Description                                                                                                                                                                               |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [aet-setup](./aet-setup)                                   | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. |
-| [aet-extract-stack](./aet-extract-stack)                   | Extract proven infrastructure, DevOps, and automation setup from an existing project into a reusable, sanitized scaffold. Inverse of aet-setup.                                           |
-| [aet-plan](./aet-plan)                                     | PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Prevents misalignment before any code is written.                           |
-| [aet-design-system-creation](./aet-design-system-creation) | Complete design system creation: aesthetic direction, typography, color, layout, motion. Produces DESIGN.md as the project's design source of truth. Opinionated and research-driven.     |
-| [aet-validate-scope](./aet-validate-scope)                 | Validate a plan against the existing domain model, terminology, and documented decisions. Includes UI/UX coverage lens. Post-PRD alignment gate before implementation.                    |
-| [aet-evolve](./aet-evolve)                                 | System evolution through retrospectives and rule/command/template updates. Cross-project learning propagation and escalation ladder. The highest-leverage long-term skill.                |
-| [aet-prime](./aet-prime)                                   | Session context loading with git-as-memory and context discipline. **Triage front door** — classifies requests into work class and routes to proportionate pipeline.                      |
-| [aet-verify](./aet-verify)                                 | Conditional live verification with three modes: foundation smoke, feature evidence capture, and bug reproduction. Required gate for critical work before merge.                           |
-| [aet-upgrade](./aet-upgrade)                               | Dependency and framework upgrades as a first-class work type. Breaking-change analysis, risk mapping, and smoke validation.                                                               |
-| [aet-tdd](./aet-tdd)                                       | Test-driven development with red-green-refactor loop and vertical tracer bullets. Integration-style tests through public interfaces.                                                      |
-| [aet-implement](./aet-implement)                           | Fresh-session implementation from plan.md with self-validation.                                                                                                                           |
-| [aet-review](./aet-review)                                 | Staff-level code review with multi-lens checks and cross-model adversarial challenge.                                                                                                     |
-| [aet-cso](./aet-cso)                                       | Diff-focused security audit: secrets, injection risks, auth bypass, CVEs, LLM trust boundaries.                                                                                           |
-| [aet-qa](./aet-qa)                                         | Automated QA with tiered validation (Quick/Standard/Exhaustive) and regression test generation.                                                                                           |
-| [aet-bug-report](./aet-bug-report)                         | Structured bug investigation and fixing. Reproduce, diagnose, fix, and validate without the overhead of full PRD planning.                                                                |
-| [aet-ship](./aet-ship)                                     | Pre-merge validation gate with bisectable commits, commit-message conventions, and PR creation.                                                                                           |
-| [aet-release-prep](./aet-release-prep)                     | Release preparation: analyze commits, suggest version bumps, and update CHANGELOG.md and PRODUCT.md.                                                                                      |
-| [aet-sync-docs](./aet-sync-docs)                           | Sync PRD and plan.md to reflect what was actually built. Appends a divergence summary when implementation drifts from the plan.                                                           |
-| [aet-work](./aet-work)                                     | Work queue management and AFK task orchestration. Curated intake, evidence-gated completion, and a local telemetry panel. Backed by local JSON, git-refs, or GitHub Issues.               |
+| [aet-setup](./skills/aet-setup)                                   | Bootstrap or upgrade any software project with best-practice documentation, code quality enforcement, local automation, and AI guardrails. Scaffolds the agentic workflow infrastructure. |
+| [aet-extract-stack](./skills/aet-extract-stack)                   | Extract proven infrastructure, DevOps, and automation setup from an existing project into a reusable, sanitized scaffold. Inverse of aet-setup.                                           |
+| [aet-plan](./skills/aet-plan)                                     | PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Prevents misalignment before any code is written.                           |
+| [aet-design-system-creation](./skills/aet-design-system-creation) | Complete design system creation: aesthetic direction, typography, color, layout, motion. Produces DESIGN.md as the project's design source of truth. Opinionated and research-driven.     |
+| [aet-validate-scope](./skills/aet-validate-scope)                 | Validate a plan against the existing domain model, terminology, and documented decisions. Includes UI/UX coverage lens. Post-PRD alignment gate before implementation.                    |
+| [aet-evolve](./skills/aet-evolve)                                 | System evolution through retrospectives and rule/command/template updates. Cross-project learning propagation and escalation ladder. The highest-leverage long-term skill.                |
+| [aet-prime](./skills/aet-prime)                                   | Session context loading with git-as-memory and context discipline. **Triage front door** — classifies requests into work class and routes to proportionate pipeline.                      |
+| [aet-verify](./skills/aet-verify)                                 | Conditional live verification with three modes: foundation smoke, feature evidence capture, and bug reproduction. Required gate for critical work before merge.                           |
+| [aet-upgrade](./skills/aet-upgrade)                               | Dependency and framework upgrades as a first-class work type. Breaking-change analysis, risk mapping, and smoke validation.                                                               |
+| [aet-tdd](./skills/aet-tdd)                                       | Test-driven development with red-green-refactor loop and vertical tracer bullets. Integration-style tests through public interfaces.                                                      |
+| [aet-implement](./skills/aet-implement)                           | Fresh-session implementation from plan.md with self-validation.                                                                                                                           |
+| [aet-review](./skills/aet-review)                                 | Staff-level code review with multi-lens checks and cross-model adversarial challenge.                                                                                                     |
+| [aet-cso](./skills/aet-cso)                                       | Diff-focused security audit: secrets, injection risks, auth bypass, CVEs, LLM trust boundaries.                                                                                           |
+| [aet-qa](./skills/aet-qa)                                         | Automated QA with tiered validation (Quick/Standard/Exhaustive) and regression test generation.                                                                                           |
+| [aet-bug-report](./skills/aet-bug-report)                         | Structured bug investigation and fixing. Reproduce, diagnose, fix, and validate without the overhead of full PRD planning.                                                                |
+| [aet-ship](./skills/aet-ship)                                     | Pre-merge validation gate with bisectable commits, commit-message conventions, and PR creation.                                                                                           |
+| [aet-release-prep](./skills/aet-release-prep)                     | Release preparation: analyze commits, suggest version bumps, and update CHANGELOG.md and PRODUCT.md.                                                                                      |
+| [aet-sync-docs](./skills/aet-sync-docs)                           | Sync PRD and plan.md to reflect what was actually built. Appends a divergence summary when implementation drifts from the plan.                                                           |
+| [aet-work](./skills/aet-work)                                     | Work queue management and AFK task orchestration. Curated intake, evidence-gated completion, and a local telemetry panel. Backed by local JSON, git-refs, or GitHub Issues.               |
 
 ### Pipelines
 
@@ -144,8 +144,8 @@ These skills orchestrate the full toolkit workflow:
 
 | Skill                                    | Description                                                                                               |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [aet-pipeline-plan](./aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → plan → validate-scope with hard human gates.                  |
-| [aet-work](./aet-work)                   | Work queue management with unified orchestrator. Runs plans with session-isolated, evidence-gated stages. |
+| [aet-pipeline-plan](./skills/aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → plan → validate-scope with hard human gates.                  |
+| [aet-work](./skills/aet-work)                   | Work queue management with unified orchestrator. Runs plans with session-isolated, evidence-gated stages. |
 
 ---
 
@@ -191,7 +191,7 @@ make add-skill NAME=my-skill
 This creates:
 
 ```
-my-skill/
+skills/my-skill/
 ├── SKILL.md
 ├── examples/
 │   └── README.md
