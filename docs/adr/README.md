@@ -58,6 +58,7 @@ Do **not** write an ADR for:
 - [036 — Repository Is Content Plus Python Package](036-repo-is-content-plus-python-package.md)
 - [037 — Runtime Dependency Policy](037-runtime-dependency-policy.md)
 - [038 — Directory Layout Change](038-directory-layout-change.md)
+- [040 — Documentation Invariants Are Data](040-documentation-invariants-as-data.md)
 
 ## Format
 
