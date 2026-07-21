@@ -429,11 +429,21 @@ def _build_pr_body(
 
 
 def _push_branch(rebased: bool, dry_run: bool) -> tuple[bool, str]:
-    """Push the branch, using force-with-lease when the gate performed a rebase."""
+    """Push the current branch to a same-named remote branch.
+
+    Worktree branches are often tracked against ``origin/main``, so a bare
+    ``git push`` is rejected. Always push ``HEAD:<branch>`` explicitly.
+    """
+    branch_result = _run_git("branch", "--show-current", check=False)
+    branch = branch_result.stdout.strip()
+    if not branch:
+        return False, "Cannot push: HEAD is detached."
+
+    push_spec = f"HEAD:{branch}"
     if rebased:
-        cmd = ["git", "push", "--force-with-lease"]
+        cmd = ["git", "push", "--force-with-lease", "origin", push_spec]
     else:
-        cmd = ["git", "push"]
+        cmd = ["git", "push", "-u", "origin", push_spec]
     if dry_run:
         return True, f"Would run: {' '.join(cmd)}"
     result = subprocess.run(cmd, capture_output=True, text=True)
