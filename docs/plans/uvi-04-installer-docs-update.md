@@ -1,7 +1,7 @@
 ---
 id: uvi-04-installer-docs-update
 size: S
-status: queued
+status: merged
 blocked_by:
   - uvi-02-curl-installer-script
 pipeline: minimal
@@ -64,5 +64,5 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
