@@ -7,6 +7,9 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
+
+import typer
 
 from aet import docs_lint
 
@@ -33,30 +36,6 @@ def _fail(message: str) -> int:
     return 1
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="docs",
-        description="Documentation governance commands.",
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-    lint = sub.add_parser(
-        "lint",
-        help="Lint documentation against declarative rules.",
-    )
-    lint.add_argument(
-        "--rules",
-        default=None,
-        help="Rules file (default: .agents/doc-rules.yaml under repo root)",
-    )
-    lint.add_argument(
-        "--repo-root",
-        dest="repo_root",
-        default=None,
-        help="Repository root (default: git root or current directory)",
-    )
-    return parser
-
-
 def cmd_lint(args: argparse.Namespace) -> int:
     if args.repo_root:
         repo_root = Path(args.repo_root).resolve()
@@ -81,12 +60,27 @@ def cmd_lint(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    if args.command == "lint":
-        return cmd_lint(args)
-    return _fail(f"unknown command: {args.command}")
+app = typer.Typer()
+
+
+@app.command("lint")
+def lint(
+    rules: Optional[str] = typer.Option(
+        None,
+        "--rules",
+        help="Rules file (default: .agents/doc-rules.yaml under repo root)",
+    ),
+    repo_root: Optional[str] = typer.Option(
+        None,
+        "--repo-root",
+        help="Repository root (default: git root or current directory)",
+    ),
+) -> None:
+    """Lint documentation against declarative rules."""
+    args = argparse.Namespace(rules=rules, repo_root=repo_root)
+    rc = cmd_lint(args)
+    raise typer.Exit(rc)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

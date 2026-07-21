@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import typer
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend, resolve_config  # noqa: E402
@@ -25,62 +27,6 @@ from aet.queue import (  # noqa: E402
     commit_and_push_status,
     lease_guard,
 )
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="sprint",
-        description="Sprint membership commands for aet-work.",
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    add_parser = sub.add_parser(
-        "add",
-        help="Promote an approved plan into the sprint.",
-    )
-    add_parser.add_argument(
-        "target",
-        help="Plan file path or task ID to promote",
-    )
-    add_parser.add_argument(
-        "--queue-file",
-        default=".agents/work-queue.json",
-        help="Path to work-queue.json",
-    )
-    add_parser.add_argument(
-        "--history-file",
-        default=".agents/work-history.jsonl",
-        help="Path to work-history.jsonl",
-    )
-    add_parser.add_argument(
-        "--plans-dir",
-        default="docs/plans",
-        help="Directory containing atomic plan markdown files",
-    )
-    add_parser.add_argument(
-        "--config",
-        default=".agents/aet-work.json",
-        help="Path to aet-work backend configuration",
-    )
-    add_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Override a live run lease and mutate the queue anyway (with a warning).",
-    )
-    add_parser.add_argument(
-        "--allow-untracked",
-        action="store_true",
-        help=(
-            "Promote the plan even if its file is not tracked in git. By default "
-            "an untracked plan is refused so aet-work can retrieve it from "
-            "origin/main; use this only for a throwaway spike."
-        ),
-    )
-    return parser
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    return build_parser().parse_args(argv)
 
 
 def resolve_plan(target: str, plans_dir: Path) -> Path | None:
@@ -131,8 +77,7 @@ def _fail(message: str) -> int:
     return 1
 
 
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
+def _add(args: argparse.Namespace) -> int:
     plans_dir = Path(args.plans_dir)
     plan_file = resolve_plan(args.target, plans_dir)
 
@@ -250,5 +195,61 @@ def main(argv: list[str] | None = None):
     return 0
 
 
+app = typer.Typer()
+
+
+@app.command("add")
+def add(
+    target: str = typer.Argument(..., help="Plan file path or task ID to promote"),
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json", "--queue-file", help="Path to work-queue.json"
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"
+    ),
+    plans_dir: str = typer.Option(
+        "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
+    ),
+    config: str = typer.Option(
+        ".agents/aet-work.json", "--config", help="Path to aet-work backend configuration"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+    allow_untracked: bool = typer.Option(
+        False,
+        "--allow-untracked",
+        help=(
+            "Promote the plan even if its file is not tracked in git. By default "
+            "an untracked plan is refused so aet-work can retrieve it from "
+            "origin/main; use this only for a throwaway spike."
+        ),
+    ),
+) -> None:
+    """Promote an approved plan into the sprint."""
+    args = argparse.Namespace(
+        target=target,
+        queue_file=queue_file,
+        history_file=history_file,
+        plans_dir=plans_dir,
+        config=config,
+        force=force,
+        allow_untracked=allow_untracked,
+    )
+    rc = _add(args)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    try:
+        return app(argv, standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

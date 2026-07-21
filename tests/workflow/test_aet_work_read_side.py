@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
-import io
+import importlib
 import json
 import subprocess
 import sys
@@ -13,24 +11,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.cli._helpers import run_typer
+
 _REPO_ROOT = Path(__file__).parents[2]
 _STATUS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "status.py"
-_NEXT_PY = _REPO_ROOT / "src" / "aet" / "cli" / "next.py"
 
-_status_spec = importlib.util.spec_from_loader(
-    "status", importlib.machinery.SourceFileLoader("status", str(_STATUS_PY))
-)
-status = importlib.util.module_from_spec(_status_spec)
-_status_spec.loader.exec_module(status)
-
-if _NEXT_PY.exists():
-    _next_spec = importlib.util.spec_from_loader(
-        "next", importlib.machinery.SourceFileLoader("next", str(_NEXT_PY))
-    )
-    next_cmd = importlib.util.module_from_spec(_next_spec)
-    _next_spec.loader.exec_module(next_cmd)
-else:
-    next_cmd = None
+aet = importlib.import_module("aet.cli.main")
 
 
 def _write_json_file(data) -> str:
@@ -86,18 +72,15 @@ class TestStatusStoredState(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                rc = status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        self.assertEqual(rc, 0)
-        output = stdout.getvalue()
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
         self.assertIn("ready: 1", output)
         self.assertIn("blocked: 1", output)
 
@@ -110,18 +93,15 @@ class TestStatusStoredState(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                rc = status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        self.assertEqual(rc, 0)
-        output = stdout.getvalue()
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
         self.assertIn("awaiting_merge: 1", output)
 
     def test_failed_tasks_reported_from_stored_status(self):
@@ -133,17 +113,15 @@ class TestStatusStoredState(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        output = stdout.getvalue()
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
         self.assertIn("Failed tasks:", output)
         self.assertIn("Broke", output)
 
@@ -157,17 +135,15 @@ class TestStatusStoredState(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        output = stdout.getvalue()
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
         self.assertIn("Next ready tasks:", output)
         self.assertIn("One", output)
         ready_section = output.split("Next ready tasks:")[1].split("\n\n")[0]
@@ -180,18 +156,15 @@ class TestStatusStoredState(unittest.TestCase):
         queue_file = str(Path(tempfile.mkdtemp()) / "missing-queue.json")
         history_file = str(Path(tempfile.mkdtemp()) / "missing-history.jsonl")
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                rc = status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        self.assertEqual(rc, 0)
-        output = stdout.getvalue()
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
         self.assertIn("No plan drift detected", output)
         self.assertIn("planned: 0", output)
         self.assertIn("Next ready tasks:", output)
@@ -206,18 +179,15 @@ class TestStatusStoredState(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                rc = status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        self.assertEqual(rc, 0)
-        output = stdout.getvalue()
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
         self.assertIn("Plan drift detected", output)
         self.assertIn("ready: 1", output)
         self.assertIn("Next ready tasks:", output)
@@ -234,18 +204,15 @@ class TestStatusStoredState(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                rc = status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        self.assertEqual(rc, 0)
-        output = stdout.getvalue()
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
         self.assertIn("ready: 1", output)
         self.assertIn("in_progress: 1", output)
         self.assertIn("blocked: 1", output)
@@ -264,19 +231,16 @@ class TestStatusJson(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--json",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                rc = status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--json",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        self.assertEqual(rc, 0)
-        output = stdout.getvalue()
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
         payload = json.loads(output)
         self.assertEqual(payload["summary"]["ready"], 1)
         self.assertEqual(payload["summary"]["blocked"], 1)
@@ -300,19 +264,16 @@ class TestStatusJson(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--json",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                rc = status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--json",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        self.assertEqual(rc, 0)
-        payload = json.loads(stdout.getvalue())
+        self.assertEqual(result.exit_code, 0)
+        payload = json.loads(result.stdout)
         self.assertEqual(len(payload["tasks"]), 1)
         entry = payload["tasks"][0]
         self.assertEqual(entry["id"], "t1")
@@ -335,19 +296,16 @@ class TestStatusJson(unittest.TestCase):
         })
         history_file = _make_history([])
 
-        stdout = io.StringIO()
-        with patch.object(sys, "stdout", stdout):
-            with patch.object(sys, "argv", [
-                "status",
-                "--json",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", plans_dir,
-            ]):
-                rc = status.main()
+        result = run_typer(aet.app, [
+            "status",
+            "--json",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
 
-        self.assertEqual(rc, 0)
-        payload = json.loads(stdout.getvalue())
+        self.assertEqual(result.exit_code, 0)
+        payload = json.loads(result.stdout)
         self.assertEqual(payload["queue_updated_at"], "2026-07-10T12:00:00Z")
 
     def test_json_output_round_trips_through_json_tool(self):
@@ -384,7 +342,6 @@ class TestStatusJson(unittest.TestCase):
         self.assertEqual(payload["tasks"][0]["id"], "t1")
 
 
-@unittest.skipIf(next_cmd is None, "next command not yet implemented")
 class TestNextStoredState(unittest.TestCase):
     def test_warns_but_picks_ready_on_plan_drift(self):
         """next warns about plan drift but still picks a stored-ready task."""
@@ -401,24 +358,20 @@ class TestNextStoredState(unittest.TestCase):
             transition_calls.append(list(cmd))
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-        stdout = io.StringIO()
         with patch.object(subprocess, "run", side_effect=mock_run):
-            with patch.object(sys, "stdout", stdout):
-                with patch.object(sys, "argv", [
-                    "next",
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", plans_dir,
-                ]):
-                    rc = next_cmd.main()
+            result = run_typer(aet.app, [
+                "next",
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", plans_dir,
+            ])
 
-        self.assertEqual(rc, 0)
+        self.assertEqual(result.exit_code, 0)
         self.assertTrue(
             any("t1" in c and "transition" in c and "in_progress" in c for c in transition_calls),
             f"Expected transition to in_progress for t1, got {transition_calls}",
         )
-        output = stdout.getvalue()
-        self.assertIn("Plan drift detected", output)
+        self.assertIn("Plan drift detected", result.stdout)
 
     def test_picks_first_stored_ready_and_transitions(self):
         """next picks the first stored-ready task and transitions it to in_progress."""
@@ -437,15 +390,14 @@ class TestNextStoredState(unittest.TestCase):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch.object(subprocess, "run", side_effect=mock_run):
-            with patch.object(sys, "argv", [
+            result = run_typer(aet.app, [
                 "next",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", plans_dir,
-            ]):
-                rc = next_cmd.main()
+            ])
 
-        self.assertEqual(rc, 0)
+        self.assertEqual(result.exit_code, 0)
         self.assertTrue(
             any("t2" in c and "transition" in c and "in_progress" in c for c in transition_calls),
             f"Expected transition to in_progress for t2, got {transition_calls}",
@@ -468,15 +420,14 @@ class TestNextStoredState(unittest.TestCase):
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch.object(subprocess, "run", side_effect=mock_run):
-            with patch.object(sys, "argv", [
+            result = run_typer(aet.app, [
                 "next",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", plans_dir,
-            ]):
-                rc = next_cmd.main()
+            ])
 
-        self.assertEqual(rc, 0)
+        self.assertEqual(result.exit_code, 0)
         self.assertTrue(
             any("t1" in c and "transition" in c and "in_progress" in c for c in transition_calls),
             f"Expected transition to in_progress for t1, got {transition_calls}",

@@ -7,10 +7,12 @@ missing history is a valid state (rc 0), not an error.
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
+
+import click
+import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import metrics  # noqa: E402
@@ -58,54 +60,62 @@ def _render_human(projection: dict) -> str:
     return "\n".join(lines).rstrip()
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Report cross-task metrics over settled history."
-    )
-    parser.add_argument(
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def metrics_cmd(
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl",
         "--history-file",
-        default=".agents/work-history.jsonl",
         help="Path to work-history.jsonl",
-    )
-    parser.add_argument(
+    ),
+    since: str | None = typer.Option(
+        None,
         "--since",
-        default=None,
-        metavar="YYYY-MM-DD",
-        help="Only include tasks settled on or after this date",
-    )
-    parser.add_argument(
+        help="Only include tasks settled on or after this date (YYYY-MM-DD)",
+    ),
+    json_output: bool = typer.Option(
+        False,
         "--json",
-        action="store_true",
         help="Print the machine-readable projection instead of the human report",
-    )
-    return parser
-
-
-def parse_args(argv) -> argparse.Namespace:
-    return build_parser().parse_args(argv)
-
-
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
-    if args.since is not None:
+    ),
+) -> None:
+    """Report cross-task metrics over settled history."""
+    if since is not None:
         try:
-            metrics._parse_date(args.since)
+            metrics._parse_date(since)
         except ValueError:
             print(
-                f"⛔ invalid --since '{args.since}' (expected YYYY-MM-DD)",
+                f"⛔ invalid --since '{since}' (expected YYYY-MM-DD)",
                 file=sys.stderr,
             )
-            return 1
-    projection = metrics.aggregate(args.history_file, since=args.since)
-    if args.json:
+            raise typer.Exit(1)
+    projection = metrics.aggregate(history_file, since=since)
+    if json_output:
         print(json.dumps(projection, indent=2))
-        return 0
+        raise typer.Exit(0)
     if projection["overall"]["settled"] == 0:
         print("No settled tasks found in the selected window.")
-        return 0
+        raise typer.Exit(0)
     print(_render_human(projection))
-    return 0
+    raise typer.Exit(0)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    try:
+        return app(argv, standalone_mode=False)
+    except (
+        click.exceptions.ClickException,
+        typer._click.exceptions.ClickException,
+    ) as exc:
+        exc.show()
+        return exc.exit_code
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

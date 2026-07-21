@@ -14,16 +14,16 @@ Archive layout (as written by src/aet/telemetry.py; the project slug is
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
-import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+import typer
 
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 
@@ -387,39 +387,46 @@ def propose_edits(patterns: dict[str, Any]) -> str:
     return "\n".join(["## Proposed Skill Edits", ""] + suggestions) + "\n"
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Scan archived telemetry for recurring patterns."
-    )
-    parser.add_argument(
-        "--archive-dir",
-        type=Path,
-        default=None,
-        help="Telemetry archive root.",
-    )
-    parser.add_argument(
-        "--propose",
-        action="store_true",
-        help="Print suggested skill edits (never writes files).",
-    )
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    """CLI entry point."""
-    args = build_parser().parse_args(argv)
-
+def _run(archive_dir: Path | None, propose: bool) -> int:
     archive_dir = (
-        args.archive_dir
+        archive_dir
         or Path(os.environ.get("AET_TELEMETRY_ARCHIVE_DIR") or DEFAULT_ARCHIVE_DIR)
     ).expanduser()
 
     patterns = mine_archive(archive_dir)
     print(format_report(patterns))
-    if args.propose:
+    if propose:
         print(propose_edits(patterns))
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def mine_learnings(
+    archive_dir: Path | None = typer.Option(
+        None,
+        "--archive-dir",
+        help="Telemetry archive root.",
+    ),
+    propose: bool = typer.Option(
+        False,
+        "--propose",
+        help="Print suggested skill edits (never writes files).",
+    ),
+) -> None:
+    """Scan archived telemetry for recurring patterns."""
+    rc = _run(archive_dir, propose)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return app(argv or [], standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

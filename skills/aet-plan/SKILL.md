@@ -281,7 +281,7 @@ After the `plan` command completes and the plan.md is ready for review:
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
 4. Commit the new plan files (and PRD) before queue handoff so they are tracked in git — this satisfies the `aet sprint add` intake durability guard, which refuses untracked plans.
-5. Confirm the new plan files were explicitly added to `.agents/work-queue.json` with `aet sprint add`; run `aet sync` only to reconcile existing entries and report drift.
+5. Confirm the new plan files were explicitly added to `.agents/work-queue.json` with `aet sprint add`; run `aet queue sync` only to reconcile existing entries and report drift.
 6. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
 
 ## Key Principles

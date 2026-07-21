@@ -87,12 +87,12 @@ class TestGateSubmit(unittest.TestCase):
         rc, _out, err = self._run(
             ["submit", "--stage", "qa", "--evidence", "payload.json"]
         )
-        self.assertEqual(rc, 1)
+        self.assertEqual(rc, 2)
         self.assertIn("--verdict", err)
 
     def test_missing_evidence_flag_exits_nonzero(self):
         rc, _out, err = self._run(["submit", "--stage", "qa", "--verdict", "pass"])
-        self.assertEqual(rc, 1)
+        self.assertEqual(rc, 2)
         self.assertIn("--evidence", err)
 
     def test_evidence_file_not_found_exits_nonzero(self):

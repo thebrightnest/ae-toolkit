@@ -16,6 +16,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import typer
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import (  # noqa: E402
     evidence,
@@ -30,7 +32,7 @@ from aet.queue import current_state, update_plan_status  # noqa: E402
 
 # Load aet-state as a module so desk actions can reuse queue mutations and
 # plan-footer updates rather than re-implementing closure logic.
-_AET_STATE_PY = _SCRIPT_DIR / "aet-state.py"
+_AET_STATE_PY = _SCRIPT_DIR / "aet_state.py"
 _aet_state_spec = importlib.util.spec_from_loader(
     "aet_state_desk",
     importlib.machinery.SourceFileLoader("aet_state_desk", str(_AET_STATE_PY)),
@@ -505,5 +507,113 @@ def main(argv: list[str] | None = None):
     return _run_risk_view(args)
 
 
+app = typer.Typer(
+    name="desk",
+    help="Review cockpit for awaiting_merge tasks.",
+)
+
+
+@app.callback(invoke_without_command=True)
+def desk_callback(
+    ctx: typer.Context,
+    eligibility: bool = typer.Option(
+        False,
+        "--eligibility",
+        help="Show per-class clean-merge counts and zero-review eligibility.",
+    ),
+    policy: str = typer.Option(
+        track_record.DEFAULT_POLICY_PATH,
+        "--policy",
+        help="Path to the zero-review policy JSON.",
+    ),
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json",
+        "--queue-file",
+        help="Path to work-queue.json",
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl",
+        "--history-file",
+        help="Path to the settled work-history JSONL (also used for eligibility).",
+    ),
+    plans_dir: str = typer.Option(
+        "docs/plans",
+        "--plans-dir",
+        help="Directory containing atomic plan markdown files",
+    ),
+    json: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit a machine-readable JSON projection.",
+    ),
+) -> None:
+    """Review cockpit for awaiting_merge tasks."""
+    if ctx.invoked_subcommand is not None:
+        return
+    args = argparse.Namespace(
+        eligibility=eligibility,
+        policy=policy,
+        queue_file=queue_file,
+        history_file=history_file,
+        plans_dir=plans_dir,
+        json=json,
+    )
+    if eligibility:
+        raise typer.Exit(_run_eligibility(args))
+    raise typer.Exit(_run_risk_view(args))
+
+
+@app.command(name="merge")
+def desk_merge(
+    task_id: str = typer.Argument(..., help="Task ID to merge."),
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json",
+        "--queue-file",
+        help="Path to work-queue.json",
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl",
+        "--history-file",
+        help="Path to the settled work-history JSONL.",
+    ),
+) -> None:
+    """Merge a PR and record the task as merged."""
+    args = argparse.Namespace(
+        task_id=task_id,
+        queue_file=queue_file,
+        history_file=history_file,
+    )
+    raise typer.Exit(_run_merge(args))
+
+
+@app.command(name="abandon")
+def desk_abandon(
+    task_id: str = typer.Argument(..., help="Task ID to abandon."),
+    reason: str = typer.Option(
+        ...,
+        "--reason",
+        help="Required reason for abandoning the task.",
+    ),
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json",
+        "--queue-file",
+        help="Path to work-queue.json",
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl",
+        "--history-file",
+        help="Path to the settled work-history JSONL.",
+    ),
+) -> None:
+    """Abandon a task with a recorded reason."""
+    args = argparse.Namespace(
+        task_id=task_id,
+        reason=reason,
+        queue_file=queue_file,
+        history_file=history_file,
+    )
+    raise typer.Exit(_run_abandon(args))
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

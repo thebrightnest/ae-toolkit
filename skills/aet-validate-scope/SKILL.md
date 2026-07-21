@@ -173,7 +173,7 @@ If the closure check fails, print exactly one of the following and stop:
   > "Scope validation cannot complete: no plan files reference this PRD. Break the PRD into `docs/plans/*.md` files (e.g., via `aet-plan`), then re-run `aet-validate-scope`."
 
 - **Plans not synced:**
-  > "Scope validation cannot complete: plan files exist but are not synced to `.agents/work-queue.json`. Run `aet sync`, then re-run `aet-validate-scope`."
+  > "Scope validation cannot complete: plan files exist but are not synced to `.agents/work-queue.json`. Run `aet queue sync`, then re-run `aet-validate-scope`."
 
 ## Completion Protocol
 

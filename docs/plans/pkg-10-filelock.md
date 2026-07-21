@@ -70,7 +70,7 @@ orchestrator.
 - [ ] Named existing tests pass: `tests/test_concurrent_state.py`,
   `tests/test_queue_guard.py`, `tests/test_quarantined_state.py`,
   `tests/test_queue.py`
-- [ ] Concurrency stress: two parallel `aet sync` invocations cannot corrupt
+- [ ] Concurrency stress: two parallel `aet queue sync` invocations cannot corrupt
   `.agents/work-queue.json` (existing test coverage demonstrates this)
 - [ ] `make validate` green
 - [ ] R-trace coverage: R-7 by tasks 1–4; no unknown R-ids cited

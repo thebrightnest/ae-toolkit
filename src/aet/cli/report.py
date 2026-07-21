@@ -9,56 +9,13 @@ holds the work-queue lease or ``AET_RUN_ID``.
 
 from __future__ import annotations
 
-import argparse
 import os
-import sys
 from pathlib import Path
+
+import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import telemetry  # noqa: E402
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Print execution telemetry summary.",
-    )
-    parser.add_argument(
-        "--project",
-        default=None,
-        help="Project slug (defaults to the current repository)",
-    )
-    parser.add_argument(
-        "--run-dir",
-        default=None,
-        help="Path to a specific run directory in the archive",
-    )
-    parser.add_argument(
-        "--task-log",
-        default=None,
-        help="Path to a single task JSONL file",
-    )
-    parser.add_argument(
-        "--since",
-        default=None,
-        help="Only include records at or after this ISO-8601 timestamp",
-    )
-    parser.add_argument(
-        "--prune",
-        type=int,
-        default=None,
-        metavar="DAYS",
-        help="Prune telemetry runs older than DAYS (dry run unless --force)",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Actually delete prune candidates (default is a dry run)",
-    )
-    return parser
-
-
-def parse_args(argv) -> argparse.Namespace:
-    return build_parser().parse_args(argv)
 
 
 def _leased_run_id() -> str | None:
@@ -102,24 +59,77 @@ def _format_prune_report(result: dict, force: bool) -> str:
     return "\n".join(lines) + "\n"
 
 
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
-
-    if args.prune is not None:
-        root = telemetry.archive_dir() / args.project if args.project else None
+def _run(
+    project: str | None,
+    run_dir: str | None,
+    task_log: str | None,
+    since: str | None,
+    prune: int | None,
+    force: bool,
+) -> int:
+    if prune is not None:
+        root = telemetry.archive_dir() / project if project else None
         result = telemetry.prune_archive(
-            args.prune,
+            prune,
             root=root,
-            force=args.force,
+            force=force,
             protected_run_ids=_protected_run_ids(),
         )
-        print(_format_prune_report(result, args.force), end="")
+        print(_format_prune_report(result, force), end="")
         return 0
 
-    target = args.task_log or args.run_dir or args.project
-    print(telemetry.report(target=target, since=args.since), end="")
+    target = task_log or run_dir or project
+    print(telemetry.report(target=target, since=since), end="")
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def report(
+    project: str | None = typer.Option(
+        None,
+        "--project",
+        help="Project slug (defaults to the current repository)",
+    ),
+    run_dir: str | None = typer.Option(
+        None,
+        "--run-dir",
+        help="Path to a specific run directory in the archive",
+    ),
+    task_log: str | None = typer.Option(
+        None,
+        "--task-log",
+        help="Path to a single task JSONL file",
+    ),
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="Only include records at or after this ISO-8601 timestamp",
+    ),
+    prune: int | None = typer.Option(
+        None,
+        "--prune",
+        help="Prune telemetry runs older than DAYS (dry run unless --force)",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Actually delete prune candidates (default is a dry run)",
+    ),
+) -> None:
+    """Print execution telemetry summary."""
+    rc = _run(project, run_dir, task_log, since, prune, force)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return app(argv or [], standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

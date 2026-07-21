@@ -12,6 +12,9 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
+
+import typer
 
 from aet import plans_lint
 
@@ -38,24 +41,6 @@ def _fail(message: str) -> int:
     return 1
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="plans",
-        description="Corpus-level commands for the plan directory.",
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-    lint = sub.add_parser(
-        "lint",
-        help="Lint the docs/plans corpus for settled/live misclassification.",
-    )
-    lint.add_argument(
-        "--plans-dir",
-        default=None,
-        help="Plans directory to lint (default: docs/plans under repo root)",
-    )
-    return parser
-
-
 def cmd_lint(args: argparse.Namespace) -> int:
     if args.plans_dir:
         plans_dir = Path(args.plans_dir).resolve()
@@ -78,12 +63,22 @@ def cmd_lint(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None):
-    args = build_parser().parse_args(argv)
-    if args.command == "lint":
-        return cmd_lint(args)
-    return _fail(f"unknown command: {args.command}")
+app = typer.Typer()
+
+
+@app.command("lint")
+def lint(
+    plans_dir: Optional[str] = typer.Option(
+        None,
+        "--plans-dir",
+        help="Plans directory to lint (default: docs/plans under repo root)",
+    ),
+) -> None:
+    """Lint the docs/plans corpus for settled/live misclassification."""
+    args = argparse.Namespace(plans_dir=plans_dir)
+    rc = cmd_lint(args)
+    raise typer.Exit(rc)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

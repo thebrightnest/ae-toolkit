@@ -53,52 +53,6 @@ class TestRunPaths(unittest.TestCase):
         )
 
 
-class TestParseRunArgs(_IsolatedBinDir):
-    def test_parse_run_args_returns_dispatcher_flags(self):
-        flags, dispatcher = aet._parse_run_args(["--foreground", "--max-jobs", "2"])
-        self.assertIn("--max-jobs", flags)
-        self.assertIn("2", flags)
-        self.assertTrue(dispatcher["foreground"])
-        self.assertIsNone(dispatcher["follow"])
-
-    def test_parse_run_args_extracts_follow(self):
-        flags, dispatcher = aet._parse_run_args(["--follow", "run-abc"])
-        self.assertEqual(dispatcher["follow"], "run-abc")
-
-    def test_parse_run_args_forwards_orchestrator_flags(self):
-        flags, _dispatcher = aet._parse_run_args(
-            [
-                "--isolation",
-                "full",
-                "--task-timeout",
-                "600",
-                "--stall-timeout",
-                "120",
-                "--on-failure",
-                "halt",
-                "--cli-bin",
-                "/bin/cli",
-            ]
-        )
-        self.assertEqual(
-            flags,
-            [
-                "--max-jobs",
-                "4",
-                "--isolation",
-                "full",
-                "--on-failure",
-                "halt",
-                "--task-timeout",
-                "600",
-                "--stall-timeout",
-                "120",
-                "--cli-bin",
-                "/bin/cli",
-            ],
-        )
-
-
 class TestRunDetachedByDefault(_IsolatedBinDir):
     def test_run_spawns_detached_and_prints_run_id(self):
         captured_proc = {}
@@ -115,12 +69,11 @@ class TestRunDetachedByDefault(_IsolatedBinDir):
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmp)
-                with patch.object(sys, "argv", ["aet", "run"]):
-                    with self._bin_env():
-                        with patch.object(aet.subprocess, "Popen", side_effect=fake_popen) as popen_mock:
-                            with patch.object(aet, "_generate_run_id", return_value="run-detached-abc"):
-                                with patch("builtins.print") as print_mock:
-                                    rc = aet.main()
+                with self._bin_env():
+                    with patch.object(aet.subprocess, "Popen", side_effect=fake_popen) as popen_mock:
+                        with patch.object(aet, "_generate_run_id", return_value="run-detached-abc"):
+                            with patch.object(aet.typer, "echo") as echo_mock:
+                                rc = aet.app(["run"], standalone_mode=False)
             finally:
                 os.chdir(old_cwd)
 
@@ -131,7 +84,7 @@ class TestRunDetachedByDefault(_IsolatedBinDir):
             self.assertTrue(
                 captured_proc["kwargs"]["stdout"].name.endswith("run-detached-abc/output.log")
             )
-            printed = " ".join(str(call.args[0]) for call in print_mock.call_args_list)
+            printed = " ".join(str(call.args[0]) for call in echo_mock.call_args_list)
             self.assertIn("run-detached-abc", printed)
             run_dir = tmp_path / ".agents" / "runs" / "run-detached-abc"
             self.assertTrue(run_dir.is_dir())
@@ -151,11 +104,10 @@ class TestRunDetachedByDefault(_IsolatedBinDir):
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmp)
-                with patch.object(sys, "argv", ["aet", "run-one", "docs/plans/x.md"]):
-                    with self._bin_env():
-                        with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
-                            with patch.object(aet, "_generate_run_id", return_value="run-one-abc"):
-                                rc = aet.main()
+                with self._bin_env():
+                    with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
+                        with patch.object(aet, "_generate_run_id", return_value="run-one-abc"):
+                            rc = aet.app(["run-one", "docs/plans/x.md"], standalone_mode=False)
             finally:
                 os.chdir(old_cwd)
 
@@ -176,10 +128,9 @@ class TestRunForeground(_IsolatedBinDir):
             captured["argv"] = exec_argv
             raise SystemExit(0)
 
-        with patch.object(sys, "argv", ["aet", "run", "--foreground"]):
-            with self._bin_env():
-                with patch.object(aet.os, "execvp", mock_execvp):
-                    rc = aet.main()
+        with self._bin_env():
+            with patch.object(aet.os, "execvp", mock_execvp):
+                rc = aet.app(["run", "--foreground"], standalone_mode=False)
 
         self.assertEqual(rc, 0)
         self.assertEqual(Path(captured["path"]), Path(sys.executable))
@@ -195,42 +146,21 @@ class TestRunForeground(_IsolatedBinDir):
             captured["argv"] = exec_argv
             raise SystemExit(0)
 
-        with patch.object(sys, "argv", ["aet", "run-one", "docs/plans/x.md", "--foreground"]):
-            with self._bin_env():
-                with patch.object(aet.os, "execvp", mock_execvp):
-                    rc = aet.main()
+        with self._bin_env():
+            with patch.object(aet.os, "execvp", mock_execvp):
+                rc = aet.app(["run-one", "docs/plans/x.md", "--foreground"], standalone_mode=False)
 
         self.assertEqual(rc, 0)
         self.assertIn("--plan-file", captured["argv"])
         self.assertIn("docs/plans/x.md", captured["argv"])
         self.assertNotIn("--run-id", captured["argv"])
 
-    def test_exec_mode_subcommand_still_uses_exec(self):
-        """`_exec()` itself is untouched for non-run subcommands."""
-        captured = {}
-
-        def mock_execvp(path, exec_argv):
-            captured["path"] = path
-            captured["argv"] = exec_argv
-            raise SystemExit(0)
-
-        with patch.object(sys, "argv", ["aet", "status", "--queue-file", "q.json"]):
-            with self._bin_env():
-                with patch.object(aet.os, "execvp", mock_execvp):
-                    rc = aet.main()
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(captured["argv"][1], str(_REPO_ROOT / "src" / "aet" / "cli" / "status.py"))
-        self.assertIn("--queue-file", captured["argv"])
-
-
 class TestFollowRun(_IsolatedBinDir):
     def test_follow_unknown_run_exits_1(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(sys, "argv", ["aet", "run", "--follow", "run-missing"]):
-                with self._bin_env():
-                    with patch.dict(os.environ, {"PWD": tmp}):
-                        rc = aet.main()
+            with self._bin_env():
+                with patch.dict(os.environ, {"PWD": tmp}):
+                    rc = aet.app(["run", "--follow", "run-missing"], standalone_mode=False)
         self.assertEqual(rc, 1)
 
     def test_follow_prints_existing_log_and_returns_rc(self):
@@ -244,15 +174,14 @@ class TestFollowRun(_IsolatedBinDir):
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmp)
-                with patch.object(sys, "argv", ["aet", "run", "--follow", "run-done"]):
-                    with self._bin_env():
-                        with patch("builtins.print") as print_mock:
-                            rc = aet.main()
+                with self._bin_env():
+                    with patch.object(aet.typer, "echo") as echo_mock:
+                        rc = aet.app(["run", "--follow", "run-done"], standalone_mode=False)
             finally:
                 os.chdir(old_cwd)
 
             self.assertEqual(rc, 0)
-            self.assertIn("hello log\n", [call.args[0] for call in print_mock.call_args_list])
+            self.assertIn("hello log\n", [call.args[0] for call in echo_mock.call_args_list])
 
 
 class TestIntegrationDetachedSpawn(_IsolatedBinDir):

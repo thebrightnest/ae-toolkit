@@ -2,27 +2,18 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
-import io
+import importlib
 import json
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from aet.backends.github_backend import GitHubBackend
+from tests.cli._helpers import run_typer
 
-_REPO_ROOT = Path(__file__).parents[2]
-_BACKLOG_PY = _REPO_ROOT / "src" / "aet" / "cli" / "backlog.py"
-
-_backlog_spec = importlib.util.spec_from_loader(
-    "backlog", importlib.machinery.SourceFileLoader("backlog", str(_BACKLOG_PY))
-)
-backlog = importlib.util.module_from_spec(_backlog_spec)
-_backlog_spec.loader.exec_module(backlog)
+aet = importlib.import_module("aet.cli.main")
 
 
 def _completed(stdout: str = "", returncode: int = 0, stderr: str = ""):
@@ -112,16 +103,19 @@ def _make_config(project_dir: Path) -> Path:
 
 class TestBacklogAdd(unittest.TestCase):
     def _run_backlog_add(self, cwd: str, target: str, config_path: Path, plans_dir: Path):
-        """Run the backlog add command and return its exit code."""
-        return backlog.main(
+        """Run the backlog add command and return its result."""
+        return run_typer(
+            aet.app,
             [
+                "backlog",
                 "add",
                 target,
                 "--config",
                 str(config_path),
                 "--plans-dir",
                 str(plans_dir),
-            ]
+            ],
+            cwd=cwd,
         )
 
     def test_backlog_add_unknown_plan_id_fails_closed(self):
@@ -132,12 +126,10 @@ class TestBacklogAdd(unittest.TestCase):
             plans_dir.mkdir(parents=True)
             config_path = _make_config(tmp_path)
 
-            stderr = io.StringIO()
-            with mock.patch.object(sys, "stderr", stderr):
-                rc = self._run_backlog_add(tmp, "nonexistent", config_path, plans_dir)
+            result = self._run_backlog_add(tmp, "nonexistent", config_path, plans_dir)
 
-            self.assertEqual(rc, 1)
-            self.assertIn("No plan found", stderr.getvalue())
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("No plan found", result.stderr)
 
     def test_backlog_add_draft_plan_labels_aet_draft(self):
         """A draft plan is boarded with the aet:draft label."""
@@ -171,9 +163,9 @@ class TestBacklogAdd(unittest.TestCase):
                     raise AssertionError(f"unexpected command: {args}")
 
                 mock_run.side_effect = side_effect
-                rc = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
+                result = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
 
-            self.assertEqual(rc, 0)
+            self.assertEqual(result.exit_code, 0)
 
             plan_text = plan.read_text(encoding="utf-8")
             self.assertIn("status: draft", plan_text)
@@ -219,9 +211,9 @@ class TestBacklogAdd(unittest.TestCase):
                     raise AssertionError(f"unexpected command: {args}")
 
                 mock_run.side_effect = side_effect
-                rc = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
+                result = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
 
-            self.assertEqual(rc, 0)
+            self.assertEqual(result.exit_code, 0)
 
             create_calls = [
                 call.args[1]
@@ -273,11 +265,11 @@ class TestBacklogAdd(unittest.TestCase):
 
                 mock_run.side_effect = side_effect
 
-                rc1 = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
-                self.assertEqual(rc1, 0)
+                result1 = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
+                self.assertEqual(result1.exit_code, 0)
 
-                rc2 = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
-                self.assertEqual(rc2, 0)
+                result2 = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
+                self.assertEqual(result2.exit_code, 0)
 
             create_calls = [
                 call.args[1]
@@ -325,9 +317,9 @@ class TestBacklogAdd(unittest.TestCase):
                     raise AssertionError(f"unexpected command: {args}")
 
                 mock_run.side_effect = side_effect
-                rc = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
+                result = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
 
-            self.assertEqual(rc, 0)
+            self.assertEqual(result.exit_code, 0)
 
             create_calls = [
                 call.args[1]
@@ -361,19 +353,17 @@ class TestBacklogAdd(unittest.TestCase):
 
             config_path = _make_config(tmp_path)
 
-            stderr = io.StringIO()
-            with mock.patch.object(sys, "stderr", stderr):
-                with mock.patch.object(
-                    GitHubBackend, "_run_gh", autospec=True
-                ) as mock_run:
-                    mock_run.side_effect = Exception("gh not found")
-                    rc = self._run_backlog_add(
-                        tmp, str(plan), config_path, plans_dir
-                    )
+            with mock.patch.object(
+                GitHubBackend, "_run_gh", autospec=True
+            ) as mock_run:
+                mock_run.side_effect = Exception("gh not found")
+                result = self._run_backlog_add(
+                    tmp, str(plan), config_path, plans_dir
+                )
 
-            self.assertEqual(rc, 0)
-            self.assertIn("warning:", stderr.getvalue())
-            self.assertIn("GitHubBackend", stderr.getvalue())
+            self.assertEqual(result.exit_code, 0)
+            self.assertIn("warning:", result.stderr)
+            self.assertIn("GitHubBackend", result.stderr)
 
             plan_text = plan.read_text(encoding="utf-8")
             self.assertIn("status: draft", plan_text)
