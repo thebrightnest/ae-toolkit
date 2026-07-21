@@ -4,7 +4,7 @@ size: L
 blocked_by:
   - pkg-06-cross-skill-extraction
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Adds the typer runtime dependency and rewrites the entire CLI parsing surface — both supply-chain and behavior-review relevant.
 docs_sync: required
@@ -156,5 +156,5 @@ harmless (or drop the pin in the same revert).
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run aet-ship*
