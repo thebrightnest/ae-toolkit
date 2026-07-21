@@ -1,7 +1,7 @@
 ---
 id: uvi-03-installer-smoke-test
 size: M
-status: approved
+status: queued
 blocked_by:
   - uvi-02-curl-installer-script
 pipeline: standard
