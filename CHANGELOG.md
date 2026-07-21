@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.4.0] — 2026-07-21
+
+### Added
+
+- **`aet setup skills`** — install skill symlinks into detected agent directories (`claude-code`, `kimi`, `cursor`, `generic`) with `--agent`, `--skills-dir`, `--bin-dir`, `--dry-run`, and `--force` flags (uvi-01).
+- **One-line curl installer** — `scripts/install.sh` bootstraps `uv`, clones the repo, installs the `aet` CLI into a dedicated venv, and links skills into the agent directory; supports `--repo`, `--tag`, `--agent`, `--bin-dir`, `--skills-dir`, and `--dry-run` (uvi-02).
+- **Installer smoke tests** — hermetic pytest suite exercises the installer against a local checkout and asserts `aet --version`, skill symlinks, idempotence, and `--dry-run` no-op behavior (uvi-03).
+- **`make test-installer`** — standalone target that runs the installer smoke tests in isolation.
+
+### Changed
+
+- **README Quick Start rewrite** — leads with the curl one-liner, documents installer flags, adds tag-install and PATH-troubleshooting examples, and notes the `npx skills add` path (uvi-04).
+- **Task-size guardrails revision** — replaces the dual file-count/task-list-line intake model with context-budget + subsystem-coherence rules; redefines L-size as a re-evaluation trigger rather than an automatic split (tgr-01/02).
+
+### Fixed
+
+- **`aet ship` branch push** — pushes the current branch explicitly as `HEAD:<branch>` so worktree branches are not rejected.
+- **`aet ship` PR base normalization** — normalizes `origin/main` to `main` when invoking `gh pr create --base`.
+
 ## [1.3.0] — 2026-07-21
 
 ### Added
