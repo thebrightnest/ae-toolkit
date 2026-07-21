@@ -1,7 +1,7 @@
 ---
 id: uvi-04-installer-docs-update
 size: S
-status: approved
+status: queued
 blocked_by:
   - uvi-02-curl-installer-script
 pipeline: minimal
