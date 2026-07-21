@@ -28,18 +28,22 @@ and the static page byte-identical. Localhost-only binding is preserved.
 
 ## Task List
 
-1. Add the chosen framework + server to `pyproject.toml` runtime
+1. ✓ Add the chosen framework + server to `pyproject.toml` runtime
    dependencies — S (traces: R-9)
-2. Rewrite `src/aet/panel/serve.py` routes on the framework: `/` (static
+2. ✓ Rewrite `src/aet/panel/serve.py` routes on the framework: `/` (static
    page), telemetry archive endpoints; identical response bodies, headers,
    and status codes; bind 127.0.0.1 only; preserve `--no-open` and browser
    launch behavior — M (traces: R-9)
-3. Update `tests/test_panel_serve.py` and the `.mjs` integration scripts
+3. ✓ Update `tests/test_panel_serve.py` and the `.mjs` integration scripts
    (`scripts/test-panel-live-runs.mjs`,
    `scripts/test-panel-plan-detail.mjs`) — response assertions must pass
    unmodified; update `docs/telemetry-guide.md` run instructions — M
-   (traces: R-9)
-4. Merge branch to main and verify integration — S
+   (traces: R-9) [Changed: test module reorganized to
+   `tests/panel/test_panel_serve.py`; `.mjs` scripts now spawn
+   `.venv/bin/python3` to keep the test interpreter consistent with the
+   editable install]
+4. Merge branch to main and verify integration — S [Deferred: pending
+   ship stage]
 
 **Size definitions:**
 
@@ -89,5 +93,5 @@ can be dropped in the same revert.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*

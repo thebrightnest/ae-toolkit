@@ -356,6 +356,27 @@ _Recorded: 2026-07-19 — Branch: pkg-02-package-skeleton_
 
 - Task 5 (merge branch to main and verify integration): pending the ship stage.
 
+### pkg-12-panel-framework — Changed from plan
+
+- Task 3 (test updates): `tests/test_panel_serve.py` was reorganized to
+  `tests/panel/test_panel_serve.py` as part of the domain-mirrored test layout;
+  the import/spawn sites and assertions were updated to match the Starlette +
+  uvicorn server.
+- Task 3 (`.mjs` integration scripts): the plan only noted a possible launch
+  path change, but the scripts were also updated to spawn
+  `.venv/bin/python3` instead of the system `python3` so the integration tests
+  run against the same interpreter as the editable install.
+
+### pkg-12-panel-framework — Added (unplanned)
+
+- `docs/telemetry-guide.md` implementation-notes paragraph was refreshed in
+  addition to the run instructions, documenting the new Starlette + uvicorn
+  stack and the `127.0.0.1` binding.
+
+### pkg-12-panel-framework — Deferred
+
+- Task 4 (merge branch to main and verify integration): pending the ship stage.
+
 ---
 
 _Stage: synced_
