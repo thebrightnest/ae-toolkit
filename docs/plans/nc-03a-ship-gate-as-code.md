@@ -100,4 +100,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
