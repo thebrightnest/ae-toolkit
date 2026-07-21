@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pld-01-governance-as-data-adr
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: New parser reading a repo-controlled rules file into the validate gate; must use yaml.safe_load and must not evaluate rule content, or a rules file becomes an execution vector.
 docs_sync: required
@@ -107,5 +107,5 @@ restores the previous gate exactly; the pytest assertions are still live.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
