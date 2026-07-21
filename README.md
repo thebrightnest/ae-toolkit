@@ -62,42 +62,38 @@ This is why `aet plan` doesn't exist: planning is judgment — a skill your agen
 
 AE Toolkit has two parts: the **Python CLI package** (`aet`) and the **skill instructions** your agent reads. You need both for the pipeline to work.
 
-### 1. Install the Python package
+### One-line install (macOS/Linux)
 
-The `aet` command is a Python console script. Install it into an environment of your choice:
+The installer bootstraps `uv`, clones the repo, installs the `aet` CLI into a dedicated venv, links skills into detected agent directories, and symlinks `aet` onto `PATH`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash
+```
+
+Target a specific agent, or see what would happen first:
+
+```bash
+# Target one agent directory explicitly
+curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash -s -- --agent claude-code
+
+# Preview every planned action without making changes
+curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash -s -- --dry-run
+```
+
+`~/.local/bin` must be on your `PATH`. The installer warns you if it is not, but leaves shell-profile editing to you.
+
+### Manual install
+
+If you prefer not to run the curl installer, install the Python package and skills separately:
+
+#### 1. Install the Python package
 
 ```bash
 # Latest release from source
 pip install git+https://github.com/thebrightnest/ae-toolkit.git@v1.3.0
 ```
 
-Or clone the repo and install editable for local development:
-
-```bash
-git clone https://github.com/thebrightnest/ae-toolkit.git
-cd ae-toolkit
-pip install -e ".[dev]"
-```
-
-### 2. Install the skills
-
-AE Toolkit is a single system, not a menu of independent skills. The pipeline skills are designed to work together — installing only one leaves you with broken handoffs and missing helpers. Install the whole toolkit:
-
-```bash
-npx skills add https://github.com/thebrightnest/ae-toolkit --all
-```
-
-Target a specific agent if needed:
-
-```bash
-npx skills add https://github.com/thebrightnest/ae-toolkit --all -a claude-code
-```
-
-Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx skills` directly.
-
-`npx skills` copies skill markdown to your agent's skills directory; it does **not** install the Python CLI. Step 1 above is required for the commands below to exist.
-
-You can also symlink skills directly from a local clone with the `aet setup skills` command:
+#### 2. Install the skills
 
 ```bash
 # Auto-detect installed agents and link skills to all of them
@@ -113,21 +109,15 @@ aet setup skills --skills-dir ~/.claude/skills
 aet setup skills --dry-run
 ```
 
-### 3. Put `aet` on `PATH`
-
-The `aet` package dispatches to every helper (`aet state`, `aet run`, `aet mine-learnings`, etc.). Link it into your bin directory:
+#### 3. Put `aet` on `PATH`
 
 ```bash
 aet install
 ```
 
-Or invoke via your agent's skill command (e.g., `/aet-setup install-binaries` in Claude Code). The installer symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes retired legacy binary names. If `~/.local/bin` is not on your `PATH`, add it to your shell profile — after that, `aet` maintains its own link.
+The installer symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`). If `~/.local/bin` is not on your `PATH`, add it to your shell profile — after that, `aet` maintains its own link.
 
-If you cloned this repo and are developing skills locally, `make install-skills` installs the package, symlinks skills, and runs `aet install` automatically.
-
-### Option 2: Manual install
-
-Copy skill directories to your agent's skills folder, or paste the skill content directly into chat:
+You can also copy skill directories to your agent's skills folder, or paste the skill content directly into chat:
 
 ```bash
 # Agent-neutral standard
@@ -135,6 +125,19 @@ cp -r skills/aet-setup ~/.agents/skills/
 
 # Or simply open any SKILL.md and paste it into your chat
 ```
+
+### Development install
+
+Clone the repo and install editable for local development:
+
+```bash
+git clone https://github.com/thebrightnest/ae-toolkit.git
+cd ae-toolkit
+pip install -e ".[dev]"
+make install-skills
+```
+
+`make install-skills` installs the package, symlinks skills, and runs `aet install` automatically.
 
 ### Run it
 
