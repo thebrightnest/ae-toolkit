@@ -3,7 +3,7 @@ id: tgr-01-skill-convention-update
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Changes skill instructions that control how agents scope work; mis-scoping can affect security-sensitive changes.
 docs_sync: required
@@ -91,5 +91,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
