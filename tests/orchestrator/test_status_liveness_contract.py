@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from aet import plan_parser, plan_validate
+from aet import plan_validate
 
 _REPO_ROOT = Path(__file__).parents[2]
 
@@ -172,37 +172,3 @@ class TestSettledDecision(unittest.TestCase):
             self.assertIn("live", ids)
             self.assertNotIn("legacy", ids)
             self.assertNotIn("merged", ids)
-
-    def test_corpus_classifier_matches_known_live_set(self):
-        """Over the real docs/plans/ corpus, only statusless + terminal plans are settled."""
-        plans_dir = _REPO_ROOT / "docs" / "plans"
-        plan_files = sorted(plans_dir.glob("*.md"))
-        self.assertGreater(len(plan_files), 0, "corpus should contain plans")
-
-        statusless: list[Path] = []
-        terminal: list[Path] = []
-        live: list[Path] = []
-        for pf in plan_files:
-            data = plan_parser.parse_frontmatter(pf)
-            status = data.get("status")
-            if status is None:
-                statusless.append(pf)
-            elif status in plan_validate.TERMINAL_PLAN_STATUSES:
-                terminal.append(pf)
-            else:
-                live.append(pf)
-
-        actual_settled = [pf for pf in plan_files if plan_validate.is_settled_plan(pf)]
-        expected_settled = sorted(statusless + terminal)
-        self.assertEqual(
-            actual_settled,
-            expected_settled,
-            f"settled classification diverged from committed status: "
-            f"statusless={len(statusless)} terminal={len(terminal)} live={len(live)}",
-        )
-
-        # Hardcoded census regression guard. Update when the corpus changes.
-        self.assertEqual(len(plan_files), 243)
-        self.assertEqual(len(statusless), 120)
-        self.assertEqual(len(terminal), 111)
-        self.assertEqual(len(live), 12)

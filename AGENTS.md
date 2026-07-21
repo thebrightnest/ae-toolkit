@@ -46,7 +46,8 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 | `make lint`             | Run markdownlint on all markdown files (manual / staged-only)                        |
 | `make lint-py`          | Run ruff on Python files                                                             |
 | `make test`             | Run pytest suite                                                                     |
-| `make validate`         | Run lint-py + workflow lint + skills-lint + skill-structure validator + test         |
+| `make validate`         | Run lint-py + workflow lint + skills-lint + skill-structure validator + `aet plans lint` + test |
+| `aet plans lint`        | Lint the `docs/plans/` corpus for settled/live misclassification                     |
 | `make install-hooks`    | Install pre-commit hooks                                                             |
 
 ## Skill Structure Validator
