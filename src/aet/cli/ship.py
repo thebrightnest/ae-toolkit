@@ -442,8 +442,10 @@ def _push_branch(rebased: bool, dry_run: bool) -> tuple[bool, str]:
 
 def _create_pr(pr_base: str, title: str, body: str, dry_run: bool) -> tuple[bool, str]:
     """Create a GitHub PR using ``gh pr create``."""
+    # ``gh`` expects a branch name, not a remote tracking ref.
+    gh_base = pr_base.removeprefix("origin/")
     if dry_run:
-        return True, f"Would create PR against `{pr_base}` with title: {title}"
+        return True, f"Would create PR against `{gh_base}` with title: {title}"
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as body_file:
         body_file.write(body)
         body_path = body_file.name
@@ -454,7 +456,7 @@ def _create_pr(pr_base: str, title: str, body: str, dry_run: bool) -> tuple[bool
                 "pr",
                 "create",
                 "--base",
-                pr_base,
+                gh_base,
                 "--title",
                 title,
                 "--body-file",
