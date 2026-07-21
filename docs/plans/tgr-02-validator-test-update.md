@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - tgr-01-skill-convention-update
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Validator changes determine which plans are allowed into the work queue; misalignment could admit oversized tasks.
 docs_sync: required
