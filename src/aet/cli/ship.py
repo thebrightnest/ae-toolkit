@@ -2,13 +2,15 @@
 """aet-ship — Pre-merge gate, PR creation, and post-merge closure for AE Toolkit tasks.
 
 Usage:
-  ship gate <plan_file>               Run the pre-merge gate (steps 1-9).
-  ship open <plan_file>               Run the gate and open a PR.
-  ship record-merge <task_id> <plan_file> [queue_file]
-  ship <task_id> <plan_file> [queue_file]   Legacy alias for record-merge.
+  aet ship <plan_file>                Run the gate, then open a PR.
+  aet ship gate <plan_file>           Run the pre-merge gate (steps 1-9).
+  aet ship open <plan_file>           Run the gate and open a PR.
+  aet ship close <task_id> <plan_file> [queue_file]
+                                      Record post-merge closure.
+  aet ship record-merge <task_id> <plan_file> [queue_file]
+                                      Hidden alias for ``close``.
 
-The pre-merge gate and PR creation are implemented in code; the merge closure
-steps still follow aet-ship/SKILL.md.
+The pre-merge gate, PR creation, and merge closure are all implemented in code.
 """
 
 from __future__ import annotations
@@ -70,6 +72,19 @@ def cmd_ship(args):
         merge_commit=getattr(args, "merge_commit", None),
     )
     return aet_state.cmd_record_merge(ns)
+
+
+def cmd_default(args: argparse.Namespace) -> int:
+    """Run the gate and, if it passes, open a PR for a plan."""
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        return _fail(f"Plan file not found: {plan_path}")
+
+    print(f"Running aet ship for {plan_path}")
+    gate_rc = cmd_gate(args)
+    if gate_rc != 0:
+        return gate_rc
+    return cmd_open(args)
 
 
 def _fail(message: str) -> int:
@@ -520,10 +535,35 @@ def cmd_open(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_close_args(parser: argparse.ArgumentParser) -> None:
+    """Add the post-merge closure arguments to *parser*."""
+    parser.add_argument("task_id", help="Task ID to close.")
+    parser.add_argument("plan", help="Path to the plan markdown file.")
+    parser.add_argument(
+        "queue",
+        nargs="?",
+        default=".agents/work-queue.json",
+        help="Path to the work queue JSON file.",
+    )
+    parser.add_argument(
+        "--branch",
+        help="Branch name to use for merge verification. Overrides the task's branch field.",
+    )
+    parser.add_argument(
+        "--merge-commit",
+        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes.",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="ship",
-        description="Pre-merge gate and post-merge closure for AE Toolkit tasks.",
+        prog="aet ship",
+        description="Pre-merge gate, PR creation, and post-merge closure for AE Toolkit tasks.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -564,26 +604,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     close_parser = sub.add_parser(
-        "record-merge",
+        "close",
         help="Record post-merge closure for a task.",
     )
-    close_parser.add_argument("task_id", help="Task ID to close.")
-    close_parser.add_argument("plan", help="Path to the plan markdown file.")
-    close_parser.add_argument(
-        "queue",
-        nargs="?",
-        default=".agents/work-queue.json",
-        help="Path to the work queue JSON file.",
+    _add_close_args(close_parser)
+
+    # Hidden alias kept for backward compatibility during the transition.
+    record_merge_parser = sub.add_parser(
+        "record-merge",
+        help=argparse.SUPPRESS,
     )
-    close_parser.add_argument(
-        "--branch",
-        help="Branch name to use for merge verification. Overrides the task's branch field.",
+    _add_close_args(record_merge_parser)
+
+    # Default behavior when the first positional argument is a plan file.
+    default_parser = sub.add_parser(
+        "default",
+        help=argparse.SUPPRESS,
     )
-    close_parser.add_argument(
-        "--merge-commit",
-        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
+    default_parser.add_argument(
+        "plan",
+        help="Path to the plan markdown file.",
     )
-    close_parser.add_argument(
+    default_parser.add_argument(
+        "--base",
+        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+    )
+    default_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would be done without making changes.",
@@ -592,12 +638,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+_KNOWN_SUBCOMMANDS = {"gate", "open", "close", "record-merge"}
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse arguments, mapping the legacy closure syntax to record-merge."""
+    """Parse arguments.
+
+    A bare ``aet ship <plan_file>`` is treated as the default subcommand, which
+    runs the gate and then opens a PR. Explicit subcommands are dispatched
+    unchanged.
+    """
     argv = list(argv or sys.argv[1:])
-    # Backward compatibility: ship <task_id> <plan> [queue] => ship record-merge ...
-    if argv and argv[0] not in ("gate", "open", "record-merge", "--help", "-h"):
-        argv.insert(0, "record-merge")
+    if not argv:
+        parser = build_parser()
+        parser.print_help(sys.stderr)
+        parser.exit(2)
+    if argv[0] not in _KNOWN_SUBCOMMANDS and argv[0] not in ("--help", "-h"):
+        argv.insert(0, "default")
     return build_parser().parse_args(argv)
 
 
@@ -607,8 +664,10 @@ def main(argv: list[str] | None = None):
         return cmd_gate(args)
     if args.command == "open":
         return cmd_open(args)
-    if args.command == "record-merge":
+    if args.command in ("close", "record-merge"):
         return cmd_ship(args)
+    if args.command == "default":
+        return cmd_default(args)
     return _fail(f"Unknown command: {args.command}")
 
 

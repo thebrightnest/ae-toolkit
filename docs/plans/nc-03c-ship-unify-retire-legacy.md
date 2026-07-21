@@ -90,5 +90,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run aet-ship*
