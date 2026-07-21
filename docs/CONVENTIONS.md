@@ -99,7 +99,7 @@ The `docs/` directory has strict boundaries for planning documents. Only atomic,
 
 | Directory        | Purpose                                                                        | Queue Ingestion                                           |
 | ---------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `docs/plans/`    | Atomic, implementable task plans (single session, ≤ 8 files, ≤ 300 diff lines) | Yes — `aet init-queue` and `aet queue sync` scan this directory |
+| `docs/plans/`    | Atomic, implementable task plans (single session, ≤ 300 task-list lines) | Yes — `aet init-queue` and `aet queue sync` scan this directory |
 | `docs/prds/`     | Product Requirements Documents                                                 | No                                                        |
 | `docs/roadmaps/` | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
 | `docs/audits/`   | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
@@ -107,7 +107,7 @@ The `docs/` directory has strict boundaries for planning documents. Only atomic,
 Rules:
 
 - A document in `docs/plans/` that references other plan files or contains multiple "Phase" sections is non-atomic and must be moved to `docs/roadmaps/` or `docs/audits/`.
-- The dual-limit model (Task Size Guardrails) is the operative filter: if a plan exceeds AI-complexity limits, it does not belong in `docs/plans/`.
+- The task-list-length check (Task Size Guardrails) is the operative intake filter: if a plan exceeds the 300 task-list line limit, it does not belong in `docs/plans/`.
 - Directory creation is the user's responsibility; skills document the convention but do not auto-create directories.
 
 ## Plan Frontmatter Contract
@@ -125,7 +125,7 @@ blocked_by:
 
 - `id` must match the plan filename stem and be unique within the PRD family.
 - `blocked_by` is the authoritative dependency list; prose dependency sections are ignored by `aet queue sync`.
-- `size` is the S/M/L complexity label from the dual-limit model.
+- `size` is the S/M/L complexity label from the guardrail model.
 - `stage` lives only in the task record, never in plan frontmatter.
 
 `aet queue sync` validates the contract and fails closed on missing or duplicate IDs, unknown blockers, mismatched filenames, or invalid size values.
@@ -179,35 +179,45 @@ Length: Keep `SKILL.md` under 400 lines. Move deep detail to `references/`.
 
 ## Task Size Guardrails
 
-All planning output must be implementable in a single agent coding session. Use the dual-limit model to enforce this.
+All planning output must be implementable in a single agent coding session. Use the context-budget + coherence model to enforce this.
 
-### Dual-Limit Model
+### Guardrail Model
 
-| Layer                   | Human-Time Limit | AI-Complexity Limit            |
-| ----------------------- | ---------------- | ------------------------------ |
-| Story (PRD → ticket)    | ≤ 2 days         | ≤ 10 files OR ≤ 500 diff lines |
-| Task (ticket → plan.md) | ≤ 4 agent-hours  | ≤ 8 files OR ≤ 300 diff lines  |
+A plan/task is oversized when **any** of the following are true:
 
-A task **fails** if **either** limit is exceeded. AI-complexity is the operative limit.
+1. **Task-list length** (validator-enforced proxy for expected diff size):
+   - Task: > 300 task-list lines, enforced by `validate_size()`. A task list that long is almost certainly a > 300-line diff.
+2. **Story-level diff guidance** (skill-level only, not validator-enforced):
+   - Story: > 500 expected diff lines.
+3. **Human-time sanity check** (skill-level guidance, not validator-enforced):
+   - Story: > 2 human-days.
+   - Task: > 4 agent-hours.
+4. **Subsystem coherence** (skill-level guidance):
+   - Touches files in more than 2 distinct subsystems. A _subsystem_ is a bounded module or layer with its own ownership boundary — in this repo, for example: `src/aet/` (CLI code + its tests), `skills/` (skill content), `.agents/` (workflow infrastructure), `docs/` (documentation). Edits spanning two of these (e.g., code and its tests) are one coherent change; three or more usually signal multiple concerns.
+   - Requires maintaining more than one major architectural invariant at a time.
+5. **Context budget** (skill-level guidance):
+   - Loading the plan + all files to modify + relevant tests would exceed ~30k tokens for a task or ~50k tokens for a story.
+
+The task-list-length check remains the only hard intake check. File count is no longer a rejection criterion; it is folded into the coherence and context-budget checks.
 
 ### Size Labels
 
-Every task must carry an S/M/L label:
+Every task must carry an S/M/L label. L is a re-evaluation trigger, not an automatic split trigger.
 
-| Label | Human Time                          | Files | Diff Lines |
-| ----- | ----------------------------------- | ----- | ---------- |
-| S     | ≤ 2 hr                              | ≤ 3   | ≤ 100      |
-| M     | ≤ 1 day                             | ≤ 5   | ≤ 200      |
-| L     | > 1 day OR > 5 files OR > 200 lines | —     | —          |
+| Label | Human Time             | Diff Lines |
+| ----- | ---------------------- | ---------- |
+| S     | ≤ 2 hr                 | ≤ 100      |
+| M     | ≤ 1 day                | ≤ 200      |
+| L     | > 1 day OR > 200 lines | —          |
 
-**L is a mandatory split trigger.** No L task may enter the work queue without being broken down.
+An L task must be re-evaluated against the full model above and is split only if it actually exceeds a limit.
 
 ### Auto-Split Rule
 
 When a task exceeds limits:
 
-1. Split along vertical-slice boundaries (behavior, entity, or layer).
-2. Re-evaluate each child. Repeat recursively.
+1. Split along vertical-slice boundaries (behavior, entity, layer, or subsystem).
+2. Re-evaluate each child against the full model. Repeat recursively.
 3. **Max split depth = 3.** If a child still fails, mark it `⚠️ ATOMIC OVERSIZED` and surface for explicit user approval.
 4. Document splits with `Split from: {parent-id}` and suffix IDs (`01a`, `01b`).
 
