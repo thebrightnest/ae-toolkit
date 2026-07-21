@@ -23,12 +23,12 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ## Task List
 
-1. Add a `setup` Typer sub-app under `aet` with a `skills` command — M (traces: R-6, R-7)
-2. Implement agent-directory discovery and skill symlink logic — M (traces: R-6, R-7)
-3. Add CLI options for `--skills-dir`, `--agent`, `--dry-run`, and `--force` — S (traces: R-2, R-10)
-4. Wire the command into `src/aet/cli/main.py` and ensure `--help` works — S (traces: R-1)
-5. Add unit tests for discovery and symlink logic using temporary directories — M (traces: R-6, R-7)
-6. Run `make validate` and fix any lint/test failures — S
+1. [x] Add a `setup` Typer sub-app under `aet` with a `skills` command — M (traces: R-6, R-7)
+2. [x] Implement agent-directory discovery and skill symlink logic — M (traces: R-6, R-7)
+3. [x] Add CLI options for `--skills-dir`, `--agent`, `--dry-run`, and `--force` — S (traces: R-2, R-10)
+4. [x] Wire the command into `src/aet/cli/main.py` and ensure `--help` works — S (traces: R-1)
+5. [x] Add unit tests for discovery and symlink logic using temporary directories — M (traces: R-6, R-7)
+6. [x] Run `make validate` and fix any lint/test failures — S
 
 **Size definitions:**
 
@@ -56,13 +56,13 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ## Validation Steps
 
-- [ ] `aet setup skills --help` prints usage
-- [ ] `aet setup skills --dry-run --agent generic --skills-dir <tmp>` lists planned symlinks without writing
-- [ ] `aet setup skills --skills-dir <tmp>` creates symlinks for every `skills/*` directory
-- [ ] Re-running the command is idempotent
-- [ ] `make validate` passes (ruff, pytest, skills-lint)
-- [ ] R-trace coverage: every in-scope R-id is covered by ≥ 1 task; no task cites an unknown R-id
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `aet setup skills --help` prints usage
+- [x] `aet setup skills --dry-run --agent generic --skills-dir <tmp>` lists planned symlinks without writing
+- [x] `aet setup skills --skills-dir <tmp>` creates symlinks for every `skills/*` directory
+- [x] Re-running the command is idempotent
+- [x] `make validate` passes (ruff, pytest, skills-lint)
+- [x] R-trace coverage: every in-scope R-id is covered by ≥ 1 task; no task cites an unknown R-id
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -70,5 +70,5 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_

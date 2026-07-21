@@ -91,9 +91,25 @@ None blocking for this PRD. The following assumptions were made because this is 
 
 ## Divergence Summary
 
-_None; this is a new PRD._
+_Recorded: 2026-07-21 — Branch: uvi-01-aet-setup-skills-command_
+
+### Changed from plan
+
+- None. The `aet setup skills` implementation matches the plan intent.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- `scripts/install.sh` one-line installer shell script (R-1 through R-5, R-8, R-10, R-11).
+- `uv` bootstrap logic and venv management (R-3, R-5).
+- Smoke test wired into `make validate` using a temporary `HOME` (R-13).
+- README Quick Start rewrite leading with the `curl | bash` one-liner (R-14).
+- These items remain in the PRD and will be addressed in follow-up plans.
 
 ---
 
-_Stage: scope-validated_
-_Next step: run `aet-work` (single-plan or multi-task queue)_
+_Stage: synced_
+_Next step: run `aet-ship`_
