@@ -26,7 +26,6 @@ ALL_TESTS = ("tests/",)
 # tests/test_change_scope.py, which fails when a module starts reading repo
 # Markdown without being listed here.
 DOC_COUPLED_TESTS = (
-    "tests/orchestrator/test_status_liveness_contract.py",
     "tests/ship/test_merge_governance.py",
     "tests/skills/test_aet_qa.py",
     "tests/skills/test_aet_review.py",

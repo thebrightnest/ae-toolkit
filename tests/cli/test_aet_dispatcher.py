@@ -59,6 +59,7 @@ class TestAetSpecTable(unittest.TestCase):
             "state",
             "gate",
             "plan",
+            "plans",
             "panel",
             "run",
             "run-one",
