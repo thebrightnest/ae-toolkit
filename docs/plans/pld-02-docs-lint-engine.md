@@ -34,18 +34,19 @@ a hyphenated `aet docs-lint`.
 
 ## Task List
 
-1. Implement the rule model and evaluator in `src/aet/docs_lint.py`: load rules
-   with `yaml.safe_load`, evaluate `must_contain`, `must_not_contain`, their
-   section-scoped variants, and `path_exists` / `path_absent` — M (traces: R-2)
-2. Give every rule a required `reason` field and render failures as
+1. ✓ Implement the rule model and evaluator in `src/aet/docs_lint.py`: load
+   rules with `yaml.safe_load`, evaluate `must_contain`, `must_not_contain`,
+   their section-scoped variants, and `path_exists` / `path_absent` — M
+   (traces: R-2)
+2. ✓ Give every rule a required `reason` field and render failures as
    `<file>: <reason>` with the offending expectation, so messages stay at least
    as diagnostic as the assertions they replace — S (traces: R-2)
-3. Decide and implement the posture for a rule whose target file is missing,
+3. ✓ Decide and implement the posture for a rule whose target file is missing,
    per the PRD open question: fail-closed by default, with `path_absent`
    covering deliberately retired files — S (traces: R-2)
-4. Wire `aet docs lint` into the CLI dispatcher and into `make validate` ahead
+4. ✓ Wire `aet docs lint` into the CLI dispatcher and into `make validate` ahead
    of pytest, preserving fail-fast ordering — S (traces: R-3)
-5. Unit-test the evaluator in `tests/scripts/test_docs_lint.py`: one case per
+5. ✓ Unit-test the evaluator in `tests/scripts/test_docs_lint.py`: one case per
    rule type, section scoping, a missing-target file, a malformed rules file,
    and message formatting — M (traces: R-2, R-3)
 6. Merge branch to main and verify integration — S
@@ -106,5 +107,5 @@ restores the previous gate exactly; the pytest assertions are still live.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
