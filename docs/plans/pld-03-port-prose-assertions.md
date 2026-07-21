@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - pld-02-docs-lint-engine
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Relocation of existing documentation assertions into the rules file; no runtime, dependency, or execution-path changes beyond the already-reviewed pld-02 engine.
 docs_sync: skipped
@@ -113,5 +113,5 @@ still consults `DOC_COUPLED_TESTS` and remains correct either way.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
