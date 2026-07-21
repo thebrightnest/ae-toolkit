@@ -75,6 +75,7 @@ from aet.cli import (  # noqa: E402
     release_prep,
     report,
     retro,
+    setup,
     ship,
     sprint,
     status,
@@ -98,6 +99,7 @@ app.add_typer(hooks.app, name="hooks", help="Git hook installation and managemen
 app.add_typer(plan.app, name="plan", help="Plan-quality commands.")
 app.add_typer(plans.app, name="plans", help="Bulk plan operations and corpus linting.")
 app.add_typer(sync.app, name="queue", help="Work queue sync and related operations.")
+app.add_typer(setup.app, name="setup", help="Setup and bootstrap commands.")
 app.add_typer(ship.app, name="ship", help="Pre-merge gate, PR creation, and post-merge closure.")
 app.add_typer(sprint.app, name="sprint", help="Sprint queue management.")
 
