@@ -173,8 +173,18 @@ class TestBuildParserExposure(unittest.TestCase):
         module = _load_bin("bp_ship", _BINS["ship"])
         parser = module.build_parser()
         self.assertIsInstance(parser, argparse.ArgumentParser)
-        args = parser.parse_args(["t1", "docs/plans/t1.md"])
+        args = parser.parse_args(["record-merge", "t1", "docs/plans/t1.md"])
+        self.assertEqual(args.command, "record-merge")
         self.assertEqual(args.task_id, "t1")
+        self.assertEqual(args.plan, "docs/plans/t1.md")
+        self.assertFalse(args.dry_run)
+
+    def test_ship_build_parser_has_gate_subcommand(self):
+        module = _load_bin("bp_ship", _BINS["ship"])
+        parser = module.build_parser()
+        self.assertIsInstance(parser, argparse.ArgumentParser)
+        args = parser.parse_args(["gate", "docs/plans/t1.md"])
+        self.assertEqual(args.command, "gate")
         self.assertEqual(args.plan, "docs/plans/t1.md")
         self.assertFalse(args.dry_run)
 
