@@ -98,7 +98,7 @@ The `docs/` directory has strict boundaries for planning documents. Only atomic,
 
 | Directory        | Purpose                                                                        | Queue Ingestion                                           |
 | ---------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `docs/plans/`    | Atomic, implementable task plans (single session, ≤ 8 files, ≤ 300 diff lines) | Yes — `aet init-queue` and `aet sync` scan this directory |
+| `docs/plans/`    | Atomic, implementable task plans (single session, ≤ 8 files, ≤ 300 diff lines) | Yes — `aet init-queue` and `aet queue sync` scan this directory |
 | `docs/prds/`     | Product Requirements Documents                                                 | No                                                        |
 | `docs/roadmaps/` | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
 | `docs/audits/`   | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
@@ -123,11 +123,11 @@ blocked_by:
 ```
 
 - `id` must match the plan filename stem and be unique within the PRD family.
-- `blocked_by` is the authoritative dependency list; prose dependency sections are ignored by `aet sync`.
+- `blocked_by` is the authoritative dependency list; prose dependency sections are ignored by `aet queue sync`.
 - `size` is the S/M/L complexity label from the dual-limit model.
 - `stage` lives only in the task record, never in plan frontmatter.
 
-`aet sync` validates the contract and fails closed on missing or duplicate IDs, unknown blockers, mismatched filenames, or invalid size values.
+`aet queue sync` validates the contract and fails closed on missing or duplicate IDs, unknown blockers, mismatched filenames, or invalid size values.
 
 ## SKILL.md Format
 

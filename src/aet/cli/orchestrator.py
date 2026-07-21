@@ -38,6 +38,9 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import Optional
+
+import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import (  # noqa: E402
@@ -251,7 +254,7 @@ def _record_stage(task: dict, stage: str, repo_root: str) -> bool:
     task_id = task.get("id")
     queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
     if task_id and os.path.exists(queue_file):
-        aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
+        aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
         result = subprocess.run(
             [
                 sys.executable,
@@ -1512,7 +1515,7 @@ def _mark_quarantined(
     """
     if from_state is None:
         from_state = "in_progress"
-    aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
+    aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
     result = subprocess.run(
         [
             sys.executable,
@@ -1547,7 +1550,7 @@ def _mark_failed(
     """
     if from_state is None:
         from_state = "in_progress"
-    aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
+    aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
     result = subprocess.run(
         [
             sys.executable,
@@ -1658,7 +1661,7 @@ def _finalize_task(
     the task's ledger record before the transition so it is preserved when the
     task is later sealed. No control path reads ``cost`` (ADR-031).
     """
-    aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
+    aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
     repo_root = repo_root or os.path.dirname(os.path.dirname(queue_file))
     if ret == 0:
         queue = backend.load()["queue"]
@@ -2004,7 +2007,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # Transition the task to in_progress through the sole writer so
                 # stored state reflects that it has been picked up.
                 from_state = current_state(task) or "ready"
-                aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
+                aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
                 result = subprocess.run(
                     [
                         sys.executable,
@@ -2191,7 +2194,7 @@ def _record_run_one_in_queue(
         if from_state is None:
             from_state = "planned"
 
-        aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
+        aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
         result = subprocess.run(
             [
                 sys.executable,
@@ -2405,7 +2408,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                             if _maybe_auto_merge(queue_task, queue_file, repo_root):
                                 pass  # perform_auto_merge prints success/failure.
                             else:
-                                aet_state_bin = str(_SCRIPT_DIR / "aet-state.py")
+                                aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
                                 result = subprocess.run(
                                     [
                                         sys.executable,
@@ -2485,5 +2488,123 @@ def main(argv: list[str] | None = None):
     return exit_code
 
 
+app = typer.Typer(
+    name="orchestrator",
+    help="AE Toolkit Unified Orchestrator",
+)
+
+
+def _isolation_choice(value: str) -> str:
+    if value not in ("minimal", "standard", "full"):
+        raise typer.BadParameter("must be one of: minimal, standard, full")
+    return value
+
+
+def _on_failure_choice(value: str) -> str:
+    if value not in ("triage", "continue", "halt"):
+        raise typer.BadParameter("must be one of: triage, continue, halt")
+    return value
+
+
+@app.callback(invoke_without_command=True)
+def orchestrator_callback(
+    ctx: typer.Context,
+    queue_file: Optional[str] = typer.Option(
+        None,
+        "--queue-file",
+        help="Path to work-queue.json (batch mode).",
+    ),
+    plan_file: Optional[str] = typer.Option(
+        None,
+        "--plan-file",
+        help="Path to a single plan.md (single-plan mode).",
+    ),
+    repo_root: str = typer.Option(
+        os.getcwd(),
+        "--repo-root",
+        help="Repository root path.",
+    ),
+    cli_bin: Optional[str] = typer.Option(
+        None,
+        "--cli-bin",
+        help="Agent CLI binary path.",
+    ),
+    isolation: str = typer.Option(
+        "standard",
+        "--isolation",
+        help="Isolation level.",
+        callback=_isolation_choice,
+    ),
+    max_jobs: int = typer.Option(
+        4,
+        "--max-jobs",
+        help="Max parallel tasks (batch mode).",
+    ),
+    task_timeout: int = typer.Option(
+        7200,
+        "--task-timeout",
+        help="Per-task wall-clock timeout in seconds (default: 7200).",
+    ),
+    stall_timeout: int = typer.Option(
+        300,
+        "--stall-timeout",
+        help="Stdout-silence timeout in seconds before a session is killed (default: 300).",
+    ),
+    heartbeat_interval: int = typer.Option(
+        60,
+        "--heartbeat-interval",
+        help="Seconds between heartbeat log lines (default: 60).",
+    ),
+    run_id: Optional[str] = typer.Option(
+        None,
+        "--run-id",
+        help="Run identifier used for telemetry and run metadata.",
+    ),
+    log_file: Optional[str] = typer.Option(
+        None,
+        "--log-file",
+        help="Redirect stdout/stderr to this file (detached-run mode).",
+    ),
+    on_failure: str = typer.Option(
+        "triage",
+        "--on-failure",
+        help=(
+            "What to do when a task fails in batch mode: triage (default) "
+            "requeues transient failures; continue marks failed and keeps "
+            "spawning; halt stops the shift on the first failure."
+        ),
+        callback=_on_failure_choice,
+    ),
+) -> None:
+    """AE Toolkit Unified Orchestrator."""
+    if queue_file is None and plan_file is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit(2)
+    if queue_file is not None and plan_file is not None:
+        typer.echo("error: --queue-file and --plan-file are mutually exclusive", err=True)
+        raise typer.Exit(2)
+
+    argv: list[str] = []
+    if queue_file is not None:
+        argv.extend(["--queue-file", queue_file])
+    if plan_file is not None:
+        argv.extend(["--plan-file", plan_file])
+    argv.extend(["--repo-root", repo_root])
+    if cli_bin is not None:
+        argv.extend(["--cli-bin", cli_bin])
+    argv.extend(["--isolation", isolation])
+    argv.extend(["--max-jobs", str(max_jobs)])
+    argv.extend(["--task-timeout", str(task_timeout)])
+    argv.extend(["--stall-timeout", str(stall_timeout)])
+    argv.extend(["--heartbeat-interval", str(heartbeat_interval)])
+    if run_id is not None:
+        argv.extend(["--run-id", run_id])
+    if log_file is not None:
+        argv.extend(["--log-file", log_file])
+    argv.extend(["--on-failure", on_failure])
+
+    raise typer.Exit(main(argv))
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

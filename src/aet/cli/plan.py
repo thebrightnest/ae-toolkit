@@ -11,6 +11,9 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
+
+import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
@@ -36,24 +39,6 @@ def _repo_root_from(path: Path) -> Path:
 def _fail(message: str) -> int:
     print(f"error: {message}", file=sys.stderr)
     return 1
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="plan",
-        description="Plan-quality commands for aet-work.",
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-    validate = sub.add_parser(
-        "validate",
-        help="Validate plan files for intake quality.",
-    )
-    validate.add_argument(
-        "plans",
-        nargs="*",
-        help="Plan files to validate (default: docs/plans/*.md)",
-    )
-    return parser
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -97,12 +82,20 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None):
-    args = build_parser().parse_args(argv)
-    if args.command == "validate":
-        return cmd_validate(args)
-    return _fail(f"unknown command: {args.command}")
+app = typer.Typer()
+
+
+@app.command("validate")
+def validate(
+    plans: Optional[list[str]] = typer.Argument(None, help="Plan files to validate (default: docs/plans/*.md)"),
+) -> None:
+    """Validate plan files for intake quality."""
+    if plans is None:
+        plans = []
+    args = argparse.Namespace(plans=plans)
+    rc = cmd_validate(args)
+    raise typer.Exit(rc)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

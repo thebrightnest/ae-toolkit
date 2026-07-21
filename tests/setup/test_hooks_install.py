@@ -7,36 +7,28 @@ driven through its stdin-driven CLI surface with a controlled evidence home.
 
 from __future__ import annotations
 
-import contextlib
 import importlib.machinery
 import importlib.util
-import io
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from click.testing import CliRunner
+
 from aet import evidence
 
 _REPO_ROOT = Path(__file__).parents[2]
 _HOOKS_BIN = _REPO_ROOT / "src" / "aet" / "cli" / "hooks.py"
-_AET_PY = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 
 _hooks_spec = importlib.util.spec_from_loader(
     "aet_hooks", importlib.machinery.SourceFileLoader("aet_hooks", str(_HOOKS_BIN))
 )
 hooks = importlib.util.module_from_spec(_hooks_spec)
 _hooks_spec.loader.exec_module(hooks)
-
-_aet_spec = importlib.util.spec_from_loader(
-    "aet_dispatcher", importlib.machinery.SourceFileLoader("aet_dispatcher", str(_AET_PY))
-)
-aet = importlib.util.module_from_spec(_aet_spec)
-_aet_spec.loader.exec_module(aet)
 
 ZERO = "0" * 40
 SHA = "1" * 40
@@ -60,13 +52,12 @@ def _init_git_repo(repo_root: str) -> None:
 
 def _run_hooks(argv, stdin_text=None, env=None):
     """Invoke the hooks CLI, capturing stdout/stderr. Returns (rc, out, err)."""
-    out, err = io.StringIO(), io.StringIO()
-    stdin = io.StringIO(stdin_text) if stdin_text is not None else sys.stdin
+    import typer as _typer
+
+    runner = CliRunner()
     with patch.dict(os.environ, env or {}, clear=False):
-        with patch("sys.stdin", stdin):
-            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                rc = hooks.main(argv)
-    return rc, out.getvalue(), err.getvalue()
+        result = runner.invoke(_typer.main.get_group(hooks.app), argv, input=stdin_text)
+    return result.exit_code, result.output, result.stderr
 
 
 def _hooks_dir(repo_root: str) -> Path:
@@ -234,31 +225,6 @@ class TestCheck(unittest.TestCase):
                     env=self._env(reports),
                 )
                 self.assertEqual(rc, 0, out + err)
-
-
-class TestDispatchRouting(unittest.TestCase):
-    def test_hooks_install_routed_through_aet_dispatcher(self):
-        spec = aet.SUBCOMMANDS.get("hooks")
-        self.assertIsNotNone(spec, "SUBCOMMANDS must gain a 'hooks' row")
-        self.assertEqual(spec["target"], ("aet.cli", "hooks"))
-        self.assertEqual(spec["mode"], "exec")
-
-        captured = {}
-
-        def mock_execvp(path, argv):
-            captured["path"] = Path(path)
-            captured["argv"] = argv
-            raise SystemExit(0)
-
-        with patch.object(sys, "argv", ["aet", "hooks", "install"]):
-            with patch.object(aet.os, "execvp", mock_execvp):
-                rc = aet.main()
-        self.assertEqual(rc, 0)
-        self.assertEqual(captured["path"], Path(sys.executable))
-        self.assertEqual(
-            captured["argv"],
-            [sys.executable, str(_REPO_ROOT / "src" / "aet" / "cli" / "hooks.py"), "install"],
-        )
 
 
 if __name__ == "__main__":

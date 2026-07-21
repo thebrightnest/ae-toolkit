@@ -6,11 +6,12 @@ the stored state, and reports counts, next tasks, failed tasks, and worktree hea
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
 from pathlib import Path
+
+import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet.backends.factory import create_backend  # noqa: E402
@@ -19,35 +20,6 @@ from aet.queue import (  # noqa: E402
     current_state,
     pending_blockers,
 )
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Show work queue status.")
-    parser.add_argument(
-        "--queue-file",
-        default=".agents/work-queue.json",
-        help="Path to work-queue.json",
-    )
-    parser.add_argument(
-        "--history-file",
-        default=".agents/work-history.jsonl",
-        help="Path to work-history.jsonl",
-    )
-    parser.add_argument(
-        "--plans-dir",
-        default="docs/plans",
-        help="Directory containing atomic plan markdown files",
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Print a machine-readable JSON projection instead of the human report",
-    )
-    return parser
-
-
-def parse_args(argv) -> argparse.Namespace:
-    return build_parser().parse_args(argv)
 
 
 def _display_category(task: dict) -> str:
@@ -143,10 +115,14 @@ def _json_projection(queue: list[dict], queue_file: str, runs_dir: Path) -> dict
     }
 
 
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
+def _run(
+    queue_file: str,
+    history_file: str,
+    plans_dir: Path,
+    json_output: bool,
+) -> int:
     backend = create_backend(
-        queue_file=args.queue_file, history_file=args.history_file
+        queue_file=queue_file, history_file=history_file
     )
     try:
         data = backend.load()
@@ -162,11 +138,10 @@ def main(argv: list[str] | None = None):
         # return an empty list and hide the very tasks status must surface.
         queue = backend.load(verify=False)["queue"]
         integrity_failed = True
-    plans_dir = Path(args.plans_dir)
     runs_dir = Path.cwd() / ".agents" / "runs"
 
-    if args.json:
-        print(json.dumps(_json_projection(queue, args.queue_file, runs_dir), indent=2))
+    if json_output:
+        print(json.dumps(_json_projection(queue, queue_file, runs_dir), indent=2))
         return 0
 
     orphaned = [] if integrity_failed else backend.plan_drift(plans_dir)
@@ -258,5 +233,45 @@ def main(argv: list[str] | None = None):
     return 0
 
 
+app = typer.Typer(invoke_without_command=True)
+
+
+@app.callback()
+def status(
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json",
+        "--queue-file",
+        help="Path to work-queue.json",
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl",
+        "--history-file",
+        help="Path to work-history.jsonl",
+    ),
+    plans_dir: Path = typer.Option(
+        Path("docs/plans"),
+        "--plans-dir",
+        help="Directory containing atomic plan markdown files",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Print a machine-readable JSON projection instead of the human report",
+    ),
+) -> None:
+    """Show work queue status."""
+    rc = _run(queue_file, history_file, plans_dir, json_output)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    try:
+        return app(argv, standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

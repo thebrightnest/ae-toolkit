@@ -3,13 +3,14 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).parents[2]
-SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "configure-backend.py"
+SCRIPT = REPO_ROOT / "src" / "aet" / "cli" / "configure_backend.py"
 
 
 from aet.backends.factory import create_backend  # noqa: E402
@@ -109,6 +110,7 @@ class TestConfigResolution(unittest.TestCase):
 
         result = subprocess.run(
             [
+                sys.executable,
                 str(SCRIPT),
                 "--backend",
                 "json",

@@ -1,4 +1,4 @@
-"""Behavior-driven tests for src/aet/cli/init-queue.py and src/aet/cli/sync.py."""
+"""Behavior-driven tests for src/aet/cli/init_queue.py and src/aet/cli/sync.py."""
 
 import json
 import os
@@ -31,9 +31,10 @@ def run_script(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=N
     env["PATH"] = str(fake_bin) + os.pathsep + env["PATH"]
     env["FAKE_PYTHON3_LOG"] = str(log_file)
 
+    module_name = script_name.replace("-", "_")
     cmd = [
         sys.executable,
-        str(REPO_ROOT / "src" / "aet" / "cli" / f"{script_name}.py"),
+        str(REPO_ROOT / "src" / "aet" / "cli" / f"{module_name}.py"),
         "--queue-file",
         str(queue_file),
         "--history-file",

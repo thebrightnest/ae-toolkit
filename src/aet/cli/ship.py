@@ -25,13 +25,17 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Optional
+
+import typer
+from typer.core import TyperGroup
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_parser  # noqa: E402
 
 # Load aet-state as a module so we can reuse its merge-resolution and
 # queue-mutation logic rather than duplicating it.
-_AET_STATE_PY = Path(__file__).resolve().parent / "aet-state.py"
+_AET_STATE_PY = Path(__file__).resolve().parent / "aet_state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state",
     importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY)),
@@ -671,5 +675,169 @@ def main(argv: list[str] | None = None):
     return _fail(f"Unknown command: {args.command}")
 
 
+class _ShipGroup(TyperGroup):
+    """Click group that routes bare ``ship <plan>`` to a hidden default command.
+
+    A callback with a positional ``plan`` argument cannot coexist with
+    subcommands because Click consumes the first token for the callback before
+    checking for a subcommand name. Inserting a hidden ``default`` command when
+    the first positional is not a known subcommand preserves the legacy argparse
+    routing exactly.
+    """
+
+    default_command_name = "default"
+
+    def resolve_command(self, ctx, args):
+        if args and not args[0].startswith("-"):
+            if args[0] not in self.commands:
+                args = [self.default_command_name, *args]
+        return super().resolve_command(ctx, args)
+
+
+app = typer.Typer(
+    name="ship",
+    help="Pre-merge gate, PR creation, and post-merge closure for AE Toolkit tasks.",
+    cls=_ShipGroup,
+)
+
+
+@app.command(name="default", hidden=True)
+def ship_default(
+    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    base: Optional[str] = typer.Option(
+        None,
+        "--base",
+        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes.",
+    ),
+) -> None:
+    """Run the gate and, if it passes, open a PR (default behavior)."""
+    rc = cmd_default(argparse.Namespace(plan=plan, base=base, dry_run=dry_run))
+    raise typer.Exit(rc)
+
+
+@app.command(name="gate")
+def ship_gate(
+    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    base: Optional[str] = typer.Option(
+        None,
+        "--base",
+        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes.",
+    ),
+) -> None:
+    """Run the pre-merge validation gate."""
+    rc = cmd_gate(argparse.Namespace(plan=plan, base=base, dry_run=dry_run))
+    raise typer.Exit(rc)
+
+
+@app.command(name="open")
+def ship_open(
+    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    base: Optional[str] = typer.Option(
+        None,
+        "--base",
+        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes.",
+    ),
+) -> None:
+    """Run the gate and open a PR for the plan."""
+    rc = cmd_open(argparse.Namespace(plan=plan, base=base, dry_run=dry_run))
+    raise typer.Exit(rc)
+
+
+def _run_ship_close(
+    task_id: str,
+    plan: str,
+    queue: str,
+    branch: Optional[str],
+    merge_commit: Optional[str],
+    dry_run: bool,
+) -> int:
+    return cmd_ship(
+        argparse.Namespace(
+            command="record-merge",
+            task_id=task_id,
+            plan=plan,
+            queue=queue,
+            dry_run=dry_run,
+            branch=branch,
+            merge_commit=merge_commit,
+        )
+    )
+
+
+@app.command(name="close")
+def ship_close(
+    task_id: str = typer.Argument(..., help="Task ID to close."),
+    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    queue: str = typer.Argument(
+        ".agents/work-queue.json",
+        help="Path to the work queue JSON file.",
+    ),
+    branch: Optional[str] = typer.Option(
+        None,
+        "--branch",
+        help="Branch name to use for merge verification. Overrides the task's branch field.",
+    ),
+    merge_commit: Optional[str] = typer.Option(
+        None,
+        "--merge-commit",
+        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes.",
+    ),
+) -> None:
+    """Record post-merge closure for a task."""
+    raise typer.Exit(
+        _run_ship_close(task_id, plan, queue, branch, merge_commit, dry_run)
+    )
+
+
+@app.command(name="record-merge")
+def ship_record_merge(
+    task_id: str = typer.Argument(..., help="Task ID to close."),
+    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    queue: str = typer.Argument(
+        ".agents/work-queue.json",
+        help="Path to the work queue JSON file.",
+    ),
+    branch: Optional[str] = typer.Option(
+        None,
+        "--branch",
+        help="Branch name to use for merge verification. Overrides the task's branch field.",
+    ),
+    merge_commit: Optional[str] = typer.Option(
+        None,
+        "--merge-commit",
+        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes.",
+    ),
+) -> None:
+    """Hidden alias for close."""
+    raise typer.Exit(
+        _run_ship_close(task_id, plan, queue, branch, merge_commit, dry_run)
+    )
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

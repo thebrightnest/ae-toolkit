@@ -15,48 +15,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import typer
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend  # noqa: E402
 from aet.queue import QueueIntegrityError, build_blocks, lease_guard  # noqa: E402
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Sync docs/plans into the work queue.")
-    parser.add_argument(
-        "--queue-file",
-        default=".agents/work-queue.json",
-        help="Path to work-queue.json",
-    )
-    parser.add_argument(
-        "--history-file",
-        default=".agents/work-history.jsonl",
-        help="Path to work-history.jsonl",
-    )
-    parser.add_argument(
-        "--plans-dir",
-        default="docs/plans",
-        help="Directory containing atomic plan markdown files",
-    )
-    parser.add_argument(
-        "--config",
-        default=".agents/aet-work.json",
-        help="Path to aet-work backend configuration",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Override a live run lease and mutate the queue anyway (with a warning).",
-    )
-    return parser
-
-
-def parse_args(argv) -> argparse.Namespace:
-    return build_parser().parse_args(argv)
-
-
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
+def _sync(args: argparse.Namespace) -> int:
     queue_file = args.queue_file
     history_file = args.history_file
     plans_dir = Path(args.plans_dir)
@@ -167,5 +134,49 @@ def main(argv: list[str] | None = None):
     return 0
 
 
+app = typer.Typer()
+
+
+@app.command("sync")
+def sync(
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json", "--queue-file", help="Path to work-queue.json"
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"
+    ),
+    plans_dir: str = typer.Option(
+        "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
+    ),
+    config: str = typer.Option(
+        ".agents/aet-work.json", "--config", help="Path to aet-work backend configuration"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Append-only sync of docs/plans/*.md into the work queue."""
+    args = argparse.Namespace(
+        queue_file=queue_file,
+        history_file=history_file,
+        plans_dir=plans_dir,
+        config=config,
+        force=force,
+    )
+    rc = _sync(args)
+    raise typer.Exit(rc)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    try:
+        return app(argv, standalone_mode=False)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

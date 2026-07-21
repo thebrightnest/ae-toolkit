@@ -142,8 +142,8 @@ Confirmed no other Phase A1 plan performs a CLI subcommand rename of `review`,
 - `pkg-07-test-reorganization.md` — test file renames only; no CLI subcommand
   rename.
 - `pkg-08-skills-move.md` — content relocation; no CLI surface.
-- `pkg-09-pyyaml-frontmatter.md` — references `aet plan validate` and `aet sync`
-  in validation steps but does not rename them.
+- `pkg-09-pyyaml-frontmatter.md` — references `aet plan validate` and
+  `aet queue sync` in validation steps but does not rename them.
 - `pkg-10-filelock.md` — concurrency change; no command rename.
 - `pkg-12-panel-framework.md` — panel framework; no `review`/`plan`/`sync`
   surface.
@@ -156,5 +156,5 @@ harmless (or drop the pin in the same revert).
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run aet-ship*

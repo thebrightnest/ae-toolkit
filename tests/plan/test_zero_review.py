@@ -17,7 +17,7 @@ from aet import (  # noqa: E402
     track_record,
 )
 
-_AET_STATE_PY = REPO_ROOT / "src" / "aet" / "cli" / "aet-state.py"
+_AET_STATE_PY = REPO_ROOT / "src" / "aet" / "cli" / "aet_state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
 )

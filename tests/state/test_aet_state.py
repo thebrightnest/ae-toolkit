@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-_AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet-state.py"
+_AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
 _spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
 )
@@ -63,9 +63,8 @@ class TestAuditCommand(unittest.TestCase):
             queue_path = f.name
 
         with patch.object(sys, "argv", ["aet-state", "derive", queue_path]):
-            with self.assertRaises(SystemExit) as cm:
-                aet_state.main()
-        self.assertEqual(cm.exception.code, 2)
+            rc = aet_state.main()
+        self.assertEqual(rc, 2)
 
     def test_audit_reports_no_discrepancies_when_states_match(self):
         """audit reports empty when stored state matches derived state."""
@@ -851,9 +850,8 @@ class TestStateTransition(unittest.TestCase):
             queue_path = f.name
 
         with patch.object(sys, "argv", ["aet-state", "sync-footers", "docs/plans/t1.md", "implemented", queue_path]):
-            with self.assertRaises(SystemExit) as cm:
-                aet_state.main()
-        self.assertEqual(cm.exception.code, 2)
+            rc = aet_state.main()
+        self.assertEqual(rc, 2)
 
     def test_audit_and_heal_speak_canonical_states(self):
         """audit and heal compare stored state against canonical derived states."""

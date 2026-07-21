@@ -151,7 +151,7 @@ class TestSettledDecision(unittest.TestCase):
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(_REPO_ROOT / "src" / "aet" / "cli" / "init-queue.py"),
+                    str(_REPO_ROOT / "src" / "aet" / "cli" / "init_queue.py"),
                     "--plans-dir",
                     str(plans_dir),
                     "--queue-file",

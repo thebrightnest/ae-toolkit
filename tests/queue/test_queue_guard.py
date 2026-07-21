@@ -104,7 +104,6 @@ def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys)
 
     sprint = _load_bin("sprint")
     rc = sprint.main([
-        "add",
         str(plan),
         "--queue-file", str(qf),
         "--history-file", str(hf),
@@ -161,7 +160,6 @@ def test_force_overrides_lease_with_warning(tmp_path, monkeypatch, capsys):
 
     sprint = _load_bin("sprint")
     rc = sprint.main([
-        "add",
         str(plan),
         "--queue-file", str(qf),
         "--history-file", str(hf),
@@ -279,7 +277,7 @@ def _write_plan_file(tmp_path: Path, task_id: str) -> str:
 
 def test_audit_runs_on_tampered_queue_and_warns(tmp_path, capsys):
     """The remedy named in the error message must survive the mismatch itself."""
-    aet_state = _load_bin("aet-state")
+    aet_state = _load_bin("aet_state")
     qf = tmp_path / "work-queue.json"
     plan = _write_plan_file(tmp_path, "t1")
     _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
@@ -297,7 +295,7 @@ def test_audit_runs_on_tampered_queue_and_warns(tmp_path, capsys):
 
 def test_heal_dry_run_tolerates_tamper_without_restamping(tmp_path, capsys):
     """Dry-run heal reports the stale envelope but must not mutate the queue."""
-    aet_state = _load_bin("aet-state")
+    aet_state = _load_bin("aet_state")
     qf = tmp_path / "work-queue.json"
     plan = _write_plan_file(tmp_path, "t1")
     _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
@@ -319,7 +317,7 @@ def test_heal_dry_run_tolerates_tamper_without_restamping(tmp_path, capsys):
 
 def test_heal_apply_restamps_envelope_with_no_state_changes(tmp_path, capsys):
     """The reported scenario: states match git, only the envelope is stale."""
-    aet_state = _load_bin("aet-state")
+    aet_state = _load_bin("aet_state")
     qf = tmp_path / "work-queue.json"
     plan = _write_plan_file(tmp_path, "t1")
     revision = _stamp_and_tamper(
@@ -345,7 +343,7 @@ def test_heal_apply_restamps_envelope_with_no_state_changes(tmp_path, capsys):
 
 def test_heal_apply_restamps_and_applies_state_fix(tmp_path, capsys):
     """A tampered queue with a real discrepancy heals and verifies afterwards."""
-    aet_state = _load_bin("aet-state")
+    aet_state = _load_bin("aet_state")
     qf = tmp_path / "work-queue.json"
     plan = _write_plan_file(tmp_path, "t1")
     _stamp_and_tamper(qf, {"id": "t1", "state": "planned", "plan_file": plan})
@@ -414,13 +412,13 @@ def test_add_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
     plan = _write_plan(plans_dir, "t2")
     monkeypatch.chdir(tmp_path)
 
-    rc = sprint.main(["add", plan.stem, "--queue-file", str(qf), "--plans-dir", str(plans_dir)])
+    rc = sprint.main([plan.stem, "--queue-file", str(qf), "--plans-dir", str(plans_dir)])
 
     _assert_clean_refusal(rc, capsys.readouterr().err)
 
 
 def test_init_queue_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
-    init_queue = _load_bin("init-queue")
+    init_queue = _load_bin("init_queue")
     qf = _tampered_queue(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv", ["init-queue", "--queue-file", str(qf)])

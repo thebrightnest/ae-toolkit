@@ -24,6 +24,9 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
+
+import typer
 
 from aet import (
     evidence,  # noqa: E402
@@ -252,37 +255,28 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="aet hooks",
-        description="Generate the pre-push gate shim and check gate evidence.",
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    install = sub.add_parser(
-        "install", help="Generate the self-contained .git/hooks/pre-push shim."
-    )
-    install.add_argument(
-        "--repo", default=None, help="Repo root (default: current git toplevel)."
-    )
-
-    check = sub.add_parser(
-        "check", help="Check gate evidence for pushed refs read from stdin."
-    )
-    check.add_argument(
-        "--repo", default=None, help="Repo root (default: current git toplevel)."
-    )
-    return parser
+app = typer.Typer()
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    if args.command == "install":
-        return cmd_install(args)
-    if args.command == "check":
-        return cmd_check(args)
-    return 2
+@app.command("install")
+def install(
+    repo: Optional[str] = typer.Option(None, "--repo", help="Repo root (default: current git toplevel)."),
+) -> None:
+    """Generate the self-contained .git/hooks/pre-push shim."""
+    args = argparse.Namespace(repo=repo)
+    rc = cmd_install(args)
+    raise typer.Exit(rc)
+
+
+@app.command("check")
+def check(
+    repo: Optional[str] = typer.Option(None, "--repo", help="Repo root (default: current git toplevel)."),
+) -> None:
+    """Check gate evidence for pushed refs read from stdin."""
+    args = argparse.Namespace(repo=repo)
+    rc = cmd_check(args)
+    raise typer.Exit(rc)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

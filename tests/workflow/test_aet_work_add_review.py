@@ -1,4 +1,4 @@
-"""Behavior-driven tests for src/aet/cli/backlog.py and src/aet/cli/review.py."""
+"""Behavior-driven tests for src/aet/cli/backlog.py and src/aet/cli/gate.py."""
 
 from __future__ import annotations
 
@@ -13,9 +13,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.cli._helpers import run_typer
+
 _REPO_ROOT = Path(__file__).parents[2]
 _SPRINT_PY = _REPO_ROOT / "src" / "aet" / "cli" / "sprint.py"
-_REVIEW_PY = _REPO_ROOT / "src" / "aet" / "cli" / "review.py"
+_GATE_PY = _REPO_ROOT / "src" / "aet" / "cli" / "gate.py"
 _STATUS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "status.py"
 
 _sprint_spec = importlib.util.spec_from_loader(
@@ -24,17 +26,19 @@ _sprint_spec = importlib.util.spec_from_loader(
 sprint = importlib.util.module_from_spec(_sprint_spec)
 _sprint_spec.loader.exec_module(sprint)
 
-_review_spec = importlib.util.spec_from_loader(
-    "review", importlib.machinery.SourceFileLoader("review", str(_REVIEW_PY))
+_gate_spec = importlib.util.spec_from_loader(
+    "gate", importlib.machinery.SourceFileLoader("gate", str(_GATE_PY))
 )
-review = importlib.util.module_from_spec(_review_spec)
-_review_spec.loader.exec_module(review)
+gate = importlib.util.module_from_spec(_gate_spec)
+_gate_spec.loader.exec_module(gate)
 
 _status_spec = importlib.util.spec_from_loader(
     "status", importlib.machinery.SourceFileLoader("status", str(_STATUS_PY))
 )
 status = importlib.util.module_from_spec(_status_spec)
 _status_spec.loader.exec_module(status)
+
+aet = importlib.import_module("aet.cli.main")
 
 # The bin scripts above put src/aet on sys.path; the workflow loader
 # lives there.
@@ -127,12 +131,14 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
 
             self.assertEqual(rc, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -153,20 +159,24 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(blocker),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
             self.assertEqual(rc, 0)
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
             self.assertEqual(rc, 0)
 
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -187,12 +197,14 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 "feat-002",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
 
             self.assertEqual(rc, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -211,18 +223,17 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                rc = sprint.main(["add",
-                    str(plan),
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                ])
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
 
-            self.assertEqual(rc, 1)
-            output = stderr.getvalue()
-            self.assertIn("merged", output.lower())
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("merged", result.stderr.lower())
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
             self.assertEqual(len(queue), 0)
@@ -237,18 +248,17 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                rc = sprint.main(["add",
-                    str(plan),
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                ])
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
 
-            self.assertEqual(rc, 1)
-            output = stderr.getvalue()
-            self.assertIn("abandoned", output.lower())
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("abandoned", result.stderr.lower())
 
     def test_add_unknown_plan_rejected(self):
         """add exits non-zero when the plan file or task ID is unknown."""
@@ -259,12 +269,14 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 "nonexistent",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
 
             self.assertEqual(rc, 1)
 
@@ -278,20 +290,24 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc1 = sprint.main(["add",
+            rc1 = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
             self.assertEqual(rc1, 0)
 
-            rc2 = sprint.main(["add",
+            rc2 = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
             self.assertEqual(rc2, 0)
 
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -307,12 +323,14 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
 
             self.assertEqual(rc, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -333,14 +351,18 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            self.assertEqual(sprint.main(["add",
+            self.assertEqual(run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(blocker), "--queue-file", queue_file,
                 "--history-file", history_file, "--plans-dir", str(plans_dir),
-            ]), 0)
-            self.assertEqual(sprint.main(["add",
+            ]).exit_code, 0)
+            self.assertEqual(run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(dependent), "--queue-file", queue_file,
                 "--history-file", history_file, "--plans-dir", str(plans_dir),
-            ]), 0)
+            ]).exit_code, 0)
 
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
@@ -362,10 +384,12 @@ class TestAddCommand(unittest.TestCase):
             history_file = _make_history([])
 
             for p in (ready_plan, blocker, blocked_plan):
-                self.assertEqual(sprint.main(["add",
+                self.assertEqual(run_typer(aet.app, [
+                "sprint",
+                "add",
                     str(p), "--queue-file", queue_file,
                     "--history-file", history_file, "--plans-dir", str(plans_dir),
-                ]), 0)
+                ]).exit_code, 0)
 
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
@@ -392,12 +416,14 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([{"id": "feat-399", "state": "merged"}])
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
 
             self.assertEqual(rc, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -421,14 +447,18 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([{"id": "feat-499", "state": "merged"}])
 
-            self.assertEqual(sprint.main(["add",
+            self.assertEqual(run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(live), "--queue-file", queue_file,
                 "--history-file", history_file, "--plans-dir", str(plans_dir),
-            ]), 0)
-            self.assertEqual(sprint.main(["add",
+            ]).exit_code, 0)
+            self.assertEqual(run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(dependent), "--queue-file", queue_file,
                 "--history-file", history_file, "--plans-dir", str(plans_dir),
-            ]), 0)
+            ]).exit_code, 0)
 
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
@@ -453,17 +483,17 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            stderr = io.StringIO()
-            with patch.object(sys, "stderr", stderr):
-                rc = sprint.main(["add",
-                    str(plan),
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
-                    "--plans-dir", str(plans_dir),
-                ])
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
 
-            self.assertEqual(rc, 1)
-            self.assertIn("track", stderr.getvalue().lower())
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("track", result.stderr.lower())
             with open(queue_file, "r", encoding="utf-8") as f:
                 self.assertEqual(len(json.load(f)), 0)
 
@@ -478,12 +508,14 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
 
             self.assertEqual(rc, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -501,13 +533,15 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = sprint.main(["add",
+            rc = run_typer(aet.app, [
+                "sprint",
+                "add",
                 str(plan),
                 "--allow-untracked",
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ])
+            ]).exit_code
 
             self.assertEqual(rc, 0)
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -530,9 +564,7 @@ class TestReviewCommand(unittest.TestCase):
 
             stdout = io.StringIO()
             with patch.object(sys, "stdout", stdout):
-                rc = review.main([
-                    "--plans-dir", str(plans_dir),
-                ])
+                rc = gate.run_review(plans_dir)
 
             self.assertEqual(rc, 0)
             output = stdout.getvalue()
@@ -551,9 +583,7 @@ class TestReviewCommand(unittest.TestCase):
 
             stdout = io.StringIO()
             with patch.object(sys, "stdout", stdout):
-                rc = review.main([
-                    "--plans-dir", str(plans_dir),
-                ])
+                rc = gate.run_review(plans_dir)
 
             self.assertEqual(rc, 0)
 
@@ -561,9 +591,11 @@ class TestReviewCommand(unittest.TestCase):
         """review exits non-zero when the plans directory does not exist."""
         stdout = io.StringIO()
         with patch.object(sys, "stdout", stdout):
-            rc = review.main([
+            rc = run_typer(aet.app, [
+                "gate",
+                "review",
                 "--plans-dir", "/does/not/exist",
-            ])
+            ]).exit_code
 
         self.assertEqual(rc, 1)
 
@@ -576,32 +608,32 @@ class TestReviewBoardColumns(unittest.TestCase):
 
     def test_entry_stage_maps_to_approved(self):
         self.assertEqual(
-            review.category_for_stage("plan-approved", self.workflow), "approved"
+            gate.category_for_stage("plan-approved", self.workflow), "approved"
         )
 
     def test_terminal_skill_less_stage_maps_to_queued(self):
-        self.assertEqual(review.category_for_stage("synced", self.workflow), "queued")
+        self.assertEqual(gate.category_for_stage("synced", self.workflow), "queued")
 
     def test_skilled_middle_stages_map_to_in_progress(self):
         for stage in ("implemented", "qa-complete", "reviewed", "secure"):
             self.assertEqual(
-                review.category_for_stage(stage, self.workflow), "in-progress"
+                gate.category_for_stage(stage, self.workflow), "in-progress"
             )
 
     def test_unknown_stage_falls_back_to_in_progress(self):
         self.assertEqual(
-            review.category_for_stage("imagined-stage", self.workflow), "in-progress"
+            gate.category_for_stage("imagined-stage", self.workflow), "in-progress"
         )
 
     def test_queue_states_keep_their_columns(self):
         self.assertEqual(
-            review.category_for_stage("awaiting_merge", self.workflow), "awaiting-merge"
+            gate.category_for_stage("awaiting_merge", self.workflow), "awaiting-merge"
         )
-        self.assertEqual(review.category_for_stage("merged", self.workflow), "closed")
-        self.assertEqual(review.category_for_stage("abandoned", self.workflow), "closed")
+        self.assertEqual(gate.category_for_stage("merged", self.workflow), "closed")
+        self.assertEqual(gate.category_for_stage("abandoned", self.workflow), "closed")
 
     def test_missing_stage_defaults_to_approved(self):
-        self.assertEqual(review.category_for_stage(None, self.workflow), "approved")
+        self.assertEqual(gate.category_for_stage(None, self.workflow), "approved")
 
     def test_variant_vocabulary_derives_positionally(self):
         """A variant workflow's unknown vocabulary still renders a board."""
@@ -625,19 +657,19 @@ class TestReviewBoardColumns(unittest.TestCase):
             )
             wf = load_workflow(repo_root, "variant")
 
-        self.assertEqual(review.category_for_stage("scoped", wf), "approved")
-        self.assertEqual(review.category_for_stage("built", wf), "in-progress")
-        self.assertEqual(review.category_for_stage("released", wf), "queued")
-        self.assertEqual(review.category_for_stage("unlisted", wf), "in-progress")
+        self.assertEqual(gate.category_for_stage("scoped", wf), "approved")
+        self.assertEqual(gate.category_for_stage("built", wf), "in-progress")
+        self.assertEqual(gate.category_for_stage("released", wf), "queued")
+        self.assertEqual(gate.category_for_stage("unlisted", wf), "in-progress")
 
     def test_without_workflow_legacy_buckets_still_render(self):
         """With no workflow available the historical map renders the same board."""
-        self.assertEqual(review.category_for_stage("plan-approved"), "approved")
-        self.assertEqual(review.category_for_stage("synced"), "queued")
-        self.assertEqual(review.category_for_stage("implemented"), "in-progress")
-        self.assertEqual(review.category_for_stage("awaiting_merge"), "awaiting-merge")
-        self.assertEqual(review.category_for_stage("merged"), "closed")
-        self.assertEqual(review.category_for_stage("imagined-stage"), "in-progress")
+        self.assertEqual(gate.category_for_stage("plan-approved"), "approved")
+        self.assertEqual(gate.category_for_stage("synced"), "queued")
+        self.assertEqual(gate.category_for_stage("implemented"), "in-progress")
+        self.assertEqual(gate.category_for_stage("awaiting_merge"), "awaiting-merge")
+        self.assertEqual(gate.category_for_stage("merged"), "closed")
+        self.assertEqual(gate.category_for_stage("imagined-stage"), "in-progress")
 
 
 class TestStatusEmptyQueue(unittest.TestCase):
@@ -650,18 +682,18 @@ class TestStatusEmptyQueue(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            stdout = io.StringIO()
-            with patch.object(sys, "stdout", stdout):
-                with patch.object(sys, "argv", [
+            result = run_typer(
+                aet.app,
+                [
                     "status",
                     "--queue-file", queue_file,
                     "--history-file", history_file,
                     "--plans-dir", str(plans_dir),
-                ]):
-                    rc = status.main()
+                ],
+            )
 
-            self.assertEqual(rc, 0)
-            output = stdout.getvalue()
+            self.assertEqual(result.exit_code, 0)
+            output = result.stdout
             self.assertIn("planned: 0", output)
             self.assertIn("ready: 0", output)
             self.assertIn("blocked: 0", output)

@@ -54,13 +54,13 @@ When a task transitions, the projection removes the old AET label and adds the n
 Each task maps to one open GitHub issue:
 
 - **Title:** the task title from the plan file.
-- **Body:** a short header with the plan file path and an HTML comment marker (`<!-- plan-file: ... -->`) so `aet sync` can correlate issues with plans.
+- **Body:** a short header with the plan file path and an HTML comment marker (`<!-- plan-file: ... -->`) so `aet queue sync` can correlate issues with plans.
 - **Labels:** exactly one `aet:*` label reflecting the current state.
 - **Acceptance criteria:** remain in the PRD; the issue links back to the PRD rather than duplicating acceptance criteria.
 
 ## GitHub-to-Local Sync
 
-`aet sync` reconciles open issues with local plan files:
+`aet queue sync` reconciles open issues with local plan files:
 
 - A plan file without a matching open issue gets a new issue.
 - An open issue whose plan file is missing is reported as plan drift.

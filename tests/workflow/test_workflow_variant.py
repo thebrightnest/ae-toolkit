@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).parents[2]
 FIXTURE_PATH = REPO_ROOT / "tests" / "fixtures" / "workflows" / "content.json"
 
 # Load the lint script (no .py extension) as a module.
-_LINT_BIN = REPO_ROOT / "src" / "aet" / "cli" / "validate-workflows.py"
+_LINT_BIN = REPO_ROOT / "src" / "aet" / "cli" / "validate_workflows.py"
 _lint_loader = importlib.machinery.SourceFileLoader("validate_workflows", str(_LINT_BIN))
 _lint_spec = importlib.util.spec_from_loader("validate_workflows", _lint_loader)
 validate_workflows = importlib.util.module_from_spec(_lint_spec)

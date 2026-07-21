@@ -72,7 +72,7 @@ with PyYAML (`yaml.safe_load`), keeping the same accepted/rejected inputs.
 
 - [ ] `tests/test_plan_validate.py` (named, existing) passes unmodified;
   new edge-case tests named in task 3 pass
-- [ ] `aet plan validate` and `aet sync` behave identically on the existing
+- [ ] `aet plan validate` and `aet queue sync` behave identically on the existing
   `docs/plans/*.md` corpus (all current plan files parse to the same values)
 - [ ] `make validate` green
 - [ ] R-trace coverage: R-6 by tasks 1–4; no unknown R-ids cited

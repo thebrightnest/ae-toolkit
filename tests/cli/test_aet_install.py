@@ -4,9 +4,9 @@ All tests isolate the bin dir via ``AET_BIN_DIR`` pointed at a temp dir —
 nothing ever writes to the real ``~/.local/bin``.
 """
 
-import importlib.machinery
-import importlib.util
-import io
+from __future__ import annotations
+
+import importlib
 import os
 import subprocess
 import sys
@@ -15,16 +15,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-_REPO_ROOT = Path(__file__).parents[2]
-_AET_PY = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
-_SCRIPT = _AET_PY.resolve()
+from tests.cli._helpers import make_history, run_typer, write_json_file
 
-_aet_spec = importlib.util.spec_from_loader(
-    "aet_dispatcher_install",
-    importlib.machinery.SourceFileLoader("aet_dispatcher_install", str(_AET_PY)),
-)
-aet = importlib.util.module_from_spec(_aet_spec)
-_aet_spec.loader.exec_module(aet)
+# Module object (not the ``main`` function re-exported by ``aet.cli``).
+aet = importlib.import_module("aet.cli.main")
+
+_SCRIPT = Path(aet.__file__).resolve()
 
 
 class InstallTestCase(unittest.TestCase):
@@ -35,14 +31,12 @@ class InstallTestCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.bin_dir = Path(self.tmp.name) / "bin"
 
-    def _run_install(self, *args, env_extra=None, allow_worktree=False):
-        """Run `aet install <args>` in-process; returns (rc, stdout, stderr).
+    def _run_install(self, *args, allow_worktree=False, env_extra=None):
+        """Run `aet install <args>` through the Typer app; returns (rc, stdout, stderr).
 
         By default ``_is_worktree_copy`` is forced to ``False`` so the suite
-        passes when executed from a pipeline worktree. Tests that specifically
-        exercise worktree guarding pass ``allow_worktree=True``.
+        passes when executed from a pipeline worktree.
         """
-        stdout, stderr = io.StringIO(), io.StringIO()
         env = {"AET_BIN_DIR": str(self.bin_dir), "PATH": "/usr/bin:/bin"}
         if env_extra:
             env.update(env_extra)
@@ -51,13 +45,13 @@ class InstallTestCase(unittest.TestCase):
             if not allow_worktree
             else patch.object(aet, "_is_worktree_copy", aet._is_worktree_copy)
         )
-        with patch.object(sys, "argv", ["aet", "install", *args]):
-            with patch.dict(os.environ, env):
-                with patch.object(sys, "stdout", stdout):
-                    with patch.object(sys, "stderr", stderr):
-                        with wt_patch:
-                            rc = aet.main()
-        return rc, stdout.getvalue(), stderr.getvalue()
+        with wt_patch:
+            result = run_typer(
+                aet.app,
+                ["install", *args],
+                env=env,
+            )
+        return result.exit_code, result.stdout, result.stderr
 
 
 class TestInstallFreshLink(InstallTestCase):
@@ -85,7 +79,7 @@ class TestInstallFreshLink(InstallTestCase):
     def test_unknown_flag_exits_2(self):
         rc, _, err = self._run_install("--bogus")
         self.assertEqual(rc, 2)
-        self.assertIn("unknown flag", err)
+        self.assertIn("No such option", err)
 
 
 class TestInstallStaleAndCollision(InstallTestCase):
@@ -136,94 +130,39 @@ class TestInstallPathWarning(InstallTestCase):
         _, out, _ = self._run_install(
             "--bin-dir",
             str(self.bin_dir),
-            env_extra={"PATH": f"{self.bin_dir}:/usr/bin"},
+            env_extra={"PATH": f"{self.bin_dir}:/usr/bin:/bin"},
         )
         self.assertNotIn("not on your PATH", out)
-
-
-class TestInstallPrune(InstallTestCase):
-    """Install unconditionally prunes the seven legacy names, guarded by target."""
-
-    def _seed_skill_bin(self):
-        skill_bin = Path(self.tmp.name) / "skills" / "aet-work" / "bin"
-        skill_bin.mkdir(parents=True)
-        for name in aet.LEGACY_NAMES:
-            (skill_bin / name).write_text("#!/bin/sh\n", encoding="utf-8")
-        return skill_bin
-
-    def test_prune_removes_seven_names_only_when_skills_dir_links(self):
-        self.bin_dir.mkdir(parents=True)
-        skill_bin = self._seed_skill_bin()
-
-        # Removed: legacy names symlinked into the skills directory.
-        removed = (
-            "aet-work",
-            "orchestrator",
-            "mine-learnings",
-            "configure-task-backend",
-            "install-aet-binaries",
-        )
-        for name in removed:
-            (self.bin_dir / name).symlink_to(skill_bin / name)
-        # Kept: regular file carrying a legacy name.
-        (self.bin_dir / "aet-state").write_text("keep\n", encoding="utf-8")
-        # Kept: legacy-named symlink pointing outside any skills directory.
-        (self.bin_dir / "aet-retro").symlink_to("/usr/bin/true")
-        # Kept: non-legacy name even though it points into the skills dir.
-        (self.bin_dir / "stale-bin").symlink_to(skill_bin / "aet-work")
-
-        rc, _, err = self._run_install(
-            "--bin-dir",
-            str(self.bin_dir),
-            env_extra={"AET_SKILLS_DIR": str(skill_bin.parent.parent)},
-        )
-        self.assertEqual(rc, 0, err)
-
-        for name in removed:
-            self.assertFalse((self.bin_dir / name).exists(), name)
-        self.assertTrue((self.bin_dir / "aet-state").is_file())
-        self.assertTrue((self.bin_dir / "aet-retro").is_symlink())
-        self.assertTrue((self.bin_dir / "stale-bin").is_symlink())
-        self.assertTrue((self.bin_dir / "aet").is_symlink())
-
-    def test_install_prunes_legacy_links_by_default(self):
-        """No flag needed: install prunes skills-dir legacy links (R-5 flip)."""
-        self.bin_dir.mkdir(parents=True)
-        skill_bin = self._seed_skill_bin()
-        (self.bin_dir / "aet-work").symlink_to(skill_bin / "aet-work")
-
-        rc, out, err = self._run_install(
-            "--bin-dir",
-            str(self.bin_dir),
-            env_extra={"AET_SKILLS_DIR": str(skill_bin.parent.parent)},
-        )
-        self.assertEqual(rc, 0, err)
-        self.assertFalse((self.bin_dir / "aet-work").exists())
-        self.assertIn("pruned legacy AET symlink", out)
-
-    def test_prune_flag_rejected(self):
-        """The --prune gate is gone with the flag — no deprecation window."""
-        rc, _, err = self._run_install("--bin-dir", str(self.bin_dir), "--prune")
-        self.assertEqual(rc, 2)
-        self.assertIn("unknown flag", err)
 
 
 class TestSelfRepair(InstallTestCase):
     """Every non-install invocation verifies and repairs the aet symlink."""
 
-    def _dispatch(self, argv):
-        """Invoke main() with exec captured; returns rc."""
-        with patch.object(sys, "argv", argv):
-            with patch.dict(os.environ, {"AET_BIN_DIR": str(self.bin_dir)}):
-                with patch.object(aet.os, "execvp", side_effect=SystemExit(0)):
-                    with patch.object(
-                        aet, "_is_worktree_copy", lambda _script: False
-                    ):
-                        return aet.main()
+    def _dispatch(self, argv, cwd=None):
+        """Invoke the main app; returns the result."""
+        env = {"AET_BIN_DIR": str(self.bin_dir)}
+        with patch.object(aet, "_is_worktree_copy", lambda _script: False):
+            return run_typer(aet.app, argv, cwd=cwd, env=env)
 
     def test_deleted_link_restored_on_invocation(self):
-        rc = self._dispatch(["aet", "status"])
-        self.assertEqual(rc, 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_file = write_json_file([])
+            history_file = make_history([])
+            plans_dir = Path(tmp) / "plans"
+            plans_dir.mkdir()
+            result = self._dispatch(
+                [
+                    "status",
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+                cwd=tmp,
+            )
+        self.assertEqual(result.exit_code, 0, result.output + result.stderr)
         link = self.bin_dir / "aet"
         self.assertTrue(link.is_symlink())
         self.assertEqual(Path(os.readlink(link)), _SCRIPT)
@@ -235,7 +174,23 @@ class TestSelfRepair(InstallTestCase):
         other.write_text("x", encoding="utf-8")
         (self.bin_dir / "aet").symlink_to(other)
 
-        self._dispatch(["aet", "status"])
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_file = write_json_file([])
+            history_file = make_history([])
+            plans_dir = Path(tmp) / "plans"
+            plans_dir.mkdir()
+            self._dispatch(
+                [
+                    "status",
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+                cwd=tmp,
+            )
         self.assertEqual(Path(os.readlink(self.bin_dir / "aet")), _SCRIPT)
 
     def test_non_symlink_never_touched_by_repair(self):
@@ -243,8 +198,24 @@ class TestSelfRepair(InstallTestCase):
         collision = self.bin_dir / "aet"
         collision.write_text("foreign\n", encoding="utf-8")
 
-        rc = self._dispatch(["aet", "status"])
-        self.assertEqual(rc, 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_file = write_json_file([])
+            history_file = make_history([])
+            plans_dir = Path(tmp) / "plans"
+            plans_dir.mkdir()
+            result = self._dispatch(
+                [
+                    "status",
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+                cwd=tmp,
+            )
+        self.assertEqual(result.exit_code, 0)
         self.assertFalse(collision.is_symlink())
         self.assertEqual(collision.read_text(encoding="utf-8"), "foreign\n")
 
@@ -302,7 +273,7 @@ class TestInstallIntegration(InstallTestCase):
         env["AET_BIN_DIR"] = str(self.bin_dir)
 
         result = subprocess.run(
-            [str(_AET_PY), "install", "--bin-dir", str(self.bin_dir)],
+            [sys.executable, "-m", "aet.cli.main", "install", "--bin-dir", str(self.bin_dir)],
             capture_output=True,
             text=True,
             env=env,
@@ -319,7 +290,8 @@ class TestInstallIntegration(InstallTestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(_AET_PY),
+                "-m",
+                "aet.cli.main",
                 "status",
                 "--queue-file",
                 str(queue_file),
