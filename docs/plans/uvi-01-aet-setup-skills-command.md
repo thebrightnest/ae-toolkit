@@ -14,7 +14,7 @@ docs_sync_reason: README and AGENTS.md install instructions may need updates aft
 
 ## Context
 
-Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md). The installer needs a deterministic, testable way to symlink AE Toolkit skills into agent directories, mirroring what `make install-skills` does today but callable from a shell script without `make`.
+Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`docs/prds/uv-one-line-installer-prd.md`). The installer needs a deterministic, testable way to symlink AE Toolkit skills into agent directories, mirroring what `make install-skills` does today but callable from a shell script without `make`.
 
 ## Intake Triage
 

@@ -15,7 +15,7 @@ docs_sync_reason: README Quick Start is updated to lead with the new installer.
 
 ## Context
 
-Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md). Once the installer exists, the README Quick Start must lead with the one-liner and keep the manual paths as alternatives.
+Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`docs/prds/uv-one-line-installer-prd.md`). Once the installer exists, the README Quick Start must lead with the one-liner and keep the manual paths as alternatives.
 
 ## Intake Triage
 
