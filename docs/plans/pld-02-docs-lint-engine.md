@@ -106,5 +106,5 @@ restores the previous gate exactly; the pytest assertions are still live.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-ship`*
