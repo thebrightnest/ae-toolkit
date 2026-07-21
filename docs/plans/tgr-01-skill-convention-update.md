@@ -91,5 +91,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
