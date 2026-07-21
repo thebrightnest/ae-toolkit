@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
-SKILL_MD = REPO_ROOT / "aet-review" / "SKILL.md"
+SKILL_MD = REPO_ROOT / "skills" / "aet-review" / "SKILL.md"
 
 
 class TestAetReviewNoiseFilter(unittest.TestCase):

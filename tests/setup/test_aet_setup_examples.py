@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
-EXAMPLES_DIR = REPO_ROOT / "aet-setup" / "examples"
+EXAMPLES_DIR = REPO_ROOT / "skills" / "aet-setup" / "examples"
 
 
 class TestWorktreeShipHygieneExample(unittest.TestCase):

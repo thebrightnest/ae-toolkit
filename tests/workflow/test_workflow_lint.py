@@ -121,7 +121,8 @@ class TestSkillResolution(WorkflowLintTestCase):
     def test_resolvable_skill_is_clean(self):
         document = packaged_document()
         document["stages"][0]["skills"] = ["content-draft"]
-        skill_md = self.repo_root / "content-draft" / "SKILL.md"
+        skills_dir = self.repo_root / "skills"
+        skill_md = skills_dir / "content-draft" / "SKILL.md"
         skill_md.parent.mkdir(parents=True)
         skill_md.write_text(
             "---\nname: content-draft\ndescription: stub\n---\n", encoding="utf-8"
@@ -129,7 +130,7 @@ class TestSkillResolution(WorkflowLintTestCase):
         # Only the first stage's bindings changed; the remaining aet-* skills
         # still need stubs for the file to lint clean.
         for skill in ("aet-qa", "aet-review", "aet-cso", "aet-sync-docs"):
-            stub = self.repo_root / skill / "SKILL.md"
+            stub = skills_dir / skill / "SKILL.md"
             stub.parent.mkdir(parents=True, exist_ok=True)
             stub.write_text(f"---\nname: {skill}\ndescription: stub\n---\n", encoding="utf-8")
         path = self.write_workflow(document)

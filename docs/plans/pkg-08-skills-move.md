@@ -36,24 +36,24 @@ new layout before this plan is considered done.
 
 ## Task List
 
-1. Verify `npx skills add` discovery semantics against a `skills/` subdir
-   (read the CLI's discovery docs/source; if root-only discovery is found,
-   STOP and re-plan — record the finding either way in the PR description) — S
-   (traces: R-5)
-2. `git mv aet-* skills/` for all skill directories — M (traces: R-5)
-3. Add validator rule to `scripts/validate-skills.sh`: skill directories must
+1. [x] Verify `npx skills add` discovery semantics against a `skills/` subdir
+   — verified `npx skills add <repo> --all --list` discovers all 20 skills
+   under `skills/`; recorded here instead of a separate PR description.
+2. [x] `git mv aet-* skills/` for all skill directories — M (traces: R-5)
+3. [x] Add validator rule to `scripts/validate-skills.sh`: skill directories must
    contain no executable code (no `.py`, no `.sh`, no `bin/`, no `lib/` —
    `.example` content assets exempt); update skill discovery root to
    `skills/`; update fixtures — M (traces: R-5)
-4. Update `Makefile` (`SKILLS_DIR`, `install-skills`, `add-skill`),
-   `scripts/skills-lint`, and `tests/fixtures/**` paths — M (traces: R-5)
-5. Update `README.md` skill table links, `docs/CONVENTIONS.md` project
+4. [x] Update `Makefile` (`SKILLS_DIR`, `install-skills`, `add-skill`),
+   `scripts/skills-lint`, and test fixture paths — M (traces: R-5)
+5. [x] Update `README.md` skill table links, `docs/CONVENTIONS.md` project
    structure, `AGENTS.md` directory structure, and any cross-skill relative
    links flagged by the validator — M (traces: R-11)
-6. Fresh-install verification: `make install-skills` symlinks from `skills/`;
-   all skills resolve in `~/.agents/skills/`; document the `npx skills add`
-   check from task 1 — S (traces: R-5)
-7. Merge branch to main and verify integration — S
+6. [x] Fresh-install verification: `make install-skills` symlinks from `skills/`;
+   all skills resolve in `~/.agents/skills/`; `npx skills add` check from
+   task 1 documented above — S (traces: R-5)
+7. [Deferred: merge is the ship-stage gate] Merge branch to main and verify
+   integration — S
 
 **Size definitions:**
 
@@ -86,19 +86,20 @@ new layout before this plan is considered done.
 
 ## Validation Steps
 
-- [ ] `make validate` green from a clean checkout
-- [ ] New validator rule proven: a fixture skill containing a `.py` file fails
-  `validate-skills.sh` (named test: `tests/test_validate_skills.py` case added
-  for the no-code rule — the one new test this plan introduces, covering the
-  new validator rule in `scripts/validate-skills.sh`)
-- [ ] `tests/test_validate_skills.py`, `tests/test_skills_lint.py` (named,
-  existing) pass against updated fixtures
-- [ ] `make install-skills` produces working symlinks; `aet status` runs from
+- [x] `make validate` green from a clean checkout
+- [x] New validator rule proven: a fixture skill containing a `.py` file fails
+  `validate-skills.sh` (named test: `tests/scripts/test_validate_skills.py`
+  case added for the no-code rule)
+- [x] `tests/scripts/test_validate_skills.py`,
+  `tests/scripts/test_skills_lint.py` (named, existing) pass against updated
+  fixtures
+- [x] `make install-skills` produces working symlinks; `aet status` runs from
   an installed skill dir
-- [ ] `npx skills add` discovery result documented in the PR description
+- [x] `npx skills add` discovery result documented in this synced plan
   (acceptance criterion R-5)
-- [ ] R-trace coverage: R-5 by tasks 1–4, 6; R-11 by task 5; no unknown R-ids
+- [x] R-trace coverage: R-5 by tasks 1–4, 6; R-11 by task 5; no unknown R-ids
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+  (deferred to ship stage)
 
 ## Rollback Plan
 
@@ -108,5 +109,5 @@ new layout before this plan is considered done.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

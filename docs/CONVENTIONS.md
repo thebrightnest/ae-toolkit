@@ -6,10 +6,10 @@ This document defines the patterns and standards for authoring, editing, and mai
 
 ## Project Structure
 
-Each skill lives in its own directory at the repository root:
+Each skill lives in its own directory under `skills/`:
 
 ```
-<skill-name>/
+skills/<skill-name>/
 ├── SKILL.md              # Required. Skill instructions (YAML frontmatter + markdown body)
 ├── examples/             # Required. Usage examples and sample outputs
 │   └── README.md
