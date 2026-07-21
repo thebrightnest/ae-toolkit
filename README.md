@@ -97,6 +97,22 @@ Don't have `npx skills`? Install it once: `npm install -g skills` or use `npx sk
 
 `npx skills` copies skill markdown to your agent's skills directory; it does **not** install the Python CLI. Step 1 above is required for the commands below to exist.
 
+You can also symlink skills directly from a local clone with the `aet setup skills` command:
+
+```bash
+# Auto-detect installed agents and link skills to all of them
+aet setup skills
+
+# Target a specific agent directory
+aet setup skills --agent claude-code
+
+# Use a custom skills directory
+aet setup skills --skills-dir ~/.claude/skills
+
+# Preview what would happen without making changes
+aet setup skills --dry-run
+```
+
 ### 3. Put `aet` on `PATH`
 
 The `aet` package dispatches to every helper (`aet state`, `aet run`, `aet mine-learnings`, etc.). Link it into your bin directory:
@@ -197,9 +213,15 @@ This repo is the source of truth. All skills are symlinked from here to your age
 # Install all skills from this repo into ~/.agents/skills/
 make install-skills
 
+# Or use the CLI equivalent
+aet setup skills
+
 # Install into a different skills directory
 SKILLS_DIR=~/.claude/skills make install-skills
 SKILLS_DIR=~/.cursor/skills make install-skills
+
+# Target a specific agent directory from the CLI
+aet setup skills --agent claude-code
 
 # Scaffold a new skill
 make add-skill NAME=my-new-skill
