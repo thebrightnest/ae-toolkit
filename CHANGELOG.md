@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.3.0] — 2026-07-21
+
+### Added
+
+- **Unified `aet` CLI on Typer** — replaces the argparse multicall dispatcher with a single Typer app; subcommands register as noun-scoped groups; applies ADR-039 renames (pkg-11).
+- **`aet ship` promoted to code** — `aet ship gate`, `aet ship open`, and `aet ship close` replace the legacy bare ship binary and skill-only workflow (nc-03a/b/c).
+- **`aet docs lint`** — declarative rule engine for documentation invariants, backed by `.agents/doc-rules.yaml` (pld-02).
+- **`aet plans lint`** — corpus classifier that validates the plans directory against structure and liveness rules (pld-04).
+- **Prose assertions as data** — repo-level prose invariants moved from Python tests into declarative `doc-rules.yaml` rules (pld-03).
+- **Prose-only validate fast path** — `make validate` skips the full pytest suite when the change set is documentation-only, running only doc-coupled tests (pld-05).
+
+### Changed
+
+- **Skills moved to `skills/`** — all skills now live under `skills/` as pure content; no-code rule enforced by `validate-skills.sh` (pkg-08).
+- **Panel server on Starlette/uvicorn** — replaces stdlib `http.server` with a framework-backed server while preserving routes and behavior (pkg-12).
+
+### Documentation
+
+- Added ADR-040: documentation invariants are data (pld-01).
+- Updated command references and skill docs for the Typer-based CLI.
+
 ## [1.2.0] — 2026-07-17
 
 ### Added
