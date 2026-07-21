@@ -1,57 +1,103 @@
-"""Tests for aet.panel.serve — the /api/list dirs payload (lvp-01).
+"""Tests for aet.panel.serve — the panel HTTP surface (R-9).
 
-The panel server lives in the ``aet.panel`` package; load it via importlib and
-exercise it through its public interface: real HTTP requests against a
-ThreadingHTTPServer bound to a tmp archive.
+The panel server is a Starlette application bound to 127.0.0.1 only. Tests
+exercise it through real HTTP requests against a uvicorn server running in a
+thread against a tmp archive.
 """
 
-import importlib.machinery
-import importlib.util
+import asyncio
 import json
 import os
+import socket
 import threading
+import time
 import urllib.error
 import urllib.request
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+import uvicorn
+
+from aet.panel import serve
 
 REPO_ROOT = Path(__file__).parents[2]
-SERVE_PATH = REPO_ROOT / "src" / "aet" / "panel" / "serve.py"
+PANEL_DIR = REPO_ROOT / "src" / "aet" / "panel"
 
 
-def _load_serve():
-    loader = importlib.machinery.SourceFileLoader("panel_serve", str(SERVE_PATH))
-    spec = importlib.util.spec_from_loader("panel_serve", loader)
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module
+def _start_server(app, archive):
+    """Run uvicorn in a daemon thread; return (server, url)."""
+    serve.TELEMETRY = str(archive)
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=0,
+        log_level="warning",
+        access_log=False,
+        loop="asyncio",
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    for _ in range(100):
+        if server.started and getattr(server, "servers", None):
+            sock = server.servers[0].sockets[0]
+            port = sock.getsockname()[1]
+            break
+        time.sleep(0.05)
+    else:
+        raise RuntimeError("panel server did not start")
+
+    return server, f"http://127.0.0.1:{port}"
+
+
+def _stop_server(server):
+    """Signal uvicorn to shut down and wait for the thread."""
+    if not getattr(server, "servers", None):
+        return
+    loop = server.servers[0].get_loop()
+    future = asyncio.run_coroutine_threadsafe(server.shutdown(), loop)
+    future.result(timeout=5)
 
 
 @pytest.fixture
 def panel_server(tmp_path):
     """Run the real panel server against a tmp archive; yield (url, archive)."""
-    serve = _load_serve()
     archive = tmp_path / "telemetry"
     archive.mkdir()
-    serve.TELEMETRY = str(archive)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), serve.Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield f"http://127.0.0.1:{server.server_address[1]}", archive
-    server.shutdown()
+    original_telemetry = serve.TELEMETRY
+    server, url = _start_server(serve.app, archive)
+    try:
+        yield url, archive
+    finally:
+        _stop_server(server)
+        serve.TELEMETRY = original_telemetry
+
+
+def _get(url):
+    with urllib.request.urlopen(url) as res:
+        return res.status, res.read(), res.headers
 
 
 def _get_json(url):
-    with urllib.request.urlopen(url) as res:
-        return res.status, json.loads(res.read())
+    status, data, _headers = _get(url)
+    return status, json.loads(data)
 
 
 def _run_dir(archive, project, date, run_id):
     d = archive / project / date / run_id
     d.mkdir(parents=True)
     return d
+
+
+def test_index_html_served(panel_server):
+    """The root and /index.html paths return the bundled HTML page."""
+    url, _archive = panel_server
+    for path in ("/", "/index.html"):
+        status, data, headers = _get(url + path)
+        assert status == 200
+        assert b"AET Telemetry Panel" in data
+        assert headers.get("Content-Type") == "text/html; charset=utf-8"
 
 
 def test_dirs_includes_all_current_layout_run_dirs(panel_server):
@@ -139,6 +185,19 @@ def test_files_listing_unchanged(panel_server):
     ]
 
 
+def test_api_file_serves_json_file(panel_server):
+    """Regression: /api/file returns the requested archive file."""
+    url, archive = panel_server
+    run = _run_dir(archive, "proj", "2026-07-13", "run-file")
+    (run / "task.jsonl").write_text('{"type":"stage"}\n')
+
+    status, data, headers = _get(url + "/api/file?p=proj/2026-07-13/run-file/task.jsonl")
+
+    assert status == 200
+    assert json.loads(data) == {"type": "stage"}
+    assert headers.get("Content-Type") == "application/json"
+
+
 def test_api_file_rejects_traversal(panel_server):
     """Regression: /api/file still 404s on `..` escaping the archive root."""
     url, archive = panel_server
@@ -148,3 +207,27 @@ def test_api_file_rejects_traversal(panel_server):
         urllib.request.urlopen(url + "/api/file?p=../secret.txt")
 
     assert exc.value.code == 404
+
+
+def test_favicon_204(panel_server):
+    """/favicon.ico returns a quiet 204 No Content."""
+    url, _archive = panel_server
+    req = urllib.request.Request(url + "/favicon.ico", method="GET")
+    with urllib.request.urlopen(req) as res:
+        assert res.status == 204
+
+
+def test_server_binds_loopback_only():
+    """The panel server refuses to bind on a non-loopback address."""
+    # Reaching outside 127.0.0.1 is a security regression; ensure the binding
+    # helper is hard-coded to loopback.
+    assert serve.HOST == "127.0.0.1"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # Binding to 0.0.0.0 should fail if serve.HOST were "0.0.0.0"? Not directly.
+    # Instead, verify the helper returns a socket bound to 127.0.0.1.
+    bound = serve._bound_socket()
+    try:
+        assert bound.getsockname()[0] == "127.0.0.1"
+    finally:
+        bound.close()
