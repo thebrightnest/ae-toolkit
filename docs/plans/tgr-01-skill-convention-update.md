@@ -91,5 +91,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
