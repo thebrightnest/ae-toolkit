@@ -81,6 +81,7 @@ SUBCOMMANDS = {
     "gate": {"target": ("aet.cli", "gate"), "mode": "exec"},
     "plan": {"target": ("aet.cli", "plan"), "mode": "exec"},
     "plans": {"target": ("aet.cli", "plans"), "mode": "exec"},
+    "docs": {"target": ("aet.cli", "docs"), "mode": "exec"},
     "panel": {"target": ("aet.cli", "panel"), "mode": "exec"},
     "run": {"target": ("aet.cli", "orchestrator"), "mode": "run"},
     "run-one": {"target": ("aet.cli", "orchestrator"), "mode": "run-one"},

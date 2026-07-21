@@ -1,0 +1,3 @@
+# Documentation governance rules for `aet docs lint`.
+# Rules are evaluated in order; a missing target file fails closed.
+rules: []
