@@ -3,7 +3,7 @@ id: tgr-01-skill-convention-update
 size: M
 blocked_by: []
 pipeline: standard
-status: draft
+status: approved
 security_review: required
 security_review_reason: Changes skill instructions that control how agents scope work; mis-scoping can affect security-sensitive changes.
 docs_sync: required
@@ -25,20 +25,21 @@ docs_sync_reason: Updates conventions and templates that are consumed as documen
 
 ## Task List
 
-1. Update `skills/aet-plan/SKILL.md` guardrail section — M (traces: R-1, R-2, R-3, R-4, R-5)
+1. Update `skills/aet-plan/SKILL.md` guardrail section, including the dual-limit references in the `create-stories` and `plan` command procedures — M (traces: R-1, R-2, R-3, R-4, R-5)
 2. Update `skills/aet-pipeline-plan/SKILL.md` guardrail references — S (traces: R-2)
-3. Update `docs/CONVENTIONS.md` Task Size Guardrails section — M (traces: R-2, R-3, R-4)
+3. Update `docs/CONVENTIONS.md` Task Size Guardrails section, plus the remaining dual-limit references in the docs-taxonomy table and rules list — M (traces: R-2, R-3, R-4)
 4. Update `.agents/templates/plan-template.md` limits reference — S (traces: R-2, R-3, R-4)
-5. Add revision note to `docs/prds/task-size-guardrails-prd.md` — S (traces: R-7)
-6. Run `make validate` — S (traces: R-6)
+5. Redefine the S/M/L size labels in `skills/aet-plan/SKILL.md`, `docs/CONVENTIONS.md`, and `.agents/templates/plan-template.md`: drop the file-count column; L becomes a re-evaluation trigger, not an automatic split trigger — M (traces: R-2, R-8)
+6. Add revision note to `docs/prds/task-size-guardrails-prd.md` — S (traces: R-7)
+7. Run `make validate` — S (traces: R-6)
 
 **Size definitions:**
 
-- **S**: ≤ 2 hr human time / ≤ 3 files / ≤ 100 diff lines
-- **M**: ≤ 1 day human time / ≤ 5 files / ≤ 200 diff lines
-- **L**: > 1 day OR > 5 files OR > 200 lines — **must be split before implementation**
+- **S**: ≤ 2 hr human time / ≤ 100 expected diff lines
+- **M**: ≤ 1 day human time / ≤ 200 expected diff lines
+- **L**: > 1 day OR > 200 lines — re-evaluate against the full guardrail model; split only if a limit is actually exceeded
 
-If a task exceeds the agent session limit, split it into subtasks and document the relationship with `Split from: {parent-task-id}`.
+If a task exceeds the intake limit (> 300 task-list lines) or the skill-level checks (> 4 agent-hours, > 2 subsystems, ~30k-token context budget), split it into subtasks and document the relationship with `Split from: {parent-task-id}`.
 
 ### Renderer / UI Tasks (if applicable)
 
@@ -90,5 +91,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`, then `aet-work`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_

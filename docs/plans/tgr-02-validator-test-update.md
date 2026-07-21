@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - tgr-01-skill-convention-update
 pipeline: standard
-status: draft
+status: approved
 security_review: required
 security_review_reason: Validator changes determine which plans are allowed into the work queue; misalignment could admit oversized tasks.
 docs_sync: required
@@ -27,17 +27,17 @@ docs_sync_reason: Validator behavior change must be reflected in the docs update
 
 ## Task List
 
-1. Update `src/aet/plan_parser.py` `validate_size()` to drop the file-count intake limit — M (traces: R-2, R-3, R-6)
-2. Update `tests/queue/test_init_queue_sync.py` to match the revised validator behavior — M (traces: R-6)
+1. Update `src/aet/plan_parser.py` `validate_size()` to drop the file-count intake limit and remove the now-unused `count_files_to_modify()` — M (traces: R-2, R-3, R-6)
+2. Update `tests/queue/test_init_queue_sync.py` to match the revised validator behavior, including a new test pinning that a plan listing more than 8 files but ≤ 300 task-list lines is accepted — M (traces: R-2, R-6)
 3. Run `make test` and `make validate` — S (traces: R-6)
 
 **Size definitions:**
 
-- **S**: ≤ 2 hr human time / ≤ 3 files / ≤ 100 diff lines
-- **M**: ≤ 1 day human time / ≤ 5 files / ≤ 200 diff lines
-- **L**: > 1 day OR > 5 files OR > 200 lines — **must be split before implementation**
+- **S**: ≤ 2 hr human time / ≤ 100 expected diff lines
+- **M**: ≤ 1 day human time / ≤ 200 expected diff lines
+- **L**: > 1 day OR > 200 lines — re-evaluate against the full guardrail model; split only if a limit is actually exceeded
 
-If a task exceeds the agent session limit, split it into subtasks and document the relationship with `Split from: {parent-task-id}`.
+If a task exceeds the intake limit (> 300 task-list lines) or the skill-level checks (> 4 agent-hours, > 2 subsystems, ~30k-token context budget), split it into subtasks and document the relationship with `Split from: {parent-task-id}`.
 
 ### Renderer / UI Tasks (if applicable)
 
@@ -86,5 +86,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-_Stage: plan-draft_
-_Next step: run `aet-validate-scope`, then `aet-work`_
+_Stage: plan-approved_
+_Next step: run `aet-work`_
