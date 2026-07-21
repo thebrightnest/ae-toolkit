@@ -74,5 +74,5 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+_Stage: secure_
+_Next step: run `aet-sync-docs`, then `aet-ship`_
