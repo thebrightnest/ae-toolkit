@@ -25,13 +25,13 @@ docs_sync_reason: Updates conventions and templates that are consumed as documen
 
 ## Task List
 
-1. Update `skills/aet-plan/SKILL.md` guardrail section, including the dual-limit references in the `create-stories` and `plan` command procedures — M (traces: R-1, R-2, R-3, R-4, R-5)
-2. Update `skills/aet-pipeline-plan/SKILL.md` guardrail references — S (traces: R-2)
-3. Update `docs/CONVENTIONS.md` Task Size Guardrails section, plus the remaining dual-limit references in the docs-taxonomy table and rules list — M (traces: R-2, R-3, R-4)
-4. Update `.agents/templates/plan-template.md` limits reference — S (traces: R-2, R-3, R-4)
-5. Redefine the S/M/L size labels in `skills/aet-plan/SKILL.md`, `docs/CONVENTIONS.md`, and `.agents/templates/plan-template.md`: drop the file-count column; L becomes a re-evaluation trigger, not an automatic split trigger — M (traces: R-2, R-8)
-6. Add revision note to `docs/prds/task-size-guardrails-prd.md` — S (traces: R-7)
-7. Run `make validate` — S (traces: R-6)
+1. ✓ Update `skills/aet-plan/SKILL.md` guardrail section, including the dual-limit references in the `create-stories` and `plan` command procedures — M (traces: R-1, R-2, R-3, R-4, R-5)
+2. ✓ Update `skills/aet-pipeline-plan/SKILL.md` guardrail references — S (traces: R-2)
+3. ✓ Update `docs/CONVENTIONS.md` Task Size Guardrails section, plus the remaining dual-limit references in the docs-taxonomy table and rules list — M (traces: R-2, R-3, R-4)
+4. ✓ Update `.agents/templates/plan-template.md` limits reference — S (traces: R-2, R-3, R-4)
+5. ✓ Redefine the S/M/L size labels in `skills/aet-plan/SKILL.md`, `docs/CONVENTIONS.md`, and `.agents/templates/plan-template.md`: drop the file-count column; L becomes a re-evaluation trigger, not an automatic split trigger — M (traces: R-2, R-8)
+6. ✓ Add revision note to `docs/prds/task-size-guardrails-prd.md` — S (traces: R-7)
+7. ✓ Run lint/format checks — S (traces: R-6) [Changed: only lint/format checks run; test suite skipped because toolkit verified only non-code files changed since QA green]
 
 **Size definitions:**
 
@@ -68,10 +68,10 @@ Before finalizing this plan, confirm it should not be merged with related plans:
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] R-trace coverage: every in-scope R-id is covered by ≥ 1 task or explicitly deferred with a reason; no task cites an unknown R-id
-- [ ] No new source files introduced by this plan
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] Lint/format checks pass (test suite skipped per toolkit diff scoping: only non-code files changed since QA green)
+- [x] R-trace coverage: every in-scope R-id is covered by ≥ 1 task or explicitly deferred with a reason; no task cites an unknown R-id
+- [x] No new source files introduced by this plan
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -91,5 +91,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
