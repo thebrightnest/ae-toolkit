@@ -24,14 +24,14 @@ Source: `docs/prds/namespace-consolidation-prd.md`, R-3. `Split from: nc-03 (aet
 
 ## Task List
 
-1. Add an `aet ship open` subcommand to `src/aet/cli/ship.py`, scaffolding `tests/test_ship_open.py` alongside it; it invokes `aet ship gate`'s logic first and refuses to proceed (non-zero exit, no push) if the gate reports failure — M (traces: R-3)
-2. Port the bisectable-commit **check** (step 10) as a deterministic flag, not an automated split: if the diff looks monolithic (e.g. a single commit spans the entire `pr_base..HEAD` range while the plan lists more than one task), **STOP** and ask the agent to split manually. The judgment of *how* to split a commit into logical pieces stays out of code, consistent with the deterministic/judgment separation this workstream is built on — M (traces: R-3)
-3. Port CHANGELOG **entry** generation (step 11: derived from commit messages and the plan.md summary) as PR/commit-trail output only — it must **not** write the project-level `CHANGELOG.md` file, which remains `aet-release-prep`'s domain (ADR-007; aet-ship SKILL.md line 18 already states ship "does not update project-level `CHANGELOG.md`"). This completes ADR-007's boundary, it does not redraw it — S (traces: R-3)
-4. Port push logic (step 12: `git push --force-with-lease` if the branch was rebased by `aet ship gate`, else a normal `git push`) — S (traces: R-3)
-5. Port PR creation (step 13: `gh pr create` against the gate-computed `pr_base`; body includes plan/PRD links, the scope-audit section from `nc-03a`'s output when non-empty, and the stacked-PR warning block when `pr_base` is not `origin/main`) — M (traces: R-3)
-6. Preserve the existing guardrail verbatim: do not commit `chore(release)` or VERSION changes on feature branches (this ticket's code must not touch release versioning) — S (traces: R-3)
-7. Trim `aet-ship/SKILL.md` steps 10-13, replacing them with a pointer: "see `aet ship open` (code)" — S (traces: R-3)
-8. Merge branch to main and verify integration — S
+1. ✓ Add an `aet ship open` subcommand to `src/aet/cli/ship.py`, scaffolding `tests/test_ship_open.py` alongside it; it invokes `aet ship gate`'s logic first and refuses to proceed (non-zero exit, no push) if the gate reports failure — M (traces: R-3)
+2. ✓ Port the bisectable-commit **check** (step 10) as a deterministic flag, not an automated split: if the diff looks monolithic (e.g. a single commit spans the entire `pr_base..HEAD` range while the plan lists more than one task), **STOP** and ask the agent to split manually. The judgment of *how* to split a commit into logical pieces stays out of code, consistent with the deterministic/judgment separation this workstream is built on — M (traces: R-3)
+3. ✓ Port CHANGELOG **entry** generation (step 11: derived from commit messages and the plan.md summary) as PR/commit-trail output only — it must **not** write the project-level `CHANGELOG.md` file, which remains `aet-release-prep`'s domain (ADR-007; aet-ship SKILL.md line 18 already states ship "does not update project-level `CHANGELOG.md`"). This completes ADR-007's boundary, it does not redraw it — S (traces: R-3)
+4. ✓ Port push logic (step 12: `git push --force-with-lease` if the branch was rebased by `aet ship gate`, else a normal `git push`) — S (traces: R-3)
+5. ✓ Port PR creation (step 13: `gh pr create` against the gate-computed `pr_base`; body includes plan/PRD links, the scope-audit section from `nc-03a`'s output when non-empty, and the stacked-PR warning block when `pr_base` is not `origin/main`) — M (traces: R-3)
+6. ✓ Preserve the existing guardrail verbatim: do not commit `chore(release)` or VERSION changes on feature branches (this ticket's code must not touch release versioning) — S (traces: R-3)
+7. ✓ Trim `aet-ship/SKILL.md` steps 10-13, replacing them with a pointer: "see `aet ship open` (code)" — S (traces: R-3)
+8. [Deferred: left for `aet-ship` merge/closure stage] Merge branch to main and verify integration — S
 
 **Size definitions:**
 
@@ -59,11 +59,11 @@ Source: `docs/prds/namespace-consolidation-prd.md`, R-3. `Split from: nc-03 (aet
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] R-trace coverage: R-3 (PR-creation portion) covered by tasks 1–7; no unknown R-ids cited
-- [ ] Named tests per new file: `tests/test_ship_open.py` covers `aet ship open` — gate-failure-refusal, monolithic-commit-stop, changelog-generation, force-with-lease-vs-normal-push branching, PR-body construction (scope-audit section present/absent, stacked-PR warning present/absent)
-- [ ] Test types: unit tests (changelog generation, PR-body construction, in isolation); integration test (full open run against a scratch git repo + mocked `gh` CLI)
+- [x] Lint passes
+- [x] Tests pass
+- [x] R-trace coverage: R-3 (PR-creation portion) covered by tasks 1–7; no unknown R-ids cited
+- [x] Named tests per new file: `tests/test_ship_open.py` covers `aet ship open` — gate-failure-refusal, monolithic-commit-stop, changelog-generation, force-with-lease-vs-normal-push branching, PR-body construction (scope-audit section present/absent, stacked-PR warning present/absent)
+- [x] Test types: unit tests (changelog generation, PR-body construction, in isolation); integration test (full open run against a scratch git repo + mocked `gh` CLI)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -85,5 +85,5 @@ frontmatter and is read by `aet run`/`run-one`.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
