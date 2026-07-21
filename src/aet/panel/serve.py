@@ -2,7 +2,7 @@
 """Serve the AET telemetry panel together with ~/.aet/telemetry.
 
 Opens the panel in your default browser; the page reads the archive through
-a tiny localhost-only JSON API. No dependencies beyond the Python stdlib.
+a tiny localhost-only JSON API backed by Starlette + uvicorn.
 
 Usage:
     aet panel                               # serve + open browser
@@ -10,23 +10,30 @@ Usage:
     python3 -m aet.panel.serve --no-open    # direct module invocation
 """
 
-import json
 import os
+import socket
 import sys
 import threading
 import webbrowser
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+
+import uvicorn
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from starlette.routing import Route
 
 TELEMETRY = os.path.expanduser("~/.aet/telemetry")
 PANEL_DIR = os.path.dirname(os.path.abspath(__file__))
+HOST = "127.0.0.1"
 
 
 def telemetry_files():
     """Relative paths of all telemetry files in the archive."""
     out = []
+    if not os.path.isdir(TELEMETRY):
+        return out
     for root, _dirs, files in os.walk(TELEMETRY):
         for name in files:
             if name == "last-run.json" or (
@@ -86,56 +93,87 @@ def run_dirs():
     return sorted(out, key=lambda d: d["rel"])
 
 
-class Handler(BaseHTTPRequestHandler):
-    server_version = "AETPanel/1.0"
+async def index(request: Request):
+    """Serve the bundled HTML panel."""
+    return FileResponse(
+        os.path.join(PANEL_DIR, "index.html"),
+        media_type="text/html; charset=utf-8",
+    )
 
-    def log_message(self, *args):
-        pass  # keep the terminal quiet
 
-    def _send(self, code, body, content_type="text/plain; charset=utf-8"):
-        data = body.encode("utf-8") if isinstance(body, str) else body
-        self.send_response(code)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+async def api_list(request: Request):
+    """Return archive metadata: root path, files, and run directories."""
+    return JSONResponse(
+        {"root": TELEMETRY, "files": telemetry_files(), "dirs": run_dirs()}
+    )
 
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        if parsed.path == "/favicon.ico":
-            self.send_response(204)
-            self.end_headers()
-        elif parsed.path in ("/", "/index.html"):
-            with open(os.path.join(PANEL_DIR, "index.html"), "rb") as f:
-                self._send(200, f.read(), "text/html; charset=utf-8")
-        elif parsed.path == "/api/list":
-            body = json.dumps({"root": TELEMETRY, "files": telemetry_files(), "dirs": run_dirs()})
-            self._send(200, body, "application/json")
-        elif parsed.path == "/api/file":
-            rel = parse_qs(parsed.query).get("p", [""])[0]
-            full = os.path.normpath(os.path.join(TELEMETRY, rel))
-            if os.path.commonpath([TELEMETRY, full]) != TELEMETRY or not os.path.isfile(full):
-                self._send(404, "not found")
-                return
-            with open(full, "rb") as f:
-                self._send(200, f.read(), "application/json")
-        else:
-            self._send(404, "not found")
+
+async def api_file(request: Request):
+    """Serve a single archive file by relative path, rejecting traversal."""
+    rel = request.query_params.get("p", "")
+    full = os.path.normpath(os.path.join(TELEMETRY, rel))
+    if os.path.commonpath([TELEMETRY, full]) != TELEMETRY or not os.path.isfile(full):
+        return PlainTextResponse("not found", status_code=404)
+    return FileResponse(full, media_type="application/json")
+
+
+async def favicon(request: Request):
+    """Quietly 204 on favicon requests."""
+    return Response(status_code=204)
+
+
+async def not_found(request: Request):
+    """Fallback 404 for unmatched routes."""
+    return PlainTextResponse("not found", status_code=404)
+
+
+app = Starlette(
+    routes=[
+        Route("/", index),
+        Route("/index.html", index),
+        Route("/api/list", api_list),
+        Route("/api/file", api_file),
+        Route("/favicon.ico", favicon),
+    ],
+    exception_handlers={404: not_found},
+)
+
+
+def _bound_socket():
+    """Return a TCP socket bound to the loopback interface on a random port."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((HOST, 0))
+    sock.listen(128)
+    return sock
 
 
 def main():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    url = f"http://127.0.0.1:{server.server_address[1]}/"
-    print(f"AET telemetry panel: {url}")
-    print(f"Archive: {TELEMETRY}")
-    print("Press Ctrl-C to stop.")
-    if "--no-open" not in sys.argv:
-        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+    sock = _bound_socket()
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nstopped")
-        server.shutdown()
+        _host, port = sock.getsockname()[:2]
+        url = f"http://{HOST}:{port}/"
+        print(f"AET telemetry panel: {url}")
+        print(f"Archive: {TELEMETRY}")
+        print("Press Ctrl-C to stop.")
+        if "--no-open" not in sys.argv:
+            threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+
+        config = uvicorn.Config(
+            app,
+            host=HOST,
+            fd=sock.fileno(),
+            log_level="warning",
+            access_log=False,
+            loop="asyncio",
+        )
+        server = uvicorn.Server(config)
+        try:
+            server.run()
+        finally:
+            print("\nstopped")
+    finally:
+        sock.close()
 
 
 if __name__ == "__main__":

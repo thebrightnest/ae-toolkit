@@ -24,6 +24,7 @@ import path from "node:path";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const SERVE = path.resolve("src/aet/panel/serve.py");
+const PYTHON = path.resolve(".venv/bin/python3");
 const TELEMETRY = path.join(os.homedir(), ".aet/telemetry");
 const PLAN_NAME = "wfd-01-frontmatter-routing";
 const PROJECT = "thebrightnest/ae-toolkit";
@@ -137,7 +138,7 @@ async function main() {
 
   // 1. panel server (random port, printed on stdout)
   // -u: the launcher prints its URL on stdout, which is block-buffered when piped
-  const serve = spawn("python3", ["-u", SERVE, "--no-open"], { stdio: ["ignore", "pipe", "inherit"] });
+  const serve = spawn(PYTHON, ["-u", SERVE, "--no-open"], { stdio: ["ignore", "pipe", "inherit"] });
   const panelUrl = await new Promise((resolve, reject) => {
     let buf = "";
     serve.stdout.on("data", d => {

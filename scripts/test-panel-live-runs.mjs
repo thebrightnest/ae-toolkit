@@ -26,6 +26,7 @@ import path from "node:path";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const SERVE = path.resolve("src/aet/panel/serve.py");
+const PYTHON = path.resolve(".venv/bin/python3");
 const CDP_PORT = 9223;
 
 const RUN_LIVE_EMPTY = "1a1a1a1a-0000-4000-8000-000000000001";
@@ -150,7 +151,7 @@ async function main() {
 
   // 1. panel server against the fixture archive (HOME override), random port
   // -u: the launcher prints its URL on stdout, which is block-buffered when piped
-  const serve = spawn("python3", ["-u", SERVE, "--no-open"], {
+  const serve = spawn(PYTHON, ["-u", SERVE, "--no-open"], {
     stdio: ["ignore", "pipe", "inherit"],
     env: { ...process.env, HOME: home },
   });
