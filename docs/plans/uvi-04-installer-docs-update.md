@@ -64,5 +64,5 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-ship`_
+*Stage: qa-complete*
+*Next step: run `aet-review`*
