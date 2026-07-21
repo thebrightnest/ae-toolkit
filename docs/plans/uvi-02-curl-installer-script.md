@@ -24,14 +24,14 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ## Task List
 
-1. Create `scripts/install.sh` with argument parsing for `--tag`, `--agent`, `--bin-dir`, `--skills-dir`, `--repo`, `--dry-run`, `--help` — M (traces: R-2)
-2. Implement `uv` detection and bootstrap via Astral's official installer — M (traces: R-3)
-3. Clone or update the AE Toolkit repo to `~/.local/share/ae-toolkit` and checkout the requested tag — M (traces: R-4)
-4. Install `aet` from the cloned repo into a dedicated venv at `~/.local/share/ae-toolkit/venv` using `uv venv` + `uv pip install` — M (traces: R-5)
-5. Invoke `aet setup skills` from the installed binary for the selected agent(s) — M (traces: R-6, R-7, R-8)
-6. Symlink `<bin-dir>/aet` to the venv console script (`~/.local/share/ae-toolkit/venv/bin/aet`) directly from the script — never invoking `aet install`, whose `Path(__file__)` link target only resolves on the editable dev path — and never linking a worktree copy — S (traces: R-8, R-9)
-7. Add idempotency, error handling, and a final summary — S (traces: R-10, R-11)
-8. Run shellcheck on the script and fix warnings — S
+1. [x] Create `scripts/install.sh` with argument parsing for `--tag`, `--agent`, `--bin-dir`, `--skills-dir`, `--repo`, `--dry-run`, `--help` — M (traces: R-2)
+2. [x] Implement `uv` detection and bootstrap via Astral's official installer — M (traces: R-3)
+3. [x] Clone or update the AE Toolkit repo to `~/.local/share/ae-toolkit` and checkout the requested tag — M (traces: R-4)
+4. [x] Install `aet` from the cloned repo into a dedicated venv at `~/.local/share/ae-toolkit/venv` using `uv venv` + `uv pip install` — M (traces: R-5)
+5. [x] Invoke `aet setup skills` from the installed binary for the selected agent(s) — M (traces: R-6, R-7, R-8)
+6. [x] Symlink `<bin-dir>/aet` to the venv console script (`~/.local/share/ae-toolkit/venv/bin/aet`) directly from the script — never invoking `aet install`, whose `Path(__file__)` link target only resolves on the editable dev path — and never linking a worktree copy — S (traces: R-8, R-9)
+7. [x] Add idempotency, error handling, and a final summary — S (traces: R-10, R-11)
+8. [x] Run shellcheck on the script and fix warnings — S
 
 **Size definitions:**
 
@@ -74,5 +74,5 @@ Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`
 
 ---
 
-_Stage: secure_
-_Next step: run `aet-sync-docs`, then `aet-ship`_
+_Stage: synced_
+_Next step: run `aet-ship`_

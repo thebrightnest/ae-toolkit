@@ -109,6 +109,26 @@ _Recorded: 2026-07-21 — Branch: uvi-01-aet-setup-skills-command_
 - README Quick Start rewrite leading with the `curl | bash` one-liner (R-14).
 - These items remain in the PRD and will be addressed in follow-up plans.
 
+## Divergence Summary — uvi-02-curl-installer-script
+
+_Recorded: 2026-07-21 — Branch: uvi-02-curl-installer-script_
+
+### Changed from plan
+
+- The installer items previously deferred in the `uvi-01-aet-setup-skills-command` divergence summary are now implemented in this branch:
+  - `scripts/install.sh` one-line installer shell script (R-1 through R-5, R-8, R-10, R-11).
+  - `uv` bootstrap logic and venv management (R-3, R-5).
+  - Smoke test wired into `make validate` using a temporary `HOME` (R-13).
+  - README Quick Start rewrite leading with the `curl | bash` one-liner (R-14).
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- None.
+
 ---
 
 _Stage: synced_
