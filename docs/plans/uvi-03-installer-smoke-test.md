@@ -15,7 +15,7 @@ docs_sync_reason: No documentation change beyond the test itself.
 
 ## Context
 
-Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md). A hermetic, offline smoke test exercises `scripts/install.sh` in isolated temporary directories (cloning from the local checkout via `--repo`) so onboarding regressions are caught before merge.
+Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`docs/prds/uv-one-line-installer-prd.md`). A hermetic, offline smoke test exercises `scripts/install.sh` in isolated temporary directories (cloning from the local checkout via `--repo`) so onboarding regressions are caught before merge.
 
 ## Intake Triage
 

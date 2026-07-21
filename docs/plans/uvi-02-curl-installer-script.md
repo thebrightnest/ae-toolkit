@@ -15,7 +15,7 @@ docs_sync_reason: README Quick Start will lead with the new one-liner.
 
 ## Context
 
-Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md). This task creates the `curl | bash` entry point that bootstraps `uv`, clones the repo, installs the `aet` CLI, links skills via `aet setup skills`, and puts `aet` on `PATH`.
+Part of the [uv one-line installer PRD](../prds/uv-one-line-installer-prd.md) (`docs/prds/uv-one-line-installer-prd.md`). This task creates the `curl | bash` entry point that bootstraps `uv`, clones the repo, installs the `aet` CLI, links skills via `aet setup skills`, and puts `aet` on `PATH`.
 
 ## Intake Triage
 
