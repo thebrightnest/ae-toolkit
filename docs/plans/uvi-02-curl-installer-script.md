@@ -1,7 +1,7 @@
 ---
 id: uvi-02-curl-installer-script
 size: M
-status: approved
+status: queued
 blocked_by:
   - uvi-01-aet-setup-skills-command
 pipeline: standard
