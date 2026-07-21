@@ -25,12 +25,7 @@ ALL_TESTS = ("tests/",)
 # fixtures, so a prose-only edit can genuinely break them. Kept honest by
 # tests/test_change_scope.py, which fails when a module starts reading repo
 # Markdown without being listed here.
-DOC_COUPLED_TESTS = (
-    "tests/ship/test_merge_governance.py",
-    "tests/skills/test_aet_qa.py",
-    "tests/skills/test_aet_review.py",
-    "tests/test_scripts_layout.py",
-)
+DOC_COUPLED_TESTS = ()
 
 BASE_REF = "origin/main"
 
