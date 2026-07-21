@@ -123,6 +123,8 @@ class TestInstallerSmoke:
                 "--repo", str(REPO_ROOT),
                 "--agent", "generic",
                 "--tag", _current_branch(),
+                "--bin-dir", str(bin_dir),
+                "--skills-dir", str(skills_dir),
                 env=env,
                 check=True,
             )
@@ -143,6 +145,16 @@ class TestInstallerSmoke:
             )
             assert help_result.returncode == 0, help_result.stderr
             assert "Agentic Engineering Toolkit" in help_result.stdout
+
+            # aet reports its version
+            version_result = subprocess.run(
+                [str(aet_bin), "--version"],
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            assert version_result.returncode == 0, version_result.stderr
+            assert "aet" in version_result.stdout
 
             # skills are linked from the cloned repo
             setup_skill_dir = skills_dir / "aet-setup"
