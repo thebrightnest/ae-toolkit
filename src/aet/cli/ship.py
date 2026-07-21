@@ -17,6 +17,7 @@ import importlib.machinery
 import importlib.util
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -141,7 +142,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
     print("4. Running test suite...")
     test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
     test_result = subprocess.run(
-        test_cmd, shell=True, capture_output=True, text=True
+        shlex.split(test_cmd), capture_output=True, text=True
     )
     if test_result.returncode != 0:
         return _fail(
@@ -153,7 +154,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
     coverage_cmd = os.environ.get("AET_SHIP_COVERAGE_CMD")
     if coverage_cmd:
         coverage_result = subprocess.run(
-            coverage_cmd, shell=True, capture_output=True, text=True
+            shlex.split(coverage_cmd), capture_output=True, text=True
         )
         if coverage_result.returncode != 0:
             print(

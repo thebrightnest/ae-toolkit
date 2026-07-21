@@ -110,11 +110,11 @@ class TestShipGateChecks(unittest.TestCase):
             ("git", "branch", "--show-current"): (0, f"{branch}\n", ""),
             ("git", "status", "--short"): (0, "", ""),
             ("git", "diff", "origin/main", "--name-only"): (0, "src/aet/cli/ship.py\n", ""),
-            "true": (0, "", ""),
+            ("true",): (0, "", ""),
         }
 
     def _shell(self, cmd):
-        return cmd
+        return (cmd,)
 
     def test_gate_rebase_conflict_stops(self):
         """A rebase conflict onto origin/main stops the gate with the documented message."""
@@ -144,7 +144,7 @@ class TestShipGateChecks(unittest.TestCase):
     def test_gate_test_failure_stops(self):
         """A failing test suite stops the gate."""
         responses = self._base_responses()
-        responses[self._shell("false")] = (1, "", "test failure")
+        responses[("false",)] = (1, "", "test failure")
         env = {"AET_SHIP_TEST_CMD": "false"}
 
         with patch.dict(os.environ, env):
@@ -158,7 +158,7 @@ class TestShipGateChecks(unittest.TestCase):
     def test_gate_coverage_drop_flagged(self):
         """A coverage drop is flagged but does not stop the gate."""
         responses = self._base_responses()
-        responses[self._shell("false")] = (1, "", "coverage dropped")
+        responses[("false",)] = (1, "", "coverage dropped")
         env = {
             "AET_SHIP_TEST_CMD": "true",
             "AET_SHIP_COVERAGE_CMD": "false",
