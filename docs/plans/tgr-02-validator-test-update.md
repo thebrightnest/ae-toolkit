@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - tgr-01-skill-convention-update
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Validator changes determine which plans are allowed into the work queue; misalignment could admit oversized tasks.
 docs_sync: required
@@ -86,5 +86,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 _Next step: run `aet-ship`_
