@@ -3,7 +3,7 @@ id: epi-04-orchestrator-run-preconditions
 size: M
 blocked_by: [epi-01-base-branch-resolver]
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: writes .gitignore entries during setup and changes an error path; no network, credential, or privileged write surface
 docs_sync: required
