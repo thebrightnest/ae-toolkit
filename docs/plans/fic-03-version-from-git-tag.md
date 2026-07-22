@@ -3,7 +3,7 @@ id: fic-03-version-from-git-tag
 size: S
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: build-backend configuration and version derivation; no auth, data, network, or filesystem trust boundary is touched
 docs_sync: required
@@ -150,6 +150,8 @@ value, not to `1.3.0`.
 ## Pipeline
 
 `standard`.
+
+⚠️ VALIDATE ACK: rtrace — R-8 and R-9 cited in the PRD Requirements section belong to `uv-one-line-installer-prd.md` (inline supersession context in R-16/R-18), not to this PRD; the R-id sweep counts any mention.
 
 ---
 
