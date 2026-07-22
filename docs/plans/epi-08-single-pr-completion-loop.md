@@ -3,7 +3,7 @@ id: epi-08-single-pr-completion-loop
 size: L
 blocked_by: [epi-02-thread-resolver-through-consumers, epi-03-worktree-refresh-no-repo-root-checkout, epi-07-integration-mode-config]
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: adds local squash-merge and branch-deletion paths and a push-suppression guarantee — new git command surface that must not leak task branches to origin
 docs_sync: required
