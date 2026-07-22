@@ -136,5 +136,5 @@ pure deletion with no behavioral change to undo.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

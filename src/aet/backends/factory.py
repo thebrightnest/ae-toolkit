@@ -76,7 +76,7 @@ def resolve_config(config_path: str) -> dict[str, Any]:
     if path.exists():
         return _load_config(path)
 
-    return {"task_backend": "json"}
+    return {"task_backend": "json", "trunk_branch": None, "integration_branch": None}
 
 
 def _load_config(path: Path) -> dict[str, Any]:
