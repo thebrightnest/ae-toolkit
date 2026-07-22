@@ -87,6 +87,7 @@ from aet.cli import (  # noqa: E402
 app = typer.Typer(
     help="Agentic Engineering Toolkit CLI",
     no_args_is_help=True,
+    add_completion=False,
 )
 
 # Noun-scoped command groups.
