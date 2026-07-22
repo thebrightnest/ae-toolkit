@@ -3,7 +3,7 @@ id: fic-01-one-entry-point
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: deletes and retargets symlink creation in the user bin directory and removes an os.execv at module scope; path-resolution correctness is security-relevant, inherited from cli-04
 docs_sync: required
@@ -73,7 +73,10 @@ structural replacement, which is not itself a defect fix.
    `TestWorktreeCopyGuard` (`:239-250`); retarget the `aet install` coverage at
    `aet setup link`; add `test_subcommand_does_not_touch_link` — M
    (traces: R-15, R-16, R-18)
-6. Merge branch to main and verify integration — S
+6. Update `README.md` (`:144`, `:169`) and `docs/CONVENTIONS.md` (`:57-59`) to
+   name `aet setup link`; add the release-notes line naming re-running the
+   installer as the repair for v1.4.0-corrupted links — S (traces: R-33)
+7. Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated against the full guardrail model.
@@ -115,6 +118,8 @@ Full treatment in ADR-041. Recorded so they are not re-opened:
 - `src/aet/cli/main.py`
 - `src/aet/cli/setup.py`
 - `tests/cli/test_aet_install.py` → `tests/setup/test_setup_link.py`
+- `README.md`
+- `docs/CONVENTIONS.md`
 
 ## Validation Steps
 
@@ -144,7 +149,8 @@ Full treatment in ADR-041. Recorded so they are not re-opened:
 - [ ] `grep -rn "aet install" skills/ docs/ README.md` — every hit updated to
       `aet setup link`
 - [ ] `aet-cso` invoked — symlink creation in the user bin directory
-- [ ] R-trace coverage: R-15 (1, 5), R-16 (3, 5), R-17 (2), R-18 (3, 5), R-19 (4)
+- [ ] R-trace coverage: R-15 (1, 5), R-16 (3, 5), R-17 (2), R-18 (3, 5), R-19 (4),
+      R-33 (6)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -161,6 +167,8 @@ state that the link is no longer self-healing and that `aet install` is gone.
 
 `standard`. Symlink and PATH-ownership changes warrant the default stage
 grouping with a real security review rather than `minimal`.
+
+⚠️ VALIDATE ACK: rtrace — R-8 and R-9 cited in the PRD Requirements section belong to `uv-one-line-installer-prd.md` (inline supersession context in R-16/R-18), not to this PRD; the R-id sweep counts any mention.
 
 ---
 
