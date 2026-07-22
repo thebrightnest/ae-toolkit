@@ -3,7 +3,7 @@ id: epi-10-epic-durability-and-closure
 size: M
 blocked_by: [epi-09-serialized-integration]
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: pushes the integration branch to origin on every integration and changes merge verification — outbound git operations and a fail-closed gate
 docs_sync: required
