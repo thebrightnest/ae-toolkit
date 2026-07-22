@@ -61,10 +61,10 @@ Check the current plan/PRD against existing documentation and code. Surface cont
    - Stated behavior that contradicts existing code
    - Architectural decisions that contradict existing ADRs
 6. **Pipeline field validation** — if a plan frontmatter contains `pipeline`, verify the value is one of `minimal`, `standard`, or `full`. Any other value is a validation failure. Warn if a high-risk change (auth, data models, API, dependencies) uses `minimal`.
-7. **Closure Check** — before declaring scope validated, verify the handoff artifacts exist:
+7. **Closure Check** — before declaring scope validated, verify the handoff artifact exists:
    - At least one `docs/plans/*.md` file references the PRD (via Context or frontmatter).
-   - Every such plan file is present in `.agents/work-queue.json`.
-   - If either check fails, stop and redirect: do not update the PRD footer to `scope-validated`.
+   - If the check fails, stop and redirect: do not update the PRD footer to `scope-validated`.
+   - Do **not** check `.agents/work-queue.json` here. Queue intake happens after this skill runs: `aet sprint add` requires the `plan-approved` stamp that this skill's Completion Protocol applies, and requires the plan to be committed first. Queue verification belongs to `aet-pipeline-plan` step 3, which runs post-intake.
 8. Present findings as a concise list (not a 20-question interview)
 9. Ask **targeted questions** about the gaps found — one at a time
 
@@ -166,14 +166,10 @@ When multiple contexts exist, infer which one the current topic relates to. If u
 
 ## Closure Check Failure Messages
 
-If the closure check fails, print exactly one of the following and stop:
+If the closure check fails, print the following and stop:
 
 - **No plan files:**
-
   > "Scope validation cannot complete: no plan files reference this PRD. Break the PRD into `docs/plans/*.md` files (e.g., via `aet-plan`), then re-run `aet-validate-scope`."
-
-- **Plans not synced:**
-  > "Scope validation cannot complete: plan files exist but are not synced to `.agents/work-queue.json`. Run `aet queue sync`, then re-run `aet-validate-scope`."
 
 ## Completion Protocol
 

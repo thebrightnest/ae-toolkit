@@ -1,8 +1,9 @@
-"""aet-work sync — Append-only sync of docs/plans/*.md into the work queue.
+"""aet queue sync — Reconcile the existing work queue against docs/plans/*.md.
 
-Loads the existing queue and settled history log, appends only newly created
-plan files, validates the frontmatter contract and atomicity, recomputes the
-dependency DAG, reports drift, and updates wrapper metadata. It does **not**
+Loads the existing queue and settled history log, drops settled and non-sprint
+entries, validates the frontmatter contract and atomicity, recomputes the
+dependency DAG, reports drift, and updates wrapper metadata. Intake is curated:
+sync **never adds new plans** (that is `aet sprint add`), and it does **not**
 derive status or promote tasks.
 """
 
