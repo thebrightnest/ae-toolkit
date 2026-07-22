@@ -6,7 +6,7 @@ blocked_by:
   - fic-02-installer-bootstrap-boundary
   - fic-03-version-from-git-tag
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: test-only plan; adds coverage over the install path without changing any shipped code or trust boundary
 docs_sync: skipped
@@ -178,6 +178,8 @@ recorded reason.
 ## Pipeline
 
 `standard`.
+
+⚠️ VALIDATE ACK: rtrace — R-8 and R-9 cited in the PRD Requirements section belong to `uv-one-line-installer-prd.md` (inline supersession context in R-16/R-18), not to this PRD; the R-id sweep counts any mention.
 
 ---
 
