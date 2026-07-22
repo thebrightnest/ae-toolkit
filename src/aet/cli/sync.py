@@ -158,7 +158,7 @@ def sync(
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     ),
 ) -> None:
-    """Append-only sync of docs/plans/*.md into the work queue."""
+    """Reconcile queued tasks against docs/plans/*.md (never adds new plans)."""
     args = argparse.Namespace(
         queue_file=queue_file,
         history_file=history_file,
