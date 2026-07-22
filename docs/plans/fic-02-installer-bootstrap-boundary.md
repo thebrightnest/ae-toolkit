@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - fic-01-one-entry-point
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: rewrites the curl-piped-to-bash install path and moves symlink creation across the shell/Python boundary; this is the highest-trust code the project ships
 docs_sync: required
@@ -156,8 +156,8 @@ Full treatment in ADR-042. Recorded so they are not re-opened:
 
 - [ ] Lint passes
 - [ ] Tests pass
-- [ ] **New source file** — `aet setup verify` in `src/aet/cli/setup.py`:
-      covered by new `tests/setup/test_setup_verify.py` with named cases:
+- [ ] **New source file** — `tests/setup/test_setup_verify.py` covers
+      `aet setup verify` (`src/aet/cli/setup.py`) with named cases:
       `test_reports_ok_when_link_wins_path`,
       `test_reports_shadowing_path_by_name`,
       `test_exits_zero_when_shadowed`,
@@ -188,6 +188,8 @@ revert of the installer.
 
 `standard`. The curl-piped-to-bash path is the project's highest-trust surface
 and warrants the full review grouping.
+
+⚠️ VALIDATE ACK: rtrace — R-8 and R-9 cited in the PRD Requirements section belong to `uv-one-line-installer-prd.md` (inline supersession context in R-16/R-18), not to this PRD; the R-id sweep counts any mention.
 
 ---
 
