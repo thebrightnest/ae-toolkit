@@ -59,6 +59,9 @@ Do **not** write an ADR for:
 - [037 — Runtime Dependency Policy](037-runtime-dependency-policy.md)
 - [038 — Directory Layout Change](038-directory-layout-change.md)
 - [040 — Documentation Invariants Are Data](040-documentation-invariants-as-data.md)
+- [041 — The Console Script Is the Only Entry Point](041-console-script-is-the-only-entry-point.md)
+- [042 — The Installer Is a Bootstrap, Not a Program](042-the-installer-is-a-bootstrap.md)
+- [043 — The Version Derives From the Git Tag](043-version-derives-from-the-git-tag.md)
 
 ## Format
 
