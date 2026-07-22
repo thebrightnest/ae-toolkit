@@ -115,20 +115,31 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
                     capture_output=True,
                 )
             else:
-                # Has local commits: try to rebase onto the current base.
+                # Has local commits: rebase inside a worktree dedicated to this
+                # branch. Never run a HEAD-changing git command in repo_root.
+                _run_git(
+                    ["-C", repo_root, "worktree", "add", worktree_dir, branch_name],
+                    check=True,
+                )
                 rebase = _run_git(
-                    ["-C", repo_root, "rebase", "--onto", base, branch_base_sha, branch_name],
+                    ["-C", worktree_dir, "rebase", base],
                     capture_output=True,
                     text=True,
                 )
-                if rebase.returncode != 0:
-                    _run_git(["-C", repo_root, "rebase", "--abort"], capture_output=True)
-                    _run_git(
-                        ["-C", repo_root, "branch", "-D", branch_name],
-                        check=True,
-                        capture_output=True,
-                    )
-                    branch_exists = False
+                if rebase.returncode == 0:
+                    return worktree_dir
+                _run_git(["-C", worktree_dir, "rebase", "--abort"], capture_output=True)
+                _run_git(
+                    ["-C", repo_root, "worktree", "remove", worktree_dir],
+                    check=True,
+                    capture_output=True,
+                )
+                _run_git(
+                    ["-C", repo_root, "branch", "-D", branch_name],
+                    check=True,
+                    capture_output=True,
+                )
+                branch_exists = False
 
     if branch_exists:
         _run_git(

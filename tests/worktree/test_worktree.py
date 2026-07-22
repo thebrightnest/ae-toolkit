@@ -190,6 +190,209 @@ class TestDependencyWarmupRequired(unittest.TestCase):
             self.assertEqual(missing, [])
 
 
+class TestCreateWorktree(unittest.TestCase):
+    def _init_repo(self, repo_root: str) -> None:
+        subprocess.run(["git", "init", "-q", repo_root], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.name", "Test User"],
+            check=True,
+        )
+
+    def test_refresh_diverged_branch_leaves_repo_root_head_unchanged(self):
+        """Regression: rebasing a diverged task branch must not checkout in repo_root."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+
+            # Old base commit.
+            Path(repo_root, "base.txt").write_text("old", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "old base"],
+                check=True,
+            )
+            old_base = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+
+            ).stdout.strip()
+
+            # Task branch diverges from the old base. Use a temporary worktree so
+            # repo_root never checks out the task branch.
+            subprocess.run(
+                ["git", "-C", repo_root, "branch", "task-001", old_base],
+                check=True,
+            )
+            with tempfile.TemporaryDirectory() as task_temp:
+                subprocess.run(
+                    ["git", "-C", repo_root, "worktree", "add", task_temp, "task-001"],
+                    check=True,
+                )
+                try:
+                    Path(task_temp, "task.txt").write_text("task work", encoding="utf-8")
+                    subprocess.run(["git", "-C", task_temp, "add", "."], check=True)
+                    subprocess.run(
+                        ["git", "-C", task_temp, "commit", "-q", "-m", "task commit"],
+                        check=True,
+                    )
+                finally:
+                    subprocess.run(
+                        ["git", "-C", repo_root, "worktree", "remove", "-f", task_temp],
+                        check=True,
+                        capture_output=True,
+                    )
+
+            # repo_root is on a feature branch.
+            subprocess.run(
+                ["git", "-C", repo_root, "checkout", "-q", "-b", "feature"],
+                check=True,
+            )
+            Path(repo_root, "feature.txt").write_text("feature work", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "feature commit"],
+                check=True,
+            )
+
+            # Advance main so the task branch diverges from the current base.
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
+            Path(repo_root, "main.txt").write_text("main advance", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "main advance"],
+                check=True,
+            )
+
+            # Return repo_root to the feature branch before refreshing.
+            subprocess.run(
+                ["git", "-C", repo_root, "checkout", "-q", "feature"], check=True
+            )
+            before = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            worktree.create_worktree(repo_root, "task-001", "main")
+
+            after = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(after, before)
+            self.assertEqual(after, "feature")
+
+    def test_refresh_conflict_rebuilds_branch_from_base(self):
+        """On rebase conflict the branch is deleted and recreated from base."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+
+            # Old base commit creates a file that will conflict.
+            Path(repo_root, "shared.txt").write_text("old", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "old base"],
+                check=True,
+            )
+            old_base = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            subprocess.run(
+                ["git", "-C", repo_root, "branch", "task-001", old_base],
+                check=True,
+            )
+            with tempfile.TemporaryDirectory() as task_temp:
+                subprocess.run(
+                    ["git", "-C", repo_root, "worktree", "add", task_temp, "task-001"],
+                    check=True,
+                )
+                try:
+                    Path(task_temp, "shared.txt").write_text("task", encoding="utf-8")
+                    subprocess.run(["git", "-C", task_temp, "add", "."], check=True)
+                    subprocess.run(
+                        ["git", "-C", task_temp, "commit", "-q", "-m", "task commit"],
+                        check=True,
+                    )
+                finally:
+                    subprocess.run(
+                        ["git", "-C", repo_root, "worktree", "remove", "-f", task_temp],
+                        check=True,
+                        capture_output=True,
+                    )
+
+            # repo_root is on a feature branch.
+            subprocess.run(
+                ["git", "-C", repo_root, "checkout", "-q", "-b", "feature"],
+                check=True,
+            )
+            Path(repo_root, "feature.txt").write_text("feature work", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "feature commit"],
+                check=True,
+            )
+
+            # Advance main with a conflicting change.
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
+            Path(repo_root, "shared.txt").write_text("main", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "main advance"],
+                check=True,
+            )
+            main_sha = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            subprocess.run(
+                ["git", "-C", repo_root, "checkout", "-q", "feature"], check=True
+            )
+            before = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            worktree.create_worktree(repo_root, "task-001", "main")
+
+            after = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(after, before)
+            self.assertEqual(after, "feature")
+
+            # Branch was recreated from base.
+            branch_sha = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "task-001"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(branch_sha, main_sha)
+
+            # Worktree exists.
+            self.assertTrue(os.path.isdir(os.path.join(repo_root, ".worktrees", "task-001")))
+
+
 class TestCheckMainHygiene(unittest.TestCase):
     def _init_repo(self, repo_root: str) -> None:
         subprocess.run(["git", "init", "-q", repo_root], check=True)
