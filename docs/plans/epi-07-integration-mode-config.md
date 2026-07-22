@@ -3,7 +3,7 @@ id: epi-07-integration-mode-config
 size: M
 blocked_by: [epi-01-base-branch-resolver]
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: adds a config key resolved through the existing chain; no behavior change in this plan
 docs_sync: required
