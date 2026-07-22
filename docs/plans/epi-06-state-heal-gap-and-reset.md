@@ -3,7 +3,7 @@ id: epi-06-state-heal-gap-and-reset
 size: M
 blocked_by: [epi-02-thread-resolver-through-consumers]
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: edits queue state records and adds a reset command over existing git reads; no new external surface
 docs_sync: required
