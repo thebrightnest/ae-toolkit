@@ -111,7 +111,7 @@ Optional, gitignored `.agents/work-history.jsonl` containing transitions and clo
 Explicit human-run reconciliation of stored state against git; replaces implicit derive-on-read.
 
 **Gate Evidence (Verdict)**:
-A schema-validated JSON verdict written by a checking skill (qa, review, cso, sync-docs) to `~/.aet/reports/{project-slug}/{task-id}/`, consumed fail-closed by the orchestrator's stage gates (ADR-019). The plan footer `*Stage:*` remains a human breadcrumb; gating decisions read evidence, never the footer.
+A schema-validated JSON verdict written by a checking skill (qa, review, cso, sync-docs) to `~/.aet/reports/{project-slug}/{task-id}/`, consumed fail-closed by the orchestrator's stage gates (ADR-019) and, in `single-pr` mode, by the serialized integration step before the squash-merge lands (ADR-045). The plan footer `*Stage:*` remains a human breadcrumb; gating decisions read evidence, never the footer.
 _Avoid_: treating a footer stage string as proof a stage passed.
 
 **Workflow**:
@@ -121,6 +121,29 @@ _Avoid_: calling lifecycle states "workflow state"; using "work class" for a wor
 **Stage Routing Key**:
 Plan frontmatter (`security_review`, `docs_sync`: `required`/`skipped`, with a reason required when skipped) deciding at plan time whether a gated stage runs. Policy input authored at triage — part of the plan's machine contract, not runtime judgment and not state.
 _Avoid_: runtime heuristics deciding whether a gate runs.
+
+## Branch Model (ADR-044, ADR-045)
+
+**Trunk Branch**:
+The final merge target, resolved as: config → `git symbolic-ref refs/remotes/origin/HEAD` → `main`. No code path names a branch literally. (ADR-044)
+
+**Integration Branch**:
+The branch task worktrees are cut from and integrate into. A per-run input (`--base` → `AET_WORK_BASE_BRANCH` → config `integration_branch` → **Trunk Branch**), because a project has one trunk but many epics. Equals the Trunk Branch in the default mode.
+
+**Integration Mode**:
+Project configuration, `pr-per-task` (default) or `single-pr`, resolved through the external-first config chain. Selects what the terminal event is for a task and who serializes merges — the forge (`pr-per-task`) or AET's local advisory lock (`single-pr`). (ADR-045)
+
+**Epic**:
+The set of plans decomposing one deliverable that share one **Integration Branch** and one PR in `single-pr`. Represented by the integration branch plus the **Source PRD**; not a persisted entity.
+_Avoid_: epic as a queue entity or a new persisted record.
+
+**Integrated (terminal semantics in `single-pr`)**:
+In `single-pr`, the terminal state `merged` means squash-merged into the **Integration Branch** locally, and blockers unblock on that event; trunk arrival is verified once per **Epic** when the integration branch's PR merges. In `pr-per-task`, `merged` keeps its trunk meaning.
+_Avoid_: "done" — the mode decides which event it names.
+
+**Integration Failure**:
+An engine-level outcome in `single-pr`: a rebase conflict or post-rebase validation failure while integrating a task that already passed. Distinct from the agent-session **Failure Class** menu (ADR-030), which is unchanged — integration failures are never triaged as task failures, never requeued, and do not count toward the **Circuit Breaker**.
+_Avoid_: calling it a task failure; adding it to the ADR-030 menu.
 
 ## Telemetry & Panel (ADR-012, ADR-019, ADR-022)
 
@@ -171,3 +194,5 @@ _Avoid_: reading it from the ledger `cost` field (under-counts reworked tasks); 
 - “done” was used interchangeably with `merged`. Resolved: `merged` is the canonical terminal state; `done` is legacy.
 - “workflow” was used loosely for the lifecycle state machine (e.g. “canonical workflow state”). Resolved (2026-07-11, roadmap Phase 1): **Workflow** is the named stage-sequence data file; lifecycle states are just **State**. Where older text says “workflow state,” read “lifecycle state.”
 - “execution log” was used for the telemetry archive in panel docs. Resolved (2026-07-11, thp scope validation): **Execution Log** = `.agents/work-history.jsonl` only; the browsable store is the **Telemetry Archive** (panel README rewording lands with thp-05).
+- “failure class” was overloaded by the non-trunk integration PRD for engine-level integration outcomes. Resolved (2026-07-22, epi scope validation): **Failure Class** remains the five-value agent-session menu (ADR-030); engine-level integration outcomes are **Integration Failure**, a separate category outside triage and the Circuit Breaker.
+- “done” risked re-overloading by `single-pr` completion semantics. Resolved (2026-07-22, epi scope validation): the terminal state stays `merged`; which event it names is keyed by **Integration Mode** (see **Integrated**).
