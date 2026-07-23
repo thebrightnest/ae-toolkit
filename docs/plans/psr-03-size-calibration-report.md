@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - psr-02-record-delivered-size
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: reads local history records and reuses the git helper introduced and security-reviewed in psr-02; adds no new external surface
 docs_sync: required
@@ -153,5 +153,5 @@ are additive. No migration is required in either direction.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
