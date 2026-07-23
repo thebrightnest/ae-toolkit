@@ -142,5 +142,5 @@ remain and are harmless. The halt reverts to a requeue, restoring the loop.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
