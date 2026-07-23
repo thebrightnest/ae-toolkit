@@ -105,6 +105,14 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
 
 Then reload your profile (`source ~/.bashrc` or `source ~/.zshrc`) or open a new shell.
 
+**`aet` runs a different copy than the one you installed.** If another `aet` is earlier on your `PATH`, the installer prints a warning naming the shadowing path and still exits 0. Run `aet setup verify` at any time to see which copy `aet` resolves to and whether it matches the expected install:
+
+```bash
+aet setup verify
+```
+
+`verify` is read-only: it never edits `PATH`, shell profiles, or the link.
+
 ### Manual install
 
 If you prefer not to run the curl installer, install the Python package and skills separately:

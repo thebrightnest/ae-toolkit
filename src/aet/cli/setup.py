@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -146,11 +147,11 @@ def _link_skill(
 
 @app.command("link")
 def setup_link(
-    bin_dir: str | None = typer.Option(None, "--bin-dir", help="Target bin directory."),
+    bin_dir: str | None = typer.Option(None, "--bin-dir", envvar="AET_BIN_DIR", help="Target bin directory."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without executing."),
 ) -> None:
     """Link ``aet`` into the bin dir."""
     target_dir = Path(bin_dir) if bin_dir else _bin_dir()
-    target_dir.mkdir(parents=True, exist_ok=True)
 
     script = _link_target()
     if script is None:
@@ -170,22 +171,34 @@ def setup_link(
         )
         raise typer.Exit(1)
 
+    if not dry_run:
+        target_dir.mkdir(parents=True, exist_ok=True)
+
     link = target_dir / "aet"
     if link.is_symlink():
         if _link_target_resolves_to(link, script):
             typer.echo(f"  = aet already linked -> {script}")
         else:
-            link.unlink()
-            link.symlink_to(script)
-            typer.echo(f"  ✓ aet -> {script} (updated stale symlink)")
+            if dry_run:
+                typer.echo(f"  ~ aet -> {script} (would update stale symlink)")
+            else:
+                link.unlink()
+                link.symlink_to(script)
+                typer.echo(f"  ✓ aet -> {script} (updated stale symlink)")
     elif link.exists():
-        typer.echo(
-            f"  ⚠ aet exists in {target_dir} and is not a symlink. Skipping.",
-            err=True,
-        )
+        if dry_run:
+            typer.echo(f"  ! aet exists in {target_dir} and is not a symlink (would skip)")
+        else:
+            typer.echo(
+                f"  ⚠ aet exists in {target_dir} and is not a symlink. Skipping.",
+                err=True,
+            )
     else:
-        link.symlink_to(script)
-        typer.echo(f"  ✓ aet -> {script}")
+        if dry_run:
+            typer.echo(f"  + aet -> {script} (would create symlink)")
+        else:
+            link.symlink_to(script)
+            typer.echo(f"  ✓ aet -> {script}")
 
     if str(target_dir) not in os.environ.get("PATH", "").split(os.pathsep):
         typer.echo(f"\n⚠ {target_dir} is not on your PATH. Add it to your shell profile:")
@@ -194,8 +207,12 @@ def setup_link(
 
 @app.command("skills")
 def setup_skills(
-    skills_dir: str | None = typer.Option(None, "--skills-dir", help="Target skills directory."),
-    agent: str | None = typer.Option(None, "--agent", help="Target agent: claude-code, kimi, cursor, generic."),
+    skills_dir: str | None = typer.Option(
+        None, "--skills-dir", envvar="AET_SKILLS_DIR", help="Target skills directory."
+    ),
+    agent: str | None = typer.Option(
+        None, "--agent", envvar="AGENT", help="Target agent: claude-code, kimi, cursor, generic."
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without executing."),
     force: bool = typer.Option(False, "--force", help="Replace non-symlink collisions with symlinks."),
 ) -> None:
@@ -218,3 +235,85 @@ def setup_skills(
 
     summary = "would link" if dry_run else "linked"
     typer.echo(f"✓ {summary} {len(skills)} skill(s) to {len(target_dirs)} director(y/ies)")
+
+
+@app.command("verify")
+def setup_verify(
+    bin_dir: str | None = typer.Option(None, "--bin-dir", envvar="AET_BIN_DIR", help="Target bin directory."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without executing."),
+) -> None:
+    """Verify that the installed `aet` on PATH matches the expected link.
+
+    Resolves what `aet` actually runs on PATH and reports when it is not the
+    copy just installed. Read-only: never edits PATH, shell profiles, or the
+    link itself. Exits 0 even when shadowed — the install succeeded, but the
+    user will experience a different copy.
+    """
+    target_dir = Path(bin_dir) if bin_dir else _bin_dir()
+    expected = _link_target()
+    link = target_dir / "aet"
+
+    if dry_run:
+        typer.echo("  (dry run — would verify aet link against PATH)")
+
+    if expected is None:
+        typer.echo(
+            f"  ⚠ no aet console script next to {Path(sys.executable).parent};"
+            " install the package first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    path_aet = shutil.which("aet", path=os.environ.get("PATH"))
+
+    if link.is_symlink():
+        try:
+            link_target = link.resolve(strict=True)
+        except OSError:
+            typer.echo(f"  ⚠ {link} is dangling (target does not exist)", err=True)
+            if path_aet and Path(path_aet).resolve() != expected:
+                typer.echo(f"  ⚠ PATH `aet` resolves to {path_aet}, not {expected}", err=True)
+            elif path_aet:
+                typer.echo(f"  = PATH `aet` resolves to {expected}")
+            else:
+                typer.echo("  ⚠ no `aet` found on PATH", err=True)
+            raise typer.Exit(0)
+
+        if link_target == expected:
+            if path_aet and Path(path_aet).resolve() != expected:
+                typer.echo(f"  = {link} -> {expected}")
+                typer.echo(
+                    f"  ⚠ another `aet` on PATH shadows this install: {path_aet}",
+                    err=True,
+                )
+            else:
+                typer.echo(f"  = aet already linked -> {expected}")
+            raise typer.Exit(0)
+
+        # Link exists but points elsewhere.
+        typer.echo(f"  ⚠ {link} -> {link_target}, expected {expected}", err=True)
+        if path_aet and Path(path_aet).resolve() != expected:
+            typer.echo(f"  ⚠ PATH `aet` resolves to {path_aet}", err=True)
+        raise typer.Exit(0)
+
+    if link.exists():
+        typer.echo(
+            f"  ⚠ {link} exists and is not a symlink; cannot verify",
+            err=True,
+        )
+        if path_aet:
+            typer.echo(f"  = PATH `aet` resolves to {path_aet}")
+        raise typer.Exit(0)
+
+    # No link in target dir; just report what PATH resolves to.
+    if path_aet is None:
+        typer.echo("  ⚠ no `aet` found on PATH", err=True)
+    elif Path(path_aet).resolve() == expected:
+        typer.echo(f"  = PATH `aet` resolves to {expected}")
+    else:
+        typer.echo(f"  = PATH `aet` resolves to {path_aet}")
+        typer.echo(
+            f"  ⚠ PATH `aet` is not the expected install at {expected}",
+            err=True,
+        )
+    raise typer.Exit(0)

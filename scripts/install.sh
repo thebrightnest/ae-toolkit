@@ -50,6 +50,14 @@ error() {
     exit 1
 }
 
+# Flags consumed by the bootstrap (before Python exists).
+# --agent and --skills-dir are recognized only enough to know they take a
+# value and to capture that value for the summary; the actual value is passed
+# to the installed CLI through the documented environment variables (Typer
+# binds AGENT / AET_SKILLS_DIR via envvar=). This avoids bash marshalling
+# arguments for a Python program — the empty-array crash this plan exists to
+# remove.
+DRY_RUN_FLAG=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --tag)
@@ -57,9 +65,9 @@ while [[ $# -gt 0 ]]; do
             TAG="$2"
             shift 2
             ;;
-        --agent)
-            [[ $# -ge 2 ]] || error "--agent requires an argument"
-            AGENT="$2"
+        --repo)
+            [[ $# -ge 2 ]] || error "--repo requires an argument"
+            REPO="$2"
             shift 2
             ;;
         --bin-dir)
@@ -67,18 +75,19 @@ while [[ $# -gt 0 ]]; do
             AET_BIN_DIR="$2"
             shift 2
             ;;
+        --agent)
+            [[ $# -ge 2 ]] || error "--agent requires an argument"
+            AGENT="$2"
+            shift 2
+            ;;
         --skills-dir)
             [[ $# -ge 2 ]] || error "--skills-dir requires an argument"
             AET_SKILLS_DIR="$2"
             shift 2
             ;;
-        --repo)
-            [[ $# -ge 2 ]] || error "--repo requires an argument"
-            REPO="$2"
-            shift 2
-            ;;
         --dry-run)
             DRY_RUN=true
+            DRY_RUN_FLAG="--dry-run"
             shift
             ;;
         --help|-h)
@@ -90,11 +99,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-case "$AGENT" in
-    ""|claude-code|kimi|cursor|generic) ;;
-    *) error "unknown agent '$AGENT'; expected claude-code, kimi, cursor, or generic" ;;
-esac
 
 REPO_DIR="$AET_DATA_DIR/repo"
 VENV_DIR="$AET_DATA_DIR/venv"
@@ -181,45 +185,23 @@ create_venv_and_install() {
     uv pip install --python "$VENV_DIR/bin/python" "$REPO_DIR"
 }
 
-install_skills() {
-    local skills_args=()
-    if [[ -n "$AET_SKILLS_DIR" ]]; then
-        skills_args+=("--skills-dir" "$AET_SKILLS_DIR")
-    elif [[ -n "$AGENT" ]]; then
-        skills_args+=("--agent" "$AGENT")
-    fi
-
+run_setup() {
     if [[ "$DRY_RUN" == true ]]; then
-        log "would run: AET_REPO_ROOT=$REPO_DIR $AET_BIN setup skills ${skills_args[*]}"
+        log "would run: AET_REPO_ROOT=$REPO_DIR AET_SKILLS_DIR=$AET_SKILLS_DIR AGENT=$AGENT $AET_BIN setup skills $DRY_RUN_FLAG"
+        log "would run: AET_BIN_DIR=$AET_BIN_DIR $AET_BIN setup link $DRY_RUN_FLAG"
+        log "would run: AET_BIN_DIR=$AET_BIN_DIR $AET_BIN setup verify $DRY_RUN_FLAG"
         return 0
     fi
 
     log "linking skills"
-    AET_REPO_ROOT="$REPO_DIR" "$AET_BIN" setup skills "${skills_args[@]}"
-}
+    AET_REPO_ROOT="$REPO_DIR" AET_SKILLS_DIR="$AET_SKILLS_DIR" AGENT="$AGENT" \
+        "$AET_BIN" setup skills ${DRY_RUN_FLAG:+--dry-run}
 
-link_aet_binary() {
-    if [[ "$DRY_RUN" == true ]]; then
-        log "would symlink $AET_BIN_DIR/aet -> $AET_BIN"
-        return 0
-    fi
+    log "linking aet"
+    AET_BIN_DIR="$AET_BIN_DIR" "$AET_BIN" setup link ${DRY_RUN_FLAG:+--dry-run}
 
-    mkdir -p "$AET_BIN_DIR"
-    local link="$AET_BIN_DIR/aet"
-
-    if [[ -L "$link" ]]; then
-        if [[ "$(readlink "$link")" == "$AET_BIN" ]]; then
-            log "aet already linked -> $AET_BIN"
-        else
-            log "repointing stale symlink $link -> $AET_BIN"
-            ln -sf "$AET_BIN" "$link"
-        fi
-    elif [[ -e "$link" ]]; then
-        log "warning: $link exists and is not a symlink (skipping)"
-    else
-        log "linking $link -> $AET_BIN"
-        ln -s "$AET_BIN" "$link"
-    fi
+    log "verifying install"
+    AET_BIN_DIR="$AET_BIN_DIR" "$AET_BIN" setup verify ${DRY_RUN_FLAG:+--dry-run}
 }
 
 print_summary() {
@@ -248,8 +230,7 @@ main() {
     TAG=$(resolve_tag)
     clone_or_update_repo
     create_venv_and_install
-    install_skills
-    link_aet_binary
+    run_setup
     print_summary
 }
 
