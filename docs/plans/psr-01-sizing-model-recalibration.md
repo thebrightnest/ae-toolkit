@@ -3,7 +3,7 @@ id: psr-01-sizing-model-recalibration
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: threshold and prose changes plus removal of a size-proxy check; introduces no network, credential, subprocess, or filesystem-write surface
 docs_sync: required
@@ -215,5 +215,5 @@ status set to `Superseded` rather than deleted if the rollback is permanent.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
