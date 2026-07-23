@@ -3,7 +3,7 @@ id: psr-02-record-delivered-size
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: introduces subprocess git invocation with interpolated branch and commit refs on the closure path
 docs_sync: required
