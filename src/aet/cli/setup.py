@@ -32,17 +32,23 @@ def _bin_dir() -> Path:
     return Path(override) if override else Path.home() / ".local" / "bin"
 
 
-def _link_target() -> Path:
-    """Return the canonical target of the ``aet`` symlink.
+def _link_target() -> Path | None:
+    """Return the ``aet`` console script installed next to the interpreter.
 
-    The packaging system installs a console script next to the interpreter.
-    When that script exists it is the only supported target. The fallback
-    exists for source-checkouts that have not installed the console script.
+    ADR-041 makes the console script the only supported entry point, so there
+    is no fallback: linking a module file instead produces a link that cannot
+    execute (no shebang, not executable), which is the defect class this
+    command exists to remove. ``None`` means "refuse", not "guess".
+
+    Resolved, because ``_link_target_resolves_to`` compares against a resolved
+    readlink; leaving it unresolved makes an already-correct link compare
+    unequal whenever any path component is a symlink (``/tmp`` on macOS), so
+    every run would report a stale-link repair it did not need to make.
     """
     console_script = Path(sys.executable).parent / "aet"
     if console_script.exists():
-        return console_script
-    return Path(__file__).resolve()
+        return console_script.resolve()
+    return None
 
 
 def _is_worktree_copy(script: Path) -> bool:
@@ -147,6 +153,15 @@ def setup_link(
     target_dir.mkdir(parents=True, exist_ok=True)
 
     script = _link_target()
+    if script is None:
+        typer.echo(
+            f"  ⚠ no aet console script next to {Path(sys.executable).parent};"
+            " install the package first (e.g. `pip install -e .`), then re-run"
+            " setup link.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     if _is_worktree_copy(script):
         typer.echo(
             f"  ⚠ refusing to link from an ephemeral worktree copy ({script});"

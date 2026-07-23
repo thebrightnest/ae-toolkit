@@ -22,7 +22,7 @@ from tests.cli._helpers import make_history, run_typer, write_json_file
 aet_setup = importlib.import_module("aet.cli.setup")
 aet_main = importlib.import_module("aet.cli.main")
 
-_CONSOLE_SCRIPT = Path(sys.executable).parent / "aet"
+_CONSOLE_SCRIPT = (Path(sys.executable).parent / "aet").resolve()
 
 
 class SetupLinkTestCase(unittest.TestCase):
@@ -115,6 +115,72 @@ class TestSetupLinkStaleAndCollision(SetupLinkTestCase):
             "#!/bin/sh\necho foreign\n",
         )
         self.assertIn("not a symlink", err)
+
+
+class TestSetupLinkRequiresConsoleScript(SetupLinkTestCase):
+    """Without a console script the command refuses instead of guessing."""
+
+    def _bin_without_console_script(self) -> Path:
+        """A dir holding an interpreter but no ``aet`` console script."""
+        fake = Path(self.tmp.name) / "no-console" / "bin"
+        fake.mkdir(parents=True)
+        return fake
+
+    def test_refuses_when_console_script_missing(self):
+        """A module file is not an entry point, so no link is better than one.
+
+        The earlier fallback linked ``Path(__file__)`` — ``setup.py``, mode 644
+        with no shebang — and reported success. The link could not execute:
+        exactly the failure this command exists to remove.
+        """
+        fake_bin = self._bin_without_console_script()
+        with patch.object(aet_setup.sys, "executable", str(fake_bin / "python")):
+            self.assertIsNone(aet_setup._link_target())
+            rc, _, err = self._run_link("--bin-dir", str(self.bin_dir))
+
+        self.assertEqual(rc, 1)
+        self.assertIn("console script", err)
+        self.assertFalse((self.bin_dir / "aet").exists())
+
+    def test_never_links_a_non_executable_module_file(self):
+        """Whatever gets linked must be runnable, not merely present."""
+        rc, _, err = self._run_link("--bin-dir", str(self.bin_dir))
+        self.assertEqual(rc, 0, err)
+        target = Path(os.readlink(self.bin_dir / "aet"))
+        self.assertNotEqual(target.suffix, ".py", f"linked a module file: {target}")
+        self.assertTrue(os.access(target, os.X_OK), f"link target not executable: {target}")
+
+
+class TestSetupLinkIdempotence(SetupLinkTestCase):
+    """A correct link is reported as correct, not repaired every run."""
+
+    def test_second_run_is_noop_under_symlinked_path(self):
+        """``/tmp`` is a symlink on macOS; the target must still compare equal.
+
+        ``_link_target_resolves_to`` resolves the readlink, so an unresolved
+        script made an already-correct link look stale — relinking on every
+        invocation and misreporting a repair that never happened.
+        """
+        venv_bin = Path(self.tmp.name) / "venvbin"
+        venv_bin.mkdir()
+        console = venv_bin / "aet"
+        console.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        console.chmod(0o755)
+
+        # Reach the same dir through a symlinked parent, as /tmp -> /private/tmp does.
+        aliased = Path(self.tmp.name) / "alias"
+        aliased.symlink_to(venv_bin)
+
+        with patch.object(aet_setup.sys, "executable", str(aliased / "python")):
+            rc, out, err = self._run_link("--bin-dir", str(self.bin_dir))
+            self.assertEqual(rc, 0, err)
+            self.assertIn("aet ->", out)
+
+            rc, out, err = self._run_link("--bin-dir", str(self.bin_dir))
+
+        self.assertEqual(rc, 0, err)
+        self.assertIn("already linked", out)
+        self.assertNotIn("updated stale symlink", out)
 
 
 class TestSetupLinkPathWarning(SetupLinkTestCase):
