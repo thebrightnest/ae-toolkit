@@ -215,5 +215,5 @@ status set to `Superseded` rather than deleted if the rollback is permanent.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
