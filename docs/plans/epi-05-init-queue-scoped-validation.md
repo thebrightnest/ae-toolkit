@@ -3,7 +3,7 @@ id: epi-05-init-queue-scoped-validation
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: reorders existing validation and downgrades unrelated-plan aborts to warnings; no new input, network, or write surface
 docs_sync: required
@@ -131,5 +131,5 @@ queue is ephemeral.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
