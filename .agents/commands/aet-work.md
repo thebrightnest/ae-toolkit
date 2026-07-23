@@ -67,22 +67,30 @@ Shows the work queue plus any active detached runs (run ID, PID, and start time)
    This runs `aet ship gate` followed by `aet ship open`. If the gate fails, resolve the issue before re-running.
 
 2. Wait for the user to confirm the PR is merged (e.g., "merge PR and verify").
-3. Run the closure command:
+3. Run the closure command. The preferred form is the plan path; `aet-ship` derives the task id from the plan frontmatter and resolves the merge commit from the task's branch on `origin/main`:
 
    ```bash
-   aet ship close <task-id> docs/plans/<task-id>.md
+   aet ship close docs/plans/<task-id>.md
    ```
 
    Example:
 
    ```bash
+   aet ship close docs/plans/pkg-01-decision-records.md
+   ```
+
+   You may also pass the task id (the plan path is read from the queue task) or supply both identifiers explicitly:
+
+   ```bash
+   aet ship close pkg-01-decision-records
    aet ship close pkg-01-decision-records docs/plans/pkg-01-decision-records.md
    ```
 
-4. If `aet ship close` refuses because the task's `branch` field is null, use the `--branch` or `--merge-commit` override:
+4. If `aet ship close` cannot resolve the merge commit (for example, the feature branch was already deleted), use the `--branch` or `--merge-commit` override:
 
    ```bash
-   aet ship close --branch <branch-name> <task-id> docs/plans/<task-id>.md
+   aet ship close --branch <branch-name> docs/plans/<task-id>.md
+   aet ship close --merge-commit <sha> docs/plans/<task-id>.md
    ```
 
 ### Anti-Patterns

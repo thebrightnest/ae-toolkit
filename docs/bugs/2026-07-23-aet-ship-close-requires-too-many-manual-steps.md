@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-07-23
 - **Severity:** medium
-- **Status:** open
+- **Status:** fixed
 
 ## Symptoms
 
@@ -115,3 +115,37 @@ Make `aet ship close` the single owner of closure:
 - `docs/plans/aet-ship-squash-merge-core-plan.md`
 - `docs/plans/bs-01-aet-ship-merge-verification.md`
 - `docs/plans/qes-05-ship-closure.md`
+
+## Resolution
+
+### Fix Summary
+
+- `src/aet/cli/ship.py` now accepts flexible `aet ship close` argument forms.
+  The task id is derived from plan frontmatter when a plan path is supplied,
+  and the plan path can be omitted when the queue task already references it:
+  - `aet ship close docs/plans/<plan>.md`
+  - `aet ship close <task-id>`
+  - `aet ship close <task-id> <plan.md> [queue]` (unchanged explicit form)
+- Positional arguments are constrained to prevent silent misinterpretation:
+  when the first argument is a plan, a second `.md` path is rejected as
+  ambiguous; when the first argument is a task id, the second argument must be
+  a `.md` plan path (the queue file belongs to the third positional).
+- `.agents/commands/aet-work.md` and `skills/aet-ship/SKILL.md` document the
+  preferred plan-path form and the `--branch` / `--merge-commit` overrides.
+
+### Validation
+
+- New tests in `tests/ship/test_aet_ship.py` cover plan-path-only closure,
+  task-id-only closure, the frontmatter `id` fallback to filename stem, and
+  rejection of ambiguous or misplaced positional arguments.
+- `make validate` passed: 1111 pytest tests, ruff, skills-lint,
+  skill-structure, plans lint, and docs lint all clean.
+- `aet-review` ran on the diff; the two positional-ambiguity flags it raised
+  were fixed in the same change. Lesson recorded in `.agents/learnings.jsonl`.
+
+### Out of Scope
+
+- Queue-absent closure (task never queued, or the queue was reset) still
+  requires `aet state record-merge --merge-commit <sha>`. Making closure fully
+  queue-optional is a deeper change to `cmd_record_merge` and is tracked
+  separately.

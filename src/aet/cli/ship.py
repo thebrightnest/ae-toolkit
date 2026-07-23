@@ -5,8 +5,10 @@ Usage:
   aet ship <plan_file>                Run the gate, then open a PR.
   aet ship gate <plan_file>           Run the pre-merge gate (steps 1-9).
   aet ship open <plan_file>           Run the gate and open a PR.
+  aet ship close <plan_file>          Record post-merge closure (task id derived from plan frontmatter).
+  aet ship close <task_id>            Record post-merge closure (plan derived from queue task).
   aet ship close <task_id> <plan_file> [queue_file]
-                                      Record post-merge closure.
+                                      Record post-merge closure (explicit identifiers).
   aet ship record-merge <task_id> <plan_file> [queue_file]
                                       Hidden alias for ``close``.
 
@@ -64,14 +66,86 @@ class GateResult:
         self.message = message
 
 
+def _task_id_from_plan(plan_path: str | Path) -> str:
+    """Return the task id from a plan file's YAML frontmatter, falling back to the filename stem."""
+    path = Path(plan_path)
+    if not path.is_file():
+        raise ValueError(f"Plan file not found: {path}")
+    task_id = plan_parser.parse_frontmatter(path).get("id")
+    if not task_id:
+        return path.stem
+    return task_id
+
+
+def _normalize_close_args(
+    task_id: str,
+    plan: Optional[str],
+    queue: str,
+) -> tuple[str, Optional[str], str]:
+    """Resolve flexible ``aet ship close`` argument forms to (task_id, plan, queue).
+
+    Supported forms:
+      - ``close <plan_file>`` — derive task id from plan frontmatter.
+      - ``close <plan_file> <queue_file>`` — derive task id; explicit queue.
+      - ``close <task_id>`` — plan is read from the queue task's ``plan_file``.
+      - ``close <task_id> <plan_file>`` — explicit task id and plan.
+      - ``close <task_id> <plan_file> <queue_file>`` — explicit identifiers.
+
+    The second positional is constrained to avoid silent misinterpretation:
+    when the first argument is a plan file, the second must not also be a
+    ``.md`` path (that would be two plans); when the first argument is a task
+    id, the second must be a ``.md`` plan path (use the third positional for
+    the queue).
+    """
+
+    def _is_plan_path(value: str) -> bool:
+        return value.lower().endswith(".md")
+
+    if _is_plan_path(task_id):
+        resolved_plan = task_id
+        resolved_task_id = _task_id_from_plan(resolved_plan)
+        if plan and _is_plan_path(plan):
+            raise ValueError(
+                f"Ambiguous closure arguments: both '{task_id}' and '{plan}' "
+                "look like plan files. Pass the queue path as the second "
+                "argument or omit it."
+            )
+        resolved_queue = plan if plan else queue
+        return resolved_task_id, resolved_plan, resolved_queue
+
+    resolved_task_id = task_id
+    if plan:
+        if not _is_plan_path(plan):
+            raise ValueError(
+                f"Expected a plan markdown path (.md) as the second argument, "
+                f"got: {plan}. Use the third positional for the queue file."
+            )
+        resolved_plan = plan
+        resolved_queue = queue
+    else:
+        resolved_plan = None
+        resolved_queue = queue
+
+    return resolved_task_id, resolved_plan, resolved_queue
+
+
 def cmd_ship(args):
     """Run the post-merge closure for a task."""
+    try:
+        task_id, plan, queue = _normalize_close_args(
+            args.task_id,
+            getattr(args, "plan", None),
+            getattr(args, "queue", ".agents/work-queue.json"),
+        )
+    except ValueError as exc:
+        return _fail(str(exc))
+
     ns = aet_state.argparse.Namespace(
         command="record-merge",
-        task_id=args.task_id,
-        queue=args.queue,
+        task_id=task_id,
+        queue=queue,
         dry_run=args.dry_run,
-        plan=args.plan,
+        plan=plan,
         branch=getattr(args, "branch", None),
         merge_commit=getattr(args, "merge_commit", None),
     )
@@ -555,8 +629,19 @@ def cmd_open(args: argparse.Namespace) -> int:
 
 def _add_close_args(parser: argparse.ArgumentParser) -> None:
     """Add the post-merge closure arguments to *parser*."""
-    parser.add_argument("task_id", help="Task ID to close.")
-    parser.add_argument("plan", help="Path to the plan markdown file.")
+    parser.add_argument(
+        "task_id",
+        help="Task ID to close, or path to the plan markdown file.",
+    )
+    parser.add_argument(
+        "plan",
+        nargs="?",
+        default=None,
+        help=(
+            "Plan path (when first arg is a task ID) or queue path (when first arg is a plan). "
+            "Must be a .md file unless the first arg is already a plan."
+        ),
+    )
     parser.add_argument(
         "queue",
         nargs="?",
@@ -774,7 +859,7 @@ def ship_open(
 
 def _run_ship_close(
     task_id: str,
-    plan: str,
+    plan: Optional[str],
     queue: str,
     branch: Optional[str],
     merge_commit: Optional[str],
@@ -795,8 +880,17 @@ def _run_ship_close(
 
 @app.command(name="close")
 def ship_close(
-    task_id: str = typer.Argument(..., help="Task ID to close."),
-    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    task_id: str = typer.Argument(
+        ...,
+        help="Task ID to close, or path to the plan markdown file.",
+    ),
+    plan: Optional[str] = typer.Argument(
+        None,
+        help=(
+            "Plan path (when first arg is a task ID) or queue path (when first arg is a plan). "
+            "Must be a .md file unless the first arg is already a plan."
+        ),
+    ),
     queue: str = typer.Argument(
         ".agents/work-queue.json",
         help="Path to the work queue JSON file.",
@@ -818,15 +912,34 @@ def ship_close(
     ),
 ) -> None:
     """Record post-merge closure for a task."""
+    resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(
+        task_id, plan, queue
+    )
     raise typer.Exit(
-        _run_ship_close(task_id, plan, queue, branch, merge_commit, dry_run)
+        _run_ship_close(
+            resolved_task_id,
+            resolved_plan,
+            resolved_queue,
+            branch,
+            merge_commit,
+            dry_run,
+        )
     )
 
 
 @app.command(name="record-merge")
 def ship_record_merge(
-    task_id: str = typer.Argument(..., help="Task ID to close."),
-    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    task_id: str = typer.Argument(
+        ...,
+        help="Task ID to close, or path to the plan markdown file.",
+    ),
+    plan: Optional[str] = typer.Argument(
+        None,
+        help=(
+            "Plan path (when first arg is a task ID) or queue path (when first arg is a plan). "
+            "Must be a .md file unless the first arg is already a plan."
+        ),
+    ),
     queue: str = typer.Argument(
         ".agents/work-queue.json",
         help="Path to the work queue JSON file.",
@@ -848,8 +961,18 @@ def ship_record_merge(
     ),
 ) -> None:
     """Hidden alias for close."""
+    resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(
+        task_id, plan, queue
+    )
     raise typer.Exit(
-        _run_ship_close(task_id, plan, queue, branch, merge_commit, dry_run)
+        _run_ship_close(
+            resolved_task_id,
+            resolved_plan,
+            resolved_queue,
+            branch,
+            merge_commit,
+            dry_run,
+        )
     )
 
 

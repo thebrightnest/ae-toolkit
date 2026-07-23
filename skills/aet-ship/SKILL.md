@@ -10,7 +10,9 @@ The aet-ship workflow is now implemented in code:
 - `aet ship <plan_file>` — run the gate, then open a PR.
 - `aet ship gate <plan_file>` — run the pre-merge gate only.
 - `aet ship open <plan_file>` — run the gate and open a PR.
-- `aet ship close <task_id> <plan_file>` — record post-merge closure.
+- `aet ship close <plan_file>` — record post-merge closure (task id derived from plan frontmatter).
+- `aet ship close <task_id>` — record post-merge closure (plan derived from the queue task's `plan_file`).
+- `aet ship close <task_id> <plan_file>` — record post-merge closure with explicit identifiers.
 
 ## When to Use This Skill
 
