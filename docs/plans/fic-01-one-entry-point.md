@@ -210,4 +210,5 @@ grouping with a real security review rather than `minimal`.
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
