@@ -50,11 +50,11 @@ regression-guard diff reviewable on its own.
 
 ## Task List
 
-1. Resolve `integration_mode` through `resolve_config()` with fail-closed
+1. ✓ Resolve `integration_mode` through `resolve_config()` with fail-closed
    validation of the value — S (traces: R-14)
-2. Thread the resolved mode into the orchestrator run context, resolved once
+2. ✓ Thread the resolved mode into the orchestrator run context, resolved once
    per run, selecting today's behavior for `pr-per-task` — M (traces: R-14)
-3. Assert the `pr-per-task` git command sequence is unchanged from before this
+3. ✓ Assert the `pr-per-task` git command sequence is unchanged from before this
    work — S (traces: R-14)
 4. Merge branch to main and verify integration — S
 
@@ -115,5 +115,5 @@ rollback is a pure deletion with no behavioral change to undo.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

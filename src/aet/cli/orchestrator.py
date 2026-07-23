@@ -55,7 +55,12 @@ from aet import (  # noqa: E402
 )
 from aet import failure as failure_lib  # noqa: E402
 from aet import usage as usage_lib  # noqa: E402
-from aet.backends.factory import create_backend, resolve_config  # noqa: E402
+from aet.backends.factory import (  # noqa: E402
+    DEFAULT_CONFIG_PATH,
+    create_backend,
+    resolve_config,
+    resolve_integration_mode,
+)
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
 from aet.cli_adapter import resolve_cli_adapter  # noqa: E402
 from aet.queue import (  # noqa: E402
@@ -1028,13 +1033,25 @@ def process_task(
     backend=None,
     stall_timeout: float = 300,
     base_branch: str = "origin/main",
+    integration_mode: str = "pr-per-task",
 ) -> bool:
     """Process a single task through all its stage groups.
 
     The stage sequence, skill bindings, evidence kinds, and session grouping
     come from the workflow file (``workflow:`` plan frontmatter key, default
     ``software``) — loaded once per task and threaded through every decision.
+
+    ``integration_mode`` is resolved once per run by the caller and passed
+    down so every task in a batch sees the same mode. Only ``pr-per-task``
+    is supported in this version; ``single-pr`` lands in ``epi-08``.
     """
+    if integration_mode != "pr-per-task":
+        print(
+            f"   ❌ Integration mode {integration_mode!r} is not supported "
+            "in this version. Use 'pr-per-task'."
+        )
+        return False
+
     if logger is None:
         logger = telemetry.RunLogger(repo_root)
     task_id = task["id"]
@@ -1944,6 +1961,31 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         )
         return 1
 
+    # Resolve integration_mode once per run through the external-first config
+    # chain so every task in the batch sees the same value.
+    try:
+        integration_mode = resolve_integration_mode(
+            os.path.join(repo_root, DEFAULT_CONFIG_PATH)
+        )
+    except Exception as exc:
+        print(f"⛔ Could not resolve integration_mode: {exc}")
+        end_time = telemetry.iso_now()
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=0,
+                outcome="failure",
+                exit_code=1,
+                task_ids=[],
+                final_stage=None,
+            )
+        )
+        return 1
+
     # Declare that this run owns the queue so out-of-band mutators refuse, and
     # ensure every subprocess inherits the run id for the lease check.
     os.environ["AET_RUN_ID"] = logger.run_id
@@ -2094,6 +2136,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 env["AET_RUN_ID"] = logger.run_id
                 env["AET_REPO_ROOT"] = repo_root
                 env["AET_STAGE"] = task.get("stage") or ""
+                env["AET_INTEGRATION_MODE"] = integration_mode
 
                 # Store a repo-relative worktree path for portability under lock.
                 with queue_lock(queue_file):
@@ -2419,6 +2462,14 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 "stage": env_stage,
             }
 
+        # Inherit the mode resolved once by a batch parent, or resolve it now
+        # for a top-level run. This guarantees one mode per run.
+        integration_mode = os.environ.get("AET_INTEGRATION_MODE")
+        if integration_mode is None:
+            integration_mode = resolve_integration_mode(
+                os.path.join(repo_root, DEFAULT_CONFIG_PATH)
+            )
+
         print(f"📁 Telemetry: {logger.run_dir}")
         success = process_task(
             task,
@@ -2431,6 +2482,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             backend=backend,
             stall_timeout=getattr(args, "stall_timeout", 300),
             base_branch=base_branch,
+            integration_mode=integration_mode,
         )
         exit_code = 0 if success else 1
 
