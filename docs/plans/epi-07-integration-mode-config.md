@@ -115,5 +115,5 @@ rollback is a pure deletion with no behavioral change to undo.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
