@@ -381,5 +381,5 @@ scope — the epic/integration layer — is a feature and is planned as one.
 
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*
