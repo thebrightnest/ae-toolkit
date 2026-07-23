@@ -160,6 +160,7 @@ Each live task record in `.agents/work-queue.json` carries the fields needed by 
 | `plan_file` | `aet sprint add/sync` | Relative path to the plan markdown file. |
 | `branch` / `worktree` | orchestrator | Git branch and checkout path for isolated execution. |
 | `cost` | orchestrator | **Analytics-only** per-task token/cost rollup written at task close. See below. |
+| `delivered_size` | `aet-state` seal | **Analytics-only** first-parent diff-stat for the recorded `merge_commit`, paired with the plan's declared `size`. See below. |
 
 ### Per-Task Cost (`cost`)
 
@@ -177,6 +178,26 @@ At task close the orchestrator sums the task's `stage` telemetry records (`token
 - The field is **analytics-only** (ADR-031): the desk and scoreboard may read it, but no runtime gate, kill, throttle, or triage path does.
 - Null is preserved honestly: a task whose stage records carry no token/cost values gets no `cost` field (rather than a zeroed or null-valued object).
 - The per-run total remains available via the telemetry archive; `cost` is the per-task decomposition needed by downstream reporting.
+
+### Per-Task Delivered Size (`delivered_size`)
+
+At terminal seal the writer computes the diff introduced by the task's recorded `merge_commit` and stores:
+
+```json
+{
+  "delivered_size": {
+    "headline": 320,
+    "total": 480,
+    "declared_size": "M",
+    "status": "ok",
+    "reason": null
+  }
+}
+```
+
+- The measurement uses the first-parent range `git diff <merge_commit>^1..<merge_commit>`, so it is exact for both squash and regular merges and needs no trunk ref.
+- `headline` excludes planning artifacts (`docs/`, `.agents/`, `content/`, `reports/`) so it is comparable to the declared `size` bands.
+- The field is **analytics-only** (ADR-046): a measurement failure is recorded with `status: "failed"` and a reason, but the task still settles.
 
 ## Diff Budget for Bug Fixes
 
