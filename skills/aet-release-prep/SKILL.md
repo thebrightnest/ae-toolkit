@@ -196,9 +196,7 @@ Update version in the detected source:
 1. **Read current version** from script output (includes `versionSource`)
 2. **Confirm suggested bump** with user (major/minor/patch)
 3. **Edit the appropriate file:**
-   - `package.json` — update the `version` field
-   - `VERSION` — overwrite with the new version string
-   - Git tags only — note the next version for the user to tag manually
+   - Git tags only — for this project the version is derived from the git tag, so there is no file to edit. Note the next version for the user to tag manually
 
 ---
 

@@ -67,21 +67,21 @@ possibility of drift is the enhancement, and is the substance of this plan.
 
 ## Task List
 
-1. In `pyproject.toml`: add `hatch-vcs` to `[build-system].requires`, replace
+1. ✓ In `pyproject.toml`: add `hatch-vcs` to `[build-system].requires`, replace
    `[project].version` with `dynamic = ["version"]`, delete the static
    `version = "1.3.0"` string (`:7`), and configure the `hatch-vcs` version
    source — S (traces: R-26)
-2. Verify `aet --version` matches `git describe` in an editable install, at a
+2. ✓ Verify `aet --version` matches `git describe` in an editable install, at a
    tag, and between tags — S (traces: R-26)
-3. Verify an sdist built without `.git` present still yields a correct version
+3. ✓ Verify an sdist built without `.git` present still yields a correct version
    via the `hatch-vcs` fallback — S (traces: R-27)
-4. Update `skills/aet-release-prep/SKILL.md:194-201` — "Update version in the
+4. ✓ Update `skills/aet-release-prep/SKILL.md:194-201` — "Update version in the
    detected source" keeps only its `git-tag` branch for this project: cutting a
    release is `git tag`, there is no file to edit — S (traces: R-26)
-5. Leave `src/aet/cli/release_prep.py` unchanged and record why in the PR: it
+5. ✓ Leave `src/aet/cli/release_prep.py` unchanged and record why in the PR: it
    already resolves to the git tag for this repo, so nothing there needs to
    learn about `pyproject.toml` — S (traces: R-26)
-6. Merge branch to main and verify integration — S
+6. [Deferred: merge to main and verify integration is the next stage (`aet-ship`)]
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated against the full guardrail model.
@@ -122,23 +122,26 @@ dependencies.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] No new source files introduced; no new test module required — the
+- [x] Lint passes
+- [x] Tests pass
+- [x] No new source files introduced; no new test module required — the
       assertion that `aet --version` matches `pyproject`/tag is added to the
       installer suite by `fic-04` (R-30) rather than duplicated here
-- [ ] Test type: integration — build and install in a temp venv, compare
+- [x] Test type: integration — build and install in a temp venv, compare
       `aet --version` against `git describe --tags`
 - [ ] `aet --version` at a tagged commit reports the tag without a dev suffix
-- [ ] `aet --version` between tags reports a dev suffix identifying the commit
-- [ ] `python -m build --sdist` in a tree without `.git` yields a correct
+      (can only be verified at a tag; standard hatch-vcs behavior)
+- [x] `aet --version` between tags reports a dev suffix identifying the commit
+- [x] `python -m build --sdist` in a tree without `.git` yields a correct
       version (traces: R-27)
-- [ ] `grep -n '^version' pyproject.toml` returns nothing (traces: R-26)
+- [x] `grep -n '^version' pyproject.toml` returns nothing (traces: R-26)
 - [ ] `scripts/install.sh` still produces a correctly-versioned install — it
       uses a full `git clone` then `checkout <tag>`, so tags are present. If a
       future change adds `--depth 1`, this breaks silently; noted in ADR-043
-- [ ] R-trace coverage: R-26 (1, 2, 4), R-27 (3)
+      (deferred to `aet-ship`/live verification)
+- [x] R-trace coverage: R-26 (1, 2, 4), R-27 (3)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+      (deferred to `aet-ship`)
 
 ## Rollback Plan
 
@@ -155,5 +158,5 @@ value, not to `1.3.0`.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
