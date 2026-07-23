@@ -14,6 +14,11 @@ docs_sync_reason: [one line]
 <!-- `status` is the plan lifecycle value (CONTEXT.md): one of `draft`,
 `approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, `abandoned`. -->
 
+<!-- `pipeline` selects the orchestrator isolation mode. Size-based defaults:
+     S → minimal, M → standard, L → standard or full. Override to standard/full
+     for auth, data-model, API, dependency, or infrastructure changes.
+     See docs/PIPELINE.md#pipeline-mode-selection. -->
+
 <!-- `security_review` / `docs_sync` route the aet-cso and aet-sync-docs
 pipeline gates at plan time: `required` (default) runs the stage; `skipped`
 skips it and must be paired with the one-line reason above. A missing key is
