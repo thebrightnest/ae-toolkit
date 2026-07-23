@@ -136,5 +136,5 @@ pure deletion with no behavioral change to undo.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
