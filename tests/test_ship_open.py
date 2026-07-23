@@ -79,6 +79,53 @@ class TestShipOpenParser(unittest.TestCase):
         self.assertEqual(args.plan, "docs/plans/t1.md")
 
 
+class TestDeterminePrBase(unittest.TestCase):
+    """Regression guard for _determine_pr_base ref resolution.
+
+    A branch whose fork point is behind origin/main (the normal state of a queued
+    worktree once other plans have merged ahead of it) must resolve its PR base to
+    origin/main, not to its own name. The bug: the branch's own tip decoration
+    ``HEAD -> <branch>`` was stripped and returned as if it were a stacked parent,
+    so ``gh pr create`` rejected head == base.
+    """
+
+    def _walk_responses(self, log_stdout):
+        """Git responses that force _determine_pr_base into the ancestry-path walk."""
+        return {
+            ("git", "merge-base", "HEAD", "origin/main"): (0, "old-fork\n", ""),
+            ("git", "rev-parse", "origin/main"): (0, "new-main\n", ""),
+            (
+                "git",
+                "log",
+                "--oneline",
+                "--decorate",
+                "--ancestry-path",
+                "old-fork..HEAD",
+            ): (0, log_stdout, ""),
+        }
+
+    def test_behind_main_independent_branch_resolves_to_origin_main(self):
+        """A branch merely behind origin/main bases its PR on origin/main, not itself."""
+        responses = self._walk_responses(
+            "22400d8c (HEAD -> feat-001, origin/feat-001) feat: do a thing\n"
+        )
+        with patch.object(
+            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
+        ):
+            self.assertEqual(ship._determine_pr_base(), "origin/main")
+
+    def test_genuinely_stacked_branch_resolves_to_parent(self):
+        """A branch stacked on a parent feature branch keeps the parent as its base."""
+        responses = self._walk_responses(
+            "aaaaaaa (HEAD -> feat-child, origin/feat-child) child commit\n"
+            "bbbbbbb (feat-parent, origin/feat-parent) parent commit\n"
+        )
+        with patch.object(
+            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
+        ):
+            self.assertEqual(ship._determine_pr_base(), "feat-parent")
+
+
 class TestShipOpenChecks(unittest.TestCase):
     """Behavior-driven tests for aet ship open decisions."""
 

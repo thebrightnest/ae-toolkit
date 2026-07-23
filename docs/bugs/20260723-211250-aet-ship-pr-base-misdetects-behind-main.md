@@ -4,7 +4,7 @@
 - **Reported:** 2026-07-23
 - **Component:** `src/aet/cli/ship.py` — `_determine_pr_base()`
 - **Severity:** High — blocks PR creation for nearly every queued branch
-- **Status:** Diagnosed; fix proposed, awaiting approval
+- **Status:** Fixed — `HEAD -> <branch>` excluded from stacked-parent search in `src/aet/cli/ship.py`, regression tests added in `tests/test_ship_open.py`
 
 ## Summary
 

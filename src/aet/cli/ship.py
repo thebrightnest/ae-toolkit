@@ -123,7 +123,9 @@ def _determine_pr_base() -> str:
             continue
         refs = [r.strip() for r in match.group(1).split(",")]
         for r in refs:
-            r = r.replace("HEAD -> ", "").strip()
+            if r.startswith("HEAD -> "):
+                continue  # current branch — the one being shipped, never its own parent
+            r = r.strip()
             if r in ("HEAD",) or r.startswith("origin/") or r.startswith("tag:"):
                 continue
             return r
