@@ -177,5 +177,5 @@ the revert remain valid and are simply not extended by later closures.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
