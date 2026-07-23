@@ -393,7 +393,91 @@ class TestCreateWorktree(unittest.TestCase):
             self.assertTrue(os.path.isdir(os.path.join(repo_root, ".worktrees", "task-001")))
 
 
-class TestCheckMainHygiene(unittest.TestCase):
+class TestNonMainBase(unittest.TestCase):
+    def _init_repo(self, repo_root: str) -> None:
+        subprocess.run(["git", "init", "-q", repo_root], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.name", "Test User"],
+            check=True,
+        )
+
+    def _setup_dev_base(self, repo_root: str) -> str:
+        """Create a 'dev' branch and an origin/dev remote-tracking ref."""
+        Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "init on main"],
+            check=True,
+        )
+        # Create a dev branch and a remote-tracking ref for it.
+        subprocess.run(["git", "-C", repo_root, "branch", "dev"], check=True)
+        dev_sha = subprocess.run(
+            ["git", "-C", repo_root, "rev-parse", "dev"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        subprocess.run(
+            ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/dev", dev_sha],
+            check=True,
+        )
+        return dev_sha
+
+    def test_create_worktree_uses_non_main_base(self):
+        """A resolved integration branch other than main is used as the base."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            dev_sha = self._setup_dev_base(repo_root)
+
+            worktree_dir = worktree.create_worktree(repo_root, "task-dev", "origin/dev")
+
+            self.assertTrue(os.path.isdir(worktree_dir))
+            branch_sha = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "task-dev"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(branch_sha, dev_sha)
+
+    def test_remove_worktree_counts_against_non_main_base(self):
+        """Cleanup counts against the resolved integration branch, not main."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            self._setup_dev_base(repo_root)
+
+            worktree_dir = worktree.create_worktree(repo_root, "task-dev", "origin/dev")
+            self.assertTrue(os.path.isdir(worktree_dir))
+
+            # With no commits ahead of origin/dev, cleanup succeeds.
+            removed = worktree.remove_worktree(repo_root, "task-dev", "origin/dev")
+            self.assertTrue(removed)
+            self.assertFalse(os.path.isdir(worktree_dir))
+
+    def test_remove_worktree_refuses_when_ahead_of_non_main_base(self):
+        """Cleanup refuses when the task branch is ahead of the integration base."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            self._setup_dev_base(repo_root)
+
+            worktree_dir = worktree.create_worktree(repo_root, "task-dev", "origin/dev")
+            Path(worktree_dir, "task.txt").write_text("work", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", worktree_dir, "commit", "-q", "-m", "task commit"],
+                check=True,
+            )
+
+            removed = worktree.remove_worktree(repo_root, "task-dev", "origin/dev")
+            self.assertFalse(removed)
+            self.assertTrue(os.path.isdir(worktree_dir))
+
+
+class TestCheckBaseHygiene(unittest.TestCase):
     def _init_repo(self, repo_root: str) -> None:
         subprocess.run(["git", "init", "-q", repo_root], check=True)
         subprocess.run(
@@ -417,7 +501,7 @@ class TestCheckMainHygiene(unittest.TestCase):
             for sidecar in ("work-queue.json.lock", "work-queue.lease"):
                 (agents_dir / sidecar).write_text("", encoding="utf-8")
 
-            ok, msg = worktree.check_main_hygiene(repo_root)
+            ok, msg = worktree.check_base_hygiene(repo_root)
 
             self.assertTrue(ok, f"sidecars should be ignored, got: {msg}")
 
@@ -429,7 +513,7 @@ class TestCheckMainHygiene(unittest.TestCase):
             agents_dir.mkdir()
             (agents_dir / "notes.txt").write_text("x", encoding="utf-8")
 
-            ok, msg = worktree.check_main_hygiene(repo_root)
+            ok, msg = worktree.check_base_hygiene(repo_root)
 
             self.assertFalse(ok)
             self.assertEqual(msg, "Working tree is dirty")

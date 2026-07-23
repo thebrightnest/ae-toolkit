@@ -156,13 +156,13 @@ def _write_passing(reports_dir: str, *kinds: str, task_id: str = "demo") -> None
         _write_verdict(reports_dir, kind, "pass", task_id=task_id)
 
 
-class TestEnforceMainHygiene(unittest.TestCase):
-    def test_enforce_main_hygiene_returns_true_when_main_clean(self):
+class TestEnforceBaseHygiene(unittest.TestCase):
+    def test_enforce_base_hygiene_returns_true_when_main_clean(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
-            self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+            self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_halts_when_main_ahead_in_interactive_mode(self):
+    def test_enforce_base_hygiene_halts_when_main_ahead_in_interactive_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, "ahead.txt").write_text("x", encoding="utf-8")
@@ -173,9 +173,9 @@ class TestEnforceMainHygiene(unittest.TestCase):
             )
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_halts_when_main_ahead_in_unattended_mode(self):
+    def test_enforce_base_hygiene_halts_when_main_ahead_in_unattended_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, "ahead.txt").write_text("x", encoding="utf-8")
@@ -185,9 +185,9 @@ class TestEnforceMainHygiene(unittest.TestCase):
                 check=True,
             )
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
-                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_halts_when_main_behind_in_interactive_mode(self):
+    def test_enforce_base_hygiene_halts_when_main_behind_in_interactive_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             # Move origin/main forward while local main stays behind.
@@ -210,30 +210,30 @@ class TestEnforceMainHygiene(unittest.TestCase):
             )
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_halts_when_dirty_in_interactive_mode(self):
+    def test_enforce_base_hygiene_halts_when_dirty_in_interactive_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_halts_when_dirty_in_unattended_mode(self):
+    def test_enforce_base_hygiene_halts_when_dirty_in_unattended_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
-                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_proceeds_when_clean_in_unattended_mode(self):
+    def test_enforce_base_hygiene_proceeds_when_clean_in_unattended_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
-                self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_proceeds_without_origin_in_unattended_mode(self):
+    def test_enforce_base_hygiene_proceeds_without_origin_in_unattended_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             # Drop the remote-tracking ref so there is no origin/main to be
@@ -243,9 +243,9 @@ class TestEnforceMainHygiene(unittest.TestCase):
                 check=True,
             )
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
-                self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_ignores_untracked_queue_file(self):
+    def test_enforce_base_hygiene_ignores_untracked_queue_file(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, ".agents").mkdir()
@@ -254,9 +254,9 @@ class TestEnforceMainHygiene(unittest.TestCase):
             )
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_ignores_modified_queue_files(self):
+    def test_enforce_base_hygiene_ignores_modified_queue_files(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, ".agents").mkdir()
@@ -274,9 +274,9 @@ class TestEnforceMainHygiene(unittest.TestCase):
             queue_file.write_text('{"tasks": [{"id": "x"}]}', encoding="utf-8")
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertTrue(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_main_hygiene_still_halts_on_other_dirty_files(self):
+    def test_enforce_base_hygiene_still_halts_on_other_dirty_files(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, ".agents").mkdir()
@@ -286,7 +286,7 @@ class TestEnforceMainHygiene(unittest.TestCase):
             Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertFalse(orchestrator.enforce_main_hygiene(repo_root))
+                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
 
 class TestRunSingleHygiene(unittest.TestCase):

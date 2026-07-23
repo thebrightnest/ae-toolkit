@@ -65,17 +65,18 @@ generalization; splitting them would produce two designs for one signature.
 
 ## Task List
 
-1. Take the resolved integration branch in `create_worktree` and pass it from
+1. ✓ Take the resolved integration branch in `create_worktree` and pass it from
    all three orchestrator call sites, resolved once per run — M (traces: R-4)
-2. Count against the resolved integration branch in `remove_worktree` so
+2. ✓ Count against the resolved integration branch in `remove_worktree` so
    cleanup works off-trunk — S (traces: R-4)
-3. Rename `check_main_hygiene` to `check_base_hygiene` taking both resolved
+3. ✓ Rename `check_main_hygiene` to `check_base_hygiene` taking both resolved
    refs, and update its callers — S (traces: R-4)
-4. Use the resolved integration branch in `_session_diff_stats` so telemetry
+4. ✓ Use the resolved integration branch in `_session_diff_stats` so telemetry
    excludes the base-vs-trunk delta — S (traces: R-4)
-5. Rename `is_ancestor_of_main` to take the resolved trunk, and update
+5. ✓ Rename `is_ancestor_of_main` to take the resolved trunk, and update
    `derive_status` and the heal path that read it — M (traces: R-4)
-6. Merge branch to main and verify integration — S
+6. [Deferred: merge and final integration verification happen at the ship stage]
+   Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated.
@@ -142,5 +143,5 @@ the changed values are persisted.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

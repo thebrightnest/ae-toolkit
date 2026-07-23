@@ -193,6 +193,15 @@ class TestAbandonSuccess:
 def _merge_subprocess_runner(cwd: str | None):
     """Return a mock subprocess.run side_effect for a successful desk merge."""
 
+    def _git_subcommand(cmd):
+        """Return the git subcommand, skipping an optional -C <path> prefix."""
+        if cmd[0] != "git":
+            return None
+        idx = 1
+        if idx < len(cmd) and cmd[idx] == "-C":
+            idx += 2
+        return cmd[idx] if idx < len(cmd) else None
+
     def _run(cmd, **kwargs):
         class _Result:
             def __init__(self, rc, stdout="", stderr=""):
@@ -200,23 +209,27 @@ def _merge_subprocess_runner(cwd: str | None):
                 self.stdout = stdout
                 self.stderr = stderr
 
+        sub = _git_subcommand(cmd)
+
         if cmd[0] == "gh" and cmd[1:3] == ["pr", "merge"]:
             return _Result(0, "https://github.com/org/repo/pull/1\n", "")
-        if cmd[0] == "git" and cmd[1] == "fetch":
+        if sub == "fetch":
             return _Result(0, "", "")
-        if cmd[0] == "git" and cmd[1] == "rev-parse":
+        if sub == "symbolic-ref":
+            return _Result(0, "refs/remotes/origin/main\n", "")
+        if sub == "rev-parse":
             return _Result(0, "abc123def456\n", "")
-        if cmd[0] == "git" and cmd[1] == "merge-base":
+        if sub == "merge-base":
             # Success means the tip is an ancestor of origin/main.
             return _Result(0, "", "")
-        if cmd[0] == "git" and cmd[1] == "add":
+        if sub == "add":
             return _Result(0, "", "")
-        if cmd[0] == "git" and cmd[1] == "diff":
+        if sub == "diff":
             # 1 means there are staged changes to commit.
             return _Result(1, "", "")
-        if cmd[0] == "git" and cmd[1] == "commit":
+        if sub == "commit":
             return _Result(0, "", "")
-        if cmd[0] == "git" and cmd[1] == "push":
+        if sub == "push":
             return _Result(0, "", "")
         # Fail closed on any unexpected external call so the test surfaces drift.
         raise AssertionError(f"Unexpected subprocess call in desk merge test: {cmd}")
