@@ -142,5 +142,5 @@ remain and are harmless. The halt reverts to a requeue, restoring the loop.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
