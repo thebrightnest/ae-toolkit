@@ -5,7 +5,7 @@ One-shot retro generation from telemetry. Run after an `aet run` batch, a comple
 - **Project-level fixes** — changes to the codebase being built.
 - **AET-level fixes** — changes to the toolkit itself (skills, orchestrator, commands, templates).
 
-Run `aet retro`; `aet install` puts the `aet` dispatcher on `PATH` (run via `make install-skills` when developing in this repo).
+Run `aet retro`; `aet setup link` puts the `aet` dispatcher on `PATH` (run via `make install-skills` when developing in this repo).
 
 ## When to Run
 

@@ -32,7 +32,7 @@ Use this context to ground all recommendations. Do not ask the user to provide i
 
 ## Prerequisites
 
-`aet mine-learnings` and `aet metrics` must be on `PATH`. Run `aet install` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+`aet mine-learnings` and `aet metrics` must be on `PATH`. Run `aet setup link` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 The orchestrator writes telemetry directly to `~/.aet/telemetry/`; no manual ingestion step is required.
 

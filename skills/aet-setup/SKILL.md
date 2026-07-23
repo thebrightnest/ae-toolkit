@@ -224,7 +224,7 @@ Create `docs/references/` at project root for task-specific reference documents 
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
-**AET skill binaries:** If the project uses aet-work, aet-ship, or aet-evolve, ensure the `aet` dispatcher is on `PATH`. Run `aet install`. `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
+**AET skill binaries:** If the project uses aet-work, aet-ship, or aet-evolve, ensure the `aet` dispatcher is on `PATH`. Run `aet setup link`. `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
 
 ### Type Safety
 

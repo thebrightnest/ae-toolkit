@@ -25,10 +25,10 @@ The AE Toolkit skills invoke helper commands through the `aet` dispatcher (`aet 
 2. Run the installer:
 
    ```bash
-   aet install
+   aet setup link
    ```
 
-   It symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`) and prunes retired legacy binary names.
+   It symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`).
 
 3. Verify the dispatcher is available:
 

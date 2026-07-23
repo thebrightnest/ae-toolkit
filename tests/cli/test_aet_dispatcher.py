@@ -295,6 +295,44 @@ class TestPackageEntryPoint(unittest.TestCase):
         self.assertIn("Usage:", result.stdout + result.stderr)
         self.assertIn("Agentic Engineering Toolkit", result.stdout + result.stderr)
 
+    def test_module_invocation_propagates_subcommand_exit_code(self):
+        """``python -m`` dispatches a real subcommand and returns its status.
+
+        Dropping the ``__main__`` block leaves the module importable and exits
+        0 without dispatching, so a caller checking only "did it crash" sees a
+        pass. ``make validate`` gates on ``python -m aet.cli.main plans lint``
+        (Makefile), so a silent 0 disables that gate. Assert on a non-zero
+        status that only a real dispatch can produce.
+        """
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(Path(__file__).parents[2] / "src")
+        result = subprocess.run(
+            [sys.executable, "-m", "aet.cli.main", "no-such-command"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("No such command", result.stdout + result.stderr)
+
+    def test_console_script_dispatches(self):
+        """The installed ``aet`` console script is a working entry point.
+
+        ADR-041 makes this the only supported way to invoke the tool, but the
+        packaging test only asserts the entry point is *declared*. Execute it.
+        """
+        console_script = Path(sys.executable).parent / "aet"
+        self.assertTrue(
+            console_script.exists(), f"console script missing at {console_script}"
+        )
+        result = subprocess.run(
+            [str(console_script), "no-such-command"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("No such command", result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

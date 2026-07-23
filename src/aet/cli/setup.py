@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import typer
@@ -23,6 +24,44 @@ def _repo_root() -> Path:
     if env_root:
         return Path(env_root).expanduser().resolve()
     return Path(__file__).resolve().parent.parent.parent.parent
+
+
+def _bin_dir() -> Path:
+    """Return the link target dir: ``AET_BIN_DIR`` or ``~/.local/bin``."""
+    override = os.environ.get("AET_BIN_DIR")
+    return Path(override) if override else Path.home() / ".local" / "bin"
+
+
+def _link_target() -> Path | None:
+    """Return the ``aet`` console script installed next to the interpreter.
+
+    ADR-041 makes the console script the only supported entry point, so there
+    is no fallback: linking a module file instead produces a link that cannot
+    execute (no shebang, not executable), which is the defect class this
+    command exists to remove. ``None`` means "refuse", not "guess".
+
+    Resolved, because ``_link_target_resolves_to`` compares against a resolved
+    readlink; leaving it unresolved makes an already-correct link compare
+    unequal whenever any path component is a symlink (``/tmp`` on macOS), so
+    every run would report a stale-link repair it did not need to make.
+    """
+    console_script = Path(sys.executable).parent / "aet"
+    if console_script.exists():
+        return console_script.resolve()
+    return None
+
+
+def _is_worktree_copy(script: Path) -> bool:
+    """True when the running copy lives under a ``.worktrees`` directory."""
+    return ".worktrees" in script.parts
+
+
+def _link_target_resolves_to(link: Path, script: Path) -> bool:
+    """True when ``link`` is a symlink already pointing at ``script``."""
+    target = Path(os.readlink(link))
+    if not target.is_absolute():
+        target = link.parent / target
+    return target.resolve() == script
 
 
 def _agent_skills_dirs() -> list[Path]:
@@ -103,6 +142,54 @@ def _link_skill(
         return f"+ {skill_path.name} would link"
     link.symlink_to(repo_skill)
     return f"+ {skill_path.name} linked"
+
+
+@app.command("link")
+def setup_link(
+    bin_dir: str | None = typer.Option(None, "--bin-dir", help="Target bin directory."),
+) -> None:
+    """Link ``aet`` into the bin dir."""
+    target_dir = Path(bin_dir) if bin_dir else _bin_dir()
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    script = _link_target()
+    if script is None:
+        typer.echo(
+            f"  ⚠ no aet console script next to {Path(sys.executable).parent};"
+            " install the package first (e.g. `pip install -e .`), then re-run"
+            " setup link.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    if _is_worktree_copy(script):
+        typer.echo(
+            f"  ⚠ refusing to link from an ephemeral worktree copy ({script});"
+            " run setup link from the main checkout.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    link = target_dir / "aet"
+    if link.is_symlink():
+        if _link_target_resolves_to(link, script):
+            typer.echo(f"  = aet already linked -> {script}")
+        else:
+            link.unlink()
+            link.symlink_to(script)
+            typer.echo(f"  ✓ aet -> {script} (updated stale symlink)")
+    elif link.exists():
+        typer.echo(
+            f"  ⚠ aet exists in {target_dir} and is not a symlink. Skipping.",
+            err=True,
+        )
+    else:
+        link.symlink_to(script)
+        typer.echo(f"  ✓ aet -> {script}")
+
+    if str(target_dir) not in os.environ.get("PATH", "").split(os.pathsep):
+        typer.echo(f"\n⚠ {target_dir} is not on your PATH. Add it to your shell profile:")
+        typer.echo(f'    export PATH="{target_dir}:$PATH"')
 
 
 @app.command("skills")

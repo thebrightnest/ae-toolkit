@@ -57,26 +57,31 @@ structural replacement, which is not itself a defect fix.
 
 ## Task List
 
-1. Delete `_ensure_path_link()`, `_running_script()`, and the callback call
+1. ✓ Delete `_ensure_path_link()`, `_running_script()`, and the callback call
    site — S (traces: R-15)
-2. Delete the shebang, `__main__` block, and module-level bootstrap guard;
+2. ✓ Delete the shebang, `__main__` block, and module-level bootstrap guard;
    verify `python -m aet.cli.main` and the console script both still work — S
-   (traces: R-17)
-3. Move `install` to `aet setup link` in `src/aet/cli/setup.py`, retargeted at
+   (traces: R-17) — **[Changed: kept `__main__` block]** Deleting it broke
+   `python -m aet.cli.main` and 9 tests; only the shebang and bootstrap guard
+   were removed. See PRD Divergence Summary.
+3. ✓ Move `install` to `aet setup link` in `src/aet/cli/setup.py`, retargeted at
    the console script; move `_is_worktree_copy`, `_link_target_resolves_to`,
    `_bin_dir` with it; remove `install` from `main.py` and its callback
    exemption — M (traces: R-16, R-18)
-4. Correct the module docstring (`main.py:2-8`), which asserts
+4. ✓ Correct the module docstring (`main.py:2-8`), which asserts
    `_ensure_path_link` remains for single-name PATH ownership — S (traces: R-19)
-5. Rewrite `tests/cli/test_aet_install.py` as `tests/setup/test_setup_link.py`:
+5. ✓ Rewrite `tests/cli/test_aet_install.py` as `tests/setup/test_setup_link.py`:
    delete `TestSelfRepair` (`:138-228`) and the self-repair half of
    `TestWorktreeCopyGuard` (`:239-250`); retarget the `aet install` coverage at
    `aet setup link`; add `test_subcommand_does_not_touch_link` — M
    (traces: R-15, R-16, R-18)
-6. Update `README.md` (`:144`, `:169`) and `docs/CONVENTIONS.md` (`:57-59`) to
+6. ✓ Update `README.md` (`:144`, `:169`) and `docs/CONVENTIONS.md` (`:57-59`) to
    name `aet setup link`; add the release-notes line naming re-running the
    installer as the repair for v1.4.0-corrupted links — S (traces: R-33)
-7. Merge branch to main and verify integration — S
+   — **release-notes half deferred to release-prep**: `CHANGELOG` edits are
+   blocked on feature branches by `scripts/prevent-release-on-feature-branch.sh`.
+   Wording to carry over is in the Rollback Plan below.
+7. [Deferred: await `aet-ship`] Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated against the full guardrail model.
@@ -123,9 +128,9 @@ Full treatment in ADR-041. Recorded so they are not re-opened:
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] No new source files introduced. Coverage for the relocated command lands
+- [x] Lint passes — `ruff check .` clean (`make lint-py`)
+- [x] Tests pass — `make validate` green: 1026 passed + 5 installer tests
+- [x] No new source files introduced. Coverage for the relocated command lands
       in `tests/setup/test_setup_link.py` with named cases:
       `test_fresh_link_targets_console_script`,
       `test_stale_link_repaired`,
@@ -134,24 +139,53 @@ Full treatment in ADR-041. Recorded so they are not re-opened:
       `test_refuses_worktree_copy`,
       `test_subcommand_does_not_touch_link` — seed `<bin-dir>/aet` at a distinct
       file, run a real subcommand (`aet status`), assert `readlink` unchanged
-- [ ] Test types: unit tests over link-target resolution; integration test
+- [x] Test types: unit tests over link-target resolution; integration test
       invoking a real subcommand through the seeded link
-- [ ] `test_subcommand_does_not_touch_link` demonstrated **failing** against
-      current `main.py` before the change (traces: R-32)
-- [ ] Manual check on a packaged install: `aet setup link` from a non-editable
+- [x] `test_subcommand_does_not_touch_link` demonstrated **failing** against
+      current `main.py` before the change (traces: R-32). First draft was a
+      false green — it passed against pre-change `main.py` because the suite
+      runs from `.worktrees/`, where the old `_ensure_path_link()` bailed at its
+      own worktree guard before touching the link. Guard now neutralised in the
+      test; verified failing pre-change, passing post-change. The subprocess
+      integration test had the same hole *and* skipped itself post-change; it
+      now stages the package outside `.worktrees` and always runs
+- [x] Manual check on a packaged install: `aet setup link` from a non-editable
       venv produces a link that executes. R-16's failure mode is invisible to an
       editable-install suite — this is the check that would have caught the
-      shipped defect
-- [ ] `python -m aet.cli.main plans lint` and `python -m aet.cli.main docs lint`
-      still work (`Makefile:100-101` depends on both)
-- [ ] `scripts/skills-lint` still imports `from aet.cli.main import app`
-- [ ] `grep -rn "_ensure_path_link\|_running_script" src/ tests/` returns nothing
-- [ ] `grep -rn "aet install" skills/ docs/ README.md` — every hit updated to
-      `aet setup link`
+      shipped defect. Verified: package resolved to
+      `site-packages/aet/cli/main.py`, link produced was `<venv>/bin/aet` (the
+      console script, not `__file__`), and `<bin>/aet --version` printed
+      `aet 1.3.0`
+- [x] `python -m aet.cli.main plans lint` and `python -m aet.cli.main docs lint`
+      still work (`Makefile:100-101` depends on both) — see deviation note below
+- [x] `scripts/skills-lint` still imports `from aet.cli.main import app`
+- [x] `grep -rn "_ensure_path_link\|_running_script" src/ tests/` returns nothing
+- [x] `grep -rn "aet install" skills/ docs/ README.md` — every hit updated to
+      `aet setup link`. Remaining tree-wide hits are historical records (merged
+      plans, superseded PRDs/ADRs, the v1.0.0 release note) and are deliberately
+      left intact; the PRD's own acceptance criterion scopes this to
+      `README.md` + `docs/CONVENTIONS.md`, both clean
 - [ ] `aet-cso` invoked — symlink creation in the user bin directory
-- [ ] R-trace coverage: R-15 (1, 5), R-16 (3, 5), R-17 (2), R-18 (3, 5), R-19 (4),
+- [x] R-trace coverage: R-15 (1, 5), R-16 (3, 5), R-17 (2), R-18 (3, 5), R-19 (4),
       R-33 (6)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+
+### Deviation from locked design (task 2)
+
+ADR-041 decision 2 lists the `if __name__ == "__main__"` block for deletion
+while naming `python -m aet.cli.main` a supported invocation. Those are
+contradictory: that block *is* what `-m` dispatches through. Deleting it left
+the module importable but inert — `python -m aet.cli.main plans lint` exited 0
+with no output, silently disabling the `make validate` gate at `Makefile:100-101`
+and breaking 9 tests across the suite.
+
+Resolved by keeping the `__main__` block and deleting only the direct-script
+machinery the ADR actually targets: the shebang and the module-level bootstrap
+guard. Without a shebang or re-exec, an interpreter that cannot import `aet` now
+fails loudly at import instead of silently re-execing — which is the ADR's
+stated intent. Guarded by
+`test_module_invocation_propagates_subcommand_exit_code` and
+`test_console_script_dispatches`; ADR-041 needs a correction to decision 2.
 
 ## Rollback Plan
 
@@ -163,6 +197,12 @@ Users holding a corrupted link (pointing at `site-packages/aet/cli/main.py`) are
 repaired by re-running `install.sh` or `aet setup link`. Release notes must
 state that the link is no longer self-healing and that `aet install` is gone.
 
+**Carry into the next release's `CHANGELOG`** (blocked on this branch by the
+release-guard hook): if `~/.local/bin/aet` points at
+`site-packages/aet/cli/main.py` (the v1.4.0 self-repair defect), re-run
+`scripts/install.sh` or `aet setup link` to repoint it at the console script.
+`aet install` is removed and the symlink is no longer self-healing.
+
 ## Pipeline
 
 `standard`. Symlink and PATH-ownership changes warrant the default stage
@@ -172,5 +212,5 @@ grouping with a real security review rather than `minimal`.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

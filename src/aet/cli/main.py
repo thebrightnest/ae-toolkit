@@ -1,17 +1,14 @@
-#!/usr/bin/env python3
 """aet — single Typer app entry point for the AE Toolkit.
 
-All subcommands register directly on the ``app`` object below. The legacy
-``SUBCOMMANDS`` spec, os.exec dispatch, and multi-binary symlink pruning have
-been removed. ``aet install`` and ``_ensure_path_link`` remain because
-single-name PATH ownership is still required.
+All subcommands register directly on the ``app`` object below. The supported
+invocations are the installed console script (``aet``) and
+``python -m aet.cli.main``; both guarantee an interpreter that can import the
+package, so no module-level bootstrap guard is required.
 """
 
 from __future__ import annotations
 
-# Bootstrap guard: when this script is invoked directly from a source checkout,
-# the interpreter may be system Python which lacks the AE Toolkit dependencies.
-# Re-exec under the repo's virtual environment when available.
+import importlib
 import os
 import secrets
 import string
@@ -20,42 +17,12 @@ import sys
 import time
 from pathlib import Path
 
-_REQUIRED_IMPORTS = ("filelock", "yaml", "aet")
-
-
-def _can_import_aet() -> bool:
-    for name in _REQUIRED_IMPORTS:
-        try:
-            __import__(name)
-        except Exception:
-            return False
-    return True
-
-
-if not _can_import_aet():
-    here = Path(__file__).resolve()
-    candidate_roots = [
-        here.parent.parent.parent.parent,
-        Path.cwd(),
-    ]
-    venv_path = os.environ.get("VIRTUAL_ENV")
-    if venv_path:
-        candidate_roots.insert(0, Path(venv_path))
-    for root in candidate_roots:
-        venv_python = root / ".venv" / "bin" / "python"
-        if not venv_python.exists():
-            venv_python = root / "bin" / "python"
-        if venv_python.exists():
-            os.execv(str(venv_python), [str(venv_python), str(here)] + sys.argv[1:])
-
-import importlib  # noqa: E402
-
-import typer  # noqa: E402
+import typer
 
 # Import subcommand modules. Each module exposes an ``app`` attribute that is a
 # ``typer.Typer()`` instance registered under a top-level name below.
 # isort: off
-from aet.cli import (  # noqa: E402
+from aet.cli import (
     aet_state,
     backlog,
     configure_backend,
@@ -120,60 +87,6 @@ app.add_typer(status.app, name="status")
 app.add_typer(validate_workflows.app, name="validate-workflows")
 
 
-# ---------------------------------------------------------------------------
-# PATH ownership helpers (kept from the legacy dispatcher)
-# ---------------------------------------------------------------------------
-
-
-def _running_script() -> Path:
-    """Return the resolved path of this running copy."""
-    return Path(__file__).resolve()
-
-
-def _is_worktree_copy(script: Path) -> bool:
-    """True when the running copy lives under a ``.worktrees`` directory."""
-    return ".worktrees" in script.parts
-
-
-def _bin_dir() -> Path:
-    """Return the link target dir: ``AET_BIN_DIR`` or ``~/.local/bin``."""
-    override = os.environ.get("AET_BIN_DIR")
-    return Path(override) if override else Path.home() / ".local" / "bin"
-
-
-def _link_target_resolves_to(link: Path, script: Path) -> bool:
-    """True when ``link`` is a symlink already pointing at ``script``."""
-    target = Path(os.readlink(link))
-    if not target.is_absolute():
-        target = link.parent / target
-    return target.resolve() == script
-
-
-def _ensure_path_link() -> None:
-    """Silently create or repair the AET-managed ``aet`` symlink.
-
-    Best-effort and never fatal. Skipped on worktree copies and non-symlink
-    collisions.
-    """
-    try:
-        bin_dir = _bin_dir()
-        link = bin_dir / "aet"
-        script = _running_script()
-        if _is_worktree_copy(script):
-            return
-        if link.is_symlink():
-            if _link_target_resolves_to(link, script):
-                return
-            link.unlink()
-        elif link.exists():
-            return
-        else:
-            bin_dir.mkdir(parents=True, exist_ok=True)
-        link.symlink_to(script)
-    except OSError:
-        pass
-
-
 def _version_callback(value: bool) -> None:
     if value:
         from importlib.metadata import version as get_version
@@ -184,7 +97,6 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def _main_callback(
-    ctx: typer.Context,
     version: bool = typer.Option(
         False,
         "--version",
@@ -193,9 +105,7 @@ def _main_callback(
         callback=_version_callback,
     ),
 ) -> None:
-    """On every non-install invocation, verify/repair the ``aet`` symlink."""
-    if ctx.invoked_subcommand != "install":
-        _ensure_path_link()
+    """Top-level callback; handles --version only."""
 
 
 # ---------------------------------------------------------------------------
@@ -422,50 +332,6 @@ def run_one(
     raise typer.Exit(_spawn_detached(argv, run_id))
 
 
-# ---------------------------------------------------------------------------
-# install command (kept in main.py)
-# ---------------------------------------------------------------------------
-
-
-@app.command()
-def install(
-    bin_dir: str | None = typer.Option(None, "--bin-dir", help="Target bin directory."),
-) -> None:
-    """Link ``aet`` into the bin dir."""
-    target_dir = Path(bin_dir) if bin_dir else _bin_dir()
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    script = _running_script()
-    if _is_worktree_copy(script):
-        typer.echo(
-            f"  ⚠ refusing to link from an ephemeral worktree copy ({script});"
-            " run install from the main checkout.",
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    link = target_dir / "aet"
-    if link.is_symlink():
-        if _link_target_resolves_to(link, script):
-            typer.echo(f"  = aet already linked -> {script}")
-        else:
-            link.unlink()
-            link.symlink_to(script)
-            typer.echo(f"  ✓ aet -> {script} (updated stale symlink)")
-    elif link.exists():
-        typer.echo(
-            f"  ⚠ aet exists in {target_dir} and is not a symlink. Skipping.",
-            err=True,
-        )
-    else:
-        link.symlink_to(script)
-        typer.echo(f"  ✓ aet -> {script}")
-
-    if str(target_dir) not in os.environ.get("PATH", "").split(os.pathsep):
-        typer.echo(f"\n⚠ {target_dir} is not on your PATH. Add it to your shell profile:")
-        typer.echo(f'    export PATH="{target_dir}:$PATH"')
-
-
 def main() -> int:
     _ensure_aet_importable()
     try:
@@ -477,5 +343,11 @@ def main() -> int:
     return 0
 
 
+# Runs under ``python -m aet.cli.main``, which is a supported invocation
+# (``Makefile`` validate targets, and several subprocess tests). Without this
+# the module is imported, nothing dispatches, and the process exits 0 — turning
+# every ``-m`` caller into a silent no-op. The direct-script mode is what this
+# module dropped: there is no shebang and no interpreter bootstrap, so an
+# interpreter that cannot import ``aet`` now fails loudly at import.
 if __name__ == "__main__":
     sys.exit(main())

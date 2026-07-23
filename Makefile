@@ -40,10 +40,10 @@ install-skills: install-editable ## Symlink all skills from this repo to ~/.agen
 			fi; \
 		fi; \
 	done
-	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" aet install
+	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" aet setup link
 
 install-binaries: install-editable ## Symlink skill binaries from installed skill dirs onto PATH
-	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" aet install
+	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" aet setup link
 
 add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 	@if [ -z "$(NAME)" ]; then \
