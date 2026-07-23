@@ -145,7 +145,18 @@ Make `aet ship close` the single owner of closure:
 
 ### Out of Scope
 
-- Queue-absent closure (task never queued, or the queue was reset) still
+Hardening items for the closure path, tracked for a follow-up change to
+`cmd_record_merge`:
+
+- **Queue-absent closure** (task never queued, or the queue was reset) still
   requires `aet state record-merge --merge-commit <sha>`. Making closure fully
-  queue-optional is a deeper change to `cmd_record_merge` and is tracked
-  separately.
+  queue-optional is a deeper change to `cmd_record_merge`.
+- **Sealed-task retry re-commits instead of pushing the intact commit.**
+  Observed 2026-07-24 closing `ppt-01-pipeline-mode-docs`: the first closure
+  committed the plan-status change locally but its push was rejected (local
+  main was behind the fresh squash merge). After rebasing, the sealed-task
+  retry path re-ran `commit_and_push_status` against drifted file content and
+  produced a second, duplicate "mark plan as merged" chore commit instead of
+  simply pushing the existing intact commit. The retry should detect that the
+  plan already carries the terminal status and only push, not rewrite the
+  file.
