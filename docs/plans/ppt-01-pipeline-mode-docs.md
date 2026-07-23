@@ -25,7 +25,8 @@ Update `docs/PIPELINE.md` and `.agents/templates/plan-template.md` to codify the
 
 1. Add a "Pipeline Mode Selection" section to `docs/PIPELINE.md` with a size-to-mode table (S→minimal, M→standard, L→standard/full) and the risk override list (auth, data-model, API, dependencies, infrastructure). — M (traces: R-1)
 2. Update `.agents/templates/plan-template.md` frontmatter comment to explain the size-based default and link to `docs/PIPELINE.md`. — S (traces: R-2)
-3. Verify markdownlint passes on both files. — S
+3. Update ADR-047 status from Proposed to Accepted and verify it is referenced from `docs/PIPELINE.md`. — S (traces: R-4)
+4. Verify markdownlint passes on both files. — S
 
 **Size definitions:**
 
