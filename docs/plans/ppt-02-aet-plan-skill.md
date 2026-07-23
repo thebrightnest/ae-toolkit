@@ -23,9 +23,9 @@ Update `skills/aet-plan/SKILL.md` frontmatter contract so plan authors set `pipe
 
 ## Task List
 
-1. Update the `pipeline` frontmatter explanation in `skills/aet-plan/SKILL.md` to state the size-based default (S→minimal, M→standard, L→standard/full) and the risk override rule. — S (traces: R-3)
-2. Add a reference to ADR-047 in the frontmatter contract section. — S
-3. Verify markdownlint and skills-lint pass. — S
+1. ✓ Update the `pipeline` frontmatter explanation in `skills/aet-plan/SKILL.md` to state the size-based default (S→minimal, M→standard, L→standard/full) and the risk override rule. — S (traces: R-3)
+2. ✓ Add a reference to ADR-047 in the frontmatter contract section. — S
+3. ✓ Verify markdownlint and skills-lint pass. — S
 
 **Size definitions:**
 
@@ -66,5 +66,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
