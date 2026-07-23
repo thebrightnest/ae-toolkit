@@ -219,12 +219,12 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
                     "docs/product-briefs/",
                 ],
                 # Telemetry diff stats emitted after each stage/session group.
-                ["git", "-C", "<worktree>", "diff", "--name-only", "main...HEAD"],
-                ["git", "-C", "<worktree>", "rev-list", "--count", "main..HEAD"],
-                ["git", "-C", "<worktree>", "diff", "--name-only", "main...HEAD"],
-                ["git", "-C", "<worktree>", "rev-list", "--count", "main..HEAD"],
-                ["git", "-C", "<worktree>", "diff", "--name-only", "main...HEAD"],
-                ["git", "-C", "<worktree>", "rev-list", "--count", "main..HEAD"],
+                ["git", "-C", "<worktree>", "diff", "--name-only", "origin/main...HEAD"],
+                ["git", "-C", "<worktree>", "rev-list", "--count", "origin/main..HEAD"],
+                ["git", "-C", "<worktree>", "diff", "--name-only", "origin/main...HEAD"],
+                ["git", "-C", "<worktree>", "rev-list", "--count", "origin/main..HEAD"],
+                ["git", "-C", "<worktree>", "diff", "--name-only", "origin/main...HEAD"],
+                ["git", "-C", "<worktree>", "rev-list", "--count", "origin/main..HEAD"],
             ]
 
             self.assertEqual(git_calls, expected)
