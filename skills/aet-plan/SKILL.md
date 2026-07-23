@@ -174,7 +174,13 @@ Break the PRD into vertically-sliced, independently implementable tickets.
    - `blocked_by` is a list of blocking task IDs; an empty list means no blockers.
    - `size` is the S/M/L complexity label. `stage` lives only in the task record, never in frontmatter.
    - `status` is the plan lifecycle value (CONTEXT.md): `draft`, `approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, or `abandoned`. New plans are born `draft`; `aet-validate-scope` advances it to `approved` when the footer moves to `plan-approved`.
-   - `pipeline` is optional and controls orchestrator isolation: `minimal` (all stages in one session), `standard` (default stage grouping), or `full` (one session per stage).
+   - `pipeline` controls orchestrator isolation. Declare it explicitly in every plan; there is no orchestrator auto-switch. See ADR-047 (`docs/adr/047-pipeline-mode-by-plan-size.md`) for the full rationale.
+     - Size-based advisory default:
+       - **S** (≤ 2 hr human time / ≤ 100 expected diff lines) → `minimal`
+       - **M** (≤ 1 day human time / ≤ 200 expected diff lines) → `standard`
+       - **L** (> 1 day OR > 200 expected diff lines) → `standard` or `full`; pick based on risk
+     - Risk override: regardless of size, use `standard` or `full` when the change touches authentication/authorization, data models or persisted state, public/internal API contracts, dependencies/frameworks/infrastructure, or security-sensitive surfaces (secrets, trust boundaries, injection paths).
+     - `minimal` runs all skilled stages in one session; `standard` uses the default stage groups; `full` uses one session per stage.
 
 8. **Set gate routing keys deliberately.** `security_review` and `docs_sync` route the aet-cso and aet-sync-docs stages at plan time, so the engine never judges at run time. Default both to `required`. Set `skipped` only when the gate is genuinely unnecessary for the plan, and always pair a skip with a one-line `security_review_reason` / `docs_sync_reason` recording why — intake rejects a `skipped` key without its reason, and a missing key is treated as `required` (fail-safe: the stage runs).
 
