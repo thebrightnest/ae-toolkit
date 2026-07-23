@@ -26,6 +26,14 @@ class UnknownBackendError(ValueError):
     """
 
 
+class IntegrationModeError(ValueError):
+    """Raised when ``integration_mode`` has an unrecognized value."""
+
+
+# Legal values for the ``integration_mode`` project setting.
+INTEGRATION_MODES = frozenset({"pr-per-task", "single-pr"})
+
+
 def create_backend(
     config_path: str | None = None,
     queue_file: str = ".agents/work-queue.json",
@@ -77,6 +85,24 @@ def resolve_config(config_path: str) -> dict[str, Any]:
         return _load_config(path)
 
     return {"task_backend": "json", "trunk_branch": None, "integration_branch": None}
+
+
+def resolve_integration_mode(config_path: str | None = None) -> str:
+    """Resolve ``integration_mode`` through the external-first config chain.
+
+    Uses the same precedence as :func:`resolve_config`: env ``AET_WORK_CONFIG``
+    → external ``~/.aet/{slug}/config.json`` → in-tree ``config_path`` →
+    built-in default. The default is ``pr-per-task``. An unrecognized value
+    fails closed with a message naming the key and the legal values.
+    """
+    config = resolve_config(config_path or DEFAULT_CONFIG_PATH)
+    mode = config.get("integration_mode", "pr-per-task")
+    if mode in INTEGRATION_MODES:
+        return mode
+    raise IntegrationModeError(
+        f"Invalid integration_mode: {mode!r}. "
+        f"Choose one of: {', '.join(sorted(INTEGRATION_MODES))}."
+    )
 
 
 def _load_config(path: Path) -> dict[str, Any]:
