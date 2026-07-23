@@ -67,7 +67,7 @@ change, no new dependencies in this phase** — pure relocation.
       slice, that slice is added here as well.
 - [ ] `aet-work/panel/` → `aet/panel/`
 - [ ] All `sys.path.insert` hacks deleted; real package imports
-- [ ] `make validate` green; `aet install` and all subcommands work from an
+- [ ] `make validate` green; `aet setup link` and all subcommands work from an
       editable install exactly as before
 
 **Done when:** no Python file or executable script remains inside any skill
@@ -131,10 +131,10 @@ becomes a PRD when Track B opens.
 - ADR superseding "No CI"; release pipeline (tag → build → publish PyPI/GitHub
   Releases, checksums)
 - Skills bundled as package data, versioned with the CLI (kills version skew by
-  construction); `aet install` materializes skills into agent skill dirs,
+  construction); `aet setup skills` materializes skills into agent skill dirs,
   `--dev` mode symlinks from a working tree
 - Bootstrap installer: `curl -fsSL <domain>/install.sh | bash` → bootstraps
-  `uv` → `uv tool install aet` → `aet install`
+  `uv` → `uv tool install aet` → `aet setup link`
 - Update channel design: auto-check + nag vs. silent auto-update (CLI vs. skill
   content may warrant different policies); `aet update` / `aet doctor`
 - `aet skills` lifecycle commands (`list` / `add` / `update` / `remove`),

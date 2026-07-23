@@ -141,10 +141,10 @@ npx skills add https://github.com/thebrightnest/ae-toolkit --all
 #### 3. Put `aet` on `PATH`
 
 ```bash
-aet install
+aet setup link
 ```
 
-The installer symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`). If `~/.local/bin` is not on your `PATH`, add it to your shell profile — after that, `aet` maintains its own link.
+The command symlinks `aet` into `~/.local/bin` (override with `AET_BIN_DIR`). If `~/.local/bin` is not on your `PATH`, add it to your shell profile. The link is no longer self-healing; re-run the installer or `aet setup link` if it breaks.
 
 You can also copy skill directories to your agent's skills folder, or paste the skill content directly into chat:
 
@@ -166,7 +166,7 @@ pip install -e ".[dev]"
 make install-skills
 ```
 
-`make install-skills` installs the package, symlinks skills, and runs `aet install` automatically.
+`make install-skills` installs the package, symlinks skills, and runs `aet setup link` automatically.
 
 ### Run it
 
