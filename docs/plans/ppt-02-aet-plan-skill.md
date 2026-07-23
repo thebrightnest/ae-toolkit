@@ -1,7 +1,7 @@
 ---
 id: ppt-02-aet-plan-skill
 size: S
-status: approved
+status: queued
 blocked_by: []
 pipeline: minimal
 security_review: required
