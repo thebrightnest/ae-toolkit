@@ -4,6 +4,10 @@
 
 The original Task Size Guardrails PRD (`docs/prds/task-size-guardrails-prd.md`) introduced a dual-limit model (human-time + AI-complexity) calibrated to keep agent sessions under roughly 100k tokens. Since then, context windows and runtime context management have improved; the 100k-token hard ceiling is less relevant, and the rigid proxies it produced — especially file-count and calendar-day limits — are causing over-fragmentation and artificial splits. This revision replaces those proxies with a context-budget + coherence rule, keeps the proven diff-line limits, and preserves the auto-split/`⚠️ ATOMIC OVERSIZED` safety net.
 
+## Revision Note
+
+This PRD is superseded by `docs/prds/plan-sizing-recalibration-prd.md` (2026-07-23). The central premise of this revision — that task-list length is a usable proxy for diff size and can be enforced at intake — was measured and falsified: the correlation with delivered code diff is **r = 0.30**, with a flat relationship past roughly six task-list lines. `validate_size()` no longer rejects on task-list length, the S/M/L bands were recalibrated against measured delivery, and the guardrail model moved to a 2-of-N advisory rule. See ADR-046 (`docs/adr/046-plan-size-measured-not-gated.md`) for the governing decision.
+
 ## Goals
 
 - **G1:** Preserve the protective intent of the guardrail: no unbounded, multi-concern agent sessions enter the work queue.

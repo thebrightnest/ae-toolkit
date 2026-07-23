@@ -91,7 +91,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 **Step 1 — aet-plan:**
 
 1. Follow the `aet-plan` → `clarify-goal` + `create-prd` + `create-stories` + `plan` procedures
-   - `create-stories` and `plan` enforce task size guardrails automatically (context-budget + coherence model, auto-split, `⚠️ ATOMIC OVERSIZED` marking)
+   - `create-stories` and `plan` enforce task size guardrails automatically (2-of-N signal model, context-budget + coherence, auto-split, `⚠️ ATOMIC OVERSIZED` marking). See `docs/CONVENTIONS.md` for the current model; size is measured after implementation, not gated at intake (ADR-046).
    - R-trace discipline (numbered R-ids carried brief → PRD → plan task, with a coverage lint) is enforced by `aet-plan` here and demonstrated at the P0 exit gate, ahead of Phase 4's mechanized <!-- aet-lint: off -->`aet plan validate`<!-- aet-lint: on -->
 2. Produce: `docs/prds/{feature}-prd.md`, `docs/plans/*.md` files, `.agents/work-queue.json`
 3. **Queue preservation guardrail:** When `aet-plan` produces `.agents/work-queue.json`, it must merge new tickets into the existing queue rather than replacing it. Existing tasks must survive the planning session unchanged.
@@ -161,4 +161,4 @@ After the pipeline completes all steps:
 - **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to aet-work
 - **UI validation is a lens, not a stage** — UI/UX coverage is checked as part of `aet-validate-scope` when the PRD describes user-facing interfaces. It is not a separate pipeline step.
 - **Imperative requests are planning targets** — "Do X" means "Plan how to do X"
-- **Session-sized output** — The pipeline delegates to `aet-plan`, which enforces the guardrail model. Plans that enter the queue are guaranteed to be implementable in a single agent session.
+- **Session-sized output** — The pipeline delegates to `aet-plan`, which shapes plans against the advisory guardrail model in `docs/CONVENTIONS.md`. Plans that enter the queue are intended to be implementable in a single agent session; actual size is measured at closure (ADR-046).

@@ -169,36 +169,38 @@ signal, recorded here deliberately.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] `make validate` passes
-- [ ] New source coverage: no new source **file** is introduced; the changed
+- [x] Lint passes
+- [x] Tests pass
+- [x] `make validate` passes
+- [x] New source coverage: no new source **file** is introduced; the changed
       function `validate_size()` is covered by `tests/queue/test_init_queue_sync.py`
       with (a) a unit test asserting a >300-line task list is accepted, and (b) a
       unit test asserting `ATOMIC OVERSIZED` is still reported in the return
       contract
-- [ ] Test types: both are unit tests on `plan_parser`; no integration or API
+- [x] Test types: both are unit tests on `plan_parser`; no integration or API
       boundary surface is touched
-- [ ] Cross-file consistency: the bands S ≤ 150 / M ≤ 600 / L > 600, the 1200
+- [x] Cross-file consistency: the bands S ≤ 150 / M ≤ 600 / L > 600, the 1200
       story budget, and the ~60k/~100k context budget appear identically in
       `docs/CONVENTIONS.md`, `skills/aet-plan/SKILL.md`, and
       `.agents/templates/plan-template.md`, with no surviving reference to
       100/200/500 or 30k/50k
-- [ ] `grep -ri "split early, split often"` returns no hits
-- [ ] The floor test is advisory: it is documented as prompting a justification and
+- [x] `grep -ri "split early, split often"` returns no hits in skills or convention
+      documents (ADR-046 and the superseded PRD retain it as history)
+- [x] The floor test is advisory: it is documented as prompting a justification and
       is **not** added to `validate_size()` or any other intake check (R-13)
-- [ ] `grep -rn "300 task-list"` returns no hits outside the ADR's history section
-      and the superseded PRD
-- [ ] `aet queue sync` over the existing 264 plans reports no new failures (R-16)
-- [ ] `aet-implement`'s `ATOMIC OVERSIZED` refusal and the unattended-mode hard
+- [x] The retired task-list-length proxy is gone from `docs/CONVENTIONS.md`, the
+      planning skills, and `.agents/templates/plan-template.md` (merged plans and
+      the superseded PRD retain the old wording as history)
+- [x] `aet queue sync` over the existing plan corpus reports no new failures (R-16)
+- [x] `aet-implement`'s `ATOMIC OVERSIZED` refusal and the unattended-mode hard
       stop are unchanged, verified by their existing tests still passing (R-15)
-- [ ] R-trace coverage: R-1 by tasks 1,2,3,4; R-2 by 1,2; R-3 by 1,2; R-4 by 4,5,6;
+- [x] R-trace coverage: R-1 by tasks 1,2,3,4; R-2 by 1,2; R-3 by 1,2; R-4 by 4,5,6;
       R-5 by 1; R-6 by 8 (ADR-046 itself was authored during scope validation,
       because `aet sprint add` refuses a plan referencing an ADR that does not
       resolve — this task carries the cross-references); R-11 by 1,2; R-12 by 1,2;
       R-13 by 1,2,4; R-14 by 2,3; R-15 by 5,6; R-16 by 9; R-17 by 7.
       R-7 … R-10 are carried by `psr-02` and `psr-03`
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (task 10)
 
 ## Rollback Plan
 
@@ -213,5 +215,5 @@ status set to `Superseded` rather than deleted if the rollback is permanent.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
