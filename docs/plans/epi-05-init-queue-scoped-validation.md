@@ -55,9 +55,9 @@ recorded for `frh-17`/`frh-18` — fixing the ordering resolves both instances.
 
 ## Task List
 
-1. Compute the included-plan set before validation in `init_queue.py`, moving
+1. ✓ Compute the included-plan set before validation in `init_queue.py`, moving
    validation after the settled/sprint skips — M (traces: R-10)
-2. Warn-and-skip invalid plans outside the included set; keep fail-closed for
+2. ✓ Warn-and-skip invalid plans outside the included set; keep fail-closed for
    invalid plans inside it — S (traces: R-10)
 3. Merge branch to main and verify integration — S
 
@@ -94,17 +94,17 @@ re-evaluated.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] New source coverage: `tests/queue/test_init_queue_scoped_validation.py`
+- [x] Lint passes
+- [x] Tests pass
+- [x] New source coverage: `tests/queue/test_init_queue_scoped_validation.py`
       asserts a complete queue is written in a plans directory containing
       unrelated plans that fail validation, with one warning per invalid plan —
       demonstrated **failing** against the current abort-at-`:230` behavior
-- [ ] An invalid plan inside the included set still fails closed with a
+- [x] An invalid plan inside the included set still fails closed with a
       non-zero exit and no queue write
-- [ ] The `frh-17`/`frh-18` ordering instance is covered by the same test or a
+- [x] The `frh-17`/`frh-18` ordering instance is covered by the same test or a
       named sibling test
-- [ ] R-trace coverage: R-10 covered by tasks 1–2
+- [x] R-trace coverage: R-10 covered by tasks 1–2
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -113,11 +113,23 @@ Revert the commit. The abort-before-skip ordering returns; a wedged queue in a
 shared repository becomes unregenerable again, but no data is lost because the
 queue is ephemeral.
 
+## Divergence Notes
+
+- **`queue sync` needed no change.** The locked design left this open: if
+  validation were a shared helper, scope it there; otherwise record the finding
+  here. `src/aet/cli/sync.py` already skips settled and non-sprint plans
+  (`:69-72`) before calling `plan_validate.validate` (`:98`), so it never had
+  the abort-before-skip defect. `sync.py` was not modified.
+- **Test fixtures updated beyond the listed files.** Bad-plan fixtures in
+  `tests/plan/test_intake_gate.py` and `tests/queue/test_init_queue_sync.py`
+  gained `status: queued` so they stay in the included set and keep exercising
+  fail-closed rejection after scoping.
+
 ## Pipeline
 
 `standard`.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

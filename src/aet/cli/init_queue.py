@@ -217,6 +217,18 @@ def _run(
 
     plan_files = sorted(plans_dir.glob("*.md"))
 
+    # Scope validation to the plans that will actually be included in the queue.
+    # Settled and non-sprint plans are skipped anyway; if they also fail validation
+    # we warn and continue instead of aborting the rebuild (ADR-013 regeneration
+    # guarantee). Included plans keep the fail-closed contract.
+    included_plan_files: list[Path] = []
+    excluded_plan_files: list[Path] = []
+    for pf in plan_files:
+        if plan_validate.is_settled_plan(pf) or not plan_validate.is_sprint_member(pf):
+            excluded_plan_files.append(pf)
+        else:
+            included_plan_files.append(pf)
+
     repo_root = Path(
         subprocess.run(
             ["git", "-C", str(plans_dir), "rev-parse", "--show-toplevel"],
@@ -225,8 +237,22 @@ def _run(
         ).stdout.strip()
         or str(plans_dir.parent.parent)
     )
-    findings = plan_validate.validate(plan_files, repo_root=repo_root)
-    plan_texts = {pf: pf.read_text(errors="ignore") for pf in plan_files}
+
+    # Warn for invalid plans that are being skipped for unrelated reasons.
+    if excluded_plan_files:
+        excluded_findings = plan_validate.validate(excluded_plan_files, repo_root=repo_root)
+        excluded_texts = {pf: pf.read_text(errors="ignore") for pf in excluded_plan_files}
+        excluded_findings = plan_validate.apply_acks(excluded_findings, excluded_texts)
+        for finding in excluded_findings:
+            if not finding.acked:
+                print(
+                    f"⚠️ {finding.plan.name}: {finding.check_id}: {finding.message}",
+                    file=sys.stderr,
+                )
+
+    # Fail closed for invalid plans in the included set.
+    findings = plan_validate.validate(included_plan_files, repo_root=repo_root)
+    plan_texts = {pf: pf.read_text(errors="ignore") for pf in included_plan_files}
     findings = plan_validate.apply_acks(findings, plan_texts)
     unacked = [f for f in findings if not f.acked]
     if unacked:

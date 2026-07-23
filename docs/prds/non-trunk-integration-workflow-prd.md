@@ -323,6 +323,36 @@ scope — the epic/integration layer — is a feature and is planned as one.
   epics in flight? Declared a non-goal here; the constraint should be enforced
   with a clear error rather than assumed.
 
+## Divergence Summary
+
+*Recorded: 2026-07-23 — Branch: epi-05-init-queue-scoped-validation (R-10)*
+
+### Changed from plan
+
+- None. Tasks 1–2 of `epi-05-init-queue-scoped-validation` were implemented as
+  locked: the included-set is computed before validation in `init_queue.py`,
+  excluded plans warn-and-skip, included plans fail closed.
+
+### Added (unplanned)
+
+- Test fixture updates in `tests/plan/test_intake_gate.py` and
+  `tests/queue/test_init_queue_sync.py`: bad-plan fixtures gained
+  `status: queued` so they remain in the included set and keep exercising the
+  fail-closed path after scoping. Without this they would be excluded as
+  non-sprint plans and only warned on.
+
+### Deferred
+
+- None.
+
+### Open question resolved
+
+- The `queue sync` open question above is answered: `src/aet/cli/sync.py`
+  already computes the included set (settled/sprint skips at `:69-72`) before
+  calling `plan_validate.validate` at `:98`, so it never had the
+  abort-before-skip defect. No shared-helper change was needed and `sync.py`
+  was not modified.
+
 ---
 
 *Stage: scope-validated*
