@@ -23,11 +23,11 @@ Upgrade stage telemetry records so they capture the actual stage(s) that ran, fa
 
 ## Task List
 
-1. Extend `src/aet/telemetry.py` `stage_record` to include `actual_stages` (list of stage names run), `failure_class` (nsr-01 taxonomy), `plan_snapshot` (shallow copy of `size`, `pipeline`, `security_review`, `docs_sync`, `aet_version`), and `attempt` (int, default 1). — M (traces: R-6)
-2. Update `src/aet/cli/orchestrator.py` `_emit_stage_session` to populate the new fields: compute `actual_stages` from the target stage and span, read plan frontmatter for `plan_snapshot`, and pass `attempt`. — M (traces: R-6)
-3. Add `attempt` tracking: orchestrator increments attempt per task+stage+run; existing records default to 1. — S (traces: R-6)
-4. Update `src/aet/metrics.py` and any consumers to prefer `actual_stages` when present and fall back to the legacy reverse-lookup. — S (traces: R-6)
-5. Add unit tests for the new schema fields. — M (traces: R-6)
+1. ✓ Extend `src/aet/telemetry.py` `stage_record` to include `actual_stages` (list of stage names run), `failure_class` (nsr-01 taxonomy), `plan_snapshot` (shallow copy of `size`, `pipeline`, `security_review`, `docs_sync`, `aet_version`), and `attempt` (int, default 1). — M (traces: R-6)
+2. ✓ Update `src/aet/cli/orchestrator.py` `_emit_stage_session` to populate the new fields: compute `actual_stages` from the target stage and span, read plan frontmatter for `plan_snapshot`, and pass `attempt`. — M (traces: R-6)
+3. ✓ Add `attempt` tracking: orchestrator increments attempt per task+stage+run; existing records default to 1. — S (traces: R-6)
+4. ✓ Update consumers to prefer `actual_stages` when present and fall back to the legacy single `stage` field. [Changed: `src/aet/metrics.py` does not resolve stage names, so `src/aet/track_record.py` was updated instead.] — S (traces: R-6)
+5. ✓ Add unit tests for the new schema fields. — M (traces: R-6)
 
 **Size definitions:**
 
@@ -43,15 +43,18 @@ Upgrade stage telemetry records so they capture the actual stage(s) that ran, fa
 
 - `src/aet/telemetry.py`
 - `src/aet/cli/orchestrator.py`
-- `src/aet/metrics.py`
-- `tests/test_telemetry.py` (or equivalent)
+- `src/aet/track_record.py` [Added: consumer migration for `actual_stages`]
+- `tests/orchestrator/test_orchestrator.py`
+- `tests/telemetry/test_telemetry.py`
+- `tests/track_record/test_track_record_routing.py`
+- `tests/workflow/test_workflow_variant.py`
 
 ## Validation Steps
 
-- [ ] `make test` passes
-- [ ] `make validate` passes
-- [ ] New records include all four new fields
-- [ ] Existing records still parse without errors
+- [x] `make test` passes
+- [x] `make validate` passes
+- [x] New records include all four new fields
+- [x] Existing records still parse without errors
 
 ## Rollback Plan
 
@@ -73,5 +76,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
