@@ -22,6 +22,20 @@ Every incoming request is classified into one of three work classes before any s
    - Yes → **Trivial** → Direct edit + `make validate` + ship
 4. **Everything else** → **Normal** → Quick plan → implement → ship
 
+## Pipeline Mode Selection
+
+Every plan declares its orchestration mode in frontmatter (`pipeline: standard`). The default choice is size-driven, with a risk override for changes that need more isolation.
+
+| Plan size | Default `pipeline` | Rationale |
+| --------- | ------------------ | --------- |
+| **S** (≤ 2 hr human time / ≤ 100 expected diff lines) | `minimal` | Lowest overhead; telemetry shows no reliability regression for small plans. |
+| **M** (≤ 1 day / ≤ 200 lines) | `standard` | Staged QA and review catch real defects without `full` isolation cost. |
+| **L** (> 1 day OR > 200 lines) | `standard` or `full` | Larger change surface benefits from more isolation; pick based on risk. |
+
+**Risk override:** Regardless of size, use `standard` or `full` when the change touches authentication, authorization, sessions, or permissions; data models, migrations, or persisted state; public or internal API contracts or wire formats; dependencies, frameworks, or infrastructure; or other security-sensitive surfaces such as secrets, trust boundaries, or injection paths.
+
+Plan authors must record the `pipeline` value explicitly; the orchestrator does not auto-switch. See [ADR-047](./adr/047-pipeline-mode-by-plan-size.md) for the telemetry evidence and decision record.
+
 ## Symmetric Routing Guards
 
 Entry-point skills enforce symmetric guards to prevent misrouted work:
