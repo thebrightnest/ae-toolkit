@@ -519,10 +519,10 @@ class TestProcessTaskPlanPresence(unittest.TestCase):
             # The plan file path is inside the repo but does not exist anywhere.
             plan_file = os.path.join(repo_root, "docs", "plans", "missing.md")
             task = {"id": "missing", "title": "missing", "plan_file": plan_file}
-            result = orchestrator.process_task(
-                task, repo_root, _FAKE_ADAPTER, "standard"
-            )
-            self.assertFalse(result)
+            with self.assertRaises(orchestrator.MissingPlanError):
+                orchestrator.process_task(
+                    task, repo_root, _FAKE_ADAPTER, "standard"
+                )
 
 
 def _write_queue(repo_root: str, tasks: list[dict]) -> str:

@@ -369,8 +369,8 @@ When creating `.agents/`, ensure `.gitignore` excludes generated workflow artifa
 .agents/work-queue.json.lock
 .agents/work-queue.lease
 .agents/work-history.jsonl
-aet-work.log
-aet-work-*.log
+.agents/runs/
+.worktrees/
 ```
 
 ## Per-Provider Merge Guard
