@@ -91,9 +91,7 @@ def make_plan(path, title, blocked_by=None, size="M", extra_body="", status="que
 
     lines.extend(["## Task List", "1. Do something (traces: R-1).", ""])
     lines.extend(["## Files to Modify", "- `src/widget.py` (new)", ""])
-    lines.extend(
-        ["## Validation Steps", "- [ ] test_widget_creation verifies widget.py", ""]
-    )
+    lines.extend(["## Validation Steps", "- [ ] test_widget_creation verifies widget.py", ""])
     lines.extend(["---", "", "*Stage: plan-approved*"])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

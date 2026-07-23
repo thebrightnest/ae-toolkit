@@ -240,12 +240,8 @@ def _run(
 
     # Warn for invalid plans that are being skipped for unrelated reasons.
     if excluded_plan_files:
-        excluded_findings = plan_validate.validate(
-            excluded_plan_files, repo_root=repo_root
-        )
-        excluded_texts = {
-            pf: pf.read_text(errors="ignore") for pf in excluded_plan_files
-        }
+        excluded_findings = plan_validate.validate(excluded_plan_files, repo_root=repo_root)
+        excluded_texts = {pf: pf.read_text(errors="ignore") for pf in excluded_plan_files}
         excluded_findings = plan_validate.apply_acks(excluded_findings, excluded_texts)
         for finding in excluded_findings:
             if not finding.acked:
