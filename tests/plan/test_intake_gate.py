@@ -291,7 +291,9 @@ class TestInitQueueIntakeGate(unittest.TestCase):
             prds_dir.mkdir(parents=True)
             _make_clean_plan(plans_dir, prds_dir, "good.md")
             bad = plans_dir / "bad.md"
-            bad.write_text("---\nsize: S\n---\n\n# Bad\n", encoding="utf-8")
+            bad.write_text(
+                "---\nsize: S\nstatus: queued\n---\n\n# Bad\n", encoding="utf-8"
+            )
             queue_file = _write_json_file([])
             history_file = _make_history([])
 

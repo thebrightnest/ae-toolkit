@@ -347,7 +347,9 @@ class TestFrontmatterIntake(unittest.TestCase):
     def test_reject_missing_or_mismatched_id(self):
         """Plans without id or with mismatched id are rejected with a clear message."""
         bad = self.plans_dir / "bad.md"
-        bad.write_text("---\nsize: M\n---\n\n# Bad\n", encoding="utf-8")
+        bad.write_text(
+            "---\nsize: M\nstatus: queued\n---\n\n# Bad\n", encoding="utf-8"
+        )
         make_plan(self.plans_dir / "good.md", "Good", size="S")
 
         result, _ = run_script(
@@ -364,7 +366,8 @@ class TestFrontmatterIntake(unittest.TestCase):
 
         mismatched = self.plans_dir / "mismatched.md"
         mismatched.write_text(
-            "---\nid: other\nsize: S\n---\n\n# Mismatched\n", encoding="utf-8"
+            "---\nid: other\nsize: S\nstatus: queued\n---\n\n# Mismatched\n",
+            encoding="utf-8",
         )
         self.queue_file.write_text(json.dumps([]))
         result, _ = run_script(
@@ -384,7 +387,8 @@ class TestFrontmatterIntake(unittest.TestCase):
         make_plan(self.plans_dir / "first.md", "First", size="S")
         second = self.plans_dir / "second.md"
         second.write_text(
-            "---\nid: first\nsize: S\n---\n\n# Second\n", encoding="utf-8"
+            "---\nid: first\nsize: S\nstatus: queued\n---\n\n# Second\n",
+            encoding="utf-8",
         )
 
         result, _ = run_script(
@@ -515,7 +519,9 @@ class TestFrontmatterIntake(unittest.TestCase):
     def test_init_queue_rejects_invalid_plan_identically(self):
         """init-queue uses the same validation as sync and fails closed."""
         bad = self.plans_dir / "bad.md"
-        bad.write_text("---\nsize: M\n---\n\n# Bad\n", encoding="utf-8")
+        bad.write_text(
+            "---\nsize: M\nstatus: queued\n---\n\n# Bad\n", encoding="utf-8"
+        )
 
         result, _ = run_script(
             "init-queue",
@@ -532,7 +538,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         """A plan with a legacy dependency section is rejected, not ingested as empty."""
         plan = self.plans_dir / "legacy.md"
         plan.write_text(
-            "---\nid: legacy\nsize: S\n---\n\n# Legacy\n\n"
+            "---\nid: legacy\nsize: S\nstatus: queued\n---\n\n# Legacy\n\n"
             "## Blocked by\n- missing-link\n\n"
             "---\n\n*Stage: plan-approved*\n",
             encoding="utf-8",
