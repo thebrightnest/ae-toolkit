@@ -1,7 +1,7 @@
 ---
 id: ppt-04-stage-telemetry-schema
 size: M
-status: approved
+status: queued
 blocked_by: []
 pipeline: standard
 security_review: required
