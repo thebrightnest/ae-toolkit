@@ -71,3 +71,7 @@ dependency changes should usually use `standard` or `full`.
 
 *Stage: merged*
 *Next step: run `aet-work`*
+
+---
+
+*Stage: merged*
