@@ -66,5 +66,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
