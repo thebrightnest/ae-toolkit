@@ -3,7 +3,7 @@ id: psr-01-sizing-model-recalibration
 size: M
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: threshold and prose changes plus removal of a size-proxy check; introduces no network, credential, subprocess, or filesystem-write surface
 docs_sync: required
