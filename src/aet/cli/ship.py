@@ -2,9 +2,9 @@
 """aet-ship — Pre-merge gate, PR creation, and post-merge closure for AE Toolkit tasks.
 
 Usage:
-  aet ship <plan_file>                Run the gate, then open a PR.
-  aet ship gate <plan_file>           Run the pre-merge gate (steps 1-9).
-  aet ship open <plan_file>           Run the gate and open a PR.
+  aet ship <plan_file|task_id>        Run the gate, then open a PR.
+  aet ship gate <plan_file|task_id>   Run the pre-merge gate (steps 1-9).
+  aet ship open <plan_file|task_id>   Run the gate and open a PR.
   aet ship close <plan_file>          Record post-merge closure (task id derived from plan frontmatter).
   aet ship close <task_id>            Record post-merge closure (plan derived from queue task).
   aet ship close <task_id> <plan_file> [queue_file]
@@ -12,7 +12,9 @@ Usage:
   aet ship record-merge <task_id> <plan_file> [queue_file]
                                       Hidden alias for ``close``.
 
-The pre-merge gate, PR creation, and merge closure are all implemented in code.
+A bare task id given to ``gate``, ``open``, or the default command resolves to
+the conventional ``docs/plans/<task_id>.md`` path. The pre-merge gate, PR
+creation, and merge closure are all implemented in code.
 """
 
 from __future__ import annotations
@@ -152,8 +154,31 @@ def cmd_ship(args):
     return aet_state.cmd_record_merge(ns)
 
 
+def _resolve_plan_arg(plan: str) -> str:
+    """Resolve a plan argument that may be a path or a bare task id.
+
+    A value ending in ``.md`` is treated as a plan path and returned as-is.
+    Anything else is treated as a task id and resolved to the conventional
+    ``docs/plans/<id>.md`` path. Raises ``ValueError`` when the id does not
+    resolve, so the error names both interpretations.
+    """
+    if plan.lower().endswith(".md"):
+        return plan
+    candidate = Path("docs/plans") / f"{plan}.md"
+    if candidate.is_file():
+        return str(candidate)
+    raise ValueError(
+        f"Plan not found: '{plan}' is not a .md path and "
+        f"docs/plans/{plan}.md does not exist. Pass the full plan path."
+    )
+
+
 def cmd_default(args: argparse.Namespace) -> int:
     """Run the gate and, if it passes, open a PR for a plan."""
+    try:
+        args.plan = _resolve_plan_arg(args.plan)
+    except ValueError as exc:
+        return _fail(str(exc))
     plan_path = Path(args.plan)
     if not plan_path.is_file():
         return _fail(f"Plan file not found: {plan_path}")
@@ -318,6 +343,10 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
 
 def cmd_gate(args: argparse.Namespace) -> int:
     """Run the pre-merge gate for a plan."""
+    try:
+        args.plan = _resolve_plan_arg(args.plan)
+    except ValueError as exc:
+        return _fail(str(exc))
     plan_path = Path(args.plan)
     if not plan_path.is_file():
         return _fail(f"Plan file not found: {plan_path}")
@@ -573,6 +602,10 @@ def _check_release_guard(pr_base: str) -> str | None:
 
 def cmd_open(args: argparse.Namespace) -> int:
     """Run the gate and open a PR for a plan."""
+    try:
+        args.plan = _resolve_plan_arg(args.plan)
+    except ValueError as exc:
+        return _fail(str(exc))
     plan_path = Path(args.plan)
     if not plan_path.is_file():
         return _fail(f"Plan file not found: {plan_path}")
@@ -676,7 +709,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gate_parser.add_argument(
         "plan",
-        help="Path to the plan markdown file.",
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
     )
     gate_parser.add_argument(
         "--base",
@@ -694,7 +727,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     open_parser.add_argument(
         "plan",
-        help="Path to the plan markdown file.",
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
     )
     open_parser.add_argument(
         "--base",
@@ -726,7 +759,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     default_parser.add_argument(
         "plan",
-        help="Path to the plan markdown file.",
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
     )
     default_parser.add_argument(
         "--base",
@@ -802,7 +835,10 @@ app = typer.Typer(
 
 @app.command(name="default", hidden=True)
 def ship_default(
-    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    plan: str = typer.Argument(
+        ...,
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+    ),
     base: Optional[str] = typer.Option(
         None,
         "--base",
@@ -821,7 +857,10 @@ def ship_default(
 
 @app.command(name="gate")
 def ship_gate(
-    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    plan: str = typer.Argument(
+        ...,
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+    ),
     base: Optional[str] = typer.Option(
         None,
         "--base",
@@ -840,7 +879,10 @@ def ship_gate(
 
 @app.command(name="open")
 def ship_open(
-    plan: str = typer.Argument(..., help="Path to the plan markdown file."),
+    plan: str = typer.Argument(
+        ...,
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+    ),
     base: Optional[str] = typer.Option(
         None,
         "--base",

@@ -79,6 +79,41 @@ class TestShipOpenParser(unittest.TestCase):
         self.assertEqual(args.plan, "docs/plans/t1.md")
 
 
+class TestResolvePlanArg(unittest.TestCase):
+    """Bare task ids resolve to the conventional docs/plans/<id>.md path."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        base = Path(self.tmpdir.name)
+        plan_dir = base / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        self.plan_path = plan_dir / "t1.md"
+        self.plan_path.write_text("---\nid: t1\n---\n", encoding="utf-8")
+        self.cwd = os.getcwd()
+        self.addCleanup(os.chdir, self.cwd)
+
+    def test_md_path_passes_through(self):
+        """A .md argument is returned unchanged, even if the file is missing."""
+        self.assertEqual(
+            ship._resolve_plan_arg("docs/plans/elsewhere.md"),
+            "docs/plans/elsewhere.md",
+        )
+
+    def test_bare_id_resolves_to_conventional_plan_path(self):
+        """A bare task id resolves to docs/plans/<id>.md when that file exists."""
+        os.chdir(self.tmpdir.name)
+        self.assertEqual(ship._resolve_plan_arg("t1"), "docs/plans/t1.md")
+
+    def test_bare_id_without_plan_file_raises(self):
+        """A bare id with no conventional plan file errors naming both interpretations."""
+        os.chdir(self.tmpdir.name)
+        with self.assertRaises(ValueError) as ctx:
+            ship._resolve_plan_arg("no-such-task")
+        self.assertIn("no-such-task", str(ctx.exception))
+        self.assertIn("docs/plans/no-such-task.md", str(ctx.exception))
+
+
 class TestDeterminePrBase(unittest.TestCase):
     """Regression guard for _determine_pr_base ref resolution.
 
@@ -287,6 +322,35 @@ class TestShipOpenChecks(unittest.TestCase):
         push_cmds = [c for c in commands if c[0] == "git" and c[1] == "push"]
         self.assertEqual(len(push_cmds), 1)
         self.assertNotIn("--force-with-lease", push_cmds[0])
+
+    def test_open_accepts_bare_task_id(self):
+        """aet ship open <task-id> resolves the plan via docs/plans/<id>.md."""
+        os.chdir(self.tmpdir.name)
+        responses = self._base_responses()
+        env = {"AET_SHIP_TEST_CMD": "true"}
+        commands: list[tuple[str, ...]] = []
+
+        with patch.dict(os.environ, env):
+            with patch.object(
+                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
+            ):
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+
+        self.assertEqual(rc, 0)
+        gh_cmds = [c for c in commands if c[0] == "gh"]
+        self.assertEqual(len(gh_cmds), 1)
+
+    def test_open_bare_id_without_plan_file_fails_cleanly(self):
+        """aet ship open <task-id> fails with a clear error when no plan matches."""
+        os.chdir(self.tmpdir.name)
+        responses = self._base_responses()
+
+        with patch.object(
+            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
+        ):
+            rc = ship.cmd_open(ship.parse_args(["open", "no-such-task"]))
+
+        self.assertNotEqual(rc, 0)
 
     def test_open_pr_body_includes_scope_audit_when_present(self):
         """The PR body contains a scope-audit section when files are flagged."""

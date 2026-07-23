@@ -64,6 +64,12 @@ Shows the work queue plus any active detached runs (run ID, PID, and start time)
    aet ship docs/plans/pkg-01-decision-records.md
    ```
 
+   A bare task id also works — it resolves to the conventional `docs/plans/<task-id>.md` path:
+
+   ```bash
+   aet ship pkg-01-decision-records
+   ```
+
    This runs `aet ship gate` followed by `aet ship open`. If the gate fails, resolve the issue before re-running.
 
 2. Wait for the user to confirm the PR is merged (e.g., "merge PR and verify").
