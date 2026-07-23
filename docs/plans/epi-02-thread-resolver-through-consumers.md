@@ -142,5 +142,5 @@ the changed values are persisted.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: await merge*
