@@ -155,5 +155,5 @@ value, not to `1.3.0`.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
