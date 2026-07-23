@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - fic-01-one-entry-point
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: rewrites the curl-piped-to-bash install path and moves symlink creation across the shell/Python boundary; this is the highest-trust code the project ships
 docs_sync: required
@@ -194,5 +194,5 @@ and warrants the full review grouping.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
