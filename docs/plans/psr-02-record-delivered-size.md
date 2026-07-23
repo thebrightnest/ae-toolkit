@@ -73,21 +73,21 @@ decision, not a technical dependency.
 
 ## Task List
 
-1. Add `src/aet/plan_size.py` with `delivered_size(repo_root, merge_commit)`
+1. ✓ Add `src/aet/plan_size.py` with `delivered_size(repo_root, merge_commit)`
    returning headline lines, total lines, and a status/reason, computed over the
    first-parent range using list-form subprocess — M (traces: R-7)
-2. Classify each changed path as planning-artifact or implementation using the
+2. ✓ Classify each changed path as planning-artifact or implementation using the
    same exclusion set the PRD's bands are defined against, exposed as a named
    constant rather than an inline literal — S (traces: R-7)
-3. Record the result on the task's history entry in
+3. ✓ Record the result on the task's history entry in
    `src/aet/queue.py::append_history_record`, alongside the plan's declared
    `size` label so the pair is comparable per task — M (traces: R-7, R-8)
-4. Call the measurement from the closure path in
+4. ✓ Call the measurement from the closure path in
    `src/aet/cli/orchestrator.py::_finalize_task`, wrapped so any failure degrades
    to a recorded reason and never blocks settling — S (traces: R-7)
-5. Add `tests/test_plan_size.py` covering the computation, the exclusion split,
+5. ✓ Add `tests/test_plan_size.py` covering the computation, the exclusion split,
    and each degradation path — M (traces: R-7)
-6. Extend the history-record tests to pin that the new fields are written and
+6. ✓ Extend the history-record tests to pin that the new fields are written and
    that a failed measurement still settles the task — S (traces: R-7, R-8)
 7. Merge branch to main and verify integration — S
 
@@ -177,5 +177,5 @@ the revert remain valid and are simply not extended by later closures.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
