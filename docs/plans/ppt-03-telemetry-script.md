@@ -1,7 +1,7 @@
 ---
 id: ppt-03-telemetry-script
 size: S
-status: approved
+status: queued
 blocked_by: []
 pipeline: minimal
 security_review: required
