@@ -153,5 +153,5 @@ are additive. No migration is required in either direction.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

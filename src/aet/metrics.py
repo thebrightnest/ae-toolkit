@@ -7,11 +7,12 @@ Read-only analytics: every projection derives from the shared definitions in
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aet import track_record
+from aet import plan_parser, plan_size, track_record
 
 
 def _task_settled_at(task: dict[str, Any]) -> str | None:
@@ -201,4 +202,171 @@ def aggregate(
         "since": since,
         "overall": overall,
         "classes": dict(sorted(classes.items())),
+    }
+
+
+# -----------------------------------------------------------------------------
+# Delivered-size aggregation and backfill
+# -----------------------------------------------------------------------------
+
+SIZE_BANDS: dict[str, int | None] = {
+    "S": 150,
+    "M": 600,
+    "L": None,  # L is unbounded above; exceed share is always 0.
+}
+
+
+def _median(sorted_values: list[int]) -> float:
+    """Return the median of a sorted list of numbers."""
+    n = len(sorted_values)
+    mid = n // 2
+    if n % 2:
+        return float(sorted_values[mid])
+    return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
+
+
+def _percentile(sorted_values: list[int], pct: int) -> float:
+    """Return the nearest-rank percentile of a sorted list of numbers."""
+    n = len(sorted_values)
+    # Nearest-rank: ceil(pct/100 * n), 1-indexed.
+    rank = max(1, (pct * n + 99) // 100)
+    return float(sorted_values[min(rank, n) - 1])
+
+
+def _empty_size_bucket() -> dict[str, Any]:
+    """Return a fresh delivered-size aggregate bucket."""
+    return {
+        "n": 0,
+        "median": None,
+        "p90": None,
+        "exceeds_band": None,
+    }
+
+
+def aggregate_delivered_size(
+    history_file: str | Path,
+    since: str | None = None,
+) -> dict[str, Any]:
+    """Return the delivered-size distribution grouped by declared label.
+
+    For each declared S/M/L label the result reports the count of measured
+    tasks, the median and p90 headline diff size, and the share of tasks whose
+    delivered headline exceeds the label's band. Tasks without a measurable
+    ``delivered_size`` or without a declared size are excluded from the sample.
+    """
+    tasks = iter_settled_tasks(history_file, since=since)
+    by_label: dict[str, list[int]] = {label: [] for label in SIZE_BANDS}
+
+    for task in tasks:
+        delivered = task.get("delivered_size")
+        if not isinstance(delivered, dict) or delivered.get("status") != "ok":
+            continue
+        declared = delivered.get("declared_size")
+        headline = delivered.get("headline")
+        if declared not in SIZE_BANDS or not isinstance(headline, (int, float)):
+            continue
+        by_label[declared].append(int(headline))
+
+    labels: dict[str, dict[str, Any]] = {}
+    for label, upper in SIZE_BANDS.items():
+        samples = sorted(by_label[label])
+        n = len(samples)
+        if n == 0:
+            labels[label] = _empty_size_bucket()
+            continue
+        exceeds = 0.0
+        if upper is not None:
+            exceeds = sum(1 for value in samples if value > upper) / n
+        labels[label] = {
+            "n": n,
+            "median": _median(samples),
+            "p90": _percentile(samples, 90),
+            "exceeds_band": exceeds,
+        }
+
+    return {
+        "since": since,
+        "sample_size": sum(len(values) for values in by_label.values()),
+        "labels": labels,
+    }
+
+
+def _declared_size_for_task(task: dict[str, Any], repo_root: str | Path) -> str | None:
+    """Read the declared size from a task's plan file, if present."""
+    plan_file = task.get("plan_file")
+    if not plan_file:
+        return None
+    try:
+        plan_data = plan_parser.parse_frontmatter(Path(repo_root) / plan_file)
+    except OSError:
+        return None
+    size = plan_data.get("size")
+    if size in SIZE_BANDS:
+        return size
+    return None
+
+
+def _write_history_tasks(path: str | Path, tasks: list[dict[str, Any]]) -> None:
+    """Atomically rewrite the append-only history log."""
+    path = Path(path)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        for task in tasks:
+            f.write(json.dumps(task, separators=(",", ":")) + "\n")
+    tmp.replace(path)
+
+
+def backfill_delivered_size(
+    history_file: str | Path,
+    repo_root: str | Path,
+) -> dict[str, Any]:
+    """Backfill ``delivered_size`` onto settled history records.
+
+    The routine is idempotent: records that already carry a ``delivered_size``
+    value are skipped, records with a resolvable ``merge_commit`` are measured
+    via ``plan_size.delivered_size``, and unresolvable records are counted with
+    a reason breakdown. A failed measurement is written back so the next run
+    does not re-attempt it.
+    """
+    repo_root = Path(repo_root)
+    tasks = track_record.read_history_tasks(history_file)
+    measured = 0
+    skipped = 0
+    reasons: dict[str, int] = {}
+
+    for task in tasks:
+        if "delivered_size" in task:
+            skipped += 1
+            continue
+
+        merge_commit = task.get("merge_commit")
+        if not merge_commit:
+            reason = "no merge_commit recorded"
+            task["delivered_size"] = {
+                "headline": None,
+                "total": None,
+                "status": "failed",
+                "reason": reason,
+                "declared_size": _declared_size_for_task(task, repo_root),
+            }
+            reasons[reason] = reasons.get(reason, 0) + 1
+            continue
+
+        size_info = plan_size.delivered_size(repo_root, merge_commit)
+        declared_size = _declared_size_for_task(task, repo_root)
+        task["delivered_size"] = {**size_info, "declared_size": declared_size}
+        if size_info["status"] == "ok":
+            measured += 1
+        else:
+            reason = size_info.get("reason") or "unknown"
+            reasons[reason] = reasons.get(reason, 0) + 1
+
+    if tasks:
+        _write_history_tasks(history_file, tasks)
+
+    return {
+        "measured": measured,
+        "skipped": skipped,
+        "unresolvable": len(tasks) - measured - skipped,
+        "reasons": reasons,
     }
