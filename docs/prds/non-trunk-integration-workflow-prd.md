@@ -363,21 +363,35 @@ scope — the epic/integration layer — is a feature and is planned as one.
   `remove_worktree`, `check_base_hygiene`, `_session_diff_stats`, and
   `is_ancestor_of_trunk` all receive the resolved refs.
 
+## Divergence Summary: epi-04-orchestrator-run-preconditions
+
+*Recorded: 2026-07-23 — Branch: epi-04-orchestrator-run-preconditions (R-6, R-8, R-9)*
+
+### Changed from plan
+
+- Task 2 (`aet setup` writes ignore entries): implemented as a dedicated
+  `aet setup bootstrap` subcommand rather than embedding the writer in the main
+  setup flow. The shared `AET_IGNORED_PATHS` constant is still the single source
+  of truth for both the hygiene gate and the writer.
+
 ### Added (unplanned)
 
 - None.
 
 ### Deferred
 
-- Task 6 (merge branch to main and verify integration): the merge and final
-  integration verification are out of scope for the sync-docs stage and will
-  happen at the ship stage.
+- Task 6 (epi-02 merge branch to main and verify integration): the merge and
+  final integration verification are out of scope for the sync-docs stage and
+  will happen at the ship stage.
 - Broad "no hardcoded `main`" grep validation: the plan's validation step
   `grep -rn "origin/main\|main\.\.\|main\.\.\." src/aet/` returning no matches
   remains incomplete outside the five scoped consumers. Literal refs persist in
   `ship.py`, `sprint.py`, `change_scope.py`, `verifier.py`, and `init_queue.py`,
   which were not part of this plan's locked scope; they are deferred to the
   mode-keyed work in `epi-08` or a dedicated trunk-generalization hygiene sweep.
+- Task 5 (epi-04 merge branch to main and verify integration): deferred to the
+  ship/merge stage; `git merge-base --is-ancestor HEAD origin/main` is not yet
+  true.
 
 ---
 
