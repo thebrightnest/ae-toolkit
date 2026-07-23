@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - psr-02-record-delivered-size
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: reads local history records and reuses the git helper introduced and security-reviewed in psr-02; adds no new external surface
 docs_sync: required
