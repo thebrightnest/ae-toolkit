@@ -63,16 +63,18 @@ share the failure surface.
 
 ## Task List
 
-1. Extract the ignored-paths list into one shared constant covering the queue
+1. ✓ Extract the ignored-paths list into one shared constant covering the queue
    sidecars, `.agents/runs/`, and `.worktrees/`, audited against every in-repo
    path AET writes, read by the hygiene gate — S (traces: R-8)
-2. Write the ignore entries to `.gitignore` in `aet setup`, idempotently
-   — M (traces: R-9)
-3. Correct the three `aet-setup` prose lists to match the constant
+2. ✓ Write the ignore entries to `.gitignore` in `aet setup`, idempotently
+   — M (traces: R-9) [Changed: exposed through a dedicated `aet setup bootstrap`
+   subcommand rather than the main setup flow]
+3. ✓ Correct the three `aet-setup` prose lists to match the constant
    — S (traces: R-9)
-4. Halt instead of requeueing when the resolved base lacks the plan file,
+4. ✓ Halt instead of requeueing when the resolved base lacks the plan file,
    naming base, expected path, and override — M (traces: R-6)
-5. Merge branch to main and verify integration — S
+5. [Deferred: merge happens at the ship/merge stage] Merge branch to main and
+   verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated.
@@ -142,5 +144,5 @@ remain and are harmless. The halt reverts to a requeue, restoring the loop.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

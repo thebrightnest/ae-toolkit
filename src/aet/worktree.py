@@ -343,28 +343,48 @@ def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dic
     return results
 
 
+AET_IGNORED_PATHS = {
+    ".agents/work-queue.json",
+    ".agents/work-queue.json.lock",
+    ".agents/work-queue.lease",
+    ".agents/work-history.jsonl",
+    ".agents/runs/",
+    ".worktrees/",
+}
+
+
+def _is_ignored_path(path: str) -> bool:
+    """Return True when ``path`` matches an AET ignored path or directory.
+
+    Directory entries in ``AET_IGNORED_PATHS`` end with ``/`` and match both
+    the directory itself and any nested path.
+    """
+    for ignored in AET_IGNORED_PATHS:
+        if ignored.endswith("/"):
+            prefix = ignored
+            dir_only = ignored.rstrip("/")
+            if path == dir_only or path.startswith(prefix):
+                return True
+        elif path == ignored:
+            return True
+    return False
+
+
 def check_base_hygiene(
     repo_root: str, integration_branch: str = "main", trunk_branch: str = "main"
 ) -> tuple[bool, str]:
     """Check if the integration branch is clean and synced with origin.
 
-    Queue files and orchestrator run metadata are excluded from the dirty
-    check because the orchestrator mutates them as part of normal operation
-    and they are gitignored in projects using the toolkit. The ``.lock``
+    AET-generated paths are excluded from the dirty check because the
+    orchestrator mutates them as part of normal operation and they must be
+    gitignored in projects using the toolkit. The shared constant is the same
+    one ``aet setup bootstrap`` writes to ``.gitignore``. The ``.lock``
     sidecar is never unlinked — deleting an fcntl lock file on release races
     with concurrent openers — and the ``.lease`` sidecar self-reclaims only
     on the next mutation, so both linger on disk (including after a crash)
     and must be ignored here and in project ``.gitignore`` files.
     """
-    ignored_paths = {
-        ".agents/work-queue.json",
-        ".agents/work-queue.json.lock",
-        ".agents/work-queue.lease",
-        ".agents/work-history.jsonl",
-    }
-    ignored_prefixes = {".agents/runs/"}
-
-    # Check working tree, ignoring toolkit-mutation artifacts. Use
+    # Check working tree, ignoring AET-generated paths. Use
     # --untracked-files=all so untracked paths are listed individually rather
     # than collapsed into parent directories.
     result = subprocess.run(
@@ -381,9 +401,7 @@ def check_base_hygiene(
         if len(parts) < 2:
             continue
         path = parts[1]
-        if path not in ignored_paths and not any(
-            path.startswith(prefix) for prefix in ignored_prefixes
-        ):
+        if not _is_ignored_path(path):
             dirty_lines.append(line)
     if dirty_lines:
         return False, "Working tree is dirty"

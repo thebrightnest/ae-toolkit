@@ -93,6 +93,19 @@ from aet.worktree import (  # noqa: E402
 _shutdown_requested = False
 
 
+class MissingPlanError(Exception):
+    """Raised when the resolved base branch does not contain the plan file."""
+
+    def __init__(self, base_branch: str, plan_file: str) -> None:
+        self.base_branch = base_branch
+        self.plan_file = plan_file
+        super().__init__(
+            f"⛔ Plan not found in worktree — resolved base `{base_branch}` "
+            f"does not contain `{plan_file}`. Override with "
+            f"`--base <branch>` or `AET_WORK_BASE_BRANCH=<branch>`."
+        )
+
+
 def _handle_signal(signum: int, _frame) -> None:
     global _shutdown_requested
     _shutdown_requested = True
@@ -309,6 +322,11 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--plan-file", help="Path to a single plan.md (single-plan mode)")
     parser.add_argument("--repo-root", default=os.getcwd(), help="Repository root path")
     parser.add_argument("--cli-bin", default=None, help="Agent CLI binary path")
+    parser.add_argument(
+        "--base",
+        default=None,
+        help="Override the worktree base branch/ref (default: origin/main or AET_WORK_BASE_BRANCH).",
+    )
     parser.add_argument("--isolation", default="standard", choices=["minimal", "standard", "full"])
     parser.add_argument("--max-jobs", type=int, default=4, help="Max parallel tasks (batch mode)")
     parser.add_argument(
@@ -1032,6 +1050,7 @@ def process_task(
     workflow: Workflow | None = None,
     backend=None,
     stall_timeout: float = 300,
+    *,
     base_branch: str = "origin/main",
     integration_mode: str = "pr-per-task",
 ) -> bool:
@@ -1064,7 +1083,7 @@ def process_task(
 
     # Create or reuse worktree
     if worktree_dir is None:
-        worktree_dir = create_worktree(repo_root, task_id, base_branch)
+        worktree_dir = create_worktree(repo_root, task_id, base_branch=base_branch)
     copy_untracked_files(repo_root, worktree_dir)
 
     # Warm up configured worktree dependencies.
@@ -1098,14 +1117,11 @@ def process_task(
     # Use the worktree copy of the plan file for stages and verification.
     plan_file = os.path.join(worktree_dir, os.path.relpath(plan_file, repo_root))
 
-    # Fail loudly if the plan is missing in the worktree. A missing plan usually
-    # means the base branch (origin/main) is stale relative to the plan commit.
+    # Fail loudly if the plan is missing in the worktree. A missing plan means
+    # the resolved base branch never contained it; this is a misconfiguration,
+    # not a flaky task, so it halts rather than requeues (R-6).
     if not os.path.exists(plan_file):
-        print(
-            "   ❌ Plan not found in worktree — base may be stale; "
-            "ensure the plan is committed and pushed to origin/main"
-        )
-        return False
+        raise MissingPlanError(base_branch, plan_file)
 
     # Gate routing resolves against the plan frontmatter — parse it once per
     # task so every stage decision below is a pure data lookup.
@@ -1775,6 +1791,14 @@ def _finalize_task(
     # Roll up per-task cost for incident tasks too (nsr-07).
     _write_task_cost(backend, queue_file, task_id, logger)
 
+    # Missing-plan failures are terminal misconfigurations: leave the task
+    # failed and stop spawning. The child exits 2 so the parent can tell
+    # this apart from a transient session failure (R-6).
+    if ret == 2:
+        print(f"   ⛔ {task_id} halted: plan missing from resolved base")
+        _mark_failed(backend, queue_file, task_id, from_state)
+        return {"successes": 0, "failures": 1, "stop_spawn": True}
+
     # Stall/task-timeout failures are terminal: leave the task failed rather
     # than requeue it. The child process records the TIMEOUT class on the
     # task's failure_signatures ledger; read that back after the reload above.
@@ -1934,10 +1958,13 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     print()
 
     # Resolve trunk and integration branch once per run so every consumer
-    # agrees on the base (ADR-044).
+    # agrees on the base (ADR-044), while still allowing --base /
+    # AET_WORK_BASE_BRANCH to override the integration branch.
     config = resolve_config(os.path.join(repo_root, ".agents", "aet-work.json"))
     trunk = resolve_trunk_branch(repo_root, config)
-    integration = resolve_integration_branch(repo_root, config)
+    integration = resolve_integration_branch(
+        repo_root, config, cli_base=getattr(args, "base", None)
+    )
     base_branch = f"origin/{integration.ref}"
     print(f"   Trunk: {trunk.ref} ({trunk.provenance})")
     print(f"   Integration: {integration.ref} ({integration.provenance})")
@@ -2128,7 +2155,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # Re-read queue after transition and record branch/worktree so the
                 # stored state reflects in_progress and does not spawn the same task
                 # again on the next loop iteration.
-                worktree_dir = create_worktree(repo_root, task_id, base_branch)
+                worktree_dir = create_worktree(repo_root, task_id, base_branch=base_branch)
                 env = os.environ.copy()
                 env["AET_TASK_ID"] = task_id
                 env["AET_PLAN_FILE"] = task.get("plan_file", "")
@@ -2158,6 +2185,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     repo_root,
                     "--cli-bin",
                     adapter.bin,
+                    "--base",
+                    base_branch,
                     "--isolation",
                     args.isolation,
                     "--stall-timeout",
@@ -2347,11 +2376,13 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
     # Resolve trunk and integration branch once per run so every consumer
     # agrees on the base (ADR-044). Batch children inherit the parent's
-    # resolution via AET_WORK_BASE_BRANCH if set, but still need the local
-    # trunk/integration for aet-state calls made from this process.
+    # resolution via --base / AET_WORK_BASE_BRANCH if set, but still need the
+    # local trunk/integration for aet-state calls made from this process.
     config = resolve_config(os.path.join(repo_root, ".agents", "aet-work.json"))
     trunk = resolve_trunk_branch(repo_root, config)
-    integration = resolve_integration_branch(repo_root, config)
+    integration = resolve_integration_branch(
+        repo_root, config, cli_base=getattr(args, "base", None)
+    )
     base_branch = f"origin/{integration.ref}"
 
     # Check base hygiene before any worktree work — but only for top-level
@@ -2434,7 +2465,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         if queued_task and not spawned_by_batch:
             queued_task_id = queued_task.get("id", task_id)
             # Ensure the worktree/branch exist before recording them.
-            worktree_dir = create_worktree(repo_root, queued_task_id, base_branch)
+            worktree_dir = create_worktree(repo_root, queued_task_id, base_branch=base_branch)
             worktree_rel = os.path.relpath(worktree_dir, repo_root)
             _record_run_one_in_queue(backend, queue_file, queued_task_id, worktree_rel, queued_task_id)
             task_id = queued_task_id
@@ -2471,20 +2502,26 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             )
 
         print(f"📁 Telemetry: {logger.run_dir}")
-        success = process_task(
-            task,
-            repo_root,
-            adapter,
-            args.isolation,
-            logger=logger,
-            worktree_dir=worktree_dir,
-            workflow=wf,
-            backend=backend,
-            stall_timeout=getattr(args, "stall_timeout", 300),
-            base_branch=base_branch,
-            integration_mode=integration_mode,
-        )
-        exit_code = 0 if success else 1
+        success = False
+        try:
+            success = process_task(
+                task,
+                repo_root,
+                adapter,
+                args.isolation,
+                logger=logger,
+                worktree_dir=worktree_dir,
+                workflow=wf,
+                backend=backend,
+                stall_timeout=getattr(args, "stall_timeout", 300),
+                base_branch=base_branch,
+                integration_mode=integration_mode,
+            )
+            exit_code = 0 if success else 1
+        except MissingPlanError as exc:
+            print(f"   {exc}")
+            success = False
+            exit_code = 2
 
         # Roll up per-task cost from this child's telemetry and persist it on the
         # queued task record. The batch parent later seals state, but cost must
@@ -2644,6 +2681,11 @@ def orchestrator_callback(
         "--cli-bin",
         help="Agent CLI binary path.",
     ),
+    base: Optional[str] = typer.Option(
+        None,
+        "--base",
+        help="Override the worktree base branch/ref (default: origin/main or AET_WORK_BASE_BRANCH).",
+    ),
     isolation: str = typer.Option(
         "standard",
         "--isolation",
@@ -2707,6 +2749,8 @@ def orchestrator_callback(
     argv.extend(["--repo-root", repo_root])
     if cli_bin is not None:
         argv.extend(["--cli-bin", cli_bin])
+    if base is not None:
+        argv.extend(["--base", base])
     argv.extend(["--isolation", isolation])
     argv.extend(["--max-jobs", str(max_jobs)])
     argv.extend(["--task-timeout", str(task_timeout)])

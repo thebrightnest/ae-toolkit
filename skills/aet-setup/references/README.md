@@ -47,9 +47,12 @@ Agent-neutral home for workflows, templates, and persistent state:
 Ensure `.gitignore` excludes generated agent workflow artifacts:
 
 ```gitignore
+.agents/work-queue.json
+.agents/work-queue.json.lock
+.agents/work-queue.lease
 .agents/work-history.jsonl
-aet-work.log
-aet-work-*.log
+.agents/runs/
+.worktrees/
 ```
 
 ### 4. `.agents/aet-work.json` (task backend config)

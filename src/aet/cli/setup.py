@@ -9,6 +9,8 @@ from pathlib import Path
 
 import typer
 
+from aet.worktree import AET_IGNORED_PATHS
+
 app = typer.Typer(help="Setup and bootstrap commands.")
 
 
@@ -25,6 +27,33 @@ def _repo_root() -> Path:
     if env_root:
         return Path(env_root).expanduser().resolve()
     return Path(__file__).resolve().parent.parent.parent.parent
+
+
+def write_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
+    """Idempotently write AET ignore entries to ``repo_root/.gitignore``.
+
+    Reads the shared ``AET_IGNORED_PATHS`` constant so the hygiene gate and
+    setup command always agree. Existing lines are preserved; duplicate
+    entries are never appended.
+    """
+    gitignore = Path(repo_root) / ".gitignore"
+    existing_lines: set[str] = set()
+    if gitignore.exists():
+        existing_lines = {
+            line.strip() for line in gitignore.read_text(encoding="utf-8").splitlines()
+        }
+
+    added: list[str] = []
+    for entry in AET_IGNORED_PATHS:
+        if entry not in existing_lines:
+            added.append(entry)
+
+    if added:
+        with gitignore.open("a", encoding="utf-8") as f:
+            for entry in added:
+                f.write(f"{entry}\n")
+
+    return added
 
 
 def _bin_dir() -> Path:
@@ -317,3 +346,22 @@ def setup_verify(
             err=True,
         )
     raise typer.Exit(0)
+
+
+@app.command("bootstrap")
+def setup_bootstrap(
+    path: str | None = typer.Option(
+        None,
+        "--path",
+        help="Project root to write .gitignore into (default: current directory).",
+    ),
+) -> None:
+    """Write AET ignore entries to the project ``.gitignore``."""
+    repo_root = Path(path).expanduser().resolve() if path else Path.cwd()
+    added = write_aet_gitignore_entries(repo_root)
+    if added:
+        for entry in added:
+            typer.echo(f"  + {entry}")
+        typer.echo(f"✓ wrote {len(added)} AET ignore entries to .gitignore")
+    else:
+        typer.echo("= all AET ignore entries already present")
