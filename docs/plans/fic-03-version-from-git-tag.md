@@ -3,7 +3,7 @@ id: fic-03-version-from-git-tag
 size: S
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: build-backend configuration and version derivation; no auth, data, network, or filesystem trust boundary is touched
 docs_sync: required
@@ -158,5 +158,5 @@ value, not to `1.3.0`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
