@@ -57,29 +57,31 @@ structural replacement, which is not itself a defect fix.
 
 ## Task List
 
-1. Delete `_ensure_path_link()`, `_running_script()`, and the callback call
+1. ✓ Delete `_ensure_path_link()`, `_running_script()`, and the callback call
    site — S (traces: R-15)
-2. Delete the shebang, `__main__` block, and module-level bootstrap guard;
+2. ✓ Delete the shebang, `__main__` block, and module-level bootstrap guard;
    verify `python -m aet.cli.main` and the console script both still work — S
-   (traces: R-17)
-3. Move `install` to `aet setup link` in `src/aet/cli/setup.py`, retargeted at
+   (traces: R-17) — **[Changed: kept `__main__` block]** Deleting it broke
+   `python -m aet.cli.main` and 9 tests; only the shebang and bootstrap guard
+   were removed. See PRD Divergence Summary.
+3. ✓ Move `install` to `aet setup link` in `src/aet/cli/setup.py`, retargeted at
    the console script; move `_is_worktree_copy`, `_link_target_resolves_to`,
    `_bin_dir` with it; remove `install` from `main.py` and its callback
    exemption — M (traces: R-16, R-18)
-4. Correct the module docstring (`main.py:2-8`), which asserts
+4. ✓ Correct the module docstring (`main.py:2-8`), which asserts
    `_ensure_path_link` remains for single-name PATH ownership — S (traces: R-19)
-5. Rewrite `tests/cli/test_aet_install.py` as `tests/setup/test_setup_link.py`:
+5. ✓ Rewrite `tests/cli/test_aet_install.py` as `tests/setup/test_setup_link.py`:
    delete `TestSelfRepair` (`:138-228`) and the self-repair half of
    `TestWorktreeCopyGuard` (`:239-250`); retarget the `aet install` coverage at
    `aet setup link`; add `test_subcommand_does_not_touch_link` — M
    (traces: R-15, R-16, R-18)
-6. Update `README.md` (`:144`, `:169`) and `docs/CONVENTIONS.md` (`:57-59`) to
+6. ✓ Update `README.md` (`:144`, `:169`) and `docs/CONVENTIONS.md` (`:57-59`) to
    name `aet setup link`; add the release-notes line naming re-running the
    installer as the repair for v1.4.0-corrupted links — S (traces: R-33)
    — **release-notes half deferred to release-prep**: `CHANGELOG` edits are
    blocked on feature branches by `scripts/prevent-release-on-feature-branch.sh`.
    Wording to carry over is in the Rollback Plan below.
-7. Merge branch to main and verify integration — S
+7. [Deferred: await `aet-ship`] Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated against the full guardrail model.
@@ -210,5 +212,5 @@ grouping with a real security review rather than `minimal`.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*

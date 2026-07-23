@@ -282,5 +282,19 @@ no-backward-compat convention).
 *Amended at review 2026-07-22: R-18 names the v1.4.0 corruption signature as*
 *AET-managed; R-21 specifies the bash/Python flag and env-var boundary; R-33*
 *(doc sweep) added; naming questions settled.*
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+
+## Divergence Summary
+
+*Recorded: 2026-07-23 — Branch: fic-01-one-entry-point*
+
+### Changed from plan
+
+- **R-17 / Task 2:** The `if __name__ == "__main__"` block was kept, not deleted. Deleting it left `python -m aet.cli.main` importable but inert (silent exit 0), which disabled the `make validate` gate at `Makefile:100-101` and broke 9 subprocess tests. The direct-script machinery actually targeted by ADR-041 — the shebang and the module-level bootstrap guard — was removed instead. The module docstring and test coverage (`test_module_invocation_propagates_subcommand_exit_code`, `test_console_script_dispatches`) were updated to reflect this.
+
+### Deferred
+
+- **R-33 release-notes half:** The `CHANGELOG` edit naming re-running the installer as the repair for v1.4.0-corrupted links is deferred to release-prep. `scripts/prevent-release-on-feature-branch.sh` blocks `CHANGELOG` edits on feature branches; the exact wording is preserved in the plan's Rollback Plan for the release-prep stage.
+- **Merge to main:** Task 7 (merge branch to main and verify integration) remains pending and will be handled by `aet-ship`.
+
+*Stage: synced*
+*Next step: run `aet-ship`*
