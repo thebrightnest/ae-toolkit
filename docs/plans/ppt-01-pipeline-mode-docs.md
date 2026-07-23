@@ -1,7 +1,7 @@
 ---
 id: ppt-01-pipeline-mode-docs
 size: M
-status: queued
+status: merged
 blocked_by: []
 pipeline: standard
 security_review: required
@@ -69,5 +69,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*
