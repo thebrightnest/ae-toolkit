@@ -23,7 +23,7 @@ echo "=== Skill Structure Checks ==="
 echo "Found ${#SKILL_DIRS[@]} skill(s)"
 echo
 
-for skill_dir in "${SKILL_DIRS[@]}"; do
+for skill_dir in ${SKILL_DIRS[@]+"${SKILL_DIRS[@]}"}; do
   name="$(basename "${skill_dir%/}")"
   skill_file="${skill_dir}SKILL.md"
 
@@ -100,7 +100,7 @@ echo
 echo "=== Trigger Uniqueness Check ==="
 
 TRIGGER_TMP=$(mktemp)
-for skill_dir in "${SKILL_DIRS[@]}"; do
+for skill_dir in ${SKILL_DIRS[@]+"${SKILL_DIRS[@]}"}; do
   name="$(basename "${skill_dir%/}")"
   skill_file="${skill_dir}SKILL.md"
   frontmatter_desc=$(sed -n '/^---$/,/^---$/p' "$skill_file" | grep -m1 '^description:' | sed 's/^description: *//') || true
@@ -138,7 +138,7 @@ echo
 echo "=== Next-Step Consistency Check ==="
 
 NEXTSTEP_ERRORS=0
-for skill_dir in "${SKILL_DIRS[@]}"; do
+for skill_dir in ${SKILL_DIRS[@]+"${SKILL_DIRS[@]}"}; do
   name="$(basename "${skill_dir%/}")"
   skill_file="${skill_dir}SKILL.md"
 

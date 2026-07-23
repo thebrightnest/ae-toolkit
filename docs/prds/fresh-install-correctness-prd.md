@@ -296,5 +296,28 @@ no-backward-compat convention).
 - **R-33 release-notes half:** The `CHANGELOG` edit naming re-running the installer as the repair for v1.4.0-corrupted links is deferred to release-prep. `scripts/prevent-release-on-feature-branch.sh` blocks `CHANGELOG` edits on feature branches; the exact wording is preserved in the plan's Rollback Plan for the release-prep stage.
 - **Merge to main:** Task 7 (merge branch to main and verify integration) remains pending and will be handled by `aet-ship`.
 
+## Divergence Summary — fic-02-installer-bootstrap-boundary
+
+*Recorded: 2026-07-23 — Branch: fic-02-installer-bootstrap-boundary*
+
+### Changed from plan
+
+- **R-21 / Task 3:** Recognized flags (`--agent`, `--bin-dir`, `--skills-dir`) are
+  bound via Typer `envvar=` options rather than appended to `"$@"` untouched.
+  The env-var contract survives the bash/Python handoff and bash still rejects
+  unrecognized flags before the clone, so the intent of the boundary shift is
+  preserved.
+
+### Added (unplanned)
+
+- **`tests/setup/test_setup_verify.py`:** Added
+  `test_reports_ok_when_no_link_but_console_script_wins_path` to cover the
+  no-symlink case where the console script already wins on `PATH`.
+
+### Deferred
+
+- **Merge to main:** Task 8 (merge branch to main and verify integration) remains
+  pending and will be handled by `aet-ship`.
+
 *Stage: synced*
 *Next step: run `aet-ship`*
