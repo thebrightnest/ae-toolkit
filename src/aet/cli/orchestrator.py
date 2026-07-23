@@ -47,6 +47,7 @@ from aet import (  # noqa: E402
     breaker,
     evidence,
     plan_parser,
+    plan_size,
     telemetry,
     track_record,
     triage,
@@ -1642,6 +1643,35 @@ def _write_task_cost(
         backend.save(queue)
 
 
+def _attach_delivered_size(task: dict, repo_root: str) -> bool:
+    """Record delivered diff size on the task record when the merge commit is known.
+
+    The measurement is best-effort and analytics-only: any failure is recorded
+    as a ``failed`` status with a reason and the task continues to settle. If
+    no ``merge_commit`` is present yet (normal awaiting_merge closure), the
+    field is left for ``append_history_record`` to populate at terminal seal
+    time.
+
+    Returns ``True`` when the task record was mutated.
+    """
+    merge_commit = task.get("merge_commit")
+    if not merge_commit:
+        return False
+    size_info = plan_size.delivered_size(repo_root, merge_commit)
+    plan_path = task.get("plan_file")
+    declared_size: str | None = None
+    if plan_path:
+        try:
+            plan_path_obj = Path(plan_path)
+            if not plan_path_obj.is_absolute():
+                plan_path_obj = Path(repo_root) / plan_path_obj
+            declared_size = plan_parser.parse_frontmatter(plan_path_obj).get("size")
+        except Exception:  # noqa: BLE001
+            declared_size = None
+    task["delivered_size"] = {**size_info, "declared_size": declared_size}
+    return True
+
+
 def _finalize_task(
     backend,
     queue_file: str,
@@ -1679,6 +1709,11 @@ def _finalize_task(
         from_state = current_state(task) if task else "in_progress"
         if from_state == "awaiting_merge":
             return {"successes": 1, "failures": 0, "stop_spawn": False}
+        # Record delivered diff size when the merge commit is already known
+        # (e.g. auto-merge closure). Normal awaiting_merge closure defers the
+        # measurement to terminal seal time in ``append_history_record``.
+        if task and _attach_delivered_size(task, repo_root):
+            backend.save(queue)
         # Roll up per-task cost from this run's telemetry and write it to the
         # ledger record before transition.
         _write_task_cost(backend, queue_file, task_id, logger)

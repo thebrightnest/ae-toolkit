@@ -771,6 +771,138 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             self.assertIn("merge_commit", settled)
             self.assertIsNotNone(settled["merge_commit"])
 
+    def test_record_merge_records_delivered_size(self):
+        """A sealed history record carries delivered_size paired with declared size."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\nsize: M\n---\n\n# Demo\n\n_Stage: implemented_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            # Create a feature branch with both code and planning-artifact changes.
+            subprocess.run(
+                ["git", "-C", repo_root, "checkout", "-b", "demo"],
+                check=True,
+                capture_output=True,
+            )
+            Path(repo_root, "src").mkdir(parents=True, exist_ok=True)
+            Path(repo_root, "src", "demo.py").write_text("a\nb\nc\n", encoding="utf-8")
+            Path(repo_root, "docs", "demo.md").write_text("x\ny\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "implement demo"],
+                check=True,
+            )
+
+            subprocess.run(
+                ["git", "-C", repo_root, "checkout", "main"],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "merge", "--no-ff", "-m", "merge demo", "demo"],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            queue_file = _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo-plan.md",
+                        "blocked_by": [],
+                        "state": "awaiting_merge",
+                        "branch": "demo",
+                    }
+                ],
+            )
+
+            aet_state_bin = str(
+                Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
+            )
+            result = subprocess.run(
+                [sys.executable, aet_state_bin, "record-merge", "demo", queue_file],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            history_file = os.path.join(repo_root, ".agents", "work-history.jsonl")
+            with open(history_file, encoding="utf-8") as f:
+                settled = json.loads(f.readline())
+
+            self.assertEqual(settled["state"], "merged")
+            self.assertIn("delivered_size", settled)
+            delivered = settled["delivered_size"]
+            self.assertEqual(delivered["status"], "ok")
+            self.assertEqual(delivered["declared_size"], "M")
+            self.assertEqual(delivered["headline"], 3)
+            self.assertEqual(delivered["total"], 5)
+            self.assertIn("reason", delivered)
+
+    def test_failed_measurement_still_settles_task(self):
+        """A task with an invalid merge_commit settles with a failed size record."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\nsize: S\n---\n\n# Demo\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+
+            queue_file = _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo-plan.md",
+                        "blocked_by": [],
+                        "state": "merged",
+                        "merge_commit": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+                    }
+                ],
+            )
+            history_file = os.path.join(repo_root, ".agents", "work-history.jsonl")
+
+            backend = orchestrator._make_backend(queue_file)
+            sealed = backend.seal("demo", history_file)
+            self.assertEqual(sealed["state"], "merged")
+
+            with open(history_file, encoding="utf-8") as f:
+                settled = json.loads(f.readline())
+            self.assertEqual(settled["state"], "merged")
+            self.assertIn("delivered_size", settled)
+            delivered = settled["delivered_size"]
+            self.assertEqual(delivered["status"], "failed")
+            self.assertEqual(delivered["declared_size"], "S")
+            self.assertIn("reason", delivered)
+            self.assertIsNotNone(delivered["reason"])
+
 
 class _SpyBackend:
     """Wrapper around a real backend that records save calls."""

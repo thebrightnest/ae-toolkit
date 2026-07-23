@@ -16,6 +16,8 @@ from typing import Any, Iterator
 
 from filelock import FileLock
 
+from aet import plan_size
+
 # Tracks whether a queue file was read as a dict wrapper and, if so, its
 # non-task metadata so write_queue can preserve the envelope.
 _queue_wrappers: dict[str, dict[str, Any] | None] = {}
@@ -533,9 +535,33 @@ def read_history(history_file: str) -> list[dict[str, Any]]:
 
 
 def append_history_record(history_file: str, task: dict[str, Any]) -> None:
-    """Append a settled task record to the append-only JSONL history log."""
+    """Append a settled task record to the append-only JSONL history log.
+
+    The record is extended with ``delivered_size``: a first-parent diff-stat
+    anchored on the task's ``merge_commit``, paired with the plan's declared
+    ``size`` label. Measurement failures are recorded with a reason and never
+    raise, so telemetry collection cannot block a task from settling.
+    """
     os.makedirs(os.path.dirname(history_file), exist_ok=True)
     record = {**task, "settled_at": datetime.now(timezone.utc).isoformat()}
+
+    from aet import plan_parser  # local import avoids a cycle with plan_parser
+
+    repo_root = Path(history_file).parent.parent
+    plan_file = task.get("plan_file")
+    declared_size: str | None = None
+    if plan_file:
+        try:
+            plan_path = Path(plan_file)
+            if not plan_path.is_absolute():
+                plan_path = repo_root / plan_path
+            declared_size = plan_parser.parse_frontmatter(plan_path).get("size")
+        except Exception:  # noqa: BLE001
+            declared_size = None
+
+    size_info = plan_size.delivered_size(repo_root, task.get("merge_commit"))
+    record["delivered_size"] = {**size_info, "declared_size": declared_size}
+
     with open(history_file, "a", encoding="utf-8") as f:
         json.dump(record, f)
         f.write("\n")
