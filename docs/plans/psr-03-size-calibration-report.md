@@ -58,23 +58,23 @@ argument is settled by the recorded distribution rather than re-argued.
 
 ## Task List
 
-1. Add a backfill routine that walks `.agents/work-history.jsonl`, measures each
+1. ✓ Add a backfill routine that walks `.agents/work-history.jsonl`, measures each
    settled record carrying a resolvable `merge_commit` via `psr-02`'s
    `delivered_size()`, and writes the result back idempotently — M
    (traces: R-10)
-2. Report backfill outcomes as measured / skipped-already-present /
+2. ✓ Report backfill outcomes as measured / skipped-already-present /
    unresolvable, with a reason breakdown for the unresolvable set — S
    (traces: R-10)
-3. Extend `src/aet/metrics.py` to aggregate **Delivered Size** by **Declared
+3. ✓ Extend `src/aet/metrics.py` to aggregate **Delivered Size** by **Declared
    Size**, producing n, median, p90, and the share exceeding the band — M
    (traces: R-9)
-4. Expose `aet size report` and `aet size backfill` as a noun-scoped command
+4. ✓ Expose `aet size report` and `aet size backfill` as a noun-scoped command
    group per ADR-039 — S (traces: R-9, R-10)
-5. Add tests for the aggregation maths, the idempotent backfill, and the
+5. ✓ Add tests for the aggregation maths, the idempotent backfill, and the
    unresolvable-record path — M (traces: R-9, R-10)
-6. Document the report and backfill in the appropriate operator-facing docs — S
+6. ✓ Document the report and backfill in the appropriate operator-facing docs — S
    (traces: R-9, R-10)
-7. Merge branch to main and verify integration — S
+7. ✓ Merge branch to main and verify integration — S
 
 **Size definitions (as proposed by this PRD, dogfooded here):**
 
@@ -118,28 +118,28 @@ CLI surfaces, tests, and docs. **M** under the proposed bands.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] `make validate` passes
-- [ ] New source coverage: the new test module names cases for (a) median and p90
+- [x] Lint passes
+- [x] Tests pass
+- [x] `make validate` passes
+- [x] New source coverage: the new test module names cases for (a) median and p90
       aggregation against a fixture set with a known answer, (b) the
       share-exceeding-band calculation, (c) backfill run twice producing identical
       records, (d) a record with no `merge_commit` counted as unresolvable with a
       reason, and (e) a record already measured being skipped rather than
       recomputed
-- [ ] Test types: aggregation and backfill accounting are unit tests over fixture
+- [x] Test types: aggregation and backfill accounting are unit tests over fixture
       history records; the CLI surfaces get an integration test invoking them
       end-to-end against a temporary project. No API boundary surface is touched.
-- [ ] Running backfill twice over the same history is a no-op on the second run
-- [ ] The unresolvable count is printed, never silently zero
-- [ ] Backfill over the current corpus resolves ~267 of 289 records; a materially
+- [x] Running backfill twice over the same history is a no-op on the second run
+- [x] The unresolvable count is printed, never silently zero
+- [x] Backfill over the current corpus resolves ~267 of 289 records; a materially
       lower yield fails the check rather than being reported as success
-- [ ] The report states its sample size alongside the distribution
-- [ ] Command names follow ADR-039: `aet size report` / `aet size backfill`,
+- [x] The report states its sample size alongside the distribution
+- [x] Command names follow ADR-039: `aet size report` / `aet size backfill`,
       registered as a noun-scoped group
-- [ ] R-trace coverage: R-9 by tasks 3,4,5,6; R-10 by tasks 1,2,4,5,6.
+- [x] R-trace coverage: R-9 by tasks 3,4,5,6; R-10 by tasks 1,2,4,5,6.
       R-7 and R-8 are carried by `psr-02`; R-1 … R-6 and R-11 … R-17 by `psr-01`
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -153,5 +153,5 @@ are additive. No migration is required in either direction.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

@@ -44,6 +44,7 @@ from aet.cli import (
     retro,
     setup,
     ship,
+    size,
     sprint,
     status,
     sync,
@@ -69,6 +70,7 @@ app.add_typer(plans.app, name="plans", help="Bulk plan operations and corpus lin
 app.add_typer(sync.app, name="queue", help="Work queue sync and related operations.")
 app.add_typer(setup.app, name="setup", help="Setup and bootstrap commands.")
 app.add_typer(ship.app, name="ship", help="Pre-merge gate, PR creation, and post-merge closure.")
+app.add_typer(size.app, name="size", help="Delivered-size measurement and reporting.")
 app.add_typer(sprint.app, name="sprint", help="Sprint queue management.")
 
 # Top-level single-word commands.

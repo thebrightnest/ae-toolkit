@@ -194,6 +194,47 @@ Null and coverage semantics:
   projection, both with exit code 0. The only exit-code-1 path is a malformed
   `--since` (expected `YYYY-MM-DD`).
 
+## Delivered-size measurement loop (`aet size`)
+
+At task closure the orchestrator records the actual diff size for the task's
+`merge_commit`. `aet size` exposes that measurement loop to operators:
+
+```bash
+aet size report                          # distribution by declared S/M/L label
+aet size report --json                   # machine-readable projection
+aet size report --since 2026-07-01       # only tasks settled on/after a date
+aet size backfill                        # measure historical records idempotently
+aet size backfill --min-yield 267        # fail if fewer than N records resolve
+```
+
+The report answers one question per declared label: how many plans delivered a
+measurable diff, what were the median and p90 headline sizes, and what share
+exceeded the label's band? The headline size excludes planning artifacts
+(`docs/`, `.agents/`, `content/`, `reports/`) so the numbers are comparable to
+the S/M/L bands defined in `docs/CONVENTIONS.md`.
+
+The `--json` projection is the canonical output of
+`aet.metrics.aggregate_delivered_size`:
+
+```json
+{
+  "since": "2026-07-01",
+  "sample_size": 147,
+  "labels": {
+    "S": {"n": 12, "median": 81.0, "p90": 384.0, "exceeds_band": 0.42},
+    "M": {"n": 117, "median": 405.0, "p90": 836.0, "exceeds_band": 0.71},
+    "L": {"n": 18, "median": 832.0, "p90": 6244.0, "exceeds_band": 0.0}
+  }
+}
+```
+
+Backfill is idempotent: records that already carry a `delivered_size` are
+skipped, records with a resolvable `merge_commit` are measured via
+`git diff <merge_commit>^1..<merge_commit>`, and unresolvable records are
+counted with a reason breakdown rather than silently dropped. Run it whenever
+`delivered_size` measurement is added or fixed so the historical distribution
+is up to date.
+
 ## Telemetry during test runs
 
 The toolkit's pytest suite spawns the real orchestrator, but it never writes to
