@@ -15,6 +15,8 @@ docs_sync_reason: changes the user-facing sizing guardrails documented in CONVEN
 ## Context
 
 - PRD: `docs/prds/plan-sizing-recalibration-prd.md` (R-1 … R-6, R-11 … R-17)
+- ADR: `docs/adr/046-plan-size-measured-not-gated.md` — the governing decision,
+  authored during scope validation (see Locked design). This plan implements it.
 - Supersedes: `docs/prds/task-size-guardrails-revision-prd.md` (adopted 2026-07-21)
 - Related: ADR-006 (plan atomicity boundary — unchanged), ADR-015 (telemetry informs guardrails)
 
@@ -46,6 +48,11 @@ Nothing here is a defect report.
   then task-list length) have now failed; the measured correlation is r = 0.30
   with a flat relationship past ~6 lines. A third proxy inherits the same defect
   because plan-time diff size is not derivable from the plan document.
+- **ADR-046 is already written; do not re-author it.** It was drafted during
+  scope validation rather than left as a task here, because `aet sprint add`
+  validates that every ADR a plan references resolves — a plan cannot enter the
+  queue citing an ADR it intends to create. Treat the ADR as fixed input; this
+  plan makes the docs and code agree with it.
 - **The measured evidence goes in the repo, not just the PRD.** The correlation
   figure is recorded in `docs/CONVENTIONS.md` so the proxy is not reintroduced by
   a future revision that has forgotten why it was dropped.
@@ -78,41 +85,37 @@ Nothing here is a defect report.
 
 ## Task List
 
-1. Add `docs/adr/046-plan-size-measured-not-gated.md` recording the decision that
-   plan size is measured after implementation rather than gated before it, with
-   the two-failed-proxies history and its consequences — S (traces: R-6)
-2. Update the `## Task Size Guardrails` section of `docs/CONVENTIONS.md`: new
+1. Update the `## Task Size Guardrails` section of `docs/CONVENTIONS.md`: new
    bands, story budget 1200, context budget ~60k/~100k, the retired-proxy note
    with the r = 0.30 evidence, implementation-only subsystem counting, the 2-of-N
-   rule, and the general floor test replacing the Batching Rule — M
+   rule, and the advisory floor test replacing the Batching Rule — M
    (traces: R-1, R-2, R-3, R-5, R-11, R-12, R-13)
-3. Update `skills/aet-plan/SKILL.md`: the Guardrail Model block, the Size Labels
+2. Update `skills/aet-plan/SKILL.md`: the Guardrail Model block, the Size Labels
    table, the `create-stories` and `plan` procedure steps that restate the
    numbers, and the Key Principles line — replacing "Split early, split often"
    with target-shaped framing that names the intended unit of work — M
    (traces: R-1, R-2, R-3, R-11, R-12, R-13, R-14)
-4. Update `skills/aet-pipeline-plan/SKILL.md` so its guardrail reference and
+3. Update `skills/aet-pipeline-plan/SKILL.md` so its guardrail reference and
    "Session-sized output" principle match, without duplicating the model — S
    (traces: R-1, R-14)
-5. Update `.agents/templates/plan-template.md`: size definitions, the intake-limit
+4. Update `.agents/templates/plan-template.md`: size definitions, the intake-limit
    sentence that cites the removed 300-line check, and the Batching Check block
    replaced by the floor test — S (traces: R-1, R-4, R-13)
-6. Change `validate_size()` in `src/aet/plan_parser.py` to stop rejecting on
+5. Change `validate_size()` in `src/aet/plan_parser.py` to stop rejecting on
    task-list length, preserving the `ATOMIC OVERSIZED` warning signal in its
    return contract — S (traces: R-4, R-15)
-7. Update `tests/queue/test_init_queue_sync.py` for the new validator behaviour,
+6. Update `tests/queue/test_init_queue_sync.py` for the new validator behaviour,
    including a case pinning that a plan with a very long task list is accepted
    and a case pinning that `ATOMIC OVERSIZED` still surfaces — S
    (traces: R-4, R-15)
-8. Add a revision note to `docs/prds/task-size-guardrails-revision-prd.md` naming
+7. Add a revision note to `docs/prds/task-size-guardrails-revision-prd.md` naming
    the falsified premise and pointing to the new PRD — S (traces: R-17)
-9. Cross-reference ADR-046 from the **Declared Size** entry in `CONTEXT.md`; the
-   glossary terms were added during scope validation but deliberately left
-   without a forward reference to an ADR that did not exist yet — S
-   (traces: R-6)
-10. Run `aet queue sync` over the existing plan corpus and confirm no new
+8. Cross-reference ADR-046 from the **Declared Size** entry in `CONTEXT.md` and
+   from the retired-proxy note in `docs/CONVENTIONS.md`, so the decision is
+   reachable from both the glossary and the guardrails — S (traces: R-6)
+9. Run `aet queue sync` over the existing plan corpus and confirm no new
    validation failures are introduced — S (traces: R-16)
-11. Merge branch to main and verify integration — S
+10. Merge branch to main and verify integration — S
 
 **Size definitions (as proposed by this PRD, dogfooded here):**
 
@@ -120,8 +123,9 @@ Nothing here is a defect report.
 - **M**: ≤ 1 day human time / ≤ 600 expected diff lines
 - **L**: > 600 lines — re-evaluate against the full model; justify above 1500
 
-Expected diff ≈ 500–600 lines across docs, skills, one validator function, and
-its tests. This is **M** under the proposed bands. Under the current bands it
+Expected diff ≈ 400–500 lines across docs, skills, one validator function, and
+its tests (the ADR is already written, so it is not part of this diff). This is
+**M** under the proposed bands. Under the current bands it
 would be **L** and would have been force-split into four fragments that each
 leave the documented model self-contradictory — which is the PRD's dogfooding
 signal, recorded here deliberately.
@@ -154,7 +158,6 @@ signal, recorded here deliberately.
 
 ## Files to Modify
 
-- `docs/adr/046-plan-size-measured-not-gated.md` (new)
 - `docs/CONVENTIONS.md`
 - `skills/aet-plan/SKILL.md`
 - `skills/aet-pipeline-plan/SKILL.md`
@@ -189,10 +192,12 @@ signal, recorded here deliberately.
 - [ ] `aet queue sync` over the existing 264 plans reports no new failures (R-16)
 - [ ] `aet-implement`'s `ATOMIC OVERSIZED` refusal and the unattended-mode hard
       stop are unchanged, verified by their existing tests still passing (R-15)
-- [ ] R-trace coverage: R-1 by tasks 2,3,4,5; R-2 by 2,3; R-3 by 2,3; R-4 by 5,6,7;
-      R-5 by 2; R-6 by 1; R-11 by 2,3; R-12 by 2,3; R-13 by 2,3,5; R-14 by 3,4;
-      R-15 by 6,7; R-16 by 10; R-17 by 8. R-6 also by 9. R-7 … R-10 are carried by `psr-02` and
-      `psr-03`
+- [ ] R-trace coverage: R-1 by tasks 1,2,3,4; R-2 by 1,2; R-3 by 1,2; R-4 by 4,5,6;
+      R-5 by 1; R-6 by 8 (ADR-046 itself was authored during scope validation,
+      because `aet sprint add` refuses a plan referencing an ADR that does not
+      resolve — this task carries the cross-references); R-11 by 1,2; R-12 by 1,2;
+      R-13 by 1,2,4; R-14 by 2,3; R-15 by 5,6; R-16 by 9; R-17 by 7.
+      R-7 … R-10 are carried by `psr-02` and `psr-03`
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan

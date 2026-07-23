@@ -15,8 +15,8 @@ docs_sync_reason: adds a new recorded field to work-history.jsonl, which is a do
 ## Context
 
 - PRD: `docs/prds/plan-sizing-recalibration-prd.md` (R-7, R-8)
-- ADR: `docs/adr/046-plan-size-measured-not-gated.md` — created by `psr-01`;
-  this plan is the measurement half of that decision
+- ADR: `docs/adr/046-plan-size-measured-not-gated.md` — authored during scope
+  validation; this plan is the measurement half of that decision
 - Related: ADR-015 (telemetry informs guardrails, local-first)
 
 Plan-time size gating was retired because plan-time diff size is unknowable. This
