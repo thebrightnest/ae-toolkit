@@ -3,7 +3,7 @@ id: epi-01-base-branch-resolver
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: reads git refs and existing config files; introduces no network, credential, or filesystem-write surface
 docs_sync: required
@@ -136,5 +136,5 @@ pure deletion with no behavioral change to undo.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
