@@ -3,7 +3,7 @@ id: fic-01-one-entry-point
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: deletes and retargets symlink creation in the user bin directory and removes an os.execv at module scope; path-resolution correctness is security-relevant, inherited from cli-04
 docs_sync: required
@@ -212,5 +212,5 @@ grouping with a real security review rather than `minimal`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
