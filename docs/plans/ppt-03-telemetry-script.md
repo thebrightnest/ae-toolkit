@@ -14,7 +14,7 @@ docs_sync_reason: PRD footer must reflect script addition
 
 ## Context
 
-Create `scripts/analyze-pipeline-efficiency.py` so any user can replicate the stage cost and failure analysis on their own `~/.aet/telemetry/{project}/` archive.
+Create `scripts/analyze-pipeline-efficiency.py` so any user can replicate the stage cost and failure analysis on their own `~/.aet/telemetry/{project}/` archive. See PRD: docs/prds/pipeline-performance-telemetry-prd.md
 
 ## Intake Triage
 

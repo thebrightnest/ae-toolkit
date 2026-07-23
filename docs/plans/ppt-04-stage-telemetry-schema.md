@@ -14,7 +14,7 @@ docs_sync_reason: PRD footer must reflect telemetry schema changes
 
 ## Context
 
-Upgrade stage telemetry records so they capture the actual stage(s) that ran, failure classification, plan frontmatter snapshot, and attempt counter. This removes the need to reverse-engineer the workflow when analyzing telemetry and enables richer self-evolution metrics.
+Upgrade stage telemetry records so they capture the actual stage(s) that ran, failure classification, plan frontmatter snapshot, and attempt counter. This removes the need to reverse-engineer the workflow when analyzing telemetry and enables richer self-evolution metrics. See PRD: docs/prds/pipeline-performance-telemetry-prd.md
 
 ## Intake Triage
 

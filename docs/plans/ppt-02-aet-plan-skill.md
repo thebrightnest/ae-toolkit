@@ -14,7 +14,7 @@ docs_sync_reason: PRD footer must reflect skill updates
 
 ## Context
 
-Update `skills/aet-plan/SKILL.md` frontmatter contract so plan authors set `pipeline` using the size-based default plus risk override.
+Update `skills/aet-plan/SKILL.md` frontmatter contract so plan authors set `pipeline` using the size-based default plus risk override. See PRD: docs/prds/pipeline-performance-telemetry-prd.md
 
 ## Intake Triage
 

@@ -14,7 +14,7 @@ docs_sync_reason: PRD footer must reflect doc updates
 
 ## Context
 
-Update `docs/PIPELINE.md` and `.agents/templates/plan-template.md` to codify the size-based pipeline defaults from ADR-047.
+Update `docs/PIPELINE.md` and `.agents/templates/plan-template.md` to codify the size-based pipeline defaults from ADR-047. See PRD: docs/prds/pipeline-performance-telemetry-prd.md
 
 ## Intake Triage
 

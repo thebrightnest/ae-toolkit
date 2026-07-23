@@ -14,7 +14,7 @@ docs_sync_reason: PRD footer must reflect planning telemetry changes
 
 ## Context
 
-Capture planning-phase sessions (`aet-plan`, `aet-validate-scope`) in telemetry so the toolkit can measure planning cost against implementation cost and evaluate whether planning is the core value.
+Capture planning-phase sessions (`aet-plan`, `aet-validate-scope`) in telemetry so the toolkit can measure planning cost against implementation cost and evaluate whether planning is the core value. See PRD: docs/prds/pipeline-performance-telemetry-prd.md
 
 ## Intake Triage
 
