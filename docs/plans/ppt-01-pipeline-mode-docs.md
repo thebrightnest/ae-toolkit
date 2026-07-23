@@ -1,7 +1,7 @@
 ---
 id: ppt-01-pipeline-mode-docs
 size: M
-status: approved
+status: queued
 blocked_by: []
 pipeline: standard
 security_review: required
