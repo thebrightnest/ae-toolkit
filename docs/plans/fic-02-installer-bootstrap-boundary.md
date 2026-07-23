@@ -73,26 +73,27 @@ substance of this plan.
 
 ## Task List
 
-1. Add `aet setup verify` to `src/aet/cli/setup.py`: resolve the `PATH`-winning
+1. [x] Add `aet setup verify` to `src/aet/cli/setup.py`: resolve the `PATH`-winning
    `aet`, compare to the expected link, report shadowing by name; read-only,
    exit 0. Cover it with a new `tests/setup/test_setup_verify.py` — M
    (traces: R-23)
-2. Strip `install_skills()` and `link_aet_binary()` from `install.sh`; replace
+2. [x] Strip `install_skills()` and `link_aet_binary()` from `install.sh`; replace
    with a single hand-off invoking `setup skills`, `setup link`, and
    `setup verify` on the installed CLI — M (traces: R-20, R-22)
-3. Reduce shell flag parsing to `--repo`, `--tag`, `--dry-run`, `--help`;
-   recognize-and-forward `--agent`, `--bin-dir`, `--skills-dir` via `"$@"` while
-   still erroring on anything unrecognized before the clone; delete the
+3. [x] Reduce shell flag parsing to `--repo`, `--tag`, `--dry-run`, `--help`;
+   recognize-and-forward `--agent`, `--bin-dir`, `--skills-dir` [Changed:
+   implemented via Typer `envvar=` bindings rather than appending to `"$@"`]
+   while still erroring on anything unrecognized before the clone; delete the
    `skills_args` array and the `AGENT` validation `case` — M (traces: R-21)
-4. Thread `--dry-run` across the boundary so the Python side prints planned
+4. [x] Thread `--dry-run` across the boundary so the Python side prints planned
    actions and modifies nothing — S (traces: R-24)
-5. Move agent validation (`claude-code|kimi|cursor|generic`) into the Typer
+5. [x] Move agent validation (`claude-code|kimi|cursor|generic`) into the Typer
    layer so the error message comes from one place — S (traces: R-21)
-6. Guard the three `SKILL_DIRS` expansions in `scripts/validate-skills.sh`
+6. [x] Guard the three `SKILL_DIRS` expansions in `scripts/validate-skills.sh`
    (`:26`, `:103`, `:141`) — S (traces: R-25)
-7. Update README Quick Start and troubleshooting for `aet setup verify` and the
+7. [x] Update README Quick Start and troubleshooting for `aet setup verify` and the
    shadowing warning — S (traces: R-23)
-8. Merge branch to main and verify integration — S
+8. [Deferred: handled by `aet-ship`] Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated against the full guardrail model.
@@ -193,5 +194,5 @@ and warrants the full review grouping.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
