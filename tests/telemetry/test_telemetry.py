@@ -47,6 +47,84 @@ class TestStageRecord(unittest.TestCase):
         self.assertEqual(record["stage"], "qa-complete")
         self.assertEqual(record["stages"], ["plan-approved", "implemented"])
 
+    def test_stage_record_defaults_actual_stages_to_target_stage(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+        )
+        self.assertEqual(record["actual_stages"], ["implemented"])
+
+    def test_stage_record_uses_provided_actual_stages(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="standard",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+            stages=["plan-approved", "implemented"],
+            actual_stages=["plan-approved", "implemented"],
+        )
+        self.assertEqual(record["actual_stages"], ["plan-approved", "implemented"])
+
+    def test_stage_record_includes_failure_class_plan_snapshot_and_attempt(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=1,
+            failure_class="design",
+            plan_snapshot={"size": "M", "pipeline": "standard"},
+            attempt=2,
+        )
+        self.assertEqual(record["failure_class"], "design")
+        self.assertEqual(record["plan_snapshot"], {"size": "M", "pipeline": "standard"})
+        self.assertEqual(record["attempt"], 2)
+
+    def test_stage_record_attempt_defaults_to_one(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+        )
+        self.assertEqual(record["attempt"], 1)
+
+    def test_stage_record_success_has_null_failure_class_and_plan_snapshot(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+        )
+        self.assertIsNone(record["failure_class"])
+        self.assertIsNone(record["plan_snapshot"])
+
 
 class TestRunSummaryRecord(unittest.TestCase):
     def _summary(self, **kwargs):

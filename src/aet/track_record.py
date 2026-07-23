@@ -85,12 +85,26 @@ def _has_failed_stage(records: Iterable[dict[str, Any]]) -> bool:
     return False
 
 
+def _stage_names(record: dict[str, Any]) -> list[str]:
+    """Return the stage names represented by a record.
+
+    Prefer the explicit ``actual_stages`` list when present (telemetry schema
+    v2); otherwise fall back to the legacy single ``stage`` field.
+    """
+    actual = record.get("actual_stages")
+    if isinstance(actual, list) and all(isinstance(s, str) for s in actual):
+        return actual
+    stage = record.get("stage")
+    if isinstance(stage, str):
+        return [stage]
+    return []
+
+
 def _repeated_stage_count(records: Iterable[dict[str, Any]]) -> int:
     """Return the number of stage/test_run records beyond the first per stage."""
     counts: dict[str, int] = {}
     for record in records:
-        stage = record.get("stage")
-        if isinstance(stage, str):
+        for stage in _stage_names(record):
             counts[stage] = counts.get(stage, 0) + 1
     return sum(max(0, count - 1) for count in counts.values())
 

@@ -205,12 +205,30 @@ def stage_record(
     token_count: int | None = None,
     cost_estimate: float | None = None,
     stages: list[str] | None = None,
+    actual_stages: list[str] | None = None,
+    failure_class: str | None = None,
+    plan_snapshot: dict[str, Any] | None = None,
+    attempt: int = 1,
 ) -> dict[str, Any]:
     """Build a per-stage telemetry record.
 
     ``stage`` is the target stage of the spawned session. For group sessions
     (standard isolation) ``stages`` carries the ordered list of stage names the
     single session spanned; it is ``None`` for exact per-stage sessions.
+
+    ``actual_stages`` is the ordered list of stage names that actually ran in
+    the session. When omitted it defaults to ``[stage]`` so consumers can always
+    rely on its presence.
+
+    ``failure_class`` carries the nsr-01 taxonomy class for failed sessions and
+    is ``None`` for successful sessions.
+
+    ``plan_snapshot`` is a shallow copy of the plan frontmatter fields that
+    influence pipeline routing, captured at emission time so analytics do not
+    need to re-read plan files.
+
+    ``attempt`` counts how many times this task+stage combination has been
+    emitted within the run (starting at 1).
     """
     duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
     return {
@@ -220,6 +238,10 @@ def stage_record(
         "plan_file": plan_file,
         "stage": stage,
         "stages": stages,
+        "actual_stages": actual_stages if actual_stages is not None else [stage],
+        "failure_class": failure_class,
+        "plan_snapshot": plan_snapshot,
+        "attempt": attempt,
         "agent_cli": agent_cli,
         "isolation_level": isolation_level,
         "start_time": start_time,
