@@ -3,7 +3,7 @@ id: epi-03-worktree-refresh-no-repo-root-checkout
 size: S
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: removes a git checkout side effect; creates no new network, credential, or filesystem-write surface
 docs_sync: skipped
@@ -116,4 +116,4 @@ migration.
 
 ---
 
-*Stage: reviewed*
+*Stage: merged*
