@@ -43,6 +43,17 @@ Approved plans in `docs/plans/` that are not yet in the queue and not yet closed
 **Source PRD**:
 The product requirements document that generated the plan, referenced from the plan file's Context section.
 
+**Declared Size**:
+The `size` value in a plan file's frontmatter — `S`, `M`, or `L`. It is a _prediction_, made at plan time, of how large the change will be. It is not enforced at intake: plan-time diff size is not derivable from the plan document, so no proxy for it is gated.
+_Avoid_: treating a declared size as a measurement, or as a limit intake will enforce.
+
+**Delivered Size**:
+The _measured_ diff of a task, computed at closure over the first-parent range of its `merge_commit` and recorded on the Execution Log entry. The headline figure excludes planning artifacts (`docs/`, `.agents/`, `content/`, `reports/`); the total is retained alongside it.
+_Avoid_: calling this "size" unqualified — the whole point of recording it is that it is comparable to, and frequently diverges from, the **Declared Size**.
+
+**Band**:
+The expected **Delivered Size** range attached to each **Declared Size** label. A band is a falsifiable claim about delivery, re-checkable against the recorded distribution — not an intake limit.
+
 ## Relationships
 
 - A **Task** has exactly one **Plan File**.
@@ -52,6 +63,7 @@ The product requirements document that generated the plan, referenced from the p
 - A plan with `status: approved` is part of the **Plan Backlog** until it is explicitly promoted to `status: queued`; only `status: queued` plans are loaded into the **Work Queue**.
 - A plan is closed when its `status` is `merged` or `abandoned`; at that point it no longer appears in the **Work Queue**.
 - Closure updates the plan file (`status` and `*Stage:*`) and the change is committed and pushed so the terminal state is versioned and reproducible across clones.
+- A **Task** has one **Declared Size** (predicted at plan time) and, once closed, one **Delivered Size** (measured at closure). The pair is what makes a **Band** checkable; neither substitutes for the other.
 
 ## Example dialogue
 
