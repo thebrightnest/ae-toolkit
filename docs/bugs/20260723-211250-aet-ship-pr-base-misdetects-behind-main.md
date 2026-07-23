@@ -53,7 +53,8 @@ End to end: `aet ship open <plan>` → gate passes, branch pushes, then
 
 ## Root cause
 
-`_determine_pr_base()` (`src/aet/cli/ship.py:110`) classifies any branch whose
+`_determine_pr_base()` (at `src/aet/cli/ship.py:110` when reported; now at
+`src/aet/cli/ship.py:209` post-fix) classifies any branch whose
 merge-base differs from `origin/main` as **stacked on a parent feature branch**,
 then walks the ancestry-path log to name that parent:
 
@@ -74,8 +75,9 @@ then walks the ancestry-path log to name that parent:
 The premise is false. `merge_base != origin_main` is **also** true whenever
 `origin/main` has simply advanced past the branch's fork point — the ordinary
 case for a queued branch. In that case the only decorated non-remote ref in the
-ancestry path is the branch's **own** tip decoration `HEAD -> <branch>`. Line 126
-strips the `"HEAD -> "` prefix and then treats the resulting name as a stacked
+ancestry path is the branch's **own** tip decoration `HEAD -> <branch>`. The
+loop (at line 126 when reported; now at `src/aet/cli/ship.py:225`) strips the
+`"HEAD -> "` prefix and then treats the resulting name as a stacked
 parent, returning the current branch as its own PR base. `gh pr create` then
 rejects head == base.
 
@@ -126,6 +128,12 @@ decoration). The fix should add a unit test for `_determine_pr_base()`:
 - behind-main independent branch (decoration `HEAD -> feat, origin/feat`) → `origin/main`
 - genuinely stacked branch (a non-HEAD parent ref present) → the parent name
 
+Both tests were added as `TestDeterminePrBase` (`tests/test_ship_open.py:117`).
+One residual risk: the tests hand-craft the `git log --decorate` output strings,
+so the mock is now the contract — if git's decoration format drifts (e.g.
+`HEAD -> x` ordering or the `tag:` prefix), tests and parser could drift
+together without either failing.
+
 ## Related observation (not part of this fix)
 
 During recovery, the tool's post-rebase push (`_push_branch`, bare
@@ -135,7 +143,19 @@ explicit lease (`--force-with-lease=<branch>:<old-sha>`) was required. Lower
 confidence and a distinct code path — flagging for a separate look, not bundling
 into this fix.
 
-## Workaround (until fixed)
+## Residual risk (not part of this fix)
+
+The fix removes the self-return case, but the underlying heuristic — "the first
+decorated non-remote ref in the ancestry path is the stacked parent" — can still
+false-positive. Any *other* local branch pointing at a commit in
+`merge_base..HEAD` (e.g. an abandoned `wip-foo` left at an ancestor commit)
+would be returned as the PR base. This is rarer than the bug fixed here, but it
+stems from the same false premise: decoration presence does not prove
+intentional stacking. A durable fix likely means recording the parent at
+branch-creation time rather than inferring it from decorations — fold into the
+epi-01/epi-02 base/trunk-resolver thread (#185).
+
+## Workaround (pre-fix versions only)
 
 Ship behind-main branches with an explicit base from the worktree:
 
