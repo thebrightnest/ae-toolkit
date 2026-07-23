@@ -1,7 +1,7 @@
 ---
 id: ppt-02-aet-plan-skill
 size: S
-status: queued
+status: merged
 blocked_by: []
 pipeline: minimal
 security_review: required
@@ -66,5 +66,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: run `aet-work`*
