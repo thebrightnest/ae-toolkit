@@ -39,11 +39,11 @@ Link to the PRD and any relevant prior decisions.
 
 **Size definitions:**
 
-- **S**: ≤ 2 hr human time / ≤ 100 expected diff lines
-- **M**: ≤ 1 day human time / ≤ 200 expected diff lines
-- **L**: > 1 day OR > 200 lines — re-evaluate against the full guardrail model; split only if a limit is actually exceeded
+- **S**: ≤ 2 hr human time / ≤ 150 expected diff lines
+- **M**: ≤ 1 day human time / ≤ 600 expected diff lines
+- **L**: > 1 day OR > 600 lines — re-evaluate against the full guardrail model; justify above 1500
 
-If a task exceeds the intake limit (> 300 task-list lines) or the skill-level checks (> 4 agent-hours, > 2 subsystems, ~30k-token context budget), split it into subtasks and document the relationship with `Split from: {parent-task-id}`.
+If a task exceeds two or more of the skill-level checks (> 600 expected diff lines, > 1 human-day, > 2 implementation subsystems, ~60k-token context budget), split it into subtasks and document the relationship with `Split from: {parent-task-id}`. No plan-time proxy for diff size is enforced at intake (ADR-046).
 
 ### Renderer / UI Tasks (if applicable)
 
@@ -51,15 +51,15 @@ If a task exceeds the intake limit (> 300 task-list lines) or the skill-level ch
 - [ ] Add/update CSS styles for all custom `className` values
 - [ ] Verify no unstyled `className` references remain
 
-### Batching Check
+### Floor Check
 
-Before finalizing this plan, confirm it should not be merged with related plans:
+Before finalizing this plan, confirm it should not be merged with a sibling plan:
 
-- [ ] This is not one of several near-identical additions (templates, examples, docs).
-- [ ] The diff is expected to exceed 3 files or 50 lines.
+- [ ] This stands alone as an independently shippable, reviewable behaviour change.
+- [ ] The expected diff materially exceeds branch/PR/review overhead.
 - [ ] The work cannot share a branch/PR with related tasks.
 
-If all boxes are unchecked, consider batching this work into a single plan.
+If all boxes are unchecked, merge this work into a sibling plan instead. This check is advisory — it prompts a written justification, it does not block at scope validation.
 
 ## Rejected Alternatives
 

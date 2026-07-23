@@ -419,9 +419,11 @@ class TestFrontmatterIntake(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unknown blocker", result.stderr)
 
-    def test_reject_oversize_without_marker(self):
-        """A plan exceeding atomic complexity limits is rejected unless marked oversized."""
-        body_lines = ["## Task List"] + [f"{i}. task {i}" for i in range(302)]
+    def test_long_task_list_is_accepted(self):
+        """A plan with a very long task list is accepted; size is not gated at intake."""
+        body_lines = ["## Task List"] + [
+            f"{i}. task {i} (traces: R-1)" for i in range(302)
+        ]
         make_plan(
             self.plans_dir / "big.md",
             "Big",
@@ -437,8 +439,8 @@ class TestFrontmatterIntake(unittest.TestCase):
             self.plans_dir,
             self.prds_dir,
         )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("complexity limit", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("big", {t["id"] for t in read_tasks(self.queue_file)})
 
     def test_oversize_with_marker_is_accepted(self):
         """A marked oversized plan is accepted despite complexity limits."""
@@ -463,8 +465,34 @@ class TestFrontmatterIntake(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("big", {t["id"] for t in read_tasks(self.queue_file)})
 
-    def test_many_files_within_task_limit_is_accepted(self):
-        """A plan listing more than 8 files but <=300 task-list lines is accepted."""
+    def test_validate_size_still_reports_atomic_oversized_marker(self):
+        """validate_size() surfaces the ATOMIC OVERSIZED warning in its return contract."""
+        plan = self.plans_dir / "marked.md"
+        body_lines = ["\u26a0\ufe0f ATOMIC OVERSIZED", "", "## Task List"] + [
+            f"{i}. task {i} (traces: R-1)" for i in range(10)
+        ]
+        make_plan(
+            plan,
+            "Marked",
+            size="L",
+            extra_body="\n".join(body_lines),
+        )
+        ok, reason, has_warning = plan_parser.validate_size(plan)
+        self.assertTrue(ok)
+        self.assertIsNone(reason)
+        self.assertTrue(has_warning)
+
+    def test_validate_size_reports_no_warning_without_marker(self):
+        """validate_size() returns has_warning=False when the marker is absent."""
+        plan = self.plans_dir / "plain.md"
+        make_plan(plan, "Plain", size="S")
+        ok, reason, has_warning = plan_parser.validate_size(plan)
+        self.assertTrue(ok)
+        self.assertIsNone(reason)
+        self.assertFalse(has_warning)
+
+    def test_many_files_is_accepted(self):
+        """A plan listing many files is accepted; file count is not an intake gate."""
         file_lines = ["## Files to Modify"] + [
             f"- `src/module_{i}.py`" for i in range(10)
         ]

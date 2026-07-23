@@ -199,29 +199,17 @@ def has_explicit_frontmatter_blocked_by(path: Path) -> bool:
     return bool(re.search(r"^blocked_by\s*:", body, re.M))
 
 
-def task_list_line_count(path: Path) -> int:
-    """Count non-empty lines under ## Task List."""
-    content = path.read_text(errors="ignore")
-    match = re.search(
-        r"(?m)^##\s+Task List\s*\n(.*?)(?=\n## |\n---|\Z)",
-        content,
-        re.S,
-    )
-    if not match:
-        return 0
-    return len([line for line in match.group(1).splitlines() if line.strip()])
-
-
 def validate_size(path: Path) -> tuple[bool, str | None, bool]:
-    """Check that a plan is within atomic-complexity limits.
+    """Check whether a plan carries the ATOMIC OVERSIZED assertion.
 
     Returns (ok, reason, has_oversized_warning).
+
+    Plan size is measured after implementation, not gated at intake, so this
+    function no longer rejects on task-list length.  The warning signal is
+    preserved for downstream skills (e.g. ``aet-implement``) that refuse to
+    start on plans marked atomic-oversized without explicit approval.
     """
-    lines = task_list_line_count(path)
-    oversized = lines > 300
     has_warning = "\u26a0\ufe0f ATOMIC OVERSIZED" in path.read_text(errors="ignore")
-    if oversized and not has_warning:
-        return False, f"task_list_lines={lines}", has_warning
     return True, None, has_warning
 
 

@@ -99,7 +99,7 @@ The `docs/` directory has strict boundaries for planning documents. Only atomic,
 
 | Directory        | Purpose                                                                        | Queue Ingestion                                           |
 | ---------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `docs/plans/`    | Atomic, implementable task plans (single session, ≤ 300 task-list lines) | Yes — `aet init-queue` and `aet queue sync` scan this directory |
+| `docs/plans/`    | Atomic, implementable task plans (single session, one coherent behaviour change) | Yes — `aet init-queue` and `aet queue sync` scan this directory |
 | `docs/prds/`     | Product Requirements Documents                                                 | No                                                        |
 | `docs/roadmaps/` | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
 | `docs/audits/`   | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
@@ -107,7 +107,7 @@ The `docs/` directory has strict boundaries for planning documents. Only atomic,
 Rules:
 
 - A document in `docs/plans/` that references other plan files or contains multiple "Phase" sections is non-atomic and must be moved to `docs/roadmaps/` or `docs/audits/`.
-- The task-list-length check (Task Size Guardrails) is the operative intake filter: if a plan exceeds the 300 task-list line limit, it does not belong in `docs/plans/`.
+- The task-list-length check is no longer an intake filter; plan size is measured after implementation, not gated before it (see ADR-046). A plan that is genuinely non-atomic belongs in `docs/roadmaps/` or `docs/audits/` by the ADR-006 atomicity boundary, not because a proxy count rejected it.
 - Directory creation is the user's responsibility; skills document the convention but do not auto-create directories.
 
 ## Plan Frontmatter Contract
@@ -179,57 +179,50 @@ Length: Keep `SKILL.md` under 400 lines. Move deep detail to `references/`.
 
 ## Task Size Guardrails
 
-All planning output must be implementable in a single agent coding session. Use the context-budget + coherence model to enforce this.
+All planning output must be implementable in a single agent coding session. Use the context-budget + coherence model to shape the plan; the actual diff size is measured at closure, not guessed at intake (see ADR-046).
 
 ### Guardrail Model
 
-A plan/task is oversized when **any** of the following are true:
+A plan/task is a candidate for splitting when **two or more** of the following signals are true. One tripped signal is a prompt to justify the shape in writing, not an order to split.
 
-1. **Task-list length** (validator-enforced proxy for expected diff size):
-   - Task: > 300 task-list lines, enforced by `validate_size()`. A task list that long is almost certainly a > 300-line diff.
-2. **Story-level diff guidance** (skill-level only, not validator-enforced):
-   - Story: > 500 expected diff lines.
-3. **Human-time sanity check** (skill-level guidance, not validator-enforced):
+1. **Expected diff guidance** (skill-level only, not validator-enforced):
+   - Task: > 600 expected diff lines.
+   - Story: > 1,200 expected diff lines.
+2. **Human-time sanity check** (skill-level guidance, not validator-enforced):
    - Story: > 2 human-days.
-   - Task: > 4 agent-hours.
-4. **Subsystem coherence** (skill-level guidance):
-   - Touches files in more than 2 distinct subsystems. A _subsystem_ is a bounded module or layer with its own ownership boundary — in this repo, for example: `src/aet/` (CLI code + its tests), `skills/` (skill content), `.agents/` (workflow infrastructure), `docs/` (documentation). Edits spanning two of these (e.g., code and its tests) are one coherent change; three or more usually signal multiple concerns.
+   - Task: > 1 human-day.
+3. **Subsystem coherence** (skill-level guidance):
+   - Touches files in more than 2 distinct implementation subsystems. A _subsystem_ is a bounded module or layer with its own ownership boundary — in this repo, for example: `src/aet/` (CLI code + its tests), `skills/` (skill content), `.agents/` (workflow infrastructure). `docs/` changes and the tests that belong to a code change do not count as additional subsystems; code + its tests are one concern.
    - Requires maintaining more than one major architectural invariant at a time.
-5. **Context budget** (skill-level guidance):
-   - Loading the plan + all files to modify + relevant tests would exceed ~30k tokens for a task or ~50k tokens for a story.
+4. **Context budget** (skill-level guidance):
+   - Loading the plan + all files to modify + relevant tests would exceed ~60k tokens for a task or ~100k tokens for a story.
 
-The task-list-length check remains the only hard intake check. File count is no longer a rejection criterion; it is folded into the coherence and context-budget checks.
+No plan-time proxy for diff size is enforced at intake. Two proxies have been measured and retired: file count, and task-list length. The latter correlated with delivered code diff at only **r = 0.30**, with a flat relationship past roughly six task-list lines, so `validate_size()` no longer rejects on task-list length. See ADR-046 for the full measurement and the decision to move size measurement to closure.
 
 ### Size Labels
 
-Every task must carry an S/M/L label. L is a re-evaluation trigger, not an automatic split trigger.
+Every task must carry an S/M/L label. A label is an advisory prediction calibrated against measured delivery, not an intake limit.
 
-| Label | Human Time             | Diff Lines |
-| ----- | ---------------------- | ---------- |
-| S     | ≤ 2 hr                 | ≤ 100      |
-| M     | ≤ 1 day                | ≤ 200      |
-| L     | > 1 day OR > 200 lines | —          |
+| Label | Human Time             | Expected Diff Lines |
+| ----- | ---------------------- | ------------------- |
+| S     | ≤ 2 hr                 | ≤ 150               |
+| M     | ≤ 1 day                | ≤ 600               |
+| L     | > 1 day OR > 600 lines | — justify above 1500 |
 
 An L task must be re-evaluated against the full model above and is split only if it actually exceeds a limit.
 
 ### Auto-Split Rule
 
-When a task exceeds limits:
+When a task exceeds two or more signals from the model:
 
 1. Split along vertical-slice boundaries (behavior, entity, layer, or subsystem).
 2. Re-evaluate each child against the full model. Repeat recursively.
 3. **Max split depth = 3.** If a child still fails, mark it `⚠️ ATOMIC OVERSIZED` and surface for explicit user approval.
 4. Document splits with `Split from: {parent-id}` and suffix IDs (`01a`, `01b`).
 
-### Batching Rule
+### Floor Test
 
-The opposite mistake is also possible: splitting a coherent feature into plans that are each too small to justify their own branch, worktree, and PR overhead. Before creating a new plan, ask:
-
-- Is this change part of a set of near-identical additions (e.g., multiple example templates, multiple convention docs)?
-- Will each resulting diff be ≤ 3 files and ≤ 50 lines?
-- Do the changes share the same validation steps and rollout risk?
-
-If the answer is **yes** to any of these, batch the related work into a single plan/branch/PR and list every deliverable in the task list. Do not create one plan per file just because the PRD enumerated files separately.
+The opposite mistake is also possible: splitting a coherent feature into plans that are each too small to justify their own branch, worktree, and review overhead. Before creating a new plan, confirm in writing that it stands alone as an independently shippable, reviewable behaviour change and that its diff materially exceeds the branch/PR/review overhead. If it does not, merge it with a sibling plan instead. This check is advisory — it prompts a written justification, it does not block at scope validation.
 
 ## Recorded-Forward Work Queue State
 

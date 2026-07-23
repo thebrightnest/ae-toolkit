@@ -44,7 +44,7 @@ Approved plans in `docs/plans/` that are not yet in the queue and not yet closed
 The product requirements document that generated the plan, referenced from the plan file's Context section.
 
 **Declared Size**:
-The `size` value in a plan file's frontmatter — `S`, `M`, or `L`. It is a _prediction_, made at plan time, of how large the change will be. It is not enforced at intake: plan-time diff size is not derivable from the plan document, so no proxy for it is gated.
+The `size` value in a plan file's frontmatter — `S`, `M`, or `L`. It is a _prediction_, made at plan time, of how large the change will be. It is not enforced at intake: plan-time diff size is not derivable from the plan document, so no proxy for it is gated. See ADR-046 for the measurement and decision.
 _Avoid_: treating a declared size as a measurement, or as a limit intake will enforce.
 
 **Delivered Size**:
