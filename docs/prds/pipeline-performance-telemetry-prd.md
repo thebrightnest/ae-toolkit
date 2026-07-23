@@ -1,7 +1,7 @@
 # PRD: Pipeline Performance & Self-Evolution Telemetry
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*
 
 ## Overview
 
