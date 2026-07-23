@@ -32,7 +32,9 @@ def make_backend(queue_path):
 def _resolve_trunk(queue_path):
     """Resolve the trunk branch for the repo containing the queue file."""
     cwd = os.path.dirname(queue_path) if queue_path else "."
-    config = resolve_config(os.path.join(cwd, ".agents", "aet-work.json"))
+    # The queue file lives in the .agents directory, so the project config is
+    # right next to it (e.g. .agents/aet-work.json).
+    config = resolve_config(os.path.join(cwd, "aet-work.json"))
     return resolve_trunk_branch(cwd, config).ref
 
 

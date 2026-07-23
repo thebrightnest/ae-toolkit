@@ -142,5 +142,4 @@ the changed values are persisted.
 
 ---
 
-*Stage: qa-complete*
-*Next step: await merge*
+*Stage: reviewed*
