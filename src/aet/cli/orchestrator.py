@@ -55,7 +55,8 @@ from aet import (  # noqa: E402
 )
 from aet import failure as failure_lib  # noqa: E402
 from aet import usage as usage_lib  # noqa: E402
-from aet.backends.factory import create_backend  # noqa: E402
+from aet.backends.factory import create_backend, resolve_config  # noqa: E402
+from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
 from aet.cli_adapter import resolve_cli_adapter  # noqa: E402
 from aet.queue import (  # noqa: E402
     LEGAL_TRANSITIONS,
@@ -76,7 +77,7 @@ from aet.verifier import (  # noqa: E402
 )
 from aet.workflow import Workflow, WorkflowError, WorkflowStage, load_workflow  # noqa: E402
 from aet.worktree import (  # noqa: E402
-    check_main_hygiene,
+    check_base_hygiene,
     copy_untracked_files,
     create_worktree,
     prepare_worktree_dependencies,
@@ -278,15 +279,17 @@ def _record_stage(task: dict, stage: str, repo_root: str) -> bool:
     return True
 
 
-def enforce_main_hygiene(repo_root: str) -> bool:
-    """Check main hygiene and decide whether to proceed.
+def enforce_base_hygiene(
+    repo_root: str, integration_branch: str, trunk_branch: str
+) -> bool:
+    """Check base hygiene and decide whether to proceed.
 
     Returns True when the caller should continue, False when it should halt.
-    Main hygiene is a mechanical durability check (see ADR-005/ADR-027): a real
-    violation halts in both interactive and unattended mode so an AFK run never
-    builds an empty worktree off a dirty or unpushed ``main``.
+    Base hygiene is a mechanical durability check (see ADR-005/ADR-027/ADR-044):
+    a real violation halts in both interactive and unattended mode so an AFK
+    run never builds an empty worktree off a dirty or unpushed base.
     """
-    ok, msg = check_main_hygiene(repo_root)
+    ok, msg = check_base_hygiene(repo_root, integration_branch, trunk_branch)
     if ok:
         return True
 
@@ -416,8 +419,10 @@ def build_prompt(
     )
 
 
-def _session_diff_stats(worktree_dir: str) -> tuple[list[str], int]:
-    """Return (files_modified, commits_created) for a worktree relative to main.
+def _session_diff_stats(
+    worktree_dir: str, base_ref: str = "origin/main"
+) -> tuple[list[str], int]:
+    """Return (files_modified, commits_created) for a worktree relative to base.
 
     Best-effort: any git failure yields an empty/zero result so telemetry
     emission never blocks a run.
@@ -426,7 +431,7 @@ def _session_diff_stats(worktree_dir: str) -> tuple[list[str], int]:
     commits_created = 0
 
     diff = subprocess.run(
-        ["git", "-C", worktree_dir, "diff", "--name-only", "main...HEAD"],
+        ["git", "-C", worktree_dir, "diff", "--name-only", f"{base_ref}...HEAD"],
         capture_output=True,
         text=True,
         check=False,
@@ -435,7 +440,7 @@ def _session_diff_stats(worktree_dir: str) -> tuple[list[str], int]:
         files_modified = [line for line in diff.stdout.splitlines() if line]
 
     rev = subprocess.run(
-        ["git", "-C", worktree_dir, "rev-list", "--count", "main..HEAD"],
+        ["git", "-C", worktree_dir, "rev-list", "--count", f"{base_ref}..HEAD"],
         capture_output=True,
         text=True,
         check=False,
@@ -463,6 +468,7 @@ def _emit_stage_session(
     exit_code: int,
     usage: dict | None = None,
     session_dir: Path | None = None,
+    base_branch: str = "origin/main",
 ) -> None:
     """Emit one stage telemetry record for a completed agent session.
 
@@ -475,7 +481,7 @@ def _emit_stage_session(
     wire-derived ``test_run`` record is appended per extracted test
     invocation, tagged with the session's ``stage``.
     """
-    files_modified, commits_created = _session_diff_stats(worktree_dir)
+    files_modified, commits_created = _session_diff_stats(worktree_dir, base_branch)
     logger.append_record(
         telemetry.stage_record(
             run_id=logger.run_id,
@@ -1021,6 +1027,7 @@ def process_task(
     workflow: Workflow | None = None,
     backend=None,
     stall_timeout: float = 300,
+    base_branch: str = "origin/main",
 ) -> bool:
     """Process a single task through all its stage groups.
 
@@ -1040,7 +1047,7 @@ def process_task(
 
     # Create or reuse worktree
     if worktree_dir is None:
-        worktree_dir = create_worktree(repo_root, task_id)
+        worktree_dir = create_worktree(repo_root, task_id, base_branch)
     copy_untracked_files(repo_root, worktree_dir)
 
     # Warm up configured worktree dependencies.
@@ -1183,6 +1190,7 @@ def process_task(
                     exit_code,
                     usage=usage,
                     session_dir=session_dir,
+                    base_branch=base_branch,
                 )
                 agent_invoked = True
                 if exit_code != 0:
@@ -1293,6 +1301,7 @@ def process_task(
                 exit_code,
                 usage=usage,
                 session_dir=session_dir,
+                base_branch=base_branch,
             )
             agent_invoked = True
 
@@ -1907,8 +1916,17 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     print(f"   Telemetry: {logger.run_dir}")
     print()
 
-    # Check main hygiene
-    if not enforce_main_hygiene(repo_root):
+    # Resolve trunk and integration branch once per run so every consumer
+    # agrees on the base (ADR-044).
+    config = resolve_config(os.path.join(repo_root, ".agents", "aet-work.json"))
+    trunk = resolve_trunk_branch(repo_root, config)
+    integration = resolve_integration_branch(repo_root, config)
+    base_branch = f"origin/{integration.ref}"
+    print(f"   Trunk: {trunk.ref} ({trunk.provenance})")
+    print(f"   Integration: {integration.ref} ({integration.provenance})")
+
+    # Check base hygiene
+    if not enforce_base_hygiene(repo_root, integration.ref, trunk.ref):
         end_time = telemetry.iso_now()
         logger.write_last_run(
             telemetry.run_summary_record(
@@ -2019,7 +2037,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     report = breaker.systemic_report(systemic_tally)
                     print(f"⛔ {report}")
                     stop_spawn = True
-        remove_worktree(repo_root, task_id)
+        remove_worktree(repo_root, task_id, base_branch)
 
     try:
         acquire_lease(queue_file, logger.run_id)
@@ -2068,7 +2086,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # Re-read queue after transition and record branch/worktree so the
                 # stored state reflects in_progress and does not spawn the same task
                 # again on the next loop iteration.
-                worktree_dir = create_worktree(repo_root, task_id)
+                worktree_dir = create_worktree(repo_root, task_id, base_branch)
                 env = os.environ.copy()
                 env["AET_TASK_ID"] = task_id
                 env["AET_PLAN_FILE"] = task.get("plan_file", "")
@@ -2280,13 +2298,22 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         plan_file = os.path.join(repo_root, plan_file)
 
     # When spawned by the batch orchestrator, the parent has already verified
-    # main hygiene and will dirty the working tree by updating the queue file
+    # base hygiene and will dirty the working tree by updating the queue file
     # between spawning tasks. Re-checking here would deadlock the pipeline.
     spawned_by_batch = bool(os.environ.get("AET_TASK_ID"))
 
-    # Check main hygiene before any worktree work — but only for top-level
+    # Resolve trunk and integration branch once per run so every consumer
+    # agrees on the base (ADR-044). Batch children inherit the parent's
+    # resolution via AET_WORK_BASE_BRANCH if set, but still need the local
+    # trunk/integration for aet-state calls made from this process.
+    config = resolve_config(os.path.join(repo_root, ".agents", "aet-work.json"))
+    trunk = resolve_trunk_branch(repo_root, config)
+    integration = resolve_integration_branch(repo_root, config)
+    base_branch = f"origin/{integration.ref}"
+
+    # Check base hygiene before any worktree work — but only for top-level
     # run-one invocations. Batch children rely on the parent-level check.
-    if not spawned_by_batch and not enforce_main_hygiene(repo_root):
+    if not spawned_by_batch and not enforce_base_hygiene(repo_root, integration.ref, trunk.ref):
         end_time = telemetry.iso_now()
         logger.write_last_run(
             telemetry.run_summary_record(
@@ -2364,7 +2391,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         if queued_task and not spawned_by_batch:
             queued_task_id = queued_task.get("id", task_id)
             # Ensure the worktree/branch exist before recording them.
-            worktree_dir = create_worktree(repo_root, queued_task_id)
+            worktree_dir = create_worktree(repo_root, queued_task_id, base_branch)
             worktree_rel = os.path.relpath(worktree_dir, repo_root)
             _record_run_one_in_queue(backend, queue_file, queued_task_id, worktree_rel, queued_task_id)
             task_id = queued_task_id
@@ -2403,6 +2430,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             workflow=wf,
             backend=backend,
             stall_timeout=getattr(args, "stall_timeout", 300),
+            base_branch=base_branch,
         )
         exit_code = 0 if success else 1
 

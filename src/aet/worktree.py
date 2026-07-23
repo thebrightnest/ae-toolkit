@@ -154,15 +154,15 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
     return worktree_dir
 
 
-def remove_worktree(repo_root: str, task_id: str) -> bool:
+def remove_worktree(repo_root: str, task_id: str, base_branch: str = "origin/main") -> bool:
     """Remove a worktree if it exists and has no uncommitted changes."""
     worktree_dir = os.path.join(repo_root, ".worktrees", task_id)
     if not os.path.isdir(worktree_dir):
         return True
 
-    # Check for commits ahead of main
+    # Check for commits ahead of the configured base branch.
     result = subprocess.run(
-        ["git", "-C", worktree_dir, "rev-list", "--count", "main..HEAD"],
+        ["git", "-C", worktree_dir, "rev-list", "--count", f"{base_branch}..HEAD"],
         capture_output=True,
         text=True,
     )
@@ -343,16 +343,18 @@ def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dic
     return results
 
 
-def check_main_hygiene(repo_root: str) -> tuple[bool, str]:
-    """Check if main is clean and synced with origin.
+def check_base_hygiene(
+    repo_root: str, integration_branch: str = "main", trunk_branch: str = "main"
+) -> tuple[bool, str]:
+    """Check if the integration branch is clean and synced with origin.
 
-    Queue files are excluded from the dirty check because the orchestrator
-    mutates them as part of normal operation and they are gitignored in
-    projects using the toolkit. The ``.lock`` sidecar is never unlinked —
-    deleting an fcntl lock file on release races with concurrent openers —
-    and the ``.lease`` sidecar self-reclaims only on the next mutation, so
-    both linger on disk (including after a crash) and must be ignored here
-    and in project ``.gitignore`` files.
+    Queue files and orchestrator run metadata are excluded from the dirty
+    check because the orchestrator mutates them as part of normal operation
+    and they are gitignored in projects using the toolkit. The ``.lock``
+    sidecar is never unlinked — deleting an fcntl lock file on release races
+    with concurrent openers — and the ``.lease`` sidecar self-reclaims only
+    on the next mutation, so both linger on disk (including after a crash)
+    and must be ignored here and in project ``.gitignore`` files.
     """
     ignored_paths = {
         ".agents/work-queue.json",
@@ -360,8 +362,9 @@ def check_main_hygiene(repo_root: str) -> tuple[bool, str]:
         ".agents/work-queue.lease",
         ".agents/work-history.jsonl",
     }
+    ignored_prefixes = {".agents/runs/"}
 
-    # Check working tree, ignoring queue-mutation artifacts. Use
+    # Check working tree, ignoring toolkit-mutation artifacts. Use
     # --untracked-files=all so untracked paths are listed individually rather
     # than collapsed into parent directories.
     result = subprocess.run(
@@ -378,27 +381,49 @@ def check_main_hygiene(repo_root: str) -> tuple[bool, str]:
         if len(parts) < 2:
             continue
         path = parts[1]
-        if path not in ignored_paths:
+        if path not in ignored_paths and not any(
+            path.startswith(prefix) for prefix in ignored_prefixes
+        ):
             dirty_lines.append(line)
     if dirty_lines:
         return False, "Working tree is dirty"
 
-    # Check unpushed commits
+    # Check unpushed commits against the integration branch.
     result = subprocess.run(
-        ["git", "-C", repo_root, "rev-list", "--count", "origin/main..main"],
+        [
+            "git",
+            "-C",
+            repo_root,
+            "rev-list",
+            "--count",
+            f"origin/{integration_branch}..{integration_branch}",
+        ],
         capture_output=True,
         text=True,
     )
     if int(result.stdout.strip() or 0) > 0:
-        return False, "Local main is ahead of origin/main"
+        msg = f"Local {integration_branch} is ahead of origin/{integration_branch}"
+        if integration_branch != trunk_branch:
+            msg += f" (trunk: {trunk_branch})"
+        return False, msg
 
-    # Check unpulled commits
+    # Check unpulled commits against the integration branch.
     result = subprocess.run(
-        ["git", "-C", repo_root, "rev-list", "--count", "main..origin/main"],
+        [
+            "git",
+            "-C",
+            repo_root,
+            "rev-list",
+            "--count",
+            f"{integration_branch}..origin/{integration_branch}",
+        ],
         capture_output=True,
         text=True,
     )
     if int(result.stdout.strip() or 0) > 0:
-        return False, "Local main is behind origin/main"
+        msg = f"Local {integration_branch} is behind origin/{integration_branch}"
+        if integration_branch != trunk_branch:
+            msg += f" (trunk: {trunk_branch})"
+        return False, msg
 
     return True, ""

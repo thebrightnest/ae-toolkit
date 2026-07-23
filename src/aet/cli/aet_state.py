@@ -18,7 +18,8 @@ from typing import Optional
 import typer
 
 from aet import queue as queue_lib  # noqa: E402
-from aet.backends.factory import create_backend  # noqa: E402, I001
+from aet.backends.factory import create_backend, resolve_config  # noqa: E402, I001
+from aet.branch_ref import resolve_trunk_branch  # noqa: E402
 
 _INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
 
@@ -26,6 +27,13 @@ def make_backend(queue_path):
     """Create a task backend for the given queue path."""
     history_file = str(Path(queue_path).with_name("work-history.jsonl"))
     return create_backend(queue_file=queue_path, history_file=history_file)
+
+
+def _resolve_trunk(queue_path):
+    """Resolve the trunk branch for the repo containing the queue file."""
+    cwd = os.path.dirname(queue_path) if queue_path else "."
+    config = resolve_config(os.path.join(cwd, ".agents", "aet-work.json"))
+    return resolve_trunk_branch(cwd, config).ref
 
 
 def find_task(queue, task_id):
@@ -66,31 +74,33 @@ def branch_exists(branch, cwd=None):
     return rc == 0
 
 
-def is_ancestor_of_main(branch, cwd=None):
-    if not branch:
+def is_ancestor_of_trunk(branch, trunk_branch, cwd=None):
+    if not branch or not trunk_branch:
         return False
-    rc, _, _ = run_git("merge-base", "--is-ancestor", branch, "origin/main", cwd=cwd)
+    rc, _, _ = run_git(
+        "merge-base", "--is-ancestor", branch, f"origin/{trunk_branch}", cwd=cwd
+    )
     return rc == 0
 
 
-def resolve_merge_commit(branch, cwd=None):
-    """Resolve the merge commit for a branch on origin/main.
+def resolve_merge_commit(branch, cwd=None, trunk_branch="main"):
+    """Resolve the merge commit for a branch on the remote trunk.
 
     Tries, in order:
-      1. Regular merge: branch tip is an ancestor of origin/main.
+      1. Regular merge: branch tip is an ancestor of origin/<trunk_branch>.
       2. Squash merge via `gh pr view <branch> --json mergeCommit`.
-      3. Diff-equivalence fallback against recent origin/main commits.
+      3. Diff-equivalence fallback against recent origin/<trunk_branch> commits.
 
     Returns (merge_commit, merge_strategy) or (None, None) if unresolved.
     """
     if not branch:
         return None, None
 
-    # 1. Regular merge: branch tip is on origin/main.
+    # 1. Regular merge: branch tip is on the remote trunk.
     rc, out, _ = run_git("rev-parse", branch, cwd=cwd)
     if rc == 0:
         tip = out.strip()
-        if is_ancestor_of_main(tip, cwd=cwd):
+        if is_ancestor_of_trunk(tip, trunk_branch, cwd=cwd):
             return tip, "regular"
 
     # 2. Squash merge via GitHub CLI.
@@ -99,22 +109,24 @@ def resolve_merge_commit(branch, cwd=None):
         try:
             data = json.loads(out)
             sha = data.get("mergeCommit", {}).get("oid")
-            if sha and is_ancestor_of_main(sha, cwd=cwd):
+            if sha and is_ancestor_of_trunk(sha, trunk_branch, cwd=cwd):
                 return sha, "squash"
         except json.JSONDecodeError:
             pass
 
     # 3. Diff-equivalence fallback.
-    sha = resolve_by_diff(branch, cwd=cwd)
+    sha = resolve_by_diff(branch, cwd=cwd, trunk_branch=trunk_branch)
     if sha:
         return sha, "squash"
 
     return None, None
 
 
-def resolve_by_diff(branch, cwd=None, max_commits=20):
-    """Find a squash merge by matching the branch diff to a recent main commit."""
-    rc, merge_base, _ = run_git("merge-base", branch, "origin/main", cwd=cwd)
+def resolve_by_diff(branch, cwd=None, max_commits=20, trunk_branch="main"):
+    """Find a squash merge by matching the branch diff to a recent trunk commit."""
+    rc, merge_base, _ = run_git(
+        "merge-base", branch, f"origin/{trunk_branch}", cwd=cwd
+    )
     if rc != 0:
         return None
     merge_base = merge_base.strip()
@@ -127,7 +139,7 @@ def resolve_by_diff(branch, cwd=None, max_commits=20):
         return None
 
     rc, commits_out, _ = run_git(
-        "rev-list", "--max-count", str(max_commits), "origin/main", cwd=cwd
+        "rev-list", "--max-count", str(max_commits), f"origin/{trunk_branch}", cwd=cwd
     )
     if rc != 0:
         return None
@@ -145,11 +157,11 @@ def resolve_by_diff(branch, cwd=None, max_commits=20):
     return None
 
 
-def derive_status(task, blocker_status_fn=None, cwd=None):
+def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main"):
     """Derive canonical state from ground truth.
 
     Derivation rules, applied in order:
-      1. merged   — branch or merge_commit is an ancestor of origin/main.
+      1. merged   — branch or merge_commit is an ancestor of origin/<trunk_branch>.
       2. in_progress — local branch exists.
       3. ready    — plan exists, no branch, and all blockers are terminal
                    (including the case of no blockers).
@@ -176,13 +188,13 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
     else:
         derived["branch_exists"] = False
 
-    # Ancestry check (branch OR merge_commit must be on main)
-    on_main = False
-    if branch and is_ancestor_of_main(branch, cwd=cwd):
-        on_main = True
-    if merge_commit and is_ancestor_of_main(merge_commit, cwd=cwd):
-        on_main = True
-    derived["on_main"] = on_main
+    # Ancestry check (branch OR merge_commit must be on the remote trunk)
+    on_trunk = False
+    if branch and is_ancestor_of_trunk(branch, trunk_branch, cwd=cwd):
+        on_trunk = True
+    if merge_commit and is_ancestor_of_trunk(merge_commit, trunk_branch, cwd=cwd):
+        on_trunk = True
+    derived["on_trunk"] = on_trunk
 
     # Worktree present?
     if worktree and Path(worktree).is_dir():
@@ -198,7 +210,7 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
 
     # Determine actionable canonical state.
     status = "unknown"
-    if on_main:
+    if on_trunk:
         status = "merged"
     elif derived["branch_exists"]:
         status = "in_progress"
@@ -221,10 +233,10 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
     # Warnings
     current_status = queue_lib.current_state(task) or ""
     warnings = []
-    if current_status == "awaiting_merge" and not merge_commit and not on_main:
+    if current_status == "awaiting_merge" and not merge_commit and not on_trunk:
         warnings.append("awaiting_merge without merge verification")
-    if current_status == "merged" and not on_main:
-        warnings.append("merged state but not ancestor of origin/main")
+    if current_status == "merged" and not on_trunk:
+        warnings.append(f"merged state but not ancestor of origin/{trunk_branch}")
     if warnings:
         derived["warnings"] = warnings
         status = f"{status} (warning: {'; '.join(warnings)})"
@@ -233,7 +245,7 @@ def derive_status(task, blocker_status_fn=None, cwd=None):
     return derived
 
 
-def validate_transition(task, from_stage, to_stage, cwd=None):
+def validate_transition(task, from_stage, to_stage, cwd=None, trunk_branch="main"):
     """Return (ok, message). ok=True means the state transition is legal.
 
     Validates the recorded-forward lifecycle (ADR-011).  ``from_stage`` and
@@ -252,20 +264,34 @@ def validate_transition(task, from_stage, to_stage, cwd=None):
     if to_stage not in legal:
         return (False, f"Illegal transition: {from_stage} -> {to_stage}.")
 
-    # Cannot set merged without ancestry check
+    # Cannot set merged without ancestry check against the remote trunk.
     if to_stage == "merged":
-        on_main = False
+        on_trunk = False
         if branch:
-            on_main = is_ancestor_of_main(branch, cwd=cwd)
+            on_trunk = is_ancestor_of_trunk(branch, trunk_branch, cwd=cwd)
         if merge_commit:
-            on_main = on_main or is_ancestor_of_main(merge_commit, cwd=cwd)
-        if not on_main:
-            return (False, "Cannot set merged: branch/merge_commit is not ancestor of origin/main.")
+            on_trunk = on_trunk or is_ancestor_of_trunk(merge_commit, trunk_branch, cwd=cwd)
+        if not on_trunk:
+            return (
+                False,
+                f"Cannot set merged: branch/merge_commit is not ancestor of origin/{trunk_branch}.",
+            )
 
     return (True, "Transition is valid.")
 
 
-def _apply_transition(backend, queue, task, from_state, to_state, by, evidence=None, cwd=None, history_file=None):
+def _apply_transition(
+    backend,
+    queue,
+    task,
+    from_state,
+    to_state,
+    by,
+    evidence=None,
+    cwd=None,
+    history_file=None,
+    trunk_branch="main",
+):
     """Apply a validated state transition and propagate the forward frontier.
 
     This is the only function that assigns ``task["state"]``.  It validates the
@@ -273,7 +299,7 @@ def _apply_transition(backend, queue, task, from_state, to_state, by, evidence=N
     persists the queue through the configured backend, and seals terminal tasks
     to the settled history log.
     """
-    ok, msg = validate_transition(task, from_state, to_state, cwd=cwd)
+    ok, msg = validate_transition(task, from_state, to_state, cwd=cwd, trunk_branch=trunk_branch)
     if not ok:
         raise RuntimeError(msg)
 
@@ -380,7 +406,7 @@ def cmd_set_stage(args):
     return 0
 
 
-def _derive_all_states(queue, cwd, history=None):
+def _derive_all_states(queue, cwd, history=None, trunk_branch="main"):
     """Return (task_by_id, derived) for every task in the queue.
 
     Settled history records seed ``derived`` so a dependent whose blocker
@@ -402,14 +428,18 @@ def _derive_all_states(queue, cwd, history=None):
 
     def blocker_status(task_id):
         if task_id not in derived and task_id in task_by_id:
-            derived[task_id] = derive_status(task_by_id[task_id], blocker_status, cwd=cwd)
+            derived[task_id] = derive_status(
+                task_by_id[task_id], blocker_status, cwd=cwd, trunk_branch=trunk_branch
+            )
         status = derived.get(task_id, {}).get("derived_status", "unknown")
         return status.split(" (warning")[0]
 
     for task in tasks:
         task_id = task["id"]
         if task_id not in derived:
-            derived[task_id] = derive_status(task, blocker_status, cwd=cwd)
+            derived[task_id] = derive_status(
+                task, blocker_status, cwd=cwd, trunk_branch=trunk_branch
+            )
 
     return task_by_id, derived
 
@@ -440,7 +470,10 @@ def cmd_audit(args):
     data = backend.load(verify=False)
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    task_by_id, derived = _derive_all_states(queue, cwd, history=data["history"])
+    trunk_branch = _resolve_trunk(args.queue)
+    task_by_id, derived = _derive_all_states(
+        queue, cwd, history=data["history"], trunk_branch=trunk_branch
+    )
 
     results = {}
     for task in queue:
@@ -491,7 +524,10 @@ def cmd_heal(args):
     data = backend.load(verify=False)
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    task_by_id, derived = _derive_all_states(queue, cwd, history=data["history"])
+    trunk_branch = _resolve_trunk(args.queue)
+    task_by_id, derived = _derive_all_states(
+        queue, cwd, history=data["history"], trunk_branch=trunk_branch
+    )
 
     # A blocker counts as pending only while it is not terminal in the live
     # queue and not settled in history.
@@ -643,6 +679,7 @@ def cmd_heal(args):
                 _apply_transition(
                     backend, queue, task, from_state, to_state,
                     by="heal", evidence={"reason": change["reason"]}, cwd=cwd,
+                    trunk_branch=trunk_branch,
                 )
                 applied += 1
             except RuntimeError as e:
@@ -662,7 +699,10 @@ def cmd_validate(args):
         print(f"Task not found: {args.task_id}", file=sys.stderr)
         return 1
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    ok, msg = validate_transition(task, args.from_stage, args.to_stage, cwd=cwd)
+    trunk_branch = _resolve_trunk(args.queue)
+    ok, msg = validate_transition(
+        task, args.from_stage, args.to_stage, cwd=cwd, trunk_branch=trunk_branch
+    )
     if ok:
         print(msg)
         return 0
@@ -673,6 +713,7 @@ def cmd_validate(args):
 def cmd_transition(args):
     backend = make_backend(args.queue)
     cwd = os.path.dirname(args.queue) if args.queue else "."
+    trunk_branch = _resolve_trunk(args.queue)
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1
@@ -686,7 +727,9 @@ def cmd_transition(args):
             return 1
 
         if args.dry_run:
-            ok, msg = validate_transition(task, args.from_stage, args.to_stage, cwd=cwd)
+            ok, msg = validate_transition(
+                task, args.from_stage, args.to_stage, cwd=cwd, trunk_branch=trunk_branch
+            )
             if ok:
                 print(f"[dry-run] Would transition {args.task_id} {args.from_stage} -> {args.to_stage}")
                 return 0
@@ -698,6 +741,7 @@ def cmd_transition(args):
             _apply_transition(
                 backend, queue, task, args.from_stage, args.to_stage,
                 by="transition", evidence=evidence, cwd=cwd,
+                trunk_branch=trunk_branch,
             )
         except RuntimeError as e:
             print(str(e), file=sys.stderr)
@@ -712,6 +756,7 @@ def cmd_record_merge(args):
     backend = make_backend(args.queue)
     cwd = os.path.dirname(args.queue) if args.queue else "."
     history_file = getattr(backend, "history_file", None)
+    trunk_branch = _resolve_trunk(args.queue)
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1
@@ -773,9 +818,9 @@ def cmd_record_merge(args):
         return 1
 
     if cli_merge_commit:
-        if not is_ancestor_of_main(cli_merge_commit, cwd=cwd):
+        if not is_ancestor_of_trunk(cli_merge_commit, trunk_branch, cwd=cwd):
             print(
-                f"Merge verification failed: {cli_merge_commit} is not an ancestor of origin/main.",
+                f"Merge verification failed: {cli_merge_commit} is not an ancestor of origin/{trunk_branch}.",
                 file=sys.stderr,
             )
             return 1
@@ -786,11 +831,11 @@ def cmd_record_merge(args):
         if not branch:
             print(f"Task {args.task_id} has no branch. Use --branch or --merge-commit.", file=sys.stderr)
             return 1
-        merge_commit, merge_strategy = resolve_merge_commit(branch, cwd=cwd)
+        merge_commit, merge_strategy = resolve_merge_commit(branch, cwd=cwd, trunk_branch=trunk_branch)
 
     if not merge_commit:
         print(
-            "Merge verification failed: could not determine merge commit on origin/main.",
+            f"Merge verification failed: could not determine merge commit on origin/{trunk_branch}.",
             file=sys.stderr,
         )
         return 1
@@ -814,7 +859,9 @@ def cmd_record_merge(args):
             task["branch"] = branch
 
         if args.dry_run:
-            ok, msg = validate_transition(task, current_state, "merged", cwd=cwd)
+            ok, msg = validate_transition(
+                task, current_state, "merged", cwd=cwd, trunk_branch=trunk_branch
+            )
             if ok:
                 print(
                     f"[dry-run] Would record merge for {args.task_id}: "
@@ -832,6 +879,7 @@ def cmd_record_merge(args):
             _apply_transition(
                 backend, queue, task, current_state, "merged",
                 by="record-merge", evidence=evidence, cwd=cwd,
+                trunk_branch=trunk_branch,
             )
         except RuntimeError as e:
             task["merge_commit"] = previous_merge_commit
