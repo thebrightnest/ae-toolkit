@@ -3,7 +3,7 @@ id: epi-02-thread-resolver-through-consumers
 size: M
 blocked_by: [epi-01-base-branch-resolver]
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: replaces literal git refs with resolved ones in existing git invocations; no new command surface
 docs_sync: required
@@ -143,5 +143,5 @@ the changed values are persisted.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
