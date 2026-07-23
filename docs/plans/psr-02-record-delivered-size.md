@@ -177,5 +177,5 @@ the revert remain valid and are simply not extended by later closures.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
