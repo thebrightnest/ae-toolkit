@@ -66,5 +66,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
