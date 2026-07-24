@@ -31,14 +31,16 @@ class MockResult:
 class TestShipMergeParser(unittest.TestCase):
     """Argument parsing for the merge subcommand."""
 
-    def test_merge_subcommand_requires_branch(self):
-        """aet ship merge requires --branch to be explicit."""
+    def test_merge_subcommand_defaults_branch_to_main(self):
+        """aet ship merge defaults --branch to main when omitted."""
         parser = ship.build_parser()
-        with self.assertRaises(SystemExit):
-            parser.parse_args(["merge", "docs/plans/t1.md"])
+        args = parser.parse_args(["merge", "docs/plans/t1.md"])
+        self.assertEqual(args.command, "merge")
+        self.assertEqual(args.plan, "docs/plans/t1.md")
+        self.assertEqual(args.branch, "main")
 
     def test_merge_subcommand_parses_branch(self):
-        """aet ship merge accepts a plan and a required --branch."""
+        """aet ship merge accepts an explicit --branch."""
         parser = ship.build_parser()
         args = parser.parse_args(["merge", "docs/plans/t1.md", "--branch", "dev"])
         self.assertEqual(args.command, "merge")
@@ -119,10 +121,10 @@ class TestShipMergeCommand(unittest.TestCase):
     def _write_plan(self, content: str) -> None:
         self.plan_path.write_text(content, encoding="utf-8")
 
-    def test_merge_requires_branch_option(self):
-        """Typer/argparse rejects merge when --branch is missing."""
-        with self.assertRaises(SystemExit):
-            ship.parse_args(["merge", str(self.plan_path)])
+    def test_merge_defaults_branch_to_main(self):
+        """Typer/argparse defaults --branch to main when omitted."""
+        args = ship.parse_args(["merge", str(self.plan_path)])
+        self.assertEqual(args.branch, "main")
 
     def test_merge_refuses_to_proceed_when_gate_fails(self):
         """If the gate reports failure, merge exits before conflict/merge checks."""

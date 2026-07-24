@@ -972,8 +972,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     merge_parser.add_argument(
         "--branch",
-        required=True,
-        help="Target branch to merge into (required).",
+        default="main",
+        help="Target branch to merge into (default: main).",
     )
     merge_parser.add_argument(
         "--dry-run",
@@ -1150,9 +1150,9 @@ def ship_merge(
         help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
     ),
     branch: str = typer.Option(
-        ...,
+        "main",
         "--branch",
-        help="Target branch to merge into (required).",
+        help="Target branch to merge into (default: main).",
     ),
     dry_run: bool = typer.Option(
         False,
