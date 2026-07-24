@@ -4,7 +4,7 @@ size: S
 blocked_by:
   - cfg-01-config-resolution-overhaul
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: new write surface for persisted config values; write-time validation is the guard against persisting a mode the resolver will reject
 docs_sync: required
