@@ -183,5 +183,4 @@ recorded reason.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: reviewed*
