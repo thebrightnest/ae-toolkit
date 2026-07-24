@@ -61,13 +61,14 @@ at two granularities.
 
 ## Task List
 
-1. Add the missing heal rule and make `state audit` report the pair
+1. ✓ Add the missing heal rule and make `state audit` report the pair
    — S (traces: R-11)
-2. Clear stale `branch`/`worktree` runtime fields in heal repairs
+2. ✓ Clear stale `branch`/`worktree` runtime fields in heal repairs
    — S (traces: R-12)
-3. Add `aet state reset <task_id>`: recompute from git + blockers, set
+3. ✓ Add `aet state reset <task_id>`: recompute from git + blockers, set
    `ready`/`blocked`, clear runtime fields — M (traces: R-13)
-4. Merge branch to main and verify integration — S
+4. [Deferred: merge and final integration verification happen at ship stage]
+   Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated.
@@ -103,19 +104,19 @@ re-evaluated.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] New source coverage: `tests/state/test_heal_missing_branch.py` asserts
+- [x] Lint passes
+- [x] Tests pass
+- [x] New source coverage: `tests/state/test_heal_missing_branch.py` asserts
       `state heal --apply` on an `in_progress` task whose branch was deleted
       moves it to its derived state and leaves `branch`/`worktree` cleared —
       demonstrated **failing** against the current "No healable discrepancies
       found" fall-through
-- [ ] New source coverage: `tests/state/test_state_reset.py` asserts reset
+- [x] New source coverage: `tests/state/test_state_reset.py` asserts reset
       un-starts a task and the queue then round-trips through `init-queue`
       unchanged
-- [ ] `state audit` output names the (`ready`|`blocked`, `in_progress`) pair
-- [ ] The `awaiting_merge` case is covered alongside `in_progress`
-- [ ] R-trace coverage: R-11 by task 1; R-12 by task 2; R-13 by task 3
+- [x] `state audit` output names the (`ready`|`blocked`, `in_progress`) pair
+- [x] The `awaiting_merge` case is covered alongside `in_progress`
+- [x] R-trace coverage: R-11 by task 1; R-12 by task 2; R-13 by task 3
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -130,5 +131,5 @@ schema changes.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
