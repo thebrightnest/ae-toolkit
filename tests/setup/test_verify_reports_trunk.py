@@ -13,7 +13,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from tests.cli._helpers import run_typer
 
@@ -50,8 +49,7 @@ class VerifyReportsTrunkTestCase(unittest.TestCase):
         }
         if env_extra:
             env.update(env_extra)
-        with patch.object(aet_setup, "_is_worktree_copy", lambda _script: False):
-            result = run_typer(aet_setup.app, ["verify"], env=env)
+        result = run_typer(aet_setup.app, ["verify"], env=env)
         return result.exit_code, result.stdout, result.stderr
 
 
