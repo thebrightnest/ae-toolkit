@@ -134,5 +134,5 @@ rename back by hand — one file, called out in the upgrade guide).
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
