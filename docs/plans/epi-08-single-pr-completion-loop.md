@@ -66,17 +66,20 @@ stays whole.
 
 ## Task List
 
-1. Create per-task branches locally in `single-pr` and make their push path
+1. ✓ Create per-task branches locally in `single-pr` and make their push path
    unreachable — M (traces: R-15)
-2. Complete tasks by local squash-merge into the integration branch, firing
+2. ✓ Complete tasks by local squash-merge into the integration branch, firing
    ADR-011 unblocking on integration rather than trunk arrival
-   — M (traces: R-16)
-3. Cut task worktrees from the integration branch's live tip at task-start
-   time, after blockers have integrated — M (traces: R-17)
-4. Key `check_base_hygiene` and `_session_diff_stats` to the integration
+   — M (traces: R-16) [Changed: per-task gate evidence is not re-verified at
+   integration time; existing stage-advancement gates still apply (R-22 gap)]
+3. ✓ Cut task worktrees from the integration branch's live tip at task-start
+   time, after blockers have integrated — M (traces: R-17) [Changed: no advisory
+   lock or post-rebase re-validation is implemented; integration is a simple
+   squash-merge (R-18 gap)]
+4. ✓ Key `check_base_hygiene` and `_session_diff_stats` to the integration
    branch in `single-pr` — S (traces: R-4)
-5. Delete each per-task branch locally after it integrates — S (traces: R-15)
-6. Merge branch to main and verify integration — S
+5. ✓ Delete each per-task branch locally after it integrates — S (traces: R-15)
+6. [Deferred: ship stage] Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated.
@@ -116,22 +119,22 @@ re-evaluated.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] New source coverage: `tests/orchestrator/test_single_pr_loop.py` runs a
+- [x] Lint passes
+- [x] Tests pass
+- [x] New source coverage: `tests/orchestrator/test_single_pr_loop.py` runs a
       two-task `single-pr` epic with a dependency and asserts
       `git ls-remote --heads origin` contains the integration branch and no
       task branch, and that the dependent task's worktree contains its
       blocker's committed changes at creation time (PRD acceptance criteria
       for R-15, R-16, R-17)
-- [ ] New source coverage: `tests/state/test_done_means_integrated.py` asserts
+- [x] New source coverage: `tests/state/test_done_means_integrated.py` asserts
       a task integrated into the integration branch derives terminal and
       unblocks its dependents, while trunk arrival is not required
-- [ ] `pr-per-task` behavior is unchanged — the `epi-07` command-sequence
+- [x] `pr-per-task` behavior is unchanged — the `epi-07` command-sequence
       regression test still passes
-- [ ] No push of a task branch is reachable in `single-pr` (asserted by
+- [x] No push of a task branch is reachable in `single-pr` (asserted by
       inspecting the commands issued, not by reading the code)
-- [ ] R-trace coverage: R-15 by tasks 1 and 5; R-16 by task 2; R-17 by task 3;
+- [x] R-trace coverage: R-15 by tasks 1 and 5; R-16 by task 2; R-17 by task 3;
       R-4 (mode-keyed sentence) by task 4
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -147,5 +150,5 @@ reflog. `pr-per-task` is untouched by construction.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

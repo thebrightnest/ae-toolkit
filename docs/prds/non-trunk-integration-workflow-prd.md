@@ -410,6 +410,34 @@ scope — the epic/integration layer — is a feature and is planned as one.
 - Task 3 (merge branch to main and verify integration): deferred to the
   `aet-ship` stage; `aet-sync-docs` does not perform merges.
 
+## Divergence Summary: epi-08-single-pr-completion-loop
+
+*Recorded: 2026-07-24 — Branch: epi-08-single-pr-completion-loop (R-15, R-16, R-17, R-4)*
+
+### Changed from plan
+
+- **R-18 (advisory lock + post-rebase re-validation):** Not implemented. The
+  integration step is a simple squash-merge into the integration branch without
+  serialization or re-validation against the live tip.
+- **R-19 (integration failure as distinct failure category):** Not implemented
+  as a distinct category. A failed integration returns `False` from
+  `process_task` and is handled through the existing task-failure path.
+- **R-22 (per-task gate evidence at integration time):** Gate evidence is
+  enforced during stage advancement but not re-verified inside the integration
+  step itself.
+- **R-7 (no repo-root HEAD changes):** `squash_merge_task_branch` checks out the
+  integration branch in `repo_root`, changing `HEAD` there. This contradicts the
+  hard requirement that AET never changes the repo-root checkout.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- **Epic merge to trunk and final integration verification** — out of scope for
+  the sync-docs stage; will happen at the ship stage.
+
 ## Divergence Summary: epi-06-state-heal-gap-and-reset
 
 *Recorded: 2026-07-24 — Branch: epi-06-state-heal-gap-and-reset*

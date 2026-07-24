@@ -85,8 +85,11 @@ from aet.worktree import (  # noqa: E402
     check_base_hygiene,
     copy_untracked_files,
     create_worktree,
+    delete_local_branch,
     prepare_worktree_dependencies,
+    push_branch,
     remove_worktree,
+    squash_merge_task_branch,
 )
 
 # Global shutdown flag
@@ -1126,10 +1129,10 @@ def process_task(
     down so every task in a batch sees the same mode. Only ``pr-per-task``
     is supported in this version; ``single-pr`` lands in ``epi-08``.
     """
-    if integration_mode != "pr-per-task":
+    if integration_mode not in ("pr-per-task", "single-pr"):
         print(
-            f"   ❌ Integration mode {integration_mode!r} is not supported "
-            "in this version. Use 'pr-per-task'."
+            f"   ❌ Integration mode {integration_mode!r} is not supported. "
+            "Use 'pr-per-task' or 'single-pr'."
         )
         return False
 
@@ -1446,7 +1449,86 @@ def process_task(
             print(f"   ❌ Task completed without running any stage and {msg}")
             return False
 
+    # In single-pr mode, integrate the task branch into the epic integration
+    # branch locally, push the integration branch, delete the per-task branch,
+    # and mark the task merged. This is the "done means integrated" semantics
+    # of ADR-045 decision 3.
+    if integration_mode == "single-pr":
+        integration_branch = base_branch.split("/", 1)[1] if "/" in base_branch else base_branch
+        ok = _integrate_single_pr_task(
+            repo_root=repo_root,
+            task_id=task_id,
+            integration_branch=integration_branch,
+            worktree_dir=worktree_dir,
+        )
+        if not ok:
+            return False
+
     print(f"   ✅ Task complete: {task_id}")
+    return True
+
+
+def _integrate_single_pr_task(
+    repo_root: str,
+    task_id: str,
+    integration_branch: str,
+    worktree_dir: str,
+) -> bool:
+    """Squash-merge a task into the integration branch, push, and delete the task branch.
+
+    Also transitions the queued task to ``merged`` when a queue file exists.
+    Returns ``True`` on success.
+    """
+    print(f"   🔀 Integrating {task_id} into {integration_branch}")
+
+    ok, msg = squash_merge_task_branch(repo_root, task_id, integration_branch)
+    if not ok:
+        print(f"   ❌ Integration failed: {msg}")
+        return False
+    merge_commit = msg
+
+    ok, err = push_branch(repo_root, integration_branch)
+    if not ok:
+        print(f"   ❌ Push of {integration_branch} failed: {err}")
+        return False
+
+    # Remove the worktree before deleting the branch; git refuses to delete a
+    # branch that is still checked out in a worktree.
+    subprocess.run(
+        ["git", "-C", repo_root, "worktree", "remove", "--force", worktree_dir],
+        capture_output=True,
+    )
+    delete_local_branch(repo_root, task_id)
+
+    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    if os.path.exists(queue_file):
+        aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+        result = subprocess.run(
+            [
+                sys.executable,
+                aet_state_bin,
+                "transition",
+                task_id,
+                "in_progress",
+                "merged",
+                queue_file,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(
+                f"   ⚠️  Could not transition {task_id} to merged: {result.stderr.strip()}"
+            )
+            return False
+
+    # Update the remote-tracking ref so the next worktree is cut from the live tip.
+    subprocess.run(
+        ["git", "-C", repo_root, "update-ref", f"refs/remotes/origin/{integration_branch}", merge_commit],
+        capture_output=True,
+    )
+
+    print(f"   ✅ {task_id} integrated into {integration_branch}")
     return True
 
 
@@ -1816,6 +1898,9 @@ def _finalize_task(
                     return {"successes": 0, "failures": 1, "stop_spawn": True}
         from_state = current_state(task) if task else "in_progress"
         if from_state == "awaiting_merge":
+            return {"successes": 1, "failures": 0, "stop_spawn": False}
+        if from_state == "merged":
+            # Single-pr mode: process_task already integrated locally.
             return {"successes": 1, "failures": 0, "stop_spawn": False}
         # Record delivered diff size when the merge commit is already known
         # (e.g. auto-merge closure). Normal awaiting_merge closure defers the
@@ -2603,50 +2688,55 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
         # For top-level run-one on a queued task, mirror run_batch and transition
         # the task to awaiting_merge on success so aet-state record-merge can run.
+        # In single-pr mode process_task has already integrated the task locally
+        # and transitioned it to merged, so skip the awaiting_merge step.
         if success and queued_task and not spawned_by_batch:
             try:
                 queue = backend.load()["queue"]
                 queue_task = next((t for t in queue if t.get("id") == task_id), None)
                 if queue_task:
                     from_state = current_state(queue_task) or "in_progress"
-                    worktree_rel = queue_task.get("worktree")
-                    if worktree_rel:
-                        ok, msg = verify_branch_has_commits(
-                            os.path.join(repo_root, worktree_rel)
-                        )
-                        if not ok:
-                            print(f"   ❌ Task {task_id} succeeded but produced no commits: {msg}")
-                            _mark_failed(backend, queue_file, task_id, from_state)
-                            exit_code = 1
-                        else:
-                            tokens, usd = _task_usage_aggregates(logger, task_id)
-                            if tokens is not None or usd is not None:
-                                queue_task["cost"] = {"tokens": tokens, "usd": usd}
-                                backend.save(queue)
-                            if _maybe_auto_merge(queue_task, queue_file, repo_root):
-                                pass  # perform_auto_merge prints success/failure.
+                    if from_state == "merged":
+                        print(f"   ✅ Task {task_id} merged locally (single-pr)")
+                    else:
+                        worktree_rel = queue_task.get("worktree")
+                        if worktree_rel:
+                            ok, msg = verify_branch_has_commits(
+                                os.path.join(repo_root, worktree_rel)
+                            )
+                            if not ok:
+                                print(f"   ❌ Task {task_id} succeeded but produced no commits: {msg}")
+                                _mark_failed(backend, queue_file, task_id, from_state)
+                                exit_code = 1
                             else:
-                                aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
-                                result = subprocess.run(
-                                    [
-                                        sys.executable,
-                                        aet_state_bin,
-                                        "transition",
-                                        task_id,
-                                        from_state,
-                                        "awaiting_merge",
-                                        queue_file,
-                                    ],
-                                    capture_output=True,
-                                    text=True,
-                                )
-                                if result.returncode == 0:
-                                    print(f"   ✅ Task {task_id} awaiting merge")
+                                tokens, usd = _task_usage_aggregates(logger, task_id)
+                                if tokens is not None or usd is not None:
+                                    queue_task["cost"] = {"tokens": tokens, "usd": usd}
+                                    backend.save(queue)
+                                if _maybe_auto_merge(queue_task, queue_file, repo_root):
+                                    pass  # perform_auto_merge prints success/failure.
                                 else:
-                                    print(
-                                        f"   ⚠️  Could not transition {task_id} to "
-                                        f"awaiting_merge: {result.stderr.strip()}"
+                                    aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+                                    result = subprocess.run(
+                                        [
+                                            sys.executable,
+                                            aet_state_bin,
+                                            "transition",
+                                            task_id,
+                                            from_state,
+                                            "awaiting_merge",
+                                            queue_file,
+                                        ],
+                                        capture_output=True,
+                                        text=True,
                                     )
+                                    if result.returncode == 0:
+                                        print(f"   ✅ Task {task_id} awaiting merge")
+                                    else:
+                                        print(
+                                            f"   ⚠️  Could not transition {task_id} to "
+                                            f"awaiting_merge: {result.stderr.strip()}"
+                                        )
             except Exception as exc:  # pragma: no cover - defensive logging
                 print(f"   ⚠️  Could not mark {task_id} awaiting merge: {exc}")
 
