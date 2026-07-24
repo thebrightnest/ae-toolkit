@@ -124,9 +124,14 @@ class TestStatusReadPathNoGit(unittest.TestCase):
         ], plans_dir))
         history_file = _make_history([])
 
+        repo_root_tmp = tempfile.TemporaryDirectory()
         no_git = _NoGitRun()
         stdout = io.StringIO()
-        with patch.dict(os.environ, {"AET_PROJECT_ID": "no-git-test"}, clear=False):
+        with patch.dict(
+            os.environ,
+            {"AET_PROJECT_ID": "no-git-test", "AET_REPO_ROOT": repo_root_tmp.name},
+            clear=False,
+        ):
             with patch.object(subprocess, "run", side_effect=no_git):
                 with patch.object(sys, "stdout", stdout):
                     with patch.object(sys, "argv", [
@@ -163,8 +168,13 @@ class TestNextReadPathNoGit(unittest.TestCase):
                 raise AssertionError(f"next invoked forbidden subprocess: {cmd}")
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
+        repo_root_tmp = tempfile.TemporaryDirectory()
         stdout = io.StringIO()
-        with patch.dict(os.environ, {"AET_PROJECT_ID": "no-git-test"}, clear=False):
+        with patch.dict(
+            os.environ,
+            {"AET_PROJECT_ID": "no-git-test", "AET_REPO_ROOT": repo_root_tmp.name},
+            clear=False,
+        ):
             with patch.object(subprocess, "run", side_effect=mock_run):
                 with patch.object(sys, "stdout", stdout):
                     with patch.object(sys, "argv", [
