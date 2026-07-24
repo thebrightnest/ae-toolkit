@@ -150,7 +150,7 @@ class TestStatusStoredState(unittest.TestCase):
         self.assertNotIn("Two", ready_section)
 
     def test_works_when_queue_file_is_missing(self):
-        """status exits cleanly and reports an empty queue when files are missing."""
+        """status exits cleanly and hides empty sections when files are missing."""
         plans_dir_tmp = _make_plans_dir([])
         plans_dir = plans_dir_tmp.name
         queue_file = str(Path(tempfile.mkdtemp()) / "missing-queue.json")
@@ -166,9 +166,11 @@ class TestStatusStoredState(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         output = result.stdout
         self.assertIn("No plan drift detected", output)
-        self.assertIn("planned: 0", output)
-        self.assertIn("Next ready tasks:", output)
-        self.assertIn("None.", output)
+        self.assertIn("Queue is empty.", output)
+        self.assertNotIn("Queue summary:", output)
+        self.assertIn("No ready tasks.", output)
+        self.assertNotIn("Next ready tasks:", output)
+        self.assertNotIn("None.", output)
 
     def test_plan_drift_is_informational(self):
         """status exits 0 and still reports active queue state when plan drift exists."""

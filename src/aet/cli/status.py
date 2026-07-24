@@ -167,18 +167,22 @@ def _run(
         if category in counts:
             counts[category] += 1
 
-    print("\nQueue summary (active tasks only):")
-    for state, count in counts.items():
-        print(f"  {state}: {count}")
+    non_zero = {state: count for state, count in counts.items() if count}
+    if non_zero:
+        print("\nQueue summary:")
+        for state, count in non_zero.items():
+            print(f"  {state}: {count}")
+    else:
+        print("\nQueue is empty.")
 
     active_runs = _active_runs(runs_dir)
-    print("\nActive detached runs:")
     if active_runs:
+        print("\nActive detached runs:")
         for run in active_runs:
             started = f" (started {run['started']})" if run["started"] else ""
             print(f"  - {run['id']} (PID {run['pid']}){started}")
     else:
-        print("  None.")
+        print("\nNo active detached runs.")
 
     terminal = {"merged", "abandoned"}
     active_ids = {t.get("id") for t in queue}
@@ -198,37 +202,42 @@ def _run(
                 ", ".join(deps) or "—",
             ]
         )
-    print()
-    for line in _render_table(["ID", "State", "Depends on"], rows):
-        print(line)
+    if rows:
+        print()
+        for line in _render_table(["ID", "State", "Depends on"], rows):
+            print(line)
+    else:
+        print("\nNo active tasks.")
 
     ready = [t for t in queue if current_state(t) == "ready"]
-    print("\nNext ready tasks:")
     if ready:
+        print("\nNext ready tasks:")
         for task in ready[:3]:
             print(f"  - {task.get('id')} — {task.get('title')} → {task.get('plan_file')}")
     else:
-        print("  None.")
+        print("\nNo ready tasks.")
 
     failed = [t for t in queue if current_state(t) == "failed"]
-    print("\nFailed tasks:")
     if failed:
+        print("\nFailed tasks:")
         for task in failed:
             print(f"  - {task.get('id')} — {task.get('title')}")
     else:
-        print("  None.")
+        print("\nNo failed tasks.")
 
-    print("\nWorktree validation:")
-    stale = 0
+    stale_worktrees = []
     for task in queue:
         worktree = task.get("worktree")
         if worktree and not Path(worktree).is_dir():
+            stale_worktrees.append((task.get("id"), worktree))
+    if stale_worktrees:
+        print("\nWorktree validation:")
+        for task_id, worktree in stale_worktrees:
             print(
-                f"  ⚠️ Stale worktree: {task.get('id')} → {worktree} does not exist."
+                f"  ⚠️ Stale worktree: {task_id} → {worktree} does not exist."
             )
-            stale += 1
-    if not stale:
-        print("  All registered worktrees present.")
+    else:
+        print("\nAll registered worktrees are present.")
 
     return 0
 

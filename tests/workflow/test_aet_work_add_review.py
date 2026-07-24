@@ -694,9 +694,12 @@ class TestStatusEmptyQueue(unittest.TestCase):
 
             self.assertEqual(result.exit_code, 0)
             output = result.stdout
-            self.assertIn("planned: 0", output)
-            self.assertIn("ready: 0", output)
-            self.assertIn("blocked: 0", output)
+            self.assertIn("Queue is empty.", output)
+            self.assertNotIn("Queue summary:", output)
+            self.assertNotIn("planned: 0", output)
+            self.assertIn("No active tasks.", output)
+            self.assertIn("No ready tasks.", output)
+            self.assertIn("No failed tasks.", output)
 
 
 if __name__ == "__main__":
