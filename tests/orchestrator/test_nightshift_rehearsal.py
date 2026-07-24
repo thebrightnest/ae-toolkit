@@ -24,7 +24,7 @@ from unittest.mock import patch
 import pytest
 
 # Ensure the aet-work lib is on the path before importing telemetry.
-from aet import failure
+from aet import breaker, failure
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
@@ -119,12 +119,12 @@ def _write_fake_claude(repo_root: str) -> Path:
     bin_dir = Path(repo_root) / "bin"
     bin_dir.mkdir(exist_ok=True)
     fake_cli = bin_dir / "claude"
+    helper = Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py"
     fake_cli.write_text(
         '#!/usr/bin/env python3\n'
         'import os\n'
         'import subprocess\n'
         'import sys\n'
-        'import time\n'
         '\n'
         'prompt = sys.argv[-1]\n'
         '\n'
@@ -145,10 +145,10 @@ def _write_fake_claude(repo_root: str) -> Path:
         '    result_envelope()\n'
         '    sys.exit(1)\n'
         '\n'
-        '# Stall: emit usage, then go silent until the watchdog kills us.\n'
+        '# Stall: emit usage, then sleep until the watchdog kills us.\n'
         'if "stall" in prompt:\n'
         '    result_envelope()\n'
-        '    time.sleep(600)\n'
+        f'    subprocess.run([sys.executable, "{helper}", "600"])\n'
         '    sys.exit(0)\n'
         '\n'
         '# Healthy fixture: ensure at least one commit exists and exit 0.\n'
@@ -286,6 +286,18 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
         new_path = f"{fake_cli.parent}{os.pathsep}{os.environ.get('PATH', '')}"
         cls.enterClassContext(patch.dict(os.environ, {"PATH": new_path}))
 
+        # Lower the breaker threshold for the rehearsal so the deterministic
+        # failure quarantines after one retry instead of the default three,
+        # shrinking the serial setup time without changing the covered behavior.
+        _orig_should_quarantine = breaker.should_quarantine_task
+        cls.enterClassContext(
+            patch.object(
+                breaker,
+                "should_quarantine_task",
+                side_effect=lambda record: _orig_should_quarantine(record, threshold=1),
+            )
+        )
+
         adapter = orchestrator.resolve_cli_adapter(str(fake_cli))
         args = argparse.Namespace(
             queue_file=queue_file,
@@ -295,7 +307,7 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
             isolation="minimal",
             max_jobs=3,
             task_timeout=999,
-            stall_timeout=5,
+            stall_timeout=1,
             heartbeat_interval=999,
             on_failure="triage",
         )

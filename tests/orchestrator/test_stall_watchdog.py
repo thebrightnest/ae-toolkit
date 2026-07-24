@@ -109,14 +109,15 @@ def _setup_plan_and_queue(repo_root: str, task_id: str) -> str:
 
 
 def _write_silent_cli(repo_root: str) -> str:
-    """Create a fake agent CLI that sleeps silently."""
+    """Create a fake agent CLI that sleeps silently until killed."""
     bin_dir = Path(repo_root) / "bin"
     bin_dir.mkdir()
     fake_cli = bin_dir / "kimi"
+    helper = Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py"
     fake_cli.write_text(
         "#!/usr/bin/env bash\n"
         "# ignore prompt flag and prompt\n"
-        "exec python3 -c \"import time; time.sleep(600)\"\n",
+        f"exec python3 '{helper}' 600\n",
         encoding="utf-8",
     )
     fake_cli.chmod(0o755)
@@ -129,7 +130,10 @@ class TestStallWatchdog(unittest.TestCase):
     def test_silent_session_killed_after_stall_timeout(self):
         """A silent session is killed and classified as timeout (-9)."""
         with tempfile.TemporaryDirectory() as cwd:
-            cmd = [sys.executable, "-c", "import time; time.sleep(600)"]
+            helper = (
+                Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py"
+            )
+            cmd = [sys.executable, str(helper), "600"]
             start = time.monotonic()
             exit_code, _tail = orchestrator._run_with_live_tee(
                 cmd, cwd, os.environ.copy(), stall_timeout=0.2
@@ -197,7 +201,7 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
                 cli_bin=fake_cli,
                 isolation="minimal",
                 max_jobs=1,
-                task_timeout=1,
+                task_timeout=0.5,
                 stall_timeout=999,
                 heartbeat_interval=999,
                 on_failure="continue",
@@ -209,7 +213,7 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
                 rc, out = self._run_batch(args, adapter, timeout=15)
 
             self.assertEqual(rc, 1)
-            self.assertIn("timed out after 1s", out)
+            self.assertIn("timed out after 0.5s", out)
 
             queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
             self.assertEqual(queue[0]["state"], "failed")
@@ -231,7 +235,7 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
                 isolation="minimal",
                 max_jobs=1,
                 task_timeout=999,
-                stall_timeout=1,
+                stall_timeout=0.5,
                 heartbeat_interval=999,
                 on_failure="continue",
             )
