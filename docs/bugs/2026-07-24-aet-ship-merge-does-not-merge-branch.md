@@ -78,13 +78,28 @@ The real merge included `src/aet/cli/configure_backend.py`, `tests/cli/test_conf
 
 ## Root Cause
 
-`aet ship merge` appears to resolve the merge source as `main` (or the current checkout) instead of the task's feature branch. It then performs a no-op merge of `main` into `main` and commits only the plan-footer update that marks the task as merged.
+`aet ship merge` resolves the merge **source** from the current checkout, not from the
+task. `cmd_merge` reads the feature branch with:
+
+```python
+# src/aet/cli/ship.py:832
+feature_branch = _run_git("branch", "--show-current", check=False).stdout.strip()
+```
+
+When the command is invoked from a checkout sitting on `main` (e.g. the repo root),
+`feature_branch` resolves to `"main"` and `target_branch` defaults to `main`.
+`_merge_into_target` then runs `git merge --no-ff main` on `main` — a no-op — and the only
+commit produced is the plan-footer update written by the record-merge/closure step
+(`cmd_record_merge`, `src/aet/cli/aet_state.py`). The task's real branch is never touched.
 
 Evidence:
 
-- The merge output says `Merging main into main` rather than `Merging <branch> into main`.
+- The merge output at `ship.py:863` is `f"Merging {feature_branch} into {target_branch}..."`;
+  the observed "Merging main into main" is that f-string with **both** operands resolved to
+  `main` — direct proof `feature_branch == "main"`.
 - The resulting commit only touches the plan file.
-- `git merge-base main <branch>` before the fix is the same as before the merge, proving the branch was never incorporated.
+- `git merge-base main <branch>` is unchanged across the "merge", proving the branch was
+  never incorporated.
 
 Why existing checks did not catch it:
 
@@ -98,10 +113,22 @@ Why existing checks did not catch it:
 
 A code fix in the `aet ship merge` path should:
 
-1. Identify the task's actual feature branch (from the queue record's `branch` or `worktree` field, or from `docs/plans/<task>.md` frontmatter plus the conventional branch name).
-2. Merge that branch into the target branch (default `main`).
-3. Only after the branch merge succeeds, commit the plan-footer update marking the task as `merged`.
-4. Verify post-merge that `git merge-base --is-ancestor <branch> HEAD` is true.
+1. **Resolve the feature branch from the task, not the checkout.** Replace the
+   `git branch --show-current` read at `ship.py:832` with a branch derived from the task id.
+   `cmd_merge` already computes `_task_id_from_plan(plan_path)` (at `ship.py:873`, currently
+   only for recording) and the plan path is known from line 827 — the task identity is
+   already in scope *before* the merge; it just isn't used to pick the branch. Source the
+   branch from the queue record's `branch`/`worktree` field or the conventional
+   name derived from that task id.
+2. **Guard against self-merge before merging.** Add a fail-closed pre-check: if the resolved
+   `feature_branch == target_branch`, abort with "refusing to merge a branch into itself."
+   This single line would have hard-failed all three cfg-* cases at the "Merging main into
+   main" moment, before any bogus commit.
+3. Merge that branch into the target branch (default `main`).
+4. Only after the branch merge succeeds, commit the plan-footer update marking the task as
+   `merged`.
+5. Verify post-merge that `git merge-base --is-ancestor <branch> HEAD` is true
+   (belt-and-braces with the pre-check in step 2).
 
 **Manual workaround used today:**
 
@@ -128,5 +155,6 @@ No automated test exists for this path. A regression test should:
 ## Lessons Learned
 
 - **Pattern:** Merge/ship commands that update bookkeeping metadata without verifying the actual code merge.
-- **Prevention:** Any ship/merge command should have a fail-closed post-condition check that the source branch is an ancestor of the target branch. Do not trust exit code 0 alone.
+- **Systemic class:** This is the third instance of "`aet ship` resolves branch/base identity from ambient git state instead of the plan id" — alongside the base-resolver bug (`_determine_pr_base` returning the branch's own name as PR base) and the cwd-sensitivity of `ship open`/`close`. The class-level fix is: **derive branch and base identity from the plan/task id, never from cwd or the current checkout.** Closing the class retires all three at once.
+- **Prevention:** Any ship/merge command should have a fail-closed post-condition check that the source branch is an ancestor of the target branch — and a pre-condition check that source ≠ target. Do not trust exit code 0 alone.
 - **Reference:** This report feeds into `aet-evolve` and should inform updates to `aet-ship` skill references and the `aet ship merge` implementation.

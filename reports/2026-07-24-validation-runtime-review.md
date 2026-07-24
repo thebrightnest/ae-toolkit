@@ -11,9 +11,10 @@ sum of their work.
 This report breaks down where that time actually went. An earlier draft concluded that
 validation was "the dominant cost, roughly half the wall clock." Re-checking that claim
 against the raw telemetry showed it was an artifact of summing two *parallel* tasks:
-**on the critical path, validation was ~13–18% of the wall clock, and the single dominant
-cost was one 29-minute implement/QA session.** The corrected analysis and its
-consequences for the recommendations are below.
+**on the critical path, validation was ~13% of the wall clock as pytest (~18% including
+lint and the installer smoke test), and the single dominant cost was one 29-minute
+implement/QA session.** The corrected analysis and its consequences for the
+recommendations are below.
 
 ## Summary of Findings
 
@@ -84,8 +85,14 @@ is the *critical path*, and summing both tasks' timings double-counts overlapped
 
 `cfg-01`'s three sessions alone account for 99.8% of the wall clock. **`cfg-03`
 contributed no wall-clock time** — it started with `cfg-01`, ran shorter, and finished
-first. Any optimization scoped to `cfg-03` (validation tiering, session grouping) saves
-**0 s** of runtime for this batch.
+first. This is not merely inferred from "they started together": the wall clock itself
+corroborates it. Wall clock (2444.8 s) exceeds `cfg-01`'s session sum (2439.5 s) by only
+5.3 s of orchestrator overhead; had `cfg-03` (1690.5 s) extended past `cfg-01`, wall clock
+would sit above `cfg-01`'s sum by far more than that. `cfg-03` therefore falls entirely
+inside `cfg-01`'s span. (To make this fully airtight, cite the two tasks' raw start
+timestamps from the `.jsonl` records — the one number the appendix does not yet show.) Any
+optimization scoped to `cfg-03` (validation tiering, session grouping) saves **0 s** of
+runtime for this batch.
 
 Breaking down the critical path (`cfg-01`):
 
@@ -215,9 +222,12 @@ prose-only sessions that already skip pytest (`Makefile:112`). Gate it:
 - Run only when `scripts/install.sh` or `src/aet/cli/setup.py` changed, or the plan tags
   the task as touching installation.
 
-This is the one change that actually recovers time from the `reviewed`/`synced` sessions,
-because it is the only validation cost that *doesn't* already self-skip there. ~30 s per
-affected invocation, near-zero risk.
+Put the gate in `change_scope` (emit an install-tests flag from the same path list it
+already computes), not in Makefile shell — same code-enforced-determinism argument as
+Recommendations 5–6, and it keeps every test-scope decision in one place. This is the one
+change that actually recovers time from the `reviewed`/`synced` sessions, because it is the
+only validation cost that *doesn't* already self-skip there. ~30 s per affected invocation,
+near-zero risk.
 
 ### 3. Investigate `--dist=loadgroup` before optimizing around pytest
 
@@ -251,6 +261,12 @@ this in `change_scope` (code-enforced, fail-safe), not as a prompt instruction**
 the mechanism that already deterministically decides full-vs-skip, rather than adding a
 tier the agent may misapply.
 
+The Makefile side is **already wired for this**: `test` consumes `PYTEST_TARGETS`
+(`Makefile:17`, defaulting to `tests/`) and `validate` threads `change_scope`'s output
+straight into it (`test PYTEST_TARGETS="$$targets"`). `change_scope` simply always emits
+`tests/`. So the change is localized to `decide()`/`main()` returning a target list — **no
+Makefile change required** — which lowers this from "Medium" toward "Low–Medium" effort.
+
 ### 6. Stage-aware validation (lowest priority — mind the determinism trap)
 
 A stage → validation-tier mapping (review/security/docs stages run lint + targeted tests
@@ -273,7 +289,7 @@ only) is defensible, but two cautions demote it:
 | Conditional installer test | Low (~30 s/invocation) | Low–Medium | Low | Low |
 | Fix/replace `--dist=loadgroup` | Medium — speeds every code stage | Medium–High | Low | Low–Medium |
 | Code-enforced QA-freshness | Low here | Medium | Low (orchestrator enforces) | Medium |
-| File-to-test mapping | Low here | High (full suite → targeted) | Medium (cross-module regressions) | Medium |
+| File-to-test mapping | Low here | High (full suite → targeted) | Medium (cross-module regressions) | Low–Medium (Makefile already wired) |
 | Stage-aware validation | **~0** (later stages already skip) | Low–Medium | Medium (false confidence) | Medium |
 
 The biggest wall-clock lever is the **long agent session**, which no validation change
