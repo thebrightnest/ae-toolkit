@@ -103,7 +103,7 @@ class TestVerifyReportsConfigTrunk(VerifyReportsTrunkTestCase):
 
         rc, out, err = self._run_verify(env_extra={"AET_WORK_CONFIG": str(config)})
         self.assertEqual(rc, 0, err)
-        self.assertIn("trunk: custom-trunk (config)", out.lower())
+        self.assertIn("trunk: custom-trunk (config (env))", out.lower())
 
 
 if __name__ == "__main__":

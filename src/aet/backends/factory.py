@@ -73,6 +73,56 @@ def create_backend(
     )
 
 
+def resolve_config_with_source(
+    config_path: str, repo_root: str | Path | None = None
+) -> tuple[dict[str, Any], str]:
+    """Resolve AET config and report which layer supplied it.
+
+    Order: env ``AET_WORK_CONFIG`` → external ``~/.aet/{slug}/config.json``
+    → in-tree ``config_path`` → built-in defaults. Returns ``(config, source)``
+    where ``source`` is one of ``env``, ``user``, ``project``, or ``default``.
+
+    The in-tree path is anchored to the repository root, not the process cwd,
+    so subdirectory invocations resolve the same config as root invocations.
+    When ``repo_root`` is provided it is used directly; otherwise the root is
+    discovered via ``resolve_repo_root()``.
+
+    If the legacy ``.agents/aet-work.json`` exists and the canonical
+    ``.agents/aet-config.json`` does not, resolution fails closed with
+    :class:`LegacyConfigError` naming ``aet configure --migrate`` as the
+    remedy.
+    """
+    env_override = os.environ.get(AET_WORK_CONFIG_ENV)
+    if env_override:
+        path = Path(env_override)
+        if path.exists():
+            return _load_config(path), "env"
+
+    slug = derive_config_slug(repo_root)
+    external_path = Path.home() / ".aet" / slug / "config.json"
+    if external_path.exists():
+        return _load_config(external_path), "user"
+
+    root = resolve_repo_root(repo_root)
+    path = Path(config_path)
+    if not path.is_absolute():
+        path = root / path
+
+    if path.exists():
+        return _load_config(path), "project"
+
+    legacy_path = root / LEGACY_CONFIG_PATH
+    if legacy_path.exists():
+        raise LegacyConfigError(
+            f"Legacy config found at {LEGACY_CONFIG_PATH}. "
+            "Run `aet configure --migrate` to rename it to "
+            f"{DEFAULT_CONFIG_PATH}."
+        )
+
+    defaults = {"task_backend": "json", "trunk_branch": None, "integration_branch": None}
+    return defaults, "default"
+
+
 def resolve_config(
     config_path: str, repo_root: str | Path | None = None
 ) -> dict[str, Any]:
@@ -91,34 +141,7 @@ def resolve_config(
     :class:`LegacyConfigError` naming ``aet configure --migrate`` as the
     remedy.
     """
-    env_override = os.environ.get(AET_WORK_CONFIG_ENV)
-    if env_override:
-        path = Path(env_override)
-        if path.exists():
-            return _load_config(path)
-
-    slug = derive_config_slug(repo_root)
-    external_path = Path.home() / ".aet" / slug / "config.json"
-    if external_path.exists():
-        return _load_config(external_path)
-
-    root = resolve_repo_root(repo_root)
-    path = Path(config_path)
-    if not path.is_absolute():
-        path = root / path
-
-    if path.exists():
-        return _load_config(path)
-
-    legacy_path = root / LEGACY_CONFIG_PATH
-    if legacy_path.exists():
-        raise LegacyConfigError(
-            f"Legacy config found at {LEGACY_CONFIG_PATH}. "
-            "Run `aet configure --migrate` to rename it to "
-            f"{DEFAULT_CONFIG_PATH}."
-        )
-
-    return {"task_backend": "json", "trunk_branch": None, "integration_branch": None}
+    return resolve_config_with_source(config_path, repo_root=repo_root)[0]
 
 
 def resolve_integration_mode(
@@ -140,6 +163,20 @@ def resolve_integration_mode(
         f"Invalid integration_mode: {mode!r}. "
         f"Choose one of: {', '.join(sorted(INTEGRATION_MODES))}."
     )
+
+
+def resolve_integration_mode_with_provenance(
+    config_path: str | None = None,
+) -> tuple[str, str]:
+    """Resolve ``integration_mode`` and report where the value came from.
+
+    Returns ``(mode, provenance)`` where provenance is ``config (project)``,
+    ``config (user)``, ``config (env)``, or ``default``.
+    """
+    config, source = resolve_config_with_source(config_path or DEFAULT_CONFIG_PATH)
+    if "integration_mode" in config:
+        return config["integration_mode"], f"config ({source})"
+    return "pr-per-task", "default"
 
 
 def _load_config(path: Path) -> dict[str, Any]:

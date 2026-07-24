@@ -229,27 +229,45 @@ that teach both adoption modes.
 
 ## Divergence Summary
 
-*Recorded: 2026-07-24 — Branch: cfg-01-config-resolution-overhaul*
+*Recorded: 2026-07-24 — Branches: cfg-01-config-resolution-overhaul + cfg-03-cli-surface-fixes*
 
-The implementation branch delivered the config-resolution mechanics (R-1 through R-4 and the `--migrate` remedy) but deferred the broader CLI, docs, and skill surface work to a follow-up cycle.
+The config-resolution overhaul was delivered in two parallel implementation
+branches. cfg-01 delivered the core resolution mechanics (R-1 through R-4 and
+the `--migrate` remedy); cfg-03 delivered the CLI surface fixes (R-6 `--base`
+forwarding and R-7 resolved config inspection with provenance).
 
 ### Changed from plan
 
-- None — the plan.md scope was implemented as written.
+- **cfg-01:** None — the plan.md scope was implemented as written.
+- **cfg-03 Task 2 (setup verify provenance):** Resolved mode/branches are
+  surfaced using new `resolve_config_with_source` and
+  `resolve_integration_mode_with_provenance` helpers in
+  `src/aet/backends/factory.py`, rather than only reading from the existing
+  resolver surfaces.
+- **cfg-03 Task 3 (tests):** Verify tests extend the existing
+  `tests/setup/test_setup_verify.py` instead of creating the planned
+  `tests/cli/test_setup_verify.py`.
 
 ### Added (unplanned)
 
-- None.
+- `src/aet/backends/factory.py`: Added `resolve_config_with_source` and
+  `resolve_integration_mode_with_provenance` to expose config-layer and
+  integration-mode provenance required by `aet setup verify`.
 
 ### Deferred
 
-- **R-5 (CLI writer for all config keys):** `aet configure` currently only writes `task_backend`; `--integration-mode`, `--trunk-branch`, `--integration-branch`, and `--scope project|user` remain to be added.
-- **R-6 (`--base` forwarding):** `aet run` / `aet run-one` do not yet accept or forward `--base` to the orchestrator.
-- **R-7 (resolved config inspection):** `aet setup verify` was updated to the new filename only; it does not yet print resolved mode/branches with provenance.
-- **R-8 (shadow mode docs + upgrade guide):** No `docs/upgrades/` guide or README/CHANGELOG links were added.
-- **R-9 (skill surface updates):** `aet-work` and `aet-ship` SKILL.md files were not updated to describe both integration modes or remove stale `task_backend: github` claims.
-- **R-10 (doc command accuracy):** CONVENTIONS.md typo fix and `aet ship close --target-branch` documentation were not addressed.
-- **R-11 (guided first-time setup):** The setup flow does not yet ask scope/mode questions and write a valid config.
+- **R-5 (CLI writer for all config keys):** `aet configure` currently only
+  writes `task_backend`; `--integration-mode`, `--trunk-branch`,
+  `--integration-branch`, and `--scope project|user` remain to be added.
+- **R-8 (shadow mode docs + upgrade guide):** No `docs/upgrades/` guide or
+  README/CHANGELOG links were added.
+- **R-9 (skill surface updates):** `aet-work` and `aet-ship` SKILL.md files
+  were not updated to describe both integration modes or remove stale
+  `task_backend: github` claims.
+- **R-10 (doc command accuracy):** CONVENTIONS.md typo fix and `aet ship close
+  --target-branch` documentation were not addressed.
+- **R-11 (guided first-time setup):** The setup flow does not yet ask
+  scope/mode questions and write a valid config.
 
 ---
 

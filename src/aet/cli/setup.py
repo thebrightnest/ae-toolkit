@@ -9,11 +9,21 @@ from pathlib import Path
 
 import typer
 
-from aet.backends.factory import resolve_config
-from aet.branch_ref import resolve_trunk_branch
+from aet.backends.factory import (
+    resolve_config_with_source,
+    resolve_integration_mode_with_provenance,
+)
+from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch
 from aet.worktree import AET_IGNORED_PATHS
 
 app = typer.Typer(help="Setup and bootstrap commands.")
+
+
+def _format_branch_provenance(provenance: str, config_source: str) -> str:
+    """Render a branch resolver provenance, annotating config with its layer."""
+    if provenance == "config":
+        return f"config ({config_source})"
+    return provenance
 
 
 def _repo_root() -> Path:
@@ -298,16 +308,25 @@ def setup_verify(
         raise typer.Exit(1)
 
     repo_root = _repo_root()
+    config_path = str(repo_root / ".agents" / "aet-config.json")
     try:
-        config = resolve_config(str(repo_root / ".agents" / "aet-config.json"))
+        config, config_source = resolve_config_with_source(config_path)
+        mode, mode_provenance = resolve_integration_mode_with_provenance(config_path)
+        integration = resolve_integration_branch(repo_root, config)
         trunk = resolve_trunk_branch(repo_root, config)
     except FileNotFoundError:
         typer.echo(
-            "  ⚠ could not resolve trunk: git is not available on PATH",
+            "  ⚠ could not resolve config: git is not available on PATH",
             err=True,
         )
     else:
-        typer.echo(f"  trunk: {trunk.ref} ({trunk.provenance})")
+        typer.echo(f"  integration_mode: {mode} ({mode_provenance})")
+        integration_provenance = _format_branch_provenance(
+            integration.provenance, config_source
+        )
+        typer.echo(f"  integration_branch: {integration.ref} ({integration_provenance})")
+        trunk_provenance = _format_branch_provenance(trunk.provenance, config_source)
+        typer.echo(f"  trunk: {trunk.ref} ({trunk_provenance})")
 
     path_aet = shutil.which("aet", path=os.environ.get("PATH"))
 
