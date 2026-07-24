@@ -244,3 +244,18 @@ the validation runtime (targeted scope, conditional installer, group-split, fast
 code-enforced freshness). The one defect in the 2026-07-24 batch — `aet ship merge` recording
 a merge without merging — was correctly routed to `aet-bug-report` (Initiative 1, PR #192)
 and is not part of this PRD.
+
+## Divergence Summary — vre-02-orchestrator-xdist-subgroups
+
+Implementation matches intent. The 15 `xdist_group("orchestrator")` sites were replaced
+with four resource-scoped subgroups (`process-group`, `cwd`, `telemetry-dir`, `git-repo`)
+as documented in `docs/CONVENTIONS.md` "Test parallelization". The three proven-conflicting
+tests remain in `process-group` with the rest of the heavy subprocess tests.
+
+One incidental fix landed: `_finalize_task` in `src/aet/cli/orchestrator.py` now trusts
+`awaiting_merge`/`merged` state before verifying the worktree still exists, eliminating a
+pre-existing flake in `test_max_jobs_three_integration_steps_serialize` where the worktree
+is intentionally removed after integration.
+
+Measurement (8 workers, `-n auto --dist=loadgroup`, 10 consecutive runs): mean ~103.6 s,
+vs. 238 s baseline → ~134 s improvement, 10/10 green.
