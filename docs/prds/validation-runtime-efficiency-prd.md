@@ -1,7 +1,7 @@
 # PRD: Validation-Runtime Efficiency & Determinism
 
 *Stage: scope-validated*
-*Next step: `aet sprint add` vre-01/02/03 (vre-04 held pending the R-6 decision) → `aet run`*
+*Next step: `aet run` — vre-01/02/03 queued. R-6 deferred as an idea: `docs/ideas/deterministic-qa-freshness-suppression.md`.*
 
 ## Overview
 
@@ -94,24 +94,13 @@ verdict gate is untouched).
 
 ## Deferred Requirements (not in this sprint)
 
-The item below was reframed during scope validation and is **held pending a keep / defer / drop
-decision** (see *Scope Validation Findings*). It is intentionally excluded from the committed
-R-trace scope of this initiative: `vre-04` is neither written nor queued, and no task traces
-R-6. If it is kept, an ADR extending ADR-025 — making freshness suppression *enforced* rather
-than advisory — must be authored **before** `vre-04` is written and `aet sprint add`-ed.
-
-- **R-6** *(reframed; held)*: The freshness re-run **suppression** the orchestrator already
-  computes (`_qa_freshness_decision`, orchestrator.py:414) is enforced deterministically by the
-  runtime, rather than delivered only as the agent-discretionary `_freshness_clause` prose
-  (orchestrator.py:388). The fail-closed verdict gate (`_require_passing_verdict`) is **not**
-  touched (ADR-025 decision 4); only the redundant re-run is suppressed, in code, and
-  bias-to-`RUN` is preserved. This is an efficiency-determinism gain, not a correctness fix.
-  - *User story (if taken up):* As a toolkit maintainer, I want the redundant QA re-run
-    suppressed by a code decision the orchestrator acts on — not only requested via a prose
-    clause an agent may skip — so freshness behaves deterministically.
-  - *Acceptance (if taken up):* When freshness resolves to `SKIP`/`LINT_ONLY`, the redundant
-    suite re-run is suppressed by the runtime (not only requested via prose);
-    `_require_passing_verdict` is unchanged and bias-to-`RUN` is preserved.
+One requirement surfaced during scope validation was reframed and **deferred as an idea**, not
+queued: **deterministic QA-freshness re-run suppression** (originally R-6). It is an
+efficiency-determinism gain — not a correctness fix; the fail-closed verdict gate
+(`_require_passing_verdict`) stays untouched (ADR-025 decision 4). The full analysis and what it
+would take to pick it up are parked at
+**`docs/ideas/deterministic-qa-freshness-suppression.md`**. No task traces R-6; `vre-04` is
+neither written nor queued.
 
 ## User Stories
 
@@ -220,10 +209,10 @@ than advisory — must be authored **before** `vre-04` is written and `aet sprin
    has **no runtime consumer** (observability-only), so the prose clause is today the sole driver
    of suppression — but every ignore-path is safe. R-6 is therefore reframed to its ADR-consistent
    core: make the re-run **suppression deterministic**, never touching the verdict gate. This is
-   efficiency hardening, not the correctness class the ship-merge bug fell into. **`vre-04` is held
-   out of the sprint pending a keep / defer / drop decision**, and — if kept — needs an ADR
-   extending ADR-025 (freshness suppression becomes enforced, not observability-only) authored
-   before `aet sprint add`.
+   efficiency hardening, not the correctness class the ship-merge bug fell into. **`vre-04` is
+   deferred and parked as an idea** (`docs/ideas/deterministic-qa-freshness-suppression.md`) — if
+   picked up it needs an ADR extending ADR-025 (freshness suppression becomes enforced, not
+   observability-only) authored before `aet sprint add`.
 2. **R-3 tier reuses the existing vocabulary (refinement).** `change_scope` already shares
    `evidence.default_is_code_path`, and `evidence.validation_freshness` already defines
    `RUN`/`LINT_ONLY`/`SKIP`. R-3's tier reuses that vocabulary rather than forking a third
@@ -245,7 +234,7 @@ approval, in Step 1 create-stories/plan → Step 3 `aet sprint add`.)*
 | `vre-01-change-scope-targeted-validation` | R-1, R-2, R-3 | `change_scope` emits a code-derived minimal target list + conditional installer signal + change-set tier, conservative FULL fallback. Files: `src/aet/change_scope.py`, `tests/test_change_scope.py` (+ possible thin Makefile installer-line removal). | — |
 | `vre-02-orchestrator-xdist-subgroups` | R-4 | Split `xdist_group("orchestrator")` into resource-scoped subgroups across the 15 sites; keep the 3 proven-conflicting tests co-grouped. Files: 15 `tests/**` marker sites + taxonomy note. | — |
 | `vre-03-orchestrator-serial-pole-speedup` | R-5 | Replace fixed sleeps / heavy fixtures in the hottest orchestrator tests with event/poll waits. Files: hottest `tests/orchestrator/*.py`. | `vre-02` |
-| `vre-04-qa-freshness-deterministic-suppression` *(held — pending R-6 decision)* | R-6 | Runtime deterministically suppresses the redundant re-run on `SKIP`/`LINT_ONLY`; verdict gate untouched (ADR-025 decision 4). Files: `src/aet/cli/orchestrator.py`, `tests/orchestrator/**`. | — |
+| `vre-04-qa-freshness-deterministic-suppression` *(deferred — parked at `docs/ideas/deterministic-qa-freshness-suppression.md`)* | R-6 | Runtime deterministically suppresses the redundant re-run on `SKIP`/`LINT_ONLY`; verdict gate untouched (ADR-025 decision 4). Files: `src/aet/cli/orchestrator.py`, `tests/orchestrator/**`. | — |
 
 ## Intake Triage Record
 
