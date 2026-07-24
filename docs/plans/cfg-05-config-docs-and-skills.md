@@ -73,7 +73,8 @@ docs_sync_reason: this plan IS the documentation deliverable (R-8, R-9, R-10) pl
 
 ## Task List
 
-1. ADR-048: two-layer config model decision record — S (traces: R-8)
+1. Finalize ADR-048 (written at planning time; cross-check against as-built
+   behavior and correct any drift) — S (traces: R-8)
 2. CONVENTIONS.md config section rewrite (modes, chain, typo fix,
    branch-not-worktree language) — M (traces: R-8, R-10)
 3. `docs/upgrades/` guide + README upgrades table entry — S (traces: R-8)
