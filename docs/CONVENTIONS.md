@@ -459,6 +459,31 @@ In `single-pr` mode, a rebase conflict or a post-rebase validation failure is an
 
 The per-task circuit breaker overrides every mode: three identical signatures on one task always quarantine it.
 
+## Test Parallelization
+
+The orchestrator test suite runs under `pytest-xdist` with `--dist=loadgroup`.
+Tests that contend for the same mutable resource are grouped so they serialize
+on one worker; tests that contend for different resources run on different
+workers concurrently.
+
+When adding an orchestrator test that needs isolation, assign it to the
+resource-scoped subgroup that matches the mutable resource it touches:
+
+| Group name      | Shared resource it protects                              |
+| --------------- | -------------------------------------------------------- |
+| `process-group` | Real orchestrator subprocesses and process-group lifecycle. Files in this group may spawn the orchestrator CLI and rely on signal/process-group isolation. |
+| `cwd`           | The process-wide current working directory (`os.chdir`, `monkeypatch.chdir`). |
+| `telemetry-dir` | Telemetry archive paths and orchestrator state helpers that do not spawn heavy subprocesses or mutate git repos. |
+| `git-repo`      | Temporary git repositories created and mutated by the test. |
+
+Rules:
+
+- Do not reintroduce the legacy monolithic `xdist_group("orchestrator")` marker.
+- Place a test in the group of its most restrictive shared resource.
+- The regression guard in `tests/orchestrator/test_xdist_groups.py` lists the
+current file-to-group mapping and must be updated when a new orchestrator file
+joins the grouped set.
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. No separate version field in frontmatter.

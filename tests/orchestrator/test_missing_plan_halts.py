@@ -23,7 +23,7 @@ _spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(orchestrator)
 
-pytestmark = pytest.mark.xdist_group("orchestrator")
+pytestmark = pytest.mark.xdist_group("git-repo")
 
 _FAKE_ADAPTER = CLIAdapter(
     name="test",

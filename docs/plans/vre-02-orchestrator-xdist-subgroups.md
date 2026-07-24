@@ -79,13 +79,39 @@ docs_sync_reason: the resource-scoped subgroup taxonomy must be documented so ne
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Coverage: the measurement in task 3 is the acceptance evidence (wall-clock delta +
+- [x] `make validate` passes
+- [x] Coverage: the measurement in task 3 is the acceptance evidence (wall-clock delta +
   ≥ 10-run green streak); record both numbers in the plan's divergence/notes on closure
-- [ ] R-trace coverage: R-4 by tasks 1, 2, 3; no unknown R-ids
-- [ ] No orchestrator test is left ungrouped (every one of the 15 sites carries a subgroup
+- [x] R-trace coverage: R-4 by tasks 1, 2, 3; no unknown R-ids
+- [x] No orchestrator test is left ungrouped (every one of the 15 sites carries a subgroup
   marker; the three conflict-floor tests remain co-grouped)
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+
+## Divergence / Notes
+
+Measurement (2026-07-24, `-n auto --dist=loadgroup`, 8 workers, this branch):
+
+| Run | Wall clock (s) |
+| --- | -------------- |
+| 1   | 104            |
+| 2   | 100            |
+| 3   | 103            |
+| 4   | 103            |
+| 5   | 104            |
+| 6   | 103            |
+| 7   | 102            |
+| 8   | 103            |
+| 9   | 105            |
+| 10  | 109            |
+
+- Mean: ~103.6 s
+- Baseline: 238 s
+- Delta: ~134 s improvement (>2× the ≥60 s target)
+- Green streak: 10/10
+
+Also fixed a pre-existing flake in `test_max_jobs_three_integration_steps_serialize`:
+`_finalize_task` now trusts `awaiting_merge`/`merged` state before verifying the worktree
+exists, because the worktree is intentionally removed after integration.
 
 ## Rollback Plan
 
@@ -94,6 +120,5 @@ sites and the suite returns to the 238 s baseline behavior.
 
 ---
 
-*Stage: plan-approved*
-
-*Next step: run `aet run-one docs/plans/vre-02-orchestrator-xdist-subgroups.md`*
+*Stage: synced*
+*Next step: run `aet-ship`*

@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 import pytest
 
-pytestmark = pytest.mark.xdist_group("orchestrator")
+pytestmark = pytest.mark.xdist_group("telemetry-dir")
 
 _REPO_ROOT = Path(__file__).parents[2]
 _STATUS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "status.py"

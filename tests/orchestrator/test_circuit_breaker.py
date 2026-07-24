@@ -23,7 +23,7 @@ _orchestrator_spec = importlib.util.spec_from_loader(
 orchestrator = importlib.util.module_from_spec(_orchestrator_spec)
 _orchestrator_spec.loader.exec_module(orchestrator)
 
-pytestmark = pytest.mark.xdist_group("orchestrator")
+pytestmark = pytest.mark.xdist_group("git-repo")
 
 
 SIG_A = "sig-a" * 4

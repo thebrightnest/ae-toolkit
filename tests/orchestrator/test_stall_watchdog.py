@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
-pytestmark = pytest.mark.xdist_group("orchestrator")
+pytestmark = pytest.mark.xdist_group("process-group")
 
 # Ensure the aet-work lib is on the path before importing telemetry.
 # Load the orchestrator script (no .py extension) as a module.

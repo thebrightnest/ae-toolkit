@@ -42,7 +42,7 @@ _spec_hooks = importlib.util.spec_from_loader("hooks", _hooks_loader)
 hooks = importlib.util.module_from_spec(_spec_hooks)
 _spec_hooks.loader.exec_module(hooks)
 
-pytestmark = pytest.mark.xdist_group("orchestrator")
+pytestmark = pytest.mark.xdist_group("git-repo")
 
 _FAKE_ADAPTER = CLIAdapter(
     name="test",
