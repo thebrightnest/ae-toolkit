@@ -2128,6 +2128,14 @@ def _finalize_task(
         # worktree was removed; the merge_commit is the evidence of completion.
         if task and task.get("merge_commit"):
             return {"successes": 1, "failures": 0, "stop_spawn": False}
+        # In single-pr mode the child may already have integrated the task and
+        # transitioned it to awaiting_merge before the batch parent finalizes.
+        # Trust that state rather than failing because the worktree is gone.
+        if from_state == "awaiting_merge":
+            return {"successes": 1, "failures": 0, "stop_spawn": False}
+        if from_state == "merged":
+            # Single-pr mode: process_task already integrated locally.
+            return {"successes": 1, "failures": 0, "stop_spawn": False}
         # A successful child that produced no commits is a false completion.
         # Fail the task rather than promoting an empty branch to awaiting_merge.
         if task:
@@ -2138,11 +2146,6 @@ def _finalize_task(
                     print(f"   ❌ {task_id} succeeded but produced no commits: {msg}")
                     _mark_failed(backend, queue_file, task_id, current_state(task))
                     return {"successes": 0, "failures": 1, "stop_spawn": True}
-        if from_state == "awaiting_merge":
-            return {"successes": 1, "failures": 0, "stop_spawn": False}
-        if from_state == "merged":
-            # Single-pr mode: process_task already integrated locally.
-            return {"successes": 1, "failures": 0, "stop_spawn": False}
         # Record delivered diff size when the merge commit is already known
         # (e.g. auto-merge closure). Normal awaiting_merge closure defers the
         # measurement to terminal seal time in ``append_history_record``.

@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytestmark = pytest.mark.xdist_group("orchestrator")
+pytestmark = pytest.mark.xdist_group("telemetry-dir")
 
 _ORCHESTRATOR_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
 _spec = importlib.util.spec_from_loader(

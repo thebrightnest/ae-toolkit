@@ -94,6 +94,4 @@ sites and the suite returns to the 238 s baseline behavior.
 
 ---
 
-*Stage: plan-approved*
-
-*Next step: run `aet run-one docs/plans/vre-02-orchestrator-xdist-subgroups.md`*
+*Stage: implemented*

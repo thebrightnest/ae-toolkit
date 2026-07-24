@@ -15,7 +15,7 @@ from aet import plan_validate
 
 _REPO_ROOT = Path(__file__).parents[2]
 
-pytestmark = pytest.mark.xdist_group("orchestrator")
+pytestmark = pytest.mark.xdist_group("telemetry-dir")
 
 
 def _make_plan(
