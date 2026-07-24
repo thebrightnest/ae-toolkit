@@ -147,5 +147,5 @@ reflog. `pr-per-task` is untouched by construction.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
