@@ -133,5 +133,5 @@ revert are protected by the squash-merge being atomic per task.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
