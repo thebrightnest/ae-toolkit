@@ -135,5 +135,5 @@ exists to close, so rollback should ship with a hold on `single-pr` use.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
