@@ -3,7 +3,7 @@ id: vre-01-change-scope-targeted-validation
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: changes which tests `make validate` selects locally; no new input, auth, data, or write surface, and the fail-toward-full-suite default bounds the blast radius of any mapping gap
 docs_sync: required
@@ -105,5 +105,4 @@ unchanged either way, so the revert is self-contained.
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
