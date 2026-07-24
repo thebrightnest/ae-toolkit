@@ -111,8 +111,10 @@ class TestInstallerDryRun:
             }
             result = run_installer(
                 "--dry-run",
-                "--repo", str(REPO_ROOT),
-                "--agent", "generic",
+                "--repo",
+                str(REPO_ROOT),
+                "--agent",
+                "generic",
                 env=env,
                 check=True,
             )
@@ -151,11 +153,16 @@ class TestInstallerSmoke:
                 "AET_DATA_DIR": str(data_dir),
             }
             run_installer(
-                "--repo", str(REPO_ROOT),
-                "--agent", "generic",
-                "--tag", _current_branch(),
-                "--bin-dir", str(bin_dir),
-                "--skills-dir", str(skills_dir),
+                "--repo",
+                str(REPO_ROOT),
+                "--agent",
+                "generic",
+                "--tag",
+                _current_branch(),
+                "--bin-dir",
+                str(bin_dir),
+                "--skills-dir",
+                str(skills_dir),
                 env=env,
                 check=True,
             )
@@ -184,9 +191,12 @@ class TestInstallerSmoke:
 
             # idempotent re-run exits zero
             rerun = run_installer(
-                "--repo", str(REPO_ROOT),
-                "--agent", "generic",
-                "--tag", _current_branch(),
+                "--repo",
+                str(REPO_ROOT),
+                "--agent",
+                "generic",
+                "--tag",
+                _current_branch(),
                 env=env,
                 check=True,
             )
@@ -208,11 +218,16 @@ class TestInstallerSmoke:
                 "AET_DATA_DIR": str(data_dir),
             }
             run_installer(
-                "--repo", str(REPO_ROOT),
-                "--agent", "generic",
-                "--tag", _current_branch(),
-                "--bin-dir", str(bin_dir),
-                "--skills-dir", str(skills_dir),
+                "--repo",
+                str(REPO_ROOT),
+                "--agent",
+                "generic",
+                "--tag",
+                _current_branch(),
+                "--bin-dir",
+                str(bin_dir),
+                "--skills-dir",
+                str(skills_dir),
                 env=env,
                 check=True,
             )
@@ -255,8 +270,10 @@ class TestInstallerSmoke:
                 "AET_DATA_DIR": "",
             }
             run_installer(
-                "--repo", str(REPO_ROOT),
-                "--tag", _current_branch(),
+                "--repo",
+                str(REPO_ROOT),
+                "--tag",
+                _current_branch(),
                 env=env,
                 check=True,
             )
@@ -283,8 +300,10 @@ class TestInstallerSmoke:
                 "AET_DATA_DIR": "",
             }
             run_installer(
-                "--repo", str(REPO_ROOT),
-                "--tag", _current_branch(),
+                "--repo",
+                str(REPO_ROOT),
+                "--tag",
+                _current_branch(),
                 env=env,
                 check=True,
             )
