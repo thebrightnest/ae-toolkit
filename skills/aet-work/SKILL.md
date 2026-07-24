@@ -92,7 +92,7 @@ Backends are configured in `.agents/aet-work.json`:
 }
 ```
 
-Valid values for `task_backend` are `json` (default) and `github`. The `github` key is only required when using the GitHub backend. Run `aet-setup` (or `aet configure-backend`) to write this file and create the required `aet:*` labels.
+Valid values for `task_backend` are `json` (default) and `git-refs`. Run `aet-setup` (or `aet configure`) to write this file.
 
 ### JSON backend
 

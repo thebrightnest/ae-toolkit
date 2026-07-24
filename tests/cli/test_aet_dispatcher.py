@@ -61,10 +61,10 @@ class TestAetGroupRouting(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("retro", result.output.lower())
 
-    def test_configure_backend_routes_to_command(self):
-        result = run_typer(aet.app, ["configure-backend", "--help"])
+    def test_configure_routes_to_command(self):
+        result = run_typer(aet.app, ["configure", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("backend", result.output.lower())
+        self.assertIn("task-backend", result.output.lower())
 
     def test_gate_routes_to_gate_group(self):
         result = run_typer(aet.app, ["gate", "--help"])
