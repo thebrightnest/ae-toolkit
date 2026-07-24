@@ -94,6 +94,6 @@ verify output are unaffected by the revert.
 
 ---
 
-_Stage: synced_
+_Stage: merged_
 
-_Next step: run `aet-ship`_
+_Next step: merged_
