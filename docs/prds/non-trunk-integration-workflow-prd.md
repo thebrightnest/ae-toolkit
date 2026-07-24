@@ -485,6 +485,31 @@ scope — the epic/integration layer — is a feature and is planned as one.
   integration verification are out of scope for the sync-docs stage and will
   happen at the `aet-ship` stage.
 
+## Divergence Summary: epi-10-epic-durability-and-closure
+
+*Recorded: 2026-07-24 — Branch: epi-10-epic-durability-and-closure (R-20, R-21, R-22)*
+
+### Changed from plan
+
+- None. Tasks 1–3 were implemented as locked: `src/aet/gate.py` factors the
+  verdict helper so `src/aet/cli/hooks.py` and `_integrate_single_pr_task`
+  share one implementation of task-branch detection, required-stage resolution,
+  and verdict-path derivation; the integration step pushes the integration
+  branch after each successful squash-merge (R-20) and verifies required gate
+  evidence before the squash-merge lands (R-22); `aet ship close` accepts a
+  `--target-branch` override and refuses self-merge while delegating merge
+  evidence verification to the existing `cmd_record_merge` path (R-21).
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- Task 4 (merge branch to main and verify integration): the merge and final
+  integration verification are out of scope for the sync-docs stage and will
+  happen at the `aet-ship` stage.
+
 ---
 
 *Stage: synced*
