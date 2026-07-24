@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - cfg-02-configure-writer
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: writes config into the user home directory or a shared repo based on interactive choices; scope confusion writes AET config where it should not be
 docs_sync: required
