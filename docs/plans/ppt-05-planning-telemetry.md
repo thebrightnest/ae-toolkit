@@ -1,7 +1,7 @@
 ---
 id: ppt-05-planning-telemetry
 size: M
-status: queued
+status: merged
 blocked_by: []
 pipeline: standard
 security_review: required
@@ -75,5 +75,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: plan-approved*
+*Stage: merged*
 *Next step: run `aet-work`*
