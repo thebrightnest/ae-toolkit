@@ -9,9 +9,10 @@ from typing import Any
 
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.backends.json_backend import JsonBackend
-from aet.project_id import derive_project_slug
+from aet.project_id import derive_config_slug, resolve_repo_root
 
-DEFAULT_CONFIG_PATH = ".agents/aet-work.json"
+DEFAULT_CONFIG_PATH = ".agents/aet-config.json"
+LEGACY_CONFIG_PATH = ".agents/aet-work.json"
 
 # Environment variable that overrides the config file location. Highest
 # precedence in the external-first resolution order.
@@ -30,6 +31,15 @@ class IntegrationModeError(ValueError):
     """Raised when ``integration_mode`` has an unrecognized value."""
 
 
+class LegacyConfigError(ValueError):
+    """Raised when only the legacy in-tree config file exists.
+
+    The canonical in-tree file is ``.agents/aet-config.json``. If the legacy
+    ``.agents/aet-work.json`` is present and the new file is not, callers must
+    run ``aet configure --migrate`` before AET can read the config.
+    """
+
+
 # Legal values for the ``integration_mode`` project setting.
 INTEGRATION_MODES = frozenset({"pr-per-task", "single-pr"})
 
@@ -43,7 +53,7 @@ def create_backend(
 
     Configuration is resolved with external-first precedence:
     ``AET_WORK_CONFIG`` env → ``~/.aet/{slug}/config.json`` → in-tree
-    ``.agents/aet-work.json`` → built-in defaults. The ``task_backend`` key
+    ``.agents/aet-config.json`` → built-in defaults. The ``task_backend`` key
     selects the implementation: ``json`` or ``git-refs``. Forge values such as
     ``github`` or ``both`` are rejected with :class:`UnknownBackendError` and
     must be configured on the orthogonal ``projections`` axis.
@@ -63,11 +73,23 @@ def create_backend(
     )
 
 
-def resolve_config(config_path: str) -> dict[str, Any]:
+def resolve_config(
+    config_path: str, repo_root: str | Path | None = None
+) -> dict[str, Any]:
     """Resolve AET config with external-first precedence.
 
     Order: env ``AET_WORK_CONFIG`` → external ``~/.aet/{slug}/config.json``
     → in-tree ``config_path`` → built-in defaults.
+
+    The in-tree path is anchored to the repository root, not the process cwd,
+    so subdirectory invocations resolve the same config as root invocations.
+    When ``repo_root`` is provided it is used directly; otherwise the root is
+    discovered via ``resolve_repo_root()``.
+
+    If the legacy ``.agents/aet-work.json`` exists and the canonical
+    ``.agents/aet-config.json`` does not, resolution fails closed with
+    :class:`LegacyConfigError` naming ``aet configure --migrate`` as the
+    remedy.
     """
     env_override = os.environ.get(AET_WORK_CONFIG_ENV)
     if env_override:
@@ -75,27 +97,42 @@ def resolve_config(config_path: str) -> dict[str, Any]:
         if path.exists():
             return _load_config(path)
 
-    slug = derive_project_slug()
+    slug = derive_config_slug(repo_root)
     external_path = Path.home() / ".aet" / slug / "config.json"
     if external_path.exists():
         return _load_config(external_path)
 
+    root = resolve_repo_root(repo_root)
     path = Path(config_path)
+    if not path.is_absolute():
+        path = root / path
+
     if path.exists():
         return _load_config(path)
+
+    legacy_path = root / LEGACY_CONFIG_PATH
+    if legacy_path.exists():
+        raise LegacyConfigError(
+            f"Legacy config found at {LEGACY_CONFIG_PATH}. "
+            "Run `aet configure --migrate` to rename it to "
+            f"{DEFAULT_CONFIG_PATH}."
+        )
 
     return {"task_backend": "json", "trunk_branch": None, "integration_branch": None}
 
 
-def resolve_integration_mode(config_path: str | None = None) -> str:
+def resolve_integration_mode(
+    config_path: str | None = None, repo_root: str | Path | None = None
+) -> str:
     """Resolve ``integration_mode`` through the external-first config chain.
 
     Uses the same precedence as :func:`resolve_config`: env ``AET_WORK_CONFIG``
     → external ``~/.aet/{slug}/config.json`` → in-tree ``config_path`` →
-    built-in default. The default is ``pr-per-task``. An unrecognized value
-    fails closed with a message naming the key and the legal values.
+    built-in default. The in-tree path is anchored to the repository root.
+    The default is ``pr-per-task``. An unrecognized value fails closed with a
+    message naming the key and the legal values.
     """
-    config = resolve_config(config_path or DEFAULT_CONFIG_PATH)
+    config = resolve_config(config_path or DEFAULT_CONFIG_PATH, repo_root=repo_root)
     mode = config.get("integration_mode", "pr-per-task")
     if mode in INTEGRATION_MODES:
         return mode

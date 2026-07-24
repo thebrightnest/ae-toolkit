@@ -356,8 +356,11 @@ def _resolve_actionable_task(
     error to stderr and returns ``(None, None, "")``; the caller should
     return 1.
     """
+    config_path = str(Path(args.queue_file).with_name("aet-config.json"))
     backend = create_backend(
-        queue_file=args.queue_file, history_file=args.history_file
+        config_path=config_path,
+        queue_file=args.queue_file,
+        history_file=args.history_file,
     )
     data = backend.load(verify=False)
     queue = data["queue"]
@@ -447,8 +450,11 @@ def _run_abandon(args: argparse.Namespace) -> int:
 
 def _run_risk_view(args: argparse.Namespace) -> int:
     """Emit the risk-ranked awaiting_merge view."""
+    config_path = str(Path(args.queue_file).with_name("aet-config.json"))
     backend = create_backend(
-        queue_file=args.queue_file, history_file=args.history_file
+        config_path=config_path,
+        queue_file=args.queue_file,
+        history_file=args.history_file,
     )
     data = backend.load(verify=False)
     queue = data["queue"]

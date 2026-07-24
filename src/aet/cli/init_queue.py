@@ -368,9 +368,9 @@ def init_queue(
         help="Directory containing PRD markdown files",
     ),
     config: str = typer.Option(
-        ".agents/aet-work.json",
+        ".agents/aet-config.json",
         "--config",
-        help="Path to aet-work backend configuration",
+        help="Path to AET backend configuration",
     ),
     force: bool = typer.Option(
         False,

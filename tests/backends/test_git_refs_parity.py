@@ -75,7 +75,7 @@ def _init_merged_repo(path: Path, branch: str = BRANCH) -> Path:
 
 
 def _write_config(repo: Path, backend: str) -> None:
-    (repo / ".agents" / "aet-work.json").write_text(
+    (repo / ".agents" / "aet-config.json").write_text(
         json.dumps({"task_backend": backend}), encoding="utf-8"
     )
 

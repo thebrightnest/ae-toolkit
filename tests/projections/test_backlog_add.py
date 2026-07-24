@@ -85,7 +85,7 @@ _Next step: run `aet-backlog-add`_
 
 
 def _make_config(project_dir: Path) -> Path:
-    config_path = project_dir / ".agents" / "aet-work.json"
+    config_path = project_dir / ".agents" / "aet-config.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(
         json.dumps(

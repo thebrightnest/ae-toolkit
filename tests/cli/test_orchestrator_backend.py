@@ -458,9 +458,10 @@ class TestBackendFactoryPaths(unittest.TestCase):
 
             captured = {}
 
-            def fake_create_backend(queue_file, history_file):
+            def fake_create_backend(queue_file, history_file, config_path=None):
                 captured["queue_file"] = queue_file
                 captured["history_file"] = history_file
+                captured["config_path"] = config_path
                 backend = FakeBackend([])
                 backend.queue_file = queue_file
                 backend.history_file = history_file

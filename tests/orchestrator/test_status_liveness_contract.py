@@ -145,7 +145,7 @@ class TestSettledDecision(unittest.TestCase):
 
             queue_file = root / ".agents" / "work-queue.json"
             history_file = root / ".agents" / "work-history.jsonl"
-            config_file = root / ".agents" / "aet-work.json"
+            config_file = root / ".agents" / "aet-config.json"
 
             # No history file exists — this is the R-7 regression case.
             result = subprocess.run(

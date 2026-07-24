@@ -26,22 +26,25 @@ _INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
 def make_backend(queue_path):
     """Create a task backend for the given queue path."""
     history_file = str(Path(queue_path).with_name("work-history.jsonl"))
-    return create_backend(queue_file=queue_path, history_file=history_file)
+    config_path = str(Path(queue_path).with_name("aet-config.json"))
+    return create_backend(
+        config_path=config_path, queue_file=queue_path, history_file=history_file
+    )
 
 
 def _resolve_trunk(queue_path):
     """Resolve the trunk branch for the repo containing the queue file."""
     cwd = os.path.dirname(queue_path) if queue_path else "."
     # The queue file lives in the .agents directory, so the project config is
-    # right next to it (e.g. .agents/aet-work.json).
-    config = resolve_config(os.path.join(cwd, "aet-work.json"))
+    # right next to it (e.g. .agents/aet-config.json).
+    config = resolve_config(os.path.join(cwd, "aet-config.json"))
     return resolve_trunk_branch(cwd, config).ref
 
 
 def _resolve_integration(queue_path):
     """Resolve the integration branch for the repo containing the queue file."""
     cwd = os.path.dirname(queue_path) if queue_path else "."
-    config = resolve_config(os.path.join(cwd, "aet-work.json"))
+    config = resolve_config(os.path.join(cwd, "aet-config.json"))
     return resolve_integration_branch(cwd, config).ref
 
 

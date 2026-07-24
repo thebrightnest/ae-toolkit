@@ -70,5 +70,42 @@ def derive_project_slug(repo_root: str | Path | None = None) -> str:
     return repo_root.name
 
 
+def derive_config_slug(repo_root: str | Path | None = None) -> str:
+    """Derive a worktree-independent config slug.
+
+    Returns the same ``<main-worktree-dir>/main`` identity regardless of
+    whether the process is running in the primary worktree or a linked
+    worktree. This keeps ``~/.aet/{slug}/config.json`` stable across linked
+    worktrees while ``derive_project_slug`` continues to label telemetry and
+    reports per-worktree.
+
+    Env overrides (``AET_PROJECT_ID`` / ``AET_REPO_SLUG``) win, matching
+    ``derive_project_slug`` so explicit project identity is respected.
+    """
+    env_slug = os.environ.get("AET_PROJECT_ID") or os.environ.get("AET_REPO_SLUG")
+    if env_slug:
+        return env_slug
+
+    repo_root = resolve_repo_root(repo_root)
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            out = result.stdout.strip()
+            common = Path(out) if os.path.isabs(out) else (repo_root / out)
+            main_root = common.resolve().parent  # <main>/.git -> <main>
+            return f"{main_root.name}/main"
+    except FileNotFoundError:
+        pass
+
+    return repo_root.name
+
+
 # Keep Any import referenced so linters do not complain on re-export usage.
 Any = Any

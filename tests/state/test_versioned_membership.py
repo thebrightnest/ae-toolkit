@@ -129,7 +129,7 @@ class TestQueueMembershipDerivedFromStatusQueued(unittest.TestCase):
             _write_plan(plans_dir, "approved", status="approved")
             queue_file = _queue_file(root)
             history_file = _history_file(root)
-            config_file = root / ".agents" / "aet-work.json"
+            config_file = root / ".agents" / "aet-config.json"
 
             with patch.object(
                 sys,
@@ -249,7 +249,7 @@ class TestTwoClonesSelectSameTaskAfterPull(unittest.TestCase):
             for clone in (clone_a, clone_b):
                 queue_file = clone / ".agents" / "work-queue.json"
                 history_file = clone / ".agents" / "work-history.jsonl"
-                config_file = clone / ".agents" / "aet-work.json"
+                config_file = clone / ".agents" / "aet-config.json"
                 with patch.object(
                     sys,
                     "argv",
@@ -289,7 +289,7 @@ class TestReadyBlockedStillComputedFromBlockedBy(unittest.TestCase):
             _write_plan(plans_dir, "blocked", status="queued", blocked_by=["ready"])
             queue_file = _queue_file(root)
             history_file = _history_file(root)
-            config_file = root / ".agents" / "aet-work.json"
+            config_file = root / ".agents" / "aet-config.json"
 
             with patch.object(
                 sys,

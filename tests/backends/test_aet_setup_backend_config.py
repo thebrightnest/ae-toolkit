@@ -42,15 +42,15 @@ class TestConfigureTaskBackend(unittest.TestCase):
         )
 
     def read_config(self):
-        """Read the generated .agents/aet-work.json."""
-        path = self.project / ".agents" / "aet-work.json"
+        """Read the generated .agents/aet-config.json."""
+        path = self.project / ".agents" / "aet-config.json"
         self.assertTrue(path.exists(), f"Expected config file: {path}")
         return json.loads(path.read_text())
 
     def test_help_prints_usage(self):
         result = self.run_script(["--help"])
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Configure the task backend", result.stdout)
+        self.assertIn("Configure the AET project config", result.stdout)
 
     def test_json_backend_creates_config(self):
         result = self.run_script(["--backend", "json", "--non-interactive"])
@@ -105,7 +105,7 @@ class TestConfigureTaskBackend(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("projections", result.stderr.lower())
         # No config should be written when the backend is invalid.
-        self.assertFalse((self.project / ".agents" / "aet-work.json").exists())
+        self.assertFalse((self.project / ".agents" / "aet-config.json").exists())
 
     def test_both_backend_is_rejected(self):
         result = self.run_script(["--backend", "both", "--non-interactive"])
@@ -125,7 +125,7 @@ class TestConfigureTaskBackend(unittest.TestCase):
         existing = {
             "task_backend": "json",
         }
-        (agents / "aet-work.json").write_text(json.dumps(existing))
+        (agents / "aet-config.json").write_text(json.dumps(existing))
         result = self.run_script(["--backend", "git-refs", "--non-interactive"])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("forward-only", result.stderr.lower())

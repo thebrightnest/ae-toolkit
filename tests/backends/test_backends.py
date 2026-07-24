@@ -155,7 +155,7 @@ class TestFactory(unittest.TestCase):
         self.assertIsInstance(backend, JsonBackend)
 
     def test_factory_returns_json_backend_when_configured(self):
-        config_path = Path(self.tmp.name) / "aet-work.json"
+        config_path = Path(self.tmp.name) / "aet-config.json"
         config_path.write_text('{"task_backend": "json"}', encoding="utf-8")
 
         backend = create_backend(
@@ -166,7 +166,7 @@ class TestFactory(unittest.TestCase):
         self.assertIsInstance(backend, JsonBackend)
 
     def test_factory_returns_git_refs_backend_when_configured(self):
-        config_path = Path(self.tmp.name) / "aet-work.json"
+        config_path = Path(self.tmp.name) / "aet-config.json"
         config_path.write_text('{"task_backend": "git-refs"}', encoding="utf-8")
         # GitRefsBackend requires the queue path to live inside a git repo.
         subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
@@ -179,7 +179,7 @@ class TestFactory(unittest.TestCase):
         self.assertIsInstance(backend, GitRefsBackend)
 
     def test_factory_raises_named_error_for_github_backend(self):
-        config_path = Path(self.tmp.name) / "aet-work.json"
+        config_path = Path(self.tmp.name) / "aet-config.json"
         config_path.write_text(
             '{"task_backend": "github", "github": {"repo": "owner/repo"}}',
             encoding="utf-8",
@@ -194,7 +194,7 @@ class TestFactory(unittest.TestCase):
         self.assertIn("projections", str(ctx.exception).lower())
 
     def test_factory_raises_named_error_for_both_backend(self):
-        config_path = Path(self.tmp.name) / "aet-work.json"
+        config_path = Path(self.tmp.name) / "aet-config.json"
         config_path.write_text('{"task_backend": "both"}', encoding="utf-8")
 
         with self.assertRaises(UnknownBackendError) as ctx:
@@ -206,7 +206,7 @@ class TestFactory(unittest.TestCase):
         self.assertIn("projections", str(ctx.exception).lower())
 
     def test_factory_raises_for_unknown_backend(self):
-        config_path = Path(self.tmp.name) / "aet-work.json"
+        config_path = Path(self.tmp.name) / "aet-config.json"
         config_path.write_text('{"task_backend": "magic"}', encoding="utf-8")
 
         with self.assertRaises(UnknownBackendError):

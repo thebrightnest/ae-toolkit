@@ -38,7 +38,7 @@ class TestConfigResolution(unittest.TestCase):
         self.tmp.cleanup()
 
     def _write_in_tree(self, config):
-        path = self.project / ".agents" / "aet-work.json"
+        path = self.project / ".agents" / "aet-config.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(config), encoding="utf-8")
 
@@ -50,7 +50,7 @@ class TestConfigResolution(unittest.TestCase):
     def test_default_when_no_config_present(self):
         with patch.dict(os.environ, {"HOME": str(self.home)}, clear=False):
             backend = create_backend(
-                config_path=str(self.project / ".agents" / "aet-work.json"),
+                config_path=str(self.project / ".agents" / "aet-config.json"),
                 queue_file=str(self.project / "work-queue.json"),
                 history_file=str(self.project / "work-history.jsonl"),
             )
@@ -60,7 +60,7 @@ class TestConfigResolution(unittest.TestCase):
         self._write_in_tree({"task_backend": "git-refs"})
         with patch.dict(os.environ, {"HOME": str(self.home)}, clear=False):
             backend = create_backend(
-                config_path=str(self.project / ".agents" / "aet-work.json"),
+                config_path=str(self.project / ".agents" / "aet-config.json"),
                 queue_file=str(self.project / "work-queue.json"),
                 history_file=str(self.project / "work-history.jsonl"),
             )
@@ -75,7 +75,7 @@ class TestConfigResolution(unittest.TestCase):
             self._write_external("myproject/main", {"task_backend": "git-refs"})
             self._write_in_tree({"task_backend": "json"})
             backend = create_backend(
-                config_path=str(self.project / ".agents" / "aet-work.json"),
+                config_path=str(self.project / ".agents" / "aet-config.json"),
                 queue_file=str(self.project / "work-queue.json"),
                 history_file=str(self.project / "work-history.jsonl"),
             )
@@ -97,7 +97,7 @@ class TestConfigResolution(unittest.TestCase):
             self._write_external("myproject/main", {"task_backend": "git-refs"})
             self._write_in_tree({"task_backend": "git-refs"})
             backend = create_backend(
-                config_path=str(self.project / ".agents" / "aet-work.json"),
+                config_path=str(self.project / ".agents" / "aet-config.json"),
                 queue_file=str(self.project / "work-queue.json"),
                 history_file=str(self.project / "work-history.jsonl"),
             )
@@ -124,7 +124,7 @@ class TestConfigResolution(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        in_tree = self.project / ".agents" / "aet-work.json"
+        in_tree = self.project / ".agents" / "aet-config.json"
         self.assertFalse(in_tree.exists(), "non-invasive setup must not write in-tree config")
 
         external = self.home / ".aet" / "noninvasive-project" / "config.json"

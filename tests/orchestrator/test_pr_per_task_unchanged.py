@@ -124,7 +124,7 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
             )
 
             Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(
                     {
                         "trunk_branch": "main",

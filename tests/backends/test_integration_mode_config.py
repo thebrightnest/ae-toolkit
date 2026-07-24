@@ -29,7 +29,7 @@ class TestIntegrationModeResolution(unittest.TestCase):
         self.tmp.cleanup()
 
     def _write_in_tree(self, value: str | None):
-        path = self.project / ".agents" / "aet-work.json"
+        path = self.project / ".agents" / "aet-config.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         config: dict = {}
         if value is not None:
@@ -55,7 +55,7 @@ class TestIntegrationModeResolution(unittest.TestCase):
     def test_default_is_pr_per_task_when_no_config_present(self):
         with patch.dict(os.environ, {"HOME": str(self.home)}, clear=False):
             mode = resolve_integration_mode(
-                config_path=str(self.project / ".agents" / "aet-work.json")
+                config_path=str(self.project / ".agents" / "aet-config.json")
             )
         self.assertEqual(mode, "pr-per-task")
 
@@ -63,7 +63,7 @@ class TestIntegrationModeResolution(unittest.TestCase):
         self._write_in_tree("pr-per-task")
         with patch.dict(os.environ, {"HOME": str(self.home)}, clear=False):
             mode = resolve_integration_mode(
-                config_path=str(self.project / ".agents" / "aet-work.json")
+                config_path=str(self.project / ".agents" / "aet-config.json")
             )
         self.assertEqual(mode, "pr-per-task")
 
@@ -71,7 +71,7 @@ class TestIntegrationModeResolution(unittest.TestCase):
         self._write_in_tree("single-pr")
         with patch.dict(os.environ, {"HOME": str(self.home)}, clear=False):
             mode = resolve_integration_mode(
-                config_path=str(self.project / ".agents" / "aet-work.json")
+                config_path=str(self.project / ".agents" / "aet-config.json")
             )
         self.assertEqual(mode, "single-pr")
 
@@ -80,7 +80,7 @@ class TestIntegrationModeResolution(unittest.TestCase):
         with patch.dict(os.environ, {"HOME": str(self.home)}, clear=False):
             with self.assertRaises(IntegrationModeError) as ctx:
                 resolve_integration_mode(
-                    config_path=str(self.project / ".agents" / "aet-work.json")
+                    config_path=str(self.project / ".agents" / "aet-config.json")
                 )
         msg = str(ctx.exception)
         self.assertIn("integration_mode", msg)
@@ -97,7 +97,7 @@ class TestIntegrationModeResolution(unittest.TestCase):
             self._write_external("myproject/main", "single-pr")
             self._write_in_tree("pr-per-task")
             mode = resolve_integration_mode(
-                config_path=str(self.project / ".agents" / "aet-work.json")
+                config_path=str(self.project / ".agents" / "aet-config.json")
             )
         self.assertEqual(mode, "single-pr")
 
@@ -115,7 +115,7 @@ class TestIntegrationModeResolution(unittest.TestCase):
             self._write_external("myproject/main", "single-pr")
             self._write_in_tree("single-pr")
             mode = resolve_integration_mode(
-                config_path=str(self.project / ".agents" / "aet-work.json")
+                config_path=str(self.project / ".agents" / "aet-config.json")
             )
         self.assertEqual(mode, "pr-per-task")
 
@@ -128,7 +128,7 @@ class TestIntegrationModeResolution(unittest.TestCase):
             self._write_external("myproject/main", "bad-mode")
             with self.assertRaises(IntegrationModeError):
                 resolve_integration_mode(
-                    config_path=str(self.project / ".agents" / "aet-work.json")
+                    config_path=str(self.project / ".agents" / "aet-config.json")
                 )
 
     def test_unrecognized_value_in_env_config_fails_closed(self):
@@ -140,8 +140,48 @@ class TestIntegrationModeResolution(unittest.TestCase):
         ):
             with self.assertRaises(IntegrationModeError):
                 resolve_integration_mode(
-                    config_path=str(self.project / ".agents" / "aet-work.json")
+                    config_path=str(self.project / ".agents" / "aet-config.json")
                 )
+
+    def test_precedence_env_beats_external_beats_in_tree_beats_default(self):
+        """R-4: full external-first chain is unchanged by the rename."""
+        env_config = self._write_env_config("pr-per-task")
+        with patch.dict(
+            os.environ,
+            {
+                "HOME": str(self.home),
+                "AET_PROJECT_ID": "myproject/main",
+                "AET_WORK_CONFIG": str(env_config),
+            },
+            clear=False,
+        ):
+            self._write_external("myproject/main", "single-pr")
+            self._write_in_tree("typo-mode")
+            mode = resolve_integration_mode(
+                config_path=str(self.project / ".agents" / "aet-config.json")
+            )
+        self.assertEqual(mode, "pr-per-task")
+
+        # External beats in-tree (no env).
+        with patch.dict(
+            os.environ,
+            {"HOME": str(self.home), "AET_PROJECT_ID": "myproject/main"},
+            clear=False,
+        ):
+            self._write_external("myproject/main", "single-pr")
+            self._write_in_tree("pr-per-task")
+            mode = resolve_integration_mode(
+                config_path=str(self.project / ".agents" / "aet-config.json")
+            )
+        self.assertEqual(mode, "single-pr")
+
+        # In-tree beats default.
+        with patch.dict(os.environ, {"HOME": str(self.home)}, clear=False):
+            self._write_in_tree("single-pr")
+            mode = resolve_integration_mode(
+                config_path=str(self.project / ".agents" / "aet-config.json")
+            )
+        self.assertEqual(mode, "single-pr")
 
 
 if __name__ == "__main__":

@@ -98,7 +98,7 @@ class TestVerifyReportsConfigTrunk(VerifyReportsTrunkTestCase):
     """When config sets trunk_branch, that value is reported."""
 
     def test_reports_config_trunk(self):
-        config = Path(self.tmp.name) / "aet-work.json"
+        config = Path(self.tmp.name) / "aet-config.json"
         config.write_text('{"trunk_branch": "custom-trunk"}', encoding="utf-8")
 
         rc, out, err = self._run_verify(env_extra={"AET_WORK_CONFIG": str(config)})

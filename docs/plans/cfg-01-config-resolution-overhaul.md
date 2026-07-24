@@ -69,20 +69,20 @@ docs_sync_reason: CONVENTIONS.md config section and CONTEXT.md reference the old
 
 ## Task List
 
-1. Rename `DEFAULT_CONFIG_PATH` to `.agents/aet-config.json`; add
+1. ✓ Rename `DEFAULT_CONFIG_PATH` to `.agents/aet-config.json`; add
    `LegacyConfigError` (fail-closed, names `aet configure --migrate`) when only
    the legacy file exists — S (traces: R-1)
-2. Anchor in-tree resolution to `resolve_repo_root()` instead of cwd — S
+2. ✓ Anchor in-tree resolution to `resolve_repo_root()` instead of cwd — S
    (traces: R-2)
-3. Add `derive_config_slug()` (main-worktree identity) in `project_id.py` and
+3. ✓ Add `derive_config_slug()` (main-worktree identity) in `project_id.py` and
    use it for the external config path in `factory.py` — S (traces: R-3)
-4. Sweep remaining readers to the new filename: `orchestrator.py` (2 explicit
+4. ✓ Sweep remaining readers to the new filename: `orchestrator.py` (2 explicit
    `resolve_config` call sites — switch to anchored default), `worktree.py`
    (`symlink_dependencies`, 2 sites), `reconcile.py`, `sprint.py` — S
    (traces: R-1)
-5. Add `aet configure --migrate` (git-aware rename, no overwrite, prints the
+5. ✓ Add `aet configure --migrate` (git-aware rename, no overwrite, prints the
    resolved result) — S (traces: R-1)
-6. Regression tests (see Validation Steps), including updating the existing
+6. ✓ Regression tests (see Validation Steps), including updating the existing
    tests that write the old filename (`test_single_pr_loop.py`,
    `test_integration_push.py`, `test_orchestrator.py`,
    `test_status_liveness_contract.py`) — M (traces: R-1, R-2, R-3, R-4)
@@ -112,19 +112,19 @@ docs_sync_reason: CONVENTIONS.md config section and CONTEXT.md reference the old
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] New coverage in `tests/backends/test_config_resolution_overhaul.py`:
+- [x] `make validate` passes
+- [x] New coverage in `tests/backends/test_config_resolution_overhaul.py`:
   - `test_legacy_file_only_fails_closed_naming_migrate` (unit)
   - `test_new_file_resolves_from_subdirectory` (unit, chdir into subdir)
   - `test_external_config_resolves_from_linked_worktree` (integration:
     temp repo + `git worktree add`, HOME redirected)
   - `test_migrate_renames_and_preserves_contents` (unit)
   - `test_migrate_refuses_overwrite_of_existing_new_file` (unit)
-- [ ] Extended precedence regression in `test_integration_mode_config.py`:
+- [x] Extended precedence regression in `test_integration_mode_config.py`:
   env > external > in-tree > defaults unchanged (R-4)
-- [ ] Default-mode regression: `tests/orchestrator/test_pr_per_task_unchanged.py` stays green
-- [ ] R-trace coverage: R-1 by tasks 1, 4, 5; R-2 by tasks 2, 5; R-3 by tasks 3, 5; R-4 by task 5; no unknown R-ids
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] Default-mode regression: `tests/orchestrator/test_pr_per_task_unchanged.py` stays green
+- [x] R-trace coverage: R-1 by tasks 1, 4, 5; R-2 by tasks 2, 5; R-3 by tasks 3, 5; R-4 by task 5; no unknown R-ids
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` [Deferred: ship stage]
 
 ## Rollback Plan
 
@@ -134,5 +134,5 @@ rename back by hand — one file, called out in the upgrade guide).
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-work`_
+_Stage: merged_
+_Next step: merged_

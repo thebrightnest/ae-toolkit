@@ -227,7 +227,31 @@ that teach both adoption modes.
   defect. (Verified consumer pain is a discoverability/design gap in shipped
   behavior, not a crash or incorrect computation in existing code paths.)
 
+## Divergence Summary
+
+*Recorded: 2026-07-24 — Branch: cfg-01-config-resolution-overhaul*
+
+The implementation branch delivered the config-resolution mechanics (R-1 through R-4 and the `--migrate` remedy) but deferred the broader CLI, docs, and skill surface work to a follow-up cycle.
+
+### Changed from plan
+
+- None — the plan.md scope was implemented as written.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- **R-5 (CLI writer for all config keys):** `aet configure` currently only writes `task_backend`; `--integration-mode`, `--trunk-branch`, `--integration-branch`, and `--scope project|user` remain to be added.
+- **R-6 (`--base` forwarding):** `aet run` / `aet run-one` do not yet accept or forward `--base` to the orchestrator.
+- **R-7 (resolved config inspection):** `aet setup verify` was updated to the new filename only; it does not yet print resolved mode/branches with provenance.
+- **R-8 (shadow mode docs + upgrade guide):** No `docs/upgrades/` guide or README/CHANGELOG links were added.
+- **R-9 (skill surface updates):** `aet-work` and `aet-ship` SKILL.md files were not updated to describe both integration modes or remove stale `task_backend: github` claims.
+- **R-10 (doc command accuracy):** CONVENTIONS.md typo fix and `aet ship close --target-branch` documentation were not addressed.
+- **R-11 (guided first-time setup):** The setup flow does not yet ask scope/mode questions and write a valid config.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*

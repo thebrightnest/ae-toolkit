@@ -157,7 +157,10 @@ def _make_backend(queue_file: str):
     stays consistent regardless of where the queue lives.
     """
     history_file = str(Path(queue_file).with_name("work-history.jsonl"))
-    return create_backend(queue_file=queue_file, history_file=history_file)
+    config_path = str(Path(queue_file).with_name("aet-config.json"))
+    return create_backend(
+        config_path=config_path, queue_file=queue_file, history_file=history_file
+    )
 
 
 def _runs_dir(repo_root: str) -> Path:
@@ -2357,7 +2360,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     # Resolve trunk and integration branch once per run so every consumer
     # agrees on the base (ADR-044), while still allowing --base /
     # AET_WORK_BASE_BRANCH to override the integration branch.
-    config = resolve_config(os.path.join(repo_root, ".agents", "aet-work.json"))
+    config = resolve_config(DEFAULT_CONFIG_PATH, repo_root=repo_root)
     trunk = resolve_trunk_branch(repo_root, config)
     integration = resolve_integration_branch(
         repo_root, config, cli_base=getattr(args, "base", None)
@@ -2388,9 +2391,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     # Resolve integration_mode once per run through the external-first config
     # chain so every task in the batch sees the same value.
     try:
-        integration_mode = resolve_integration_mode(
-            os.path.join(repo_root, DEFAULT_CONFIG_PATH)
-        )
+        integration_mode = resolve_integration_mode(DEFAULT_CONFIG_PATH, repo_root=repo_root)
     except Exception as exc:
         print(f"⛔ Could not resolve integration_mode: {exc}")
         end_time = telemetry.iso_now()
@@ -2775,7 +2776,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # agrees on the base (ADR-044). Batch children inherit the parent's
     # resolution via --base / AET_WORK_BASE_BRANCH if set, but still need the
     # local trunk/integration for aet-state calls made from this process.
-    config = resolve_config(os.path.join(repo_root, ".agents", "aet-work.json"))
+    config = resolve_config(DEFAULT_CONFIG_PATH, repo_root=repo_root)
     trunk = resolve_trunk_branch(repo_root, config)
     integration = resolve_integration_branch(
         repo_root, config, cli_base=getattr(args, "base", None)
@@ -2895,7 +2896,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         integration_mode = os.environ.get("AET_INTEGRATION_MODE")
         if integration_mode is None:
             integration_mode = resolve_integration_mode(
-                os.path.join(repo_root, DEFAULT_CONFIG_PATH)
+                DEFAULT_CONFIG_PATH, repo_root=repo_root
             )
 
         print(f"📁 Telemetry: {logger.run_dir}")
