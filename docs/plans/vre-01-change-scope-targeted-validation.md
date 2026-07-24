@@ -105,4 +105,5 @@ unchanged either way, so the revert is self-contained.
 
 ---
 
-*Stage: reviewed*
+*Stage: synced*
+*Next step: run `aet-ship`*

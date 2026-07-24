@@ -1,7 +1,7 @@
 # PRD: Validation-Runtime Efficiency & Determinism
 
-*Stage: scope-validated*
-*Next step: `aet run` — vre-01/02/03 queued. R-6 deferred as an idea: `docs/ideas/deterministic-qa-freshness-suppression.md`.*
+*Stage: synced*
+*Next step: run `aet-ship`*
 
 ## Overview
 
