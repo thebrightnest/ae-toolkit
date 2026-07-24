@@ -10,11 +10,14 @@ The aet-ship workflow is now implemented in code:
 - `aet ship <plan_file|task_id>` — run the gate, then open a PR.
 - `aet ship gate <plan_file|task_id>` — run the pre-merge gate only.
 - `aet ship open <plan_file|task_id>` — run the gate and open a PR.
+- `aet ship merge <plan_file|task_id> --branch <target>` — run the gate, detect conflicts against the target branch, merge directly into it, and record closure.
 - `aet ship close <plan_file>` — record post-merge closure (task id derived from plan frontmatter).
 - `aet ship close <task_id>` — record post-merge closure (plan derived from the queue task's `plan_file`).
 - `aet ship close <task_id> <plan_file>` — record post-merge closure with explicit identifiers.
 
-A bare task id given to `aet ship`, `aet ship gate`, or `aet ship open` resolves to the conventional `docs/plans/<task_id>.md` path.
+A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet ship merge` resolves to the conventional `docs/plans/<task_id>.md` path.
+
+`aet ship merge` requires `--branch` so the target branch is always explicit. It checks for merge conflicts against `origin/<target>` before merging and records the resulting merge commit in the work queue.
 
 ## When to Use This Skill
 

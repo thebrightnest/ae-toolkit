@@ -758,7 +758,7 @@ def cmd_record_merge(args):
     backend = make_backend(args.queue)
     cwd = os.path.dirname(args.queue) if args.queue else "."
     history_file = getattr(backend, "history_file", None)
-    trunk_branch = _resolve_trunk(args.queue)
+    trunk_branch = getattr(args, "target_branch", None) or _resolve_trunk(args.queue)
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1

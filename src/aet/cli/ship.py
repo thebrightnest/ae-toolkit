@@ -5,6 +5,9 @@ Usage:
   aet ship <plan_file|task_id>        Run the gate, then open a PR.
   aet ship gate <plan_file|task_id>   Run the pre-merge gate (steps 1-9).
   aet ship open <plan_file|task_id>   Run the gate and open a PR.
+  aet ship merge <plan_file|task_id> --branch <target>
+                                      Run the gate, detect conflicts against the target branch,
+                                      merge directly into it, and record closure.
   aet ship close <plan_file>          Record post-merge closure (task id derived from plan frontmatter).
   aet ship close <task_id>            Record post-merge closure (plan derived from queue task).
   aet ship close <task_id> <plan_file> [queue_file]
@@ -12,9 +15,9 @@ Usage:
   aet ship record-merge <task_id> <plan_file> [queue_file]
                                       Hidden alias for ``close``.
 
-A bare task id given to ``gate``, ``open``, or the default command resolves to
+A bare task id given to ``gate``, ``open``, ``merge``, or the default command resolves to
 the conventional ``docs/plans/<task_id>.md`` path. The pre-merge gate, PR
-creation, and merge closure are all implemented in code.
+creation, direct merge, and merge closure are all implemented in code.
 """
 
 from __future__ import annotations
@@ -660,6 +663,226 @@ def cmd_open(args: argparse.Namespace) -> int:
     return 0
 
 
+def _has_merge_conflicts(target_branch: str) -> tuple[bool, str]:
+    """Return (has_conflicts, message) for merging HEAD into origin/<target_branch>."""
+    target_ref = f"origin/{target_branch}"
+    base_result = _run_git("merge-base", "HEAD", target_ref, check=False)
+    if base_result.returncode != 0:
+        return True, f"Could not find merge base between HEAD and {target_ref}."
+    merge_base = base_result.stdout.strip()
+    tree_result = _run_git("merge-tree", merge_base, "HEAD", target_ref, check=False)
+    if tree_result.returncode != 0:
+        return True, f"Merge-tree failed for {target_ref}: {tree_result.stderr}"
+    if any(line.startswith("<<<<<<< ") for line in tree_result.stdout.splitlines()):
+        return (
+            True,
+            f"Merging HEAD into {target_ref} would produce conflicts. "
+            "Rebase onto the target branch or resolve the conflicts first.",
+        )
+    return False, ""
+
+
+def _find_target_worktree(branch: str) -> Optional[Path]:
+    """Return the path of an existing worktree for *branch*, or None."""
+    result = _run_git("worktree", "list", "--porcelain", check=False)
+    if result.returncode != 0:
+        return None
+    current_path: Optional[Path] = None
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            current_path = Path(line[len("worktree "):])
+        elif line.startswith("branch ") and current_path is not None:
+            ref = line[len("branch "):]
+            if ref == f"refs/heads/{branch}":
+                return current_path
+    return None
+
+
+def _create_temp_worktree(target_branch: str) -> Path:
+    """Create a temporary worktree for origin/<target_branch> and return its path."""
+    repo_root = Path(_run_git("rev-parse", "--show-toplevel").stdout.strip())
+    worktree_dir = repo_root / ".worktrees" / f".merge-{target_branch}-{os.getpid()}"
+    result = _run_git(
+        "worktree", "add", "--checkout", str(worktree_dir), f"origin/{target_branch}",
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Could not create worktree for {target_branch}: {result.stderr}"
+        )
+    return worktree_dir
+
+
+def _remove_worktree(path: Path) -> None:
+    """Remove a temporary worktree, ignoring errors."""
+    _run_git("worktree", "remove", "--force", str(path), check=False)
+
+
+def _merge_into_target(
+    target_branch: str, feature_branch: str, dry_run: bool
+) -> tuple[bool, str, Optional[str]]:
+    """Merge *feature_branch* into *target_branch* and push.
+
+    Returns (ok, message, merge_commit). *merge_commit* is None on failure or
+    dry-run. Existing worktrees for the target branch are reused; otherwise a
+    temporary worktree is created and removed.
+    """
+    target_ref = f"origin/{target_branch}"
+    worktree = _find_target_worktree(target_branch)
+    created = False
+    if worktree is None:
+        if dry_run:
+            return (
+                True,
+                f"Would create a worktree for {target_ref}, merge {feature_branch} into "
+                f"{target_branch}, and push {target_branch}.",
+                None,
+            )
+        try:
+            worktree = _create_temp_worktree(target_branch)
+            created = True
+        except RuntimeError as exc:
+            return False, str(exc), None
+
+    try:
+        if dry_run:
+            return (
+                True,
+                f"Would merge {feature_branch} into {target_branch} and push {target_branch}.",
+                None,
+            )
+
+        checkout_result = _run_git(
+            "-C", str(worktree), "checkout", target_branch, check=False
+        )
+        if checkout_result.returncode != 0:
+            return False, f"Could not checkout {target_branch}: {checkout_result.stderr}", None
+
+        pull_result = _run_git(
+            "-C", str(worktree), "pull", "origin", target_branch, check=False
+        )
+        if pull_result.returncode != 0:
+            return False, f"Could not pull {target_ref}: {pull_result.stderr}", None
+
+        merge_message = f"Merge {feature_branch} into {target_branch}"
+        merge_result = _run_git(
+            "-C",
+            str(worktree),
+            "merge",
+            "--no-ff",
+            "-m",
+            merge_message,
+            feature_branch,
+            check=False,
+        )
+        if merge_result.returncode != 0:
+            _run_git("-C", str(worktree), "merge", "--abort", check=False)
+            return (
+                False,
+                f"Merge into {target_branch} failed:\n{merge_result.stdout}\n{merge_result.stderr}",
+                None,
+            )
+
+        sha_result = _run_git("-C", str(worktree), "rev-parse", "HEAD", check=False)
+        if sha_result.returncode != 0:
+            return False, f"Could not read merge commit SHA: {sha_result.stderr}", None
+        merge_commit = sha_result.stdout.strip()
+
+        push_result = _run_git(
+            "-C", str(worktree), "push", "origin", target_branch, check=False
+        )
+        if push_result.returncode != 0:
+            return (
+                False,
+                f"Push of {target_branch} failed:\n{push_result.stdout}\n{push_result.stderr}",
+                None,
+            )
+
+        return (
+            True,
+            f"Merged {feature_branch} into {target_branch} ({merge_commit}).",
+            merge_commit,
+        )
+    finally:
+        if created:
+            _remove_worktree(worktree)
+
+
+def cmd_merge(args: argparse.Namespace) -> int:
+    """Run the gate, detect conflicts, merge directly into a target branch, and close."""
+    try:
+        args.plan = _resolve_plan_arg(args.plan)
+    except ValueError as exc:
+        return _fail(str(exc))
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        return _fail(f"Plan file not found: {plan_path}")
+
+    target_branch = args.branch
+    feature_branch = _run_git("branch", "--show-current", check=False).stdout.strip()
+    if not feature_branch:
+        return _fail("Cannot merge: HEAD is detached.")
+
+    print(f"Running aet ship merge for {plan_path} into {target_branch}")
+
+    # The gate should treat the target branch as the merge base so tests and
+    # checks run against the same integration point we will merge into.
+    args.base = f"origin/{target_branch}"
+    result = _run_gate(args)
+    if not result.ok:
+        return _fail(f"Gate failed: {result.message}")
+    print("   Gate passed.")
+
+    guard_error = _check_release_guard(result.pr_base)
+    if guard_error:
+        return _fail(guard_error)
+
+    if _is_monolithic_commit(result.pr_base, plan_path):
+        return _fail(
+            "Monolithic commit detected: one commit spans the entire merge range "
+            "while the plan lists multiple tasks.\n"
+            "STOP and split the commit manually into logical pieces before merging."
+        )
+
+    print(f"Checking for merge conflicts against origin/{target_branch}...")
+    has_conflicts, conflict_msg = _has_merge_conflicts(target_branch)
+    if has_conflicts:
+        return _fail(conflict_msg)
+    print("   No conflicts detected.")
+
+    print(f"Merging {feature_branch} into {target_branch}...")
+    ok, msg, merge_commit = _merge_into_target(target_branch, feature_branch, args.dry_run)
+    if not ok:
+        return _fail(msg)
+    print(f"   {msg}")
+
+    if args.dry_run:
+        print("✅ aet ship merge complete (dry-run).")
+        return 0
+
+    task_id = _task_id_from_plan(plan_path)
+    rc = aet_state.cmd_record_merge(
+        argparse.Namespace(
+            command="record-merge",
+            task_id=task_id,
+            queue=".agents/work-queue.json",
+            plan=str(plan_path),
+            dry_run=False,
+            branch=feature_branch,
+            merge_commit=merge_commit,
+            target_branch=target_branch,
+        )
+    )
+    if rc != 0:
+        return _fail(
+            "Merge succeeded, but recording closure failed. "
+            "Run `aet ship close` manually to finish."
+        )
+
+    print("✅ aet ship merge complete.")
+    return 0
+
+
 def _add_close_args(parser: argparse.ArgumentParser) -> None:
     """Add the post-merge closure arguments to *parser*."""
     parser.add_argument(
@@ -739,6 +962,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show what would be done without making changes.",
     )
 
+    merge_parser = sub.add_parser(
+        "merge",
+        help="Run the gate, detect conflicts, merge directly into a target branch, and close.",
+    )
+    merge_parser.add_argument(
+        "plan",
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+    )
+    merge_parser.add_argument(
+        "--branch",
+        required=True,
+        help="Target branch to merge into (required).",
+    )
+    merge_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes.",
+    )
+
     close_parser = sub.add_parser(
         "close",
         help="Record post-merge closure for a task.",
@@ -774,7 +1016,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-_KNOWN_SUBCOMMANDS = {"gate", "open", "close", "record-merge"}
+_KNOWN_SUBCOMMANDS = {"gate", "open", "merge", "close", "record-merge"}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -800,6 +1042,8 @@ def main(argv: list[str] | None = None):
         return cmd_gate(args)
     if args.command == "open":
         return cmd_open(args)
+    if args.command == "merge":
+        return cmd_merge(args)
     if args.command in ("close", "record-merge"):
         return cmd_ship(args)
     if args.command == "default":
@@ -896,6 +1140,28 @@ def ship_open(
 ) -> None:
     """Run the gate and open a PR for the plan."""
     rc = cmd_open(argparse.Namespace(plan=plan, base=base, dry_run=dry_run))
+    raise typer.Exit(rc)
+
+
+@app.command(name="merge")
+def ship_merge(
+    plan: str = typer.Argument(
+        ...,
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+    ),
+    branch: str = typer.Option(
+        ...,
+        "--branch",
+        help="Target branch to merge into (required).",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes.",
+    ),
+) -> None:
+    """Run the gate, detect conflicts, merge directly into a target branch, and close."""
+    rc = cmd_merge(argparse.Namespace(plan=plan, branch=branch, dry_run=dry_run))
     raise typer.Exit(rc)
 
 
