@@ -22,8 +22,11 @@ help: ## Show this help
 $(PYTHON):
 	@python3 -m venv $(VENV)
 
-install-editable: $(PYTHON) ## Ensure the aet package is installed editable (plain pip; uv optional)
-	@$(PYTHON) -c "import aet" 2>/dev/null || $(PIP) install -e '.[dev]'
+install-editable: $(PYTHON) ## Ensure the aet package is installed editable from this repo root
+	@installed_path="$$($(PYTHON) -c 'import aet, pathlib; print(str(pathlib.Path(aet.__file__).resolve().parents[2]))' 2>/dev/null)"; \
+	if [ "$$installed_path" != "$$(pwd)" ]; then \
+		$(PIP) install -e '.[dev]'; \
+	fi
 	@echo "✓ Editable install verified"
 
 install-skills: install-editable ## Symlink all skills from this repo to ~/.agents/skills/ and put binaries on PATH
