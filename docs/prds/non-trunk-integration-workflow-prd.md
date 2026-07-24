@@ -410,6 +410,22 @@ scope — the epic/integration layer — is a feature and is planned as one.
 - Task 3 (merge branch to main and verify integration): deferred to the
   `aet-ship` stage; `aet-sync-docs` does not perform merges.
 
+## Divergence Summary: epi-06-state-heal-gap-and-reset
+
+*Recorded: 2026-07-24 — Branch: epi-06-state-heal-gap-and-reset*
+
+### Changed from plan
+
+- None. Tasks 1–3 were implemented as locked: the missing heal rule for (`ready`/`blocked`, `in_progress`/`awaiting_merge`) was added to `cmd_heal`, stale `branch`/`worktree` fields are cleared by `_clear_stale_runtime_fields` during repair transitions, and `aet state reset` recomputes a single task and un-starts it.
+
+### Added (unplanned)
+
+- `tests/cli/test_build_parsers.py` was updated to register the new `reset` subcommand in the command registry. This is the standard parser collateral implied by adding a new `aet state` subcommand.
+
+### Deferred
+
+- Task 4 (merge branch to main and verify integration): the merge and final integration verification are out of scope for the sync-docs stage and will happen at the ship stage.
+
 ---
 
 *Stage: synced*
