@@ -3,7 +3,7 @@ id: epi-11-branch-model-docs-and-verify
 size: S
 blocked_by: [epi-01-base-branch-resolver, fic-02-installer-bootstrap-boundary]
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: displays an already-resolved value and edits documentation; no new input or write surface
 docs_sync: required
@@ -112,5 +112,5 @@ disappears; no code path depends on either.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
