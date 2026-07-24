@@ -20,7 +20,8 @@ from unittest.mock import patch
 
 import pytest
 
-from aet import integration_lock
+from aet import evidence as ev_module
+from aet import integration_lock, telemetry
 from aet.cli_adapter import CLIAdapter
 
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
@@ -145,6 +146,25 @@ def _add_commit_to_worktree(worktree_dir: str, filename: str, content: str) -> N
     )
 
 
+def _write_qa_verdict(repo_root: str, task_id: str) -> None:
+    """Write a passing qa verdict for task_id to the canonical evidence path."""
+    project_slug = telemetry.derive_project_slug(repo_root)
+    record = {
+        "task_id": task_id,
+        "stage": "qa-complete",
+        "skill": "aet-qa",
+        "verdict": "pass",
+        "summary": "fake qa passed",
+        "generated_at": telemetry.iso_now(),
+        "tree_hash": "",
+        "test_command": "make validate",
+        "tests_total": 1,
+        "tests_passed": 1,
+        "tests_failed": 0,
+    }
+    ev_module.write_verdict(task_id, "qa", record, project_slug=project_slug)
+
+
 def _read_lock_log(log_path: str) -> list[dict]:
     events = []
     if not os.path.exists(log_path):
@@ -264,7 +284,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            _write_plan(repo_root, "task-a")
+            plan_a = _write_plan(repo_root, "task-a")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(
                 ["git", "-C", repo_root, "commit", "-q", "-m", "add plans"],
@@ -280,6 +300,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 repo_root, "task-a", base_branch="origin/epic-01"
             )
             _add_commit_to_worktree(worktree_a, "task-a.txt", "task-a work")
+            _write_qa_verdict(repo_root, "task-a")
 
             with patch.object(orchestrator, "_validate_after_rebase", return_value=(True, "")):
                 result = orchestrator._integrate_single_pr_task(
@@ -287,6 +308,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                     task_id="task-a",
                     integration_branch="epic-01",
                     worktree_dir=worktree_a,
+                    plan_file=plan_a,
                 )
 
             self.assertTrue(result)

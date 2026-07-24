@@ -20,7 +20,6 @@ nothing about AET (R-9/R-10).
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -28,12 +27,7 @@ from typing import Optional
 
 import typer
 
-from aet import (
-    evidence,  # noqa: E402
-    plan_parser,  # noqa: E402
-    telemetry,  # noqa: E402
-)
-from aet.workflow import load_workflow  # noqa: E402
+from aet import gate, plan_parser  # noqa: E402
 
 # Marker embedded in every shim this tool generates. ``install`` rewrites a
 # hook only when this marker is present; a hook without it is left untouched.
@@ -164,57 +158,6 @@ def _branch_from_ref(ref: str) -> str | None:
     return ref[len(prefix) :] if ref.startswith(prefix) else None
 
 
-def _plan_for_branch(repo_root: Path, branch: str) -> Path | None:
-    """Task-branch convention: branch name == task id == plan file stem.
-
-    This mirrors aet-work's worktree naming (``branch_name = task_id``); a
-    branch is a task branch only when a matching plan file exists.
-    """
-    plan = repo_root / "docs" / "plans" / f"{branch}.md"
-    return plan if plan.is_file() else None
-
-
-def _required_evidence(repo_root: Path, plan_fm: dict) -> list[tuple[str, str]]:
-    """Resolve required (stage_name, evidence_kind) pairs from the workflow.
-
-    Mirrors the orchestrator's ``stage_enabled`` gate: a gated stage is required
-    unless the plan frontmatter marks its gate key ``skipped`` (a missing key
-    fails safe to required). Ungated evidence stages (qa, review) always run.
-    """
-    try:
-        workflow = load_workflow(repo_root)
-    except Exception:
-        return []
-    required = []
-    for stage in workflow.stages:
-        if not stage.evidence:
-            continue
-        if stage.gate_key and plan_fm.get(stage.gate_key) == "skipped":
-            continue
-        required.append((stage.name, stage.evidence))
-    return required
-
-
-def _verdict_status(task_id: str, kind: str, repo_root: Path) -> tuple[bool, str]:
-    """Return (passed, detail) for one required gate kind.
-
-    Reads the canonical project-namespaced verdict path — the same derivation
-    the orchestrator's gate uses — and passes only on ``verdict: "pass"``.
-    """
-    slug = telemetry.derive_project_slug(repo_root)
-    path = evidence.evidence_path(task_id=task_id, kind=kind, project_slug=slug)
-    try:
-        record = evidence.read_verdict(path)
-    except FileNotFoundError:
-        return False, f"no verdict recorded at {path}"
-    except (json.JSONDecodeError, OSError) as exc:
-        return False, f"unreadable verdict at {path}: {exc}"
-    verdict = record.get("verdict")
-    if verdict != "pass":
-        return False, f"verdict is {verdict!r} at {path}"
-    return True, ""
-
-
 def cmd_check(args: argparse.Namespace) -> int:
     """Refuse the push when a task branch is missing required gate evidence."""
     repo_root = _resolve_repo_root(args.repo)
@@ -227,17 +170,12 @@ def cmd_check(args: argparse.Namespace) -> int:
         branch = _branch_from_ref(local_ref)
         if branch is None:
             continue
-        plan = _plan_for_branch(repo_root, branch)
+        plan = gate.plan_for_branch(repo_root, branch)
         if plan is None:
             continue  # non-task branch — no gate imposed
         plan_fm = plan_parser.parse_frontmatter(plan)
-        for stage_name, kind in _required_evidence(repo_root, plan_fm):
-            passed, detail = _verdict_status(branch, kind, repo_root)
-            if not passed:
-                failures.append(
-                    f"  task '{branch}': required gate '{kind}' "
-                    f"(stage '{stage_name}') — {detail}"
-                )
+        _ok, task_failures = gate.check_task_evidence(branch, plan_fm, repo_root)
+        failures.extend(task_failures)
 
     if failures:
         print(

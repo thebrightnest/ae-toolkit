@@ -46,6 +46,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import (  # noqa: E402
     breaker,
     evidence,
+    gate,
     plan_parser,
     plan_size,
     telemetry,
@@ -1466,6 +1467,7 @@ def process_task(
                 integration_branch=integration_branch,
                 worktree_dir=worktree_dir,
                 backend=backend,
+                plan_file=plan_file,
             )
         except IntegrationFailureError as exc:
             print(f"   ❌ Integration failure for {task_id}: {exc}")
@@ -1564,6 +1566,7 @@ def _integrate_single_pr_task(
     integration_branch: str,
     worktree_dir: str,
     backend=None,
+    plan_file: str | None = None,
 ) -> bool:
     """Serialize, rebase, re-validate, squash-merge, push, and clean up.
 
@@ -1618,6 +1621,20 @@ def _integrate_single_pr_task(
             if not ok:
                 raise IntegrationFailureError(
                     f"validation failed after rebase for {task_id}:\n{output}"
+                )
+
+            # Verify required gate evidence before the squash-merge lands (R-22).
+            # Use the plan file from the task when available; fall back to the
+            # task-id convention so the gate matches the pre-push hook.
+            _plan_path = Path(plan_file) if plan_file else Path(worktree_dir) / "docs" / "plans" / f"{task_id}.md"
+            _plan_fm = plan_parser.parse_frontmatter(_plan_path)
+            _evidence_ok, _evidence_failures = gate.check_task_evidence(
+                task_id, _plan_fm, repo_root
+            )
+            if not _evidence_ok:
+                raise IntegrationFailureError(
+                    "missing required gate evidence for "
+                    f"{task_id}:\n" + "\n".join(_evidence_failures)
                 )
 
             # Squash-merge the rebased task branch into the integration branch.

@@ -59,13 +59,14 @@ merge evidence a task closes with today (R-21).
 
 ## Task List
 
-1. Push the integration branch to `origin` after each successful integration,
+1. ✓ Push the integration branch to `origin` after each successful integration,
    inside the lock — S (traces: R-20)
-2. Factor the gate-verdict check out of `hooks.py` into a shared helper and
+2. ✓ Factor the gate-verdict check out of `hooks.py` into a shared helper and
    enforce it at integration time before the squash-merge — M (traces: R-22)
-3. Run ADR-029 merge verification once per epic at the integration branch's PR
+3. ✓ Run ADR-029 merge verification once per epic at the integration branch's PR
    merge, retaining fail-closed and no-self-merge — M (traces: R-21)
-4. Merge branch to main and verify integration — S
+4. Merge branch to main and verify integration — S [Deferred: out of scope for
+   sync-docs; will happen at the `aet-ship` stage]
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated.
