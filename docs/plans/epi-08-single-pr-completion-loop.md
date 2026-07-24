@@ -147,5 +147,5 @@ reflog. `pr-per-task` is untouched by construction.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
