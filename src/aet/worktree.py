@@ -419,6 +419,7 @@ AET_IGNORED_PATHS = {
     ".agents/work-queue.json.lock",
     ".agents/work-queue.lease",
     ".agents/work-history.jsonl",
+    ".agents/integration.lock",
     ".agents/runs/",
     ".worktrees/",
 }

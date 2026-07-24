@@ -144,12 +144,12 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
             with patch.dict(os.environ, env, clear=True):
                 with patch.object(subprocess, "run", side_effect=recorder):
                     with patch.object(
-                        orchestrator, "run_stage", return_value=(0, None, None)
+                        orchestrator, "run_stage", return_value=(0, None, None, "")
                     ):
                         with patch.object(
                             orchestrator,
                             "run_stage_group",
-                            return_value=(0, None, None),
+                            return_value=(0, None, None, None),
                         ):
                             with patch.object(
                                 orchestrator,

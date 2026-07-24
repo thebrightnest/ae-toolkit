@@ -439,7 +439,9 @@ All task failures are classified into one of five classes before routing:
 - `timeout` — killed by wall-clock or silence timeout.
 - `canceled` — killed by signal or orchestrator shutdown.
 
-### Routing modes
+### Integration Failure
+
+In `single-pr` mode, a rebase conflict or a post-rebase validation failure is an **Integration Failure** — an engine-level outcome, not a member of the five-class ADR-030 menu above. The task passed; the combination did not. Integration Failures are marked `failed` with an integration signature for human review, are never triaged as task failures, and do not increment the per-task circuit breaker.
 
 - `triage` (default): spawn a triage session that emits `{class, action: requeue|quarantine}`. `requeue` transitions `failed → ready`; `quarantine` transitions to `quarantined`. An errored or unparseable verdict falls back to the nsr-01 default action.
 - `continue`: mark `failed` and keep spawning new tasks.

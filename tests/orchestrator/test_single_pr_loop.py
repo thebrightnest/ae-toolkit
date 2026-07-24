@@ -167,15 +167,16 @@ class TestSinglePrLoop(unittest.TestCase):
 
             env = os.environ.copy()
             env["AET_PROJECT_ID"] = "demo-project"
+            env["AET_INTEGRATION_VALIDATE_CMD"] = "true"
 
             with patch.dict(os.environ, env, clear=True):
                 with patch.object(
-                    orchestrator, "run_stage", return_value=(0, None, None)
+                    orchestrator, "run_stage", return_value=(0, None, None, "")
                 ):
                     with patch.object(
                         orchestrator,
                         "run_stage_group",
-                        return_value=(0, None, None),
+                        return_value=(0, None, None, None),
                     ):
                         with patch.object(
                             orchestrator,

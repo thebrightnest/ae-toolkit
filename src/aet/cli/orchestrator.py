@@ -63,6 +63,10 @@ from aet.backends.factory import (  # noqa: E402
 )
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
 from aet.cli_adapter import resolve_cli_adapter  # noqa: E402
+from aet.integration_lock import (  # noqa: E402
+    IntegrationFailureError,
+    integration_lock,
+)
 from aet.queue import (  # noqa: E402
     LEGAL_TRANSITIONS,
     QueueIntegrityError,
@@ -89,7 +93,7 @@ from aet.worktree import (  # noqa: E402
     prepare_worktree_dependencies,
     push_branch,
     remove_worktree,
-    squash_merge_task_branch,
+    run_git_plain,
 )
 
 # Global shutdown flag
@@ -1455,17 +1459,103 @@ def process_task(
     # of ADR-045 decision 3.
     if integration_mode == "single-pr":
         integration_branch = base_branch.split("/", 1)[1] if "/" in base_branch else base_branch
-        ok = _integrate_single_pr_task(
-            repo_root=repo_root,
-            task_id=task_id,
-            integration_branch=integration_branch,
-            worktree_dir=worktree_dir,
-        )
-        if not ok:
-            return False
+        try:
+            _integrate_single_pr_task(
+                repo_root=repo_root,
+                task_id=task_id,
+                integration_branch=integration_branch,
+                worktree_dir=worktree_dir,
+                backend=backend,
+            )
+        except IntegrationFailureError as exc:
+            print(f"   ❌ Integration failure for {task_id}: {exc}")
+            queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+            if os.path.exists(queue_file):
+                _mark_integration_failure(
+                    backend,
+                    queue_file,
+                    task_id,
+                    current_state(task) if task else "in_progress",
+                    str(exc),
+                )
+            raise
 
     print(f"   ✅ Task complete: {task_id}")
     return True
+
+
+def _validate_after_rebase(worktree_dir: str) -> tuple[bool, str]:
+    """Re-run task validation in the rebased worktree.
+
+    Returns ``(True, "")`` on success, ``(False, output)`` on failure. The
+    default command is the project's full validation gate; tests and unusual
+    projects can override it via ``AET_INTEGRATION_VALIDATE_CMD``.
+    """
+    cmd_env = os.environ.get("AET_INTEGRATION_VALIDATE_CMD", "")
+    if cmd_env:
+        cmd = cmd_env.split()
+    else:
+        cmd = ["make", "validate"]
+    result = subprocess.run(
+        cmd,
+        cwd=worktree_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        output = result.stdout + result.stderr
+        return False, output
+    return True, ""
+
+
+def _mark_integration_failure(
+    backend,
+    queue_file: str,
+    task_id: str,
+    from_state: str | None,
+    reason: str,
+) -> None:
+    """Mark a task as failed due to an integration failure.
+
+    Integration failure is an engine-level outcome, not a member of the
+    ADR-030 failure-class menu. It is not triaged as a task failure and does
+    not increment the per-task circuit breaker (ADR-045, R-19).
+    """
+    if from_state is None:
+        from_state = "in_progress"
+    aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+    result = subprocess.run(
+        [
+            sys.executable,
+            aet_state_bin,
+            "transition",
+            task_id,
+            from_state,
+            "failed",
+            queue_file,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(
+            f"   ⚠️  Could not transition {task_id} to failed after integration failure: "
+            f"{result.stderr.strip()}"
+        )
+        return
+
+    sig = failure_lib.signature(stage="integration", tail=reason)
+    with queue_lock(queue_file):
+        data = backend.load()
+        queue = data["queue"]
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        if task is not None:
+            task["integration_failure"] = {
+                "reason": reason,
+                "signature": sig,
+                "at": telemetry.iso_now(),
+            }
+            backend.save(queue)
 
 
 def _integrate_single_pr_task(
@@ -1473,36 +1563,169 @@ def _integrate_single_pr_task(
     task_id: str,
     integration_branch: str,
     worktree_dir: str,
+    backend=None,
 ) -> bool:
-    """Squash-merge a task into the integration branch, push, and delete the task branch.
+    """Serialize, rebase, re-validate, squash-merge, push, and clean up.
+
+    In ``single-pr`` mode the integration step (rebase onto current tip →
+    re-validate → squash-merge) is gated behind the local advisory integration
+    lock while implementation stays concurrent (ADR-045, R-18). A rebase
+    conflict or post-rebase validation failure is reported as an Integration
+    Failure, not triaged as a task failure (R-19).
 
     Also transitions the queued task to ``merged`` when a queue file exists.
-    Returns ``True`` on success.
+    Returns ``True`` on success and raises ``IntegrationFailureError`` on any
+    integration failure.
     """
     print(f"   🔀 Integrating {task_id} into {integration_branch}")
+    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
 
-    ok, msg = squash_merge_task_branch(repo_root, task_id, integration_branch)
-    if not ok:
-        print(f"   ❌ Integration failed: {msg}")
-        return False
-    merge_commit = msg
+    # Remember repo_root HEAD so we can restore it after checking out the
+    # integration branch for the squash-merge.
+    head_ref = subprocess.run(
+        ["git", "-C", repo_root, "symbolic-ref", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    original_branch = head_ref.stdout.strip() if head_ref.returncode == 0 else None
+    original_sha_proc = subprocess.run(
+        ["git", "-C", repo_root, "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    original_sha = original_sha_proc.stdout.strip() if original_sha_proc.returncode == 0 else None
 
-    ok, err = push_branch(repo_root, integration_branch)
-    if not ok:
-        print(f"   ❌ Push of {integration_branch} failed: {err}")
-        return False
+    with integration_lock(repo_root):
+        try:
+            # Rebase the task branch onto the live integration tip inside the
+            # worktree. This is the "rebase onto current tip" part of R-18.
+            rebase = subprocess.run(
+                ["git", "-C", worktree_dir, "rebase", f"origin/{integration_branch}"],
+                capture_output=True,
+                text=True,
+            )
+            if rebase.returncode != 0:
+                subprocess.run(
+                    ["git", "-C", worktree_dir, "rebase", "--abort"],
+                    capture_output=True,
+                )
+                raise IntegrationFailureError(
+                    f"rebase conflict integrating {task_id}: {rebase.stderr.strip()}"
+                )
 
-    # Remove the worktree before deleting the branch; git refuses to delete a
-    # branch that is still checked out in a worktree.
+            # Re-validate the rebased combination before it lands (R-18).
+            ok, output = _validate_after_rebase(worktree_dir)
+            if not ok:
+                raise IntegrationFailureError(
+                    f"validation failed after rebase for {task_id}:\n{output}"
+                )
+
+            # Squash-merge the rebased task branch into the integration branch.
+            # Fetch first so the local integration branch tracks the live remote
+            # tip; previous integration pushes may have moved it.
+            subprocess.run(
+                ["git", "-C", repo_root, "fetch", "origin", integration_branch],
+                capture_output=True,
+                text=True,
+            )
+            checkout = subprocess.run(
+                ["git", "-C", repo_root, "checkout", integration_branch],
+                capture_output=True,
+                text=True,
+            )
+            if checkout.returncode != 0:
+                raise IntegrationFailureError(
+                    f"checkout {integration_branch} failed: {checkout.stderr.strip()}"
+                )
+            reset = subprocess.run(
+                ["git", "-C", repo_root, "reset", "--hard", f"origin/{integration_branch}"],
+                capture_output=True,
+                text=True,
+            )
+            if reset.returncode != 0:
+                raise IntegrationFailureError(
+                    f"reset to origin/{integration_branch} failed: {reset.stderr.strip()}"
+                )
+
+            merge = subprocess.run(
+                ["git", "-C", repo_root, "merge", "--squash", task_id],
+                capture_output=True,
+                text=True,
+            )
+            if merge.returncode != 0:
+                subprocess.run(
+                    ["git", "-C", repo_root, "merge", "--abort"],
+                    capture_output=True,
+                )
+                raise IntegrationFailureError(
+                    f"squash merge of {task_id} failed: {merge.stderr.strip()}"
+                )
+
+            commit = subprocess.run(
+                ["git", "-C", repo_root, "commit", "-m", f"Integrate {task_id}"],
+                capture_output=True,
+                text=True,
+            )
+            if commit.returncode != 0:
+                raise IntegrationFailureError(
+                    f"commit after squash merge failed: {commit.stderr.strip()}"
+                )
+
+            rc, out, _ = run_git_plain(["-C", repo_root, "rev-parse", "HEAD"])
+            if rc != 0:
+                raise IntegrationFailureError("could not resolve merge commit")
+            merge_commit = out.strip()
+
+            ok, err = push_branch(repo_root, integration_branch)
+            if not ok:
+                raise IntegrationFailureError(
+                    f"push of {integration_branch} failed: {err}"
+                )
+        finally:
+            # Restore repo_root HEAD before releasing the lock so the next task
+            # does not race for repo_root's index.lock.
+            if original_branch:
+                subprocess.run(
+                    ["git", "-C", repo_root, "checkout", original_branch],
+                    capture_output=True,
+                )
+            elif original_sha:
+                subprocess.run(
+                    ["git", "-C", repo_root, "checkout", original_sha],
+                    capture_output=True,
+                )
+
+    # Update the remote-tracking ref so the ancestry check in aet_state
+    # passes before we transition the task to merged.
+    subprocess.run(
+        ["git", "-C", repo_root, "update-ref", f"refs/remotes/origin/{integration_branch}", merge_commit],
+        capture_output=True,
+    )
+
+    # Lock released. Clean up the task branch and worktree, then transition
+    # the queued task to merged.
     subprocess.run(
         ["git", "-C", repo_root, "worktree", "remove", "--force", worktree_dir],
         capture_output=True,
     )
     delete_local_branch(repo_root, task_id)
 
-    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    # Record the merge commit on the task so the merged-state ancestry check
+    # can pass even though the per-task branch has been deleted.
+    if backend is not None and os.path.exists(queue_file):
+        queue = backend.load()["queue"]
+        for t in queue:
+            if t.get("id") == task_id:
+                t["merge_commit"] = merge_commit
+                break
+        backend.save(queue)
+
     if os.path.exists(queue_file):
         aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+        # Record the integration as awaiting_merge so the batch parent can
+        # finalize it. We avoid transitioning straight to merged here because
+        # aet_state seals merged tasks out of the live queue, which would
+        # race with the parent's _finalize_task bookkeeping.
         result = subprocess.run(
             [
                 sys.executable,
@@ -1510,7 +1733,7 @@ def _integrate_single_pr_task(
                 "transition",
                 task_id,
                 "in_progress",
-                "merged",
+                "awaiting_merge",
                 queue_file,
             ],
             capture_output=True,
@@ -1518,15 +1741,9 @@ def _integrate_single_pr_task(
         )
         if result.returncode != 0:
             print(
-                f"   ⚠️  Could not transition {task_id} to merged: {result.stderr.strip()}"
+                f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}"
             )
             return False
-
-    # Update the remote-tracking ref so the next worktree is cut from the live tip.
-    subprocess.run(
-        ["git", "-C", repo_root, "update-ref", f"refs/remotes/origin/{integration_branch}", merge_commit],
-        capture_output=True,
-    )
 
     print(f"   ✅ {task_id} integrated into {integration_branch}")
     return True
@@ -1886,6 +2103,11 @@ def _finalize_task(
     if ret == 0:
         queue = backend.load()["queue"]
         task = next((t for t in queue if t.get("id") == task_id), None)
+        from_state = current_state(task) if task else "in_progress"
+        # Single-pr mode: integration already happened under the lock and the
+        # worktree was removed; the merge_commit is the evidence of completion.
+        if task and task.get("merge_commit"):
+            return {"successes": 1, "failures": 0, "stop_spawn": False}
         # A successful child that produced no commits is a false completion.
         # Fail the task rather than promoting an empty branch to awaiting_merge.
         if task:
@@ -1896,7 +2118,6 @@ def _finalize_task(
                     print(f"   ❌ {task_id} succeeded but produced no commits: {msg}")
                     _mark_failed(backend, queue_file, task_id, current_state(task))
                     return {"successes": 0, "failures": 1, "stop_spawn": True}
-        from_state = current_state(task) if task else "in_progress"
         if from_state == "awaiting_merge":
             return {"successes": 1, "failures": 0, "stop_spawn": False}
         if from_state == "merged":
@@ -1949,6 +2170,14 @@ def _finalize_task(
         print(f"   ⛔ {task_id} halted: plan missing from resolved base")
         _mark_failed(backend, queue_file, task_id, from_state)
         return {"successes": 0, "failures": 1, "stop_spawn": True}
+
+    # Integration failures (exit code 3) are engine-level outcomes, not task
+    # failures. The task passed; the combination did not. They are not triaged
+    # and do not increment the circuit breaker (ADR-045, R-19).
+    if ret == 3:
+        print(f"   ❌ {task_id} integration failure; bypassing triage/requeue")
+        _mark_failed(backend, queue_file, task_id, from_state)
+        return {"successes": 0, "failures": 1, "stop_spawn": False}
 
     # Stall/task-timeout failures are terminal: leave the task failed rather
     # than requeue it. The child process records the TIMEOUT class on the
@@ -2337,7 +2566,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     "--cli-bin",
                     adapter.bin,
                     "--base",
-                    base_branch,
+                    integration.ref,
                     "--isolation",
                     args.isolation,
                     "--stall-timeout",
@@ -2673,6 +2902,10 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             print(f"   {exc}")
             success = False
             exit_code = 2
+        except IntegrationFailureError as exc:
+            print(f"   {exc}")
+            success = False
+            exit_code = 3
 
         # Roll up per-task cost from this child's telemetry and persist it on the
         # queued task record. The batch parent later seals state, but cost must
