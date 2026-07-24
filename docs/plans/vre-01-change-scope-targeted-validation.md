@@ -105,6 +105,5 @@ unchanged either way, so the revert is self-contained.
 
 ---
 
-*Stage: plan-approved*
-
-*Next step: run `aet run-one docs/plans/vre-01-change-scope-targeted-validation.md`*
+*Stage: synced*
+*Next step: run `aet-ship`*

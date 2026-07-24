@@ -1,11 +1,9 @@
 """Decide how much of the validate gate the current change set requires.
 
 ``make validate`` is this repo's only safety net — there is no CI — so the
-default is always the full suite. This module allows exactly one narrowing:
-when a change touches nothing but prose, pytest is skipped entirely.
-
-Fail-safe by construction. An unreadable change set, an unrecognized path, and
-an empty diff all resolve to :data:`FULL`.
+default is always the full suite. This module maps a change set to the smallest
+safe set of pytest targets, falling back to the full suite whenever the diff
+cannot be narrowed reliably.
 """
 
 from __future__ import annotations
@@ -19,6 +17,36 @@ FULL = "full"
 DOCS = "docs"
 
 BASE_REF = "origin/main"
+
+# Path-prefix → pytest target table. Longest prefix wins.
+_PATH_TARGETS: list[tuple[str, str]] = [
+    ("src/aet/backends/", "tests/backends"),
+    ("src/aet/cli/", "tests/cli"),
+    ("src/aet/panel/", "tests/panel"),
+    ("src/aet/projections/", "tests/projections"),
+    ("src/aet/failure.py", "tests/failure"),
+    ("src/aet/gate.py", "tests/gate"),
+    ("src/aet/metrics.py", "tests/metrics"),
+    ("src/aet/queue.py", "tests/queue"),
+    ("src/aet/telemetry.py", "tests/telemetry"),
+    ("src/aet/usage.py", "tests/usage"),
+    ("src/aet/workflow.py", "tests/workflow"),
+    ("src/aet/worktree.py", "tests/worktree"),
+    ("src/aet/wirelog.py", "tests/wirelog"),
+    ("src/aet/plan_parser.py", "tests/plan"),
+    ("src/aet/plan_size.py", "tests/plan"),
+    ("src/aet/plan_validate.py", "tests/plan"),
+    ("src/aet/plans_lint.py", "tests/plan"),
+    ("src/aet/verifier.py", "tests/plan"),
+    ("src/aet/branch_ref.py", "tests/test_branch_ref.py"),
+    ("src/aet/change_scope.py", "tests/test_change_scope.py"),
+    ("src/aet/cli/release_prep.py", "tests/test_release_prep.py"),
+    ("src/aet/cli/ship.py", "tests/ship"),
+    ("src/aet/cli/orchestrator.py", "tests/orchestrator"),
+    ("scripts/install.sh", "tests/installer/test_installer.py"),
+    ("src/aet/cli/setup.py", "tests/installer/test_installer.py"),
+    ("scripts/", "tests/scripts"),
+]
 
 
 def is_code_path(path: str) -> bool:
@@ -35,6 +63,28 @@ def is_code_path(path: str) -> bool:
     if p.startswith("tests/"):
         return True
     return evidence.default_is_code_path(p)
+
+
+def _is_shared_fixture(path: str) -> bool:
+    """Changes to shared test infrastructure force the full suite."""
+    p = path.strip()
+    if not p:
+        return False
+    if p == "tests/conftest.py":
+        return True
+    if p.startswith("tests/fixtures/"):
+        return True
+    return False
+
+
+def _target_for(path: str) -> str | None:
+    """Return the pytest target for a single changed path, or ``None`` if unmapped."""
+    matches = [(prefix, target) for prefix, target in _PATH_TARGETS if path.startswith(prefix)]
+    if not matches:
+        return None
+    # Longest prefix wins.
+    matches.sort(key=lambda pair: len(pair[0]), reverse=True)
+    return matches[0][1]
 
 
 def _git(*args: str) -> str | None:
@@ -89,6 +139,39 @@ def changed_paths() -> list[str] | None:
     return sorted(paths)
 
 
+def tier(paths: list[str] | None) -> str:
+    """Scope tier from the change set, reusing ADR-025 vocabulary.
+
+    Never keyed on the plan's ``*Stage:*`` label.
+    """
+    if paths is None or not paths:
+        return evidence.RUN
+    if any(is_code_path(p) for p in paths):
+        return evidence.RUN
+    return evidence.LINT_ONLY
+
+
+def targets(paths: list[str] | None) -> list[str]:
+    """Map a change set to the smallest safe set of pytest targets.
+
+    - ``None`` or an empty diff → ``["tests/"]`` (fail-safe).
+    - Prose-only change → ``[]`` (the Makefile skips pytest).
+    - ``conftest.py``, shared fixtures, or an unmapped code path → ``["tests/"]``.
+    - Otherwise, the deduplicated, sorted target list from :data:`_PATH_TARGETS`.
+    """
+    if paths is None:
+        return ["tests/"]
+    code_paths = [p for p in paths if is_code_path(p)]
+    if not code_paths:
+        return []
+    if any(_is_shared_fixture(p) for p in code_paths):
+        return ["tests/"]
+    mapped = [_target_for(p) for p in code_paths]
+    if None in mapped:
+        return ["tests/"]
+    return sorted(set(mapped))
+
+
 def decide(paths: list[str] | None) -> str:
     """``DOCS`` only when the change set is known, non-empty, and all prose."""
     if not paths:
@@ -102,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     paths = changed_paths()
     decision = decide(paths)
+    scope = targets(paths)
 
     if "--explain" in argv:
         if decision == DOCS:
@@ -110,11 +194,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             count = "undetermined" if paths is None else len(paths)
-            print(f"→ full suite (changed paths: {count})")
+            if scope == ["tests/"]:
+                print(f"→ full suite (changed paths: {count})")
+            else:
+                print(f"→ targeted tests: {' '.join(scope)} (changed paths: {count})")
         return 0
 
     # Empty output tells the Makefile to skip the pytest step.
-    print("tests/" if decision == FULL else "")
+    print(" ".join(scope))
     return 0
 
 

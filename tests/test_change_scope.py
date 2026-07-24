@@ -189,3 +189,40 @@ class TestDecide:
 
     def test_empty_change_set_forces_full(self):
         assert change_scope.decide([]) == change_scope.FULL
+
+
+class TestTargetsAndTier:
+    """Targeted validation scope derived from the change set, never the plan stage."""
+
+    def test_change_scope_maps_source_dir_to_targeted_test_dir(self):
+        assert change_scope.targets(["src/aet/queue.py"]) == ["tests/queue"]
+
+    def test_change_scope_falls_back_to_full_suite_on_conftest_or_shared_fixture(self):
+        assert change_scope.targets(["tests/conftest.py"]) == ["tests/"]
+        assert change_scope.targets(["tests/fixtures/skills-lint/legacy.md"]) == ["tests/"]
+
+    def test_change_scope_emits_installer_target_only_when_installer_surface_changed(self):
+        assert change_scope.targets(["scripts/install.sh"]) == [
+            "tests/installer/test_installer.py"
+        ]
+        assert change_scope.targets(["src/aet/cli/setup.py"]) == [
+            "tests/installer/test_installer.py"
+        ]
+
+    def test_change_scope_omits_installer_target_for_unrelated_change(self):
+        assert "tests/installer/test_installer.py" not in change_scope.targets(
+            ["src/aet/queue.py"]
+        )
+
+    def test_change_scope_tier_reuses_evidence_vocabulary_and_ignores_stage(self):
+        from aet import evidence
+
+        assert change_scope.tier(["src/aet/queue.py"]) == evidence.RUN
+        assert change_scope.tier(["README.md"]) == evidence.LINT_ONLY
+        assert change_scope.tier(None) == evidence.RUN
+        assert change_scope.tier([]) == evidence.RUN
+        # The tier is a pure function of paths; no stage argument exists.
+        import inspect
+
+        sig = inspect.signature(change_scope.tier)
+        assert "stage" not in sig.parameters
