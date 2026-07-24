@@ -20,7 +20,9 @@ _REPO_ROOT = Path(__file__).parents[2]
 # Module paths relative to the repo root and the command/callback shape we
 # expect after the Typer consolidation.
 _MODULES = {
-    "aet.cli.aet_state": {"commands": ["audit", "heal", "validate", "transition", "set-stage", "record-merge"]},
+    "aet.cli.aet_state": {
+        "commands": ["audit", "heal", "validate", "reset", "transition", "set-stage", "record-merge"]
+    },
     "aet.cli.backlog": {"commands": ["add"]},
     "aet.cli.configure_backend": {"callback": True},
     "aet.cli.desk": {"commands": ["merge", "abandon"], "callback": True},

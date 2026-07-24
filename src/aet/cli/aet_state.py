@@ -247,6 +247,23 @@ def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main"):
     return derived
 
 
+def _clear_stale_runtime_fields(task, cwd=None):
+    """Remove ``branch``/``worktree`` pointers whose referent no longer exists.
+
+    Returns ``True`` when at least one runtime field was cleared.
+    """
+    cleared = False
+    branch = task.get("branch")
+    if branch and not branch_exists(branch, cwd=cwd):
+        task.pop("branch", None)
+        cleared = True
+    worktree = task.get("worktree")
+    if worktree and not Path(worktree).is_dir():
+        task.pop("worktree", None)
+        cleared = True
+    return cleared
+
+
 def validate_transition(task, from_stage, to_stage, cwd=None, trunk_branch="main"):
     """Return (ok, message). ok=True means the state transition is legal.
 
@@ -293,6 +310,7 @@ def _apply_transition(
     cwd=None,
     history_file=None,
     trunk_branch="main",
+    repair=False,
 ):
     """Apply a validated state transition and propagate the forward frontier.
 
@@ -300,10 +318,32 @@ def _apply_transition(
     transition, appends history, promotes dependents after terminal transitions,
     persists the queue through the configured backend, and seals terminal tasks
     to the settled history log.
+
+    When ``repair`` is true, lifecycle legality is bypassed so that heal and
+    reset can move a task back to its git-derived state; the current-state check
+    and merged ancestry guard are still enforced.
     """
-    ok, msg = validate_transition(task, from_state, to_state, cwd=cwd, trunk_branch=trunk_branch)
-    if not ok:
-        raise RuntimeError(msg)
+    current_state = queue_lib.current_state(task)
+    if from_state != current_state:
+        raise RuntimeError(f"Current state is '{current_state}', not '{from_state}'.")
+
+    if not repair:
+        ok, msg = validate_transition(task, from_state, to_state, cwd=cwd, trunk_branch=trunk_branch)
+        if not ok:
+            raise RuntimeError(msg)
+    elif to_state == "merged":
+        # Even repairs must prove ancestry before recording merged.
+        on_trunk = False
+        branch = task.get("branch")
+        merge_commit = task.get("merge_commit")
+        if branch:
+            on_trunk = is_ancestor_of_trunk(branch, trunk_branch, cwd=cwd)
+        if merge_commit:
+            on_trunk = on_trunk or is_ancestor_of_trunk(merge_commit, trunk_branch, cwd=cwd)
+        if not on_trunk:
+            raise RuntimeError(
+                f"Cannot set merged: branch/merge_commit is not ancestor of origin/{trunk_branch}."
+            )
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -316,6 +356,10 @@ def _apply_transition(
         task["completed_at"] = now
 
     queue_lib.append_history(task, from_state, to_state, by, evidence)
+
+    # Repairs clear stale branch/worktree pointers whose referents disappeared.
+    if repair:
+        _clear_stale_runtime_fields(task, cwd=cwd)
 
     # Forward frontier: terminal transitions unblock dependents. A dependent is
     # promoted once its last blocker clears, whether it was curated as
@@ -567,6 +611,7 @@ def cmd_heal(args):
                 "from": stored_state,
                 "to": "ready",
                 "reason": "plan exists and blockers are terminal",
+                "repair": True,
             }
         elif derived_state == "failed" and stored_state == "in_progress":
             change = {
@@ -574,6 +619,15 @@ def cmd_heal(args):
                 "from": stored_state,
                 "to": "failed",
                 "reason": "branch does not exist and plan is missing or blocked",
+                "repair": True,
+            }
+        elif derived_state in ("ready", "blocked") and stored_state in ("in_progress", "awaiting_merge"):
+            change = {
+                "task_id": task_id,
+                "from": stored_state,
+                "to": derived_state,
+                "reason": "branch no longer exists; reset to derived state",
+                "repair": True,
             }
 
         computed_pb = len(
@@ -682,6 +736,7 @@ def cmd_heal(args):
                     backend, queue, task, from_state, to_state,
                     by="heal", evidence={"reason": change["reason"]}, cwd=cwd,
                     trunk_branch=trunk_branch,
+                    repair=change.get("repair", False),
                 )
                 applied += 1
             except RuntimeError as e:
@@ -710,6 +765,95 @@ def cmd_validate(args):
         return 0
     print(msg, file=sys.stderr)
     return 1
+
+
+def cmd_reset(args):
+    """Recompute a single task from git + blockers and reset it to ready/blocked.
+
+    This is the pointed, single-task form of ``heal``: it clears stale runtime
+    fields and moves the task to the state derived from ground truth. It is the
+    supported way to un-start a task whose branch/worktree has disappeared.
+    """
+    backend = make_backend(args.queue)
+    try:
+        backend.load()
+    except _INTEGRITY_ERRORS:
+        print(
+            "⚠️  Queue integrity check failed (content_hash mismatch); "
+            "reset continues with unverified data.",
+            file=sys.stderr,
+        )
+    data = backend.load(verify=False)
+    queue = data["queue"]
+    cwd = os.path.dirname(args.queue) if args.queue else "."
+    trunk_branch = _resolve_trunk(args.queue)
+
+    task = find_task(queue, args.task_id)
+    if not task:
+        print(f"Task not found: {args.task_id}", file=sys.stderr)
+        return 1
+
+    _, derived = _derive_all_states(
+        queue, cwd, history=data["history"], trunk_branch=trunk_branch
+    )
+    derived_state = derived[args.task_id]["derived_status"].split(" (warning")[0]
+    stored_state = queue_lib.current_state(task)
+
+    if not args.apply:
+        print(f"[dry-run] Would reset {args.task_id}: {stored_state} -> {derived_state}")
+        return 0
+
+    if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
+        return 1
+
+    with queue_lib.queue_lock(args.queue):
+        # Re-load under the lock in case another process changed the queue.
+        data = backend.load(verify=False)
+        queue = data["queue"]
+        task = find_task(queue, args.task_id)
+        if not task:
+            print(f"Task not found: {args.task_id}", file=sys.stderr)
+            return 1
+
+        stored_state = queue_lib.current_state(task)
+        _, derived = _derive_all_states(
+            queue, cwd, history=data["history"], trunk_branch=trunk_branch
+        )
+        derived_state = derived[args.task_id]["derived_status"].split(" (warning")[0]
+
+        if derived_state not in ("ready", "blocked"):
+            if stored_state == derived_state:
+                cleared = _clear_stale_runtime_fields(task, cwd=cwd)
+                if cleared:
+                    backend.save(queue)
+                print(f"Reset {args.task_id}: already {stored_state}")
+                return 0
+            print(
+                f"Cannot reset {args.task_id}: derived state is {derived_state}, "
+                "not ready/blocked.",
+                file=sys.stderr,
+            )
+            return 1
+
+        if stored_state == derived_state:
+            cleared = _clear_stale_runtime_fields(task, cwd=cwd)
+            if cleared:
+                backend.save(queue)
+            print(f"Reset {args.task_id}: {stored_state} (runtime fields cleared)")
+            return 0
+
+        try:
+            _apply_transition(
+                backend, queue, task, stored_state, derived_state,
+                by="reset", evidence={"reason": "reset to derived state"}, cwd=cwd,
+                trunk_branch=trunk_branch, repair=True,
+            )
+        except RuntimeError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+
+    print(f"Reset {args.task_id}: {stored_state} -> {derived_state}")
+    return 0
 
 
 def cmd_transition(args):
@@ -967,6 +1111,33 @@ def validate(
     args = argparse.Namespace(task_id=task_id, from_stage=from_stage, to_stage=to_stage, queue=queue)
     try:
         rc = cmd_validate(args)
+    except _INTEGRITY_ERRORS as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        raise typer.Exit(1)
+    raise typer.Exit(rc)
+
+
+@app.command("reset")
+def reset(
+    task_id: str = typer.Argument(..., help="Task ID."),
+    queue: Optional[str] = typer.Argument(
+        ".agents/work-queue.json", help="Path to queue JSON."
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Apply the reset; otherwise dry-run."
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Recompute a task from git and blockers, reset to ready/blocked, clear stale runtime fields."""
+    args = argparse.Namespace(
+        command="reset", task_id=task_id, queue=queue, apply=apply, force=force
+    )
+    try:
+        rc = cmd_reset(args)
     except _INTEGRITY_ERRORS as exc:
         print(f"⛔ {exc}", file=sys.stderr)
         raise typer.Exit(1)
