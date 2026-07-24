@@ -39,5 +39,5 @@ Revert the three file changes.
 
 ---
 
-_Stage: in_progress_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
