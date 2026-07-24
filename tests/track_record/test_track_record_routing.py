@@ -180,6 +180,75 @@ def test_rework_count_repeated_stage_records(tmp_path):
     ) == 1
 
 
+def test_rework_count_prefers_actual_stages_over_single_stage(tmp_path):
+    """Group sessions with actual_stages count each named stage for rework."""
+    task = _make_task(tmp_path, "t-1", "---\nid: t-1\n---\n\n# T-1\n")
+    run_dir = tmp_path / "telemetry" / "demo" / "project" / "2026-07-09" / "run-1"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    group1 = telemetry.stage_record(
+        run_id="run-1",
+        task_id="t-1",
+        plan_file="docs/plans/t-1.md",
+        stage="implemented",
+        agent_cli="test",
+        isolation_level="standard",
+        start_time="2026-07-09T10:00:00Z",
+        end_time="2026-07-09T10:05:00Z",
+        exit_code=0,
+        actual_stages=["plan-approved", "implemented"],
+    )
+    group2 = telemetry.stage_record(
+        run_id="run-1",
+        task_id="t-1",
+        plan_file="docs/plans/t-1.md",
+        stage="implemented",
+        agent_cli="test",
+        isolation_level="standard",
+        start_time="2026-07-09T10:10:00Z",
+        end_time="2026-07-09T10:15:00Z",
+        exit_code=0,
+        actual_stages=["plan-approved", "implemented"],
+    )
+    (run_dir / "t-1.jsonl").write_text(
+        json.dumps(group1) + "\n" + json.dumps(group2) + "\n",
+        encoding="utf-8",
+    )
+    assert track_record.rework_count(
+        task,
+        archive_dir=tmp_path / "telemetry",
+        project_slug="demo/project",
+    ) == 2
+
+
+def test_rework_count_falls_back_to_legacy_stage_field(tmp_path):
+    """Records without actual_stages still count via the legacy stage field."""
+    task = _make_task(tmp_path, "t-1", "---\nid: t-1\n---\n\n# T-1\n")
+    run_dir = tmp_path / "telemetry" / "demo" / "project" / "2026-07-09" / "run-1"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    legacy = telemetry.stage_record(
+        run_id="run-1",
+        task_id="t-1",
+        plan_file="docs/plans/t-1.md",
+        stage="implemented",
+        agent_cli="test",
+        isolation_level="full",
+        start_time="2026-07-09T10:00:00Z",
+        end_time="2026-07-09T10:05:00Z",
+        exit_code=0,
+    )
+    # Remove the auto-populated actual_stages to simulate a legacy record.
+    legacy.pop("actual_stages")
+    (run_dir / "t-1.jsonl").write_text(
+        json.dumps(legacy) + "\n" + json.dumps(legacy) + "\n",
+        encoding="utf-8",
+    )
+    assert track_record.rework_count(
+        task,
+        archive_dir=tmp_path / "telemetry",
+        project_slug="demo/project",
+    ) == 1
+
+
 def test_rework_count_failed_reentry_transitions(tmp_path):
     """History transitions from 'failed' count as rework."""
     task = _make_task(tmp_path, "t-1", "---\nid: t-1\n---\n\n# T-1\n")

@@ -65,3 +65,20 @@ Upgrade the AE Toolkit's pipeline efficiency and self-measurement capabilities. 
 
 - Should the orchestrator emit a warning when an S plan uses `standard` or an M plan uses `minimal`? (Out of scope for this PRD; reserved for a later ADR if the convention proves stable.)
 - Should `attempt` reset on each new run or persist across runs for the same task? (Default: per-run counter.)
+
+## Divergence Summary
+
+*Recorded: 2026-07-23 — Branch: ppt-04-stage-telemetry-schema*
+
+### Changed from plan
+
+- **R-6 consumer migration**: The plan specified updating `src/aet/metrics.py` to prefer `actual_stages` and fall back to the legacy reverse-lookup. `metrics.py` only aggregates token/cost totals and does not resolve stage names, so the consumer update was applied to `src/aet/track_record.py` instead, which is where stage re-entry counting (rework) lives.
+
+### Added (unplanned)
+
+- **Track-record helper**: Added `_stage_names()` in `src/aet/track_record.py` to centralize the `actual_stages` → legacy `stage` fallback logic.
+- **Additional test files**: `tests/track_record/test_track_record_routing.py` and `tests/workflow/test_workflow_variant.py` were updated to cover the new `run_stage`/`run_stage_group` return signature and the track-record fallback behavior.
+
+### Deferred
+
+- None.

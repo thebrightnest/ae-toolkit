@@ -38,7 +38,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 
@@ -477,6 +477,47 @@ def _session_diff_stats(
     return files_modified, commits_created
 
 
+def _plan_snapshot(plan_file: str) -> dict[str, Any] | None:
+    """Return a shallow snapshot of plan frontmatter fields used for routing.
+
+    Captures ``size``, ``pipeline``, ``security_review``, ``docs_sync``, and
+    ``aet_version`` when present. Returns ``None`` when the plan file cannot be
+    read or has no frontmatter.
+    """
+    try:
+        data = plan_parser.parse_frontmatter(Path(plan_file))
+    except OSError:
+        return None
+    if not data:
+        return None
+    snapshot: dict[str, Any] = {}
+    for key in ("size", "pipeline", "security_review", "docs_sync", "aet_version"):
+        if key in data:
+            snapshot[key] = data[key]
+    return snapshot if snapshot else None
+
+
+def _next_attempt(logger: telemetry.RunLogger, task_id: str, stage: str) -> int:
+    """Return the next attempt number for ``task_id`` + ``stage`` in this run.
+
+    Attempts are counted from the stage records already emitted for this task
+    in the current run. Existing records (legacy or otherwise) that lack an
+    ``attempt`` field default to one attempt each.
+    """
+    count = 0
+    for record in telemetry.read_jsonl(logger.task_log_path(task_id)):
+        if record.get("type") != "stage":
+            continue
+        if record.get("stage") != stage:
+            continue
+        previous = record.get("attempt")
+        if isinstance(previous, int) and previous > 0:
+            count = max(count, previous)
+        else:
+            count = max(count, 1)
+    return count + 1
+
+
 def _emit_stage_session(
     logger: telemetry.RunLogger,
     task_id: str,
@@ -492,6 +533,8 @@ def _emit_stage_session(
     usage: dict | None = None,
     session_dir: Path | None = None,
     base_branch: str = "origin/main",
+    output: str = "",
+    verdict_recorded: bool = False,
 ) -> None:
     """Emit one stage telemetry record for a completed agent session.
 
@@ -503,8 +546,23 @@ def _emit_stage_session(
     for non-kimi CLIs and unresolvable sessions); when present, one
     wire-derived ``test_run`` record is appended per extracted test
     invocation, tagged with the session's ``stage``.
+
+    ``output`` is the captured session tail used to classify failures on the
+    nsr-01 taxonomy. ``verdict_recorded`` is True when the failing session had
+    already written an evidence verdict before failing.
     """
     files_modified, commits_created = _session_diff_stats(worktree_dir, base_branch)
+    actual_stages = stages if stages is not None else [stage]
+    failure_class: str | None = None
+    if exit_code != 0:
+        failure_class = _classify_failure(
+            exit_code=exit_code,
+            tail=output,
+            stage=stage,
+            verdict_recorded=verdict_recorded,
+            shutdown=_shutdown_requested,
+            killed_by_timeout=exit_code == -9,
+        ).value
     logger.append_record(
         telemetry.stage_record(
             run_id=logger.run_id,
@@ -519,6 +577,10 @@ def _emit_stage_session(
             files_modified=files_modified,
             commits_created=commits_created,
             stages=stages,
+            actual_stages=actual_stages,
+            failure_class=failure_class,
+            plan_snapshot=_plan_snapshot(plan_file),
+            attempt=_next_attempt(logger, task_id, stage),
             token_count=usage.get("total_tokens") if usage else None,
             cost_estimate=usage.get("cost_usd") if usage else None,
         ),
@@ -845,8 +907,8 @@ def run_stage(
     task: dict | None = None,
     backend=None,
     stall_timeout: float = 300,
-) -> tuple[int, dict | None, Path | None]:
-    """Spawn a single stage session, returning ``(exit_code, usage, session_dir)``.
+) -> tuple[int, dict | None, Path | None, str]:
+    """Spawn a single stage session, returning ``(exit_code, usage, session_dir, output)``.
 
     When *task* and *backend* are provided, a non-zero exit records a failure
     signature on the task's ledger record for the circuit breaker (nsr-03).
@@ -895,7 +957,7 @@ def run_stage(
             current_stage,
             output,
         )
-    return exit_code, usage, session_dir
+    return exit_code, usage, session_dir, output
 
 
 def build_stage_group_prompt(
@@ -944,12 +1006,12 @@ def run_stage_group(
     task: dict | None = None,
     backend=None,
     stall_timeout: float = 300,
-) -> tuple[int, dict | None, Path | None]:
+) -> tuple[int, dict | None, Path | None, str]:
     """Spawn one session that runs every stage in the group sequentially.
 
-    Returns ``(exit_code, usage, session_dir)``; usage covers the whole group
-    session and ``session_dir`` is the resolved kimi wire dir (``None`` for
-    non-kimi CLIs and unresolvable sessions). When *task* and *backend* are
+    Returns ``(exit_code, usage, session_dir, output)``; usage covers the whole
+    group session and ``session_dir`` is the resolved kimi wire dir (``None``
+    for non-kimi CLIs and unresolvable sessions). When *task* and *backend* are
     provided, a non-zero exit records a failure signature on the task's ledger
     record using the first stage's name (nsr-03).
     """
@@ -1003,7 +1065,7 @@ def run_stage_group(
             stages[0].name,
             output,
         )
-    return exit_code, usage, session_dir
+    return exit_code, usage, session_dir, output
 
 
 def stage_enabled(stage: WorkflowStage, plan_fm: dict) -> bool:
@@ -1195,7 +1257,7 @@ def process_task(
                 )
 
                 start_time = telemetry.iso_now()
-                exit_code, usage, session_dir = run_stage_group(
+                exit_code, usage, session_dir, output = run_stage_group(
                     adapter,
                     repo_root,
                     plan_file,
@@ -1224,6 +1286,8 @@ def process_task(
                     usage=usage,
                     session_dir=session_dir,
                     base_branch=base_branch,
+                    output=output,
+                    verdict_recorded=False,
                 )
                 agent_invoked = True
                 if exit_code != 0:
@@ -1304,7 +1368,7 @@ def process_task(
 
             kind = target_stage.evidence
             start_time = telemetry.iso_now()
-            exit_code, usage, session_dir = run_stage(
+            exit_code, usage, session_dir, output = run_stage(
                 adapter,
                 repo_root,
                 plan_file,
@@ -1335,6 +1399,8 @@ def process_task(
                 usage=usage,
                 session_dir=session_dir,
                 base_branch=base_branch,
+                output=output,
+                verdict_recorded=kind is not None,
             )
             agent_invoked = True
 
