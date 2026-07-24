@@ -454,6 +454,37 @@ scope — the epic/integration layer — is a feature and is planned as one.
 
 - Task 4 (merge branch to main and verify integration): the merge and final integration verification are out of scope for the sync-docs stage and will happen at the ship stage.
 
+## Divergence Summary: epi-09-serialized-integration
+
+*Recorded: 2026-07-24 — Branch: epi-09-serialized-integration (R-18, R-19)*
+
+### Changed from plan
+
+- None. Tasks 1–3 were implemented as locked: `src/aet/integration_lock.py`
+  provides a local advisory `FileLock`, and `_integrate_single_pr_task`
+  serializes the rebase → re-validate → squash-merge step while leaving
+  implementation stages concurrent. Re-validation failures and rebase conflicts
+  raise `IntegrationFailureError` and are recorded as engine-level Integration
+  Failures outside the ADR-030 task-failure menu.
+
+### Added (unplanned)
+
+- `src/aet/worktree.py`: `.agents/integration.lock` was added to
+  `AET_IGNORED_PATHS` so the hygiene gate ignores the new lock sidecar, matching
+  the treatment of the queue lock sidecars.
+- `src/aet/cli/orchestrator.py`: the repo-root checkout is remembered before the
+  integration-branch checkout and restored in the `finally` block that releases
+  the lock. This closes the R-7 gap noted in the `epi-08` divergence summary.
+- Test mock updates in `tests/orchestrator/test_pr_per_task_unchanged.py` and
+  `tests/orchestrator/test_single_pr_loop.py` to match the updated
+  `run_stage`/`run_stage_group` return signatures.
+
+### Deferred
+
+- Task 4 (merge branch to main and verify integration): the merge and final
+  integration verification are out of scope for the sync-docs stage and will
+  happen at the `aet-ship` stage.
+
 ---
 
 *Stage: synced*

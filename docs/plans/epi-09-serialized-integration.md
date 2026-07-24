@@ -59,14 +59,15 @@ it is not a claim-check, not a lease, and not visible to anyone else.
 
 ## Task List
 
-1. Add the local advisory integration lock and gate the integration step
+1. ✓ Add the local advisory integration lock and gate the integration step
    (rebase → re-validate → squash-merge) behind it — M (traces: R-18)
-2. Re-run task validation inside the lock after the rebase; a failure aborts
+2. ✓ Re-run task validation inside the lock after the rebase; a failure aborts
    the integration before the squash-merge — M (traces: R-18)
-3. Add the Integration Failure outcome category, route it outside task triage
+3. ✓ Add the Integration Failure outcome category, route it outside task triage
    and the circuit breaker, and document it in `docs/CONVENTIONS.md`
    — S (traces: R-19)
-4. Merge branch to main and verify integration — S
+4. [Deferred: merge and final verification happen at the `aet-ship` stage]
+   Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated.
@@ -105,21 +106,22 @@ re-evaluated.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] New source coverage: `tests/orchestrator/test_integration_serialization.py`
+- [x] Lint passes
+- [x] Tests pass
+- [x] New source coverage: `tests/orchestrator/test_integration_serialization.py`
       asserts with `--max-jobs 3` that integration steps do not interleave
       while implementation stages do, by lock acquisition order with no sleeps
-- [ ] The same test module asserts a post-rebase validation failure is reported
+- [x] The same test module asserts a post-rebase validation failure is reported
       as an Integration Failure, is not triaged as a task failure, and does
       not increment the task's requeue count (PRD acceptance criterion, R-19)
-- [ ] `tests/orchestrator/test_integration_serialization.py` covers
+- [x] `tests/orchestrator/test_integration_serialization.py` covers
       `src/aet/integration_lock.py`: contended acquisition is ordered, and the
       lock is released on rebase conflict, validation failure, and crash
-- [ ] `docs/CONVENTIONS.md` documents Integration Failure next to the taxonomy;
+- [x] `docs/CONVENTIONS.md` documents Integration Failure next to the taxonomy;
       the five-value ADR-030 menu is unchanged
-- [ ] R-trace coverage: R-18 by tasks 1–2; R-19 by task 3
+- [x] R-trace coverage: R-18 by tasks 1–2; R-19 by task 3
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+      [Deferred: merge happens at the `aet-ship` stage]
 
 ## Rollback Plan
 
@@ -133,5 +135,5 @@ revert are protected by the squash-merge being atomic per task.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
