@@ -96,5 +96,5 @@ locations the (reverted) resolver reads.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
