@@ -1,7 +1,7 @@
 ---
 id: aet-ship-direct-merge-command-plan
 size: M
-status: in_progress
+status: merged
 blocked_by: []
 pipeline: standard
 security_review: required

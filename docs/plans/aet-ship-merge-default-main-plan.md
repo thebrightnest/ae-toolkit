@@ -1,7 +1,7 @@
 ---
 id: aet-ship-merge-default-main-plan
 size: S
-status: in_progress
+status: merged
 blocked_by: []
 pipeline: minimal
 security_review: skipped
