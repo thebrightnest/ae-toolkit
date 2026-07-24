@@ -96,5 +96,5 @@ locations the (reverted) resolver reads.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
