@@ -6,7 +6,7 @@ blocked_by:
   - fic-02-installer-bootstrap-boundary
   - fic-03-version-from-git-tag
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: test-only plan; adds coverage over the install path without changing any shipped code or trust boundary
 docs_sync: skipped
@@ -183,4 +183,4 @@ recorded reason.
 
 ---
 
-*Stage: reviewed*
+*Stage: merged*
