@@ -120,4 +120,5 @@ sites and the suite returns to the 238 s baseline behavior.
 
 ---
 
-*Stage: qa-complete*
+*Stage: synced*
+*Next step: run `aet-ship`*
