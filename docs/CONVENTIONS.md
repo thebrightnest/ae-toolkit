@@ -35,6 +35,16 @@ remaining lint stages still run. This fast path is safe only because no test
 module reads Markdown from the checkout outside `tests/`. Any new test that
 does so will fail the regression guard in `tests/test_change_scope.py`.
 
+For code changes, `make validate` asks `src/aet/change_scope.py` for the
+smallest safe set of pytest targets. `change_scope` keeps an explicit,
+path-prefix → test-dir mapping in `src/aet/change_scope.py:_PATH_TARGETS` and
+**fails toward the full suite**: any `conftest.py`, shared fixture, unmapped
+path, or undetermined diff returns `tests/` rather than risk a silent skip.
+The installer smoke test (`tests/installer/test_installer.py`) is included
+only when the installer surface (`scripts/install.sh` or `src/aet/cli/setup.py`)
+changed. Add a mapping entry when a new subsystem has a dedicated test
+directory; until then the safe fallback runs the whole suite.
+
 ## Package-Deliverable Rules
 
 AE Toolkit is installed together, not à la carte. Skills may reference shared conventions, cross-skill rules, and toolkit-level docs because the whole system is present at runtime.

@@ -109,7 +109,6 @@ validate: install-editable ## Run all quality checks, fail-fast; pytest is skipp
 	else \
 		echo "→ Skipping pytest (prose-only change)"; \
 	fi
-	@$(MAKE) test-installer
 	@echo "✓ All validation checks passed"
 
 install-hooks: ## Install pre-commit hooks
