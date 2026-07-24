@@ -105,6 +105,6 @@ unchanged either way, so the revert is self-contained.
 
 ---
 
-*Stage: implemented*
+*Stage: qa-complete*
 
-*Next step: run `aet-qa`*
+*Next step: run `aet-review`*
