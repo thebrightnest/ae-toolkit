@@ -165,7 +165,11 @@ _Avoid_: "execution log" — that term is reserved for `.agents/work-history.jso
 
 **Project Slug**:
 `<main-worktree-dirname>/<current-worktree-dirname>` (primary worktree labelled `main`, e.g. `aiskills/main`), derived by `derive_project_slug()` and shared by the telemetry archive and the gate-evidence reports tree (ADR-022). `AET_PROJECT_ID` overrides.
-_Avoid_: origin-remote derived names (pre-ADR-022).
+_Avoid_: origin-remote derived names (pre-ADR-022); using it for config resolution — config uses the **Config Slug** instead.
+
+**Config Slug**:
+The main-worktree-only identity (`<main-worktree-dirname>/main`, worktree label dropped) used solely for resolving the external config `~/.aet/{slug}/config.json`, so one personal config serves every linked worktree of a repo. Derived by `derive_config_slug()` (cfg-01). Distinct from the **Project Slug**, which keeps the per-worktree label for telemetry/reports granularity.
+_Avoid_: conflating the two slugs; "fixing" the telemetry slug to match (the label is deliberate there, ADR-022).
 
 **Run**:
 One orchestrator invocation, recorded as one run directory in the telemetry archive. The execution vehicle for tasks — not the unit of intent.
@@ -208,3 +212,4 @@ _Avoid_: reading it from the ledger `cost` field (under-counts reworked tasks); 
 - “execution log” was used for the telemetry archive in panel docs. Resolved (2026-07-11, thp scope validation): **Execution Log** = `.agents/work-history.jsonl` only; the browsable store is the **Telemetry Archive** (panel README rewording lands with thp-05).
 - “failure class” was overloaded by the non-trunk integration PRD for engine-level integration outcomes. Resolved (2026-07-22, epi scope validation): **Failure Class** remains the five-value agent-session menu (ADR-030); engine-level integration outcomes are **Integration Failure**, a separate category outside triage and the Circuit Breaker.
 - “done” risked re-overloading by `single-pr` completion semantics. Resolved (2026-07-22, epi scope validation): the terminal state stays `merged`; which event it names is keyed by **Integration Mode** (see **Integrated**).
+- “project config” risked overloading the **Project Slug** when config resolution gained a worktree-independent identity. Resolved (2026-07-24, cfg scope validation): config resolution uses the **Config Slug** (main-worktree identity); the **Project Slug** keeps its worktree label for telemetry/reports only. The committed team config file is `.agents/aet-config.json` (renamed from `aet-work.json`); the external `~/.aet/{slug}/config.json` is the personal/**Shadow Mode** layer.
