@@ -1,7 +1,7 @@
 ---
 id: ppt-03-telemetry-script
 size: S
-status: queued
+status: merged
 blocked_by: []
 pipeline: minimal
 security_review: required
@@ -68,5 +68,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: plan-approved*
+*Stage: merged*
 *Next step: run `aet-work`*
