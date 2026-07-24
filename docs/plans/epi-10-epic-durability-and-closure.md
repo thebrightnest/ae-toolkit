@@ -135,5 +135,5 @@ exists to close, so rollback should ship with a hold on `single-pr` use.
 
 ---
 
-*Stage: qa-complete*
-*Next step: done*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
