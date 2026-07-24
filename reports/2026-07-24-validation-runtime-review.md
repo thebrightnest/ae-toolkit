@@ -315,6 +315,62 @@ headline — is last: it recovers nothing here and invites the determinism trap.
    via `change_scope`), and prose-level skipping re-introduces the AI-discretion failure
    mode. If a tier is wanted, compute it in `change_scope`.
 
+## Measured Results (2026-07-24 follow-up)
+
+The two measurement-gated items were run before planning. Machine: M-series Mac,
+`-n auto` (8 workers), repo clean, `.venv`.
+
+### Investigation A — `cfg-01` session 1 profile (from telemetry)
+
+| Metric | Value |
+|---|---|
+| Duration | 1765.7 s (29 min 26 s, 72% of wall clock) |
+| Tokens | **22.6 M — 52.8% of the batch's 42.8 M** |
+| Files modified | **38** (17 `src/`, 21 `tests/`) |
+| Commits | 3 |
+| Agent CLI | `kimi` |
+
+The session was a genuinely large change (the config-resolution overhaul spanning
+`factory.py`, `aet_state.py`, `orchestrator.py`, `setup.py`, … plus 21 test files), not
+obvious context-thrash. **Telemetry gap:** the finest granularity emitted is the *stage*
+record — there is **no per-tool-call or per-turn data** — so "profile the session's tool
+calls" (Rec 1 / Action 1) is **not possible from telemetry as it stands**. Acting on Rec 1
+first requires turn-level telemetry enrichment (or agent-transcript capture). The
+actionable lever visible today is **task sizing**: a 38-file, 22.6 M-token single session
+is a decomposition candidate (ADR-046 measures size at closure).
+
+### Investigation B — `--dist=loadgroup` A/B (re-measured)
+
+Full suite (1,203 tests), clean runs, wall clock:
+
+| Mode | Wall clock | Result |
+|---|---|---|
+| `-n auto --dist=loadgroup` (status quo) | **238 s** | green |
+| `-n auto --dist=load` | **162 s** | green (this run) |
+| Orchestrator group alone, serial | 120 s | green |
+| Rest of suite (no orchestrator), `-n auto` | 151 s | — |
+
+**Loadgroup is systematically ~76 s (+47%) slower**, not merely on the occasional stall
+(the earlier 241 s run stalled on the serialization test; the clean 238 s confirms the
+overhead is structural). Mechanism: `pytest.mark.xdist_group("orchestrator")` on **15
+files / 171 tests** pins them all to **one worker** (~120 s serial, worse under
+contention) while the other 7 workers finish the ~1,030 remaining tests and idle.
+
+**But the 76 s is not free to reclaim by dropping loadgroup.** A safety probe running the
+orchestrator group unpinned (`--dist=load`) failed **3/3 iterations, a different test each
+time** (`test_batch_spawns_task_promoted_mid_run`,
+`test_emit_stage_session_classifies_failure_for_nonzero_exit`,
+`test_cleanup_kills_process_groups_on_shutdown`) — the group exists for real isolation
+(shared process groups, git, telemetry, cwd). The single green full-suite `load` run above
+was luck of the distribution.
+
+**Reshaped Recommendation 3:** the lever is **not** flag removal but **(a)** splitting the
+monolithic `"orchestrator"` group into finer resource-scoped subgroups so mutually-safe
+heavy tests spread across a few workers while only truly-conflicting ones stay serialized
+together, and/or **(b)** speeding up the orchestrator tests themselves (the ~120 s serial
+pole — sleeps, subprocess fixtures). The suite floor is ~150 s of real work regardless;
+loadgroup adds ~76 s of avoidable serialization on top, recoverable only via (a)/(b).
+
 ## Appendix: Telemetry Sources & Derived Numbers
 
 **Sources**
