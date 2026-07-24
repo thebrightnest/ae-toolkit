@@ -87,13 +87,31 @@ verdict gate is untouched).
 - **R-5**: The orchestrator **serial pole (~120 s)** is reduced by replacing fixed `sleep`
   waits and avoidable subprocess fixtures in the hottest orchestrator tests with
   event/poll-based waits, measured against the 238 s baseline.
-- **R-6** *(reframed during scope validation — see Scope Validation Findings; `vre-04` is held
-  pending a keep/defer/drop decision)*: The freshness re-run **suppression** the orchestrator
-  already computes (`_qa_freshness_decision`, orchestrator.py:414) is enforced deterministically
-  by the runtime, rather than delivered only as the agent-discretionary `_freshness_clause`
-  prose (orchestrator.py:388). The fail-closed verdict gate (`_require_passing_verdict`) is
-  **not** touched (ADR-025 decision 4); only the redundant re-run is suppressed, in code, and
-  bias-to-`RUN` is preserved.
+- A sixth requirement — **deterministic QA-freshness suppression** — was reframed during scope
+  validation and is **deferred out of this sprint** pending a keep / defer / drop decision. It
+  is documented under *Deferred Requirements* below and is **not** part of this initiative's
+  committed scope (R-1 through R-5).
+
+## Deferred Requirements (not in this sprint)
+
+The item below was reframed during scope validation and is **held pending a keep / defer / drop
+decision** (see *Scope Validation Findings*). It is intentionally excluded from the committed
+R-trace scope of this initiative: `vre-04` is neither written nor queued, and no task traces
+R-6. If it is kept, an ADR extending ADR-025 — making freshness suppression *enforced* rather
+than advisory — must be authored **before** `vre-04` is written and `aet sprint add`-ed.
+
+- **R-6** *(reframed; held)*: The freshness re-run **suppression** the orchestrator already
+  computes (`_qa_freshness_decision`, orchestrator.py:414) is enforced deterministically by the
+  runtime, rather than delivered only as the agent-discretionary `_freshness_clause` prose
+  (orchestrator.py:388). The fail-closed verdict gate (`_require_passing_verdict`) is **not**
+  touched (ADR-025 decision 4); only the redundant re-run is suppressed, in code, and
+  bias-to-`RUN` is preserved. This is an efficiency-determinism gain, not a correctness fix.
+  - *User story (if taken up):* As a toolkit maintainer, I want the redundant QA re-run
+    suppressed by a code decision the orchestrator acts on — not only requested via a prose
+    clause an agent may skip — so freshness behaves deterministically.
+  - *Acceptance (if taken up):* When freshness resolves to `SKIP`/`LINT_ONLY`, the redundant
+    suite re-run is suppressed by the runtime (not only requested via prose);
+    `_require_passing_verdict` is unchanged and bias-to-`RUN` is preserved.
 
 ## User Stories
 
@@ -109,9 +127,6 @@ verdict gate is untouched).
   flakes. (satisfies: R-4)
 - As a toolkit maintainer, I want the slowest orchestrator tests to stop sleeping and
   spawning unnecessarily, so the serial pole shrinks toward the ~150 s floor. (satisfies: R-5)
-- As a toolkit maintainer, I want QA-freshness enforced by a code decision the orchestrator
-  acts on — not a prose clause an agent may skip — so the check cannot silently regress the
-  way the ship-merge ancestry check did. (satisfies: R-6)
 
 ## Acceptance Criteria
 
@@ -134,10 +149,7 @@ verdict gate is untouched).
 - [ ] The full suite stays green across **≥10 consecutive** `-n auto --dist=loadgroup` runs
       after the group-split and pole work — isolation preserved, no re-introduced flake.
       (satisfies: R-4, R-5)
-- [ ] When freshness resolves to `SKIP`/`LINT_ONLY`, the redundant suite re-run is suppressed
-      by the runtime (not only requested via prose); `_require_passing_verdict` is unchanged and
-      bias-to-`RUN` is preserved. (satisfies: R-6)
-- [ ] `make validate` passes after all changes. (satisfies: R-1, R-2, R-3, R-4, R-5, R-6)
+- [ ] `make validate` passes after all changes. (satisfies: R-1, R-2, R-3, R-4, R-5)
 
 ## Technical Notes
 
