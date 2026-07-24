@@ -3,7 +3,7 @@ id: vre-02-orchestrator-xdist-subgroups
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: test-suite parallelization change only; edits pytest markers and a test-grouping convention, no product, auth, data, or trust surface
 docs_sync: required
@@ -120,5 +120,4 @@ sites and the suite returns to the 238 s baseline behavior.
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
