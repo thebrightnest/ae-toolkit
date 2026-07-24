@@ -89,5 +89,4 @@ verify output are unaffected by the revert.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
