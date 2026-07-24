@@ -62,6 +62,12 @@ Do **not** write an ADR for:
 - [041 — The Console Script Is the Only Entry Point](041-console-script-is-the-only-entry-point.md)
 - [042 — The Installer Is a Bootstrap, Not a Program](042-the-installer-is-a-bootstrap.md)
 - [043 — The Version Derives From the Git Tag](043-version-derives-from-the-git-tag.md)
+- [044 — The Base Branch Is Configured, Not Assumed](044-base-branch-is-configured-not-assumed.md)
+- [045 — Epic Integration Branch and Per-Task Integration Mode](045-epic-integration-branch-and-task-integration-mode.md)
+- [046 — Plan Size is Measured After Implementation, Not Gated Before It](046-plan-size-measured-not-gated.md)
+- [047 — Pipeline Mode Selection by Plan Size](047-pipeline-mode-by-plan-size.md)
+- [048 — Two-Layer Config Model: Committed Team File, External Shadow File](048-two-layer-config-model.md)
+- [049 — Validation Scope Is Derived from the Change Set, in Code](049-validation-scope-from-change-set.md)
 
 ## Format
 
