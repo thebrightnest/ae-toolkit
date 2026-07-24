@@ -96,5 +96,5 @@ locations the (reverted) resolver reads.
 
 ---
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+*Stage: merged*
+*Next step: merged*
