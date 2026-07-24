@@ -3,7 +3,7 @@ id: epi-09-serialized-integration
 size: M
 blocked_by: [epi-08-single-pr-completion-loop]
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: adds a local advisory lock and a failure class over existing git and test invocations; no new external surface
 docs_sync: required
@@ -135,5 +135,5 @@ revert are protected by the squash-merge being atomic per task.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
