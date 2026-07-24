@@ -170,7 +170,7 @@ class TestSetupVerifyConfigProvenance(SetupVerifyTestCase):
             "integration_branch": "feat/epic",
             "trunk_branch": "develop",
         }
-        config_path = repo / ".agents" / "aet-work.json"
+        config_path = repo / ".agents" / "aet-config.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(json.dumps(config), encoding="utf-8")
 
