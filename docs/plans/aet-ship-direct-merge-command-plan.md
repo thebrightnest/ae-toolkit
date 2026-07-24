@@ -1,5 +1,5 @@
 ---
-id: aet-ship-direct-merge-command
+id: aet-ship-direct-merge-command-plan
 size: M
 status: in_progress
 blocked_by: []
