@@ -134,5 +134,5 @@ rename back by hand — one file, called out in the upgrade guide).
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
