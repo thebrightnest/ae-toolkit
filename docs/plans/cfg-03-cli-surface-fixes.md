@@ -3,7 +3,7 @@ id: cfg-03-cli-surface-fixes
 size: S
 blocked_by: []
 pipeline: minimal
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: forwards a flag the orchestrator already accepts and sanitizes, and displays already-resolved values; no new input or write surface
 docs_sync: required
