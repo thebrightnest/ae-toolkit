@@ -47,6 +47,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 | `make lint-py`          | Run ruff on Python files                                                             |
 | `make test`             | Run pytest suite                                                                     |
 | `make validate`         | Run lint-py + workflow lint + skills-lint + skill-structure validator + `aet plans lint` + `aet docs lint` + test (pytest skipped for prose-only changes) |
+| `aet status`            | Show queue health and plan drift; use after queue/state edits                        |
 | `aet plans lint`        | Lint the `docs/plans/` corpus for settled/live misclassification                     |
 | `aet docs lint`         | Lint documentation against the declarative rules in `.agents/doc-rules.yaml`          |
 | `make install-hooks`    | Install pre-commit hooks                                                             |
@@ -73,7 +74,11 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 ### Mandatory
 
-- Always run `make validate` before claiming any skill edit is complete
+- Match validation to the change; do not default to the heaviest suite:
+  - **Code, skill, or workflow changes** → run `make validate` before completion.
+  - **Prose-only / documentation changes** → run `make lint` (or the relevant doc linter); skip the full build/test suite.
+  - **Queue or state bookkeeping** (plan status drift, history cleanup, work-queue fixes) → verify with the specific tool surface, e.g., `aet status`, `aet plans lint`, or `aet state audit`.
+  - **Plan frontmatter-only edits** → `aet status` plus `aet plans lint` is sufficient; do not run the full suite unless the plan change drives code paths.
 - Always update `docs/CONVENTIONS.md` if you introduce a new skill pattern
 - Always keep `SKILL.md` under 400 lines; move deep detail to `references/`
 - Always use YAML frontmatter with `name` and `description` in every new SKILL.md
@@ -87,7 +92,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - Always branch worktrees from `origin/main` and rebase independent branches onto `origin/main` before shipping; never let a stale or ahead local `main` leak into a PR diff
 - **Design-to-implementation hard gate** — Free-form design conversations are not implementation approval. After the user approves a design proposal ("yes", "sounds good", "go ahead", or similar), STOP and confirm scope before writing files: _"This will modify [N files]: [list]. Approve to proceed?"_ Do not begin editing until the user explicitly confirms.
 - **Analysis-to-action discipline** — When your own analysis identifies a violation of a documented principle (ADR, convention, guardrail), state the conclusion and propose the fix. Do not present options that preserve a pattern you have proven wrong. The user chooses between valid implementations of the correct direction, not whether to keep a known error.
-- Always run self-validation (`make validate`) before declaring a task complete
+- Always run self-validation that covers the change before declaring a task complete (see the Mandatory validation tiering above)
 - Always update `.agents/learnings.jsonl` after a bug or misalignment
 - Never plan and implement in the same session; clear context between phases
 - Use `docs/product-briefs/` for product briefs, `docs/plans/` for atomic plan.md files, `docs/roadmaps/` for roadmaps, `docs/audits/` for audits, and `docs/prds/` for PRDs
