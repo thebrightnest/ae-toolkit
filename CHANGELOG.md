@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.5.0] — 2026-07-24
+
+### Added
+
+- **Configurable branch model** — `trunk_branch`, `integration_branch`, and `integration_mode` are resolved from config, environment, or CLI instead of hardcoding `main`; `aet setup verify` reports the resolved trunk and its provenance (epi-01, epi-02, epi-07, epi-11).
+- **Single-PR integration mode** — new `integration_mode: single-pr` squashes task branches into a shared integration branch instead of opening one PR per task, with serialized integration behind an advisory lock and re-validation after rebase (epi-07…epi-10).
+- **`aet ship merge` direct merge command** — merge a task branch directly into a target branch with pre-merge conflict detection via `git merge-tree`; `--branch` now defaults to `main` (aet-ship).
+- **`aet ship open/gate/close` bare task IDs** — commands that previously required a plan path now accept a bare task id and resolve it to `docs/plans/<id>.md` automatically.
+- **`aet size report` and `aet size backfill`** — aggregate and backfill delivered diff-size measurements for closed plans to calibrate future sizing estimates (psr-03).
+- **Orchestrator run preconditions** — `aet setup bootstrap` adds required `.gitignore` entries and the orchestrator halts cleanly with `MissingPlanError` when a queued plan file is missing (epi-04).
+- **Stage telemetry schema v2** — records `actual_stages`, `failure_class`, `plan_snapshot`, and per-task attempt counters for richer run analysis (ppt-04).
+
+### Changed
+
+- **Branch-aware worktree refresh** — refreshing a worktree no longer checks out the integration branch in the operator's repo root; all rebase operations happen inside isolated worktrees so HEAD stays unchanged (epi-03).
+- **Scoped `init-queue` validation** — only plans actually being included in the sprint are validated; invalid plans outside the included set are warned and skipped instead of failing intake (epi-05).
+- **Sizing model recalibration** — plan size is now measured at closure rather than gated at intake; S/M/L bands updated to S≤150, M≤600, L>600 lines with advisory 2-of-N checks (psr-01, ADR-046).
+- **`aet status` compact empty states** — empty queues, zero-count task states, and healthy worktrees are summarized in single sentences instead of blank tables.
+- **One console-script entry point** — `aet install` moved to `aet setup link` and targets the console script, eliminating broken self-repair paths and worktree-hijacked symlinks (fic-01, fic-02).
+
+### Fixed
+
+- **`aet ship` PR base detection** — branches merely behind `origin/main` no longer return their own name as the PR base; stacked branches still resolve to their parent feature branch.
+- **`aet ship close` identifier handling** — accepts either a plan path or a bare task id and derives the missing identifier automatically.
+- **State heal gap** — `aet state heal` now detects when a recorded branch no longer exists and clears stale branch/worktree fields; new `aet state reset` recomputes and un-starts a single task (epi-06).
+- **`aet-validate-scope` closure check** — removed a deadlocked queue-membership guard that could block legitimate scope validation.
+- **`aet queue sync` help text** — corrected the command description in CLI help output.
+
+### Documentation
+
+- Added ADR-044, ADR-045, ADR-046, ADR-047, and PRDs covering non-trunk integration, pipeline performance & telemetry, and plan-size measurement.
+- Added bug reports and retrospective notes for `aet-ship` pr-base and close-UX issues.
+
+---
+
 ## [1.4.0] — 2026-07-21
 
 ### Added

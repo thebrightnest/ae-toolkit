@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.2.0
+## Current Version: 1.5.0
 
-Last updated: 2026-07-17
+Last updated: 2026-07-24
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, and night-shift runtime resilience including circuit breakers, stall watchdog, failure taxonomy, and triage routing.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, night-shift runtime resilience, and configurable branch models including single-PR integration mode.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -41,7 +41,7 @@ Verify code before it ships.
 
 Land code cleanly and document releases.
 
-- **aet-ship** — Pre-merge validation, PR creation, merge verification, and provider-specific merge-guard harness detection.
+- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, and provider-specific merge-guard harness detection. Accepts plan paths or bare task ids across open, gate, close, and merge.
 - **aet-release-prep** — Release preparation: commit analysis, changelog updates, and version bump suggestions.
 - **aet-sync-docs** — Sync PRD and `plan.md` to reflect what was actually built.
 
@@ -49,7 +49,7 @@ Land code cleanly and document releases.
 
 Keep projects and the toolkit itself healthy.
 
-- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, and optional pre-push hook gates.
+- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries.
 - **aet-upgrade** — Dependency and framework upgrade planning with breaking-change analysis.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
@@ -61,7 +61,8 @@ Keep projects and the toolkit itself healthy.
 | Name                  | Description                                                                                                                          |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `make install-skills` | Symlinks all skills to `~/.agents/skills/` for local agent use.                                                                      |
-| `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet install` self-installs and repairs `PATH` on invocation. |
+| `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet setup link` installs the console script on `PATH`. |
+| `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates. |
 | Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, and run history. |
 | GitHub Issues         | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                                                  |
 | git-refs backend      | `aet-work` task backend that stores queue state in git refs instead of local JSON files; now the default written backend.              |
@@ -70,6 +71,15 @@ Keep projects and the toolkit itself healthy.
 ---
 
 ## What's New
+
+### What's New in v1.5.0
+
+- **Configurable branch model** — `trunk_branch`, `integration_branch`, and `integration_mode` are resolved from config, environment, or CLI instead of hardcoding `main`; `aet setup verify` reports the resolved trunk and its provenance.
+- **Single-PR integration mode** — squash multiple task branches into a shared integration branch instead of opening one PR per task, with serialized integration and re-validation after rebase.
+- **`aet ship merge` direct merges** — merge a task branch straight into a target branch with pre-merge conflict detection; `--branch` defaults to `main`.
+- **Bare task IDs across `aet ship`** — `open`, `gate`, `close`, and `merge` accept a bare task id and resolve it to the conventional plan path.
+- **Delivered-size calibration** — `aet size report` and `aet size backfill` aggregate diff-size measurements from closed plans to improve future size estimates.
+- **Cleaner intake and status UX** — `init-queue` only validates plans actually entering the sprint, and `aet status` summarizes empty sections in compact sentences.
 
 ### What's New in v1.2.0
 
