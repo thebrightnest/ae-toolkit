@@ -134,5 +134,5 @@ rename back by hand — one file, called out in the upgrade guide).
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: merged_
