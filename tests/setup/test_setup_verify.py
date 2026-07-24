@@ -7,7 +7,9 @@ nothing ever writes to the real ``~/.local/bin``.
 from __future__ import annotations
 
 import importlib
+import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -127,3 +129,64 @@ class TestSetupVerifyReadOnly(SetupVerifyTestCase):
         self.assertEqual(rc, 0, err)
         self.assertEqual(os.readlink(our_link), before_target)
         self.assertFalse("PATH" in out and "=" in out and "export" in out)
+
+
+class TestSetupVerifyConfigProvenance(SetupVerifyTestCase):
+    """``setup verify`` prints resolved mode/branches with provenance labels."""
+
+    def _init_repo(self, repo: Path) -> None:
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "config", "user.email", "test@example.com"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(repo), "config", "user.name", "Test User"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "--allow-empty", "-m", "init"],
+            check=True,
+        )
+
+    def _run_verify_in_repo(self, repo: Path):
+        """Run ``aet setup verify`` against an isolated repo."""
+        env = {
+            "AET_BIN_DIR": str(self.bin_dir),
+            "AET_REPO_ROOT": str(repo),
+            "PATH": f"{self.bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        }
+        with patch.object(aet_setup, "_is_worktree_copy", lambda _script: False):
+            result = run_typer(aet_setup.app, ["verify"], env=env)
+        return result.exit_code, result.stdout, result.stderr
+
+    def test_prints_mode_and_branches_with_project_provenance(self):
+        repo = Path(self.tmp.name) / "repo"
+        repo.mkdir()
+        self._init_repo(repo)
+
+        config = {
+            "integration_mode": "single-pr",
+            "integration_branch": "feat/epic",
+            "trunk_branch": "develop",
+        }
+        config_path = repo / ".agents" / "aet-work.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        rc, out, err = self._run_verify_in_repo(repo)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("integration_mode: single-pr (config (project))", out)
+        self.assertIn("integration_branch: feat/epic (config (project))", out)
+        self.assertIn("trunk: develop (config (project))", out)
+
+    def test_marks_default_and_fallback_provenance(self):
+        repo = Path(self.tmp.name) / "repo"
+        repo.mkdir()
+        self._init_repo(repo)
+
+        rc, out, err = self._run_verify_in_repo(repo)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("integration_mode: pr-per-task (default)", out)
+        self.assertIn("integration_branch: main (trunk)", out)
+        self.assertIn("trunk: main (fallback)", out)

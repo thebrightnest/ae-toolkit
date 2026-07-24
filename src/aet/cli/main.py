@@ -226,6 +226,7 @@ def _build_orchestrator_flags(
     task_timeout: int | None,
     stall_timeout: int | None,
     cli_bin: str | None,
+    base: str | None,
 ) -> list[str]:
     """Build the forwarded flag list for the orchestrator."""
     flags = ["--max-jobs", str(max_jobs), "--isolation", isolation]
@@ -237,6 +238,8 @@ def _build_orchestrator_flags(
         flags.extend(["--stall-timeout", str(stall_timeout)])
     if cli_bin is not None:
         flags.extend(["--cli-bin", cli_bin])
+    if base is not None:
+        flags.extend(["--base", base])
     return flags
 
 
@@ -287,13 +290,14 @@ def run(
     task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
     stall_timeout: int | None = typer.Option(None, "--stall-timeout", help="Silence timeout (s)."),
     cli_bin: str | None = typer.Option(None, "--cli-bin", help="Agent CLI binary path."),
+    base: str | None = typer.Option(None, "--base", help="Override the worktree base branch/ref."),
 ) -> None:
     """Run the orchestrator in batch mode."""
     if follow is not None:
         _follow_run(follow)
         return
 
-    flags = _build_orchestrator_flags(max_jobs, isolation, on_failure, task_timeout, stall_timeout, cli_bin)
+    flags = _build_orchestrator_flags(max_jobs, isolation, on_failure, task_timeout, stall_timeout, cli_bin, base)
     argv = ["--queue-file", ".agents/work-queue.json", *flags]
 
     if foreground:
@@ -316,13 +320,14 @@ def run_one(
     task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
     stall_timeout: int | None = typer.Option(None, "--stall-timeout", help="Silence timeout (s)."),
     cli_bin: str | None = typer.Option(None, "--cli-bin", help="Agent CLI binary path."),
+    base: str | None = typer.Option(None, "--base", help="Override the worktree base branch/ref."),
 ) -> None:
     """Run the orchestrator for a single plan."""
     if follow is not None:
         _follow_run(follow)
         return
 
-    flags = _build_orchestrator_flags(max_jobs, isolation, on_failure, task_timeout, stall_timeout, cli_bin)
+    flags = _build_orchestrator_flags(max_jobs, isolation, on_failure, task_timeout, stall_timeout, cli_bin, base)
     argv = ["--plan-file", plan_file, *flags]
 
     if foreground:
