@@ -54,7 +54,8 @@ verdict gate is untouched).
 - **Does not address Rec 1 (the cfg-01 72%-of-wall-clock session).** That is a task-sizing
   / model concern blocked on turn-level telemetry the toolkit does not emit today (measured:
   the finest telemetry granularity is the stage record — no per-tool-call data). It is
-  **carved out as a separate initiative** and is not planned here.
+  **carved out as a separate initiative**, parked at
+  `docs/ideas/cfg-01-session-efficiency.md`, and is not planned here.
 - **Does not rewire the Makefile's `PYTEST_TARGETS` plumbing.** `make validate` already
   consumes `change_scope` stdout as `PYTEST_TARGETS` (Makefile:106-108); this initiative
   changes what `change_scope` emits, not how the Makefile consumes it.

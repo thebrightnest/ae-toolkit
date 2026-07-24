@@ -34,7 +34,8 @@ the prose.
 - **Efficiency-only and unmeasured.** There is no turn-level telemetry to size how often the
   redundant re-run actually fires or what it costs in aggregate. Committing runtime + ADR effort
   to an unquantified win is premature — **ADR-031: enforce on evidence, never on a guess.**
-  (This is the same telemetry gap that blocks the cfg-01 task-sizing initiative — "Rec 1".)
+  (This is the same telemetry gap that parks the cfg-01 session-efficiency idea —
+  `docs/ideas/cfg-01-session-efficiency.md`.)
 - **It reopens a deliberate decision.** Making suppression *enforced* rather than advisory
   changes ADR-025 decision 4, which was chosen on purpose. That reversal wants evidence behind
   it, not principle alone.
