@@ -1,7 +1,7 @@
 ---
 id: ppt-04-stage-telemetry-schema
 size: M
-status: queued
+status: merged
 blocked_by: []
 pipeline: standard
 security_review: required
@@ -76,5 +76,5 @@ dependency changes should usually use `standard` or `full`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
