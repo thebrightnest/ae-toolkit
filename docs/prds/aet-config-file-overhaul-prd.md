@@ -227,7 +227,31 @@ that teach both adoption modes.
   defect. (Verified consumer pain is a discoverability/design gap in shipped
   behavior, not a crash or incorrect computation in existing code paths.)
 
+## Divergence Summary
+
+*Recorded: 2026-07-24 — Branch: cfg-03-cli-surface-fixes*
+
+### Changed from plan
+
+- Task 2 (setup verify provenance): Resolved mode/branches are surfaced using
+  new `resolve_config_with_source` and `resolve_integration_mode_with_provenance`
+  helpers in `src/aet/backends/factory.py`, rather than only reading from the
+  existing resolver surfaces.
+- Task 3 (tests): Verify tests extend the existing
+  `tests/setup/test_setup_verify.py` instead of creating the planned
+  `tests/cli/test_setup_verify.py`.
+
+### Added (unplanned)
+
+- `src/aet/backends/factory.py`: Added `resolve_config_with_source` and
+  `resolve_integration_mode_with_provenance` to expose config-layer and
+  integration-mode provenance required by `aet setup verify`.
+
+### Deferred
+
+- Task 4 (merge to main): remains deferred to the ship stage.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*

@@ -50,11 +50,16 @@ docs_sync_reason: CLI help and CONVENTIONS.md must agree on the forwarded --base
 
 ## Task List
 
-1. Accept and forward `--base` in the `aet run` / `aet run-one` dispatcher —
+1. ✓ Accept and forward `--base` in the `aet run` / `aet run-one` dispatcher —
    S (traces: R-6)
-2. Print resolved `integration_mode` / `integration_branch` / `trunk_branch`
+2. ✓ Print resolved `integration_mode` / `integration_branch` / `trunk_branch`
    with provenance in `aet setup verify` — S (traces: R-7)
-3. Tests (see Validation Steps) — S (traces: R-6, R-7)
+   [Changed: provenance display required new `resolve_config_with_source` and
+   `resolve_integration_mode_with_provenance` helpers in
+   `src/aet/backends/factory.py`]
+3. ✓ Tests (see Validation Steps) — S (traces: R-6, R-7)
+   [Changed: verify tests extend `tests/setup/test_setup_verify.py` instead of
+   the planned `tests/cli/test_setup_verify.py`]
 4. Merge branch to main and verify integration — S [Deferred: ship stage]
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines.
@@ -89,4 +94,6 @@ verify output are unaffected by the revert.
 
 ---
 
-_Stage: reviewed_
+_Stage: synced_
+
+_Next step: run `aet-ship`_
