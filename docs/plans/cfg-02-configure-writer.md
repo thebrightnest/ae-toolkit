@@ -55,12 +55,12 @@ docs_sync_reason: the configure command's documented key set and scope flag chan
 
 ## Task List
 
-1. Rename `configure-backend` → `aet configure` (atomic, alias-free, ADR-039);
+1. ✓ Rename `configure-backend` → `aet configure` (atomic, alias-free, ADR-039);
    update dispatcher wiring and help text — S (traces: R-5)
-2. Add the four key flags + `--scope project|user` with merge-style writes and
+2. ✓ Add the four key flags + `--scope project|user` with merge-style writes and
    the shadow-friendly scope default — M (traces: R-5)
-3. Write-time validation with legal-values errors — S (traces: R-5)
-4. Tests (see Validation Steps) — S (traces: R-5)
+3. ✓ Write-time validation with legal-values errors — S (traces: R-5)
+4. ✓ Tests (see Validation Steps) — S (traces: R-5)
 5. Merge branch to main and verify integration — S [Deferred: ship stage]
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines; M ≤ 1 day / ≤ 600 lines.
@@ -78,16 +78,16 @@ docs_sync_reason: the configure command's documented key set and scope flag chan
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] New coverage in `tests/cli/test_configure.py`:
+- [x] `make validate` passes
+- [x] New coverage in `tests/cli/test_configure.py`:
   - `test_writes_each_key_to_project_scope` (unit)
   - `test_user_scope_writes_external_config` (unit, HOME redirected)
   - `test_merge_style_preserves_unspecified_keys` (unit)
   - `test_invalid_integration_mode_rejected_naming_legal_values` (unit)
   - `test_scope_defaults_to_user_when_no_in_tree_config` (unit)
   - `test_old_command_name_is_gone` (unit: `configure-backend` rejected)
-- [ ] R-trace coverage: R-5 by tasks 1-4; no unknown R-ids
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-5 by tasks 1-4; no unknown R-ids
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` [Deferred: ship stage]
 
 ## Rollback Plan
 
@@ -96,5 +96,5 @@ locations the (reverted) resolver reads.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
