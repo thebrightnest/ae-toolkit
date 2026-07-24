@@ -93,6 +93,59 @@ aet configure-backend
 
 This writes `.agents/aet-work.json`. Because reads are external-first, an external config (if present) will still take precedence.
 
+### Branch Model
+
+Three settings control how AET maps tasks to branches and merges. Config values are resolved external-first, just like `task_backend`.
+
+| Setting              | Meaning                                                                 |
+| -------------------- | ----------------------------------------------------------------------- |
+| `trunk_branch`       | The final merge target for every task (e.g., `main`, `master`).         |
+| `integration_branch` | The parent branch for feature worktrees and the base for stacked work.  |
+| `integration_mode`   | `pr-per-task` (default) or `single-pr`.                                 |
+
+`aet setup verify` prints the resolved `trunk_branch` and how it was derived — `config`, `detected` from `refs/remotes/origin/HEAD`, or `fallback` to `main`.
+
+#### Resolution Order
+
+**`trunk_branch`** is resolved in this order:
+
+1. `trunk_branch` in config
+2. `git symbolic-ref refs/remotes/origin/HEAD`
+3. Fallback to `main`
+
+**`integration_branch`** is resolved in this order:
+
+1. `--base-branch` CLI flag
+2. `AET_WORK_BASE_BRANCH` environment variable
+3. `integration_branch` in config
+4. `trunk_branch` (via the same trunk resolution above)
+
+**`integration_mode`** is resolved from config only; it defaults to `pr-per-task` and must be one of `pr-per-task` or `single-pr`.
+
+#### Scenario B: One Engineer, Shared Repo, Plans on a Feature Branch, `single-pr`
+
+You want to keep all plan updates on one long-running branch and ship them through a single PR, while still using AET's queue and state machine locally.
+
+1. Create a shared AET config in your personal `~/.aet` space so the repo stays free of AET config:
+
+   ```bash
+   aet configure-backend --external-config
+   ```
+
+2. Edit `~/.aet/{project-slug}/config.json` to set `single-pr` mode and point `integration_branch` at the long-running feature branch:
+
+   ```json
+   {
+     "task_backend": "json",
+     "integration_mode": "single-pr",
+     "integration_branch": "docs-roadmap"
+   }
+   ```
+
+3. Leave `trunk_branch` unset so it resolves from `refs/remotes/origin/HEAD` (or set it explicitly to `main`).
+
+4. Run plans on the `docs-roadmap` branch. `aet-work` will use `docs-roadmap` as the worktree base, and `aet-ship` will target `main` as the final merge destination. `aet setup verify` shows exactly which trunk the current checkout resolves to.
+
 ## Planning Artifact Directories
 
 The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/`; all other planning artifacts belong in their designated directories.

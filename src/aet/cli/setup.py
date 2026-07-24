@@ -9,6 +9,8 @@ from pathlib import Path
 
 import typer
 
+from aet.backends.factory import resolve_config
+from aet.branch_ref import resolve_trunk_branch
 from aet.worktree import AET_IGNORED_PATHS
 
 app = typer.Typer(help="Setup and bootstrap commands.")
@@ -274,9 +276,11 @@ def setup_verify(
     """Verify that the installed `aet` on PATH matches the expected link.
 
     Resolves what `aet` actually runs on PATH and reports when it is not the
-    copy just installed. Read-only: never edits PATH, shell profiles, or the
-    link itself. Exits 0 even when shadowed — the install succeeded, but the
-    user will experience a different copy.
+    copy just installed. Also prints the resolved trunk branch and how it was
+    derived (config, detected from ``refs/remotes/origin/HEAD``, or fallback
+    to ``main``). Read-only: never edits PATH, shell profiles, or the link
+    itself. Exits 0 even when shadowed — the install succeeded, but the user
+    will experience a different copy.
     """
     target_dir = Path(bin_dir) if bin_dir else _bin_dir()
     expected = _link_target()
@@ -292,6 +296,18 @@ def setup_verify(
             err=True,
         )
         raise typer.Exit(1)
+
+    repo_root = _repo_root()
+    try:
+        config = resolve_config(str(repo_root / ".agents" / "aet-work.json"))
+        trunk = resolve_trunk_branch(repo_root, config)
+    except FileNotFoundError:
+        typer.echo(
+            "  ⚠ could not resolve trunk: git is not available on PATH",
+            err=True,
+        )
+    else:
+        typer.echo(f"  trunk: {trunk.ref} ({trunk.provenance})")
 
     path_aet = shutil.which("aet", path=os.environ.get("PATH"))
 
