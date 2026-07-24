@@ -7,7 +7,7 @@ blocked_by:
   - cfg-03-cli-surface-fixes
   - cfg-04-guided-setup
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: documentation and skill content only; no code or write surface (epi-11 precedent)
 docs_sync: required
