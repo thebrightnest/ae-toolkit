@@ -75,7 +75,6 @@ app.add_typer(sprint.app, name="sprint", help="Sprint queue management.")
 
 # Top-level single-word commands.
 app.add_typer(configure_backend.app, name="configure")
-app.add_typer(configure_backend.app, name="configure-backend")
 app.add_typer(harness_guard.app, name="harness-guard")
 app.add_typer(init_queue.app, name="init-queue")
 app.add_typer(metrics.app, name="metrics")

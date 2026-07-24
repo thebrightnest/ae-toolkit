@@ -57,7 +57,7 @@ Ensure `.gitignore` excludes generated agent workflow artifacts:
 
 ### 4. `.agents/aet-work.json` (task backend config)
 
-Created by `aet configure-backend` during `aet-setup` Step 6. Chooses the storage backend used by aet-work:
+Created by `aet configure` during `aet-setup` Step 6. Chooses the storage backend used by aet-work:
 
 ```json
 {

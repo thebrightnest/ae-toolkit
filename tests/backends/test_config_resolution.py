@@ -112,10 +112,11 @@ class TestConfigResolution(unittest.TestCase):
             [
                 sys.executable,
                 str(SCRIPT),
-                "--backend",
+                "--task-backend",
                 "json",
                 "--non-interactive",
-                "--external-config",
+                "--scope",
+                "user",
             ],
             cwd=self.project,
             env=env,

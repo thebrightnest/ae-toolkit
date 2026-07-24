@@ -153,7 +153,7 @@ Create/modify files. Always:
 
 ### Step 6: Configure Task Backend
 
-Run `aet configure-backend` to write `.agents/aet-work.json`:
+Run `aet configure` to write `.agents/aet-config.json`:
 
 - `task_backend`: `git-refs` (default) or `json` (documented opt-out for non-git or unconfigured contexts). A forge is never a storage backend.
 - Projections are configured on the orthogonal `projections` axis:
