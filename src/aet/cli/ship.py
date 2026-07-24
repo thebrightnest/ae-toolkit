@@ -135,7 +135,7 @@ def _normalize_close_args(
 
 
 def cmd_ship(args):
-    """Run the post-merge closure for a task."""
+    """Run the post-merge closure for a task or epic."""
     try:
         task_id, plan, queue = _normalize_close_args(
             args.task_id,
@@ -145,14 +145,24 @@ def cmd_ship(args):
     except ValueError as exc:
         return _fail(str(exc))
 
+    target_branch = getattr(args, "target_branch", None)
+    branch = getattr(args, "branch", None)
+
+    # No-self-merge guard: closing a branch against itself is never valid.
+    if target_branch and branch and target_branch == branch:
+        return _fail(
+            f"Self-merge refused: branch '{branch}' cannot be closed against target '{target_branch}'."
+        )
+
     ns = aet_state.argparse.Namespace(
         command="record-merge",
         task_id=task_id,
         queue=queue,
         dry_run=args.dry_run,
         plan=plan,
-        branch=getattr(args, "branch", None),
+        branch=branch,
         merge_commit=getattr(args, "merge_commit", None),
+        target_branch=target_branch,
     )
     return aet_state.cmd_record_merge(ns)
 
@@ -913,6 +923,11 @@ def _add_close_args(parser: argparse.ArgumentParser) -> None:
         help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
     )
     parser.add_argument(
+        "--target-branch",
+        help="Target branch the source branch merged into (default: configured integration branch). "
+        "Use 'main' when closing an epic whose integration branch merged to trunk.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would be done without making changes.",
@@ -1171,6 +1186,7 @@ def _run_ship_close(
     queue: str,
     branch: Optional[str],
     merge_commit: Optional[str],
+    target_branch: Optional[str],
     dry_run: bool,
 ) -> int:
     return cmd_ship(
@@ -1182,6 +1198,7 @@ def _run_ship_close(
             dry_run=dry_run,
             branch=branch,
             merge_commit=merge_commit,
+            target_branch=target_branch,
         )
     )
 
@@ -1213,6 +1230,12 @@ def ship_close(
         "--merge-commit",
         help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
     ),
+    target_branch: Optional[str] = typer.Option(
+        None,
+        "--target-branch",
+        help="Target branch the source branch merged into (default: configured integration branch). "
+        "Use 'main' when closing an epic whose integration branch merged to trunk.",
+    ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
@@ -1230,6 +1253,7 @@ def ship_close(
             resolved_queue,
             branch,
             merge_commit,
+            target_branch,
             dry_run,
         )
     )
@@ -1262,6 +1286,12 @@ def ship_record_merge(
         "--merge-commit",
         help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
     ),
+    target_branch: Optional[str] = typer.Option(
+        None,
+        "--target-branch",
+        help="Target branch the source branch merged into (default: configured integration branch). "
+        "Use 'main' when closing an epic whose integration branch merged to trunk.",
+    ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
@@ -1279,6 +1309,7 @@ def ship_record_merge(
             resolved_queue,
             branch,
             merge_commit,
+            target_branch,
             dry_run,
         )
     )
