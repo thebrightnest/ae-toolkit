@@ -112,5 +112,5 @@ disappears; no code path depends on either.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
