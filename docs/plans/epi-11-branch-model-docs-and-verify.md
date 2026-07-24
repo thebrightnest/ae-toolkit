@@ -50,11 +50,11 @@ this plan is display plus documentation, which is why it is S.
 
 ## Task List
 
-1. Print the resolved trunk and its provenance in `aet setup verify`
+1. ✓ Print the resolved trunk and its provenance in `aet setup verify`
    — S (traces: R-5)
-2. Document the branch model, resolution orders, and a worked Scenario B setup
+2. ✓ Document the branch model, resolution orders, and a worked Scenario B setup
    in `docs/CONVENTIONS.md` — M (traces: R-23)
-3. Merge branch to main and verify integration — S
+3. Merge branch to main and verify integration — S [Deferred: ship stage]
 
 **Size definitions:** S ≤ 2 hr / ≤ 100 lines; M ≤ 1 day / ≤ 200 lines; L must be
 re-evaluated.
@@ -112,5 +112,5 @@ disappears; no code path depends on either.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*

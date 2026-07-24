@@ -393,6 +393,23 @@ scope — the epic/integration layer — is a feature and is planned as one.
   ship/merge stage; `git merge-base --is-ancestor HEAD origin/main` is not yet
   true.
 
+## Divergence Summary (epi-11-branch-model-docs-and-verify)
+
+*Recorded: 2026-07-24 — Branch: epi-11-branch-model-docs-and-verify*
+
+### Changed from plan
+
+- None.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- Task 3 (merge branch to main and verify integration): deferred to the
+  `aet-ship` stage; `aet-sync-docs` does not perform merges.
+
 ---
 
 *Stage: synced*
