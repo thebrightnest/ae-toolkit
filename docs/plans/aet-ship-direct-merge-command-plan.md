@@ -85,5 +85,5 @@ delete `tests/test_ship_merge.py`.
 
 ---
 
-_Stage: synced_
-_Next step: run `aet-ship`_
+_Stage: merged_
+_Next step: run `aet-work`_
