@@ -121,8 +121,9 @@ def _run(
     plans_dir: Path,
     json_output: bool,
 ) -> int:
+    config_path = str(Path(queue_file).with_name("aet-config.json"))
     backend = create_backend(
-        queue_file=queue_file, history_file=history_file
+        config_path=config_path, queue_file=queue_file, history_file=history_file
     )
     try:
         data = backend.load()

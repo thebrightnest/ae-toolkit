@@ -75,7 +75,7 @@ class TestPrepareWorktreeDependencies(unittest.TestCase):
                     {"name": "vendor", "source": "api/vendor", "target": "api/vendor"},
                 ]
             }
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(config), encoding="utf-8"
             )
 
@@ -105,7 +105,7 @@ class TestPrepareWorktreeDependencies(unittest.TestCase):
                     {"name": "node_modules", "source": "app/node_modules", "target": "app/node_modules"},
                 ]
             }
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(config), encoding="utf-8"
             )
 
@@ -128,7 +128,7 @@ class TestPrepareWorktreeDependencies(unittest.TestCase):
                     {"name": "node_modules", "source": "app/node_modules", "target": "app/node_modules"},
                 ]
             }
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(config), encoding="utf-8"
             )
 
@@ -157,7 +157,7 @@ class TestDependencyWarmupRequired(unittest.TestCase):
                     {"name": "vendor", "source": "api/vendor", "target": "api/vendor"},
                 ]
             }
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(config), encoding="utf-8"
             )
 
@@ -176,7 +176,7 @@ class TestDependencyWarmupRequired(unittest.TestCase):
                     {"name": "node_modules", "source": "app/node_modules", "target": "app/node_modules"},
                 ]
             }
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(config), encoding="utf-8"
             )
 

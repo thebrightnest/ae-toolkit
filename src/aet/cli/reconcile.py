@@ -101,9 +101,9 @@ def reconcile(
         help="Apply corrective writes (default is a dry run)",
     ),
     config: str = typer.Option(
-        ".agents/aet-work.json",
+        ".agents/aet-config.json",
         "--config",
-        help="Path to aet-work backend configuration",
+        help="Path to AET backend configuration",
     ),
     plans_dir: Path = typer.Option(
         Path("docs/plans"),

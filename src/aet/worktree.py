@@ -289,12 +289,12 @@ def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
 def dependency_warmup_required(repo_root: str, worktree_dir: str) -> list[dict]:
     """Return configured dependencies that are missing inside the worktree.
 
-    Reads ``.agents/aet-work.json`` for a ``symlink_dependencies`` array. Each
+    Reads ``.agents/aet-config.json`` for a ``symlink_dependencies`` array. Each
     entry is expected to have ``name``, ``source``, and ``target`` keys. Targets
     are checked relative to ``worktree_dir``. An empty list means no warmup is
     required (or no config exists).
     """
-    config_path = os.path.join(repo_root, ".agents", "aet-work.json")
+    config_path = os.path.join(repo_root, ".agents", "aet-config.json")
     if not os.path.isfile(config_path):
         return []
 
@@ -325,7 +325,7 @@ def dependency_warmup_required(repo_root: str, worktree_dir: str) -> list[dict]:
 def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dict]:
     """Create symlink dependencies inside a new worktree.
 
-    Reads ``.agents/aet-work.json`` for a ``symlink_dependencies`` array. Each
+    Reads ``.agents/aet-config.json`` for a ``symlink_dependencies`` array. Each
     entry must have ``name``, ``source``, and ``target`` keys. The source is
     resolved relative to ``repo_root`` and the target relative to
     ``worktree_dir``. Missing parent directories are created automatically.
@@ -333,7 +333,7 @@ def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dic
     Returns a list of result dicts with keys ``name``, ``target``, ``status``
     (``created``, ``skipped``, or ``failed``), and ``message``.
     """
-    config_path = os.path.join(repo_root, ".agents", "aet-work.json")
+    config_path = os.path.join(repo_root, ".agents", "aet-config.json")
     if not os.path.isfile(config_path):
         return []
 

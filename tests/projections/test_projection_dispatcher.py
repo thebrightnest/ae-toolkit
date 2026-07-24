@@ -221,7 +221,7 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
         self.tmp.cleanup()
 
     def _write_in_tree(self, config):
-        path = self.project / ".agents" / "aet-work.json"
+        path = self.project / ".agents" / "aet-config.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(config), encoding="utf-8")
 
@@ -250,7 +250,7 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
             {"HOME": str(self.home), "AET_PROJECT_ID": "myproject/main"},
             clear=False,
         ):
-            config = resolve_config(str(self.project / ".agents" / "aet-work.json"))
+            config = resolve_config(str(self.project / ".agents" / "aet-config.json"))
 
         dispatcher = resolve_projections(config)
         self.assertEqual(len(dispatcher.projections), 1)
@@ -291,7 +291,7 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
             },
             clear=False,
         ):
-            config = resolve_config(str(self.project / ".agents" / "aet-work.json"))
+            config = resolve_config(str(self.project / ".agents" / "aet-config.json"))
 
         dispatcher = resolve_projections(config)
         self.assertEqual(dispatcher.projections[0].repo, "env/repo")

@@ -1,38 +1,47 @@
 #!/usr/bin/env python3
-"""aet configure-backend — Configure the task backend for aet-work.
+"""aet configure — Configure the AET project config.
 
 Usage:
-  aet configure-backend [--backend json|git-refs] [--external-config]
-                        [--non-interactive] [--help]
+  aet configure [--backend json|git-refs] [--external-config]
+                [--non-interactive] [--help]
+  aet configure --migrate
 
 In interactive mode (default), the script prompts for the backend (empty
 input accepts the default, git-refs). In non-interactive mode, a missing
 --backend selects the default (git-refs).
 
 GitHub Issues is no longer a task_backend value; it is configured on the
-orthogonal "projections" axis in .agents/aet-work.json (see aet-setup docs).
+orthogonal "projections" axis in .agents/aet-config.json (see aet-setup docs).
 
 Use --external-config for a non-invasive project: the config is written to
 ~/.aet/{slug}/config.json and nothing is written inside the repo. Reads
 always resolve external-first: AET_WORK_CONFIG env → ~/.aet/{slug}/config.json
-→ .agents/aet-work.json → defaults.
+→ .agents/aet-config.json → defaults.
+
+Use --migrate to rename a legacy .agents/aet-work.json to the canonical
+.agents/aet-config.json. The rename uses git mv when the legacy file is
+tracked and a plain filesystem rename otherwise. Migrate refuses to overwrite
+an existing .agents/aet-config.json.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
 import typer
 
-from aet.project_id import derive_project_slug
+from aet.project_id import derive_config_slug
 
 DEFAULT_BACKEND = "git-refs"
+NEW_CONFIG_NAME = "aet-config.json"
+LEGACY_CONFIG_NAME = "aet-work.json"
 
 
 def _log(msg: str) -> None:
-    print(f"[configure-backend] {msg}", file=sys.stderr)
+    print(f"[configure] {msg}", file=sys.stderr)
 
 
 def _error(msg: str) -> None:
@@ -60,14 +69,66 @@ def _read_existing_backend(path: Path | None) -> str:
         return ""
 
 
+def _is_tracked(path: Path) -> bool:
+    """Return True when ``path`` is tracked in git."""
+    result = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", str(path)],
+        cwd=path.parent,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _migrate_config(project_root: Path) -> int:
+    """Rename legacy .agents/aet-work.json to .agents/aet-config.json.
+
+    Uses ``git mv`` when the legacy file is tracked; otherwise a plain rename.
+    Refuses to overwrite an existing new file.
+    """
+    agents_dir = project_root / ".agents"
+    legacy = agents_dir / LEGACY_CONFIG_NAME
+    new_file = agents_dir / NEW_CONFIG_NAME
+
+    if not legacy.exists():
+        _error(f"No legacy config to migrate: {legacy}")
+
+    if new_file.exists():
+        _error(
+            f"Refusing to migrate: {new_file} already exists. "
+            "Resolve the conflict manually and remove one of the files."
+        )
+
+    if _is_tracked(legacy):
+        result = subprocess.run(
+            ["git", "mv", LEGACY_CONFIG_NAME, NEW_CONFIG_NAME],
+            cwd=agents_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            _error(f"git mv failed: {result.stderr.strip()}")
+    else:
+        legacy.rename(new_file)
+
+    _log(f"Migrated {legacy} -> {new_file}")
+    return 0
+
+
 def _run(
     backend: str | None,
     external_config: bool,
     non_interactive: bool,
+    migrate: bool,
 ) -> int:
     project_root = Path.cwd()
-    config_dir = project_root / ".agents"
-    config_file = config_dir / "aet-work.json"
+    agents_dir = project_root / ".agents"
+    config_file = agents_dir / NEW_CONFIG_NAME
+
+    if migrate:
+        return _migrate_config(project_root)
 
     if backend is None:
         if non_interactive:
@@ -87,7 +148,7 @@ def _run(
 
     external_config_file: Path | None = None
     if external_config:
-        slug = derive_project_slug()
+        slug = derive_config_slug()
         external_config_dir = Path.home() / ".aet" / slug
         external_config_dir.mkdir(parents=True, exist_ok=True)
         external_config_file = external_config_dir / "config.json"
@@ -123,10 +184,10 @@ def _run(
         _log(f"Wrote external config to {external_config_file}")
         _log(
             "Config resolution order: AET_WORK_CONFIG env → ~/.aet/{slug}/config.json "
-            "→ .agents/aet-work.json → defaults"
+            f"→ .agents/{NEW_CONFIG_NAME} → defaults"
         )
     else:
-        config_dir.mkdir(parents=True, exist_ok=True)
+        agents_dir.mkdir(parents=True, exist_ok=True)
         existing_json = None
         if config_file.exists():
             existing_json = config_file.read_text(encoding="utf-8")
@@ -143,7 +204,7 @@ app = typer.Typer(invoke_without_command=True)
 
 
 @app.callback()
-def configure_backend(
+def configure(
     backend: str | None = typer.Option(
         None,
         "--backend",
@@ -152,16 +213,21 @@ def configure_backend(
     external_config: bool = typer.Option(
         False,
         "--external-config",
-        help="Write config to ~/.aet/{slug}/config.json instead of .agents/aet-work.json.",
+        help=f"Write config to ~/.aet/{{slug}}/config.json instead of .agents/{NEW_CONFIG_NAME}.",
     ),
     non_interactive: bool = typer.Option(
         False,
         "--non-interactive",
         help="Fail if a required value is missing instead of prompting.",
     ),
+    migrate: bool = typer.Option(
+        False,
+        "--migrate",
+        help=f"Rename legacy .agents/{LEGACY_CONFIG_NAME} to .agents/{NEW_CONFIG_NAME}.",
+    ),
 ) -> None:
-    """Configure the task backend for aet-work."""
-    rc = _run(backend, external_config, non_interactive)
+    """Configure the AET project config."""
+    rc = _run(backend, external_config, non_interactive, migrate)
     raise typer.Exit(rc)
 
 

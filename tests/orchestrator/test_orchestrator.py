@@ -388,7 +388,7 @@ class TestDependencyWarmup(unittest.TestCase):
 
             Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
             Path(repo_root, "app", "node_modules", "pkg").mkdir(parents=True, exist_ok=True)
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(
                     {
                         "symlink_dependencies": [
@@ -462,7 +462,7 @@ class TestEnvironmentIssueEmission(unittest.TestCase):
             )
 
             Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(
                     {
                         "symlink_dependencies": [

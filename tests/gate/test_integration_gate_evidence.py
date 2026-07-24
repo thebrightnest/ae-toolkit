@@ -251,7 +251,7 @@ class TestIntegrationGateEnforcement(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
             _init_git_repo(repo_root, origin_root)
             Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(
                     {
                         "trunk_branch": "main",
@@ -310,7 +310,7 @@ class TestIntegrationGateEnforcement(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
             _init_git_repo(repo_root, origin_root)
             Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
-            Path(repo_root, ".agents", "aet-work.json").write_text(
+            Path(repo_root, ".agents", "aet-config.json").write_text(
                 json.dumps(
                     {
                         "trunk_branch": "main",

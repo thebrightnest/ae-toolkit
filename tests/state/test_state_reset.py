@@ -251,7 +251,7 @@ class TestStateReset(unittest.TestCase):
                 history_file=history_file,
                 plans_dir=Path(tmpdir) / "docs" / "plans",
                 prds_dir=Path(tmpdir) / "docs" / "prds",
-                config=str(Path(tmpdir) / ".agents" / "aet-work.json"),
+                config=str(Path(tmpdir) / ".agents" / "aet-config.json"),
                 force=False,
             )
             self.assertEqual(rc, 0)

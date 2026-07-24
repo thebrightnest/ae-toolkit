@@ -125,7 +125,7 @@ def _rewrite_envelope(repo: Path, new_envelope: dict) -> None:
 
 
 def _write_git_refs_config(repo: Path) -> None:
-    (repo / ".agents" / "aet-work.json").write_text(
+    (repo / ".agents" / "aet-config.json").write_text(
         json.dumps({"task_backend": "git-refs"}), encoding="utf-8"
     )
 

@@ -211,7 +211,7 @@ def add(
         "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
     ),
     config: str = typer.Option(
-        ".agents/aet-work.json", "--config", help="Path to aet-work backend configuration"
+        ".agents/aet-config.json", "--config", help="Path to AET backend configuration"
     ),
     force: bool = typer.Option(
         False,

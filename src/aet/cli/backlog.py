@@ -102,7 +102,7 @@ app = typer.Typer()
 def add(
     target: str = typer.Argument(..., help="Plan file path or task ID to add to the backlog"),
     plans_dir: str = typer.Option("docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"),
-    config: str = typer.Option(".agents/aet-work.json", "--config", help="Path to aet-work backend configuration"),
+    config: str = typer.Option(".agents/aet-config.json", "--config", help="Path to AET backend configuration"),
 ) -> None:
     """Add a plan to the backlog."""
     args = argparse.Namespace(

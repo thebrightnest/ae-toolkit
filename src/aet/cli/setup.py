@@ -299,7 +299,7 @@ def setup_verify(
 
     repo_root = _repo_root()
     try:
-        config = resolve_config(str(repo_root / ".agents" / "aet-work.json"))
+        config = resolve_config(str(repo_root / ".agents" / "aet-config.json"))
         trunk = resolve_trunk_branch(repo_root, config)
     except FileNotFoundError:
         typer.echo(
