@@ -125,5 +125,5 @@ Revert the merge commit; documentation returns to describing v1.5.0 behavior
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
