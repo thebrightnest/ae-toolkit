@@ -52,11 +52,11 @@ docs_sync_reason: the setup flow's documented steps change; aet-setup skill and 
 
 ## Task List
 
-1. Guided config flow in the setup surface: two questions, writer-backed,
+1. ✓ Guided config flow in the setup surface: two questions, writer-backed,
    existing-config detection, non-interactive bypass — M (traces: R-11)
-2. aet-setup skill checklist + SKILL.md: add the guided-config step, state the
+2. ✓ aet-setup skill checklist + SKILL.md: add the guided-config step, state the
    team/shadow split — S (traces: R-11)
-3. Tests (see Validation Steps) — S (traces: R-11)
+3. ✓ Tests (see Validation Steps) — S (traces: R-11)
 4. Merge branch to main and verify integration — S [Deferred: ship stage]
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines; M ≤ 1 day / ≤ 600 lines.
@@ -93,4 +93,4 @@ skill reverts with the commit.
 ---
 
 _Stage: merged_
-_Next step: run `aet-work`_
+_Next step: none — merged to `origin/main`_

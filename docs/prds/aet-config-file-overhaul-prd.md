@@ -280,6 +280,35 @@ delivered the `aet configure` writer for all config keys (R-5).
 - **R-11 (guided first-time setup):** The setup flow does not yet ask
   scope/mode questions and write a valid config.
 
+## Divergence Summary (cfg-04)
+
+*Recorded: 2026-07-25 — Branch: cfg-04-guided-setup*
+
+`cfg-04-guided-setup` implemented the previously-deferred **R-11** requirement:
+`aet configure --guided` now asks scope (team/shadow) and integration mode
+(pr-per-task/single-pr), detects existing config, confirms before overwriting,
+and supports non-interactive bypass via flags or `AET_EXECUTION_MODE=unattended`.
+The aet-setup skill and reference docs were updated to describe the guided step.
+
+### Changed from plan
+
+- None — the cfg-04 plan was implemented as written.
+
+### Added (unplanned)
+
+- `src/aet/cli/configure_backend.py`: Added `--guided` flow with two-question
+  prompts, existing-config detection, overwrite confirmation, and unattended
+  bypass.
+- `tests/cli/test_guided_setup.py`: New coverage for team/shadow writes,
+  existing-config confirmation, and non-interactive flag bypass.
+- `skills/aet-setup/SKILL.md` and `skills/aet-setup/references/README.md`:
+  Updated Step 6 to use `aet configure --guided` and explain team/shadow scope.
+
+### Deferred
+
+- R-8, R-9 remaining scope, and R-10 remain deferred from the prior divergence
+  summary.
+
 ---
 
 *Stage: synced*

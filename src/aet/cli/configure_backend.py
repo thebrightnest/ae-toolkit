@@ -6,11 +6,18 @@ Usage:
                 [--integration-mode pr-per-task|single-pr]
                 [--integration-branch B] [--scope project|user]
                 [--non-interactive] [--help]
+  aet configure --guided [--scope team|shadow] [--integration-mode pr-per-task|single-pr]
   aet configure --migrate
 
 In interactive mode (default), the script prompts for the task backend (empty
 input accepts the default, git-refs). In non-interactive mode, a missing
 --task-backend selects the default (git-refs).
+
+The ``--guided`` flow is the setup-time entry point: it asks exactly two
+questions — scope (team/shadow) and integration mode (pr-per-task/single-pr) —
+and writes a git-refs-backed config via the single cfg-02 writer. Existing
+config is detected and shown before overwriting. ``AET_EXECUTION_MODE=unattended``
+or explicit ``--scope``/``--integration-mode`` flags skip all prompts.
 
 GitHub Issues is no longer a task_backend value; it is configured on the
 orthogonal "projections" axis in .agents/aet-config.json (see aet-setup docs).
@@ -21,6 +28,8 @@ AET_WORK_CONFIG env → ~/.aet/{slug}/config.json → .agents/aet-config.json �
 Use --scope user for a non-invasive project: the config is written to
 ~/.aet/{slug}/config.json and nothing is written inside the repo. The default
 scope is project when an in-tree config already exists, and user otherwise.
+In guided mode ``--scope team`` is an alias for ``project`` and ``shadow`` is an
+alias for ``user``.
 
 Use --migrate to rename a legacy .agents/aet-work.json to the canonical
 .agents/aet-config.json. The rename uses git mv when the legacy file is
@@ -31,19 +40,31 @@ an existing .agents/aet-config.json.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import typer
 
-from aet.backends.factory import INTEGRATION_MODES
+from aet.backends.factory import INTEGRATION_MODES, resolve_config_with_source
 from aet.project_id import derive_config_slug
 
 DEFAULT_BACKEND = "git-refs"
 NEW_CONFIG_NAME = "aet-config.json"
 LEGACY_CONFIG_NAME = "aet-work.json"
 KNOWN_BACKENDS = frozenset({"json", "git-refs"})
+
+# Guided-flow scope vocabulary.  "team" writes config into the repo;
+# "shadow" writes it to an external user-scoped directory so nothing is
+# committed.  These aliases are normalized to the writer's project/user
+# vocabulary before any I/O happens.
+GUIDED_SCOPE_ALIASES = {
+    "team": "project",
+    "shadow": "user",
+    "project": "project",
+    "user": "user",
+}
 
 
 def _log(msg: str) -> None:
@@ -199,6 +220,136 @@ def _build_updates(
     return updates
 
 
+def _is_unattended() -> bool:
+    """Return True when the environment requests non-interactive execution."""
+    return os.environ.get("AET_EXECUTION_MODE") == "unattended"
+
+
+def _prompt_choice(prompt: str, choices: set[str], default: str | None = None) -> str:
+    """Prompt until the user supplies one of ``choices``.
+
+    ``default`` is returned on empty input when provided.
+    """
+    choice_str = "/".join(sorted(choices))
+    default_hint = f" [{default}]" if default else ""
+    while True:
+        try:
+            value = input(f"{prompt} ({choice_str}){default_hint}: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            value = ""
+        if not value and default is not None:
+            return default
+        if value in choices:
+            return value
+        print(f"Please enter one of: {', '.join(sorted(choices))}.", file=sys.stderr)
+
+
+def _prompt_yes_no(prompt: str, default: bool = False) -> bool:
+    """Prompt for a yes/no answer and return the boolean result."""
+    suffix = " [Y/n]" if default else " [y/N]"
+    while True:
+        try:
+            value = input(f"{prompt}{suffix}: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            value = ""
+        if not value:
+            return default
+        if value in {"y", "yes"}:
+            return True
+        if value in {"n", "no"}:
+            return False
+        print("Please answer yes or no.", file=sys.stderr)
+
+
+def _normalize_guided_scope(value: str | None) -> str | None:
+    """Map guided scope aliases to the writer's project/user vocabulary."""
+    if value is None:
+        return None
+    normalized = GUIDED_SCOPE_ALIASES.get(value.lower())
+    if normalized is None:
+        return value
+    return normalized
+
+
+def _run_guided(
+    scope: str | None,
+    integration_mode: str | None,
+) -> int:
+    """Interactive two-question setup flow.
+
+    Asks for scope (team/shadow) and integration mode (pr-per-task/single-pr),
+    detects an existing config, confirms before overwriting, and writes the
+    result through the cfg-02 writer.  Non-interactive bypass is available via
+    ``--scope``/``--integration-mode`` flags or ``AET_EXECUTION_MODE=unattended``.
+    """
+    project_root = Path.cwd()
+    in_tree_path = project_root / ".agents" / NEW_CONFIG_NAME
+
+    config, source = resolve_config_with_source(str(in_tree_path), project_root)
+    existing_mode = config.get("integration_mode")
+    existing_scope = "team" if source == "project" else "shadow" if source in {"user", "env"} else None
+
+    has_flags = scope is not None or integration_mode is not None
+    unattended = _is_unattended() or has_flags
+
+    if scope is None:
+        if unattended:
+            # Default to shadow (non-invasive) when nothing is specified.
+            scope = "shadow"
+        else:
+            hint = f" [{existing_scope}]" if existing_scope else ""
+            scope = _prompt_choice(
+                f"Where should AET store its config? (team=repo, shadow=HOME){hint}",
+                {"team", "shadow"},
+                default=existing_scope,
+            )
+    scope = _normalize_guided_scope(scope)
+
+    if integration_mode is None:
+        if unattended:
+            integration_mode = existing_mode or "pr-per-task"
+        else:
+            hint = f" [{existing_mode}]" if existing_mode else ""
+            integration_mode = _prompt_choice(
+                "Integration mode" + hint,
+                INTEGRATION_MODES,
+                default=existing_mode,
+            )
+    if integration_mode not in INTEGRATION_MODES:
+        _error(
+            f"Invalid integration_mode '{integration_mode}'. "
+            f"Choose one of: {', '.join(sorted(INTEGRATION_MODES))}."
+        )
+        return 1
+
+    target = _target_path(project_root, scope)
+    existing_target_config = _read_existing_config(target)
+
+    # Confirmation when we are about to overwrite an existing config.
+    if existing_target_config and not unattended:
+        current_scope_label = "team" if scope == "project" else "shadow"
+        print("Existing AET config detected:")
+        print(f"  scope: {current_scope_label}")
+        print(f"  integration_mode: {existing_target_config.get('integration_mode', 'not set')}")
+        if not _prompt_yes_no("Overwrite existing config?", default=False):
+            _log("Config left unchanged.")
+            return 0
+
+    updates = {
+        "task_backend": DEFAULT_BACKEND,
+        "integration_mode": integration_mode,
+    }
+    existing_json = target.read_text(encoding="utf-8") if target.exists() else None
+    target.write_text(_write_json_config(existing_json, updates), encoding="utf-8")
+
+    scope_label = "team" if scope == "project" else "shadow"
+    provenance = "committed in repo" if scope == "project" else "external user config"
+    _log(f"Wrote config ({scope_label}, {provenance}): {target}")
+    _log(f"  task_backend: {DEFAULT_BACKEND}")
+    _log(f"  integration_mode: {integration_mode}")
+    return 0
+
+
 def _run(
     task_backend: str | None,
     trunk_branch: str | None,
@@ -207,11 +358,15 @@ def _run(
     scope: str | None,
     non_interactive: bool,
     migrate: bool,
+    guided: bool,
 ) -> int:
     project_root = Path.cwd()
 
     if migrate:
         return _migrate_config(project_root)
+
+    if guided:
+        return _run_guided(scope, integration_mode)
 
     if task_backend is None:
         if non_interactive:
@@ -300,6 +455,11 @@ def configure(
         "--migrate",
         help=f"Rename legacy .agents/{LEGACY_CONFIG_NAME} to .agents/{NEW_CONFIG_NAME}.",
     ),
+    guided: bool = typer.Option(
+        False,
+        "--guided",
+        help="Run the two-question guided setup flow (scope + integration mode).",
+    ),
 ) -> None:
     """Configure the AET project config."""
     rc = _run(
@@ -310,6 +470,7 @@ def configure(
         scope,
         non_interactive,
         migrate,
+        guided,
     )
     raise typer.Exit(rc)
 
