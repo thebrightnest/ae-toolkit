@@ -92,5 +92,5 @@ skill reverts with the commit.
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: reviewed_
+_Next step: run `aet-sync-docs`_
