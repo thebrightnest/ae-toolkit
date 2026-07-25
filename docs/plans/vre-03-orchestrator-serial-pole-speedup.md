@@ -4,7 +4,7 @@ size: M
 blocked_by:
   - vre-02-orchestrator-xdist-subgroups
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: internal test-speed refactor; replaces sleeps/fixtures with event-based waits, no product, auth, data, or trust surface
 docs_sync: skipped
@@ -87,6 +87,6 @@ subgroup markers are unaffected by the revert.
 
 ---
 
-*Stage: plan-approved*
+*Stage: merged*
 
 *Next step: run `aet run-one docs/plans/vre-03-orchestrator-serial-pole-speedup.md` (after vre-02 merges)*
