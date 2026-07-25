@@ -307,7 +307,10 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
             isolation="minimal",
             max_jobs=3,
             task_timeout=999,
-            stall_timeout=1,
+            # Keep stall_timeout generous enough that the healthy fixture's git
+            # operations do not get killed under loadgroup/xdist load, while
+            # still being far shorter than the original 5 s.
+            stall_timeout=3,
             heartbeat_interval=999,
             on_failure="triage",
         )
