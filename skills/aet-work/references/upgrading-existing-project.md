@@ -123,7 +123,7 @@ or, for non-toolkit projects, the equivalent lint/test command.
 
 ## Worktree dependency warmup (optional)
 
-If your project has large dependency directories that are expensive to recreate in every worktree, you can declare them in `.agents/aet-work.json`:
+If your project has large dependency directories that are expensive to recreate in every worktree, you can declare them in `.agents/aet-config.json`:
 
 ```json
 {

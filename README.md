@@ -294,6 +294,10 @@ Edit `SKILL.md` following the [skill creator guide](https://docs.kimi.ai/skills)
 
 See [docs/upgrades/README.md](./docs/upgrades/README.md) for version-specific upgrade guides.
 
+| From   | To     | Guide                                    |
+| ------ | ------ | ---------------------------------------- |
+| v1.5.0 | v1.6.0 | [v1.5.0-to-v1.6.0.md](./docs/upgrades/v1.5.0-to-v1.6.0.md) |
+
 ## License
 
 MIT

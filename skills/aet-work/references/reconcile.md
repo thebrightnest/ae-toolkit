@@ -65,7 +65,7 @@ aet reconcile
 aet reconcile --apply
 
 # Use a non-standard plans directory or config
-aet reconcile --plans-dir docs/plans --config .agents/aet-work.json
+aet reconcile --plans-dir docs/plans --config .agents/aet-config.json
 
 # Machine-readable output
 aet reconcile --json

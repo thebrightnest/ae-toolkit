@@ -81,7 +81,7 @@ No external service is used. Logs stay on your local filesystem.
 ## Configuring worktree dependency warmup
 
 If new worktrees are missing dependency directories (`node_modules`, `vendor`,
-etc.), record the symlinks in `.agents/aet-work.json`:
+etc.), record the symlinks in `.agents/aet-config.json`:
 
 ```json
 {
@@ -297,7 +297,7 @@ path traversal. To roll back, replay the dry-run output inverted
 | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `~/.aet/telemetry/` is empty                          | Run `aet-work run-one` or `aet-work run` at least once.                           |
 | `mine-learnings` finds no patterns                    | Run more tasks or extend the date range.                                          |
-| Dependency warmup does not run                        | Verify `.agents/aet-work.json` exists and the source paths are correct.           |
+| Dependency warmup does not run                        | Verify `.agents/aet-config.json` exists and the source paths are correct.         |
 | Junk projects (`tests`, `tmp*`) appear in the archive | Pre-thp-01 pollution from test runs; the suite is isolated now — delete the dirs. |
 
 ## Panel implementation notes
