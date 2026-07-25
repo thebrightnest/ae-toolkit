@@ -82,6 +82,22 @@ def _task_id_from_plan(plan_path: str | Path) -> str:
     return task_id
 
 
+def _resolve_feature_branch(task_id: str) -> Optional[str]:
+    """Resolve a task's feature branch by name.
+
+    The orchestrator names each task's branch after its task id (it sets
+    ``qt["branch"] = task_id`` when recording a task in-progress), so the merge
+    source is the ``task_id`` ref — never whatever branch happens to be checked
+    out. Prefer the local branch; fall back to the remote-tracking ref. Return
+    ``None`` when neither exists so callers fail closed instead of merging a
+    branch into itself and recording a merge that never happened.
+    """
+    for ref in (task_id, f"origin/{task_id}"):
+        if _run_git("rev-parse", "--verify", "--quiet", ref, check=False).returncode == 0:
+            return ref
+    return None
+
+
 def _normalize_close_args(
     task_id: str,
     plan: Optional[str],
@@ -808,6 +824,23 @@ def _merge_into_target(
                 None,
             )
 
+        # Fail-closed post-condition: the feature branch must be an ancestor of the
+        # target after the merge. Catches silent no-op merges (e.g. an already-merged
+        # or misresolved source) that would otherwise report success while leaving the
+        # branch's commits behind.
+        ancestry = _run_git(
+            "-C", str(worktree), "merge-base", "--is-ancestor",
+            feature_branch, target_branch, check=False,
+        )
+        if ancestry.returncode != 0:
+            return (
+                False,
+                f"Post-merge verification failed: {feature_branch} is not an ancestor "
+                f"of {target_branch} after the merge. The branch was not incorporated; "
+                "refusing to report success.",
+                None,
+            )
+
         return (
             True,
             f"Merged {feature_branch} into {target_branch} ({merge_commit}).",
@@ -829,9 +862,19 @@ def cmd_merge(args: argparse.Namespace) -> int:
         return _fail(f"Plan file not found: {plan_path}")
 
     target_branch = args.branch
-    feature_branch = _run_git("branch", "--show-current", check=False).stdout.strip()
+    task_id = _task_id_from_plan(plan_path)
+    feature_branch = _resolve_feature_branch(task_id)
     if not feature_branch:
-        return _fail("Cannot merge: HEAD is detached.")
+        return _fail(
+            f"Cannot resolve a feature branch for task {task_id!r}: neither "
+            f"{task_id!r} nor origin/{task_id} exists. Refusing to record a merge "
+            "that did not happen."
+        )
+    if feature_branch == target_branch:
+        return _fail(
+            f"Refusing to merge {feature_branch!r} into itself: the resolved feature "
+            f"branch equals the target branch ({target_branch!r})."
+        )
 
     print(f"Running aet ship merge for {plan_path} into {target_branch}")
 
@@ -870,7 +913,6 @@ def cmd_merge(args: argparse.Namespace) -> int:
         print("✅ aet ship merge complete (dry-run).")
         return 0
 
-    task_id = _task_id_from_plan(plan_path)
     rc = aet_state.cmd_record_merge(
         argparse.Namespace(
             command="record-merge",
@@ -878,7 +920,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
             queue=".agents/work-queue.json",
             plan=str(plan_path),
             dry_run=False,
-            branch=feature_branch,
+            branch=task_id,
             merge_commit=merge_commit,
             target_branch=target_branch,
         )

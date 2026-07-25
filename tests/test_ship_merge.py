@@ -6,6 +6,7 @@ import argparse
 import importlib.machinery
 import importlib.util
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -136,7 +137,8 @@ class TestShipMergeCommand(unittest.TestCase):
             dry_run=False,
             message="Working tree is dirty.",
         )
-        with patch.object(ship, "_run_gate", return_value=gate_result):
+        with patch.object(ship, "_run_gate", return_value=gate_result), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"):
             rc = ship.cmd_merge(
                 argparse.Namespace(plan=str(self.plan_path), branch="dev", dry_run=False)
             )
@@ -152,7 +154,8 @@ class TestShipMergeCommand(unittest.TestCase):
             dry_run=False,
             message="Gate passed.",
         )
-        with patch.object(ship, "_run_gate", return_value=gate_result):
+        with patch.object(ship, "_run_gate", return_value=gate_result), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"):
             with patch.object(ship, "_check_release_guard", return_value=None):
                 with patch.object(ship, "_is_monolithic_commit", return_value=False):
                     with patch.object(
@@ -179,7 +182,8 @@ class TestShipMergeCommand(unittest.TestCase):
             dry_run=False,
             message="Gate passed.",
         )
-        with patch.object(ship, "_run_gate", return_value=gate_result):
+        with patch.object(ship, "_run_gate", return_value=gate_result), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"):
             with patch.object(ship, "_check_release_guard", return_value=None):
                 with patch.object(ship, "_is_monolithic_commit", return_value=False):
                     with patch.object(
@@ -202,6 +206,7 @@ class TestShipMergeCommand(unittest.TestCase):
         self.assertEqual(ns.task_id, "t1")
         self.assertEqual(ns.merge_commit, "abc123")
         self.assertEqual(ns.target_branch, "dev")
+        self.assertEqual(ns.branch, "t1")
 
     def test_merge_dry_run_skips_closure(self):
         """Dry-run reports success but does not call record-merge."""
@@ -213,7 +218,8 @@ class TestShipMergeCommand(unittest.TestCase):
             dry_run=True,
             message="Gate passed.",
         )
-        with patch.object(ship, "_run_gate", return_value=gate_result):
+        with patch.object(ship, "_run_gate", return_value=gate_result), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"):
             with patch.object(ship, "_check_release_guard", return_value=None):
                 with patch.object(ship, "_is_monolithic_commit", return_value=False):
                     with patch.object(
@@ -231,6 +237,115 @@ class TestShipMergeCommand(unittest.TestCase):
                                     )
                                 )
         self.assertEqual(rc, 0)
+        close_mock.assert_not_called()
+
+    def _init_repo_with_task_branch(self, task_id: str) -> Path:
+        """Create a real temp git repo whose HEAD is on ``main`` and which also
+        has a branch named *task_id* carrying a commit absent from main — the
+        exact shape that triggered the bug (running the merge from a checkout on
+        main, where ``git branch --show-current`` returns "main")."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        # Restore cwd before the temp repo is torn down (LIFO cleanup order).
+        self.addCleanup(os.chdir, self.cwd)
+        repo = Path(tmp.name)
+
+        def git(*args: str) -> None:
+            subprocess.run(
+                ["git", "-C", str(repo), *args],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        git("init", "-q")
+        git("symbolic-ref", "HEAD", "refs/heads/main")
+        git("config", "user.email", "test@example.com")
+        git("config", "user.name", "Test")
+        (repo / "base.txt").write_text("base\n", encoding="utf-8")
+        git("add", "base.txt")
+        git("commit", "-q", "-m", "base on main")
+        git("checkout", "-q", "-b", task_id)
+        (repo / f"{task_id}.txt").write_text("feature\n", encoding="utf-8")
+        git("add", f"{task_id}.txt")
+        git("commit", "-q", "-m", f"work for {task_id}")
+        git("checkout", "-q", "main")
+        return repo
+
+    def test_merge_resolves_feature_branch_from_task_not_checkout(self):
+        """Regression: the merge source is the task's branch, not the checkout.
+
+        The bug ran `aet ship merge` from a checkout on main, so the source
+        resolved to "main" and main was merged into main (a no-op) while the task
+        was still recorded as merged. cmd_merge must resolve the branch from the
+        task id.
+        """
+        os.chdir(self._init_repo_with_task_branch("t1"))
+        captured = {}
+
+        def fake_merge(target_branch, feature_branch, dry_run):
+            captured["target"] = target_branch
+            captured["feature"] = feature_branch
+            return (True, "merged", "abc123")
+
+        gate_result = ship.GateResult(
+            ok=True,
+            pr_base="origin/main",
+            rebased=False,
+            scope_audit=[],
+            dry_run=False,
+            message="Gate passed.",
+        )
+        with patch.object(ship, "_run_gate", return_value=gate_result), \
+             patch.object(ship, "_check_release_guard", return_value=None), \
+             patch.object(ship, "_is_monolithic_commit", return_value=False), \
+             patch.object(ship, "_has_merge_conflicts", return_value=(False, "")), \
+             patch.object(ship, "_merge_into_target", side_effect=fake_merge), \
+             patch.object(ship.aet_state, "cmd_record_merge", return_value=0):
+            rc = ship.cmd_merge(
+                argparse.Namespace(
+                    plan=str(self.plan_path), branch="main", dry_run=False
+                )
+            )
+        self.assertEqual(rc, 0)
+        # The task branch — never the "main" checkout — is what gets merged.
+        self.assertEqual(captured["feature"], "t1")
+        self.assertEqual(captured["target"], "main")
+
+    def test_resolve_feature_branch_uses_task_id_not_checkout(self):
+        """_resolve_feature_branch returns the task's branch (HEAD is on main),
+        and fails closed (None) for an unknown task rather than the checkout."""
+        os.chdir(self._init_repo_with_task_branch("t1"))
+        self.assertEqual(ship._resolve_feature_branch("t1"), "t1")
+        self.assertIsNone(ship._resolve_feature_branch("no-such-task"))
+
+    def test_merge_refuses_self_merge(self):
+        """A resolved feature branch equal to the target aborts before any merge."""
+        with patch.object(ship, "_resolve_feature_branch", return_value="main"), \
+             patch.object(ship, "_merge_into_target") as merge_mock, \
+             patch.object(ship.aet_state, "cmd_record_merge") as close_mock:
+            rc = ship.cmd_merge(
+                argparse.Namespace(
+                    plan=str(self.plan_path), branch="main", dry_run=False
+                )
+            )
+        self.assertNotEqual(rc, 0)
+        merge_mock.assert_not_called()
+        close_mock.assert_not_called()
+
+    def test_merge_fails_closed_when_branch_unresolvable(self):
+        """When no branch resolves for the task, refuse rather than record a
+        merge that did not happen."""
+        with patch.object(ship, "_resolve_feature_branch", return_value=None), \
+             patch.object(ship, "_merge_into_target") as merge_mock, \
+             patch.object(ship.aet_state, "cmd_record_merge") as close_mock:
+            rc = ship.cmd_merge(
+                argparse.Namespace(
+                    plan=str(self.plan_path), branch="main", dry_run=False
+                )
+            )
+        self.assertNotEqual(rc, 0)
+        merge_mock.assert_not_called()
         close_mock.assert_not_called()
 
 
@@ -270,6 +385,10 @@ class TestShipMergeIntoTarget(unittest.TestCase):
                 "",
             ),
             ("git", "-C", str(worktree_path), "push", "origin", "dev"): (0, "", ""),
+            (
+                "git", "-C", str(worktree_path),
+                "merge-base", "--is-ancestor", "feat-001", "dev",
+            ): (0, "", ""),
             ("git", "worktree", "remove", "--force", str(worktree_path)): (0, "", ""),
         }
         commands: list[tuple[str, ...]] = []
@@ -324,6 +443,10 @@ class TestShipMergeIntoTarget(unittest.TestCase):
                 "",
             ),
             ("git", "-C", existing, "push", "origin", "dev"): (0, "", ""),
+            (
+                "git", "-C", existing,
+                "merge-base", "--is-ancestor", "feat-001", "dev",
+            ): (0, "", ""),
         }
         commands: list[tuple[str, ...]] = []
 
@@ -343,6 +466,51 @@ class TestShipMergeIntoTarget(unittest.TestCase):
         self.assertFalse(
             any(c[1] == "worktree" and c[2] == "add" for c in commands)
         )
+
+    def test_merge_fails_closed_when_branch_not_ancestor(self):
+        """Regression: a merge that leaves the feature branch un-incorporated (a
+        silent no-op) fails closed instead of reporting success."""
+        existing = "/repo/.worktrees/dev"
+        responses = {
+            ("git", "worktree", "list", "--porcelain"): (
+                0,
+                f"worktree {existing}\nbranch refs/heads/dev\n",
+                "",
+            ),
+            ("git", "-C", existing, "checkout", "dev"): (0, "", ""),
+            ("git", "-C", existing, "pull", "origin", "dev"): (0, "", ""),
+            (
+                "git",
+                "-C",
+                existing,
+                "merge",
+                "--no-ff",
+                "-m",
+                "Merge feat-001 into dev",
+                "feat-001",
+            ): (0, "", ""),
+            ("git", "-C", existing, "rev-parse", "HEAD"): (0, "merge-commit-sha\n", ""),
+            ("git", "-C", existing, "push", "origin", "dev"): (0, "", ""),
+            # The branch did NOT end up an ancestor — the no-op merge the bug produced.
+            (
+                "git", "-C", existing,
+                "merge-base", "--is-ancestor", "feat-001", "dev",
+            ): (1, "", ""),
+        }
+
+        def mock_run(cmd, **kwargs):
+            args = tuple(cmd)
+            if args in responses:
+                rc, out, err = responses[args]
+                return MockResult(rc, out, err)
+            return MockResult(1, "", f"unexpected: {cmd!r}")
+
+        with patch.object(ship.subprocess, "run", side_effect=mock_run):
+            ok, msg, merge_commit = ship._merge_into_target("dev", "feat-001", False)
+
+        self.assertFalse(ok)
+        self.assertIsNone(merge_commit)
+        self.assertIn("not an ancestor", msg)
 
 
 if __name__ == "__main__":
