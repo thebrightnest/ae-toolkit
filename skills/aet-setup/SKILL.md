@@ -153,24 +153,12 @@ Create/modify files. Always:
 
 ### Step 6: Configure Task Backend
 
-Run `aet configure` to write `.agents/aet-config.json`:
+Run `aet configure --guided` to write the AET config in two questions:
 
-- `task_backend`: `git-refs` (default) or `json` (documented opt-out for non-git or unconfigured contexts). A forge is never a storage backend.
-- Projections are configured on the orthogonal `projections` axis:
+1. **Scope** — `team` writes `.agents/aet-config.json` (committed with the repo); `shadow` writes `~/.aet/{slug}/config.json` (nothing committed).
+2. **Integration mode** — `pr-per-task` or `single-pr`.
 
-  ```json
-  {
-    "task_backend": "git-refs",
-    "projections": [
-      { "type": "github", "repo": "owner/name", "label_prefix": "aet" }
-    ]
-  }
-  ```
-
-- Projection failures are caught and warned by the dispatcher; storage writes remain fail-closed.
-- Backend switches are forward-only; history is not migrated.
-
-Schema: `task_backend` ∈ {`git-refs`, `json`}, optional `projections` list. See `aet-work/references/github-backend.md` for the label contract, `gh` requirements, and sync behavior.
+The guided flow detects existing config, shows current values, and asks before overwriting. In unattended contexts (`AET_EXECUTION_MODE=unattended` or `--scope`/`--integration-mode` flags), it skips prompts and writes directly. The writer sets `task_backend: git-refs` by default; projections are configured on the orthogonal `projections` axis. See `aet-work/references/github-backend.md` for the label contract and sync behavior.
 
 ### Step 7: Validate
 
