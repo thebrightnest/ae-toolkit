@@ -73,18 +73,21 @@ docs_sync_reason: this plan IS the documentation deliverable (R-8, R-9, R-10) pl
 
 ## Task List
 
-1. Finalize ADR-048 (written at planning time; cross-check against as-built
+1. ✓ Finalize ADR-048 (written at planning time; cross-check against as-built
    behavior and correct any drift) — S (traces: R-8)
-2. CONVENTIONS.md config section rewrite (modes, chain, typo fix,
+2. ✓ CONVENTIONS.md config section rewrite (modes, chain, typo fix,
    branch-not-worktree language) — M (traces: R-8, R-10)
-3. `docs/upgrades/` guide + README upgrades table entry — S (traces: R-8)
-4. aet-work + aet-ship skill updates (both modes, no `origin/main`
+3. ✓ `docs/upgrades/` guide + README upgrades table entry — S (traces: R-8)
+4. ✓ aet-work + aet-ship skill updates (both modes, no `origin/main`
    hardcoding, stale backend claim removed, `configure-backend` renamed to
-   `aet configure`) — M (traces: R-9, R-10)
-5. CONTEXT.md vocabulary entries (Team Config, Shadow Mode, Config Slug vs
+   `aet configure`) — M (traces: R-9, R-10) [Changed: review-stage sweep also
+   removed residual `origin/main` from `skills/aet-ship/references/squash-merge-handling.md`,
+   `skills/aet-work/references/migration-aet-state.md`, and
+   `skills/aet-work/references/upgrading-existing-project.md`]
+5. ✓ CONTEXT.md vocabulary entries (Team Config, Shadow Mode, Config Slug vs
    Project Slug) + remaining filename sweep (`docs/telemetry-guide.md`,
    `docs/use-cases.md`, aet-setup skill references) — S (traces: R-8)
-6. Verify every command cited in the touched docs parses (`--help` surface) —
+6. ✓ Verify every command cited in the touched docs parses (`--help` surface) —
    S (traces: R-10)
 7. Merge branch to main and verify integration — S [Deferred: ship stage]
 
@@ -125,5 +128,5 @@ Revert the merge commit; documentation returns to describing v1.5.0 behavior
 
 ---
 
-_Stage: reviewed_
-_Next step: run `aet-sync-docs`_
+_Stage: synced_
+_Next step: run `aet-ship`_
