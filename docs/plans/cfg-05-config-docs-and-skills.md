@@ -7,7 +7,7 @@ blocked_by:
   - cfg-03-cli-surface-fixes
   - cfg-04-guided-setup
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: documentation and skill content only; no code or write surface (epi-11 precedent)
 docs_sync: required
@@ -125,5 +125,5 @@ Revert the merge commit; documentation returns to describing v1.5.0 behavior
 
 ---
 
-_Stage: plan-approved_
+_Stage: merged_
 _Next step: run `aet-work`_
