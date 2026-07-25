@@ -43,7 +43,7 @@ aet status
 
 | Stored state     | Likely expected status | Cause                                  |
 | ---------------- | ---------------------- | -------------------------------------- |
-| `merged`         | `in-progress`          | Branch not yet on `origin/main`        |
+| `merged`         | `in-progress`          | Branch not yet on the resolved trunk branch |
 | `awaiting_merge` | `in-progress`          | Pipeline finished but PR not merged    |
 | `merge_verified` | `merged`               | Legacy alias; normalized automatically |
 | `in_progress`    | `planned`              | Worktree removed, branch deleted       |

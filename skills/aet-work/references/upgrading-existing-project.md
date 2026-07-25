@@ -81,7 +81,7 @@ This re-ingests every `docs/plans/*.md` using the new frontmatter contract and n
 
 ### 6. Record merges for already-merged branches
 
-For any task whose branch is already merged to `origin/main` but the queue still shows it as active:
+For any task whose branch is already merged to the resolved trunk branch but the queue still shows it as active:
 
 ```bash
 aet state record-merge <task-id> .agents/work-queue.json

@@ -1,5 +1,7 @@
 # Squash-Merge Handling
 
+In this repo the trunk branch is `main`; substitute `<trunk>` with the branch reported by `aet setup verify`.
+
 ## When This Applies
 
 Use this fallback when `gh` is unavailable, the remote is not GitHub, or `gh pr view` returns no `mergeCommit` data. The primary verification path uses the GitHub API; this document covers the heuristic fallback.
@@ -9,16 +11,16 @@ Use this fallback when `gh` is unavailable, the remote is not GitHub, or `gh pr 
 ### 1. Capture the branch diff
 
 ```bash
-MERGE_BASE=$(git merge-base HEAD origin/main)
+MERGE_BASE=$(git merge-base HEAD origin/<trunk>)
 BRANCH_DIFF=$(git diff $MERGE_BASE..HEAD)
 ```
 
-### 2. Search recent `origin/main` commits
+### 2. Search recent `origin/<trunk>` commits
 
-Check the last N commits on `origin/main` for a matching diff. A reasonable default is N=20:
+Check the last N commits on `origin/<trunk>` for a matching diff. A reasonable default is N=20:
 
 ```bash
-for commit in $(git rev-list --max-count=20 origin/main); do
+for commit in $(git rev-list --max-count=20 origin/<trunk>); do
   COMMIT_DIFF=$(git diff ${commit}^..${commit})
   if [ "$BRANCH_DIFF" = "$COMMIT_DIFF" ]; then
     echo "Match found: $commit"
@@ -35,7 +37,7 @@ done
 ## Limitations
 
 - **False positives:** Two unrelated changes can produce identical diffs (rare but possible with small changes).
-- **Amended commits:** If the squash commit was amended on `origin/main`, the diff may no longer match exactly.
+- **Amended commits:** If the squash commit was amended on `origin/<trunk>`, the diff may no longer match exactly.
 - **Partial squash:** If only some commits from the branch were squashed, the diff comparison will mismatch.
 - **Large diffs:** Very large diffs can cause performance issues in the comparison loop.
 
