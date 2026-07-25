@@ -309,6 +309,31 @@ The aet-setup skill and reference docs were updated to describe the guided step.
 - R-8, R-9 remaining scope, and R-10 remain deferred from the prior divergence
   summary.
 
+## Divergence Summary (cfg-05)
+
+*Recorded: 2026-07-25 — Branch: cfg-05-config-docs-and-skills*
+
+`cfg-05-config-docs-and-skills` implemented the remaining deferred R-8, R-9,
+and R-10 scope: config docs, skills, upgrade guide, and ADR-048 cross-check.
+
+### Changed from plan
+
+- **Task 4 (aet-work + aet-ship skill updates):** A review-stage sweep removed
+  additional residual `origin/main` references from
+  `skills/aet-ship/references/squash-merge-handling.md`,
+  `skills/aet-work/references/migration-aet-state.md`, and
+  `skills/aet-work/references/upgrading-existing-project.md` beyond the initial
+  implementation commit.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- **Task 7 (merge branch to main and verify integration):** Deferred to the
+  ship stage.
+
 ---
 
 *Stage: synced*

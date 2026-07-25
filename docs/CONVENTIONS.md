@@ -68,52 +68,89 @@ Rules:
 - The canonical installer is `aet setup link`, implemented in `src/aet/cli/setup.py` and exposed through the installed console script (`aet = "aet.cli:main"`). It symlinks `aet` into `~/.local/bin` (or `AET_BIN_DIR`).
 - `make install-skills` in this repo installs the package editable and runs `aet setup link` automatically for the local development workflow.
 
-## AET Backend Configuration
+## AET Configuration
 
-`aet-work` reads its backend/mode config through an external-first precedence so that AET can run without committing any AET _config_ to a shared repo.
+`aet-work` reads its backend and integration config through an external-first
+precedence chain so that AET can run without committing any AET _config_ to a
+shared repo. ADR-048 records the two-layer model and the rename from the legacy
+`.agents/aet-work.json` file.
 
 ### Resolution Order
 
 Config is resolved in this order; the first source that exists wins:
 
 1. `AET_WORK_CONFIG` environment variable (path to a JSON config file)
-2. `~/.aet/{project-slug}/config.json`
-3. In-tree `.agents/aet-work.json`
-4. Built-in defaults (`{"task_backend": "json"}`)
+2. `~/.aet/{config-slug}/config.json` (shadow / personal layer)
+3. In-tree `.agents/aet-config.json` (team layer)
+4. Built-in defaults (`{"task_backend": "git-refs"}`)
 
-`{project-slug}` is derived the same way as telemetry and evidence paths (see `aet-work/lib/project_id.py`). `AET_PROJECT_ID` or `AET_REPO_SLUG` override the derived slug.
+`{config-slug}` is the main-worktree identity derived by `derive_config_slug()`;
+it drops the worktree label so one personal config serves every linked worktree
+of the same repo. `AET_PROJECT_ID` or `AET_REPO_SLUG` override the derived slug.
+The in-tree file is resolved against the repository root
+(`git rev-parse --show-toplevel`), never the process cwd.
 
-### Non-Invasive Setup
+### Adoption Modes
 
-For projects whose owners cannot enforce AET on the whole team, keep AET config out of the repo entirely:
+| Mode  | Where config lives                    | Best for                                      |
+| ----- | ------------------------------------- | --------------------------------------------- |
+| Team  | `.agents/aet-config.json` (committed) | Whole team shares one backend/mode setup.     |
+| Shadow | `~/.aet/{config-slug}/config.json`   | Solo adoption on a shared repo; zero footprint. |
+
+Use `aet configure --guided` to choose the mode and integration mode in two
+questions; the command writes the file in the right place with valid values.
+Direct writes use `--scope project` for the team file or `--scope user` for the
+shadow file. Guided mode exposes the same choice as `--scope team|shadow`.
+
+### Shadow Mode Setup
+
+Keep AET config out of the repo entirely:
 
 ```bash
-aet configure-backend --external-config
+aet configure --guided --scope shadow --integration-mode pr-per-task
 ```
 
-This writes config to `~/.aet/{project-slug}/config.json` and touches nothing inside the repo. Plans, PRDs, and other project artifacts remain versioned in `docs/` as usual; only the AET backend/mode config leaves version control.
+This writes config to `~/.aet/{config-slug}/config.json` and touches nothing
+inside the repo. Plans, PRDs, and other project artifacts remain versioned in
+`docs/` as usual; only the AET backend/mode config leaves version control.
 
-### In-Tree Setup
+### Team Mode Setup
 
-For self-hosted or team-wide AET adoption, write config in-tree as before:
+For self-hosted or team-wide AET adoption, commit the config in-tree:
 
 ```bash
-aet configure-backend
+aet configure --guided --scope team --integration-mode pr-per-task
 ```
 
-This writes `.agents/aet-work.json`. Because reads are external-first, an external config (if present) will still take precedence.
+This writes `.agents/aet-config.json`. Because reads are external-first, an
+external config (if present) will still take precedence.
 
-### Branch Model
+### Upgrading from the Legacy File
 
-Three settings control how AET maps tasks to branches and merges. Config values are resolved external-first, just like `task_backend`.
+If the repo contains only the legacy `.agents/aet-work.json` file, any
+config-reading command fails closed and names the migration command:
+
+```bash
+aet configure --migrate
+```
+
+`--migrate` renames the file to `.agents/aet-config.json` (using `git mv` when
+the file is tracked) and refuses to overwrite an existing new file.
+
+### Branch / Integration Model
+
+Three settings control how AET maps tasks to branches and merges. Config values
+are resolved external-first, just like `task_backend`.
 
 | Setting              | Meaning                                                                 |
 | -------------------- | ----------------------------------------------------------------------- |
 | `trunk_branch`       | The final merge target for every task (e.g., `main`, `master`).         |
-| `integration_branch` | The parent branch for feature worktrees and the base for stacked work.  |
+| `integration_branch` | The parent branch for feature work and the base for stacked work.       |
 | `integration_mode`   | `pr-per-task` (default) or `single-pr`.                                 |
 
-`aet setup verify` prints the resolved `trunk_branch` and how it was derived — `config`, `detected` from `refs/remotes/origin/HEAD`, or `fallback` to `main`.
+`aet setup verify` prints the resolved `trunk_branch`, `integration_branch`, and
+`integration_mode` with provenance — `config`, `detected` from
+`refs/remotes/origin/HEAD`, or `fallback` to `main`.
 
 #### Resolution Order
 
@@ -125,36 +162,51 @@ Three settings control how AET maps tasks to branches and merges. Config values 
 
 **`integration_branch`** is resolved in this order:
 
-1. `--base-branch` CLI flag
+1. `--base` CLI flag
 2. `AET_WORK_BASE_BRANCH` environment variable
 3. `integration_branch` in config
 4. `trunk_branch` (via the same trunk resolution above)
 
-**`integration_mode`** is resolved from config only; it defaults to `pr-per-task` and must be one of `pr-per-task` or `single-pr`.
+**`integration_mode`** is resolved from config only; it defaults to `pr-per-task`
+and must be one of `pr-per-task` or `single-pr`.
 
-#### Scenario B: One Engineer, Shared Repo, Plans on a Feature Branch, `single-pr`
+This is a branch/integration model, not a worktree model. Worktrees are a
+mechanical implementation detail; the integration branch is the semantic input.
 
-You want to keep all plan updates on one long-running branch and ship them through a single PR, while still using AET's queue and state machine locally.
+#### Scenario: One Engineer, Shared Repo, Plans on a Feature Branch, `single-pr`
 
-1. Create a shared AET config in your personal `~/.aet` space so the repo stays free of AET config:
+You want to keep all plan updates on one long-running branch and ship them
+through a single PR, while still using AET's queue and state machine locally.
+
+1. Create a shadow AET config so the repo stays free of AET config:
 
    ```bash
-   aet configure-backend --external-config
+   aet configure --guided --scope shadow --integration-mode single-pr
    ```
 
-2. Edit `~/.aet/{project-slug}/config.json` to set `single-pr` mode and point `integration_branch` at the long-running feature branch:
+2. Edit `~/.aet/{config-slug}/config.json` to point `integration_branch` at the
+   long-running feature branch:
 
    ```json
    {
-     "task_backend": "json",
+     "task_backend": "git-refs",
      "integration_mode": "single-pr",
      "integration_branch": "docs-roadmap"
    }
    ```
 
-3. Leave `trunk_branch` unset so it resolves from `refs/remotes/origin/HEAD` (or set it explicitly to `main`).
+3. Leave `trunk_branch` unset so it resolves from `refs/remotes/origin/HEAD`
+   (or set it explicitly to `main`).
 
-4. Run plans on the `docs-roadmap` branch. `aet-work` will use `docs-roadmap` as the worktree base, and `aet-ship` will target `main` as the final merge destination. `aet setup verify` shows exactly which trunk the current checkout resolves to.
+4. Run plans on the `docs-roadmap` branch:
+
+   ```bash
+   aet run --base docs-roadmap
+   ```
+
+   `aet-work` uses `docs-roadmap` as the worktree base, and `aet-ship` targets
+   the resolved trunk as the final merge destination. `aet setup verify` shows
+   exactly which trunk the current checkout resolves to.
 
 ## Planning Artifact Directories
 

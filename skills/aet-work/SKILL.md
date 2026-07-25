@@ -70,60 +70,87 @@ The `git-refs` backend carries the equivalent protection. Its envelope ref (`ref
 2. User runs `aet sprint add docs/plans/FEAT-001.md` → task appears in queue as `ready` (or `blocked` if it has pending blockers).
 3. `aet next` or `aet run` transitions it through `in_progress` and its stage sub-states.
 4. Task reaches `awaiting_merge`.
-5. PR is opened and merged.
-6. `aet-ship` verifies the merge commit is on `origin/main`.
+5. PR is opened and merged into the resolved trunk branch.
+6. `aet-ship` verifies the merge commit is on the resolved trunk branch.
 7. `aet-ship` sets plan `status: merged`, appends closure to `.agents/work-history.jsonl`, and removes the task from `.agents/work-queue.json`.
 
 ## Task Backends
 
-`aet` routes queue I/O through a pluggable backend. The default JSON backend preserves today's behavior exactly; the optional GitHub Issues adapter mirrors tasks as issues for teams that want human-visible work tracking.
+`aet` routes queue I/O through a pluggable storage backend. The default
+`git-refs` backend stores queue state in git refs; the `json` backend stores it
+in `.agents/work-queue.json` for non-git contexts.
 
 ### Configuration
 
-Backends are configured in `.agents/aet-work.json`:
+Backends are configured in `.agents/aet-config.json` (team mode) or
+`~/.aet/{config-slug}/config.json` (shadow mode). Use `aet configure --guided`
+to create the file in the right place:
+
+```bash
+aet configure --guided --scope team --integration-mode pr-per-task
+```
+
+Valid values for `task_backend` are `git-refs` (default) and `json`. Run
+`aet-setup` (or `aet configure`) to write this file.
+
+### git-refs backend
+
+The default backend stores the active queue in git refs under `refs/aet/meta/`
+and the optional execution log in `.agents/work-history.jsonl`. No GitHub
+access is required.
+
+### json backend
+
+The local JSON backend stores the active queue in `.agents/work-queue.json` and
+the optional execution log in `.agents/work-history.jsonl`. Use this for
+non-git projects or while debugging the git-refs backend.
+
+### GitHub Issues projection
+
+GitHub Issues mirroring is configured on the orthogonal `projections` axis, not
+as a `task_backend` value. Add a projection entry to the same config file:
 
 ```json
 {
-  "task_backend": "json",
-  "github": {
-    "repo": "owner/repo",
-    "label_prefix": "aet"
-  }
+  "task_backend": "git-refs",
+  "integration_mode": "pr-per-task",
+  "projections": [
+    { "type": "github", "repo": "owner/repo", "label_prefix": "aet" }
+  ]
 }
 ```
 
-Valid values for `task_backend` are `json` (default) and `git-refs`. Run `aet-setup` (or `aet configure`) to write this file.
+AET states map to `aet:*` labels on the mirrored issues. `aet next` picks the
+next open issue labeled `aet:ready` when a GitHub projection is enabled.
 
-### JSON backend
+See [`references/github-backend.md`](references/github-backend.md) for the full
+label contract, `gh` CLI requirements, issue body format, and sync behavior.
 
-The local JSON backend stores the active queue in `.agents/work-queue.json` and the optional execution log in `.agents/work-history.jsonl`. This is the default and requires no external tooling.
+## Integration Modes
 
-### GitHub Issues backend
+`integration_mode` selects how tasks close:
 
-The GitHub backend keeps the same local JSON queue as the scheduling source of truth and mirrors each task as a GitHub issue. AET states map to `aet:*` labels:
+| Mode          | Behavior                                                              |
+| ------------- | --------------------------------------------------------------------- |
+| `pr-per-task` | Each task ships in its own PR to the resolved trunk branch (default). |
+| `single-pr`   | Tasks integrate into a shared epic/Integration Branch and ship together. |
 
-| AET state        | GitHub label         |
-| ---------------- | -------------------- |
-| `planned`        | `aet:planned`        |
-| `ready`          | `aet:ready`          |
-| `blocked`        | `aet:blocked`        |
-| `in_progress`    | `aet:in-progress`    |
-| `awaiting_merge` | `aet:awaiting-merge` |
-| `merged`         | `aet:merged`         |
-| `abandoned`      | `aet:abandoned`      |
-| `failed`         | `aet:failed`         |
+Configure the mode with `aet configure`:
 
-`aet next` picks the next open issue labeled `aet:ready` when GitHub mode is enabled. `aet queue sync` reconciles open issues with local plan files and treats manually closed issues as `abandoned`.
+```bash
+aet configure --integration-mode single-pr --scope user
+```
 
-### Backend switching
+The per-epic integration branch is a per-run input, not a config value. Use
+`--base` with `aet run` or `aet run-one`:
 
-Only one backend is active at a time. Switching backends is forward-only:
+```bash
+aet run --base feat/epic-name
+aet run-one --base feat/epic-name docs/plans/FEAT-001.md
+```
 
-- Active tasks and settled history are **not** migrated.
-- Issues or JSON records created under the previous backend are left untouched.
-- The new backend only manages work created after the switch.
-
-See [`references/github-backend.md`](references/github-backend.md) for the full label contract, `gh` CLI requirements, issue body format, and sync behavior.
+`aet setup verify` prints the resolved `trunk_branch`, `integration_branch`, and
+`integration_mode` with provenance.
 
 ## Commands
 
@@ -246,7 +273,7 @@ aet status
 
 ### Drift check
 
-Detect tasks marked terminal whose commits are not on `origin/main` — part of `aet state audit`.
+Detect tasks marked terminal whose commits are not on the resolved trunk branch — part of `aet state audit`.
 
 ```bash
 aet state audit
@@ -263,17 +290,17 @@ aet state transition FEAT-001 <current_status> abandoned --reason="duplicate"
 
 **Rules:**
 
-- Never mark a task `merged` without verifying its merge commit is on `origin/main`.
+- Never mark a task `merged` without verifying its merge commit is on the resolved trunk branch.
 - Never mark a task `done` manually; use `merged` or `abandoned`.
 - `merge_verified` is a legacy status; use `merged` instead.
 
 ## Queue Terminal Statuses
 
-| Status      | Meaning                             | Set by                 |
-| ----------- | ----------------------------------- | ---------------------- |
-| `merged`    | Code is verified on `origin/main`   | `aet-ship`             |
-| `abandoned` | Task explicitly cancelled           | `aet state transition` |
-| `failed`    | Pipeline failed; needs human review | Orchestrator           |
+| Status      | Meaning                                        | Set by                 |
+| ----------- | ---------------------------------------------- | ---------------------- |
+| `merged`    | Code is verified on the resolved trunk branch  | `aet-ship`             |
+| `abandoned` | Task explicitly cancelled                      | `aet state transition` |
+| `failed`    | Pipeline failed; needs human review            | Orchestrator           |
 
 ## Key Principles
 

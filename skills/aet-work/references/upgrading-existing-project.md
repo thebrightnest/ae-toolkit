@@ -81,7 +81,7 @@ This re-ingests every `docs/plans/*.md` using the new frontmatter contract and n
 
 ### 6. Record merges for already-merged branches
 
-For any task whose branch is already merged to `origin/main` but the queue still shows it as active:
+For any task whose branch is already merged to the resolved trunk branch but the queue still shows it as active:
 
 ```bash
 aet state record-merge <task-id> .agents/work-queue.json
@@ -123,7 +123,7 @@ or, for non-toolkit projects, the equivalent lint/test command.
 
 ## Worktree dependency warmup (optional)
 
-If your project has large dependency directories that are expensive to recreate in every worktree, you can declare them in `.agents/aet-work.json`:
+If your project has large dependency directories that are expensive to recreate in every worktree, you can declare them in `.agents/aet-config.json`:
 
 ```json
 {

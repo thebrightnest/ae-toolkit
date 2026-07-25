@@ -50,7 +50,16 @@ structural problems surfaced with real consumers (2026-07-24):
    trunk-based defaults.
 5. **A CLI writer.** `aet configure` (renamed atomically from
    `configure-backend` per ADR-039) writes any of the four config keys with
-   `--scope project|user`, validating values at write time.
+   `--scope project|user`, validating values at write time. A `--guided` flow
+   asks the two setup-time questions (scope as `team|shadow`, integration mode)
+   and writes a valid config without hand-editing JSON. `--migrate` performs
+   the git-aware rename from `.agents/aet-work.json` to `.agents/aet-config.json`.
+6. **Per-run branch override.** `aet run` and `aet run-one` accept and forward
+   `--base <branch>` to the orchestrator, so the per-epic integration branch
+   remains a runtime input (ADR-044) and is reachable from the installed CLI.
+7. **Inspectability.** `aet setup verify` prints the resolved `integration_mode`,
+   `integration_branch`, and `trunk_branch` with provenance (config / detected /
+   fallback).
 
 ## Consequences
 

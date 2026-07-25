@@ -47,7 +47,7 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
 
 2. **Pre-branch git hygiene:**
 
-   Before spawning the first task, the orchestrator ensures `main` is clean and synchronized with `origin/main`. If `main` is dirty, ahead, or behind, the orchestrator prints an actionable reason and halts before creating any worktrees. Main hygiene is a mechanical durability hard-stop: the loop halts in unattended mode too (ADR-027). Mutations to `.agents/work-queue.json` and `.agents/work-history.jsonl` are ignored by the dirty check because the orchestrator writes them as part of normal operation; the `.agents/work-queue.json.lock` and `.agents/work-queue.lease` sidecars are ignored too — they linger on disk by design (the lock file is never unlinked; the lease self-reclaims on the next mutation after a crash).
+   Before spawning the first task, the orchestrator ensures the trunk branch is clean and synchronized with its remote tracking branch. If the trunk is dirty, ahead, or behind, the orchestrator prints an actionable reason and halts before creating any worktrees. Trunk hygiene is a mechanical durability hard-stop: the loop halts in unattended mode too (ADR-027). Mutations to `.agents/work-queue.json` and `.agents/work-history.jsonl` are ignored by the dirty check because the orchestrator writes them as part of normal operation; the `.agents/work-queue.json.lock` and `.agents/work-queue.lease` sidecars are ignored too — they linger on disk by design (the lock file is never unlinked; the lease self-reclaims on the next mutation after a crash).
 
 3. **Invoke the unified orchestrator:**
 
@@ -153,7 +153,7 @@ Seal terminal tasks and remove their worktrees atomically. Repairs stale queue e
 
 7. **Stale worktree repair (universal):** For each remaining task with a `worktree` field, regardless of status:
    - If the directory does not exist, clear `worktree: null` via `aet state transition` (or direct JSON update if the task status is unchanged) and print `Repaired stale worktree field for {task_id}`
-   - If the directory exists but has 0 commits ahead of main (`git rev-list --count main..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
+   - If the directory exists but has 0 commits ahead of trunk (`git rev-list --count <trunk>..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
 8. Report archived, removed, repaired, and remaining worktrees
 
 For the full one-time upgrade procedure for older projects that predate the forward-only state model, see [`upgrading-existing-project.md`](upgrading-existing-project.md).
@@ -166,7 +166,7 @@ Reconcile stored state against git ground truth without mutating the queue. `aud
 
 1. Run `aet state audit .agents/work-queue.json`
 2. For each task, compute the expected status from git ground truth in order:
-   - `merged` — `branch` or `merge_commit` is an ancestor of `origin/main`
+   - `merged` — `branch` or `merge_commit` is an ancestor of the resolved trunk branch
    - `in-progress` — local `branch` exists
    - `unblocked` — `plan_file` exists, no local branch, and every task in `blocked_by` is terminal (`merged` or `abandoned`)
    - `blocked` — `plan_file` exists, no local branch, and some blocker is not terminal
@@ -215,20 +215,20 @@ Plan-drift detection checks only the active queue. Settled tasks are ignored; th
 
 ## Drift check
 
-Detect tasks marked `done` or `merged` whose commits are not on `origin/main`.
+Detect tasks marked `done` or `merged` whose commits are not on the resolved trunk branch.
 
 **Procedure:**
 
 1. Read `.agents/work-queue.json`
 2. Run `git fetch origin`
 3. For each task with status `done`, `merged`, or `merge_verified`:
-   a. If `merge_commit` is set and `git merge-base --is-ancestor <merge_commit> origin/main` passes, skip (verified)
-   b. If `branch` is set, run `git merge-base --is-ancestor <branch> origin/main`. If it fails, record as drifted
+   a. If `merge_commit` is set and `git merge-base --is-ancestor <merge_commit> <trunk>` passes, skip (verified)
+   b. If `branch` is set, run `git merge-base --is-ancestor <branch> <trunk>`. If it fails, record as drifted
    c. If neither `merge_commit` nor `branch` is available, record as unverifiable
 4. Report findings:
    - Drifted tasks: print task ID, title, and branch name
    - Unverifiable tasks: print task ID and note missing metadata
-   - If none: print `✅ No drift detected. All done/merged tasks are on origin/main.`
+   - If none: print `✅ No drift detected. All done/merged tasks are on <trunk>.`
 
 ## Marking tasks terminal
 
@@ -251,7 +251,7 @@ Mark a task as `merged` or `abandoned`. This is the only supported way to set a 
 
 **Rules:**
 
-- Never mark a task `merged` without verifying its merge_commit is on origin/main
-- Never mark a task `done` manually; use `merged` (if on main) or `abandoned` (if cancelled)
+- Never mark a task `merged` without verifying its merge_commit is on the resolved trunk branch
+- Never mark a task `done` manually; use `merged` (if on trunk) or `abandoned` (if cancelled)
 - Never mark a task `merge_verified`; it is normalized automatically to `merged`
 - Always use `aet state transition` instead of direct JSON mutation

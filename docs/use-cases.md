@@ -429,7 +429,7 @@ You have multiple projects running `aet-work` and want the toolkit to learn from
   → Writes per-task JSONL logs to ~/.aet/telemetry/{project-slug}/{date}/{run-id}/
 
 # Configure dependency warmup once per project
-edit .agents/aet-work.json
+edit .agents/aet-config.json
   → symlink_dependencies for node_modules, vendor, etc.
 
 # Mine the archive for systemic patterns
