@@ -1940,11 +1940,12 @@ class TestProcessGroupKill(unittest.TestCase):
         bin_dir = Path(repo_root) / "bin"
         bin_dir.mkdir()
         fake_kimi = bin_dir / "kimi"
+        helper = Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py"
         fake_kimi.write_text(
             "#!/usr/bin/env bash\n"
             "# ignore prompt flag and prompt\n"
-            f"python3 -c \"import time; MARKER='{marker}'; time.sleep(300)\" &\n"
-            f"exec python3 -c \"import time; MARKER='{marker}'; time.sleep(300)\"\n",
+            f"python3 '{helper}' 300 '{marker}' &\n"
+            f"exec python3 '{helper}' 300 '{marker}'\n",
             encoding="utf-8",
         )
         fake_kimi.chmod(0o755)
@@ -1959,7 +1960,7 @@ class TestProcessGroupKill(unittest.TestCase):
             )
             if result.returncode == 0 and result.stdout.strip():
                 return
-            time.sleep(0.2)
+            time.sleep(0.05)
         self.fail(f"Marker process {marker} did not start")
 
     def _wait_no_marker(self, marker: str, timeout: float = 15) -> None:
@@ -1971,7 +1972,7 @@ class TestProcessGroupKill(unittest.TestCase):
             )
             if result.returncode != 0 or not result.stdout.strip():
                 return
-            time.sleep(0.2)
+            time.sleep(0.05)
         self.fail(f"Marker process {marker} still alive")
 
     def _setup_plan_and_queue(self, repo_root: str, task_id: str) -> str:
@@ -2021,7 +2022,7 @@ class TestProcessGroupKill(unittest.TestCase):
                 cli_bin=fake_kimi,
                 isolation="minimal",
                 max_jobs=1,
-                task_timeout=2,
+                task_timeout=1,
                 heartbeat_interval=999,
                 on_failure="continue",
             )

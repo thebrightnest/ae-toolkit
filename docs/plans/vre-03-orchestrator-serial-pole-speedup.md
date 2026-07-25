@@ -72,11 +72,11 @@ docs_sync_reason: internal test-performance change with no user-facing behavior,
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Coverage: the task-3 measurement (serial-pole delta + full-suite wall clock + ≥ 10-run
+- [x] `make validate` passes
+- [x] Coverage: the task-3 measurement (serial-pole delta + full-suite wall clock + ≥ 10-run
   green streak) is the acceptance evidence; record the numbers on closure
-- [ ] R-trace coverage: R-5 by tasks 1, 2, 3; no unknown R-ids
-- [ ] No behavioral coverage lost: each edited test asserts the same conditions, only the wait
+- [x] R-trace coverage: R-5 by tasks 1, 2, 3; no unknown R-ids
+- [x] No behavioral coverage lost: each edited test asserts the same conditions, only the wait
   mechanism changes
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -85,8 +85,15 @@ docs_sync_reason: internal test-performance change with no user-facing behavior,
 Revert the merge commit; the affected tests return to their fixed-sleep waits. vre-02's
 subgroup markers are unaffected by the revert.
 
+## Measurements
+
+- Serial pole (process-group, `-n1`): ~85 s baseline → ~65 s after changes.
+- Full suite wall clock (`make test`, loadgroup): ~238 s baseline → ~93 s.
+- Green streak: 10 consecutive process-group runs passed (64–66 s each).
+- Full suite run: 1220 passed, 2 warnings, 118 subtests passed in 90.07 s.
+
 ---
 
 *Stage: merged*
 
-*Next step: run `aet run-one docs/plans/vre-03-orchestrator-serial-pole-speedup.md` (after vre-02 merges)*
+*Next step: none — merged to `origin/main`.*
