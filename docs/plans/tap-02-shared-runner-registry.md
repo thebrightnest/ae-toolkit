@@ -137,4 +137,5 @@ recorded in the `tap-01` re-baseline note.
 
 ---
 
-*Stage: plan-approved*
+*Stage: implemented*
+*Next step: run `aet-qa`*

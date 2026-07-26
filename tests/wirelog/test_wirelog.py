@@ -268,6 +268,44 @@ class TestExtractTestInvocations(unittest.TestCase):
         self.assertFalse(wirelog.is_test_command("git log --oneline | grep pytest"))
         self.assertFalse(wirelog.is_test_command("make testify"))
 
+    def test_shared_registry_widens_detection_without_losing_v1(self):
+        """Every v1 detection survives the registry move; the previously
+        missed shapes (`cd … &&`, path prefixes, wrappers, R-2 runners) are
+        now detected too — the extracted set is a superset of the old one."""
+        v1_commands = [
+            "pytest",
+            "python -m pytest tests/",
+            "python3 -m pytest tests/ -q",
+            "vitest run",
+            "jest",
+            "make test",
+            "make validate",
+            "npm test",
+            "cargo test",
+            "go test ./...",
+        ]
+        newly_detected = [
+            "cd /path/to/wt && make validate",
+            ".venv/bin/python -m pytest tests/ -q",
+            "source .venv/bin/activate && pytest",
+            "CI=true pytest tests/",
+            "npx vitest run",
+            "poetry run pytest tests/test_a.py",
+            "rspec",
+            "phpunit",
+            "php artisan test",
+            "dotnet test",
+            "gradle test",
+            "python -m unittest",
+        ]
+        lines = []
+        for i, command in enumerate(v1_commands + newly_detected):
+            lines.append(_tool_call_line(f"c{i}", command, 1784049800000 + i * 1000))
+            lines.append(_tool_result_line(f"c{i}", "ok", 1784049800500 + i * 1000))
+        session_dir = _write_session(self.root, {"main": lines})
+        invocations = wirelog.extract_test_invocations(session_dir)
+        self.assertEqual([inv["command"] for inv in invocations], v1_commands + newly_detected)
+
 
 if __name__ == "__main__":
     unittest.main()

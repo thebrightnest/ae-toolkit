@@ -288,6 +288,16 @@ class TestClassifyTestScope(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(telemetry.classify_test_scope(command), "unknown")
 
+    def test_make_scope_classification_unchanged_by_registry_move(self):
+        """Pins v1 make behaviour behind the shared registry; the make-target
+        scope correction belongs to tap-06, not to the registry move."""
+        for command in ("make test", "make validate", "make -j4 test"):
+            with self.subTest(command=command):
+                self.assertEqual(telemetry.classify_test_scope(command), "full-suite")
+        for command in ("make build", "make testify"):
+            with self.subTest(command=command):
+                self.assertEqual(telemetry.classify_test_scope(command), "unknown")
+
 
 class TestLearningCandidateRecord(unittest.TestCase):
     def test_learning_candidate_record_contains_required_fields(self):

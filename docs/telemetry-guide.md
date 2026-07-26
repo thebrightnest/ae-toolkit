@@ -62,6 +62,38 @@ with each run so terminal task history is preserved alongside execution logs.
 
 No external service is used. Logs stay on your local filesystem.
 
+## What counts as a test run
+
+Detection (which Bash calls in a session wire log are test invocations) and
+scope classification (`full-suite` / `impact` / `unknown`) are two readings of
+one parse. Both resolve commands through the shared runner registry in
+`src/aet/test_runners.py` — there is exactly one runner table, so a command
+the detector recognises is classifiable by construction.
+
+Before matching, the command is normalised:
+
+- compound commands are split on `&&`, `;`, `|`; leading setup segments
+  (`cd …`, `source …`, `. …`) are dropped and the last remaining segment is
+  the candidate;
+- leading `VAR=value` environment assignments are stripped;
+- a `*/bin/` path prefix on a recognised runner is reduced to the bare runner
+  name (`.venv/bin/python -m pytest` → `python -m pytest`); a path-prefixed
+  head that is not a recognised runner (`./run_tests.sh`) never matches;
+- runner wrappers are unwrapped a layer at a time: `poetry run`, `uv run`,
+  `bundle exec`, `npx` (with flags), `time`.
+
+The runner table then anchors on the normalised head: `pytest`,
+`python -m pytest`, `python -m unittest`, `vitest`, `jest`, `rspec`,
+`phpunit`, `php artisan test`, `dotnet test`, `gradle test`, `make` with a
+`test`/`validate` target, `npm test`, `npm run test`, `yarn test`,
+`pnpm test`, `cargo test`, `go test`.
+
+Anchoring is deliberate: a runner merely *mentioned* in an unrelated command
+(`grep -r pytest .`, `git commit -m "fix pytest"`, `echo "run pytest"`) does
+not match. Where normalisation is ambiguous the resolver declines to match —
+a missed run costs telemetry volume, but a wrong match would record a
+fabricated one.
+
 ## Enabling telemetry in a project
 
 1. Make sure the project has the latest AET skills installed:
