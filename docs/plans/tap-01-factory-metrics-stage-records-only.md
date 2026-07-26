@@ -94,7 +94,7 @@ docs_sync_reason: ADR-035's First-Pass Merge and Rework definitions are refined 
 
 ## Validation Steps
 
-- [ ] `make validate` passes
+- [x] `make validate` passes
 - [x] Coverage, in `tests/track_record/test_track_record_metrics.py`:
   - `test_rework_count_ignores_test_run_records_in_same_stage` (unit) — one stage record plus
     three `test_run` records in one stage yields `0`
@@ -136,5 +136,5 @@ Measured over the `aiskills/main` telemetry archive (2026-07-26):
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
