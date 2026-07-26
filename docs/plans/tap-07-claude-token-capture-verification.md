@@ -3,7 +3,7 @@ id: tap-07-claude-token-capture-verification
 size: S
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: parses a JSON envelope the CLI already writes to captured stdout; no new input source, no credential handling, and the bounded tail scan that limits parse cost is unchanged
 docs_sync: required
