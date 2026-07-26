@@ -76,8 +76,10 @@ def iter_telemetry_task_records(
 
 
 def _has_failed_stage(records: Iterable[dict[str, Any]]) -> bool:
-    """Return True if any stage/test_run record reports a failure."""
+    """Return True if any stage telemetry record reports a failure."""
     for record in records:
+        if record.get("type") != "stage":
+            continue
         if record.get("result") == "failure":
             return True
         if record.get("exit_code") not in (0, None):
@@ -101,9 +103,11 @@ def _stage_names(record: dict[str, Any]) -> list[str]:
 
 
 def _repeated_stage_count(records: Iterable[dict[str, Any]]) -> int:
-    """Return the number of stage/test_run records beyond the first per stage."""
+    """Return the number of stage telemetry records beyond the first per stage."""
     counts: dict[str, int] = {}
     for record in records:
+        if record.get("type") != "stage":
+            continue
         for stage in _stage_names(record):
             counts[stage] = counts.get(stage, 0) + 1
     return sum(max(0, count - 1) for count in counts.values())
@@ -132,7 +136,7 @@ def rework_count(
     """Return the total rework count for a task.
 
     Rework is the sum of:
-      - repeated stage/test_run records beyond the first per stage name
+      - repeated stage telemetry records beyond the first per stage name
       - history transitions with ``from == "failed"``
     """
     task_id = task.get("id")
@@ -206,8 +210,8 @@ def is_clean_merge(
     """Return True when ``task`` is a clean merge per the PRD definition.
 
     Clean merge = task reached ``merged`` (terminal), every required stage
-    verdict is ``pass``, no failed stage/test_run record exists, and no rework
-    (no re-entry from ``failed``, no repeated stage run).
+    verdict is ``pass``, no failed stage telemetry record exists, and no rework
+    (no re-entry from ``failed``, no repeated stage telemetry record).
     """
     if task.get("state") != "merged":
         return False

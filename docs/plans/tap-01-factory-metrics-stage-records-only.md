@@ -68,14 +68,14 @@ docs_sync_reason: ADR-035's First-Pass Merge and Rework definitions are refined 
 
 ## Task List
 
-1. Filter `_has_failed_stage` and `_repeated_stage_count` to `type == "stage"`, updating their
+1. [x] Filter `_has_failed_stage` and `_repeated_stage_count` to `type == "stage"`, updating their
    docstrings and `is_clean_merge`'s to name the record type they read — S (traces: R-12)
-2. Measure and record the re-baseline over the existing telemetry archive: first-pass-merge rate
+2. [x] Measure and record the re-baseline over the existing telemetry archive: first-pass-merge rate
    and rework distribution before/after, delta attributed per clause — S (traces: R-12)
-3. Update `CONTEXT.md` **First-Pass Merge** and **Rework** entries and the ADR-035 cross-reference
+3. [x] Update `CONTEXT.md` **First-Pass Merge** and **Rework** entries and the ADR-035 cross-reference
    to cite ADR-052 — S (traces: R-12)
-4. Tests (see Validation Steps) — S (traces: R-12)
-5. Merge branch to main and verify integration — S
+4. [x] Tests (see Validation Steps) — S (traces: R-12)
+5. [ ] Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -94,8 +94,8 @@ docs_sync_reason: ADR-035's First-Pass Merge and Rework definitions are refined 
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Coverage, in `tests/track_record/test_track_record_metrics.py`:
+- [x] `make validate` passes
+- [x] Coverage, in `tests/track_record/test_track_record_metrics.py`:
   - `test_rework_count_ignores_test_run_records_in_same_stage` (unit) — one stage record plus
     three `test_run` records in one stage yields `0`
   - `test_rework_count_still_counts_repeated_stage_records` (unit)
@@ -103,9 +103,9 @@ docs_sync_reason: ADR-035's First-Pass Merge and Rework definitions are refined 
   - `test_clean_merge_ignores_failed_test_run_record` (unit)
   - `test_clean_merge_still_fails_on_failed_stage_record` (unit)
   - `test_clean_merge_ignores_failed_test_run_of_either_provenance` (unit)
-- [ ] R-trace coverage: R-12 by tasks 1, 2, 3, 4; no unknown R-ids
-- [ ] Re-baseline figures recorded in the merge notes, with per-clause attribution
-- [ ] `aet desk --eligibility` and `aet metrics` run against the existing archive and report the
+- [x] R-trace coverage: R-12 by tasks 1, 2, 3, 4; no unknown R-ids
+- [x] Re-baseline figures recorded in the merge notes, with per-clause attribution
+- [x] `aet desk --eligibility` and `aet metrics` run against the existing archive and report the
       re-baselined figures without error
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -116,6 +116,25 @@ first-pass-merge rate returns to ≈1%. Nothing persists the derived numbers —
 computed at query time (ADR-035 item 5) — so the revert is complete and leaves no stamped state
 to unwind.
 
+## Re-baseline Notes
+
+Measured over the `aiskills/main` telemetry archive (2026-07-26):
+
+- Merged tasks with stage or `test_run` telemetry: 118 of 319 merged settled tasks.
+- First-pass-merge rate (telemetry clauses only): 0/118 (0.0%) before → 67/118 (56.8%) after.
+- Rework units: 632 before → 223 after (−409).
+- Per-clause attribution:
+  - Rework defect fix alone (stage-only rework, old failure clause): 49/118 (41.5%) first-pass,
+    223 rework.
+  - Failure-clause narrowing alone (old rework, stage-only failure): 0/118 (0.0%) first-pass,
+    632 rework.
+  - Combined: 67/118 (56.8%) first-pass, 223 rework.
+- Overall `aet metrics` projection (all 319 merged tasks): 0/319 (0.0%) → 67/319 (21.0%)
+  first-pass, rework 682 → 273.
+
+`aet desk --eligibility` and `aet metrics` both run against the archive without error.
+
 ---
 
-*Stage: plan-approved*
+*Stage: synced*
+*Next step: run `aet-ship`*
