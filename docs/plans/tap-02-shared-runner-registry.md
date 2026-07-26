@@ -137,5 +137,5 @@ recorded in the `tap-01` re-baseline note.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
