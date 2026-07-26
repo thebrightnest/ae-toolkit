@@ -136,5 +136,5 @@ Measured over the `aiskills/main` telemetry archive (2026-07-26):
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
