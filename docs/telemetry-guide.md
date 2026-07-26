@@ -10,11 +10,16 @@ reads the archive when you want cross-project analysis.
 When `aet-work` runs a task, the orchestrator writes directly to:
 
 ```
-~/.aet/telemetry/{project-slug}/{date}/{run-id}/
+~/.aet/telemetry/<main-worktree-dir>/<worktree-label>/{date}/{run-id}/
     ├── last-run.json
     ├── {task-id}.jsonl
     └── ...
 ```
+
+Task logs are therefore **five levels** below the archive root, not four: the
+`{project-slug}` spans the first *two* segments. A reader that treats it as one
+directory level (`{project-slug}/{date}/{run-id}/*.jsonl`) matches nothing and
+reports an empty archive rather than an error.
 
 The `{project-slug}` is worktree-based: `<main-worktree-dir>/<worktree-label>`,
 derived from the local checkout rather than the git remote. The primary

@@ -160,8 +160,8 @@ _Avoid_: calling it a task failure; adding it to the ADR-030 menu.
 ## Telemetry & Panel (ADR-012, ADR-019, ADR-022)
 
 **Telemetry Archive**:
-The user-level store of execution records at `~/.aet/telemetry/{project-slug}/{date}/{run-id}/` (override: `AET_TELEMETRY_ARCHIVE_DIR`).
-_Avoid_: "execution log" — that term is reserved for `.agents/work-history.jsonl`.
+The user-level store of execution records at `~/.aet/telemetry/<main-worktree-dir>/<worktree-label>/{date}/{run-id}/{task-id}.jsonl` (override: `AET_TELEMETRY_ARCHIVE_DIR`). Task logs sit **five** levels below the root because the `{project-slug}` (e.g. `aiskills/main`) spans the first two — see `docs/telemetry-guide.md`.
+_Avoid_: "execution log" — that term is reserved for `.agents/work-history.jsonl`; writing `{project-slug}` as a single path segment, which silently matches nothing.
 
 **Project Slug**:
 `<main-worktree-dirname>/<current-worktree-dirname>` (primary worktree labelled `main`, e.g. `aiskills/main`), derived by `derive_project_slug()` and shared by the telemetry archive and the gate-evidence reports tree (ADR-022). `AET_PROJECT_ID` overrides.

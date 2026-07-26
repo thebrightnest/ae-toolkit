@@ -1,6 +1,7 @@
 ---
 id: [plan-id]
 size: [S/M/L]
+work_class: [trivial/normal/critical]
 blocked_by:
   - [blocker-plan-id]
 pipeline: standard
@@ -14,6 +15,12 @@ docs_sync_reason: [one line]
 <!-- `status` is the plan lifecycle value (CONTEXT.md): one of `draft`,
 `approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, `abandoned`. -->
 
+<!-- `work_class` is the risk/impact dimension `aet metrics` buckets by
+(`plan_parser.py`): one of `trivial`, `normal`, `critical`. It is the only
+source of that value — an omitted key records `unclassified`, and a queue of
+unclassified tasks makes the per-class breakdown in `aet metrics` and
+`aet retro` permanently empty. Choose one; do not leave the placeholder. -->
+
 <!-- `pipeline` selects the orchestrator isolation mode. Size-based defaults:
      S → minimal, M → standard, L → standard or full. Override to standard/full
      for auth, data-model, API, dependency, or infrastructure changes.
@@ -22,7 +29,10 @@ docs_sync_reason: [one line]
 <!-- `security_review` / `docs_sync` route the aet-cso and aet-sync-docs
 pipeline gates at plan time: `required` (default) runs the stage; `skipped`
 skips it and must be paired with the one-line reason above. A missing key is
-treated as `required` (fail-safe — the stage runs). -->
+treated as `required` (fail-safe — the stage runs). `required` and `skipped`
+are the *only* accepted values — a conditional or hedged value such as
+`conditional` fails `aet plan validate`. If a stage's need depends on the
+outcome of the work, declare `required` and say so in the reason. -->
 
 # Plan: [Feature Name]
 
