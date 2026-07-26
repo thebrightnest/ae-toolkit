@@ -72,17 +72,19 @@ docs_sync_reason: the runner registry becomes the documented answer to "what cou
 
 ## Task List
 
-1. Add the runner registry module: runner table, command normalisation (separator split, `cd`/
+1. ✓ Add the runner registry module: runner table, command normalisation (separator split, `cd`/
    `source`/`.` prefix stripping, env assignments, path prefixes, wrapper unwrapping), and a
    resolve function returning the matched runner plus its arguments — M (traces: R-1, R-3)
-2. Extend the runner table with `rspec`, `phpunit`, `php artisan test`, `dotnet test`,
+   [Changed: `npm run`/`yarn`/`pnpm` are recognised as runner-table `test` forms rather than
+   unwrapped as generic wrappers — see PRD Divergence Summary]
+2. ✓ Extend the runner table with `rspec`, `phpunit`, `php artisan test`, `dotnet test`,
    `gradle test`, `python -m unittest` — S (traces: R-2)
-3. Rewrite `wirelog.is_test_command` to delegate to the registry; delete `_TEST_RUNNER_RES` — S
+3. ✓ Rewrite `wirelog.is_test_command` to delegate to the registry; delete `_TEST_RUNNER_RES` — S
    (traces: R-1, R-3)
-4. Rewrite `telemetry._test_runner_args` to delegate to the registry, preserving current `make`
+4. ✓ Rewrite `telemetry._test_runner_args` to delegate to the registry, preserving current `make`
    behaviour verbatim (its correction is `tap-06`); delete the duplicated runner list and its
    docstring note — S (traces: R-3)
-5. Tests (see Validation Steps) — M (traces: R-1, R-2, R-3)
+5. ✓ Tests (see Validation Steps) — M (traces: R-1, R-2, R-3)
 6. Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
@@ -105,8 +107,8 @@ docs_sync_reason: the runner registry becomes the documented answer to "what cou
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Coverage:
+- [x] `make validate` passes
+- [x] Coverage:
   - `test_detects_test_command_after_cd_and_separator` (unit) — `cd /path/to/wt && make validate`
   - `test_detects_test_command_after_source_and_dot_prefixes` (unit)
   - `test_detects_test_command_with_leading_env_assignments` (unit)
@@ -121,10 +123,10 @@ docs_sync_reason: the runner registry becomes the documented answer to "what cou
     there is one list, not two
   - `test_make_scope_classification_unchanged_by_registry_move` (unit) — pins current behaviour
     so `tap-06` owns the correction
-- [ ] R-trace coverage: R-1 by tasks 1, 3, 5; R-2 by tasks 2, 5; R-3 by tasks 1, 3, 4, 5; no
+- [x] R-trace coverage: R-1 by tasks 1, 3, 5; R-2 by tasks 2, 5; R-3 by tasks 1, 3, 4, 5; no
       unknown R-ids
-- [ ] For the new normalisation logic in `src/aet/test_runners.py`, tests above name the coverage
-- [ ] Replaying a captured kimi session fixture through `extract_test_invocations` yields a
+- [x] For the new normalisation logic in `src/aet/test_runners.py`, tests above name the coverage
+- [x] Replaying a captured kimi session fixture through `extract_test_invocations` yields a
       superset of the pre-change invocations — nothing previously detected is lost
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -137,5 +139,5 @@ recorded in the `tap-01` re-baseline note.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
