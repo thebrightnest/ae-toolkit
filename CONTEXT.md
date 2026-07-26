@@ -189,15 +189,21 @@ _Avoid_: conflating with the queue's **Live Set** (active tasks in `.agents/work
 **Incomplete Run (panel)**:
 A run with no `last-run.json` and stale archive activity — crashed, abandoned, or quiet mid-stage. Always rendered with its last-activity time, never as "success" or "crashed".
 
-## Factory Metrics (ADR-035)
+**Session Log**:
+The transcript the **agent CLI itself** writes for one stage session, outside AET — kimi's `~/.kimi-code/sessions/**/agents/*/wire.jsonl`, Claude Code's `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl`. AET reads it, never writes it; each adapter supplies its own reader (ADR-050). Source of **observed** **Test Run** records.
+_Avoid_: "wire log" as the general term (that is kimi's schema specifically); confusing it with the **Telemetry Archive** (AET's own store) or the **Execution Log** (`.agents/work-history.jsonl`).
+
+**Test Run (observed / claimed)**:
+A `test_run` telemetry record, carrying `source` to say which of two things it is. **Observed** (`"wire"`) — extracted from the **Session Log**: real command, real timestamps, real exit code, no test counts. **Claimed** (`"verdict"`) — derived from a passing QA verdict: test counts, but null timing and a `success` result true by construction. Duration, throughput, and pass-rate aggregates read observed records only. (ADR-051)
+_Avoid_: aggregating the two populations together; reading a claimed record's `exit_code: 0` as a measurement; inferring provenance from field signatures on new records (pre-2026-07-26 records are provenance-unknown and are not backfilled).
 
 **First-Pass Merge**:
-A settled task that reached `merged` with every verdict kind required by its plan's **Stage Routing Key** passing, no failed stage/test_run telemetry record, and no **Rework**. Computed retroactively from settled history + telemetry archive + gate evidence by one shared definition consumed by the desk, `aet metrics`, and the scoreboard. (ADR-035, refining ADR-028)
-_Avoid_: requiring verdicts for gates the plan routed to `skipped`; persisting a `first_pass` flag (derivation is query-side).
+A settled task that reached `merged` with every verdict kind required by its plan's **Stage Routing Key** passing, no failed **stage** telemetry record, and no **Rework**. Computed retroactively from settled history + telemetry archive + gate evidence by one shared definition consumed by the desk, `aet metrics`, and the scoreboard. (ADR-035, refining ADR-028; `test_run` clause removed by ADR-052)
+_Avoid_: requiring verdicts for gates the plan routed to `skipped`; persisting a `first_pass` flag (derivation is query-side); disqualifying on a failed **Test Run** record (a red TDD step is not a second pass — ADR-052).
 
 **Rework**:
-Per task, the count of repeated stage runs (stage telemetry records beyond the first per stage name) plus `failed → *` re-entry transitions. A task with zero rework is a candidate **First-Pass Merge**. (ADR-035)
-_Avoid_: counting `failure_signatures` as rework (a separate signal), or a second definition outside the shared counting core.
+Per task, the count of repeated **stage** telemetry records beyond the first per stage name, plus `failed → *` re-entry transitions. A task with zero rework is a candidate **First-Pass Merge**. (ADR-035; `test_run` records excluded by ADR-052)
+_Avoid_: counting `failure_signatures` as rework (a separate signal); a second definition outside the shared counting core; counting **Test Run** records — they carry a `stage` field, and grouping them by it once produced 418 phantom rework units across 127 tasks (ADR-052).
 
 **Cost per Merged Task**:
 The sum of a task's stage telemetry (`token_count` / `cost_estimate`) across the whole **Telemetry Archive** — cross-run — reported with explicit coverage counts. Null-honest: all-null stays null (Kimi `usd` is null by design), never estimated. Distinct from **Per-Task Cost**, which is the settling-run rollup stored on the ledger record for desk display. Analytics only, per ADR-031. (ADR-035)
@@ -212,4 +218,6 @@ _Avoid_: reading it from the ledger `cost` field (under-counts reworked tasks); 
 - “execution log” was used for the telemetry archive in panel docs. Resolved (2026-07-11, thp scope validation): **Execution Log** = `.agents/work-history.jsonl` only; the browsable store is the **Telemetry Archive** (panel README rewording lands with thp-05).
 - “failure class” was overloaded by the non-trunk integration PRD for engine-level integration outcomes. Resolved (2026-07-22, epi scope validation): **Failure Class** remains the five-value agent-session menu (ADR-030); engine-level integration outcomes are **Integration Failure**, a separate category outside triage and the Circuit Breaker.
 - “done” risked re-overloading by `single-pr` completion semantics. Resolved (2026-07-22, epi scope validation): the terminal state stays `merged`; which event it names is keyed by **Integration Mode** (see **Integrated**).
+- “test run” named two different things: a run AET measured from the agent's own transcript, and a run the QA agent said it did. Resolved (2026-07-26, tap scope validation): **Test Run** records carry `source` — **observed** (`wire`) vs **claimed** (`verdict`) — and are never aggregated together (ADR-051). Relatedly, the **Factory Metrics** stopped reading `test_run` records at all (ADR-052): they are intra-session events, and counting them punished visibility rather than measuring quality.
+- “wire log” was used generically for whatever transcript an agent CLI writes, while naming kimi's schema specifically. Resolved (2026-07-26, tap scope validation): the general term is **Session Log**; "wire log" refers to kimi's `wire.jsonl` format only, and each adapter supplies its own reader (ADR-050).
 - “project config” risked overloading the **Project Slug** when config resolution gained a worktree-independent identity. Resolved (2026-07-24, cfg scope validation): config resolution uses the **Config Slug** (main-worktree identity); the **Project Slug** keeps its worktree label for telemetry/reports only. The committed team config file is `.agents/aet-config.json` (renamed from `aet-work.json`); the external `~/.aet/{slug}/config.json` is the personal/**Shadow Mode** layer.

@@ -68,6 +68,9 @@ Do **not** write an ADR for:
 - [047 — Pipeline Mode Selection by Plan Size](047-pipeline-mode-by-plan-size.md)
 - [048 — Two-Layer Config Model: Committed Team File, External Shadow File](048-two-layer-config-model.md)
 - [049 — Validation Scope Is Derived from the Change Set, in Code](049-validation-scope-from-change-set.md)
+- [050 — Session-Log Extraction Is a Per-Adapter Extension Point](050-session-log-extraction-per-adapter.md)
+- [051 — `test_run` Records Carry Provenance](051-test-run-provenance.md)
+- [052 — Factory Metrics Read Stage Records, Not `test_run` Records](052-first-pass-merge-excludes-test-run-failures.md)
 
 ## Format
 
