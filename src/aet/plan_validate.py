@@ -43,6 +43,23 @@ PLAN_LIFECYCLE_STATUSES = frozenset(
 # Terminal plan statuses that end the lifecycle and satisfy blockers.
 TERMINAL_PLAN_STATUSES = frozenset({"merged", "abandoned"})
 
+# Mapping from frontmatter status to the set of footer stages that are
+# consistent with it. This prevents the dangerous case where a plan is queued
+# for implementation (status: queued) but its footer says it is already past
+# implementation (e.g. secure/synced), which causes the orchestrator to skip
+# aet-implement and advance straight to awaiting_merge.
+STATUS_STAGE_MAP: dict[str, frozenset[str]] = {
+    "draft": frozenset({"plan-draft"}),
+    "approved": frozenset({"plan-approved"}),
+    # queued means "ready for implementation" in the software workflow; the
+    # entry stage that carries aet-implement is plan-approved.
+    "queued": frozenset({"plan-approved"}),
+    "in_progress": frozenset({"plan-approved", "synced", "implemented"}),
+    "awaiting_merge": frozenset({"secure", "awaiting_merge", "synced"}),
+    "merged": frozenset({"merged"}),
+    "abandoned": frozenset({"abandoned"}),
+}
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -406,6 +423,23 @@ def scope_findings(plan: Path, repo_root: Path) -> list[Finding]:
 # ---------------------------------------------------------------------------
 
 
+def plan_footer_stage(plan: Path) -> str | None:
+    """Read the human-authored footer stage from a plan file, if present.
+
+    Returns the raw stage string (e.g. ``merged``, ``awaiting_merge``,
+    ``implemented``) or ``None`` when no footer stage is found.
+    """
+    for line in plan.read_text(errors="ignore").splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("_stage:") or stripped.lower().startswith(
+            "*stage:*"
+        ):
+            value = stripped.split(":", 1)[1].strip()
+            value = value.strip("_").strip("*").strip()
+            return value or None
+    return None
+
+
 def status_findings(plan: Path) -> list[Finding]:
     """Validate the plan ``status`` frontmatter lifecycle value.
 
@@ -418,6 +452,36 @@ def status_findings(plan: Path) -> list[Finding]:
         return []
     if not isinstance(status, str) or status not in PLAN_LIFECYCLE_STATUSES:
         return [Finding("status", plan, f"invalid status: {status}")]
+    return []
+
+
+def stage_status_findings(plan: Path) -> list[Finding]:
+    """Validate that the plan footer ``_Stage:`` matches the frontmatter ``status``.
+
+    Only runs when both fields are present, so legacy plans that lack one or
+    both are not forced to upgrade. The goal is to fail closed on the dangerous
+    inconsistency that caused E32 plans to be queued at ``_Stage: secure_``.
+    """
+    data = plan_parser.parse_frontmatter(plan)
+    status = data.get("status")
+    stage = plan_footer_stage(plan)
+
+    if status is None or stage is None:
+        return []
+
+    if not isinstance(status, str) or status not in STATUS_STAGE_MAP:
+        return []
+
+    allowed = STATUS_STAGE_MAP[status]
+    if stage not in allowed:
+        return [
+            Finding(
+                "stage-status",
+                plan,
+                f"status `{status}` is incompatible with footer `_Stage: {stage}_`; "
+                f"allowed stages: {', '.join(f'`{s}`' for s in sorted(allowed))}",
+            )
+        ]
     return []
 
 
@@ -467,6 +531,7 @@ def validate(
         findings.extend(rtrace_findings(plan, repo_root=repo_root, coverage=coverage))
         findings.extend(acceptance_findings(plan))
         findings.extend(status_findings(plan))
+        findings.extend(stage_status_findings(plan))
         if repo_root:
             findings.extend(scope_findings(plan, repo_root))
 
