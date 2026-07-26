@@ -112,6 +112,29 @@ The metrics stay **analytics-only** (ADR-031, ADR-035 item 4) and **retroactivel
   and by the stage-failure clause. Nothing here weakens a gate; it removes a proxy the gates
   already cover directly.
 
+## Re-baseline Measurement
+
+Measured over the `aiskills/main` telemetry archive after implementation (118 merged tasks with
+stage or `test_run` telemetry):
+
+| Clause | Before (stage + `test_run`) | After (stage records only) | Delta |
+| --- | --- | --- | --- |
+| Tasks passing both telemetry clauses | 0 (0.0%) | 67 (56.8%) | +67 |
+| Rework units | 632 | 223 | −409 |
+
+Per-clause attribution on the same corpus:
+
+- **Rework defect fix alone** (stage records only for rework, old failure clause): 49/118 (41.5%)
+  first-pass, 223 rework.
+- **Failure-clause narrowing alone** (old rework, stage records only for failure): 0/118 (0.0%)
+  first-pass, 632 rework.
+- **Combined change**: 67/118 (56.8%) first-pass, 223 rework.
+
+The overall `aet metrics` projection over all 319 merged settled tasks moves from 0/319 (0.0%) to
+67/319 (21.0%) first-pass, with rework falling from 682 to 273. These figures differ from the
+pre-implementation sample in the Context section because the sample was a narrower cross-project
+slice; the correction is of the same order and direction.
+
 ## Alternatives Considered
 
 - **Fix only the rework defect and keep the failure clause.** Rejected: it leaves the metric
