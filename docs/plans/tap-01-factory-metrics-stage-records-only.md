@@ -3,7 +3,7 @@ id: tap-01-factory-metrics-stage-records-only
 size: S
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: read-side analytics only; changes which telemetry record types a retroactive metric reads, adds no input, auth, data, or write surface, and no code path gates on the output (ADR-031, ADR-035 item 4)
 docs_sync: required
