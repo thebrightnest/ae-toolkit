@@ -109,8 +109,9 @@ agent is left with one literal command and no parameters to select.
 - **R-14**: ADR-004's consequence text, which states that `run` "spawns it as a background OS
   process, and waits for completion", is corrected — it was already made false by nc-06's
   daemonization, independent of this PRD.
-- **R-15**: CONTEXT.md gains glossary entries for `run id`, `detached run`, `follower`,
-  `stall timeout`, `wall backstop`, and `bounded report`. None are currently defined.
+- **R-15**: CONTEXT.md carries glossary entries for `run id`, `detached run`, `follower`,
+  `stall timeout`, `wall backstop`, and `bounded report` — added during scope validation.
+  They are verified against shipped behavior and corrected if drifted.
 
 ## User Stories
 
@@ -232,7 +233,7 @@ expresses what the operator wanted, it belongs on the surface.
 tuning* versus *what work is being done*. `--base` falls on the semantic side: under
 `single-pr` integration mode it names the per-epic integration branch, and the `aet-work`
 skill documents it explicitly as "a per-run input, not a config value"
-(`~/.claude/skills/aet-work/SKILL.md:145-150`). Removing it would break `single-pr` epic
+(`skills/aet-work/SKILL.md:144-150`). Removing it would break `single-pr` epic
 integration outright. It also cannot move onto `CLIAdapter` like the timeouts, since it
 varies per run rather than per provider. Any later cleanup that sweeps up "remaining run
 flags" must preserve it.
@@ -256,13 +257,12 @@ commands without removing human observability.
   interval. The prior operational workaround used 1800s for this repo. Whether that is the
   default for both adapters, or differs between them, should be set from observed data
   rather than assumed.
-- **Where does night-shift AFK execution get its fire-and-forget path?** Resolved partly:
+- ~~**Where does night-shift AFK execution get its fire-and-forget path?**~~ **Resolved:**
   `aet work` is a skill, not a CLI command — there is no `src/aet/cli/work.py`, and
-  `run`/`run-one` in `main.py` are the only spawners. So "detached stays internal to
-  `aet work`" cannot mean an internal CLI caller; the night-shift agent invokes the same
-  public command. If batch `aet run` becomes blocking, the night-shift session blocks for
-  the queue's full duration. That costs no tokens under R-2/R-3, but it is a behavioral
-  change to AFK mode that should be an explicit decision rather than a side effect.
+  `run`/`run-one` in `main.py` are the only spawners, so the night-shift agent invokes the
+  same public command. Batch `aet run` never blocks (R-2b): it returns immediately after
+  spawning, and the session observes the queue later via `--follow` (R-2c). AFK mode is
+  unchanged.
 
 ---
 

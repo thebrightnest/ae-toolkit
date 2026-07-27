@@ -34,8 +34,9 @@ never interpreted as instructions.
 ## Task List
 
 1. Define the report structure — per-stage status, duration, and exit code, plus an overall
-   result line — sourced from existing stage telemetry rather than by parsing `output.log` — M
-   (traces: R-3)
+   result line — sourced from the orchestrator's own stage telemetry records
+   (`telemetry.stage_record`, `orchestrator.py`), which are provider-neutral — never by
+   parsing `output.log` or any provider's stdout format — M (traces: R-3)
 2. Emit the report from the follower on completion for `run-one` and `aet run --follow` — S
    (traces: R-3)
 3. On failure, append a bounded excerpt of the failing stage capped at a fixed line count, with

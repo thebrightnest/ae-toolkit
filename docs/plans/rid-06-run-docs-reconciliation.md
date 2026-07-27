@@ -40,27 +40,31 @@ This plan runs last because it describes the finished behavior.
 ## Task List
 
 1. Rewrite the `aet run` / `aet run-one` sections of `.agents/commands/aet-work.md`: remove
-   `--foreground` from the flag list and the anti-patterns list, document blocking `run-one`
-   vs returning `run`, and describe `--follow` as waiting for a bounded report — S
+   `--foreground`, `--max-jobs`, `--isolation`, and `--stall-timeout` from the flag list,
+   remove `--foreground` from the anti-patterns list, document blocking `run-one` vs
+   returning `run`, and describe `--follow` as waiting for a bounded report — S
    (traces: R-13)
 2. Correct ADR-004's consequence text so it no longer claims `run` waits for completion,
    noting that daemonization (`nc-06`) and this PRD changed it — S (traces: R-14)
 3. Verify the CONTEXT.md **Run Supervision** entries (`Run`, `Run Id`, `Detached Run`,
    `Follower`, `Bounded Report`, `Stall Timeout`, `Wall Backstop`) match shipped behavior and
    correct any drift — S (traces: R-15)
-4. Update the `aet-work` skill's `run` / `run-one` sections if they reference removed flags — S
+4. Update the in-repo skill `skills/aet-work/`: `references/queue-commands.md` currently
+   documents `aet run --isolation standard --max-jobs 4` and `run-one --isolation standard`
+   and shell-backgrounds both commands — rewrite for the R-2/R-2b/R-2c behavior, and sweep
+   `SKILL.md` and the other references for any remaining mentions of removed flags — S
    (traces: R-13)
 5. Merge branch to main and verify integration — S
 
 ## Validation
 
-- `grep -rn -- "--foreground" .agents/ docs/adr/ ~/.claude/skills/aet-work/` returns no hits
-  outside historical plans and PRDs.
-- No live doc describes `--follow` as tailing or streaming.
+- `grep -rnE -- "--(foreground|max-jobs|isolation|stall-timeout)" .agents/ docs/adr/ skills/`
+  returns no hits presenting them as `run` / `run-one` flags outside historical plans and PRDs.
+- No live doc describes `--follow` as tailing or streaming, or instructs shell-backgrounding
+  `aet run` / `aet run-one`.
 - ADR-004 no longer states that `run` waits for completion.
 - CONTEXT.md's seven Run Supervision terms match the shipped commands.
-- Named tests: none — documentation-only. Verified by the greps above and by `make docs-lint`
-  if defined.
+- Named tests: none — documentation-only. Verified by the greps above and by `aet docs lint`.
 
 ---
 
