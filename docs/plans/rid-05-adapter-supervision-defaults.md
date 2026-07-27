@@ -4,7 +4,7 @@ size: M
 work_class: critical
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Changes the watchdog kill path and per-provider process supervision.
 docs_sync: required
