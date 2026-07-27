@@ -65,4 +65,5 @@ per-run inputs and must keep working.
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
