@@ -264,7 +264,18 @@ commands without removing human observability.
   spawning, and the session observes the queue later via `--follow` (R-2c). AFK mode is
   unchanged.
 
+## Divergence Summary
+
+*Recorded: 2026-07-27 — Branch: rid-02-shared-plan-arg-resolver*
+
+### Changed from plan
+
+- **R-11b `sprint`/`backlog` `.md` path resolution**: The shared resolver's ship semantics are
+  applied to `sprint` and `backlog`. A non-existent `.md` argument is returned unchanged instead
+  of falling through to a `.md.md` lookup. This matches the scope-validation decision to adopt
+  ship's semantics and is covered by `tests/queue/test_sprint_backlog_parity.py`.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*

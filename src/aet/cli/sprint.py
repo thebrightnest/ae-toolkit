@@ -19,7 +19,11 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend, resolve_config  # noqa: E402
-from aet.plan_parser import new_task_from_plan, stage_from_plan  # noqa: E402
+from aet.plan_parser import (  # noqa: E402
+    new_task_from_plan,
+    resolve_plan_arg,
+    stage_from_plan,
+)
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
 from aet.queue import (  # noqa: E402
     QueueIntegrityError,
@@ -32,18 +36,13 @@ from aet.queue import (  # noqa: E402
 def resolve_plan(target: str, plans_dir: Path) -> Path | None:
     """Resolve ``target`` to a plan file path.
 
-    If ``target`` is an existing path, use it directly. Otherwise treat it as
-    a task ID and look for ``<target>.md`` in ``plans_dir``.
+    Wraps the shared resolver and converts its ``ValueError`` into ``None``,
+    preserving ``aet sprint add``'s existing contract.
     """
-    as_path = Path(target)
-    if as_path.is_file():
-        return as_path
-
-    candidate = plans_dir / f"{target}.md"
-    if candidate.is_file():
-        return candidate
-
-    return None
+    try:
+        return Path(resolve_plan_arg(target, plans_dir=plans_dir))
+    except ValueError:
+        return None
 
 
 def plan_is_untracked(plan_file: Path) -> bool:

@@ -411,3 +411,22 @@ def intake_validation_errors(
             continue
 
     return errors
+
+
+def resolve_plan_arg(plan: str, plans_dir: Path = Path("docs/plans")) -> str:
+    """Resolve a plan argument that may be a path or a bare task id.
+
+    A value ending in ``.md`` is treated as a plan path and returned as-is.
+    Anything else is treated as a task id and resolved to
+    ``<plans_dir>/<id>.md``. Raises ``ValueError`` when the id does not
+    resolve, so the error names both interpretations.
+    """
+    if plan.lower().endswith(".md"):
+        return plan
+    candidate = plans_dir / f"{plan}.md"
+    if candidate.is_file():
+        return str(candidate)
+    raise ValueError(
+        f"Plan not found: '{plan}' is not a .md path and "
+        f"{candidate} does not exist. Pass the full plan path."
+    )
