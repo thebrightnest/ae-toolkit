@@ -5,7 +5,7 @@ work_class: normal
 blocked_by:
   - rid-03-non-streaming-follower
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Renders excerpts of agent output, which may contain secrets or injected content.
 docs_sync: required
@@ -60,5 +60,5 @@ never interpreted as instructions.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
