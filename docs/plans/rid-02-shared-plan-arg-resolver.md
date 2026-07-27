@@ -4,7 +4,7 @@ size: M
 work_class: normal
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Changes path resolution shared by five commands, including filesystem lookups from user input.
 docs_sync: required
