@@ -150,10 +150,15 @@ def _is_process_alive(pid: int) -> bool:
     return True
 
 
-def _follow_run(run_id: str) -> int:
-    """Tail the log for ``run_id`` until the process exits."""
+def _wait_for_run(run_id: str) -> int:
+    """Wait silently for ``run_id`` to finish and return its exit code.
+
+    Returns the stored returncode if one already exists. Otherwise waits for
+    the orchestrator pid to disappear, then allows a short grace period for the
+    returncode file to be written. If the pid file is absent or unparseable and
+    no returncode exists, exits non-zero with a diagnostic.
+    """
     rdir = _run_dir(run_id)
-    log_file = rdir / "output.log"
     pid_file = rdir / "pid"
     rc_file = rdir / "returncode"
 
@@ -161,13 +166,8 @@ def _follow_run(run_id: str) -> int:
         typer.echo(f"error: unknown run id '{run_id}'", err=True)
         raise typer.Exit(1)
 
-    if log_file.is_file():
-        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
-            for line in f:
-                typer.echo(line, nl=False)
-
     if rc_file.is_file():
-        raise typer.Exit(int(rc_file.read_text(encoding="utf-8").strip() or "0"))
+        return int(rc_file.read_text(encoding="utf-8").strip() or "0")
 
     pid: int | None = None
     if pid_file.is_file():
@@ -176,25 +176,31 @@ def _follow_run(run_id: str) -> int:
         except ValueError:
             pid = None
 
-    with open(log_file, "r", encoding="utf-8", errors="replace") as f:
-        if log_file.is_file():
-            f.seek(0, os.SEEK_END)
-        while True:
-            line = f.readline()
-            if line:
-                typer.echo(line, nl=False)
-                continue
-            if pid is not None and not _is_process_alive(pid):
-                for _ in range(20):
-                    if rc_file.is_file():
-                        break
-                    time.sleep(0.1)
+    if pid is None:
+        typer.echo(
+            f"error: run '{run_id}' has no process and no returncode", err=True
+        )
+        raise typer.Exit(1)
+
+    while True:
+        if rc_file.is_file():
+            return int(rc_file.read_text(encoding="utf-8").strip() or "0")
+        if not _is_process_alive(pid):
+            for _ in range(20):
                 if rc_file.is_file():
-                    raise typer.Exit(int(rc_file.read_text(encoding="utf-8").strip() or "0"))
-                raise typer.Exit(1)
-            if pid is None and rc_file.is_file():
-                raise typer.Exit(int(rc_file.read_text(encoding="utf-8").strip() or "0"))
-            time.sleep(0.1)
+                    return int(rc_file.read_text(encoding="utf-8").strip() or "0")
+                time.sleep(0.1)
+            typer.echo(
+                f"error: run '{run_id}' exited without writing a returncode",
+                err=True,
+            )
+            raise typer.Exit(1)
+        time.sleep(0.1)
+
+
+def _follow_run(run_id: str) -> None:
+    """Attach to ``run_id`` and exit with its final status without echoing output."""
+    raise typer.Exit(_wait_for_run(run_id))
 
 
 def _ensure_aet_importable() -> None:
@@ -317,7 +323,8 @@ def run_one(
     flags = _build_orchestrator_flags(on_failure, task_timeout, cli_bin, base)
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
     argv = ["--plan-file", resolved, *flags]
-    raise typer.Exit(_spawn_detached(argv, run_id))
+    _spawn_detached(argv, run_id)
+    raise typer.Exit(_wait_for_run(run_id))
 
 
 def main() -> int:

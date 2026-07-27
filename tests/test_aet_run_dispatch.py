@@ -26,6 +26,24 @@ aet = importlib.util.module_from_spec(_aet_spec)
 _aet_spec.loader.exec_module(aet)
 
 
+def _start_child_runner(run_dir: Path, returncode: int, delay: float = 0.2) -> subprocess.Popen:
+    """Start a real process that writes ``returncode`` after ``delay`` seconds.
+
+    The returned child is suitable for use as the pid of a mocked orchestrator
+    spawn.  It exits on its own after writing the returncode file.
+    """
+    script = f"""
+import os
+import time
+from pathlib import Path
+run_dir = Path(os.environ["AET_TEST_RUN_DIR"])
+time.sleep({delay})
+(run_dir / "returncode").write_text(str({returncode}), encoding="utf-8")
+"""
+    env = {**os.environ, "AET_TEST_RUN_DIR": str(run_dir)}
+    return subprocess.Popen([sys.executable, "-c", script], env=env)
+
+
 class _IsolatedBinDir(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -99,31 +117,47 @@ class TestRunDetachedByDefault(_IsolatedBinDir):
 
     def test_run_one_spawns_detached_by_default(self):
         captured_proc = {}
+        run_id = "run-one-abc"
+        run_dir = None
+        child = None
 
         def fake_popen(cmd, **kwargs):
             captured_proc["cmd"] = cmd
             captured_proc["kwargs"] = kwargs
             mock = unittest.mock.MagicMock()
-            mock.pid = 12346
+            mock.pid = child.pid
             return mock
 
         with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            run_dir = tmp_path / ".agents" / "runs" / run_id
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmp)
+                (tmp_path / "docs" / "plans").mkdir(parents=True)
+                (tmp_path / "docs" / "plans" / "x.md").write_text(
+                    "---\nid: x\n---\n\n# X\n", encoding="utf-8"
+                )
+                child = _start_child_runner(run_dir, 0, delay=0.1)
                 with self._bin_env():
                     with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
-                        with patch.object(aet, "_generate_run_id", return_value="run-one-abc"):
+                        with patch.object(aet, "_generate_run_id", return_value=run_id):
                             rc = aet.app(["run-one", "docs/plans/x.md"], standalone_mode=False)
             finally:
                 os.chdir(old_cwd)
+                if child is not None:
+                    child.terminate()
+                    try:
+                        child.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        child.kill()
 
             self.assertEqual(rc, 0)
             self.assertEqual(captured_proc["kwargs"]["start_new_session"], True)
             self.assertIn("--plan-file", captured_proc["cmd"])
             self.assertIn("docs/plans/x.md", captured_proc["cmd"])
             self.assertIn("--run-id", captured_proc["cmd"])
-            self.assertIn("run-one-abc", captured_proc["cmd"])
+            self.assertIn(run_id, captured_proc["cmd"])
 
 
 class TestRemovedFlagsRejected(_IsolatedBinDir):
@@ -205,32 +239,49 @@ class TestRetainedFlagsForward(_IsolatedBinDir):
 
     def test_run_one_forwards_retained_flags(self):
         captured_proc = {}
+        run_id = "run-one-retained"
+        run_dir = None
+        child = None
 
         def fake_popen(cmd, **kwargs):
             captured_proc["cmd"] = cmd
             mock = unittest.mock.MagicMock()
-            mock.pid = 12348
+            mock.pid = child.pid
             return mock
 
         with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            run_dir = tmp_path / ".agents" / "runs" / run_id
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmp)
+                (tmp_path / "docs" / "plans").mkdir(parents=True)
+                (tmp_path / "docs" / "plans" / "x.md").write_text(
+                    "---\nid: x\n---\n\n# X\n", encoding="utf-8"
+                )
+                child = _start_child_runner(run_dir, 0, delay=0.1)
                 with self._bin_env():
                     with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
-                        rc = aet.app(
-                            ["run-one", "docs/plans/x.md", "--base", "feat/x", "--task-timeout", "900"],
-                            standalone_mode=False,
-                        )
+                        with patch.object(aet, "_generate_run_id", return_value=run_id):
+                            rc = aet.app(
+                                ["run-one", "docs/plans/x.md", "--base", "feat/x", "--task-timeout", "900"],
+                                standalone_mode=False,
+                            )
             finally:
                 os.chdir(old_cwd)
+                if child is not None:
+                    child.terminate()
+                    try:
+                        child.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        child.kill()
 
-        self.assertEqual(rc, 0)
-        cmd = captured_proc["cmd"]
-        self.assertIn("--plan-file", cmd)
-        self.assertIn("docs/plans/x.md", cmd)
-        self.assertEqual(cmd[cmd.index("--base") + 1], "feat/x")
-        self.assertEqual(cmd[cmd.index("--task-timeout") + 1], "900")
+            self.assertEqual(rc, 0)
+            cmd = captured_proc["cmd"]
+            self.assertIn("--plan-file", cmd)
+            self.assertIn("docs/plans/x.md", cmd)
+            self.assertEqual(cmd[cmd.index("--base") + 1], "feat/x")
+            self.assertEqual(cmd[cmd.index("--task-timeout") + 1], "900")
 
 
 class TestFollowRun(_IsolatedBinDir):
@@ -241,7 +292,7 @@ class TestFollowRun(_IsolatedBinDir):
                     rc = aet.app(["run", "--follow", "run-missing"], standalone_mode=False)
         self.assertEqual(rc, 1)
 
-    def test_follow_prints_existing_log_and_returns_rc(self):
+    def test_follow_silently_returns_existing_returncode(self):
         with tempfile.TemporaryDirectory() as tmp:
             run_dir = Path(tmp) / ".agents" / "runs" / "run-done"
             run_dir.mkdir(parents=True)
@@ -259,7 +310,53 @@ class TestFollowRun(_IsolatedBinDir):
                 os.chdir(old_cwd)
 
             self.assertEqual(rc, 0)
-            self.assertIn("hello log\n", [call.args[0] for call in echo_mock.call_args_list])
+            self.assertNotIn("hello log\n", [call.args[0] for call in echo_mock.call_args_list])
+
+
+class TestRunOneBlocks(_IsolatedBinDir):
+    def test_run_one_blocks_until_terminal_state_and_returns_rc(self):
+        run_id = "run-one-blocks"
+        run_dir = None
+        child = None
+
+        def fake_popen(cmd, **kwargs):
+            mock = unittest.mock.MagicMock()
+            mock.pid = child.pid
+            return mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            run_dir = tmp_path / ".agents" / "runs" / run_id
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                (tmp_path / "docs" / "plans").mkdir(parents=True)
+                (tmp_path / "docs" / "plans" / "x.md").write_text(
+                    "---\nid: x\n---\n\n# X\n", encoding="utf-8"
+                )
+                # Pre-existing log content should not be echoed by the follower.
+                run_dir.mkdir(parents=True, exist_ok=True)
+                (run_dir / "output.log").write_text("run output line\n", encoding="utf-8")
+                child = _start_child_runner(run_dir, 42, delay=0.3)
+                started = time.monotonic()
+                with self._bin_env():
+                    with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
+                        with patch.object(aet, "_generate_run_id", return_value=run_id):
+                            result = run_typer(aet.app, ["run-one", "docs/plans/x.md"], cwd=tmp)
+                elapsed = time.monotonic() - started
+            finally:
+                os.chdir(old_cwd)
+                if child is not None:
+                    child.terminate()
+                    try:
+                        child.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        child.kill()
+
+            self.assertEqual(result.exit_code, 42)
+            self.assertGreaterEqual(elapsed, 0.25)
+            self.assertNotIn("run output line", result.stdout)
+            self.assertIn("Started run", result.stdout)
 
 
 class TestIntegrationDetachedSpawn(_IsolatedBinDir):

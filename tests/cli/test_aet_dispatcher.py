@@ -107,7 +107,8 @@ class TestRunMapping(unittest.TestCase):
                 os.chdir(tmp)
                 with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
                     with patch.object(aet, "_generate_run_id", return_value=run_id):
-                        rc = aet.app(argv, standalone_mode=False)
+                        with patch.object(aet, "_wait_for_run", return_value=0):
+                            rc = aet.app(argv, standalone_mode=False)
             finally:
                 os.chdir(old_cwd)
         return rc, captured.get("cmd"), captured.get("kwargs")

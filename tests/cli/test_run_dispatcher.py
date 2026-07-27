@@ -33,9 +33,10 @@ class TestRunOneBaseForwarding:
     def test_run_one_forwards_base_to_orchestrator(self) -> None:
         with patch.object(aet, "_spawn_detached") as spawn:
             spawn.return_value = 0
-            result = run_typer(
-                aet.app, ["run-one", "docs/plans/example.md", "--base", "feat/x"]
-            )
+            with patch.object(aet, "_wait_for_run", return_value=0):
+                result = run_typer(
+                    aet.app, ["run-one", "docs/plans/example.md", "--base", "feat/x"]
+                )
 
         assert result.exit_code == 0, result.output
         argv = spawn.call_args[0][0]
@@ -59,7 +60,8 @@ class TestRunOnePlanResolution:
     def test_run_one_resolves_bare_task_id(self, tmp_cwd: Path) -> None:
         with patch.object(aet, "_spawn_detached") as spawn:
             spawn.return_value = 0
-            result = run_typer(aet.app, ["run-one", "rid-01"], cwd=str(tmp_cwd))
+            with patch.object(aet, "_wait_for_run", return_value=0):
+                result = run_typer(aet.app, ["run-one", "rid-01"], cwd=str(tmp_cwd))
 
         assert result.exit_code == 0, result.output
         argv = spawn.call_args[0][0]
@@ -69,9 +71,10 @@ class TestRunOnePlanResolution:
     def test_run_one_resolves_md_path_identically(self, tmp_cwd: Path) -> None:
         with patch.object(aet, "_spawn_detached") as spawn:
             spawn.return_value = 0
-            result = run_typer(
-                aet.app, ["run-one", "docs/plans/rid-01.md"], cwd=str(tmp_cwd)
-            )
+            with patch.object(aet, "_wait_for_run", return_value=0):
+                result = run_typer(
+                    aet.app, ["run-one", "docs/plans/rid-01.md"], cwd=str(tmp_cwd)
+                )
 
         assert result.exit_code == 0, result.output
         argv = spawn.call_args[0][0]
