@@ -69,3 +69,7 @@ Per scope validation, the shared implementation adopts **ship's semantics**; `sp
 
 *Stage: merged*
 *Next step: run `aet-ship`*
+
+---
+
+*Stage: merged*
