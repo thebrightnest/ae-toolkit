@@ -5,7 +5,7 @@ work_class: critical
 blocked_by:
   - rid-01-detached-only-execution
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Changes process-wait and exit-code propagation, including a non-terminating loop fix.
 docs_sync: required
