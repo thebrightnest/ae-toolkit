@@ -187,6 +187,18 @@ def _write_run_metadata(repo_root: str, run_id: str) -> None:
         print(f"   ⚠️  Could not write run metadata for {run_id}: {exc}")
 
 
+def _write_telemetry_path(
+    repo_root: str, run_id: str, telemetry_run_dir: Path
+) -> None:
+    """Persist the telemetry run directory path so the follower can find it."""
+    rdir = _run_dir(repo_root, run_id)
+    try:
+        rdir.mkdir(parents=True, exist_ok=True)
+        (rdir / "telemetry_dir").write_text(str(telemetry_run_dir), encoding="utf-8")
+    except OSError as exc:
+        print(f"   ⚠️  Could not write telemetry path for {run_id}: {exc}")
+
+
 def _write_returncode(repo_root: str, run_id: str, exit_code: int) -> None:
     """Persist the orchestrator's exit code so ``aet run --follow`` can mirror it.
 
@@ -529,6 +541,17 @@ def _next_attempt(logger: telemetry.RunLogger, task_id: str, stage: str) -> int:
     return count + 1
 
 
+def _bounded_output_excerpt(
+    output: str,
+    max_lines: int = telemetry.COMPLETION_REPORT_EXCERPT_LINES,
+) -> str:
+    """Return the last ``max_lines`` lines of captured session output."""
+    lines = output.splitlines()
+    if len(lines) > max_lines:
+        lines = lines[-max_lines:]
+    return "\n".join(lines)
+
+
 def _emit_stage_session(
     logger: telemetry.RunLogger,
     task_id: str,
@@ -594,6 +617,7 @@ def _emit_stage_session(
             attempt=_next_attempt(logger, task_id, stage),
             token_count=usage.get("total_tokens") if usage else None,
             cost_estimate=usage.get("cost_usd") if usage else None,
+            output_excerpt=(_bounded_output_excerpt(output) if exit_code != 0 else None),
         ),
         task_id=task_id,
     )
@@ -2300,6 +2324,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     systemic_tally = breaker_store.load()
 
     logger = telemetry.RunLogger(repo_root, run_id=getattr(args, "run_id", None))
+    _write_telemetry_path(repo_root, logger.run_id, logger.run_dir)
     start_time = telemetry.iso_now()
     task_ids: list[str] = []
 
@@ -2761,6 +2786,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
     run_id = getattr(args, "run_id", None) or os.environ.get("AET_RUN_ID")
     logger = telemetry.RunLogger(repo_root, run_id=run_id)
+    _write_telemetry_path(repo_root, logger.run_id, logger.run_dir)
     # Ensure every subprocess (aet-state calls and stage sessions) inherits this
     # run id so their queue mutations pass the lease check.
     os.environ["AET_RUN_ID"] = logger.run_id

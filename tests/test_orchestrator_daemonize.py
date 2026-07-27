@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -10,8 +11,10 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
+from aet import telemetry
 from aet.cli_adapter import CLIAdapter
 
 _FAKE_ADAPTER = CLIAdapter(
@@ -357,6 +360,145 @@ class TestFollowerWaitsSilently(unittest.TestCase):
                 os.chdir(old_cwd)
 
             self.assertEqual(rc, 1)
+
+
+def _stage_record(
+    run_id: str,
+    task_id: str,
+    stage: str,
+    exit_code: int,
+    *,
+    duration_seconds: float = 5.0,
+    output_excerpt: str | None = None,
+    actual_stages: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "type": "stage",
+        "run_id": run_id,
+        "task_id": task_id,
+        "plan_file": "docs/plans/x.md",
+        "stage": stage,
+        "actual_stages": actual_stages or [stage],
+        "start_time": "2026-07-27T00:00:00Z",
+        "end_time": "2026-07-27T00:00:05Z",
+        "duration_seconds": duration_seconds,
+        "exit_code": exit_code,
+        "result": "success" if exit_code == 0 else "failure",
+        "output_excerpt": output_excerpt,
+    }
+
+
+class TestCompletionReport(unittest.TestCase):
+    def _archive_run_dir(
+        self,
+        archive_dir: Path,
+        run_id: str,
+        project_slug: str,
+        records: list[dict[str, Any]],
+        output_log: str = "",
+        local_run_root: Path | None = None,
+    ) -> Path:
+        date = "2026-07-27"
+        run_dir = archive_dir / project_slug / date / run_id
+        run_dir.mkdir(parents=True)
+        # Records are grouped by task_id so the follower walks them like real telemetry.
+        by_task: dict[str, list[dict[str, Any]]] = {}
+        for record in records:
+            by_task.setdefault(record["task_id"], []).append(record)
+        for task_id, task_records in by_task.items():
+            jsonl = "\n".join(json.dumps(r) for r in task_records) + "\n"
+            (run_dir / f"{task_id}.jsonl").write_text(jsonl, encoding="utf-8")
+        (run_dir / "output.log").write_text(output_log, encoding="utf-8")
+        if local_run_root is not None:
+            local_run_dir = local_run_root / ".agents" / "runs" / run_id
+            local_run_dir.mkdir(parents=True, exist_ok=True)
+            (local_run_dir / "telemetry_dir").write_text(str(run_dir), encoding="utf-8")
+        return run_dir
+
+    def test_report_line_count_is_independent_of_log_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_dir = Path(tmp) / "archive"
+            project_slug = "test-project"
+            run_id = "run-size-test"
+            large_run_id = "run-large-log"
+            local_root = Path(tmp) / "repo"
+            small_records = [
+                _stage_record(run_id, "t-1", "plan-approved", 0, duration_seconds=1.2),
+                _stage_record(run_id, "t-1", "implemented", 0, duration_seconds=2.3),
+            ]
+            large_records = [
+                _stage_record(large_run_id, "t-1", "plan-approved", 0, duration_seconds=1.2),
+                _stage_record(large_run_id, "t-1", "implemented", 0, duration_seconds=2.3),
+            ]
+            self._archive_run_dir(
+                archive_dir,
+                run_id,
+                project_slug,
+                small_records,
+                output_log="small\n",
+                local_run_root=local_root,
+            )
+            self._archive_run_dir(
+                archive_dir,
+                large_run_id,
+                project_slug,
+                large_records,
+                output_log="big line\n" * 10000,
+                local_run_root=local_root,
+            )
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(local_root)
+                small_report = cli_main._completion_report_lines(run_id, 0)
+                large_report = cli_main._completion_report_lines(large_run_id, 0)
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(len(small_report), len(large_report))
+            self.assertIn("Result: success (exit 0)", small_report)
+            report_text = "\n".join(small_report)
+            self.assertIn("plan-approved: success", report_text)
+            self.assertIn("implemented: success", report_text)
+
+    def test_failure_report_includes_bounded_excerpt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_dir = Path(tmp) / "archive"
+            project_slug = "test-project"
+            run_id = "run-fail-test"
+            local_root = Path(tmp) / "repo"
+            long_excerpt = "\n".join(f"line {i}" for i in range(50))
+            records = [
+                _stage_record(run_id, "t-1", "plan-approved", 0),
+                _stage_record(
+                    run_id,
+                    "t-1",
+                    "qa-complete",
+                    1,
+                    output_excerpt=long_excerpt,
+                ),
+            ]
+            self._archive_run_dir(
+                archive_dir, run_id, project_slug, records, local_run_root=local_root
+            )
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(local_root)
+                report = cli_main._completion_report_lines(run_id, 1)
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertIn("Result: failure (exit 1)", report)
+            cap = telemetry.COMPLETION_REPORT_EXCERPT_LINES
+            self.assertIn(f"--- Output excerpt (last {cap} lines) ---", report)
+            # The excerpt is capped at the configured line count.
+            excerpt_start = report.index(f"--- Output excerpt (last {cap} lines) ---") + 1
+            excerpt_end = report.index("---", excerpt_start)
+            excerpt_lines = report[excerpt_start:excerpt_end]
+            self.assertEqual(len(excerpt_lines), cap)
+            self.assertEqual(excerpt_lines[0], f"line {50 - cap}")
+            self.assertEqual(excerpt_lines[-1], "line 49")
 
 
 if __name__ == "__main__":
