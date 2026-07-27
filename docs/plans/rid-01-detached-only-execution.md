@@ -36,19 +36,19 @@ per-run inputs and must keep working.
 
 ## Task List
 
-1. Remove the `--foreground` option from `run` and `run-one` in `src/aet/cli/main.py`, delete
-   the `_exec_orchestrator` helper and its `os.execvp` path, and make both commands always
-   route through `_spawn_detached` — S (traces: R-1)
-2. Remove `--max-jobs`, `--isolation`, and `--stall-timeout` from both command signatures and
-   from `_build_orchestrator_flags`; keep `--base`, `--on-failure`, `--task-timeout`, and
-   `--cli-bin` forwarding unchanged — S (traces: R-9)
-3. Supply the orchestrator's `--max-jobs` and `--isolation` values internally from their
-   current defaults (4, `standard`) so orchestrator behavior is unchanged when the flags stop
-   being caller-supplied — S (traces: R-9)
-4. Update `tests/cli/test_aet_dispatcher.py`, `tests/test_aet_run_dispatch.py`, and
-   `tests/test_orchestrator_daemonize.py`: delete the `--foreground` routing and behavioral-
-   equivalence cases, and assert the three removed flags are rejected as unknown options while
-   the four retained flags still forward — M (traces: R-1, R-9)
+1. ✓ Remove the `--foreground` option from `run` and `run-one` in `src/aet/cli/main.py`, delete
+     the `_exec_orchestrator` helper and its `os.execvp` path, and make both commands always
+     route through `_spawn_detached` — S (traces: R-1)
+2. ✓ Remove `--max-jobs`, `--isolation`, and `--stall-timeout` from both command signatures and
+     from `_build_orchestrator_flags`; keep `--base`, `--on-failure`, `--task-timeout`, and
+     `--cli-bin` forwarding unchanged — S (traces: R-9)
+3. ✓ Supply the orchestrator's `--max-jobs` and `--isolation` values internally from their
+     current defaults (4, `standard`) so orchestrator behavior is unchanged when the flags stop
+     being caller-supplied — S (traces: R-9)
+4. ✓ Update `tests/cli/test_aet_dispatcher.py`, `tests/test_aet_run_dispatch.py`, and
+     `tests/test_orchestrator_daemonize.py`: delete the `--foreground` routing and behavioral-
+     equivalence cases, and assert the three removed flags are rejected as unknown options while
+     the four retained flags still forward — M (traces: R-1, R-9)
 5. Merge branch to main and verify integration — S
 
 ## Validation
@@ -65,5 +65,5 @@ per-run inputs and must keep working.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
