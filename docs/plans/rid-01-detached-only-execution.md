@@ -4,7 +4,7 @@ size: M
 work_class: normal
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: Changes process spawning and removes an execution path in the CLI dispatcher.
 docs_sync: required
