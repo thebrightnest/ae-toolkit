@@ -4,6 +4,8 @@
 
 Accepted (2026-07-16). Roadmap Phase 5 (`content/fable-review/09-2026-07-10-roadmap.md`). Records an owner decision (2026-07-15) that **overrides** the roadmap's own Phase 5 line ("budget ceilings per task with kill-and-triage on overrun") — a future reader will otherwise expect a budget wall that deliberately does not exist.
 
+**Decision item 2 is superseded by ADR-053** (2026-07-27): the stall default is no longer a flat 300 s on the command surface but a per-adapter value on `CLIAdapter`, and `--stall-timeout` is removed from `run`/`run-one`. The *principle* of item 2 — kill on evidence of silence, never on a stopwatch — is unchanged and still governs. Items 1 and 3 are unaffected.
+
 ## Context
 
 Two Phase 5 mechanisms looked like enforcement in the roadmap but are better as observation.
