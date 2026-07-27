@@ -67,5 +67,5 @@ Per scope validation, the shared implementation adopts **ship's semantics**; `sp
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa` on this plan*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
