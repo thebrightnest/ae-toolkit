@@ -3,7 +3,7 @@ id: tap-02-shared-runner-registry
 size: M
 blocked_by: [tap-01-factory-metrics-stage-records-only]
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: parses command strings already recorded in the agent's own session log for classification only; no execution, no new input surface, and the parser never runs or shells out to what it matches
 docs_sync: required
@@ -139,5 +139,5 @@ recorded in the `tap-01` re-baseline note.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
