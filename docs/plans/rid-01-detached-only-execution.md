@@ -65,5 +65,4 @@ per-run inputs and must keep working.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
