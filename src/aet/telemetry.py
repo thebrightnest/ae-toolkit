@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import shutil
 import uuid
 from collections import Counter
@@ -20,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 # Re-export the neutral identity helper so existing callers keep working.
+from aet import test_runners
 from aet.project_id import derive_project_slug, resolve_repo_root  # noqa: F401
 
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
@@ -40,46 +40,23 @@ _SUITE_ROOT_ARGS = {".", "test", "tests", "./..."}
 def classify_test_scope(command: str) -> str:
     """Classify a test command's scope: ``full-suite``, ``impact``, ``unknown``.
 
-    The single scope heuristic for every ``test_run`` emission site. A
-    command naming specific test files or subdirectories is ``impact``; a
-    recognized runner invoked bare (or on the suite root) is ``full-suite``;
-    anything else is ``unknown``. Deliberately a pure command-string
-    heuristic — auditable, stable, and environment-independent.
+    The single scope heuristic for every ``test_run`` emission site. The
+    command is resolved through the shared runner registry
+    (``test_runners.resolve_test_command``) — the same parse that feeds
+    ``wirelog.is_test_command``. A command naming specific test files or
+    subdirectories is ``impact``; a recognized runner invoked bare (or on the
+    suite root) is ``full-suite``; anything else is ``unknown``. Deliberately
+    a pure command-string heuristic — auditable, stable, and
+    environment-independent.
     """
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        tokens = command.split()
-    runner_args = _test_runner_args(tokens)
-    if runner_args is None:
+    resolved = test_runners.resolve_test_command(command)
+    if resolved is None:
         return TEST_SCOPE_UNKNOWN
+    _runner, runner_args = resolved
     for arg in runner_args:
         if _is_scope_narrowing_arg(arg):
             return TEST_SCOPE_IMPACT
     return TEST_SCOPE_FULL_SUITE
-
-
-def _test_runner_args(tokens: list[str]) -> list[str] | None:
-    """Return the arguments following a recognized test runner, or None.
-
-    The recognized runners mirror the wire-extraction match list (v1):
-    pytest variants, vitest, jest, make test/validate, npm test, cargo test,
-    go test. ``make`` invocations yield no path arguments — make targets are
-    never paths in v1.
-    """
-    if not tokens:
-        return None
-    head, rest = tokens[0], tokens[1:]
-    if head == "pytest" or head in ("vitest", "jest"):
-        return rest
-    if head in ("python", "python3") and rest[:2] == ["-m", "pytest"]:
-        return rest[2:]
-    if head == "make":
-        targets = [token for token in rest if not token.startswith("-")]
-        return [] if any(t in ("test", "validate") for t in targets) else None
-    if head in ("npm", "cargo", "go") and rest[:1] == ["test"]:
-        return rest[1:]
-    return None
 
 
 def _is_scope_narrowing_arg(arg: str) -> bool:

@@ -20,22 +20,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from aet import test_runners
 from aet.usage import _MAX_WIRE_LINE_CHARS
-
-# Test-runner match list (v1). A Bash command matching any of these patterns
-# counts as a test invocation. Scope classification lives in
-# ``telemetry.classify_test_scope`` — the single heuristic for all emission
-# sites.
-_TEST_RUNNER_RES = [
-    re.compile(r"^\s*pytest(\s|$)"),
-    re.compile(r"^\s*python3?\s+-m\s+pytest(\s|$)"),
-    re.compile(r"^\s*vitest(\s|$)"),
-    re.compile(r"^\s*jest(\s|$)"),
-    re.compile(r"^\s*make\s+(-\S+\s+)*(test|validate)(\s|$)"),
-    re.compile(r"^\s*npm\s+test(\s|$)"),
-    re.compile(r"^\s*cargo\s+test(\s|$)"),
-    re.compile(r"^\s*go\s+test(\s|$)"),
-]
 
 # The Bash tool appends this trailer to the output of a failed command; it is
 # the only place a measured exit code appears in a wire tool.result.
@@ -43,8 +29,14 @@ _EXIT_CODE_RE = re.compile(r"Command failed with exit code: (\d+)")
 
 
 def is_test_command(command: str) -> bool:
-    """Return True when a shell command matches the v1 test-runner list."""
-    return any(pattern.search(command) for pattern in _TEST_RUNNER_RES)
+    """Return True when a shell command resolves to a test runner.
+
+    Detection delegates to the shared runner registry
+    (``test_runners.resolve_test_command``) — the same parse that feeds
+    ``telemetry.classify_test_scope``, so a detected command is classifiable
+    by construction.
+    """
+    return test_runners.resolve_test_command(command) is not None
 
 
 def extract_test_invocations(session_dir: Path) -> list[dict[str, Any]]:
