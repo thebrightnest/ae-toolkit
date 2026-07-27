@@ -229,20 +229,6 @@ Resolution (R-12, ADR-052): the factory metrics read `stage` records only — th
 defect fix against ADR-035's own wording, the failure clause as a deliberate narrowing. R-12 lands
 first so the re-baseline happens on a stable corpus, with the two clauses attributed separately.
 
-## Divergence Summary
-
-*Recorded: 2026-07-26 — Branch: tap-02-shared-runner-registry (tap-02 scope only)*
-
-### Changed from plan
-
-- **Wrapper normalisation for `npm run`, `yarn`, `pnpm` (tap-02, R-1):** the locked design
-  unwrapped these as generic wrappers (`yarn vitest` → `vitest`). As built, their `test` forms
-  are runner-table entries instead (`npm run test` → `npm test`, `yarn test`, `pnpm test`) and
-  they are not unwrapped for arbitrary runners — `yarn vitest` and `npm run vitest` do not
-  match. This is the conservative direction under the plan's own false-positive-avoidance rule
-  (a missed run costs telemetry volume; a wrong match records a fabricated one); widening to
-  generic unwrapping is a small registry change if telemetry later shows those shapes matter.
-
 **Sequencing constraint.** R-1/R-2/R-3 touch the same module the R-4 split moves. Doing the
 registry work first and the split second avoids rewriting the matcher inside a moving file.
 R-12 precedes all of it for the reason above.
