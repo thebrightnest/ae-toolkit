@@ -18,7 +18,7 @@ aet ship record-merge t1 docs/plans/t1.md
 Unlabeled fence:
 
 ```
-aet run --max-jobs 2 --isolation full
+aet run --on-failure halt --task-timeout 900
 ```
 
 Non-shell fences are ignored:

@@ -220,36 +220,26 @@ def _orchestrator_path() -> Path:
 
 
 def _build_orchestrator_flags(
-    max_jobs: int,
-    isolation: str,
     on_failure: str | None,
     task_timeout: int | None,
-    stall_timeout: int | None,
     cli_bin: str | None,
     base: str | None,
 ) -> list[str]:
-    """Build the forwarded flag list for the orchestrator."""
-    flags = ["--max-jobs", str(max_jobs), "--isolation", isolation]
+    """Build the forwarded flag list for the orchestrator.
+
+    ``--max-jobs`` and ``--isolation`` are supplied internally at their
+    defaults (4, ``standard``); they are not caller-tunable (rid-01).
+    """
+    flags = ["--max-jobs", "4", "--isolation", "standard"]
     if on_failure is not None:
         flags.extend(["--on-failure", on_failure])
     if task_timeout is not None:
         flags.extend(["--task-timeout", str(task_timeout)])
-    if stall_timeout is not None:
-        flags.extend(["--stall-timeout", str(stall_timeout)])
     if cli_bin is not None:
         flags.extend(["--cli-bin", cli_bin])
     if base is not None:
         flags.extend(["--base", base])
     return flags
-
-
-def _exec_orchestrator(argv: list[str]) -> int:
-    """Exec the orchestrator with the current Python interpreter."""
-    try:
-        os.execvp(sys.executable, [sys.executable, str(_orchestrator_path()), *argv])
-    except SystemExit as exc:
-        return exc.code if isinstance(exc.code, int) else 0
-    return 0
 
 
 def _spawn_detached(argv: list[str], run_id: str) -> int:
@@ -282,13 +272,9 @@ def _spawn_detached(argv: list[str], run_id: str) -> int:
 
 @app.command()
 def run(
-    foreground: bool = typer.Option(False, "--foreground", help="Run in foreground."),
     follow: str | None = typer.Option(None, "--follow", help="Follow an existing run id."),
-    max_jobs: int = typer.Option(4, "--max-jobs", help="Max parallel tasks."),
-    isolation: str = typer.Option("standard", "--isolation", help="Isolation level."),
     on_failure: str | None = typer.Option(None, "--on-failure", help="triage|continue|halt"),
     task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
-    stall_timeout: int | None = typer.Option(None, "--stall-timeout", help="Silence timeout (s)."),
     cli_bin: str | None = typer.Option(None, "--cli-bin", help="Agent CLI binary path."),
     base: str | None = typer.Option(None, "--base", help="Override the worktree base branch/ref."),
 ) -> None:
@@ -297,13 +283,8 @@ def run(
         _follow_run(follow)
         return
 
-    flags = _build_orchestrator_flags(max_jobs, isolation, on_failure, task_timeout, stall_timeout, cli_bin, base)
-    argv = ["--queue-file", ".agents/work-queue.json", *flags]
-
-    if foreground:
-        raise typer.Exit(_exec_orchestrator(argv))
-
     run_id = _generate_run_id()
+    flags = _build_orchestrator_flags(on_failure, task_timeout, cli_bin, base)
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
     argv = ["--queue-file", ".agents/work-queue.json", *flags]
     raise typer.Exit(_spawn_detached(argv, run_id))
@@ -312,13 +293,9 @@ def run(
 @app.command("run-one")
 def run_one(
     plan_file: str = typer.Argument(..., help="Plan file to run."),
-    foreground: bool = typer.Option(False, "--foreground", help="Run in foreground."),
     follow: str | None = typer.Option(None, "--follow", help="Follow an existing run id."),
-    max_jobs: int = typer.Option(4, "--max-jobs", help="Max parallel tasks."),
-    isolation: str = typer.Option("standard", "--isolation", help="Isolation level."),
     on_failure: str | None = typer.Option(None, "--on-failure", help="triage|continue|halt"),
     task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
-    stall_timeout: int | None = typer.Option(None, "--stall-timeout", help="Silence timeout (s)."),
     cli_bin: str | None = typer.Option(None, "--cli-bin", help="Agent CLI binary path."),
     base: str | None = typer.Option(None, "--base", help="Override the worktree base branch/ref."),
 ) -> None:
@@ -327,13 +304,8 @@ def run_one(
         _follow_run(follow)
         return
 
-    flags = _build_orchestrator_flags(max_jobs, isolation, on_failure, task_timeout, stall_timeout, cli_bin, base)
-    argv = ["--plan-file", plan_file, *flags]
-
-    if foreground:
-        raise typer.Exit(_exec_orchestrator(argv))
-
     run_id = _generate_run_id()
+    flags = _build_orchestrator_flags(on_failure, task_timeout, cli_bin, base)
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
     argv = ["--plan-file", plan_file, *flags]
     raise typer.Exit(_spawn_detached(argv, run_id))
