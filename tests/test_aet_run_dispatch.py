@@ -13,6 +13,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.cli._helpers import run_typer
+
 _REPO_ROOT = Path(__file__).parents[1]
 _AET_PY = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
 
@@ -84,6 +86,11 @@ class TestRunDetachedByDefault(_IsolatedBinDir):
             self.assertTrue(
                 captured_proc["kwargs"]["stdout"].name.endswith("run-detached-abc/output.log")
             )
+            cmd = captured_proc["cmd"]
+            # Tuning values are supplied internally at their defaults.
+            self.assertEqual(cmd[cmd.index("--max-jobs") + 1], "4")
+            self.assertEqual(cmd[cmd.index("--isolation") + 1], "standard")
+            self.assertNotIn("--stall-timeout", cmd)
             printed = " ".join(str(call.args[0]) for call in echo_mock.call_args_list)
             self.assertIn("run-detached-abc", printed)
             run_dir = tmp_path / ".agents" / "runs" / "run-detached-abc"
@@ -119,41 +126,112 @@ class TestRunDetachedByDefault(_IsolatedBinDir):
             self.assertIn("run-one-abc", captured_proc["cmd"])
 
 
-class TestRunForeground(_IsolatedBinDir):
-    def test_run_foreground_routes_through_exec(self):
-        captured = {}
+class TestRemovedFlagsRejected(_IsolatedBinDir):
+    def test_run_rejects_foreground_and_tuning_flags(self):
+        for extra in (
+            ["--foreground"],
+            ["--max-jobs", "2"],
+            ["--isolation", "full"],
+            ["--stall-timeout", "60"],
+        ):
+            with self.subTest(extra=extra):
+                # Guard exec/spawn so a regression cannot outlive the test.
+                with self._bin_env():
+                    with patch.object(aet.os, "execvp", side_effect=SystemExit(0)):
+                        with patch.object(aet.subprocess, "Popen"):
+                            result = run_typer(aet.app, ["run", *extra])
+                self.assertEqual(result.exit_code, 2)
+                self.assertIn("No such option", result.output)
 
-        def mock_execvp(path, exec_argv):
-            captured["path"] = path
-            captured["argv"] = exec_argv
-            raise SystemExit(0)
+    def test_run_one_rejects_foreground_and_tuning_flags(self):
+        for extra in (
+            ["--foreground"],
+            ["--max-jobs", "2"],
+            ["--isolation", "full"],
+            ["--stall-timeout", "60"],
+        ):
+            with self.subTest(extra=extra):
+                with self._bin_env():
+                    with patch.object(aet.os, "execvp", side_effect=SystemExit(0)):
+                        with patch.object(aet.subprocess, "Popen"):
+                            result = run_typer(aet.app, ["run-one", "docs/plans/x.md", *extra])
+                self.assertEqual(result.exit_code, 2)
+                self.assertIn("No such option", result.output)
 
-        with self._bin_env():
-            with patch.object(aet.os, "execvp", mock_execvp):
-                rc = aet.app(["run", "--foreground"], standalone_mode=False)
+
+class TestRetainedFlagsForward(_IsolatedBinDir):
+    def test_run_forwards_base_on_failure_task_timeout_and_cli_bin(self):
+        captured_proc = {}
+
+        def fake_popen(cmd, **kwargs):
+            captured_proc["cmd"] = cmd
+            mock = unittest.mock.MagicMock()
+            mock.pid = 12347
+            return mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with self._bin_env():
+                    with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
+                        rc = aet.app(
+                            [
+                                "run",
+                                "--base",
+                                "feat/x",
+                                "--on-failure",
+                                "halt",
+                                "--task-timeout",
+                                "900",
+                                "--cli-bin",
+                                "/bin/kimi",
+                            ],
+                            standalone_mode=False,
+                        )
+            finally:
+                os.chdir(old_cwd)
 
         self.assertEqual(rc, 0)
-        self.assertEqual(Path(captured["path"]), Path(sys.executable))
-        self.assertEqual(captured["argv"][1], str(_REPO_ROOT / "src" / "aet" / "cli" / "orchestrator.py"))
-        self.assertIn("--queue-file", captured["argv"])
-        self.assertNotIn("--run-id", captured["argv"])
+        cmd = captured_proc["cmd"]
+        for flag, value in (
+            ("--base", "feat/x"),
+            ("--on-failure", "halt"),
+            ("--task-timeout", "900"),
+            ("--cli-bin", "/bin/kimi"),
+        ):
+            self.assertIn(flag, cmd)
+            self.assertEqual(cmd[cmd.index(flag) + 1], value)
 
-    def test_run_one_foreground_routes_through_exec(self):
-        captured = {}
+    def test_run_one_forwards_retained_flags(self):
+        captured_proc = {}
 
-        def mock_execvp(path, exec_argv):
-            captured["path"] = path
-            captured["argv"] = exec_argv
-            raise SystemExit(0)
+        def fake_popen(cmd, **kwargs):
+            captured_proc["cmd"] = cmd
+            mock = unittest.mock.MagicMock()
+            mock.pid = 12348
+            return mock
 
-        with self._bin_env():
-            with patch.object(aet.os, "execvp", mock_execvp):
-                rc = aet.app(["run-one", "docs/plans/x.md", "--foreground"], standalone_mode=False)
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with self._bin_env():
+                    with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
+                        rc = aet.app(
+                            ["run-one", "docs/plans/x.md", "--base", "feat/x", "--task-timeout", "900"],
+                            standalone_mode=False,
+                        )
+            finally:
+                os.chdir(old_cwd)
 
         self.assertEqual(rc, 0)
-        self.assertIn("--plan-file", captured["argv"])
-        self.assertIn("docs/plans/x.md", captured["argv"])
-        self.assertNotIn("--run-id", captured["argv"])
+        cmd = captured_proc["cmd"]
+        self.assertIn("--plan-file", cmd)
+        self.assertIn("docs/plans/x.md", cmd)
+        self.assertEqual(cmd[cmd.index("--base") + 1], "feat/x")
+        self.assertEqual(cmd[cmd.index("--task-timeout") + 1], "900")
+
 
 class TestFollowRun(_IsolatedBinDir):
     def test_follow_unknown_run_exits_1(self):

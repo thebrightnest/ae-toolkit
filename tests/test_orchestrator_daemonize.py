@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from aet.cli_adapter import CLIAdapter
 
@@ -27,6 +27,12 @@ _orchestrator_loader = importlib.machinery.SourceFileLoader(
 _spec = importlib.util.spec_from_loader("orchestrator_daemonize", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(orchestrator)
+
+_CLI_MAIN_PY = Path(__file__).parents[1] / "src" / "aet" / "cli" / "main.py"
+_cli_main_loader = importlib.machinery.SourceFileLoader("aet_cli_main_daemonize", str(_CLI_MAIN_PY))
+_cli_main_spec = importlib.util.spec_from_loader("aet_cli_main_daemonize", _cli_main_loader)
+cli_main = importlib.util.module_from_spec(_cli_main_spec)
+_cli_main_spec.loader.exec_module(cli_main)
 
 
 class TestRunPaths(unittest.TestCase):
@@ -227,6 +233,44 @@ class TestMainWritesReturncode(unittest.TestCase):
             )
             self.assertTrue(rc_file.is_file())
             self.assertEqual(rc_file.read_text(encoding="utf-8"), "42")
+
+
+class TestDetachedSpawnReturnsPromptly(unittest.TestCase):
+    """The CLI never blocks on the detached child process (rid-01)."""
+
+    def test_run_returns_without_waiting_for_child(self):
+        proc = MagicMock()
+        proc.pid = 4321
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with patch.object(cli_main.subprocess, "Popen", return_value=proc):
+                    rc = cli_main.app(["run"], standalone_mode=False)
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(rc, 0)
+        proc.wait.assert_not_called()
+        proc.communicate.assert_not_called()
+
+    def test_run_one_returns_without_waiting_for_child(self):
+        proc = MagicMock()
+        proc.pid = 4322
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with patch.object(cli_main.subprocess, "Popen", return_value=proc):
+                    rc = cli_main.app(["run-one", "docs/plans/x.md"], standalone_mode=False)
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(rc, 0)
+        proc.wait.assert_not_called()
+        proc.communicate.assert_not_called()
 
 
 if __name__ == "__main__":

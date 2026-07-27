@@ -90,108 +90,113 @@ class TestRunMapping(unittest.TestCase):
     def _expected_run_argv(self, *extra):
         return [sys.executable, str(aet._orchestrator_path()), *extra]
 
-    def _capture_exec(self, argv):
-        """Run ``app`` with execvp captured; return (rc, path, argv)."""
+    def _capture_spawn(self, argv, run_id="run-detached-abc"):
+        """Run ``app`` with detached Popen captured; return (rc, cmd, kwargs)."""
         captured = {}
 
-        def mock_execvp(path, exec_argv):
-            captured["path"] = path
-            captured["argv"] = exec_argv
-            raise SystemExit(0)
+        def fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            mock = MagicMock()
+            mock.pid = 12345
+            return mock
 
-        with patch.object(aet.os, "execvp", mock_execvp):
-            rc = aet.app(argv, standalone_mode=False)
-        return rc, captured.get("path"), captured.get("argv")
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with patch.object(aet.subprocess, "Popen", side_effect=fake_popen):
+                    with patch.object(aet, "_generate_run_id", return_value=run_id):
+                        rc = aet.app(argv, standalone_mode=False)
+            finally:
+                os.chdir(old_cwd)
+        return rc, captured.get("cmd"), captured.get("kwargs")
 
-    def test_run_with_all_flags_foreground(self):
-        """`aet run --foreground <flags>` execs the orchestrator with mapped argv."""
-        rc, path, exec_argv = self._capture_exec(
+    def test_run_rejects_foreground_flag(self):
+        """`aet run --foreground` is rejected as an unknown option."""
+        # Guard the exec/spawn paths so a regression to the old behavior
+        # cannot replace or outlive this test process.
+        with patch.object(aet.os, "execvp", side_effect=SystemExit(0)):
+            with patch.object(aet.subprocess, "Popen"):
+                result = run_typer(aet.app, ["run", "--foreground"])
+        self.assertEqual(result.exit_code, 2)
+        self.assertIn("No such option", result.output)
+
+    def test_run_one_rejects_foreground_flag(self):
+        """`aet run-one --foreground <plan>` is rejected as an unknown option."""
+        with patch.object(aet.os, "execvp", side_effect=SystemExit(0)):
+            with patch.object(aet.subprocess, "Popen"):
+                result = run_typer(aet.app, ["run-one", "docs/plans/x.md", "--foreground"])
+        self.assertEqual(result.exit_code, 2)
+        self.assertIn("No such option", result.output)
+
+    def test_run_rejects_tuning_flags(self):
+        """`aet run` rejects --max-jobs, --isolation, and --stall-timeout."""
+        for flag_args in (["--max-jobs", "2"], ["--isolation", "full"], ["--stall-timeout", "60"]):
+            with self.subTest(flag=flag_args[0]):
+                with patch.object(aet.subprocess, "Popen"):
+                    result = run_typer(aet.app, ["run", *flag_args])
+                self.assertEqual(result.exit_code, 2)
+                self.assertIn("No such option", result.output)
+
+    def test_run_one_rejects_tuning_flags(self):
+        """`aet run-one` rejects --max-jobs, --isolation, and --stall-timeout."""
+        for flag_args in (["--max-jobs", "2"], ["--isolation", "full"], ["--stall-timeout", "60"]):
+            with self.subTest(flag=flag_args[0]):
+                with patch.object(aet.subprocess, "Popen"):
+                    result = run_typer(aet.app, ["run-one", "docs/plans/x.md", *flag_args])
+                self.assertEqual(result.exit_code, 2)
+                self.assertIn("No such option", result.output)
+
+    def test_run_forwards_retained_flags_detached(self):
+        """`aet run --base/--on-failure/--task-timeout/--cli-bin` forwards all four."""
+        rc, cmd, _ = self._capture_spawn(
             [
                 "run",
-                "--foreground",
-                "--max-jobs",
-                "2",
-                "--isolation",
-                "full",
+                "--base",
+                "feat/x",
+                "--on-failure",
+                "halt",
                 "--task-timeout",
-                "600",
-                "--stall-timeout",
-                "120",
+                "900",
                 "--cli-bin",
-                "/bin/cli",
+                "/bin/kimi",
             ]
         )
         self.assertEqual(rc, 0)
-        self.assertEqual(Path(path), Path(sys.executable))
-        self.assertEqual(
-            exec_argv,
-            self._expected_run_argv(
-                "--queue-file",
-                ".agents/work-queue.json",
-                "--max-jobs",
-                "2",
-                "--isolation",
-                "full",
-                "--task-timeout",
-                "600",
-                "--stall-timeout",
-                "120",
-                "--cli-bin",
-                "/bin/cli",
-            ),
-        )
+        self.assertEqual(Path(cmd[0]), Path(sys.executable))
+        self.assertEqual(cmd[1], str(aet._orchestrator_path()))
+        self.assertIn("--queue-file", cmd)
+        for flag, value in (
+            ("--base", "feat/x"),
+            ("--on-failure", "halt"),
+            ("--task-timeout", "900"),
+            ("--cli-bin", "/bin/kimi"),
+        ):
+            self.assertIn(flag, cmd)
+            self.assertEqual(cmd[cmd.index(flag) + 1], value)
+        # Tuning values are supplied internally at their defaults.
+        self.assertEqual(cmd[cmd.index("--max-jobs") + 1], "4")
+        self.assertEqual(cmd[cmd.index("--isolation") + 1], "standard")
+        self.assertNotIn("--stall-timeout", cmd)
 
-    def test_run_defaults_foreground(self):
-        """`aet run --foreground` produces the default orchestrator argv."""
-        rc, _, exec_argv = self._capture_exec(["run", "--foreground"])
-        self.assertEqual(rc, 0)
-        self.assertEqual(
-            exec_argv,
-            self._expected_run_argv(
-                "--queue-file",
-                ".agents/work-queue.json",
-                "--max-jobs",
-                "4",
-                "--isolation",
-                "standard",
-            ),
-        )
-
-    def test_run_one_maps_plan_positional_foreground(self):
-        """`aet run-one --foreground <plan>` maps the plan positional to --plan-file."""
-        rc, _, exec_argv = self._capture_exec(
-            ["run-one", "docs/plans/FEAT-001.md", "--foreground", "--cli-bin", "/bin/kimi"]
+    def test_run_one_forwards_retained_flags_detached(self):
+        """`aet run-one <plan> <flags>` maps the plan positional and forwards flags."""
+        rc, cmd, _ = self._capture_spawn(
+            ["run-one", "docs/plans/FEAT-001.md", "--on-failure", "halt", "--cli-bin", "/bin/kimi"]
         )
         self.assertEqual(rc, 0)
-        self.assertEqual(
-            exec_argv,
-            self._expected_run_argv(
-                "--plan-file",
-                "docs/plans/FEAT-001.md",
-                "--max-jobs",
-                "4",
-                "--isolation",
-                "standard",
-                "--cli-bin",
-                "/bin/kimi",
-            ),
-        )
+        self.assertEqual(cmd[1], str(aet._orchestrator_path()))
+        self.assertIn("--plan-file", cmd)
+        self.assertIn("docs/plans/FEAT-001.md", cmd)
+        self.assertIn("--on-failure", cmd)
+        self.assertIn("--cli-bin", cmd)
+        self.assertNotIn("--stall-timeout", cmd)
 
     def test_run_one_without_plan_exits_2(self):
-        """`aet run-one` without a plan file exits 2 without exec."""
-        with patch.object(aet.os, "execvp") as mock_exec:
-            result = run_typer(aet.app, ["run-one"])
+        """`aet run-one` without a plan file exits 2 without spawning."""
+        result = run_typer(aet.app, ["run-one"])
         self.assertEqual(result.exit_code, 2)
-        mock_exec.assert_not_called()
-
-    def test_run_maps_on_failure_flag_foreground(self):
-        """`aet run --foreground --on-failure` forwards the flag to the orchestrator."""
-        rc, _, exec_argv = self._capture_exec(
-            ["run", "--foreground", "--on-failure", "halt"]
-        )
-        self.assertEqual(rc, 0)
-        self.assertIn("--on-failure", exec_argv)
-        self.assertEqual(exec_argv[exec_argv.index("--on-failure") + 1], "halt")
 
     def test_run_spawns_detached_by_default(self):
         """`aet run` with no flags spawns the orchestrator detached."""

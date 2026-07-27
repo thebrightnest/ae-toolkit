@@ -104,6 +104,31 @@ _Avoid_: reading "triage" as a runtime conditional embedded in the engine — th
 Token and dollar totals rolled up per task from stage telemetry onto the task's ledger record at close, stored as `cost: {tokens, usd}`. **Analytics only** — read by the desk and the scoreboard, never by any gate, kill, or triage path. Null is preserved honestly: when no stage record carried a measurable value, the field is omitted rather than zeroed or written as a null-valued object. (ADR-031)
 _Avoid_: treating cost as a budget ceiling or any execution-control signal.
 
+## Run Supervision (ADR-053, supersedes ADR-031 item 2)
+
+**Run**:
+One invocation of the orchestrator over one plan (`aet run-one`) or the active queue (`aet run`). Distinct from a **Task** (the unit of work) and from a _session_ (one agent CLI process spawned for a single stage) — one run spawns many sessions.
+
+**Run Id**:
+The identifier minted per run (`run-YYYYMMDD-HHMMSS-<suffix>`), naming its metadata directory `.agents/runs/<run-id>/` (holding `output.log`, `pid`, `returncode`). Also the `{run-id}` path segment in the **Telemetry Archive**.
+
+**Detached Run**:
+The only execution mode. The orchestrator always runs in its own OS session with stdout redirected to the run's `output.log`; it is never hosted by the invoking session's process. "Detached" describes _where the process lives_, not whether the caller waits.
+
+**Follower**:
+The waiter that blocks until a run reaches a terminal state — either a terminal record or death of the run's pid — and then exits with the run's exit code. It emits a **Bounded Report**, never the run's output. `aet run-one` embeds one; `aet run --follow <run-id>` attaches one to an already-spawned run.
+_Avoid_: reading "follow" as tailing or streaming. A follower waits and summarizes; it never relays log lines.
+
+**Bounded Report**:
+The fixed-shape completion output of a **Follower**: one line per stage with status, duration, and exit code, plus a capped excerpt of the failing stage on failure. Its length does not scale with the volume of run output — that is the whole point. Full output stays on disk in `output.log`.
+
+**Stall Timeout**:
+The silence interval after which the watchdog kills a session that has produced no output, classified `timeout`. A per-adapter value on `CLIAdapter`, not a command flag and not a config key. (ADR-053)
+_Avoid_: treating it as a duration limit — a session that keeps emitting is never killed, however long it runs.
+
+**Wall Backstop**:
+The coarse wall-clock ceiling (`--task-timeout`), set well above the **Stall Timeout** so that silence detection remains the primary control. Retained from ADR-031 item 2.
+
 **History**:
 Append-only log of transition entries and closure events written to the optional, gitignored `.agents/work-history.jsonl`. It is used for reporting, not for scheduling or closure determination.
 

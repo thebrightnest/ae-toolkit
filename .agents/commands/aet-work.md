@@ -35,18 +35,16 @@ Reference for invoking the local `aet` CLI and the AET skill pipeline in this re
 
 ### Flags
 
-- `--foreground` — block and inherit the orchestrator's stdout/stderr exactly like the pre-daemonization behavior. Use only for debugging.
 - `--follow <run-id>` — attach to and tail a running or already-completed run's log.
-- `--max-jobs`, `--isolation`, `--on-failure`, `--task-timeout`, `--stall-timeout`, `--cli-bin` — forwarded to the orchestrator unchanged.
+- `--on-failure`, `--task-timeout`, `--cli-bin`, `--base` — forwarded to the orchestrator unchanged.
 
 ### Anti-Patterns
 
-- ❌ Running `aet run --foreground` for long batches unless you are actively debugging.
 - ❌ Spawning a second `aet run` because the first one is still running; use `aet status` or `aet run --follow <id>` instead.
 
 ## `aet run-one` — Single Task Execution
 
-Same detached behavior as `aet run`: runs in the background by default, prints a run ID, and can be followed with `aet run-one --follow <run-id>`. Use `--foreground` only for debugging.
+Same detached behavior as `aet run`: runs in the background, prints a run ID, and can be followed with `aet run-one --follow <run-id>`.
 
 ## `aet status` — Queue and Run State
 
