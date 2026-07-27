@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -33,6 +35,20 @@ _cli_main_loader = importlib.machinery.SourceFileLoader("aet_cli_main_daemonize"
 _cli_main_spec = importlib.util.spec_from_loader("aet_cli_main_daemonize", _cli_main_loader)
 cli_main = importlib.util.module_from_spec(_cli_main_spec)
 _cli_main_spec.loader.exec_module(cli_main)
+
+
+def _start_child_runner(run_dir: Path, returncode: int, delay: float = 0.2) -> subprocess.Popen:
+    """Start a real process that writes ``returncode`` after ``delay`` seconds."""
+    script = f"""
+import os
+import time
+from pathlib import Path
+run_dir = Path(os.environ["AET_TEST_RUN_DIR"])
+time.sleep({delay})
+(run_dir / "returncode").write_text(str({returncode}), encoding="utf-8")
+"""
+    env = {**os.environ, "AET_TEST_RUN_DIR": str(run_dir)}
+    return subprocess.Popen([sys.executable, "-c", script], env=env)
 
 
 class TestRunPaths(unittest.TestCase):
@@ -138,7 +154,9 @@ class TestMainUsesRunId(unittest.TestCase):
             with patch.object(
                 orchestrator, "resolve_cli_adapter", return_value=_FAKE_ADAPTER
             ):
-                with patch.object(orchestrator, "run_single", return_value=0) as mock_run:
+                with patch.object(
+                    orchestrator, "run_single", return_value=0
+                ) as mock_run:
                     with patch.object(
                         orchestrator, "_redirect_output"
                     ) as mock_redirect:
@@ -236,7 +254,7 @@ class TestMainWritesReturncode(unittest.TestCase):
 
 
 class TestDetachedSpawnReturnsPromptly(unittest.TestCase):
-    """The CLI never blocks on the detached child process (rid-01)."""
+    """Batch `run` never blocks on the detached child process (rid-01)."""
 
     def test_run_returns_without_waiting_for_child(self):
         proc = MagicMock()
@@ -255,22 +273,90 @@ class TestDetachedSpawnReturnsPromptly(unittest.TestCase):
         proc.wait.assert_not_called()
         proc.communicate.assert_not_called()
 
-    def test_run_one_returns_without_waiting_for_child(self):
-        proc = MagicMock()
-        proc.pid = 4322
 
+class TestFollowerWaitsSilently(unittest.TestCase):
+    """The non-streaming follower returns the run's exit code without echoing logs."""
+
+    def test_follow_completed_run_returns_rc_without_output(self):
         with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / ".agents" / "runs" / "run-done"
+            run_dir.mkdir(parents=True)
+            (run_dir / "output.log").write_text("hello log\n", encoding="utf-8")
+            (run_dir / "pid").write_text("12345", encoding="utf-8")
+            (run_dir / "returncode").write_text("7", encoding="utf-8")
+
             old_cwd = os.getcwd()
             try:
                 os.chdir(tmp)
-                with patch.object(cli_main.subprocess, "Popen", return_value=proc):
-                    rc = cli_main.app(["run-one", "docs/plans/x.md"], standalone_mode=False)
+                with patch.object(cli_main.typer, "echo") as echo_mock:
+                    rc = cli_main.app(["run", "--follow", "run-done"], standalone_mode=False)
             finally:
                 os.chdir(old_cwd)
 
-        self.assertEqual(rc, 0)
-        proc.wait.assert_not_called()
-        proc.communicate.assert_not_called()
+            self.assertEqual(rc, 7)
+            self.assertNotIn("hello log\n", [call.args[0] for call in echo_mock.call_args_list])
+
+    def test_follow_live_run_waits_for_returncode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / ".agents" / "runs" / "run-live"
+            run_dir.mkdir(parents=True)
+            (run_dir / "output.log").write_text("live log\n", encoding="utf-8")
+            child = _start_child_runner(run_dir, 13, delay=0.2)
+            try:
+                (run_dir / "pid").write_text(str(child.pid), encoding="utf-8")
+                old_cwd = os.getcwd()
+                try:
+                    os.chdir(tmp)
+                    started = time.monotonic()
+                    with patch.object(cli_main.typer, "echo") as echo_mock:
+                        rc = cli_main.app(["run", "--follow", "run-live"], standalone_mode=False)
+                    elapsed = time.monotonic() - started
+                finally:
+                    os.chdir(old_cwd)
+            finally:
+                child.terminate()
+                try:
+                    child.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+
+            self.assertEqual(rc, 13)
+            self.assertGreaterEqual(elapsed, 0.15)
+            self.assertNotIn("live log\n", [call.args[0] for call in echo_mock.call_args_list])
+
+    def test_follow_missing_pid_exits_nonzero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / ".agents" / "runs" / "run-no-pid"
+            run_dir.mkdir(parents=True)
+            (run_dir / "output.log").write_text("orphaned log\n", encoding="utf-8")
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with patch.object(cli_main.typer, "echo") as echo_mock:
+                    rc = cli_main.app(["run", "--follow", "run-no-pid"], standalone_mode=False)
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 1)
+            self.assertNotIn("orphaned log\n", [call.args[0] for call in echo_mock.call_args_list])
+            diagnostics = " ".join(str(call.args[0]) for call in echo_mock.call_args_list if call.kwargs.get("err"))
+            self.assertIn("no process", diagnostics)
+
+    def test_follow_unparseable_pid_exits_nonzero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / ".agents" / "runs" / "run-bad-pid"
+            run_dir.mkdir(parents=True)
+            (run_dir / "pid").write_text("not-a-number", encoding="utf-8")
+
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                rc = cli_main.app(["run", "--follow", "run-bad-pid"], standalone_mode=False)
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 1)
 
 
 if __name__ == "__main__":

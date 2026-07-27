@@ -36,17 +36,17 @@ invoked, not by a flag an agent selects.
 
 ## Task List
 
-1. Extract the wait loop of `_follow_run` into a follower that waits on the two terminal
+1. ✓ Extract the wait loop of `_follow_run` into a follower that waits on the two terminal
    conditions and returns the run's exit code **without writing any run output to stdout** —
    remove the byte-zero replay and the per-line echo — M (traces: R-2c)
-2. Fix the non-terminating path: when the pid file is absent or unparseable and no
+2. ✓ Fix the non-terminating path: when the pid file is absent or unparseable and no
    `returncode` file exists, exit non-zero with a diagnostic instead of looping forever
    (`main.py:181-196`) — S (traces: R-5)
-3. Make `aet run-one` spawn detached and then attach the follower, exiting with the run's exit
+3. ✓ Make `aet run-one` spawn detached and then attach the follower, exiting with the run's exit
    code — S (traces: R-2)
-4. Keep `aet run` (batch) returning immediately after spawn, printing run id and log path — S
+4. ✓ Keep `aet run` (batch) returning immediately after spawn, printing run id and log path — S
    (traces: R-2b)
-5. Add tests covering: `run-one` returns only at terminal state with the run's exit code and
+5. ✓ Add tests covering: `run-one` returns only at terminal state with the run's exit code and
    emits no run output lines; batch `run` returns before completion; `--follow` against both a
    live and an already-completed run; and the missing-pid case terminating non-zero — M
    (traces: R-2, R-2b, R-2c, R-5)
@@ -66,5 +66,5 @@ invoked, not by a flag an agent selects.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
