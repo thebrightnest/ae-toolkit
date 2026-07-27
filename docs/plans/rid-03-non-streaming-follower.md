@@ -66,5 +66,5 @@ invoked, not by a flag an agent selects.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
