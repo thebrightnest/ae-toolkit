@@ -25,6 +25,9 @@ from aet.project_id import derive_project_slug, resolve_repo_root  # noqa: F401
 DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
 
+# Maximum number of raw agent-output lines included in a stage record's excerpt.
+COMPLETION_REPORT_EXCERPT_LINES = 10
+
 
 TEST_SCOPE_FULL_SUITE = "full-suite"
 TEST_SCOPE_IMPACT = "impact"
@@ -186,6 +189,7 @@ def stage_record(
     failure_class: str | None = None,
     plan_snapshot: dict[str, Any] | None = None,
     attempt: int = 1,
+    output_excerpt: str | None = None,
 ) -> dict[str, Any]:
     """Build a per-stage telemetry record.
 
@@ -206,6 +210,9 @@ def stage_record(
 
     ``attempt`` counts how many times this task+stage combination has been
     emitted within the run (starting at 1).
+
+    ``output_excerpt`` is a bounded snippet of raw agent stdout/stderr captured
+    on failure; it is displayed by the completion report, never interpreted.
     """
     duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
     return {
@@ -231,6 +238,7 @@ def stage_record(
         "worktree_size_bytes": worktree_size_bytes,
         "token_count": token_count,
         "cost_estimate": cost_estimate,
+        "output_excerpt": output_excerpt,
     }
 
 
@@ -413,6 +421,26 @@ def _iter_run_dirs(root: Path):
         return
     for project_dir in sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink()):
         yield from _iter_project_run_dirs(project_dir)
+
+
+def find_run_dir(run_id: str, repo_root: str | Path | None = None) -> Path | None:
+    """Locate a telemetry run directory by ``run_id``.
+
+    Searches the telemetry archive under the project slug derived from
+    ``repo_root``. Returns ``None`` when the archive or run id is not found.
+    """
+    root = archive_dir()
+    slug = derive_project_slug(repo_root) if repo_root is not None else derive_project_slug()
+    project_dir = root / slug
+    if not project_dir.is_dir():
+        return None
+    for date_dir in sorted(project_dir.iterdir(), reverse=True):
+        if not date_dir.is_dir():
+            continue
+        candidate = date_dir / run_id
+        if candidate.is_dir():
+            return candidate
+    return None
 
 
 def _newest_mtime(path: Path) -> float:

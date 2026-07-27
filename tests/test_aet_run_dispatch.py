@@ -400,5 +400,44 @@ class TestIntegrationDetachedSpawn(_IsolatedBinDir):
             )
 
 
+class TestRunStartMessage(_IsolatedBinDir):
+    def test_start_message_names_log_path_and_describes_report(self):
+        captured_proc = {}
+
+        def fake_popen(cmd, **kwargs):
+            captured_proc["cmd"] = cmd
+            captured_proc["kwargs"] = kwargs
+            mock = unittest.mock.MagicMock()
+            mock.pid = 12345
+            return mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmp)
+                with self._bin_env():
+                    with patch.object(aet.subprocess, "Popen", side_effect=fake_popen) as popen_mock:
+                        with patch.object(aet, "_generate_run_id", return_value="run-msg-abc"):
+                            with patch.object(aet.typer, "echo") as echo_mock:
+                                rc = aet.app(["run"], standalone_mode=False)
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 0)
+            popen_mock.assert_called_once()
+            printed = "\n".join(str(call.args[0]) for call in echo_mock.call_args_list)
+            self.assertIn("Started run run-msg-abc", printed)
+            self.assertIn("Log:", printed)
+            self.assertIn(
+                str(Path(tmp) / ".agents" / "runs" / "run-msg-abc" / "output.log"),
+                printed,
+            )
+            self.assertIn("Report:", printed)
+            self.assertIn("aet run --follow run-msg-abc", printed)
+            self.assertNotIn("tail", printed.lower())
+            self.assertNotIn("stream", printed.lower())
+            self.assertNotIn("Follow:", printed)
+
+
 if __name__ == "__main__":
     unittest.main()

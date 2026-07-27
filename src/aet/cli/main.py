@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -51,6 +52,7 @@ from aet.cli import (
     validate_workflows,
 )
 # isort: on
+from aet import telemetry
 from aet.plan_parser import resolve_plan_arg
 
 app = typer.Typer(
@@ -200,7 +202,81 @@ def _wait_for_run(run_id: str) -> int:
 
 def _follow_run(run_id: str) -> None:
     """Attach to ``run_id`` and exit with its final status without echoing output."""
-    raise typer.Exit(_wait_for_run(run_id))
+    exit_code = _wait_for_run(run_id)
+    _print_completion_report(run_id, exit_code)
+    raise typer.Exit(exit_code)
+
+
+def _stage_records_for_run(run_id: str) -> list[dict[str, Any]]:
+    """Read all ``stage`` telemetry records for ``run_id``, oldest first.
+
+    The orchestrator writes the telemetry run directory into the local run
+    metadata so the follower can locate it without shelling out to git.
+    """
+    telemetry_path_file = _run_dir(run_id) / "telemetry_dir"
+    try:
+        run_dir = Path(telemetry_path_file.read_text(encoding="utf-8").strip())
+    except OSError:
+        return []
+    if not run_dir.is_dir():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in run_dir.glob("*.jsonl"):
+        for record in telemetry.read_jsonl(path):
+            if record.get("type") == "stage" and record.get("run_id") == run_id:
+                records.append(record)
+    records.sort(key=lambda r: r.get("start_time", ""))
+    return records
+
+
+def _format_duration(seconds: float) -> str:
+    """Format a duration for the completion report."""
+    if seconds < 0.01:
+        return "0.0s"
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, secs = divmod(int(seconds), 60)
+    return f"{minutes}m{secs:02d}s"
+
+
+def _completion_report_lines(run_id: str, exit_code: int) -> list[str]:
+    """Build a bounded completion report, one line per stage plus a result line."""
+    lines = [f"Run report: {run_id}"]
+    overall = "success" if exit_code == 0 else "failure"
+    lines.append(f"Result: {overall} (exit {exit_code})")
+
+    stage_records = _stage_records_for_run(run_id)
+    if stage_records:
+        lines.append("Stages:")
+    for record in stage_records:
+        names = record.get("actual_stages") or [record.get("stage", "unknown")]
+        name = " → ".join(names)
+        status = record.get("result", "unknown")
+        duration = _format_duration(float(record.get("duration_seconds", 0) or 0))
+        code = record.get("exit_code", "?")
+        lines.append(f"  {name}: {status} ({duration}, exit {code})")
+
+    if exit_code != 0:
+        failing = next(
+            (r for r in stage_records if r.get("exit_code", 0) != 0), None
+        )
+        excerpt = failing.get("output_excerpt") if failing else None
+        if excerpt:
+            cap = telemetry.COMPLETION_REPORT_EXCERPT_LINES
+            excerpt_lines = excerpt.splitlines()
+            if len(excerpt_lines) > cap:
+                excerpt_lines = excerpt_lines[-cap:]
+            lines.append(f"--- Output excerpt (last {cap} lines) ---")
+            lines.extend(excerpt_lines)
+            lines.append("---")
+
+    return lines
+
+
+def _print_completion_report(run_id: str, exit_code: int) -> None:
+    """Print the bounded completion report for a finished run."""
+    for line in _completion_report_lines(run_id, exit_code):
+        typer.echo(line)
 
 
 def _ensure_aet_importable() -> None:
@@ -273,7 +349,7 @@ def _spawn_detached(argv: list[str], run_id: str) -> int:
 
     typer.echo(f"🚀 Started run {run_id}")
     typer.echo(f"   Log: {log_file}")
-    typer.echo(f"   Follow: aet run --follow {run_id}")
+    typer.echo(f"   Report: aet run --follow {run_id}")
     return 0
 
 
@@ -324,7 +400,9 @@ def run_one(
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
     argv = ["--plan-file", resolved, *flags]
     _spawn_detached(argv, run_id)
-    raise typer.Exit(_wait_for_run(run_id))
+    exit_code = _wait_for_run(run_id)
+    _print_completion_report(run_id, exit_code)
+    raise typer.Exit(exit_code)
 
 
 def main() -> int:
