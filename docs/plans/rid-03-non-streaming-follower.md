@@ -66,5 +66,5 @@ invoked, not by a flag an agent selects.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
