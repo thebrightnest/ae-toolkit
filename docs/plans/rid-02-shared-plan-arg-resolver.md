@@ -4,7 +4,7 @@ size: M
 work_class: normal
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Changes path resolution shared by five commands, including filesystem lookups from user input.
 docs_sync: required
@@ -67,5 +67,5 @@ Per scope validation, the shared implementation adopts **ship's semantics**; `sp
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
