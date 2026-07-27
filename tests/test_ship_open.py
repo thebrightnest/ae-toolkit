@@ -17,6 +17,8 @@ _REPO_SRC = Path(__file__).parents[1] / "src"
 if str(_REPO_SRC) not in sys.path:
     sys.path.insert(0, str(_REPO_SRC))
 
+from aet.plan_parser import resolve_plan_arg  # noqa: E402
+
 _SHIP_PY = Path(__file__).parents[1] / "src" / "aet" / "cli" / "ship.py"
 _spec = importlib.util.spec_from_loader(
     "aet_ship_open", importlib.machinery.SourceFileLoader("aet_ship_open", str(_SHIP_PY))
@@ -96,20 +98,20 @@ class TestResolvePlanArg(unittest.TestCase):
     def test_md_path_passes_through(self):
         """A .md argument is returned unchanged, even if the file is missing."""
         self.assertEqual(
-            ship._resolve_plan_arg("docs/plans/elsewhere.md"),
+            resolve_plan_arg("docs/plans/elsewhere.md"),
             "docs/plans/elsewhere.md",
         )
 
     def test_bare_id_resolves_to_conventional_plan_path(self):
         """A bare task id resolves to docs/plans/<id>.md when that file exists."""
         os.chdir(self.tmpdir.name)
-        self.assertEqual(ship._resolve_plan_arg("t1"), "docs/plans/t1.md")
+        self.assertEqual(resolve_plan_arg("t1"), "docs/plans/t1.md")
 
     def test_bare_id_without_plan_file_raises(self):
         """A bare id with no conventional plan file errors naming both interpretations."""
         os.chdir(self.tmpdir.name)
         with self.assertRaises(ValueError) as ctx:
-            ship._resolve_plan_arg("no-such-task")
+            resolve_plan_arg("no-such-task")
         self.assertIn("no-such-task", str(ctx.exception))
         self.assertIn("docs/plans/no-such-task.md", str(ctx.exception))
 

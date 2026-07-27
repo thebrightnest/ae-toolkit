@@ -28,18 +28,13 @@ _BACKLOG_STATUSES = {"draft", "approved"}
 def resolve_plan(target: str, plans_dir: Path) -> Path | None:
     """Resolve ``target`` to a plan file path.
 
-    If ``target`` is an existing path, use it directly. Otherwise treat it as
-    a task ID and look for ``<target>.md`` in ``plans_dir``.
+    Wraps the shared resolver and converts its ``ValueError`` into ``None``,
+    preserving ``aet backlog add``'s existing contract.
     """
-    as_path = Path(target)
-    if as_path.is_file():
-        return as_path
-
-    candidate = plans_dir / f"{target}.md"
-    if candidate.is_file():
-        return candidate
-
-    return None
+    try:
+        return Path(plan_parser.resolve_plan_arg(target, plans_dir=plans_dir))
+    except ValueError:
+        return None
 
 
 def _fail(message: str) -> int:

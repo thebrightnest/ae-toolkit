@@ -51,6 +51,7 @@ from aet.cli import (
     validate_workflows,
 )
 # isort: on
+from aet.plan_parser import resolve_plan_arg
 
 app = typer.Typer(
     help="Agentic Engineering Toolkit CLI",
@@ -292,7 +293,9 @@ def run(
 
 @app.command("run-one")
 def run_one(
-    plan_file: str = typer.Argument(..., help="Plan file to run."),
+    plan_file: str = typer.Argument(
+        ..., help="Plan file path or task ID to run."
+    ),
     follow: str | None = typer.Option(None, "--follow", help="Follow an existing run id."),
     on_failure: str | None = typer.Option(None, "--on-failure", help="triage|continue|halt"),
     task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
@@ -304,10 +307,16 @@ def run_one(
         _follow_run(follow)
         return
 
+    try:
+        resolved = resolve_plan_arg(plan_file)
+    except ValueError as exc:
+        typer.echo(f"⛔ {exc}", err=True)
+        raise typer.Exit(1) from exc
+
     run_id = _generate_run_id()
     flags = _build_orchestrator_flags(on_failure, task_timeout, cli_bin, base)
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
-    argv = ["--plan-file", plan_file, *flags]
+    argv = ["--plan-file", resolved, *flags]
     raise typer.Exit(_spawn_detached(argv, run_id))
 
 

@@ -183,29 +183,10 @@ def cmd_ship(args):
     return aet_state.cmd_record_merge(ns)
 
 
-def _resolve_plan_arg(plan: str) -> str:
-    """Resolve a plan argument that may be a path or a bare task id.
-
-    A value ending in ``.md`` is treated as a plan path and returned as-is.
-    Anything else is treated as a task id and resolved to the conventional
-    ``docs/plans/<id>.md`` path. Raises ``ValueError`` when the id does not
-    resolve, so the error names both interpretations.
-    """
-    if plan.lower().endswith(".md"):
-        return plan
-    candidate = Path("docs/plans") / f"{plan}.md"
-    if candidate.is_file():
-        return str(candidate)
-    raise ValueError(
-        f"Plan not found: '{plan}' is not a .md path and "
-        f"docs/plans/{plan}.md does not exist. Pass the full plan path."
-    )
-
-
 def cmd_default(args: argparse.Namespace) -> int:
     """Run the gate and, if it passes, open a PR for a plan."""
     try:
-        args.plan = _resolve_plan_arg(args.plan)
+        args.plan = plan_parser.resolve_plan_arg(args.plan)
     except ValueError as exc:
         return _fail(str(exc))
     plan_path = Path(args.plan)
@@ -373,7 +354,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
 def cmd_gate(args: argparse.Namespace) -> int:
     """Run the pre-merge gate for a plan."""
     try:
-        args.plan = _resolve_plan_arg(args.plan)
+        args.plan = plan_parser.resolve_plan_arg(args.plan)
     except ValueError as exc:
         return _fail(str(exc))
     plan_path = Path(args.plan)
@@ -632,7 +613,7 @@ def _check_release_guard(pr_base: str) -> str | None:
 def cmd_open(args: argparse.Namespace) -> int:
     """Run the gate and open a PR for a plan."""
     try:
-        args.plan = _resolve_plan_arg(args.plan)
+        args.plan = plan_parser.resolve_plan_arg(args.plan)
     except ValueError as exc:
         return _fail(str(exc))
     plan_path = Path(args.plan)
@@ -854,7 +835,7 @@ def _merge_into_target(
 def cmd_merge(args: argparse.Namespace) -> int:
     """Run the gate, detect conflicts, merge directly into a target branch, and close."""
     try:
-        args.plan = _resolve_plan_arg(args.plan)
+        args.plan = plan_parser.resolve_plan_arg(args.plan)
     except ValueError as exc:
         return _fail(str(exc))
     plan_path = Path(args.plan)
