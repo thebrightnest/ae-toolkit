@@ -36,19 +36,19 @@ Per scope validation, the shared implementation adopts **ship's semantics**; `sp
 
 ## Task List
 
-1. Add a shared `resolve_plan_arg(plan, plans_dir=Path("docs/plans"))` to a common module,
+1. ✓ Add a shared `resolve_plan_arg(plan, plans_dir=Path("docs/plans"))` to a common module,
    with ship's semantics: `.md` passes through unchecked; otherwise resolve to
    `<plans_dir>/<id>.md`; raise `ValueError` naming both interpretations when unresolvable — S
    (traces: R-11)
-2. Replace `ship.py:186 _resolve_plan_arg` with the shared helper at all four call sites
+2. ✓ Replace `ship.py:186 _resolve_plan_arg` with the shared helper at all four call sites
    (`ship.py:208, 376, 635, 857`), preserving current behavior exactly — S (traces: R-11)
-3. Replace `sprint.py:32` and `backlog.py:28` with call-site wrappers that catch `ValueError`
+3. ✓ Replace `sprint.py:32` and `backlog.py:28` with call-site wrappers that catch `ValueError`
    and return `None`, keeping both commands' current contract and their `plans_dir`
-   parameterization — M (traces: R-11, R-11b)
-4. Accept a bare task id for the `plan_file` argument of `run-one` in `src/aet/cli/main.py`
+   parameterization — M (traces: R-11, R-11b) [Changed: `.md` passthrough now follows ship semantics; `.md.md` fallback removed]
+4. ✓ Accept a bare task id for the `plan_file` argument of `run-one` in `src/aet/cli/main.py`
    via the shared helper, and update its help text to match `aet ship`'s wording — S
    (traces: R-10)
-5. Add tests: shared-resolver unit cases (id hit, id miss raises, `.md` passthrough of a
+5. ✓ Add tests: shared-resolver unit cases (id hit, id miss raises, `.md` passthrough of a
    non-existent path); `sprint add` / `backlog add` parity for a valid id, a missing id, and a
    non-existent `.md` path; `aet run-one <id>` and `aet run-one docs/plans/<id>.md` resolving
    identically — M (traces: R-10, R-11b)
@@ -67,5 +67,5 @@ Per scope validation, the shared implementation adopts **ship's semantics**; `sp
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
