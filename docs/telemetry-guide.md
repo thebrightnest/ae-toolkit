@@ -64,11 +64,27 @@ No external service is used. Logs stay on your local filesystem.
 
 ## What counts as a test run
 
-Detection (which Bash calls in a session wire log are test invocations) and
+Detection (which Bash calls in a session log are test invocations) and
 scope classification (`full-suite` / `impact` / `unknown`) are two readings of
 one parse. Both resolve commands through the shared runner registry in
 `src/aet/test_runners.py` — there is exactly one runner table, so a command
 the detector recognises is classifiable by construction.
+
+Session-log extraction is adapter-dispatched, mirroring `usage.parse_usage`.
+`src/aet/session_log.py` selects the reader for the current CLI:
+
+- `kimi` — reads `agents/*/wire.jsonl` under a kimi session directory
+  (`src/aet/wirelog.py`).
+- `claude` — reads Claude Code's transcript JSONL at
+  `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl`
+  (`src/aet/session_log_claude.py`).
+
+Each reader returns the same shape (`command`, `start_time`, `end_time`,
+`duration_seconds`, `exit_code`) and applies the same defensive rules: oversized
+lines, malformed JSON, missing pairs, and missing timestamps are skipped or
+recorded as null — never estimated. An adapter without a reader returns no
+observed records; that is an explicit property of the seam, not incidental
+silence (ADR-050).
 
 Before matching, the command is normalised:
 

@@ -1,0 +1,9 @@
+{"type":"context.append_loop_event","event":{"type":"tool.call","uuid":"kimi-call-1","toolCallId":"kimi-call-1","name":"Bash","args":{"command":"git status"}},"time":1784049700000}
+{"type":"context.append_loop_event","event":{"type":"tool.result","parentUuid":"kimi-call-1","toolCallId":"kimi-call-1","result":{"output":"On branch main\nnothing to commit, working tree clean","isError":false}},"time":1784049701000}
+{"type":"context.append_loop_event","event":{"type":"tool.call","uuid":"kimi-call-2","toolCallId":"kimi-call-2","name":"Bash","args":{"command":"python3 -m pytest tests/ -q"}},"time":1784049800000}
+{"type":"context.append_loop_event","event":{"type":"tool.result","parentUuid":"kimi-call-2","toolCallId":"kimi-call-2","result":{"output":"631 passed","isError":false}},"time":1784049845000}
+{"type":"context.append_loop_event","event":{"type":"tool.call","uuid":"kimi-call-3","toolCallId":"kimi-call-3","name":"Shell","args":{"command":"pytest tests/"}},"time":1784049850000}
+{"type":"context.append_loop_event","event":{"type":"tool.result","parentUuid":"kimi-call-3","toolCallId":"kimi-call-3","result":{"output":"ok","isError":false}},"time":1784049851000}
+{"type":"context.append_loop_event","event":{"type":"tool.call","uuid":"kimi-call-4","toolCallId":"kimi-call-4","name":"Bash","args":{"command":"pytest tests/"}},"time":1784049900000}
+{"type":"context.append_loop_event","event":{"type":"tool.result","parentUuid":"kimi-call-4","toolCallId":"kimi-call-4","result":{"output":"3 failed, 2 passed\nCommand failed with exit code: 1.","isError":true}},"time":1784049960000}
+{"type":"context.append_loop_event","event":{"type":"tool.call","uuid":"kimi-call-5","toolCallId":"kimi-call-5","name":"Bash","args":{"command":"pytest tests/test_unpaired.py"}},"time":1784050000000}

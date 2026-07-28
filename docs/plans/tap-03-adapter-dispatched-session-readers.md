@@ -137,4 +137,5 @@ orchestrator wiring yet (`tap-04`), so the revert touches only extraction code a
 
 ---
 
-*Stage: plan-approved*
+*Stage: synced*
+*Next step: run `aet-ship`*
