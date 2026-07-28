@@ -66,6 +66,14 @@ This plan runs last because it describes the finished behavior.
 - CONTEXT.md's seven Run Supervision terms match the shipped commands.
 - Named tests: none — documentation-only. Verified by the greps above and by `aet docs lint`.
 
+## Post-implementation revision
+
+After review, `--max-jobs` was restored as a caller-tunable option **only** for `aet run`
+(batch mode). The live command reference `.agents/commands/aet-work.md`, the skill reference
+`skills/aet-work/references/queue-commands.md`, and `docs/CONVENTIONS.md` now document
+`aet run --max-jobs <n>` (default `4`, maximum `8`) and note that `aet run-one` does not
+accept the flag. `--isolation` and `--stall-timeout` remain removed from both commands.
+
 ---
 
 *Stage: merged*

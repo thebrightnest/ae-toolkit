@@ -164,7 +164,6 @@ class TestRemovedFlagsRejected(_IsolatedBinDir):
     def test_run_rejects_foreground_and_tuning_flags(self):
         for extra in (
             ["--foreground"],
-            ["--max-jobs", "2"],
             ["--isolation", "full"],
             ["--stall-timeout", "60"],
         ):
@@ -194,7 +193,7 @@ class TestRemovedFlagsRejected(_IsolatedBinDir):
 
 
 class TestRetainedFlagsForward(_IsolatedBinDir):
-    def test_run_forwards_base_on_failure_task_timeout_and_cli_bin(self):
+    def test_run_forwards_base_on_failure_task_timeout_cli_bin_and_max_jobs(self):
         captured_proc = {}
 
         def fake_popen(cmd, **kwargs):
@@ -220,6 +219,8 @@ class TestRetainedFlagsForward(_IsolatedBinDir):
                                 "900",
                                 "--cli-bin",
                                 "/bin/kimi",
+                                "--max-jobs",
+                                "2",
                             ],
                             standalone_mode=False,
                         )
@@ -233,6 +234,7 @@ class TestRetainedFlagsForward(_IsolatedBinDir):
             ("--on-failure", "halt"),
             ("--task-timeout", "900"),
             ("--cli-bin", "/bin/kimi"),
+            ("--max-jobs", "2"),
         ):
             self.assertIn(flag, cmd)
             self.assertEqual(cmd[cmd.index(flag) + 1], value)

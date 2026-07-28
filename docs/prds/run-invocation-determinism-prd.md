@@ -80,10 +80,12 @@ agent is left with one literal command and no parameters to select.
   (enforce on evidence of silence, not on a stopwatch).
 - **R-8b**: An ADR is added superseding ADR-031 decision item 2 only. ADR-031 remains
   accepted for items 1 and 3, and ADR-031 is annotated to point at it.
-- **R-9**: `--max-jobs`, `--isolation`, and `--stall-timeout` are removed from the `run` and
-  `run-one` command surface. `--base`, `--on-failure`, `--task-timeout`, and `--cli-bin` are
-  retained as semantic per-run inputs: `--base` names the epic integration branch under
-  `single-pr` mode; `--on-failure` selects failure routing policy (ADR-030); `--task-timeout`
+- **R-9**: `--isolation` and `--stall-timeout` are removed from the `run` and `run-one`
+  command surface. `--max-jobs` is retained on `aet run` only (batch concurrency cap,
+  default `4`, maximum `8`) and is not accepted by `aet run-one`. `--base`, `--on-failure`,
+  `--task-timeout`, and `--cli-bin` are retained as semantic per-run inputs: `--base` names
+  the epic integration branch under `single-pr` mode; `--on-failure` selects failure routing
+  policy (ADR-030); `--task-timeout`
   is the wall-clock backstop ADR-031 retains; `--cli-bin` selects which agent CLI runs the
   work, and therefore — via R-7 — which supervision defaults apply.
 - **R-10**: `aet run` and `aet run-one` accept a bare task id resolved to
@@ -155,9 +157,10 @@ agent is left with one literal command and no parameters to select.
       and the wall backstop default exceeds the stall interval (satisfies: R-8)
 - [ ] An ADR exists that supersedes ADR-031 item 2 and no other item, and ADR-031 links to it
       (satisfies: R-8b)
-- [ ] `--max-jobs`, `--isolation`, and `--stall-timeout` are rejected as unknown options by
-      `run` and `run-one`, while `--base`, `--on-failure`, `--task-timeout`, and `--cli-bin`
-      are still accepted and still take effect (satisfies: R-9)
+- [ ] `--isolation` and `--stall-timeout` are rejected as unknown options by `run` and
+      `run-one`; `--max-jobs` is accepted by `run` and rejected by `run-one`; `--base`,
+      `--on-failure`, `--task-timeout`, and `--cli-bin` are still accepted and still take
+      effect (satisfies: R-9)
 - [ ] `aet run-one <id>` and `aet run-one docs/plans/<id>.md` resolve identically, and an
       unresolvable id errors naming both interpretations (satisfies: R-10)
 - [ ] `ship`, `sprint`, and `backlog` import the shared resolver, and their local copies are
@@ -274,6 +277,11 @@ commands without removing human observability.
   applied to `sprint` and `backlog`. A non-existent `.md` argument is returned unchanged instead
   of falling through to a `.md.md` lookup. This matches the scope-validation decision to adopt
   ship's semantics and is covered by `tests/queue/test_sprint_backlog_parity.py`.
+- **R-9 `--max-jobs` on `aet run`**: Originally removed from both `run` and `run-one`,
+  `--max-jobs` was restored as a caller-tunable option on `aet run` only (default `4`,
+  maximum `8`). `aet run-one` continues to reject it. The dispatcher tests in
+  `tests/cli/test_aet_dispatcher.py` and `tests/test_aet_run_dispatch.py` cover both the
+  accepted `run --max-jobs` path and the rejected `run-one --max-jobs` path.
 
 ---
 

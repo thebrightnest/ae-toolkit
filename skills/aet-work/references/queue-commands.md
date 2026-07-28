@@ -73,8 +73,8 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the orc
 
 5. **Concurrency cap:**
 
-   - Default: `4` jobs (override with `AET_WORK_JOBS` env var), hard cap at 8
-   - Override: set `AET_WORK_JOBS` environment variable
+   - Default: `4` parallel tasks
+   - Override: `aet run --max-jobs <n>` (accepted values: `1`–`8`)
    - The orchestrator never exceeds the cap to prevent resource exhaustion
 
 6. **Resume behavior:**

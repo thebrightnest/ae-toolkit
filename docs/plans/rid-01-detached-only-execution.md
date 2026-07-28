@@ -63,6 +63,22 @@ per-run inputs and must keep working.
   rejection), `tests/test_aet_run_dispatch.py` (both commands route to detached spawn with no
   exec path), `tests/test_orchestrator_daemonize.py` (detached spawn returns promptly).
 
+## Post-implementation revision
+
+After further review, `--max-jobs` was restored as a caller-tunable option **only**
+for `aet run` (batch mode). `--isolation` and `--stall-timeout` remain removed
+from both `run` and `run-one`. The `_build_orchestrator_flags` helper accepts a
+`max_jobs` argument defaulting to `4`; `aet run` exposes `--max-jobs` and forwards
+it, while `aet run-one` continues to use the default and rejects `--max-jobs`.
+
+Updated validation:
+
+- `aet run --max-jobs 2` is accepted and forwarded to the orchestrator argv.
+- `aet run --isolation full` and `--stall-timeout 60` are each rejected.
+- `aet run-one --max-jobs 2` is still rejected as an unknown option.
+- `aet run --base feat/x --on-failure halt --task-timeout 900 --cli-bin /bin/kimi --max-jobs 2`
+  is accepted and forwards all five flags to the orchestrator argv.
+
 ---
 
 *Stage: synced*

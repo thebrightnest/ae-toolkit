@@ -307,13 +307,14 @@ def _build_orchestrator_flags(
     task_timeout: int | None,
     cli_bin: str | None,
     base: str | None,
+    max_jobs: int = 4,
 ) -> list[str]:
     """Build the forwarded flag list for the orchestrator.
 
-    ``--max-jobs`` and ``--isolation`` are supplied internally at their
-    defaults (4, ``standard``); they are not caller-tunable (rid-01).
+    ``--isolation`` is supplied internally at its default (``standard``);
+    ``--max-jobs`` defaults to 4 and is caller-tunable only for ``aet run``.
     """
-    flags = ["--max-jobs", "4", "--isolation", "standard"]
+    flags = ["--max-jobs", str(max_jobs), "--isolation", "standard"]
     if on_failure is not None:
         flags.extend(["--on-failure", on_failure])
     if task_timeout is not None:
@@ -360,6 +361,9 @@ def run(
     task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
     cli_bin: str | None = typer.Option(None, "--cli-bin", help="Agent CLI binary path."),
     base: str | None = typer.Option(None, "--base", help="Override the worktree base branch/ref."),
+    max_jobs: int = typer.Option(
+        4, "--max-jobs", help="Max parallel tasks (batch mode)."
+    ),
 ) -> None:
     """Run the orchestrator in batch mode."""
     if follow is not None:
@@ -367,7 +371,9 @@ def run(
         return
 
     run_id = _generate_run_id()
-    flags = _build_orchestrator_flags(on_failure, task_timeout, cli_bin, base)
+    flags = _build_orchestrator_flags(
+        on_failure, task_timeout, cli_bin, base, max_jobs=max_jobs
+    )
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
     argv = ["--queue-file", ".agents/work-queue.json", *flags]
     raise typer.Exit(_spawn_detached(argv, run_id))

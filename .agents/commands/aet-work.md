@@ -37,6 +37,7 @@ Reference for invoking the local `aet` CLI and the AET skill pipeline in this re
 
 - `--follow <run-id>` — wait for an already-spawned run to reach a terminal state and print a bounded completion report. It does **not** tail or stream run output.
 - `--on-failure`, `--task-timeout`, `--cli-bin`, `--base` — forwarded to the orchestrator unchanged.
+- `--max-jobs <n>` — batch concurrency cap for `aet run` (default `4`, max `8`). Not accepted by `aet run-one`.
 
 ### Anti-Patterns
 

@@ -132,8 +132,8 @@ class TestRunMapping(unittest.TestCase):
         self.assertIn("No such option", result.output)
 
     def test_run_rejects_tuning_flags(self):
-        """`aet run` rejects --max-jobs, --isolation, and --stall-timeout."""
-        for flag_args in (["--max-jobs", "2"], ["--isolation", "full"], ["--stall-timeout", "60"]):
+        """`aet run` rejects --isolation and --stall-timeout; --max-jobs is retained."""
+        for flag_args in (["--isolation", "full"], ["--stall-timeout", "60"]):
             with self.subTest(flag=flag_args[0]):
                 with patch.object(aet.subprocess, "Popen"):
                     result = run_typer(aet.app, ["run", *flag_args])
@@ -150,7 +150,7 @@ class TestRunMapping(unittest.TestCase):
                 self.assertIn("No such option", result.output)
 
     def test_run_forwards_retained_flags_detached(self):
-        """`aet run --base/--on-failure/--task-timeout/--cli-bin` forwards all four."""
+        """`aet run --base/--on-failure/--task-timeout/--cli-bin/--max-jobs` forwards all five."""
         rc, cmd, _ = self._capture_spawn(
             [
                 "run",
@@ -162,6 +162,8 @@ class TestRunMapping(unittest.TestCase):
                 "900",
                 "--cli-bin",
                 "/bin/kimi",
+                "--max-jobs",
+                "2",
             ]
         )
         self.assertEqual(rc, 0)
@@ -173,11 +175,10 @@ class TestRunMapping(unittest.TestCase):
             ("--on-failure", "halt"),
             ("--task-timeout", "900"),
             ("--cli-bin", "/bin/kimi"),
+            ("--max-jobs", "2"),
         ):
             self.assertIn(flag, cmd)
             self.assertEqual(cmd[cmd.index(flag) + 1], value)
-        # Tuning values are supplied internally at their defaults.
-        self.assertEqual(cmd[cmd.index("--max-jobs") + 1], "4")
         self.assertEqual(cmd[cmd.index("--isolation") + 1], "standard")
         self.assertNotIn("--stall-timeout", cmd)
 

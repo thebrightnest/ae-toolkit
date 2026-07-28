@@ -491,6 +491,8 @@ The orchestrator writes execution telemetry directly to `~/.aet/telemetry/{proje
 
 `aet run` accepts `--on-failure={triage|continue|halt}` (default `triage`). Skills and agents that invoke the batch runner may rely on this default, so new skills should document when they need a non-default mode.
 
+`aet run` accepts `--max-jobs=<n>` (default `4`, maximum `8`) to control batch concurrency. `aet run-one` does not accept this flag.
+
 ### Failure taxonomy
 
 All task failures are classified into one of five classes before routing:
