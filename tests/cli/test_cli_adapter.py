@@ -185,6 +185,7 @@ class TestResolveSessionRef(unittest.TestCase):
             self.assertEqual(ref, expected)
 
     def test_claude_session_reference_null_when_cwd_mismatches(self):
+        """A transcript at the expected path whose own cwd disagrees is not a match."""
         envelope = (
             '[{"type":"system","subtype":"init","session_id":"s1","cwd":"/tmp/proj"},'
             '{"type":"result","subtype":"success","is_error":false,"session_id":"s1",'
@@ -193,12 +194,27 @@ class TestResolveSessionRef(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             adapter = resolve_cli_adapter("claude")
+            # Written at the slug the resolver will look under, but every record
+            # inside claims a different cwd — the confirmation must reject it.
             self._write_claude_transcript(
                 home,
-                "/tmp/other",
+                "/tmp/proj",
                 "s1",
                 [{"cwd": "/tmp/other", "session_id": "s1"}],
             )
+            with patch("pathlib.Path.home", return_value=home):
+                ref = adapter.resolve_session_ref(envelope, workdir="/tmp/proj")
+            self.assertIsNone(ref)
+
+    def test_claude_session_reference_null_when_transcript_missing(self):
+        """A resolvable session_id with no transcript on disk yields no guess."""
+        envelope = (
+            '[{"type":"result","subtype":"success","is_error":false,'
+            '"session_id":"s1","usage":{"input_tokens":2,"output_tokens":4}}]'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            adapter = resolve_cli_adapter("claude")
             with patch("pathlib.Path.home", return_value=home):
                 ref = adapter.resolve_session_ref(envelope, workdir="/tmp/proj")
             self.assertIsNone(ref)

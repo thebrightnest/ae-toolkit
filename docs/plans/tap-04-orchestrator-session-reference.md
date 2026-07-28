@@ -135,4 +135,5 @@ records stay readable either way.
 
 ---
 
-*Stage: plan-approved*
+*Stage: tdd-complete*
+*Next step: run `aet-implement`*
