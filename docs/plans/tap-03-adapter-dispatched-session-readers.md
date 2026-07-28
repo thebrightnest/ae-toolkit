@@ -3,7 +3,7 @@ id: tap-03-adapter-dispatched-session-readers
 size: M
 blocked_by: [tap-02-shared-runner-registry]
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: adds a reader for a new on-disk path family (~/.claude/projects/**) parsed with untrusted-content assumptions — line-length caps, JSON failure tolerance, and no path traversal outside the resolved project dir; the kimi reader's existing hardening must be matched, not re-derived
 docs_sync: required
@@ -137,5 +137,5 @@ orchestrator wiring yet (`tap-04`), so the revert touches only extraction code a
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
