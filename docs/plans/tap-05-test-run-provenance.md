@@ -79,19 +79,29 @@ docs_sync_reason: ADR-051 defines the provenance contract; the telemetry schema 
 
 - [x] 1 · [x] 2 · [x] 3 · [x] 4 · [x] 5 · [x] 6 — task 7 (merge) belongs to `aet-ship`.
 
-1. Add a required `source` argument to `telemetry.test_run_record` and set it at both emission
+1. ✓ Add a required `source` argument to `telemetry.test_run_record` and set it at both emission
    sites; stop passing `exit_code=0` from the verdict emitter — S (traces: R-7)
-2. Split the panel's aggregates by provenance: timing/pass-rate over observed, counts over
+   [Changed: `source` is also enum-validated (`TEST_RUN_SOURCES`), not merely required]
+2. ✓ Split the panel's aggregates by provenance: timing/pass-rate over observed, counts over
    claimed, with labels stating which; mark provenance on the timeline and test-run list rows —
    M (traces: R-8)
-3. Declare provenance in `desk._telemetry_signals`' `tests_failed` read and its docstring —
+   [Changed: plan-level aggregate recomputed at the end of `buildPlans` instead of accumulated
+   per record; added observed pass-rate/test-time stats and a `Th` prop-spreading fix so the
+   label tooltips render]
+3. ✓ Declare provenance in `desk._telemetry_signals`' `tests_failed` read and its docstring —
    S (traces: R-8)
-4. Filter `mine_learnings`' `full_suite_runs`/`impact_runs` counting to observed records and note
+4. ✓ Filter `mine_learnings`' `full_suite_runs`/`impact_runs` counting to observed records and note
    the change in its output — S (traces: R-8)
-5. Document `source` and the observed/claimed split in `docs/telemetry-guide.md`; confirm
+   [Changed: the guard covers the whole `test_run` branch, so `repeated_test_invocations` is
+   observed-only and labeled too]
+5. ✓ Document `source` and the observed/claimed split in `docs/telemetry-guide.md`; confirm
    CONTEXT.md's **Test Run** term matches — S (traces: R-7, R-8)
-6. Tests (see Validation Steps) — M (traces: R-7, R-8)
+   [Changed: CONTEXT.md needed a correction, not a confirmation; the field table in
+   `skills/aet-work/references/telemetry-log-schema.md` was documented too]
+6. ✓ Tests (see Validation Steps) — M (traces: R-7, R-8)
 7. Merge branch to main and verify integration — S
+   [Deferred: `aet-ship`; also resolves the `tap-04` `_emit_wire_test_runs` rename, since this
+   branch was cut before `tap-04` merged]
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -166,5 +176,5 @@ need a migration.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
