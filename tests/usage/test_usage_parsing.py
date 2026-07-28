@@ -81,6 +81,17 @@ class TestParseUsageClaude(unittest.TestCase):
         text = '{"type":"result","subtype":"success","usage":{"input_tokens":10,"out'
         self.assertIsNone(parse_usage("claude", text))
 
+    def test_claude_live_captured_envelope_parses(self):
+        """Live 2026-07-28 envelope (redacted) parses to non-null tokens and cost."""
+        fixture = Path(__file__).parent.parent / "fixtures" / "usage" / "claude_live_envelope.json"
+        text = fixture.read_text()
+        usage = parse_usage("claude", text)
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage["input_tokens"], 21395)
+        self.assertEqual(usage["output_tokens"], 4)
+        self.assertEqual(usage["total_tokens"], 21399)
+        self.assertAlmostEqual(usage["cost_usd"], 0.21404)
+
 
 class TestParseUsageKimi(unittest.TestCase):
     """Kimi prints no usage to stdout (verified 2026-07-12); its usage lives
