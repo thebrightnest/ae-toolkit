@@ -119,10 +119,10 @@ def _write_fake_claude(repo_root: str) -> Path:
     bin_dir = Path(repo_root) / "bin"
     bin_dir.mkdir(exist_ok=True)
     fake_cli = bin_dir / "claude"
-    helper = Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py"
     fake_cli.write_text(
         '#!/usr/bin/env python3\n'
         'import os\n'
+        'import signal\n'
         'import subprocess\n'
         'import sys\n'
         '\n'
@@ -145,11 +145,12 @@ def _write_fake_claude(repo_root: str) -> Path:
         '    result_envelope()\n'
         '    sys.exit(1)\n'
         '\n'
-        '# Stall: emit usage, then sleep until the watchdog kills us.\n'
+        '# Stall: emit usage, then self-SIGKILL so the orchestrator classifies\n'
+        '# the session as a timeout (exit -9) without waiting for the real stall\n'
+        '# watchdog. The stall watchdog is covered by test_stall_watchdog.py.\n'
         'if "stall" in prompt:\n'
         '    result_envelope()\n'
-        f'    subprocess.run([sys.executable, "{helper}", "600"])\n'
-        '    sys.exit(0)\n'
+        '    os.kill(os.getpid(), signal.SIGKILL)\n'
         '\n'
         '# Healthy fixture: ensure at least one commit exists and exit 0.\n'
         'print("fixture: checking commits", flush=True)\n'
@@ -207,9 +208,10 @@ def _commit_repo_state(repo_root: str) -> None:
 class TestNightShiftExitGateRehearsal(unittest.TestCase):
     """End-to-end rehearsal over a mixed unattended queue.
 
-    The shift is expensive — it waits out a real stall-watchdog kill and drives
-    the breaker to trip — and every test below only reads the resulting queue
-    state, so the batch runs once for the whole class.
+    The stall fixture self-SIGKILLs to produce a timeout-classified exit (-9)
+    without waiting for the real stall watchdog; the watchdog itself is covered
+    by tests/orchestrator/test_stall_watchdog.py. Every test below only reads
+    the resulting queue state, so the batch runs once for the whole class.
     """
 
     queue_file: str
@@ -307,10 +309,6 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
             isolation="minimal",
             max_jobs=3,
             task_timeout=999,
-            # Keep stall_timeout generous enough that the healthy fixture's git
-            # operations do not get killed under loadgroup/xdist load, while
-            # still being far shorter than the original 5 s.
-            stall_timeout=3,
             heartbeat_interval=999,
             on_failure="triage",
         )

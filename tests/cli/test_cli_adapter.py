@@ -72,6 +72,18 @@ class TestCLIAdapter(unittest.TestCase):
         adapter = resolve_cli_adapter("kimi")
         self.assertEqual(adapter.usage_mode, "wire-file")
 
+    def test_kimi_supervision_defaults_exceed_suite_silence(self):
+        """kimi's stall timeout and wall backstop are adapter data (ADR-053)."""
+        adapter = resolve_cli_adapter("kimi")
+        self.assertGreater(adapter.stall_timeout, 300)
+        self.assertGreater(adapter.wall_backstop, adapter.stall_timeout)
+
+    def test_claude_supervision_defaults_exceed_suite_silence(self):
+        """claude's stall timeout and wall backstop are adapter data (ADR-053)."""
+        adapter = resolve_cli_adapter("claude")
+        self.assertGreater(adapter.stall_timeout, 300)
+        self.assertGreater(adapter.wall_backstop, adapter.stall_timeout)
+
     def test_wire_file_mode_appends_no_flags(self):
         """wire-file parsing needs no CLI flags — the tee captures the hint."""
         adapter = resolve_cli_adapter("kimi")

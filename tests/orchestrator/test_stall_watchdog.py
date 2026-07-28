@@ -19,6 +19,8 @@ from unittest.mock import patch
 
 import pytest
 
+from aet.cli_adapter import CLIAdapter
+
 pytestmark = pytest.mark.xdist_group("process-group")
 
 # Ensure the aet-work lib is on the path before importing telemetry.
@@ -30,6 +32,22 @@ _orchestrator_loader = importlib.machinery.SourceFileLoader(
 _spec = importlib.util.spec_from_loader("orchestrator", _orchestrator_loader)
 orchestrator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(orchestrator)
+
+
+# Trimmed from real `claude -p --output-format json` output captured 2026-07-12:
+# a single-line JSON array whose final element (type "result") carries `usage`
+# and `total_cost_usd`.
+_CLAUDE_ENVELOPE = (
+    '[{"type":"system","subtype":"init","session_id":"s1"},'
+    '{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}],'
+    '"usage":{"input_tokens":2,"cache_creation_input_tokens":13845,'
+    '"cache_read_input_tokens":0,"output_tokens":1}}},'
+    '{"type":"result","subtype":"success","is_error":false,"num_turns":1,'
+    '"result":"OK","total_cost_usd":0.139146,'
+    '"usage":{"input_tokens":2,"cache_creation_input_tokens":13845,'
+    '"cache_read_input_tokens":0,"output_tokens":4,'
+    '"server_tool_use":{"web_search_requests":0}}}]'
+)
 
 
 def _init_git_repo(repo_root: str) -> None:
@@ -124,6 +142,48 @@ def _write_silent_cli(repo_root: str) -> str:
     return str(fake_cli)
 
 
+def _write_kimi_session(home: Path, session_id: str) -> Path:
+    """Materialize a minimal fake ~/.kimi-code session with usage in wire files."""
+    session_dir = home / "sessions" / "wd_proj_abc123" / session_id
+    wire = session_dir / "agents" / "main" / "wire.jsonl"
+    wire.parent.mkdir(parents=True, exist_ok=True)
+    wire.write_text(
+        json.dumps(
+            {
+                "type": "context.append_loop_event",
+                "event": {
+                    "type": "step.end",
+                    "uuid": "u1",
+                    "turnId": "0",
+                    "step": 1,
+                    "usage": {
+                        "inputOther": 10,
+                        "output": 1,
+                        "inputCacheRead": 0,
+                        "inputCacheCreation": 0,
+                    },
+                    "finishReason": "stop",
+                },
+                "time": 1781943979640,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with (home / "session_index.jsonl").open("a") as f:
+        f.write(
+            json.dumps(
+                {
+                    "sessionId": session_id,
+                    "sessionDir": str(session_dir),
+                    "workDir": "/tmp/proj",
+                }
+            )
+            + "\n"
+        )
+    return session_dir
+
+
 class TestStallWatchdog(unittest.TestCase):
     """Unit tests for the stdout-silence watchdog in _run_with_live_tee."""
 
@@ -160,6 +220,102 @@ class TestStallWatchdog(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertGreaterEqual(elapsed, 0.4)
             self.assertIn("line 9", tail)
+
+
+class TestAdapterStallResolution(unittest.TestCase):
+    """The watchdog interval resolves from the active CLIAdapter (ADR-053)."""
+
+    def _custom_adapter(self, stall_timeout: float) -> CLIAdapter:
+        return CLIAdapter(
+            name="test",
+            bin="test",
+            prompt_flag="-p",
+            workdir_flag=None,
+            headless_flag=None,
+            stall_timeout=stall_timeout,
+            wall_backstop=10.0,
+        )
+
+    def test_spawn_session_uses_adapter_stall_timeout(self):
+        """A custom adapter with a short stall timeout triggers a fast kill."""
+        with tempfile.TemporaryDirectory() as cwd:
+            helper = (
+                Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py"
+            )
+            adapter = self._custom_adapter(stall_timeout=0.1)
+            cmd = [sys.executable, str(helper), "600"]
+            start = time.monotonic()
+            exit_code, _usage, _session_dir, output = orchestrator._spawn_session_with_tail(
+                adapter, cmd, cwd, os.environ.copy()
+            )
+            elapsed = time.monotonic() - start
+            self.assertEqual(exit_code, -9)
+            self.assertLess(elapsed, 5.0)
+            self.assertEqual(output, "")
+
+    def test_spawn_session_spares_emitting_session(self):
+        """An emitting session survives an adapter's short stall timeout."""
+        with tempfile.TemporaryDirectory() as cwd:
+            script = (
+                "import time, sys\n"
+                "for i in range(10):\n"
+                "    print(f'line {i}', flush=True)\n"
+                "    time.sleep(0.05)\n"
+            )
+            adapter = self._custom_adapter(stall_timeout=0.15)
+            cmd = [sys.executable, "-c", script]
+            start = time.monotonic()
+            exit_code, _usage, _session_dir, output = orchestrator._spawn_session_with_tail(
+                adapter, cmd, cwd, os.environ.copy()
+            )
+            elapsed = time.monotonic() - start
+            self.assertEqual(exit_code, 0)
+            self.assertGreaterEqual(elapsed, 0.4)
+            self.assertIn("line 9", output)
+
+
+class TestDetachedOutputAndUsage(unittest.TestCase):
+    """Regression tests for R-6: the live tee must stay on and usage must parse."""
+
+    def test_claude_json_envelope_output_is_complete_and_usage_non_null(self):
+        """A detached claude run writes the full envelope to output.log and parses usage."""
+        with tempfile.TemporaryDirectory() as cwd:
+            script = f"import sys; print({_CLAUDE_ENVELOPE!r}, flush=True)"
+            adapter = orchestrator.resolve_cli_adapter("claude")
+            cmd = [sys.executable, "-c", script]
+            exit_code, usage, _session_dir, output = orchestrator._spawn_session_with_tail(
+                adapter, cmd, cwd, os.environ.copy()
+            )
+            self.assertEqual(exit_code, 0)
+            self.assertIn("total_cost_usd", output)
+            self.assertIsNotNone(usage)
+            self.assertEqual(usage["output_tokens"], 4)
+            self.assertAlmostEqual(usage["cost_usd"], 0.139146)
+
+    def test_kimi_wire_file_output_is_complete_and_usage_non_null(self):
+        """A detached kimi run writes the resume hint to output.log and parses wire usage."""
+        with tempfile.TemporaryDirectory() as cwd:
+            with tempfile.TemporaryDirectory() as home_dir:
+                kimi_home = Path(home_dir) / ".kimi-code"
+                session_id = "session_rid_05_kimi"
+                _write_kimi_session(kimi_home, session_id)
+                env = os.environ.copy()
+                script = (
+                    "import sys; "
+                    f"print('To resume this session: kimi -r {session_id}', flush=True)"
+                )
+                adapter = orchestrator.resolve_cli_adapter("kimi")
+                cmd = [sys.executable, "-c", script]
+                with patch.object(Path, "home", return_value=Path(home_dir)):
+                    exit_code, usage, session_dir, output = orchestrator._spawn_session_with_tail(
+                        adapter, cmd, cwd, env
+                    )
+                self.assertEqual(exit_code, 0)
+                self.assertIn(session_id, output)
+                self.assertIsNotNone(usage)
+                self.assertEqual(usage["input_tokens"], 10)
+                self.assertEqual(usage["output_tokens"], 1)
+                self.assertIsNotNone(session_dir)
 
 
 class TestBatchTimeoutBackstop(unittest.TestCase):
@@ -202,7 +358,6 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
                 isolation="minimal",
                 max_jobs=1,
                 task_timeout=0.5,
-                stall_timeout=999,
                 heartbeat_interval=999,
                 on_failure="continue",
             )
@@ -214,39 +369,6 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
 
             self.assertEqual(rc, 1)
             self.assertIn("timed out after 0.5s", out)
-
-            queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
-            self.assertEqual(queue[0]["state"], "failed")
-
-    def test_stall_kill_routes_through_finalize(self):
-        """A stall kill inside the child orchestrator finalizes as failed."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            task_id = "nsr-05-stall"
-            fake_cli = _write_silent_cli(repo_root)
-            queue_file = _setup_plan_and_queue(repo_root, task_id)
-            adapter = orchestrator.resolve_cli_adapter(fake_cli)
-
-            args = argparse.Namespace(
-                queue_file=queue_file,
-                plan_file=None,
-                repo_root=repo_root,
-                cli_bin=fake_cli,
-                isolation="minimal",
-                max_jobs=1,
-                task_timeout=999,
-                stall_timeout=0.5,
-                heartbeat_interval=999,
-                on_failure="continue",
-            )
-
-            with patch.object(
-                orchestrator, "verify_branch_has_commits", return_value=(True, "")
-            ):
-                rc, out = self._run_batch(args, adapter, timeout=30)
-
-            self.assertEqual(rc, 1)
-            self.assertIn("failed", out)
 
             queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
             self.assertEqual(queue[0]["state"], "failed")

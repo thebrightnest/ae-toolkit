@@ -611,7 +611,6 @@ class TestBatchIntegrationSerialization(unittest.TestCase):
                 isolation="standard",
                 max_jobs=3,
                 task_timeout=3600,
-                stall_timeout=300,
                 heartbeat_interval=60,
                 on_failure="triage",
                 run_id="test-run",

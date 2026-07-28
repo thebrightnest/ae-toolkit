@@ -64,10 +64,10 @@ At standard isolation the session groups are `[plan-approved, implemented]` → 
 
 The orchestrator distinguishes a slow-but-alive session from a genuinely wedged one by watching stdout silence, not just the clock.
 
-- **`--stall-timeout`** (default 300 s) is the primary liveness control. A lightweight watchdog thread inside the single-plan session runner stamps `last_output` on every emitted line and terminates the process group when `now - last_output > stall_timeout`. The failure is classified `timeout` (nsr-01), the same class as a wall-clock kill.
-- **`--task-timeout`** (default 7200 s) is the coarse wall-clock backstop. It is retained for the pathological cases a silence watchdog cannot see: a process that holds the pipe open but emits nothing readable, or one that streams forever. Its default is raised well above `--stall-timeout` so the watchdog fires in normal operation.
+- **Stall timeout** is the primary liveness control. It is resolved from the active `CLIAdapter` (`stall_timeout`; default 1800 s for the supported adapters). A lightweight watchdog thread inside the single-plan session runner stamps `last_output` on every emitted line and terminates the process group when `now - last_output > stall_timeout`. The failure is classified `timeout` (nsr-01), the same class as a wall-clock kill.
+- **`--task-timeout`** is the coarse wall-clock backstop. It defaults to the adapter's `wall_backstop` (7200 s for the supported adapters) and remains overridable. It is retained for the pathological cases a silence watchdog cannot see: a process that holds the pipe open but emits nothing readable, or one that streams forever.
 
-A session that keeps emitting progress lines past `--stall-timeout` but under `--task-timeout` is left running. A session that emits nothing is killed by whichever threshold is reached first.
+A session that keeps emitting progress lines is left running. A session that emits nothing is killed by the stall watchdog first; the wall-clock backstop catches the pathological cases the silence watchdog cannot.
 
 ## Failure Handling
 
@@ -80,7 +80,7 @@ The night-shift runtime classifies every task failure with the nsr-01 taxonomy a
 | `environment`   | Missing tool, dependency, network, auth, or permission | `command not found`, `connection refused`, ...   |
 | `flaky`         | Non-deterministic test or transient runtime issue    | Non-zero exit with no design-side signal         |
 | `design`        | Code/test/design defect                              | Assertion failure, lint/style failure, type/name/syntax error |
-| `timeout`       | Killed by `--task-timeout` or `--stall-timeout`      | Wall-clock or silence timeout                    |
+| `timeout`       | Killed by wall-clock backstop or stall watchdog      | Wall-clock or silence timeout                    |
 | `canceled`      | Killed by signal or orchestrator shutdown            | `SIGINT`/`SIGTERM`, graceful shutdown            |
 
 ### `--on-failure` modes
