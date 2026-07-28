@@ -69,11 +69,11 @@ docs_sync_reason: the determination is a documentation deliverable on both branc
 
 ## Task List
 
-1. Run a live Claude Code stage session with the tee output preserved; capture the raw envelope
+✓ 1. Run a live Claude Code stage session with the tee output preserved; capture the raw envelope
    and the emitted `stage` record side by side — S (traces: R-11)
-2. Determine which link fails, if any: envelope present in captured output → reaches
+✓ 2. Determine which link fails, if any: envelope present in captured output → reaches
    `parse_usage` → parses → populates `token_count` — S (traces: R-11)
-3. Write the verification record either way; if a defect is found, fix it and add a regression test
+✓ 3. Write the verification record either way; if a defect is found, fix it and add a regression test
    built from the captured envelope — S (traces: R-11)
 4. Merge branch to main and verify integration — S
 
@@ -116,5 +116,5 @@ sessions, which is the current behaviour and is null-honest either way (ADR-031)
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
