@@ -3254,7 +3254,11 @@ class TestWireTestRunEmission(unittest.TestCase):
         return session_dir
 
     def _write_claude_transcript(self, home, cwd, session_id, records):
-        transcript_dir = home / ".claude" / "projects" / session_log_claude.cwd_slug(cwd)
+        # Match the reader: transcripts live under the resolved cwd slug.
+        resolved_cwd = str(Path(cwd).resolve())
+        transcript_dir = (
+            home / ".claude" / "projects" / session_log_claude.cwd_slug(resolved_cwd)
+        )
         transcript_dir.mkdir(parents=True, exist_ok=True)
         transcript = transcript_dir / f"{session_id}.jsonl"
         transcript.write_text(
@@ -3280,17 +3284,25 @@ class TestWireTestRunEmission(unittest.TestCase):
             session_ref=session_ref,
         )
 
+    def _resolve_kimi_session_dir(self, home, session_id):
+        """Return the session dir that usage.resolve_kimi_session_dir_from_id finds."""
+        from aet.usage import resolve_kimi_session_dir_from_id
+
+        return resolve_kimi_session_dir_from_id(session_id, kimi_home=home / ".kimi-code")
+
     def test_emit_stage_session_emits_one_test_run_per_wire_invocation(self):
         """A fixture kimi session yields one test_run per test invocation
         with classified scope and measured duration."""
         t0 = 1784049800000  # 2026-07-14T17:23:20Z
+        session_id = "session_t1"
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
             with tempfile.TemporaryDirectory() as home:
-                session_ref = self._write_session(
-                    home,
-                    "session_t1",
+                home_path = Path(home)
+                self._write_session(
+                    home_path / ".kimi-code",
+                    session_id,
                     {
                         "main": [
                             self._tool_call("c1", "python3 -m pytest tests/ -q", t0),
@@ -3311,11 +3323,12 @@ class TestWireTestRunEmission(unittest.TestCase):
                         ],
                     },
                 )
-                self._emit(logger, repo_root, session_ref)
+                with patch.dict(os.environ, {"HOME": home}):
+                    self._emit(logger, repo_root, session_id)
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
         stage_record = records[0]
         self.assertEqual(stage_record["type"], "stage")
-        self.assertEqual(stage_record["session_identifier"], str(session_ref))
+        self.assertEqual(stage_record["session_identifier"], session_id)
         test_runs = [r for r in records if r.get("type") == "test_run"]
         self.assertEqual(len(test_runs), 3)
 
@@ -3355,22 +3368,25 @@ class TestWireTestRunEmission(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
-            self._emit(logger, repo_root, Path(repo_root) / "no-such-session")
+            self._emit(logger, repo_root, "no-such-session")
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
         self.assertEqual([r["type"] for r in records], ["stage"])
 
     def test_unpaired_wire_call_yields_null_duration_record(self):
         t0 = 1784049800000
+        session_id = "session_t2"
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
             with tempfile.TemporaryDirectory() as home:
-                session_ref = self._write_session(
-                    home,
-                    "session_t2",
+                home_path = Path(home)
+                self._write_session(
+                    home_path / ".kimi-code",
+                    session_id,
                     {"main": [self._tool_call("c1", "pytest tests/", t0)]},
                 )
-                self._emit(logger, repo_root, session_ref)
+                with patch.dict(os.environ, {"HOME": home}):
+                    self._emit(logger, repo_root, session_id)
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
         test_runs = [r for r in records if r.get("type") == "test_run"]
         self.assertEqual(len(test_runs), 1)
@@ -3393,17 +3409,26 @@ class TestWireTestRunEmission(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
-            # A file where a directory is expected causes wirelog to raise.
-            bad_ref = Path(repo_root) / "not-a-dir.txt"
-            bad_ref.write_text("junk", encoding="utf-8")
-            self._emit(logger, repo_root, bad_ref, agent_cli="kimi")
+            with patch("aet.session_log.extract_test_invocations") as mock_extract:
+                mock_extract.side_effect = RuntimeError("boom")
+                self._emit(logger, repo_root, "session_x", agent_cli="kimi")
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
         self.assertEqual([r["type"] for r in records], ["stage"])
 
     def test_session_reference_resolved_per_adapter_without_name_branch(self):
-        """The spawn path delegates resolution to the adapter; no adapter.name branch."""
+        """The spawn path delegates resolution to the adapter; no adapter.name branch.
+
+        A custom adapter whose resolver returns a non-None identifier proves the
+        orchestrator passes it through. If the orchestrator branched on
+        adapter.name, the custom adapter would be treated as unresolvable.
+        """
+
+        class CustomAdapter(CLIAdapter):
+            def resolve_session_ref(self, output, workdir=None):
+                return "custom-sid"
+
         with tempfile.TemporaryDirectory() as tmp:
-            adapter = CLIAdapter(
+            adapter = CustomAdapter(
                 name="custom",
                 bin="echo",
                 prompt_flag="-p",
@@ -3415,25 +3440,27 @@ class TestWireTestRunEmission(unittest.TestCase):
             )
         self.assertEqual(exit_code, 0)
         self.assertIsNone(usage)
-        self.assertIsNone(session_ref)
+        self.assertEqual(session_ref, "custom-sid")
 
     def test_emit_stage_session_emits_claude_test_runs_from_transcript(self):
         """A fixture Claude transcript yields observed test_run records."""
         t0 = "2026-07-14T17:23:20Z"
+        cwd = "/tmp/proj"
+        session_id = "s1"
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
             with tempfile.TemporaryDirectory() as home:
-                session_ref = self._write_claude_transcript(
+                self._write_claude_transcript(
                     Path(home),
-                    "/tmp/proj",
-                    "s1",
+                    cwd,
+                    session_id,
                     [
                         {
                             "type": "system",
                             "subtype": "init",
-                            "cwd": "/tmp/proj",
-                            "session_id": "s1",
+                            "cwd": cwd,
+                            "session_id": session_id,
                         },
                         {
                             "role": "assistant",
@@ -3464,11 +3491,12 @@ class TestWireTestRunEmission(unittest.TestCase):
                         },
                     ],
                 )
-                self._emit(logger, repo_root, session_ref, agent_cli="claude")
+                with patch("pathlib.Path.home", return_value=Path(home)):
+                    self._emit(logger, cwd, session_id, agent_cli="claude")
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
         stage_record = records[0]
         self.assertEqual(stage_record["type"], "stage")
-        self.assertEqual(stage_record["session_identifier"], str(session_ref))
+        self.assertEqual(stage_record["session_identifier"], session_id)
         test_runs = [r for r in records if r.get("type") == "test_run"]
         self.assertEqual(len(test_runs), 1)
         self.assertEqual(test_runs[0]["test_command"], "pytest tests/")
@@ -3476,7 +3504,7 @@ class TestWireTestRunEmission(unittest.TestCase):
         self.assertEqual(test_runs[0]["exit_code"], 0)
 
     def test_spawn_session_resolves_kimi_session_ref(self):
-        """The spawn path threads the resolved wire reference for kimi sessions."""
+        """The spawn path threads the resolved session identifier for kimi sessions."""
         with tempfile.TemporaryDirectory() as tmp:
             bin_path = Path(tmp, "kimi-stub")
             bin_path.write_text(
@@ -3493,14 +3521,14 @@ class TestWireTestRunEmission(unittest.TestCase):
                 usage_mode="wire-file",
             )
             home = Path(tmp, "kimi-home")
-            expected = self._write_session(home / ".kimi-code", "session_stub1", {"main": []})
+            self._write_session(home / ".kimi-code", "session_stub1", {"main": []})
             env = os.environ.copy()
             with patch.dict(os.environ, {"HOME": str(home)}):
                 exit_code, _usage, session_ref = orchestrator._spawn_session(
                     adapter, [str(bin_path)], tmp, env
                 )
         self.assertEqual(exit_code, 0)
-        self.assertEqual(session_ref, expected)
+        self.assertEqual(session_ref, "session_stub1")
 
     def test_spawn_session_non_kimi_yields_none_session_ref(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3517,6 +3545,145 @@ class TestWireTestRunEmission(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIsNone(usage)
         self.assertIsNone(session_ref)
+
+    def test_orchestrated_claude_stage_writes_observed_test_run(self):
+        """R-6 end-to-end: an orchestrated claude stage emits an observed test_run.
+
+        A stub claude binary writes a real transcript and JSON envelope; the
+        orchestrator's run_stage + _emit_stage_session path turns that into a
+        stage record carrying a session identifier and a test_run record with a
+        non-null duration.
+        """
+        session_id = "r6-e2e-session"
+
+        def _write_stub(home: Path, repo_root: str) -> Path:
+            stub = home / "claude-stub"
+            call_record = json.dumps(
+                {
+                    "timestamp": "2026-07-28T17:00:00Z",
+                    "sessionId": session_id,
+                    "cwd": "__CWD__",
+                    "role": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "name": "Bash",
+                                "id": "tu1",
+                                "input": {"command": "pytest tests/"},
+                            }
+                        ]
+                    },
+                }
+            )
+            result_record = json.dumps(
+                {
+                    "timestamp": "2026-07-28T17:01:00Z",
+                    "sessionId": session_id,
+                    "cwd": "__CWD__",
+                    "role": "user",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "tu1",
+                                "is_error": False,
+                            }
+                        ]
+                    },
+                }
+            )
+            envelope = json.dumps(
+                {
+                    "type": "result",
+                    "session_id": session_id,
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                }
+            )
+            lines = [
+                "#!/usr/bin/env python3",
+                "from pathlib import Path",
+                "import json, os, subprocess, sys",
+                "cwd = os.getcwd()",
+                'home = os.path.expanduser("~")',
+                'slug = cwd.rstrip("/").replace("/", "-")',
+                'transcript_dir = os.path.join(home, ".claude", "projects", slug)',
+                "os.makedirs(transcript_dir, exist_ok=True)",
+                f'transcript = os.path.join(transcript_dir, "{session_id}.jsonl")',
+                'with open(transcript, "w") as f:',
+                f'    f.write({call_record!r}.replace("__CWD__", cwd) + "\\n")',
+                f'    f.write({result_record!r}.replace("__CWD__", cwd) + "\\n")',
+                f'print({envelope!r})',
+                'Path("r6.txt").write_text("done", encoding="utf-8")',
+                'subprocess.run(["git", "add", "."], check=True)',
+                'subprocess.run(["git", "commit", "-m", "r6 e2e"], check=True)',
+            ]
+            stub.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            stub.chmod(0o755)
+            return stub
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            repo_root = str(home / "repo")
+            _init_git_repo(repo_root)
+            # Ensure a base commit exists so the stage can create a new one.
+            Path(repo_root, "base.txt").write_text("base", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "base"], check=True)
+
+            stub = _write_stub(home, repo_root)
+            adapter = CLIAdapter(
+                name="claude",
+                bin=str(stub),
+                prompt_flag="-p",
+                workdir_flag=None,
+                headless_flag="--dangerously-skip-permissions",
+                usage_mode="json-envelope",
+            )
+            plan_file = "docs/plans/r6-test.md"
+
+            logger = telemetry.RunLogger(repo_root, run_id="r6-run")
+            with patch.dict(os.environ, {"HOME": str(home)}):
+                exit_code, usage, session_ref, output = orchestrator.run_stage(
+                    adapter,
+                    repo_root,
+                    plan_file,
+                    repo_root,
+                    ["aet-qa"],
+                    "run",
+                    "done",
+                    task_id="r6-task",
+                    run_id="r6-run",
+                )
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(session_ref, session_id)
+                self.assertIsNotNone(usage)
+
+                orchestrator._emit_stage_session(
+                    logger,
+                    "r6-task",
+                    plan_file,
+                    "claude",
+                    "full",
+                    "run",
+                    None,
+                    repo_root,
+                    "2026-07-28T17:00:00Z",
+                    "2026-07-28T17:01:00Z",
+                    exit_code,
+                    usage=usage,
+                    session_ref=session_ref,
+                )
+
+            records = telemetry.read_jsonl(logger.task_log_path("r6-task"))
+        stage_records = [r for r in records if r.get("type") == "stage"]
+        test_runs = [r for r in records if r.get("type") == "test_run"]
+        self.assertEqual(len(stage_records), 1)
+        self.assertEqual(stage_records[0]["session_identifier"], session_id)
+        self.assertEqual(len(test_runs), 1)
+        self.assertEqual(test_runs[0]["test_command"], "pytest tests/")
+        self.assertEqual(test_runs[0]["duration_seconds"], 60.0)
+        self.assertEqual(test_runs[0]["exit_code"], 0)
 
 
 class TestQaFreshnessInjection(unittest.TestCase):

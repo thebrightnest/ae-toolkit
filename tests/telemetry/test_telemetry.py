@@ -136,12 +136,9 @@ class TestStageRecord(unittest.TestCase):
             start_time="2026-06-18T00:00:00Z",
             end_time="2026-06-18T00:00:05Z",
             exit_code=0,
-            session_identifier="/home/user/.claude/projects/-tmp-proj/s1.jsonl",
+            session_identifier="s1",
         )
-        self.assertEqual(
-            record["session_identifier"],
-            "/home/user/.claude/projects/-tmp-proj/s1.jsonl",
-        )
+        self.assertEqual(record["session_identifier"], "s1")
 
     def test_stage_record_session_identifier_null_when_unresolvable(self):
         record = telemetry.stage_record(

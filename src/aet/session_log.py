@@ -22,14 +22,29 @@ from typing import Any
 from aet import session_log_claude, wirelog
 
 
-def extract_test_invocations(agent_cli: str, session_ref: Path) -> list[dict[str, Any]]:
+def extract_test_invocations(
+    agent_cli: str,
+    session_ref: str,
+    worktree_dir: str | None = None,
+    home: Path | None = None,
+) -> list[dict[str, Any]]:
     """Return test invocations for ``agent_cli`` from ``session_ref``.
 
-    The shape of ``session_ref`` is adapter-defined: a directory for kimi, a
-    transcript file for Claude. Returns ``[]`` for adapters without a reader.
+    ``session_ref`` is an adapter-resolved session identifier (a session id
+    for both kimi and Claude). ``worktree_dir`` is required for the Claude
+    reader, which builds the transcript path from the cwd slug.
+    ``home`` overrides the default CLI home directory (``~/.kimi-code`` or
+    ``~/.claude``) for tests or non-standard installs.
+
+    Returns ``[]`` for adapters without a reader or when the reference cannot
+    be resolved to a log.
     """
     if agent_cli == "kimi":
-        return wirelog.extract_test_invocations(session_ref)
+        return wirelog.extract_test_invocations(session_ref, kimi_home=home)
     if agent_cli == "claude":
-        return session_log_claude.extract_test_invocations(session_ref)
+        if worktree_dir is None:
+            return []
+        return session_log_claude.extract_test_invocations(
+            session_ref, worktree_dir, home=home
+        )
     return []

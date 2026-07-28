@@ -129,6 +129,23 @@ def _find_result_element(text: str) -> dict[str, Any] | None:
     return None
 
 
+def resolve_kimi_session_id_from_output(text: str) -> str | None:
+    """Return the session id from a kimi resume hint, or ``None``.
+
+    This is the machine-independent identifier stored on stage records; path
+    resolution happens later, at test-run extraction time, via
+    ``resolve_kimi_session_dir_from_output`` or ``_resolve_kimi_session_dir``.
+    """
+    if not text:
+        return None
+    if len(text) > TAIL_SCAN_BYTES:
+        text = text[-TAIL_SCAN_BYTES:]
+    hints = _KIMI_RESUME_HINT_RE.findall(text)
+    if not hints:
+        return None
+    return hints[-1]
+
+
 def resolve_kimi_session_dir_from_output(
     text: str, kimi_home: str | Path | None = None
 ) -> Path | None:
@@ -140,15 +157,11 @@ def resolve_kimi_session_dir_from_output(
     fork the hint parsing. Returns ``None`` when no hint is present or the
     session dir cannot be located.
     """
-    if not text:
-        return None
-    if len(text) > TAIL_SCAN_BYTES:
-        text = text[-TAIL_SCAN_BYTES:]
-    hints = _KIMI_RESUME_HINT_RE.findall(text)
-    if not hints:
+    session_id = resolve_kimi_session_id_from_output(text)
+    if session_id is None:
         return None
     home = Path(kimi_home) if kimi_home is not None else Path.home() / ".kimi-code"
-    return _resolve_kimi_session_dir(home, hints[-1])
+    return _resolve_kimi_session_dir(home, session_id)
 
 
 def _parse_kimi(text: str, kimi_home: str | Path | None) -> dict[str, Any] | None:
@@ -165,6 +178,19 @@ def _parse_kimi(text: str, kimi_home: str | Path | None) -> dict[str, Any] | Non
     if session_dir is None:
         return None
     return _sum_wire_usage(session_dir)
+
+
+def resolve_kimi_session_dir_from_id(
+    session_id: str, kimi_home: str | Path | None = None
+) -> Path | None:
+    """Resolve a kimi session directory from its session id.
+
+    Looks up ``session_index.jsonl`` first, then falls back to globbing the
+    ``sessions/*/<session_id>`` layout under ``kimi_home`` (default
+    ``~/.kimi-code``).
+    """
+    home = Path(kimi_home) if kimi_home is not None else Path.home() / ".kimi-code"
+    return _resolve_kimi_session_dir(home, session_id)
 
 
 def _resolve_kimi_session_dir(home: Path, session_id: str) -> Path | None:

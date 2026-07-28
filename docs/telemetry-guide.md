@@ -114,40 +114,43 @@ fabricated one.
 
 ## Tracing a stage record to its session log
 
-Every stage record carries a `session_identifier`: a reference to the session
-log the agent CLI wrote while producing that stage. It exists so an archived
-record can be taken back to the transcript that explains it — most usefully
-when a stage claims a `test_run` that no observed record confirms.
+Every stage record carries a `session_identifier`: an identifier for the
+session log the agent CLI wrote while producing that stage. It exists so an
+archived record can be taken back to the transcript that explains it — most
+usefully when a stage claims a `test_run` that no observed record confirms.
 
 The orchestrator does not resolve this itself. It asks the active adapter
-(`CLIAdapter.resolve_session_ref`) and stores whatever that returns, so adding a
-CLI does not mean editing the orchestrator (ADR-050). The shape of the reference
-is adapter-defined:
+(`CLIAdapter.resolve_session_ref`) and stores the identifier that returns, so
+adding a CLI does not mean editing the orchestrator (ADR-050). The identifier is
+a **session id** for both supported CLIs; the path to the actual log is
+reconstructed from the id using the documented rules below.
 
-- `kimi` — a **session directory**, resolved from the `kimi -r <sessionId>`
-  resume hint the CLI prints on exit. The wire logs live beneath it at
-  `agents/*/wire.jsonl`.
-- `claude` — a **transcript file** at
-  `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl`. The `sessionId` comes from
-  the `session_id` field of the result envelope on stdout; `<cwd-slug>` is the
+- `kimi` — the identifier is the `<sessionId>` from the `kimi -r <sessionId>`
+  resume hint printed on exit. To locate the wire logs, look up
+  `<sessionId>` in `~/.kimi-code/session_index.jsonl` (the `sessionDir` field)
+  or fall back to `~/.kimi-code/sessions/*/<sessionId>/agents/*/wire.jsonl`.
+- `claude` — the identifier is the `session_id` from the `--output-format json`
+  result envelope. The transcript lives at
+  `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl`, where `<cwd-slug>` is the
   session's working directory with `/` replaced by `-`
-  (`/Users/alice/proj` → `-Users-alice-proj`). Before the path is accepted, at
-  least one record inside it must report a `cwd` matching the session's working
-  directory.
+  (`/Users/alice/proj` → `-Users-alice-proj`). Before the identifier is
+  accepted at emission time, at least one record inside the transcript must
+  report a `cwd` that resolves to the same path as the session's working
+  directory (symlinks are followed on both sides).
 
-To go from a record to a log by hand, read `session_identifier` and open it:
-under `claude` it is the transcript path directly; under `kimi` it is the
-directory whose `agents/*/wire.jsonl` files hold the session's calls. Because
-the stored value is a local path, an archive moved between machines or home
-directories needs the leading prefix re-pointed — the `<sessionId>` and
-`<cwd-slug>` components are what identify the session.
+To go from a record to a log by hand, read `session_identifier` and apply the
+rule above. Because the stored value is an identifier rather than a path, an
+archive moved between machines or home directories stays traceable as long as
+the CLI's own log directory still exists under the new home: only the leading
+prefix changes; the `<sessionId>` and `<cwd-slug>` components still identify
+the session.
 
 `session_identifier` is `null` whenever the reference could not be resolved: no
 resume hint, an unparseable envelope, a transcript that is absent, or one whose
-`cwd` disagrees. A null is honest rather than a guessed path (ADR-031), and it
-is the same signal as a stage that produced no observed `test_run` records — a
-session with a null identifier is exactly a session whose log the extractor
-could not find either.
+`cwd` disagrees. A null is honest rather than a guessed identifier (ADR-031),
+and it is the same signal as a stage that produced no observed `test_run`
+records — a session with a null identifier is exactly a session whose log the
+extractor could not find either.
 
 ## Enabling telemetry in a project
 

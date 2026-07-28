@@ -7,6 +7,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from aet import session_log_claude
 from aet import usage as usage_lib
@@ -68,19 +69,22 @@ class CLIAdapter:
 
     def resolve_session_ref(
         self, output: str, workdir: str | None = None
-    ) -> Path | None:
-        """Return a path that locates this adapter's session log, or ``None``.
+    ) -> str | None:
+        """Return an identifier for this adapter's session log, or ``None``.
 
-        The shape of the returned path is adapter-defined: a directory for
-        kimi, a transcript file for Claude. An unresolvable session returns
-        ``None`` (ADR-031) — the orchestrator turns that into zero observed
-        ``test_run`` records and a null ``session_identifier`` on the stage
-        record.
+        The identifier is adapter-defined: a session id for both kimi and
+        Claude. It is intentionally not a filesystem path — paths go stale when
+        an archive moves; the identifier plus the documented resolution rule in
+        ``docs/telemetry-guide.md`` survives relocation (ADR-031).
+
+        An unresolvable session returns ``None``; the orchestrator turns that
+        into zero observed ``test_run`` records and a null
+        ``session_identifier`` on the stage record.
         """
         if self.name == "kimi":
-            return usage_lib.resolve_kimi_session_dir_from_output(output)
+            return usage_lib.resolve_kimi_session_id_from_output(output)
         if self.name == "claude":
-            return _resolve_claude_session_ref(output, workdir)
+            return _resolve_claude_session_id(output, workdir)
         return None
 
 
@@ -131,20 +135,24 @@ def resolve_cli_adapter(cli_bin: str | None = None) -> CLIAdapter:
     raise RuntimeError("No supported AI coding agent CLI found on PATH.")
 
 
-def _resolve_claude_session_ref(output: str, workdir: str | None) -> Path | None:
-    """Resolve a Claude transcript path from the JSON envelope.
+def _resolve_claude_session_id(output: str, workdir: str | None) -> str | None:
+    """Resolve a Claude session id from the JSON envelope.
 
-    The envelope's ``session_id`` anchors the file name; the transcript's own
+    The envelope's ``session_id`` is the identifier; the transcript's own
     ``cwd`` record confirms the match. A missing workdir, unparseable envelope,
     missing transcript, or cwd mismatch all resolve to ``None`` — never a
-    guessed path (ADR-031).
+    guessed identifier (ADR-031).
     """
     if not output or not workdir:
         return None
     session_id = _extract_claude_session_id(output)
     if session_id is None:
         return None
-    candidate = session_log_claude.transcript_path_for(workdir, session_id)
+    # Claude writes transcripts under the cwd slug. A symlinked worktree
+    # (e.g. ``.worktrees/foo`` -> real path) must resolve to the real cwd
+    # before slugging, or the transcript lookup misses.
+    resolved_workdir = str(Path(workdir).resolve())
+    candidate = session_log_claude.transcript_path_for(resolved_workdir, session_id)
     try:
         with candidate.open(encoding="utf-8", errors="replace") as f:
             for line in f:
@@ -154,11 +162,27 @@ def _resolve_claude_session_ref(output: str, workdir: str | None) -> Path | None
                     record = json.loads(line)
                 except ValueError:
                     continue
-                if isinstance(record, dict) and record.get("cwd") == workdir:
-                    return candidate
+                if isinstance(record, dict) and _cwd_matches(
+                    record.get("cwd"), workdir
+                ):
+                    return session_id
     except OSError:
         pass
     return None
+
+
+def _cwd_matches(recorded_cwd: Any, workdir: str) -> bool:
+    """Return True when ``recorded_cwd`` resolves to the same path as ``workdir``.
+
+    Symlinked worktrees (e.g. ``.worktrees/foo`` pointing elsewhere) must not
+    silently fail the cwd confirmation because the CLI logged the real path.
+    """
+    if not isinstance(recorded_cwd, str):
+        return False
+    try:
+        return Path(recorded_cwd).resolve() == Path(workdir).resolve()
+    except OSError:
+        return False
 
 
 def _extract_claude_session_id(output: str) -> str | None:

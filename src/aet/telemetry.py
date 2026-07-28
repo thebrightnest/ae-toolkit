@@ -215,9 +215,11 @@ def stage_record(
     ``output_excerpt`` is a bounded snippet of raw agent stdout/stderr captured
     on failure; it is displayed by the completion report, never interpreted.
 
-    ``session_identifier`` is an adapter-resolved reference to the session log
-    that produced this stage record (a path string), or ``None`` when the
-    session reference could not be resolved (ADR-031).
+    ``session_identifier`` is an adapter-resolved session identifier (a session
+    id for both kimi and Claude) that locates the session log which produced
+    this stage record, or ``None`` when the reference could not be resolved
+    (ADR-031). The documented resolution rule lives in
+    ``docs/telemetry-guide.md``.
     """
     duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
     return {

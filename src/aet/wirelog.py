@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from aet import test_runners
-from aet.usage import _MAX_WIRE_LINE_CHARS
+from aet.usage import _MAX_WIRE_LINE_CHARS, resolve_kimi_session_dir_from_id
 
 # The Bash tool appends this trailer to the output of a failed command; it is
 # the only place a measured exit code appears in a wire tool.result.
@@ -39,8 +39,13 @@ def is_test_command(command: str) -> bool:
     return test_runners.resolve_test_command(command) is not None
 
 
-def extract_test_invocations(session_dir: Path) -> list[dict[str, Any]]:
-    """Extract test invocations from every agent wire in a session dir.
+def extract_test_invocations(
+    session_id: str, kimi_home: str | Path | None = None
+) -> list[dict[str, Any]]:
+    """Extract test invocations from every agent wire in a kimi session.
+
+    ``session_id`` is the identifier resolved from the resume hint; the
+    session directory is located via ``usage.resolve_kimi_session_dir_from_id``.
 
     Returns a list of ``{command, start_time, end_time, duration_seconds,
     exit_code}`` dicts, ordered by start time. ``start_time``/``end_time``
@@ -50,7 +55,10 @@ def extract_test_invocations(session_dir: Path) -> list[dict[str, Any]]:
     estimate.
     """
     invocations: list[dict[str, Any]] = []
-    for wire in sorted(Path(session_dir).glob("agents/*/wire.jsonl")):
+    session_dir = resolve_kimi_session_dir_from_id(session_id, kimi_home)
+    if session_dir is None:
+        return invocations
+    for wire in sorted(session_dir.glob("agents/*/wire.jsonl")):
         invocations.extend(_extract_from_wire(wire))
     invocations.sort(key=lambda inv: inv["start_time"] or "")
     return invocations

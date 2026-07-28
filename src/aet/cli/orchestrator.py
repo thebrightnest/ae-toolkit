@@ -560,7 +560,7 @@ def _emit_stage_session(
     end_time: str,
     exit_code: int,
     usage: dict | None = None,
-    session_ref: Path | None = None,
+    session_ref: str | None = None,
     base_branch: str = "origin/main",
     output: str = "",
     verdict_recorded: bool = False,
@@ -571,11 +571,10 @@ def _emit_stage_session(
     usage mode); it populates ``token_count`` / ``cost_estimate`` on the
     record. Null is the honest value when usage was not measurable.
 
-    ``session_ref`` is the adapter-resolved session log reference for the
-    session (a directory for kimi, a transcript file for Claude, ``None``
-    when unresolvable). When present, one observed ``test_run`` record is
-    appended per extracted test invocation, tagged with the session's
-    ``stage``.
+    ``session_ref`` is the adapter-resolved session identifier for the session
+    (a session id for both kimi and Claude, ``None`` when unresolvable).
+    When present, one observed ``test_run`` record is appended per extracted
+    test invocation, tagged with the session's ``stage``.
 
     ``output`` is the captured session tail used to classify failures on the
     nsr-01 taxonomy. ``verdict_recorded`` is True when the failing session had
@@ -614,11 +613,13 @@ def _emit_stage_session(
             token_count=usage.get("total_tokens") if usage else None,
             cost_estimate=usage.get("cost_usd") if usage else None,
             output_excerpt=(_bounded_output_excerpt(output) if exit_code != 0 else None),
-            session_identifier=(str(session_ref) if session_ref is not None else None),
+            session_identifier=session_ref,
         ),
         task_id=task_id,
     )
-    _emit_session_test_runs(logger, task_id, plan_file, stage, agent_cli, session_ref)
+    _emit_session_test_runs(
+        logger, task_id, plan_file, stage, agent_cli, session_ref, worktree_dir
+    )
 
 
 def _emit_session_test_runs(
@@ -627,9 +628,13 @@ def _emit_session_test_runs(
     plan_file: str,
     stage: str,
     agent_cli: str,
-    session_ref: Path | None,
+    session_ref: str | None,
+    worktree_dir: str,
 ) -> None:
     """Append one ``test_run`` record per session-log test invocation.
+
+    ``session_ref`` is an adapter-resolved session identifier. ``worktree_dir``
+    is needed by the Claude reader to locate the transcript from the cwd slug.
 
     Best-effort, mirroring ``_session_diff_stats``: extraction is defensive,
     and any unexpected failure must never block a run.
@@ -637,7 +642,9 @@ def _emit_session_test_runs(
     if session_ref is None:
         return
     try:
-        invocations = session_log.extract_test_invocations(agent_cli, session_ref)
+        invocations = session_log.extract_test_invocations(
+            agent_cli, session_ref, worktree_dir=worktree_dir
+        )
     except Exception as exc:  # noqa: BLE001
         print(f"   ⚠️  Session test-run extraction failed (skipping): {exc}")
         return
@@ -888,14 +895,13 @@ def _spawn_session(
     worktree_dir: str,
     env: dict,
     stall_timeout: float | None = None,
-) -> tuple[int, dict | None, Path | None]:
+) -> tuple[int, dict | None, str | None]:
     """Run one agent session, returning ``(exit_code, usage, session_ref)``.
 
     ``usage`` is parsed from the captured tail only when the adapter declares
     a usage mode; otherwise it is ``None`` and the record keeps null fields.
-    ``session_ref`` is the adapter-resolved session log reference (``None``
-    for unresolvable sessions); it feeds adapter-dispatched test-run
-    extraction.
+    ``session_ref`` is the adapter-resolved session identifier (``None`` for
+    unresolvable sessions); it feeds adapter-dispatched test-run extraction.
 
     ``stall_timeout`` defaults to the active adapter's configured value
     (ADR-053).
@@ -913,15 +919,17 @@ def _spawn_session_with_tail(
     worktree_dir: str,
     env: dict,
     stall_timeout: float | None = None,
-) -> tuple[int, dict | None, Path | None, str]:
+) -> tuple[int, dict | None, str | None, str]:
     """Run one agent session, returning ``(exit_code, usage, session_ref, tail)``.
 
     The bounded ``tail`` is used by the circuit breaker to classify failures.
     The public ``run_stage``/``run_stage_group`` functions call this helper and
     record signatures when a *task* and *backend* are provided.
 
-    ``session_ref`` is resolved by the adapter from the captured session output;
-    the orchestrator no longer branches on ``adapter.name``.
+    ``session_ref`` is an adapter-resolved session identifier (a session id
+    for both kimi and Claude); the orchestrator asks the adapter and does not
+    branch on ``adapter.name``. Resolution is guarded: a throwing resolver is
+    treated as an unresolvable session rather than aborting the run.
 
     ``stall_timeout`` defaults to the active adapter's configured value
     (ADR-053).
@@ -934,8 +942,21 @@ def _spawn_session_with_tail(
     usage = None
     if adapter.usage_mode is not None:
         usage = usage_lib.parse_usage(adapter.name, output)
-    session_ref = adapter.resolve_session_ref(output, workdir=worktree_dir)
+    session_ref = _resolve_session_ref_guarded(adapter, output, worktree_dir)
     return exit_code, usage, session_ref, output
+
+
+def _resolve_session_ref_guarded(adapter, output: str, worktree_dir: str) -> str | None:
+    """Ask the adapter for a session identifier, never raising.
+
+    A resolver that throws is treated as ``None``; telemetry is best-effort
+    and must never block a run (ADR-031).
+    """
+    try:
+        return adapter.resolve_session_ref(output, workdir=worktree_dir)
+    except Exception as exc:  # noqa: BLE001
+        print(f"   ⚠️  Session-reference resolution failed (skipping): {exc}")
+        return None
 
 
 def run_stage(
@@ -952,7 +973,7 @@ def run_stage(
     task: dict | None = None,
     backend=None,
     stall_timeout: float | None = None,
-) -> tuple[int, dict | None, Path | None, str]:
+) -> tuple[int, dict | None, str | None, str]:
     """Spawn a single stage session, returning ``(exit_code, usage, session_ref, output)``.
 
     When *task* and *backend* are provided, a non-zero exit records a failure
@@ -1051,12 +1072,12 @@ def run_stage_group(
     task: dict | None = None,
     backend=None,
     stall_timeout: float | None = None,
-) -> tuple[int, dict | None, Path | None, str]:
+) -> tuple[int, dict | None, str | None, str]:
     """Spawn one session that runs every stage in the group sequentially.
 
     Returns ``(exit_code, usage, session_ref, output)``; usage covers the whole
-    group session and ``session_ref`` is the adapter-resolved session log
-    reference (``None`` for unresolvable sessions). When *task* and *backend*
+    group session and ``session_ref`` is the adapter-resolved session
+    identifier (``None`` for unresolvable sessions). When *task* and *backend*
     are provided, a non-zero exit records a failure signature on the task's
     ledger record using the first stage's name (nsr-03).
     """

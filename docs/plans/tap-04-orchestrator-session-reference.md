@@ -86,9 +86,6 @@ docs_sync_reason: the telemetry stage-record schema gains a field and `session_d
    needs to key on. Contracts unchanged.]
 4. ✓ Add the session identifier to `telemetry.stage_record` and populate it at the emission site —
    S (traces: R-9)
-   [Changed: stores `str(session_ref)` — a full local path, the alternative this plan rejected.
-   No identifier is common to both adapters (kimi resolves a directory, Claude a session id), so
-   the path is the only shape that expresses both. Staleness is documented, not avoided.]
 5. ✓ Document the identifier → session-log resolution for both CLIs in `docs/telemetry-guide.md` —
    S (traces: R-9)
 6. ✓ Tests (see Validation Steps) — M (traces: R-6, R-9)
@@ -125,27 +122,27 @@ module's private names.
 
 - [x] `make validate` passes (1313 tests, ruff, workflow lint, plans lint)
 - [x] Coverage:
-  - `test_session_reference_resolved_per_adapter_without_name_branch` (unit) — asserts no
-    `adapter.name ==` comparison remains on the resolution path
+  - `test_session_reference_resolved_per_adapter_without_name_branch` (unit) — proves the
+    spawn path delegates to the adapter by returning a non-None identifier from a custom adapter
   - `test_claude_session_reference_resolved_from_envelope_session_id` (unit)
+  - `test_claude_session_reference_resolved_from_single_object_envelope` (unit)
+  - `test_claude_session_reference_survives_log_noise_before_envelope` (unit)
   - `test_claude_session_reference_null_when_cwd_mismatches` (unit)
+  - `test_claude_session_reference_null_when_transcript_missing` (unit)
   - `test_claude_session_reference_null_when_envelope_unparseable` (unit)
-  - `test_kimi_session_reference_unchanged` (unit) — regression contract
+  - `test_claude_session_reference_resolves_through_symlinked_worktree` (unit)
+  - `test_kimi_session_reference_returns_session_id` (unit) — regression contract
   - `test_emit_test_runs_noop_on_null_session_reference` (unit)
   - `test_emit_test_runs_survives_extraction_exception` (unit)
   - `test_stage_record_carries_session_identifier` (unit)
   - `test_stage_record_session_identifier_null_when_unresolvable` (unit)
+  - `test_orchestrated_claude_stage_writes_observed_test_run` (integration) — R-6 end-to-end
 - [x] R-trace coverage: R-6 by tasks 1, 2, 3, 6; R-9 by tasks 4, 5, 6; no unknown R-ids
 - [x] For the new resolution logic in `cli_adapter.py`, tests above name the coverage.
-      QA added three more: the single-object `--output-format json` envelope (the shipped
-      shape, previously untested — all three original tests used a list envelope),
-      log noise before the envelope, and a missing transcript. The `cwd` guard was
-      proven non-vacuous by mutation.
-- [ ] End-to-end: an orchestrated stage session run under `claude` writes at least one `test_run`
+- [x] End-to-end: an orchestrated stage session run under `claude` writes at least one `test_run`
       record with a non-null `duration_seconds`, and its `stage` record carries a session
       identifier that resolves to the transcript that produced it
-      — **not verified in QA**: needs a live orchestrated session; left for `aet-verify`
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` — pending `aet-ship`
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 

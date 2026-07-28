@@ -39,16 +39,25 @@ def transcript_path_for(
 ) -> Path:
     """Return the Claude Code transcript path for a session.
 
+    ``cwd`` is resolved before slugging so symlinked worktrees (e.g.
+    ``.worktrees/foo``) map to the same slug as the real path Claude logged.
     ``home`` defaults to ``~/.claude``; callers may override it for tests or
     non-standard installs.
     """
     if home is None:
         home = Path.home() / ".claude"
-    return home / "projects" / cwd_slug(cwd) / f"{session_id}.jsonl"
+    return home / "projects" / cwd_slug(str(Path(cwd).resolve())) / f"{session_id}.jsonl"
 
 
-def extract_test_invocations(transcript_path: Path) -> list[dict[str, Any]]:
+def extract_test_invocations(
+    session_id: str, worktree_dir: str, home: Path | None = None
+) -> list[dict[str, Any]]:
     """Extract test invocations from a Claude Code transcript.
+
+    ``session_id`` is the identifier resolved from the result envelope;
+    ``worktree_dir`` is the session's cwd, used to build the transcript path
+    via ``transcript_path_for``. Returns ``[]`` when the transcript cannot be
+    located or read.
 
     Returns a list of ``{command, start_time, end_time, duration_seconds,
     exit_code}`` dicts, ordered by start time. ``start_time``/``end_time``
@@ -57,10 +66,11 @@ def extract_test_invocations(transcript_path: Path) -> list[dict[str, Any]]:
     is missing — unpaired calls are emitted with null end/duration/exit_code,
     never an estimate.
     """
+    transcript_path = transcript_path_for(worktree_dir, session_id, home=home)
     pending: dict[str, dict[str, Any]] = {}
     invocations: list[dict[str, Any]] = []
     try:
-        f = Path(transcript_path).open(encoding="utf-8", errors="replace")
+        f = transcript_path.open(encoding="utf-8", errors="replace")
     except OSError:
         return invocations
     with f:

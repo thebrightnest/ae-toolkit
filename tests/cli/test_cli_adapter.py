@@ -144,7 +144,11 @@ class TestResolveSessionRef(unittest.TestCase):
     def _write_claude_transcript(
         self, home: Path, cwd: str, session_id: str, records: list[dict]
     ) -> Path:
-        transcript_dir = home / ".claude" / "projects" / session_log_claude.cwd_slug(cwd)
+        # Match the resolver: transcripts live under the resolved cwd slug.
+        resolved_cwd = str(Path(cwd).resolve())
+        transcript_dir = (
+            home / ".claude" / "projects" / session_log_claude.cwd_slug(resolved_cwd)
+        )
         transcript_dir.mkdir(parents=True, exist_ok=True)
         transcript = transcript_dir / f"{session_id}.jsonl"
         transcript.write_text(
@@ -153,16 +157,12 @@ class TestResolveSessionRef(unittest.TestCase):
         )
         return transcript
 
-    def test_kimi_session_reference_unchanged(self):
-        """kimi resolution keeps using the resume-hint path; this is a regression fence."""
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
-            expected = self._write_kimi_session(home / ".kimi-code", "session_stub1")
-            output = "To resume this session: kimi -r session_stub1\n"
-            adapter = resolve_cli_adapter("kimi")
-            with patch("pathlib.Path.home", return_value=home):
-                ref = adapter.resolve_session_ref(output)
-            self.assertEqual(ref, expected)
+    def test_kimi_session_reference_returns_session_id(self):
+        """kimi resolution returns the session id from the resume hint."""
+        output = "To resume this session: kimi -r session_stub1\n"
+        adapter = resolve_cli_adapter("kimi")
+        ref = adapter.resolve_session_ref(output)
+        self.assertEqual(ref, "session_stub1")
 
     def test_claude_session_reference_resolved_from_envelope_session_id(self):
         """Claude resolves by session_id from the envelope confirmed against cwd."""
@@ -174,7 +174,7 @@ class TestResolveSessionRef(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             adapter = resolve_cli_adapter("claude")
-            expected = self._write_claude_transcript(
+            self._write_claude_transcript(
                 home,
                 "/tmp/proj",
                 "s1",
@@ -182,7 +182,7 @@ class TestResolveSessionRef(unittest.TestCase):
             )
             with patch("pathlib.Path.home", return_value=home):
                 ref = adapter.resolve_session_ref(envelope, workdir="/tmp/proj")
-            self.assertEqual(ref, expected)
+            self.assertEqual(ref, "s1")
 
     def test_claude_session_reference_resolved_from_single_object_envelope(self):
         """`--output-format json` emits one object, not a list — the shipped shape."""
@@ -199,12 +199,12 @@ class TestResolveSessionRef(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             adapter = resolve_cli_adapter("claude")
-            expected = self._write_claude_transcript(
+            self._write_claude_transcript(
                 home, "/tmp/proj", "s9", [{"cwd": "/tmp/proj", "session_id": "s9"}]
             )
             with patch("pathlib.Path.home", return_value=home):
                 ref = adapter.resolve_session_ref(envelope, workdir="/tmp/proj")
-            self.assertEqual(ref, expected)
+            self.assertEqual(ref, "s9")
 
     def test_claude_session_reference_survives_log_noise_before_envelope(self):
         """A captured tail carries CLI chatter ahead of the envelope."""
@@ -215,12 +215,12 @@ class TestResolveSessionRef(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             adapter = resolve_cli_adapter("claude")
-            expected = self._write_claude_transcript(
+            self._write_claude_transcript(
                 home, "/tmp/proj", "s9", [{"cwd": "/tmp/proj", "session_id": "s9"}]
             )
             with patch("pathlib.Path.home", return_value=home):
                 ref = adapter.resolve_session_ref(noisy, workdir="/tmp/proj")
-            self.assertEqual(ref, expected)
+            self.assertEqual(ref, "s9")
 
     def test_claude_session_reference_null_when_cwd_mismatches(self):
         """A transcript at the expected path whose own cwd disagrees is not a match."""
@@ -261,6 +261,28 @@ class TestResolveSessionRef(unittest.TestCase):
         adapter = resolve_cli_adapter("claude")
         ref = adapter.resolve_session_ref("not valid json", workdir="/tmp/proj")
         self.assertIsNone(ref)
+
+    def test_claude_session_reference_resolves_through_symlinked_worktree(self):
+        """cwd confirmation follows symlinks so linked worktrees don't resolve to null."""
+        envelope = json.dumps(
+            {"type": "result", "subtype": "success", "session_id": "s1", "usage": {}}
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            real_dir = home / "real_proj"
+            real_dir.mkdir()
+            link_dir = home / "link_proj"
+            link_dir.symlink_to(real_dir)
+            adapter = resolve_cli_adapter("claude")
+            # Claude runs in the resolved cwd and records that path on every
+            # transcript line. The resolver is given the symlinked worktree.
+            resolved_dir = str(real_dir.resolve())
+            self._write_claude_transcript(
+                home, resolved_dir, "s1", [{"cwd": resolved_dir, "session_id": "s1"}]
+            )
+            with patch("pathlib.Path.home", return_value=home):
+                ref = adapter.resolve_session_ref(envelope, workdir=str(link_dir))
+            self.assertEqual(ref, "s1")
 
     def test_unknown_adapter_returns_none_session_reference(self):
         adapter = CLIAdapter(

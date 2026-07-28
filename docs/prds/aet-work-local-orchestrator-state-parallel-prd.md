@@ -303,7 +303,8 @@ The orchestrator records every execution event to `.agents/execution.log.jsonl`.
   "commits_created": 1,
   "worktree_size_bytes": 4194304,
   "token_count": null,
-  "cost_estimate": null
+  "cost_estimate": null,
+  "session_identifier": "<sessionId>"
 }
 ```
 
