@@ -78,17 +78,21 @@ docs_sync_reason: the `make` scope contract changes and the marker line becomes 
 
 ## Task List
 
-1. Emit a stable machine-readable resolved-targets marker from `change_scope`, alongside the
+1. ✓ Emit a stable machine-readable resolved-targets marker from `change_scope`, alongside the
    existing human `--explain` line — S (traces: R-10)
-2. Extend `classify_test_scope` with optional command output: parse the marker, classify by the
+2. ✓ Extend `classify_test_scope` with optional command output: parse the marker, classify by the
    resolved targets, fall back to the current heuristic when absent or malformed — M
-   (traces: R-10)
-3. Pass `tool_result` output through the session-reader interface to the emission site so the
-   classifier receives it — S (traces: R-10)
-4. Re-derive `full_suite_runs`/`impact_runs` over the existing archive before and after; document
+   (traces: R-10) [Changed: every marker in the output must agree, not just be present —
+   `make validate`'s own output can reprint a second, fixture-owned marker]
+3. ✓ Pass `tool_result` output through the session-reader interface to the emission site so the
+   classifier receives it — S (traces: R-10) [Changed: both readers grew the field; the
+   dispatch seam in `session_log.py` needed no change]
+4. ✓ Re-derive `full_suite_runs`/`impact_runs` over the existing archive before and after; document
    the shift in the merge notes and in `mine_learnings`' output description — S (traces: R-13)
-5. Tests (see Validation Steps) — M (traces: R-10, R-13)
-6. Merge branch to main and verify integration — S
+   [Changed: re-derived over the real archive rather than a fixture; the shift is zero because
+   archived records carry no `output` — see R-13 Measurement]
+5. ✓ Tests (see Validation Steps) — M (traces: R-10, R-13)
+6. Merge branch to main and verify integration — S [Deferred: carried to `aet-ship`]
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -189,5 +193,5 @@ identifies exactly which records are affected in either direction.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
