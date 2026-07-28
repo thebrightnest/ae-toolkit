@@ -1,7 +1,7 @@
 # PRD: Telemetry Adapter Parity & Test-Run Fidelity
 
-*Stage: scope-validated*
-*Next step: `aet sprint add` the `tap-*` plans, then run `aet run-one` or `aet run`*
+*Stage: synced*
+*Next step: run `aet-ship`*
 
 ## Overview
 

@@ -69,11 +69,11 @@ docs_sync_reason: the determination is a documentation deliverable on both branc
 
 ## Task List
 
-1. Run a live Claude Code stage session with the tee output preserved; capture the raw envelope
+✓ 1. Run a live Claude Code stage session with the tee output preserved; capture the raw envelope
    and the emitted `stage` record side by side — S (traces: R-11)
-2. Determine which link fails, if any: envelope present in captured output → reaches
+✓ 2. Determine which link fails, if any: envelope present in captured output → reaches
    `parse_usage` → parses → populates `token_count` — S (traces: R-11)
-3. Write the verification record either way; if a defect is found, fix it and add a regression test
+✓ 3. Write the verification record either way; if a defect is found, fix it and add a regression test
    built from the captured envelope — S (traces: R-11)
 4. Merge branch to main and verify integration — S
 
@@ -96,17 +96,16 @@ docs_sync_reason: the determination is a documentation deliverable on both branc
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] A live Claude Code stage session records a non-null `token_count`, **or** the verification
+- [x] `make validate` passes
+- [x] A live Claude Code stage session records a non-null `token_count`, **or** the verification
       records why it cannot, with a reproduction
-- [ ] If a defect was found: a regression test built from the captured live envelope fails before
-      the fix and passes after
-- [ ] The committed verification record names the link that was verified at each step; when no
+- [x] If a defect was found: a regression test built from the captured live envelope fails before
+      the fix and passes after (no defect found)
+- [x] The committed verification record names the link that was verified at each step; when no
       defect was found it also explains the three archived nulls
-- [ ] Coverage (defect path only):
-  - `test_parse_claude_handles_live_captured_envelope` (unit)
-  - a test naming whichever link failed
-- [ ] R-trace coverage: R-11 by tasks 1, 2, 3; no unknown R-ids
+- [x] Coverage:
+  - `test_claude_live_captured_envelope_parses` (unit)
+- [x] R-trace coverage: R-11 by tasks 1, 2, 3; no unknown R-ids
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -117,4 +116,5 @@ sessions, which is the current behaviour and is null-honest either way (ADR-031)
 
 ---
 
-*Stage: plan-approved*
+*Stage: synced*
+*Next step: run `aet-ship`*
