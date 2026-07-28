@@ -39,22 +39,22 @@ This plan runs last because it describes the finished behavior.
 
 ## Task List
 
-1. Rewrite the `aet run` / `aet run-one` sections of `.agents/commands/aet-work.md`: remove
+1. [x] Rewrite the `aet run` / `aet run-one` sections of `.agents/commands/aet-work.md`: remove
    `--foreground`, `--max-jobs`, `--isolation`, and `--stall-timeout` from the flag list,
    remove `--foreground` from the anti-patterns list, document blocking `run-one` vs
    returning `run`, and describe `--follow` as waiting for a bounded report — S
    (traces: R-13)
-2. Correct ADR-004's consequence text so it no longer claims `run` waits for completion,
+2. [x] Correct ADR-004's consequence text so it no longer claims `run` waits for completion,
    noting that daemonization (`nc-06`) and this PRD changed it — S (traces: R-14)
-3. Verify the CONTEXT.md **Run Supervision** entries (`Run`, `Run Id`, `Detached Run`,
+3. [x] Verify the CONTEXT.md **Run Supervision** entries (`Run`, `Run Id`, `Detached Run`,
    `Follower`, `Bounded Report`, `Stall Timeout`, `Wall Backstop`) match shipped behavior and
    correct any drift — S (traces: R-15)
-4. Update the in-repo skill `skills/aet-work/`: `references/queue-commands.md` currently
+4. [x] Update the in-repo skill `skills/aet-work/`: `references/queue-commands.md` currently
    documents `aet run --isolation standard --max-jobs 4` and `run-one --isolation standard`
    and shell-backgrounds both commands — rewrite for the R-2/R-2b/R-2c behavior, and sweep
    `SKILL.md` and the other references for any remaining mentions of removed flags — S
    (traces: R-13)
-5. Merge branch to main and verify integration — S
+5. [Deferred: handled by `aet-ship`] Merge branch to main and verify integration — S
 
 ## Validation
 
@@ -68,4 +68,5 @@ This plan runs last because it describes the finished behavior.
 
 ---
 
-*Stage: reviewed*
+*Stage: synced*
+*Next step: run `aet-ship`*
