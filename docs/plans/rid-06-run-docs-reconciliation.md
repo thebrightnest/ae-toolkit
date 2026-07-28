@@ -68,5 +68,5 @@ This plan runs last because it describes the finished behavior.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
