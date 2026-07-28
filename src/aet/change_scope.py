@@ -11,7 +11,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from aet import evidence
+from aet import evidence, telemetry
 
 FULL = "full"
 DOCS = "docs"
@@ -198,6 +198,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"→ full suite (changed paths: {count})")
             else:
                 print(f"→ targeted tests: {' '.join(scope)} (changed paths: {count})")
+            # The prose above is for operators and may be re-worded freely; the
+            # marker below is the contract telemetry.classify_test_scope reads
+            # to see how much of the suite a `make validate` actually ran.
+            print(f"{telemetry.TEST_SCOPE_MARKER_PREFIX} {' '.join(scope)}")
         return 0
 
     # Empty output tells the Makefile to skip the pytest step.

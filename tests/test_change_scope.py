@@ -10,7 +10,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from aet import change_scope
+from aet import change_scope, telemetry
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TESTS_DIR = REPO_ROOT / "tests"
@@ -226,3 +226,26 @@ class TestTargetsAndTier:
 
         sig = inspect.signature(change_scope.tier)
         assert "stage" not in sig.parameters
+
+
+class TestResolvedTargetsMarker:
+    """``--explain`` carries a machine-readable marker beside its human line.
+
+    The human line is for operators and may be re-worded freely; the marker is
+    the contract `telemetry.classify_test_scope` reads (tap-06).
+    """
+
+    def _explain(self, monkeypatch, capsys, paths):
+        monkeypatch.setattr(change_scope, "changed_paths", lambda: paths)
+        change_scope.main(["--explain"])
+        return capsys.readouterr().out
+
+    def test_change_scope_emits_resolved_targets_marker(self, monkeypatch, capsys):
+        out = self._explain(monkeypatch, capsys, ["src/aet/queue.py"])
+        assert f"{telemetry.TEST_SCOPE_MARKER_PREFIX} tests/queue" in out
+        # The operator-facing line survives alongside it.
+        assert "→ targeted tests: tests/queue" in out
+
+    def test_marker_absent_for_prose_only_change(self, monkeypatch, capsys):
+        out = self._explain(monkeypatch, capsys, ["README.md"])
+        assert telemetry.TEST_SCOPE_MARKER_PREFIX not in out

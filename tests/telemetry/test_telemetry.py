@@ -331,6 +331,70 @@ class TestClassifyTestScope(unittest.TestCase):
                 self.assertEqual(telemetry.classify_test_scope(command), "unknown")
 
 
+class TestClassifyTestScopeFromMarker(unittest.TestCase):
+    """tap-06: a `make` run's real scope comes from the marker in its output.
+
+    `make validate` runs pytest in a sub-make the session log never sees, so
+    the command string alone always read `full-suite`. The marker carries the
+    targets `change_scope` resolved; absent or malformed, the command-string
+    heuristic answers as before.
+    """
+
+    def _marker(self, *targets):
+        return f"{telemetry.TEST_SCOPE_MARKER_PREFIX} {' '.join(targets)}"
+
+    def test_classify_scope_reads_marker_and_returns_impact_for_narrowed_targets(self):
+        output = f"→ targeted tests: tests/queue\n{self._marker('tests/queue')}\n"
+        self.assertEqual(telemetry.classify_test_scope("make validate", output), "impact")
+
+    def test_classify_scope_returns_full_suite_for_marker_naming_suite_root(self):
+        output = f"→ full suite (changed paths: 12)\n{self._marker('tests/')}\n"
+        self.assertEqual(
+            telemetry.classify_test_scope("make validate", output), "full-suite"
+        )
+
+    def test_classify_scope_falls_back_to_heuristic_when_marker_absent(self):
+        self.assertEqual(
+            telemetry.classify_test_scope("make validate", "ruff ok\n✓ Tests passed\n"),
+            "full-suite",
+        )
+        self.assertEqual(telemetry.classify_test_scope("make validate", None), "full-suite")
+        self.assertEqual(telemetry.classify_test_scope("make build", "irrelevant"), "unknown")
+
+    def test_classify_scope_falls_back_when_marker_malformed(self):
+        for payload in (
+            "",
+            "   ",
+            "src/aet/queue.py",
+            "tests/queue; rm -rf /",
+            "../../etc/passwd",
+            "tests/queue $(whoami)",
+            "tests/queue tests/../secrets",
+        ):
+            with self.subTest(payload=payload):
+                output = f"{telemetry.TEST_SCOPE_MARKER_PREFIX} {payload}\n"
+                self.assertEqual(
+                    telemetry.classify_test_scope("make validate", output), "full-suite"
+                )
+
+    def test_classify_scope_unchanged_for_non_make_commands(self):
+        """The pure-heuristic path is untouched: output never overrides it."""
+        cases = [
+            ("pytest tests/", "full-suite"),
+            ("pytest tests/test_queue.py", "impact"),
+            ("./run_tests.sh", "unknown"),
+        ]
+        marker = self._marker("tests/queue")
+        for command, expected in cases:
+            with self.subTest(command=command):
+                self.assertEqual(telemetry.classify_test_scope(command, marker), expected)
+
+    def test_classify_scope_uses_the_last_marker_in_the_output(self):
+        """Two `make validate` runs in one shell call: the final scope wins."""
+        output = f"{self._marker('tests/')}\n...\n{self._marker('tests/queue')}\n"
+        self.assertEqual(telemetry.classify_test_scope("make validate", output), "impact")
+
+
 class TestLearningCandidateRecord(unittest.TestCase):
     def test_learning_candidate_record_contains_required_fields(self):
         record = telemetry.learning_candidate_record(

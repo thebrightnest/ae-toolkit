@@ -39,8 +39,20 @@ _TEST_FILE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs")
 # Arguments naming these roots run the whole suite, not an impact subset.
 _SUITE_ROOT_ARGS = {".", "test", "tests", "./..."}
 
+# The marker `change_scope --explain` prints so a `make` invocation's resolved
+# pytest targets survive into the command's output. `make validate` runs pytest
+# in a sub-make the session log never sees, so the command string alone cannot
+# say how much of the suite ran; this marker is the interface that closes that
+# gap (tap-06). The prefix and grammar live here, with the reader, so there is
+# one definition of the contract.
+TEST_SCOPE_MARKER_PREFIX = "AET_TEST_SCOPE_TARGETS:"
 
-def classify_test_scope(command: str) -> str:
+# A resolved target is a path under `tests/`. Matched to reject anything else:
+# the marker is data used to pick a label, never executed or path-resolved.
+_RESOLVED_TARGET_RE = re.compile(r"^tests/[A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)*/?$")
+
+
+def classify_test_scope(command: str, output: str | None = None) -> str:
     """Classify a test command's scope: ``full-suite``, ``impact``, ``unknown``.
 
     The single scope heuristic for every ``test_run`` emission site. The
@@ -48,18 +60,65 @@ def classify_test_scope(command: str) -> str:
     (``test_runners.resolve_test_command``) — the same parse that feeds
     ``wirelog.is_test_command``. A command naming specific test files or
     subdirectories is ``impact``; a recognized runner invoked bare (or on the
-    suite root) is ``full-suite``; anything else is ``unknown``. Deliberately
-    a pure command-string heuristic — auditable, stable, and
+    suite root) is ``full-suite``; anything else is ``unknown``.
+
+    ``make`` is the one runner whose command string cannot say how much of the
+    suite ran: ``make validate`` resolves its pytest targets at runtime and
+    runs them in a sub-make the session log never sees. For ``make`` only,
+    the command's ``output`` is consulted for the
+    :data:`TEST_SCOPE_MARKER_PREFIX` marker that ``change_scope --explain``
+    prints, and the resolved targets it carries decide the label. Every other
+    command — and any ``make`` run whose output has no valid marker — takes
+    the pure command-string heuristic, unchanged: auditable, stable, and
     environment-independent.
     """
     resolved = test_runners.resolve_test_command(command)
     if resolved is None:
         return TEST_SCOPE_UNKNOWN
-    _runner, runner_args = resolved
+    runner, runner_args = resolved
+    if runner == "make":
+        marker_scope = _scope_from_marker(output)
+        if marker_scope is not None:
+            return marker_scope
     for arg in runner_args:
         if _is_scope_narrowing_arg(arg):
             return TEST_SCOPE_IMPACT
     return TEST_SCOPE_FULL_SUITE
+
+
+def _scope_from_marker(output: str | None) -> str | None:
+    """Scope from the resolved-targets marker in a command's output, or None.
+
+    ``None`` means "no usable marker" and leaves the caller on the heuristic
+    fallback — the conservative answer under ADR-049's fail-toward-more-tests
+    bias. The last marker wins, so a shell call running ``make validate`` twice
+    is labelled by the run that finished it.
+
+    The marker is data. Its targets are matched against the resolved-target
+    grammar and used only to pick a label; nothing read here is executed,
+    interpolated, or path-resolved, and a single bad token discards the whole
+    marker rather than half-trusting it.
+    """
+    if not output:
+        return None
+    for line in reversed(output.splitlines()):
+        stripped = line.strip()
+        if not stripped.startswith(TEST_SCOPE_MARKER_PREFIX):
+            continue
+        targets = stripped[len(TEST_SCOPE_MARKER_PREFIX):].split()
+        if not targets or not all(_is_resolved_target(t) for t in targets):
+            return None
+        if targets == ["tests/"]:
+            return TEST_SCOPE_FULL_SUITE
+        return TEST_SCOPE_IMPACT
+    return None
+
+
+def _is_resolved_target(token: str) -> bool:
+    """Whether a marker token is a well-formed pytest target under ``tests/``."""
+    if ".." in token:
+        return False
+    return _RESOLVED_TARGET_RE.match(token) is not None
 
 
 def _is_scope_narrowing_arg(arg: str) -> bool:

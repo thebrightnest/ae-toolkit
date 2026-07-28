@@ -141,4 +141,5 @@ identifies exactly which records are affected in either direction.
 
 ---
 
-*Stage: plan-approved*
+*Stage: tdd-complete*
+*Next step: run `aet-implement`*

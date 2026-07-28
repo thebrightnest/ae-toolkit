@@ -18,7 +18,10 @@ CLAUDE_TRANSCRIPT = _fixture_path("claude") / "transcript.jsonl"
 
 
 class TestKimiRegression:
-    """R-4: the kimi reader behind the seam yields byte-identical output."""
+    """R-4: the kimi reader behind the seam yields byte-identical output.
+
+    tap-06 added ``output`` to the shape; every other field stays pinned.
+    """
 
     def test_kimi_fixture_replay_matches_pre_change_output(self):
         session_dir = _fixture_path("kimi")
@@ -29,6 +32,7 @@ class TestKimiRegression:
                 "end_time": "2026-07-14T17:24:05Z",
                 "duration_seconds": 45.0,
                 "exit_code": 0,
+                "output": "631 passed",
             },
             {
                 "command": "pytest tests/",
@@ -36,6 +40,7 @@ class TestKimiRegression:
                 "end_time": "2026-07-14T17:26:00Z",
                 "duration_seconds": 60.0,
                 "exit_code": 1,
+                "output": "3 failed, 2 passed\nCommand failed with exit code: 1.",
             },
             {
                 "command": "pytest tests/test_unpaired.py",
@@ -43,6 +48,7 @@ class TestKimiRegression:
                 "end_time": None,
                 "duration_seconds": None,
                 "exit_code": None,
+                "output": None,
             },
         ]
         assert wirelog.extract_test_invocations(session_dir) == expected
@@ -98,6 +104,75 @@ class TestClaudeReader:
         invocations = session_log_claude.extract_test_invocations(CLAUDE_TRANSCRIPT)
         commands = [inv["command"] for inv in invocations]
         assert "git status" not in commands
+
+
+class TestResultOutputExposure:
+    """tap-06: both readers surface the command's own output to the caller.
+
+    `make validate` resolves its pytest targets at runtime and prints them as a
+    marker; the scope of that run lives in the output, not the command string.
+    Every reader therefore carries `output` in the same shape.
+    """
+
+    def test_session_reader_exposes_result_output_to_emission_site(self):
+        for agent_cli, session_ref in (
+            ("kimi", _fixture_path("kimi")),
+            ("claude", CLAUDE_TRANSCRIPT),
+        ):
+            invocations = session_log.extract_test_invocations(agent_cli, session_ref)
+            passing = next(
+                inv for inv in invocations if inv["command"] == "python3 -m pytest tests/ -q"
+            )
+            assert passing["output"] == "631 passed"
+            unpaired = next(
+                inv for inv in invocations if inv["command"] == "pytest tests/test_unpaired.py"
+            )
+            assert unpaired["output"] is None
+
+    def test_claude_reader_joins_structured_content_blocks(self):
+        """Claude's tool_result content may be text blocks rather than a string."""
+        with tempfile.TemporaryDirectory() as tmp:
+            import json
+
+            transcript = Path(tmp) / "transcript.jsonl"
+            result = _claude_result_line("c1", "2026-07-14T17:24:05Z")
+            result["message"]["content"][0]["content"] = [
+                {"type": "text", "text": "AET_TEST_SCOPE_TARGETS: tests/queue"},
+                {"type": "text", "text": "✓ Tests passed"},
+            ]
+            transcript.write_text(
+                "\n".join(
+                    json.dumps(line)
+                    for line in (
+                        _claude_call_line("c1", "make validate", "2026-07-14T17:23:20Z"),
+                        result,
+                    )
+                )
+                + "\n"
+            )
+            inv = session_log_claude.extract_test_invocations(transcript)[0]
+            assert inv["output"] == "AET_TEST_SCOPE_TARGETS: tests/queue\n✓ Tests passed"
+
+    def test_readers_emit_null_output_for_unusable_payloads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            import json
+
+            session_dir = Path(tmp) / "kimi"
+            wire_dir = session_dir / "agents" / "main"
+            wire_dir.mkdir(parents=True)
+            result = _kimi_result_line("c1", None, 1784049801000)
+            result["event"]["result"]["output"] = {"unexpected": "shape"}
+            wire_dir.joinpath("wire.jsonl").write_text(
+                "\n".join(
+                    json.dumps(line)
+                    for line in (
+                        _kimi_call_line("c1", "make validate", 1784049800000),
+                        result,
+                    )
+                )
+                + "\n"
+            )
+            assert wirelog.extract_test_invocations(session_dir)[0]["output"] is None
 
 
 def _kimi_call_line(uuid, command, time_ms):
