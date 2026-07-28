@@ -7,6 +7,8 @@ from pathlib import Path
 
 from aet import wirelog
 
+_FIXTURES = Path(__file__).parents[1] / "fixtures" / "session_logs"
+
 
 def _tool_call_line(uuid, command, time_ms, name="Bash"):
     """One wire.jsonl line for a tool.call event (kimi 0.23.x shape)."""
@@ -305,6 +307,37 @@ class TestExtractTestInvocations(unittest.TestCase):
         session_dir = _write_session(self.root, {"main": lines})
         invocations = wirelog.extract_test_invocations(session_dir)
         self.assertEqual([inv["command"] for inv in invocations], v1_commands + newly_detected)
+
+
+class TestKimiFixtureRegression(unittest.TestCase):
+    """R-4 regression contract: replaying the captured fixture matches pre-change output."""
+
+    def test_kimi_fixture_replay_matches_pre_change_output(self):
+        session_dir = _FIXTURES / "kimi"
+        expected = [
+            {
+                "command": "python3 -m pytest tests/ -q",
+                "start_time": "2026-07-14T17:23:20Z",
+                "end_time": "2026-07-14T17:24:05Z",
+                "duration_seconds": 45.0,
+                "exit_code": 0,
+            },
+            {
+                "command": "pytest tests/",
+                "start_time": "2026-07-14T17:25:00Z",
+                "end_time": "2026-07-14T17:26:00Z",
+                "duration_seconds": 60.0,
+                "exit_code": 1,
+            },
+            {
+                "command": "pytest tests/test_unpaired.py",
+                "start_time": "2026-07-14T17:26:40Z",
+                "end_time": None,
+                "duration_seconds": None,
+                "exit_code": None,
+            },
+        ]
+        self.assertEqual(wirelog.extract_test_invocations(session_dir), expected)
 
 
 if __name__ == "__main__":
