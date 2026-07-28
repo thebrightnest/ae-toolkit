@@ -184,6 +184,44 @@ class TestResolveSessionRef(unittest.TestCase):
                 ref = adapter.resolve_session_ref(envelope, workdir="/tmp/proj")
             self.assertEqual(ref, expected)
 
+    def test_claude_session_reference_resolved_from_single_object_envelope(self):
+        """`--output-format json` emits one object, not a list — the shipped shape."""
+        envelope = json.dumps(
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "session_id": "s9",
+                "result": "done",
+                "usage": {"input_tokens": 2, "output_tokens": 4},
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            adapter = resolve_cli_adapter("claude")
+            expected = self._write_claude_transcript(
+                home, "/tmp/proj", "s9", [{"cwd": "/tmp/proj", "session_id": "s9"}]
+            )
+            with patch("pathlib.Path.home", return_value=home):
+                ref = adapter.resolve_session_ref(envelope, workdir="/tmp/proj")
+            self.assertEqual(ref, expected)
+
+    def test_claude_session_reference_survives_log_noise_before_envelope(self):
+        """A captured tail carries CLI chatter ahead of the envelope."""
+        envelope = json.dumps(
+            {"type": "result", "subtype": "success", "session_id": "s9", "usage": {}}
+        )
+        noisy = "starting stage...\nwarming worktree\n" + envelope
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            adapter = resolve_cli_adapter("claude")
+            expected = self._write_claude_transcript(
+                home, "/tmp/proj", "s9", [{"cwd": "/tmp/proj", "session_id": "s9"}]
+            )
+            with patch("pathlib.Path.home", return_value=home):
+                ref = adapter.resolve_session_ref(noisy, workdir="/tmp/proj")
+            self.assertEqual(ref, expected)
+
     def test_claude_session_reference_null_when_cwd_mismatches(self):
         """A transcript at the expected path whose own cwd disagrees is not a match."""
         envelope = (

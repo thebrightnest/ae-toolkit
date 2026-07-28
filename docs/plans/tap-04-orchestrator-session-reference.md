@@ -107,8 +107,8 @@ docs_sync_reason: the telemetry stage-record schema gains a field and `session_d
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Coverage:
+- [x] `make validate` passes (1313 tests, ruff, workflow lint, plans lint)
+- [x] Coverage:
   - `test_session_reference_resolved_per_adapter_without_name_branch` (unit) — asserts no
     `adapter.name ==` comparison remains on the resolution path
   - `test_claude_session_reference_resolved_from_envelope_session_id` (unit)
@@ -119,12 +119,17 @@ docs_sync_reason: the telemetry stage-record schema gains a field and `session_d
   - `test_emit_test_runs_survives_extraction_exception` (unit)
   - `test_stage_record_carries_session_identifier` (unit)
   - `test_stage_record_session_identifier_null_when_unresolvable` (unit)
-- [ ] R-trace coverage: R-6 by tasks 1, 2, 3, 6; R-9 by tasks 4, 5, 6; no unknown R-ids
-- [ ] For the new resolution logic in `cli_adapter.py`, tests above name the coverage
+- [x] R-trace coverage: R-6 by tasks 1, 2, 3, 6; R-9 by tasks 4, 5, 6; no unknown R-ids
+- [x] For the new resolution logic in `cli_adapter.py`, tests above name the coverage.
+      QA added three more: the single-object `--output-format json` envelope (the shipped
+      shape, previously untested — all three original tests used a list envelope),
+      log noise before the envelope, and a missing transcript. The `cwd` guard was
+      proven non-vacuous by mutation.
 - [ ] End-to-end: an orchestrated stage session run under `claude` writes at least one `test_run`
       record with a non-null `duration_seconds`, and its `stage` record carries a session
       identifier that resolves to the transcript that produced it
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+      — **not verified in QA**: needs a live orchestrated session; left for `aet-verify`
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` — pending `aet-ship`
 
 ## Rollback Plan
 
@@ -135,5 +140,5 @@ records stay readable either way.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
