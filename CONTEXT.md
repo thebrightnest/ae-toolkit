@@ -219,7 +219,7 @@ The transcript the **agent CLI itself** writes for one stage session, outside AE
 _Avoid_: "wire log" as the general term (that is kimi's schema specifically); confusing it with the **Telemetry Archive** (AET's own store) or the **Execution Log** (`.agents/work-history.jsonl`).
 
 **Test Run (observed / claimed)**:
-A `test_run` telemetry record, carrying `source` to say which of two things it is. **Observed** (`"wire"`) — extracted from the **Session Log**: real command, real timestamps, real exit code, no test counts. **Claimed** (`"verdict"`) — derived from a passing QA verdict: test counts, but null timing and a `success` result true by construction. Duration, throughput, and pass-rate aggregates read observed records only. (ADR-051)
+A `test_run` telemetry record, carrying `source` to say which of two things it is. **Observed** (`"wire"`) — extracted from the **Session Log**: real command, real timestamps, real exit code, no test counts. **Claimed** (`"verdict"`) — derived from a passing QA verdict: test counts, but null timing and a null `exit_code`, so it reads `result: "unknown"` rather than restating the verdict's own pass as a measurement. Duration, throughput, and pass-rate aggregates read observed records only; count aggregates read claimed records only, and say so. (ADR-051)
 _Avoid_: aggregating the two populations together; reading a claimed record's `exit_code: 0` as a measurement; inferring provenance from field signatures on new records (pre-2026-07-26 records are provenance-unknown and are not backfilled).
 
 **First-Pass Merge**:

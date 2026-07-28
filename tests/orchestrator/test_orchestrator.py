@@ -2465,8 +2465,56 @@ class TestEvidenceGates(unittest.TestCase):
             self.assertEqual(test_runs[0]["tests_total"], 12)
             self.assertEqual(test_runs[0]["tests_passed"], 11)
             self.assertEqual(test_runs[0]["tests_failed"], 1)
-            self.assertEqual(test_runs[0]["exit_code"], 0)
             self.assertIsNone(test_runs[0]["duration_seconds"])
+
+    def test_verdict_emitter_writes_source_verdict(self):
+        """A verdict-derived record declares itself claimed, not observed."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_verdict(
+                        reports_dir,
+                        "qa",
+                        "pass",
+                        test_command="pytest -k smoke",
+                        tests_total=12,
+                        tests_passed=11,
+                        tests_failed=1,
+                    )
+                    _write_passing(reports_dir, "review", "cso", "sync-docs")
+                    _result, logger = self._run_group(
+                        repo_root, plan_file, reports_dir, archive_dir
+                    )
+                    records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                    test_runs = [r for r in records if r.get("type") == "test_run"]
+            self.assertEqual(len(test_runs), 1)
+            self.assertEqual(test_runs[0]["source"], "verdict")
+
+    def test_verdict_emitter_no_longer_hardcodes_exit_code_zero(self):
+        """A claim is not a measurement: exit_code is null and result unknown."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(repo_root)
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_verdict(
+                        reports_dir,
+                        "qa",
+                        "pass",
+                        test_command="pytest -k smoke",
+                        tests_total=12,
+                        tests_passed=12,
+                        tests_failed=0,
+                    )
+                    _write_passing(reports_dir, "review", "cso", "sync-docs")
+                    _result, logger = self._run_group(
+                        repo_root, plan_file, reports_dir, archive_dir
+                    )
+                    records = telemetry.read_jsonl(logger.task_log_path("demo"))
+                    test_runs = [r for r in records if r.get("type") == "test_run"]
+            self.assertEqual(len(test_runs), 1)
+            self.assertIsNone(test_runs[0]["exit_code"])
+            self.assertEqual(test_runs[0]["result"], "unknown")
 
     def test_qa_verdict_classifies_full_suite_scope(self):
         """A suite-wide test command is classified as full-suite scope."""
@@ -2519,6 +2567,68 @@ class TestEvidenceGates(unittest.TestCase):
             self.assertEqual(len(test_runs), 1)
             self.assertEqual(test_runs[0]["scope"], "impact")
             self.assertEqual(test_runs[0]["tests_total"], 7)
+
+class TestWireTestRunProvenance(unittest.TestCase):
+    """Wire-derived test_run records declare themselves observed (ADR-051)."""
+
+    def _write_wire_session(self, root: Path, command: str) -> Path:
+        """Materialize a session dir holding one paired test invocation."""
+        session_dir = root / "sessions" / "wd_proj" / "session_demo"
+        wire = session_dir / "agents" / "main" / "wire.jsonl"
+        wire.parent.mkdir(parents=True, exist_ok=True)
+        call = {
+            "type": "context.append_loop_event",
+            "event": {
+                "type": "tool.call",
+                "uuid": "c1",
+                "toolCallId": "c1",
+                "name": "Bash",
+                "args": {"command": command},
+            },
+            "time": 1784049800000,
+        }
+        result = {
+            "type": "context.append_loop_event",
+            "event": {
+                "type": "tool.result",
+                "parentUuid": "c1",
+                "toolCallId": "c1",
+                "result": {"output": "631 passed"},
+            },
+            "time": 1784049845000,
+        }
+        wire.write_text(
+            json.dumps(call) + "\n" + json.dumps(result) + "\n", encoding="utf-8"
+        )
+        return session_dir
+
+    def test_wire_emitter_writes_source_wire(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            with tempfile.TemporaryDirectory() as archive_dir:
+                with patch.dict(
+                    os.environ,
+                    {"AET_TELEMETRY_ARCHIVE_DIR": archive_dir},
+                    clear=False,
+                ):
+                    session_dir = self._write_wire_session(
+                        Path(archive_dir), "python3 -m pytest tests/ -q"
+                    )
+                    logger = telemetry.RunLogger(repo_root, run_id="r1")
+                    orchestrator._emit_wire_test_runs(
+                        logger,
+                        "demo",
+                        "docs/plans/demo.md",
+                        "implemented",
+                        session_dir,
+                    )
+                    records = telemetry.read_jsonl(logger.task_log_path("demo"))
+            test_runs = [r for r in records if r.get("type") == "test_run"]
+            self.assertEqual(len(test_runs), 1)
+            self.assertEqual(test_runs[0]["source"], "wire")
+            self.assertEqual(test_runs[0]["duration_seconds"], 45.0)
+            self.assertEqual(test_runs[0]["result"], "success")
+
 
 class _StubPopen:
     """subprocess.Popen stand-in for _run_with_live_tee: canned output + exit code."""

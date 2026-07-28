@@ -179,6 +179,7 @@ class TestTestRunRecord(unittest.TestCase):
             stage="qa-complete",
             scope="impact",
             test_command="python3 -m pytest tests/test_demo.py",
+            source="wire",
             start_time="2026-06-18T00:00:00Z",
             end_time="2026-06-18T00:00:10Z",
             exit_code=0,
@@ -191,6 +192,38 @@ class TestTestRunRecord(unittest.TestCase):
         self.assertEqual(record["duration_seconds"], 10.0)
         self.assertEqual(record["result"], "success")
         self.assertEqual(record["tests_total"], 5)
+        self.assertEqual(record["source"], "wire")
+
+    def test_test_run_record_requires_source(self):
+        """Provenance is declared by the emitter, never defaulted (ADR-051)."""
+        with self.assertRaises(TypeError):
+            telemetry.test_run_record(
+                run_id="r1",
+                task_id="t1",
+                plan_file="docs/plans/demo.md",
+                stage="implemented",
+                scope="impact",
+                test_command="pytest tests/test_a.py",
+                start_time=None,
+                end_time=None,
+                exit_code=0,
+            )
+
+    def test_test_run_record_rejects_unknown_source(self):
+        """``source`` is an enum of the two emitters, not free text."""
+        with self.assertRaises(ValueError):
+            telemetry.test_run_record(
+                run_id="r1",
+                task_id="t1",
+                plan_file="docs/plans/demo.md",
+                stage="implemented",
+                scope="impact",
+                test_command="pytest tests/test_a.py",
+                source="guessed",
+                start_time=None,
+                end_time=None,
+                exit_code=0,
+            )
 
     def test_test_run_record_null_timestamps_yield_null_duration(self):
         """Null contract: unmeasured timestamps produce a null duration."""
@@ -201,6 +234,7 @@ class TestTestRunRecord(unittest.TestCase):
             stage="implemented",
             scope="full-suite",
             test_command="pytest tests/",
+            source="wire",
             start_time="2026-06-18T00:00:00Z",
             end_time=None,
             exit_code=None,
@@ -218,6 +252,7 @@ class TestTestRunRecord(unittest.TestCase):
             stage="implemented",
             scope="impact",
             test_command="pytest tests/test_a.py",
+            source="wire",
             start_time="2026-06-18T00:00:00Z",
             end_time="2026-06-18T00:00:10Z",
             exit_code=None,
@@ -233,6 +268,7 @@ class TestTestRunRecord(unittest.TestCase):
             stage="implemented",
             scope="full-suite",
             test_command="pytest tests/",
+            source="wire",
             start_time="2026-06-18T00:00:00Z",
             end_time="2026-06-18T00:01:00Z",
             exit_code=1,

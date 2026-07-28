@@ -145,11 +145,16 @@ def _findings_count(record: dict[str, object] | None, kind: str) -> int:
 
 
 def _telemetry_signals(task_id: str) -> tuple[dict[str, object] | None, int]:
-    """Return the latest stage record and the highest tests_failed seen.
+    """Return the latest stage record and the highest claimed tests_failed.
 
     Walks the telemetry archive for this project once, collecting the most
     recent ``stage_record`` (for ``files_modified``) and the maximum
-    ``tests_failed`` from any ``test_run_record``.
+    ``tests_failed`` from ``test_run_record``s.
+
+    Provenance (ADR-051): test counts exist only on ``source: "verdict"``
+    records — the QA agent's self-report — so this signal is declared over
+    claimed runs. Observed (``"wire"``) records carry timings, not counts, and
+    pre-ADR-051 records carry no provenance at all; neither is counted here.
     """
     slug = project_id.derive_project_slug()
     root = telemetry.archive_dir() / slug
@@ -168,6 +173,8 @@ def _telemetry_signals(task_id: str) -> tuple[dict[str, object] | None, int]:
                 ):
                     latest_stage = record
             elif record.get("type") == "test_run":
+                if record.get("source") != "verdict":
+                    continue
                 failed = record.get("tests_failed") or 0
                 if isinstance(failed, int) and failed > tests_failed:
                     tests_failed = failed
