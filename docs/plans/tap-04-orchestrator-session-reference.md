@@ -3,7 +3,7 @@ id: tap-04-orchestrator-session-reference
 size: M
 blocked_by: [tap-03-adapter-dispatched-session-readers]
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: replaces one resolved local path with an adapter-resolved reference to the same class of file and adds an existing session identifier to a local telemetry record; no new external input, no credential or network surface, and the identifier is the agent CLI's own session id, not user-supplied
 docs_sync: required
@@ -156,5 +156,5 @@ records stay readable either way.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
