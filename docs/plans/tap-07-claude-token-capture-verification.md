@@ -3,7 +3,7 @@ id: tap-07-claude-token-capture-verification
 size: S
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: parses a JSON envelope the CLI already writes to captured stdout; no new input source, no credential handling, and the bounded tail scan that limits parse cost is unchanged
 docs_sync: required
@@ -116,5 +116,5 @@ sessions, which is the current behaviour and is null-honest either way (ADR-031)
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
