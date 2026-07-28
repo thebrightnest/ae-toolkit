@@ -95,7 +95,7 @@ class TestClaudeReader:
         assert unpaired["exit_code"] is None
 
     def test_claude_reader_ignores_non_bash_tool_use_blocks(self):
-        invocations = session_log_claude.extract_test_invocations(_fixture_path("claude"))
+        invocations = session_log_claude.extract_test_invocations(CLAUDE_TRANSCRIPT)
         commands = [inv["command"] for inv in invocations]
         assert "git status" not in commands
 

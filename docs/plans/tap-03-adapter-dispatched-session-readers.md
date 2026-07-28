@@ -137,5 +137,5 @@ orchestrator wiring yet (`tap-04`), so the revert touches only extraction code a
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
