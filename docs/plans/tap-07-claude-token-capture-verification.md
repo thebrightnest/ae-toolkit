@@ -116,5 +116,5 @@ sessions, which is the current behaviour and is null-honest either way (ADR-031)
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
