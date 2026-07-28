@@ -38,12 +38,13 @@ def _make_history(tasks: list[dict]) -> str:
     return str(path)
 
 
-def _make_plans_dir(plan_names: list[str]) -> tempfile.TemporaryDirectory:
+def _make_plans_dir(plan_names: list[str], sizes: dict[str, str] | None = None) -> tempfile.TemporaryDirectory:
     tmp = tempfile.TemporaryDirectory()
     for name in plan_names:
         stem = Path(name).stem
+        size = (sizes or {}).get(stem, "S")
         Path(tmp.name, name).write_text(
-            f"---\nid: {stem}\nstatus: queued\n---\n\n# Plan\n",
+            f"---\nid: {stem}\nsize: {size}\nstatus: queued\n---\n\n# Plan\n",
             encoding="utf-8",
         )
     return tmp
@@ -221,6 +222,56 @@ class TestStatusStoredState(unittest.TestCase):
         self.assertNotIn("unblocked: 1", output)
         self.assertNotIn("in-progress: 1", output)
 
+    def test_table_includes_size_column(self):
+        """The active-tasks table includes a Size column between State and Depends on."""
+        plans_dir_tmp = _make_plans_dir(
+            ["t1.md", "t2.md", "t3.md"],
+            sizes={"t1": "S", "t2": "M", "t3": "L"},
+        )
+        plans_dir = plans_dir_tmp.name
+        queue_file = _make_queue(_resolve_plan_files([
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+            {"id": "t2", "state": "ready", "title": "Two", "plan_file": "docs/plans/t2.md"},
+            {"id": "t3", "state": "blocked", "title": "Three", "plan_file": "docs/plans/t3.md"},
+        ], plans_dir))
+        history_file = _make_history([])
+
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
+
+        self.assertEqual(result.exit_code, 0)
+        output = result.stdout
+        header_line = [ln for ln in output.splitlines() if "ID" in ln and "State" in ln][0]
+        self.assertRegex(header_line, r"ID.*State.*Size.*Depends on")
+        self.assertIn("| S    |", output)
+        self.assertIn("| M    |", output)
+        self.assertIn("| L    |", output)
+
+    def test_table_shows_placeholder_when_size_missing(self):
+        """Tasks whose plan has no size render '—' in the Size column."""
+        plans_dir_tmp = _make_plans_dir(["t1.md"])
+        plans_dir = plans_dir_tmp.name
+        plan_path = Path(plans_dir) / "t1.md"
+        plan_path.write_text("---\nid: t1\nstatus: queued\n---\n\n# Plan\n", encoding="utf-8")
+        queue_file = _make_queue(_resolve_plan_files([
+            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
+        ], plans_dir))
+        history_file = _make_history([])
+
+        result = run_typer(aet.app, [
+            "status",
+            "--queue-file", queue_file,
+            "--history-file", history_file,
+            "--plans-dir", plans_dir,
+        ])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("| —    |", result.stdout)
+
 
 class TestStatusJson(unittest.TestCase):
     def test_json_summary_counts_and_human_output_suppressed(self):
@@ -251,7 +302,7 @@ class TestStatusJson(unittest.TestCase):
         self.assertNotIn("plan drift", output.lower())
 
     def test_json_tasks_carry_projection_fields(self):
-        """Each task entry carries id/state/stage/blocked_by/pending_blockers/plan_file."""
+        """Each task entry carries id/state/size/stage/blocked_by/pending_blockers/plan_file."""
         plans_dir_tmp = _make_plans_dir(["t1.md"])
         plans_dir = plans_dir_tmp.name
         queue_file = _make_queue(_resolve_plan_files([
@@ -280,6 +331,7 @@ class TestStatusJson(unittest.TestCase):
         entry = payload["tasks"][0]
         self.assertEqual(entry["id"], "t1")
         self.assertEqual(entry["state"], "blocked")
+        self.assertEqual(entry["size"], "S")
         self.assertEqual(entry["stage"], "plan-approved")
         self.assertEqual(entry["blocked_by"], ["t0"])
         self.assertEqual(entry["pending_blockers"], 1)

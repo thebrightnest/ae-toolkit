@@ -15,6 +15,7 @@ import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet.backends.factory import create_backend  # noqa: E402
+from aet.plan_parser import parse_frontmatter  # noqa: E402
 from aet.queue import (  # noqa: E402
     QueueIntegrityError,
     current_state,
@@ -25,6 +26,19 @@ from aet.queue import (  # noqa: E402
 def _display_category(task: dict) -> str:
     """Return the canonical state for summary counting."""
     return current_state(task) or "unknown"
+
+
+def _declared_size(task: dict) -> str:
+    """Return the plan's declared S/M/L size, or '—' when unavailable."""
+    plan_file = task.get("plan_file")
+    if not plan_file:
+        return "—"
+    try:
+        data = parse_frontmatter(Path(plan_file))
+    except OSError:
+        return "—"
+    size = data.get("size")
+    return size if size in {"S", "M", "L"} else "—"
 
 
 def _render_table(headers: list[str], rows: list[list[str]]) -> list[str]:
@@ -104,6 +118,7 @@ def _json_projection(queue: list[dict], queue_file: str, runs_dir: Path) -> dict
             {
                 "id": task.get("id"),
                 "state": current_state(task),
+                "size": _declared_size(task),
                 "stage": task.get("stage"),
                 "blocked_by": task.get("blocked_by", []),
                 "blocks": task.get("blocks", []),
@@ -200,12 +215,13 @@ def _run(
             [
                 task.get("id", ""),
                 current_state(task) or "unknown",
+                _declared_size(task),
                 ", ".join(deps) or "—",
             ]
         )
     if rows:
         print()
-        for line in _render_table(["ID", "State", "Depends on"], rows):
+        for line in _render_table(["ID", "State", "Size", "Depends on"], rows):
             print(line)
     else:
         print("\nNo active tasks.")
