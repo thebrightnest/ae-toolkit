@@ -10,7 +10,7 @@ Reference for invoking the local `aet` CLI and the AET skill pipeline in this re
 
 ## `aet run` — Batch Queue Execution
 
-`aet run` starts the orchestrator in a **detached process** by default. It assigns a run ID, redirects output to `.agents/runs/<run-id>/output.log`, prints the ID, and returns immediately.
+`aet run` starts the orchestrator in a **detached process**. It assigns a run ID, redirects output to `.agents/runs/<run-id>/output.log`, prints the ID and log path, and returns immediately.
 
 ### Procedure
 
@@ -20,8 +20,8 @@ Reference for invoking the local `aet` CLI and the AET skill pipeline in this re
    aet run
    ```
 
-2. The command prints the run ID and exits as soon as the orchestrator process is spawned.
-3. Follow the run's output with:
+2. The command prints the run ID, log path, and follow command, then exits as soon as the orchestrator process is spawned.
+3. Wait for the run to finish and print a bounded completion report with:
 
    ```bash
    aet run --follow <run-id>
@@ -35,16 +35,17 @@ Reference for invoking the local `aet` CLI and the AET skill pipeline in this re
 
 ### Flags
 
-- `--follow <run-id>` — attach to and tail a running or already-completed run's log.
+- `--follow <run-id>` — wait for an already-spawned run to reach a terminal state and print a bounded completion report. It does **not** tail or stream run output.
 - `--on-failure`, `--task-timeout`, `--cli-bin`, `--base` — forwarded to the orchestrator unchanged.
 
 ### Anti-Patterns
 
 - ❌ Spawning a second `aet run` because the first one is still running; use `aet status` or `aet run --follow <id>` instead.
+- ❌ Shell-backgrounding `aet run` with `&`; the command already returns immediately after spawning.
 
 ## `aet run-one` — Single Task Execution
 
-Same detached behavior as `aet run`: runs in the background, prints a run ID, and can be followed with `aet run-one --follow <run-id>`.
+`aet run-one <plan>` runs a single plan through the full pipeline. Like `aet run`, it spawns the orchestrator in a detached process, but `run-one` **blocks** until the run reaches a terminal state, prints a bounded completion report, and exits with the run's exit code.
 
 ## `aet status` — Queue and Run State
 

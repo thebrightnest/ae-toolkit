@@ -96,7 +96,7 @@ For `standard` isolation, the orchestrator groups consecutive pipeline stages th
 
 ```
 Parent agent session (clean)
-  → invokes `bin/orchestrator --isolation standard`
+  → invokes `aet run-one docs/plans/FEAT-001.md`
     → Orchestrator spawns Agent CLI process #1 (clean context)
       → Stage group 1: aet-tdd → aet-implement, then aet-qa
       → Commits and updates plan footer between stages

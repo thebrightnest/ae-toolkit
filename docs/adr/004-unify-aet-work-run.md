@@ -21,7 +21,7 @@ Remove `run-scripted` entirely. Replace the old cooperative `run` with the prove
 
 Changes:
 
-- `aet-work run` now generates a bash orchestrator, spawns it as a background OS process, and waits for completion.
+- `aet-work run` generates a bash orchestrator and spawns it as a background OS process.
 - `run-scripted` is removed from `aet-work/SKILL.md` and all live reference documentation.
 - Historical PRDs and plans mentioning `run-scripted` are left untouched (they document past decisions).
 
@@ -31,6 +31,7 @@ Changes:
 - **No confusion** — users no longer have to evaluate which mode to use.
 - **Breaking change** — anyone who learned `run-scripted` will find it missing. The error is self-explanatory (`run-scripted` is not a documented command).
 - **Historical docs preserved** — old PRDs and briefs still mention `run-scripted` for archaeological purposes.
+- **Spawn-only semantics** — `aet run` returns immediately after spawning the detached orchestrator. The "waits for completion" wording in earlier versions of this ADR became false when `run` was daemonized (`nc-06`) and was later locked in by the Run Invocation Determinism PRD: `run-one` blocks and waits, while batch `run` returns at once and is observed via `aet run --follow <run-id>`.
 
 ## Alternatives Considered
 
