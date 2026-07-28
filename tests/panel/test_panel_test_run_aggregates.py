@@ -151,3 +151,19 @@ def test_panel_aggregate_labels_state_their_provenance():
     html = PANEL_HTML.read_text(encoding="utf-8")
     assert "Tests (claimed)" in html
     assert "Observed pass rate" in html
+
+
+def test_header_cells_forward_their_attributes():
+    """``Th`` must spread props, or the provenance tooltips render as nothing.
+
+    The "Tests (claimed)" headers pass ``title`` to explain where the counts
+    come from. A ``Th`` that destructures only ``children``/``className``
+    swallows it silently — the column still renders, so nothing fails except
+    the explanation.
+    """
+    html = PANEL_HTML.read_text(encoding="utf-8")
+    signature = html[html.index("function Th(") : html.index("function Td(")]
+    assert "...props" in signature, "Th drops unknown props (e.g. title)"
+    assert "{...props}" in signature, "Th does not spread props onto the <th>"
+    # The headers that depend on it.
+    assert '<Th title="Test counts come from QA verdicts' in html

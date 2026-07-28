@@ -127,7 +127,8 @@ Also touched during implementation (beyond the planned list):
 
 ## Validation Steps
 
-- [x] `make validate` passes (1315 passed, 2026-07-28)
+- [x] `make validate` passes (1316 passed, 2026-07-28 — re-run at QA after the `Th`
+      prop-spreading fix and its regression test)
 - [x] Coverage, with the panel aggregates in `tests/panel/test_panel_test_run_aggregates.py`:
   - `test_wire_emitter_writes_source_wire` (unit)
   - `test_verdict_emitter_writes_source_verdict` (unit)
@@ -165,5 +166,5 @@ need a migration.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*

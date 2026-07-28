@@ -584,8 +584,8 @@ function Table({ children, className = "", ...props }) {
     </div>
   );
 }
-function Th({ children, className = "" }) {
-  return <th className={`h-9 px-3 text-left align-middle font-medium text-muted-foreground whitespace-nowrap ${className}`}>{children}</th>;
+function Th({ children, className = "", ...props }) {
+  return <th className={`h-9 px-3 text-left align-middle font-medium text-muted-foreground whitespace-nowrap ${className}`} {...props}>{children}</th>;
 }
 function Td({ children, className = "", ...props }) {
   return <td className={`px-3 py-2 align-middle ${className}`} {...props}>{children}</td>;
