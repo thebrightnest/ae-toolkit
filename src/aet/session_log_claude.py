@@ -24,6 +24,29 @@ from aet.test_runners import resolve_test_command
 from aet.usage import _MAX_WIRE_LINE_CHARS
 
 
+def cwd_slug(cwd: str) -> str:
+    """Return the slug Claude Code uses for ``cwd`` in its projects directory.
+
+    Verified layout: ``/Users/alice/proj`` → ``-Users-alice-proj`` and
+    ``/private/tmp`` → ``-private-tmp``. Trailing separators are stripped before
+    slugging so ``/tmp/`` and ``/tmp`` share one directory.
+    """
+    return cwd.rstrip("/").replace("/", "-")
+
+
+def transcript_path_for(
+    cwd: str, session_id: str, home: Path | None = None
+) -> Path:
+    """Return the Claude Code transcript path for a session.
+
+    ``home`` defaults to ``~/.claude``; callers may override it for tests or
+    non-standard installs.
+    """
+    if home is None:
+        home = Path.home() / ".claude"
+    return home / "projects" / cwd_slug(cwd) / f"{session_id}.jsonl"
+
+
 def extract_test_invocations(transcript_path: Path) -> list[dict[str, Any]]:
     """Extract test invocations from a Claude Code transcript.
 

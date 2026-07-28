@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
+
+from aet import session_log_claude
+from aet import usage as usage_lib
 
 # Flags each usage mode needs appended to a headless invocation. Modes absent
 # from this map (e.g. kimi's "wire-file", read post-exit from on-disk session
@@ -61,6 +66,23 @@ class CLIAdapter:
             cmd.extend([self.workdir_flag, workdir])
         return cmd
 
+    def resolve_session_ref(
+        self, output: str, workdir: str | None = None
+    ) -> Path | None:
+        """Return a path that locates this adapter's session log, or ``None``.
+
+        The shape of the returned path is adapter-defined: a directory for
+        kimi, a transcript file for Claude. An unresolvable session returns
+        ``None`` (ADR-031) — the orchestrator turns that into zero observed
+        ``test_run`` records and a null ``session_identifier`` on the stage
+        record.
+        """
+        if self.name == "kimi":
+            return usage_lib.resolve_kimi_session_dir_from_output(output)
+        if self.name == "claude":
+            return _resolve_claude_session_ref(output, workdir)
+        return None
+
 
 ADAPTERS: dict[str, CLIAdapter] = {
     "kimi": CLIAdapter(
@@ -107,3 +129,62 @@ def resolve_cli_adapter(cli_bin: str | None = None) -> CLIAdapter:
             return adapter
 
     raise RuntimeError("No supported AI coding agent CLI found on PATH.")
+
+
+def _resolve_claude_session_ref(output: str, workdir: str | None) -> Path | None:
+    """Resolve a Claude transcript path from the JSON envelope.
+
+    The envelope's ``session_id`` anchors the file name; the transcript's own
+    ``cwd`` record confirms the match. A missing workdir, unparseable envelope,
+    missing transcript, or cwd mismatch all resolve to ``None`` — never a
+    guessed path (ADR-031).
+    """
+    if not output or not workdir:
+        return None
+    session_id = _extract_claude_session_id(output)
+    if session_id is None:
+        return None
+    candidate = session_log_claude.transcript_path_for(workdir, session_id)
+    try:
+        with candidate.open(encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if len(line) > usage_lib._MAX_WIRE_LINE_CHARS:
+                    continue
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(record, dict) and record.get("cwd") == workdir:
+                    return candidate
+    except OSError:
+        pass
+    return None
+
+
+def _extract_claude_session_id(output: str) -> str | None:
+    """Extract the session id from Claude's JSON envelope, or ``None``."""
+    text = output
+    if len(text) > usage_lib.TAIL_SCAN_BYTES:
+        text = text[-usage_lib.TAIL_SCAN_BYTES:]
+    stripped = text.strip()
+    if stripped:
+        try:
+            doc = json.loads(stripped)
+        except ValueError:
+            doc = None
+        if isinstance(doc, list):
+            for element in reversed(doc):
+                if isinstance(element, dict):
+                    sid = element.get("session_id")
+                    if isinstance(sid, str) and sid:
+                        return sid
+        elif isinstance(doc, dict):
+            sid = doc.get("session_id")
+            if isinstance(sid, str) and sid:
+                return sid
+    result = usage_lib._find_result_element(text)
+    if isinstance(result, dict):
+        sid = result.get("session_id")
+        if isinstance(sid, str) and sid:
+            return sid
+    return None
