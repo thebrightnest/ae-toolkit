@@ -91,27 +91,38 @@ def _scope_from_marker(output: str | None) -> str | None:
 
     ``None`` means "no usable marker" and leaves the caller on the heuristic
     fallback — the conservative answer under ADR-049's fail-toward-more-tests
-    bias. The last marker wins, so a shell call running ``make validate`` twice
-    is labelled by the run that finished it.
+    bias.
+
+    Every marker in the output must agree. The output of a ``make validate``
+    contains its own pytest run, and pytest echoes captured stdout on failure —
+    so a failing ``change_scope`` test reprints a marker naming *its fixture's*
+    targets, unindented, below the real one. Trusting the last marker recorded
+    such a run as ``impact`` when it had in fact run everything, understating
+    suite cost exactly when tests were failing. Repeated identical markers (one
+    shell call running ``make validate`` twice) still classify; disagreement is
+    not resolvable from the output alone, so it falls back.
 
     The marker is data. Its targets are matched against the resolved-target
     grammar and used only to pick a label; nothing read here is executed,
     interpolated, or path-resolved, and a single bad token discards the whole
-    marker rather than half-trusting it.
+    output rather than half-trusting it.
     """
     if not output:
         return None
-    for line in reversed(output.splitlines()):
+    seen: set[tuple[str, ...]] = set()
+    for line in output.splitlines():
         stripped = line.strip()
         if not stripped.startswith(TEST_SCOPE_MARKER_PREFIX):
             continue
         targets = stripped[len(TEST_SCOPE_MARKER_PREFIX):].split()
         if not targets or not all(_is_resolved_target(t) for t in targets):
             return None
-        if targets == ["tests/"]:
-            return TEST_SCOPE_FULL_SUITE
-        return TEST_SCOPE_IMPACT
-    return None
+        seen.add(tuple(targets))
+    if len(seen) != 1:
+        return None
+    if seen == {("tests/",)}:
+        return TEST_SCOPE_FULL_SUITE
+    return TEST_SCOPE_IMPACT
 
 
 def _is_resolved_target(token: str) -> bool:

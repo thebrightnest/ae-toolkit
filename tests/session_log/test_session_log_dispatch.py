@@ -153,6 +153,16 @@ class TestResultOutputExposure:
             inv = session_log_claude.extract_test_invocations(transcript)[0]
             assert inv["output"] == "AET_TEST_SCOPE_TARGETS: tests/queue\n✓ Tests passed"
 
+    @pytest.mark.parametrize("content", [42, None, {"type": "text"}, [], ["bare string"]])
+    def test_claude_output_is_null_for_unusable_content_shapes(self, content):
+        """The transcript is a recovery stream: an odd shape yields null, not a crash."""
+        assert session_log_claude._output_from_content(content) is None
+
+    @pytest.mark.parametrize("result", [None, "not a dict", 42, []])
+    def test_kimi_output_is_null_for_unusable_result_shapes(self, result):
+        """Mirrors the claude reader: the wire schema is not a public contract."""
+        assert wirelog._output_from_result(result) is None
+
     def test_readers_emit_null_output_for_unusable_payloads(self):
         with tempfile.TemporaryDirectory() as tmp:
             import json

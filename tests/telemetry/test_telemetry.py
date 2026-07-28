@@ -416,10 +416,38 @@ class TestClassifyTestScopeFromMarker(unittest.TestCase):
                     telemetry.classify_test_scope(command),
                 )
 
-    def test_classify_scope_uses_the_last_marker_in_the_output(self):
-        """Two `make validate` runs in one shell call: the final scope wins."""
-        output = f"{self._marker('tests/')}\n...\n{self._marker('tests/queue')}\n"
+    def test_repeated_agreeing_markers_classify_normally(self):
+        """Two `make validate` runs in one shell call that resolved the same."""
+        output = f"{self._marker('tests/queue')}\n...\n{self._marker('tests/queue')}\n"
         self.assertEqual(telemetry.classify_test_scope("make validate", output), "impact")
+
+    def test_disagreeing_markers_fall_back_to_full_suite(self):
+        """Regression: pytest echoing a marker must not shrink the recorded scope.
+
+        A full-suite `make validate` whose own change_scope test fails makes
+        pytest print that test's captured stdout — an unindented marker line
+        naming a narrowed target. Trusting the last marker recorded the run as
+        `impact`, understating suite cost precisely when tests were failing.
+        Disagreement is now unresolvable and falls back, per ADR-049's bias.
+        """
+        output = (
+            "→ full suite (changed paths: 15)\n"
+            f"{self._marker('tests/')}\n"
+            "=================================== FAILURES ===================================\n"
+            "--------------------------- Captured stdout call -------------------------------\n"
+            "→ targeted tests: tests/queue (changed paths: 1)\n"
+            f"{self._marker('tests/queue')}\n"
+        )
+        self.assertEqual(
+            telemetry.classify_test_scope("make validate", output), "full-suite"
+        )
+
+    def test_one_malformed_marker_discards_the_whole_output(self):
+        """A marker that fails the grammar is not silently skipped over."""
+        output = f"{self._marker('tests/queue')}\n{telemetry.TEST_SCOPE_MARKER_PREFIX} /etc/passwd\n"
+        self.assertEqual(
+            telemetry.classify_test_scope("make validate", output), "full-suite"
+        )
 
 
 class TestLearningCandidateRecord(unittest.TestCase):

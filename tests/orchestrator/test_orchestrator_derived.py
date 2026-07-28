@@ -286,6 +286,20 @@ class TestSessionTestRunScope(unittest.TestCase):
         records = self._emit([self._invocation("make test", "✓ Tests passed\n")])
         self.assertEqual(records[0]["scope"], "full-suite")
 
+    def test_captured_output_is_read_but_never_archived(self):
+        """Output is a classification input only — it must not reach the record.
+
+        A command's captured output can hold anything the shell printed, up to
+        and including credentials. It is read for the marker and dropped; the
+        archive keeps the scope label, never the text it came from.
+        """
+        secret = "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG"
+        output = f"{telemetry.TEST_SCOPE_MARKER_PREFIX} tests/queue\n{secret}\n"
+        records = self._emit([self._invocation("make validate", output)])
+        self.assertEqual(records[0]["scope"], "impact")
+        self.assertNotIn("output", records[0])
+        self.assertNotIn(secret, json.dumps(records[0]))
+
     def test_reader_without_output_key_does_not_break_emission(self):
         """Defensive: an adapter that omits `output` still yields a record."""
         invocation = self._invocation("make validate", None)
