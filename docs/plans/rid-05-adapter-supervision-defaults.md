@@ -4,7 +4,7 @@ size: M
 work_class: critical
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: Changes the watchdog kill path and per-provider process supervision.
 docs_sync: required
@@ -64,5 +64,5 @@ provider-asymmetric regression easily misattributed to `tap-07`. Do not "optimiz
 
 ---
 
-*Stage: qa-complete*
+*Stage: merged*
 *Next step: ship via `aet ship` or merge branch to main*
