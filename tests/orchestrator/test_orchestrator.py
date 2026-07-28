@@ -2568,6 +2568,7 @@ class TestEvidenceGates(unittest.TestCase):
             self.assertEqual(test_runs[0]["scope"], "impact")
             self.assertEqual(test_runs[0]["tests_total"], 7)
 
+
 class TestWireTestRunProvenance(unittest.TestCase):
     """Wire-derived test_run records declare themselves observed (ADR-051)."""
 
