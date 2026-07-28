@@ -39,7 +39,7 @@ Promote an approved plan into the runnable sprint.
 
 ## `run`
 
-AFK loop with OS-level process isolation and parallel execution. Invokes the centralized aet-work/bin/orchestrator Python script, which spawns fresh agent sessions per pipeline stage. Independent tasks execute simultaneously—each in its own git worktree—up to a configurable concurrency cap. Context leakage between skills is eliminated by session isolation.
+AFK loop with OS-level process isolation and parallel execution. Invokes the orchestrator, which spawns fresh agent sessions per pipeline stage. Independent tasks execute simultaneously—each in its own git worktree—up to a configurable concurrency cap. Context leakage between skills is eliminated by session isolation.
 
 **Procedure:**
 
@@ -49,26 +49,27 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
 
    Before spawning the first task, the orchestrator ensures the trunk branch is clean and synchronized with its remote tracking branch. If the trunk is dirty, ahead, or behind, the orchestrator prints an actionable reason and halts before creating any worktrees. Trunk hygiene is a mechanical durability hard-stop: the loop halts in unattended mode too (ADR-027). Mutations to `.agents/work-queue.json` and `.agents/work-history.jsonl` are ignored by the dirty check because the orchestrator writes them as part of normal operation; the `.agents/work-queue.json.lock` and `.agents/work-queue.lease` sidecars are ignored too — they linger on disk by design (the lock file is never unlinked; the lease self-reclaims on the next mutation after a crash).
 
-3. **Invoke the unified orchestrator:**
+3. **Invoke the detached orchestrator:**
 
-   Background the orchestrator with shell redirection so the launching shell observes its true exit status; do not pipe through `tee` without `set -o pipefail`:
+   Run the command as a normal foreground invocation. It spawns the orchestrator in its own detached session, prints the run ID, log path, and follow command, and returns immediately:
 
    ```bash
-   aet run \
-     --cli-bin $(which kimi) \
-     --isolation standard \
-     --max-jobs 4 \
-     --on-failure triage \
-     > aet-work.log 2>&1 &
+   aet run
    ```
 
-   The orchestrator handles CLI detection, worktree management, parallel execution, and stage advancement automatically. It prints the telemetry archive path when the run finishes.
+   The orchestrator handles CLI detection, worktree management, parallel execution, and stage advancement automatically.
 
    **Failure handling:** `--on-failure={triage|continue|halt}` (default `triage`). `triage` spawns a cheap triage session that decides whether to requeue a transient failure or quarantine a design defect; `continue` marks the task failed and keeps spawning new tasks; `halt` stops the shift on the first failure.
 
-4. **Per-plan pipeline override:**
+4. **Observe a running batch:**
 
-   A plan's frontmatter may declare `pipeline: minimal|standard|full`. The orchestrator uses this value instead of the `--isolation` default for that task. See `.agents/templates/plan-template.md`.
+   To wait for an already-spawned run to finish and print a bounded completion report:
+
+   ```bash
+   aet run --follow <run-id>
+   ```
+
+   `--follow` does **not** tail or stream the run log; it waits silently and emits the same fixed-shape report that `run-one` prints.
 
 5. **Concurrency cap:**
 
@@ -84,7 +85,7 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the cen
 
 ```
 Parent agent session (clean)
-  → invokes aet-work/bin/orchestrator
+  → invokes aet run
   → Orchestrator spawns Stage 1 session (clean context, worktree A)
     → TDD + Implement + QA run in one isolated session
   → Orchestrator spawns Stage 2 session (clean context, worktree A)
@@ -104,21 +105,17 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 **Procedure:**
 
-1. Accept a plan file path: `aet run-one docs/plans/FEAT-001-plan.md`
+1. Accept a plan file path or task id: `aet run-one docs/plans/FEAT-001-plan.md` or `aet run-one FEAT-001`
 2. Invoke the orchestrator in single-plan mode:
 
    ```bash
-   aet run-one docs/plans/FEAT-001-plan.md \
-     --cli-bin $(which kimi) \
-     --isolation standard \
-     > aet-work-run-one.log 2>&1 &
+   aet run-one docs/plans/FEAT-001-plan.md
    ```
 
-3. The orchestrator advances the plan through all stage groups sequentially.
-4. Telemetry is written to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/` and the path is printed on completion.
-5. On completion, the branch is ready for `aet-ship`.
-
-**Pipeline override:** The plan's frontmatter `pipeline: minimal|standard|full` overrides the `--isolation` default for this task.
+3. The command spawns the orchestrator in a detached process and **blocks** until the run reaches a terminal state.
+4. The command exits with the run's exit code and prints a bounded completion report.
+5. Telemetry is written to `~/.aet/telemetry/{project-slug}/{date}/{run-id}/` and the path is printed on completion.
+6. On completion, the branch is ready for `aet-ship`.
 
 **Queue bookkeeping:** When the plan file corresponds to a task already tracked in `.agents/work-queue.json`, `run-one` records the task's `branch` and `worktree`, transitions it to `in_progress` at the start of the run, and transitions it to `awaiting_merge` on success. This lets `aet state record-merge` resolve the merge commit automatically after the PR ships. If the plan is not in the queue, or if `run-one` was spawned by `run` (`AET_TASK_ID` is set), the queue is left unchanged.
 
