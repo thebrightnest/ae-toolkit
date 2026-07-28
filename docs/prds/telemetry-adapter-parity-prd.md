@@ -263,3 +263,63 @@ Carried from the draft and settled during scope validation.
   already broken.** Measuring the conflict found a rework-counting defect that pins the rate at
   ≈1%. Both clauses stop reading `test_run` records, and that lands first. See the
   metric-continuity note above; resolved as R-12 / ADR-052.
+
+## Divergence Summary
+
+*Recorded: 2026-07-28 — Branch: tap-04-orchestrator-session-reference*
+
+Scoped to `tap-04` (R-6, R-9). Other requirements in this PRD are delivered by their own plans.
+
+### Changed from plan
+
+- **Task 4 / R-9 — `session_identifier` stores a full local path, not a machine-independent
+  identifier.** The plan's Rejected Alternatives explicitly rejected "persist the full session-log
+  path on the record" because "paths are machine- and home-directory-specific and go stale", in
+  favour of "an identifier plus a documented resolution rule". What shipped is
+  `str(session_ref)` — an absolute path (`~/.claude/projects/<cwd-slug>/<sessionId>.jsonl` for
+  Claude, the resolved wire dir for kimi). The reason is that the two adapters resolve
+  differently-shaped references and no common identifier exists across them: kimi's resume hint
+  yields a directory, Claude's envelope yields a session id, and only the path expresses both.
+  The consequence is documented rather than hidden — `docs/telemetry-guide.md` states that a
+  moved archive needs the leading prefix re-pointed, and names `<sessionId>` / `<cwd-slug>` as the
+  components that actually identify the session. The acceptance criterion ("a documented lookup
+  resolves it to a session-log path for both CLIs") is met; the storage form is not what the plan
+  chose.
+- **Task 1 / R-6 — the `adapter.name` branch moved down a layer rather than disappearing.**
+  `CLIAdapter.resolve_session_ref` still does `if self.name == "kimi" / "claude"`. ADR-050's
+  intent holds at the seam the plan named — the orchestrator asks and does not branch — but a
+  third CLI is still an edit to an if-chain in `cli_adapter.py` rather than a registry entry,
+  which is weaker than "the adapter resolves its own session reference" implies. The named test
+  `test_session_reference_resolved_per_adapter_without_name_branch` asserts the spawn path
+  delegates (an unknown adapter yields `None`); it does not assert, as the plan's coverage line
+  describes, that "no `adapter.name ==` comparison remains on the resolution path".
+- **Task 3 — `_emit_wire_test_runs` renamed to `_emit_session_test_runs` and gained an
+  `agent_cli` parameter.** The `tap-03` dispatch keys on CLI name, so the emission site must pass
+  it alongside the reference. The best-effort and null-reference contracts are unchanged.
+
+### Not changed as planned
+
+- **`src/aet/usage.py` was listed in Files to Modify — "kimi resume-hint resolver moves behind the
+  adapter seam" — and was not touched.** `resolve_kimi_session_dir_from_output` stayed in
+  `usage.py` and is now called from `cli_adapter.py`, which additionally reaches into that
+  module's private surface (`_MAX_WIRE_LINE_CHARS`, `_find_result_element`, `TAIL_SCAN_BYTES`).
+  The seam is honoured by call direction, not by relocation, and `cli_adapter` now depends on
+  `usage` internals.
+
+### Added (unplanned)
+
+- **`src/aet/session_log_claude.py` gained `cwd_slug` and `transcript_path_for`** — not in Files
+  to Modify. The plan assumed `tap-03` had left transcript-path construction available; it had
+  not, so path derivation was added next to the reader that consumes it.
+- **Five tests beyond the nine the plan named**: the single-object `--output-format json` envelope
+  (the shipped shape — all three planned Claude tests used a list envelope), log noise before the
+  envelope, a missing transcript, an unknown adapter, and `_spawn_session` reference resolution.
+  Three were added during QA and are already recorded in the plan's validation steps.
+
+### Deferred
+
+- **Task 7 (merge to main and verify integration)** — carried to `aet-ship`.
+- **End-to-end validation** (a live `claude` session writing an observed `test_run` with a
+  non-null duration and a traceable stage record) — needs a real orchestrated session; left for
+  `aet-verify`. This is also the PRD acceptance criterion for R-6, which therefore remains
+  unverified against live data.

@@ -71,20 +71,36 @@ docs_sync_reason: the telemetry stage-record schema gains a field and `session_d
 
 ## Task List
 
-1. Add session-reference resolution to the adapter layer (kimi: existing resume-hint route;
+1. ✓ Add session-reference resolution to the adapter layer (kimi: existing resume-hint route;
    claude: `session_id` from the result envelope confirmed against `cwd`; unresolvable → `None`)
    — M (traces: R-6)
-2. Replace the `adapter.name == "kimi"` gate in `_spawn_session_with_tail` with the
+   [Changed: shipped as `CLIAdapter.resolve_session_ref`, which still branches on `self.name`.
+   The orchestrator no longer branches — ADR-050's seam holds — but a third CLI is an edit to an
+   if-chain, not a registry entry.]
+2. ✓ Replace the `adapter.name == "kimi"` gate in `_spawn_session_with_tail` with the
    adapter-resolved reference; rename `session_dir` through its call chain and update the
    docstrings that describe it as a kimi wire dir — S (traces: R-6)
-3. Route `_emit_wire_test_runs` through the `tap-03` dispatch, preserving the best-effort and
+3. ✓ Route `_emit_wire_test_runs` through the `tap-03` dispatch, preserving the best-effort and
    null-reference contracts — S (traces: R-6)
-4. Add the session identifier to `telemetry.stage_record` and populate it at the emission site —
+   [Changed: renamed to `_emit_session_test_runs` and takes `agent_cli`, which the dispatch
+   needs to key on. Contracts unchanged.]
+4. ✓ Add the session identifier to `telemetry.stage_record` and populate it at the emission site —
    S (traces: R-9)
-5. Document the identifier → session-log resolution for both CLIs in `docs/telemetry-guide.md` —
+   [Changed: stores `str(session_ref)` — a full local path, the alternative this plan rejected.
+   No identifier is common to both adapters (kimi resolves a directory, Claude a session id), so
+   the path is the only shape that expresses both. Staleness is documented, not avoided.]
+5. ✓ Document the identifier → session-log resolution for both CLIs in `docs/telemetry-guide.md` —
    S (traces: R-9)
-6. Tests (see Validation Steps) — M (traces: R-6, R-9)
-7. Merge branch to main and verify integration — S
+6. ✓ Tests (see Validation Steps) — M (traces: R-6, R-9)
+   [Changed: 14 tests shipped against 9 planned; the extras cover the shipped single-object
+   envelope, log noise, a missing transcript, an unknown adapter, and `_spawn_session`.]
+7. Merge branch to main and verify integration — S [Deferred: carried to `aet-ship`]
+
+**Unplanned work:** `session_log_claude.cwd_slug` and `session_log_claude.transcript_path_for`
+were added — `tap-03` had not left transcript-path construction available. `src/aet/usage.py` was
+listed in Files to Modify ("kimi resume-hint resolver moves behind the adapter seam") but was not
+touched: the resolver stayed put and `cli_adapter.py` now calls it, along with three of that
+module's private names.
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -140,5 +156,5 @@ records stay readable either way.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
