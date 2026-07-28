@@ -64,5 +64,5 @@ provider-asymmetric regression easily misattributed to `tap-07`. Do not "optimiz
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: qa-complete*
+*Next step: ship via `aet ship` or merge branch to main*

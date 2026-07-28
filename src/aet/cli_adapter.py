@@ -23,6 +23,11 @@ class CLIAdapter:
     work-directory flag (e.g. kimi, claude). ``usage_mode`` names the CLI's
     machine-readable usage output mode (parsed by ``usage.parse_usage``), or
     ``None`` when the CLI emits no usage data.
+
+    ``stall_timeout`` and ``wall_backstop`` are supervision defaults for this
+    adapter: how long a headless session may stay silent before the watchdog
+    kills it, and the coarse wall-clock ceiling above that silence interval
+    (ADR-053). They are adapter data, not configuration.
     """
 
     name: str
@@ -31,6 +36,8 @@ class CLIAdapter:
     workdir_flag: str | None
     headless_flag: str | None
     usage_mode: str | None = None
+    stall_timeout: float = 1800.0
+    wall_backstop: float = 7200.0
 
     def build_cmd(
         self,
@@ -65,6 +72,10 @@ ADAPTERS: dict[str, CLIAdapter] = {
         # Usage lives in ~/.kimi-code session wire files (verified 0.23.6),
         # read post-exit via the resume hint in captured stdout.
         usage_mode="wire-file",
+        # Full pytest suites can stay silent for several minutes; 1800 s is the
+        # observed safe margin above a QA-stage silence interval (ADR-053).
+        stall_timeout=1800.0,
+        wall_backstop=7200.0,
     ),
     "claude": CLIAdapter(
         name="claude",
@@ -73,6 +84,8 @@ ADAPTERS: dict[str, CLIAdapter] = {
         workdir_flag=None,
         headless_flag="--dangerously-skip-permissions",
         usage_mode="json-envelope",
+        stall_timeout=1800.0,
+        wall_backstop=7200.0,
     ),
 }
 

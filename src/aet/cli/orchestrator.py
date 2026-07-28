@@ -22,8 +22,9 @@ Run metadata lives under ``.agents/runs/<run-id>/``:
 * ``pid`` — orchestrator pid, written after startup
 * ``started`` — ISO timestamp
 
-The per-task ``--task-timeout`` and ``--stall-timeout`` watchdog logic is
-untouched by this change; only the launch presentation layer changed.
+The per-task ``--task-timeout`` wall-clock backstop remains overridable; the
+stdout-silence stall interval is resolved from the active ``CLIAdapter``
+(ADR-053). Only the launch presentation layer changed.
 """
 
 from __future__ import annotations
@@ -355,14 +356,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--task-timeout",
         type=int,
-        default=7200,
-        help="Per-task wall-clock timeout in seconds (default: 7200).",
-    )
-    parser.add_argument(
-        "--stall-timeout",
-        type=int,
-        default=300,
-        help="Stdout-silence timeout in seconds before a session is killed (default: 300).",
+        default=None,
+        help="Per-task wall-clock timeout in seconds (default: adapter wall backstop).",
     )
     parser.add_argument(
         "--heartbeat-interval",
@@ -808,7 +803,7 @@ def _run_with_live_tee(
     cmd: list[str],
     cwd: str,
     env: dict,
-    stall_timeout: float = 300,
+    stall_timeout: float,
 ) -> tuple[int, str]:
     """Spawn a session: echo its output live, keep a bounded tail buffer.
 
@@ -889,7 +884,7 @@ def _spawn_session(
     cmd: list[str],
     worktree_dir: str,
     env: dict,
-    stall_timeout: float = 300,
+    stall_timeout: float | None = None,
 ) -> tuple[int, dict | None, Path | None]:
     """Run one agent session, returning ``(exit_code, usage, session_dir)``.
 
@@ -897,7 +892,12 @@ def _spawn_session(
     a usage mode; otherwise it is ``None`` and the record keeps null fields.
     ``session_dir`` is the resolved kimi wire dir (``None`` for non-kimi CLIs
     and unresolvable sessions); it feeds wire-log test-run extraction.
+
+    ``stall_timeout`` defaults to the active adapter's configured value
+    (ADR-053).
     """
+    if stall_timeout is None:
+        stall_timeout = adapter.stall_timeout
     return _spawn_session_with_tail(
         adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
     )[:3]
@@ -908,14 +908,19 @@ def _spawn_session_with_tail(
     cmd: list[str],
     worktree_dir: str,
     env: dict,
-    stall_timeout: float = 300,
+    stall_timeout: float | None = None,
 ) -> tuple[int, dict | None, Path | None, str]:
     """Run one agent session, returning ``(exit_code, usage, session_dir, tail)``.
 
     The bounded ``tail`` is used by the circuit breaker to classify failures.
     The public ``run_stage``/``run_stage_group`` functions call this helper and
     record signatures when a *task* and *backend* are provided.
+
+    ``stall_timeout`` defaults to the active adapter's configured value
+    (ADR-053).
     """
+    if stall_timeout is None:
+        stall_timeout = adapter.stall_timeout
     exit_code, output = _run_with_live_tee(
         cmd, worktree_dir, env, stall_timeout=stall_timeout
     )
@@ -941,7 +946,7 @@ def run_stage(
     verdict_kind: str | None = None,
     task: dict | None = None,
     backend=None,
-    stall_timeout: float = 300,
+    stall_timeout: float | None = None,
 ) -> tuple[int, dict | None, Path | None, str]:
     """Spawn a single stage session, returning ``(exit_code, usage, session_dir, output)``.
 
@@ -1040,7 +1045,7 @@ def run_stage_group(
     workflow: Workflow,
     task: dict | None = None,
     backend=None,
-    stall_timeout: float = 300,
+    stall_timeout: float | None = None,
 ) -> tuple[int, dict | None, Path | None, str]:
     """Spawn one session that runs every stage in the group sequentially.
 
@@ -1146,7 +1151,7 @@ def process_task(
     worktree_dir: str | None = None,
     workflow: Workflow | None = None,
     backend=None,
-    stall_timeout: float = 300,
+    stall_timeout: float | None = None,
     *,
     base_branch: str = "origin/main",
     integration_mode: str = "pr-per-task",
@@ -1926,7 +1931,7 @@ def _consult_triage_session(
     failure_class: failure_lib.FailureClass,
     tail: str,
     signature: str,
-    stall_timeout: float = 300,
+    stall_timeout: float | None = None,
 ) -> dict | None:
     """Spawn a triage session and return its parsed verdict, or ``None``.
 
@@ -2601,7 +2606,9 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                             break
                     backend.save(queue)
 
-                # Build the orchestrator command for single-task mode
+                # Build the orchestrator command for single-task mode.
+                # Stall timeout is resolved from the selected CLI adapter inside
+                # the child orchestrator (ADR-053); do not pass --stall-timeout.
                 cmd = [
                     sys.executable,
                     __file__,
@@ -2615,8 +2622,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     integration.ref,
                     "--isolation",
                     args.isolation,
-                    "--stall-timeout",
-                    str(getattr(args, "stall_timeout", 300)),
                     "--on-failure",
                     getattr(args, "on_failure", "triage"),
                 ]
@@ -2940,7 +2945,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 worktree_dir=worktree_dir,
                 workflow=wf,
                 backend=backend,
-                stall_timeout=getattr(args, "stall_timeout", 300),
+                stall_timeout=None,
                 base_branch=base_branch,
                 integration_mode=integration_mode,
             )
@@ -3054,6 +3059,12 @@ def main(argv: list[str] | None = None):
     args = parse_args(argv)
     adapter = resolve_cli_adapter(args.cli_bin)
 
+    # Supervision defaults resolve from the active adapter (ADR-053). The
+    # wall-clock backstop remains overridable via --task-timeout; when omitted
+    # it defaults to the adapter's coarse ceiling.
+    if args.task_timeout is None:
+        args.task_timeout = int(adapter.wall_backstop)
+
     repo_root = args.repo_root
     run_id = args.run_id
     if run_id:
@@ -3133,15 +3144,10 @@ def orchestrator_callback(
         "--max-jobs",
         help="Max parallel tasks (batch mode).",
     ),
-    task_timeout: int = typer.Option(
-        7200,
+    task_timeout: Optional[int] = typer.Option(
+        None,
         "--task-timeout",
-        help="Per-task wall-clock timeout in seconds (default: 7200).",
-    ),
-    stall_timeout: int = typer.Option(
-        300,
-        "--stall-timeout",
-        help="Stdout-silence timeout in seconds before a session is killed (default: 300).",
+        help="Per-task wall-clock timeout in seconds (default: adapter wall backstop).",
     ),
     heartbeat_interval: int = typer.Option(
         60,
@@ -3189,8 +3195,8 @@ def orchestrator_callback(
         argv.extend(["--base", base])
     argv.extend(["--isolation", isolation])
     argv.extend(["--max-jobs", str(max_jobs)])
-    argv.extend(["--task-timeout", str(task_timeout)])
-    argv.extend(["--stall-timeout", str(stall_timeout)])
+    if task_timeout is not None:
+        argv.extend(["--task-timeout", str(task_timeout)])
     argv.extend(["--heartbeat-interval", str(heartbeat_interval)])
     if run_id is not None:
         argv.extend(["--run-id", run_id])
