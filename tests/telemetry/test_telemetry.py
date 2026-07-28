@@ -125,6 +125,38 @@ class TestStageRecord(unittest.TestCase):
         self.assertIsNone(record["failure_class"])
         self.assertIsNone(record["plan_snapshot"])
 
+    def test_stage_record_carries_session_identifier(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="claude",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+            session_identifier="/home/user/.claude/projects/-tmp-proj/s1.jsonl",
+        )
+        self.assertEqual(
+            record["session_identifier"],
+            "/home/user/.claude/projects/-tmp-proj/s1.jsonl",
+        )
+
+    def test_stage_record_session_identifier_null_when_unresolvable(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="claude",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+        )
+        self.assertIsNone(record["session_identifier"])
+
 
 class TestRunSummaryRecord(unittest.TestCase):
     def _summary(self, **kwargs):

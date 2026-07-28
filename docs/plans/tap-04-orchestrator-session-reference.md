@@ -71,20 +71,36 @@ docs_sync_reason: the telemetry stage-record schema gains a field and `session_d
 
 ## Task List
 
-1. Add session-reference resolution to the adapter layer (kimi: existing resume-hint route;
+1. ✓ Add session-reference resolution to the adapter layer (kimi: existing resume-hint route;
    claude: `session_id` from the result envelope confirmed against `cwd`; unresolvable → `None`)
    — M (traces: R-6)
-2. Replace the `adapter.name == "kimi"` gate in `_spawn_session_with_tail` with the
+   [Changed: shipped as `CLIAdapter.resolve_session_ref`, which still branches on `self.name`.
+   The orchestrator no longer branches — ADR-050's seam holds — but a third CLI is an edit to an
+   if-chain, not a registry entry.]
+2. ✓ Replace the `adapter.name == "kimi"` gate in `_spawn_session_with_tail` with the
    adapter-resolved reference; rename `session_dir` through its call chain and update the
    docstrings that describe it as a kimi wire dir — S (traces: R-6)
-3. Route `_emit_wire_test_runs` through the `tap-03` dispatch, preserving the best-effort and
+3. ✓ Route `_emit_wire_test_runs` through the `tap-03` dispatch, preserving the best-effort and
    null-reference contracts — S (traces: R-6)
-4. Add the session identifier to `telemetry.stage_record` and populate it at the emission site —
+   [Changed: renamed to `_emit_session_test_runs` and takes `agent_cli`, which the dispatch
+   needs to key on. Contracts unchanged.]
+4. ✓ Add the session identifier to `telemetry.stage_record` and populate it at the emission site —
    S (traces: R-9)
-5. Document the identifier → session-log resolution for both CLIs in `docs/telemetry-guide.md` —
+   [Changed: stores `str(session_ref)` — a full local path, the alternative this plan rejected.
+   No identifier is common to both adapters (kimi resolves a directory, Claude a session id), so
+   the path is the only shape that expresses both. Staleness is documented, not avoided.]
+5. ✓ Document the identifier → session-log resolution for both CLIs in `docs/telemetry-guide.md` —
    S (traces: R-9)
-6. Tests (see Validation Steps) — M (traces: R-6, R-9)
-7. Merge branch to main and verify integration — S
+6. ✓ Tests (see Validation Steps) — M (traces: R-6, R-9)
+   [Changed: 14 tests shipped against 9 planned; the extras cover the shipped single-object
+   envelope, log noise, a missing transcript, an unknown adapter, and `_spawn_session`.]
+7. Merge branch to main and verify integration — S [Deferred: carried to `aet-ship`]
+
+**Unplanned work:** `session_log_claude.cwd_slug` and `session_log_claude.transcript_path_for`
+were added — `tap-03` had not left transcript-path construction available. `src/aet/usage.py` was
+listed in Files to Modify ("kimi resume-hint resolver moves behind the adapter seam") but was not
+touched: the resolver stayed put and `cli_adapter.py` now calls it, along with three of that
+module's private names.
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -107,8 +123,8 @@ docs_sync_reason: the telemetry stage-record schema gains a field and `session_d
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Coverage:
+- [x] `make validate` passes (1313 tests, ruff, workflow lint, plans lint)
+- [x] Coverage:
   - `test_session_reference_resolved_per_adapter_without_name_branch` (unit) — asserts no
     `adapter.name ==` comparison remains on the resolution path
   - `test_claude_session_reference_resolved_from_envelope_session_id` (unit)
@@ -119,12 +135,17 @@ docs_sync_reason: the telemetry stage-record schema gains a field and `session_d
   - `test_emit_test_runs_survives_extraction_exception` (unit)
   - `test_stage_record_carries_session_identifier` (unit)
   - `test_stage_record_session_identifier_null_when_unresolvable` (unit)
-- [ ] R-trace coverage: R-6 by tasks 1, 2, 3, 6; R-9 by tasks 4, 5, 6; no unknown R-ids
-- [ ] For the new resolution logic in `cli_adapter.py`, tests above name the coverage
+- [x] R-trace coverage: R-6 by tasks 1, 2, 3, 6; R-9 by tasks 4, 5, 6; no unknown R-ids
+- [x] For the new resolution logic in `cli_adapter.py`, tests above name the coverage.
+      QA added three more: the single-object `--output-format json` envelope (the shipped
+      shape, previously untested — all three original tests used a list envelope),
+      log noise before the envelope, and a missing transcript. The `cwd` guard was
+      proven non-vacuous by mutation.
 - [ ] End-to-end: an orchestrated stage session run under `claude` writes at least one `test_run`
       record with a non-null `duration_seconds`, and its `stage` record carries a session
       identifier that resolves to the transcript that produced it
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+      — **not verified in QA**: needs a live orchestrated session; left for `aet-verify`
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` — pending `aet-ship`
 
 ## Rollback Plan
 
@@ -135,4 +156,5 @@ records stay readable either way.
 
 ---
 
-*Stage: plan-approved*
+*Stage: synced*
+*Next step: run `aet-ship`*

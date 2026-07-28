@@ -190,6 +190,7 @@ def stage_record(
     plan_snapshot: dict[str, Any] | None = None,
     attempt: int = 1,
     output_excerpt: str | None = None,
+    session_identifier: str | None = None,
 ) -> dict[str, Any]:
     """Build a per-stage telemetry record.
 
@@ -213,6 +214,10 @@ def stage_record(
 
     ``output_excerpt`` is a bounded snippet of raw agent stdout/stderr captured
     on failure; it is displayed by the completion report, never interpreted.
+
+    ``session_identifier`` is an adapter-resolved reference to the session log
+    that produced this stage record (a path string), or ``None`` when the
+    session reference could not be resolved (ADR-031).
     """
     duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
     return {
@@ -239,6 +244,7 @@ def stage_record(
         "token_count": token_count,
         "cost_estimate": cost_estimate,
         "output_excerpt": output_excerpt,
+        "session_identifier": session_identifier,
     }
 
 

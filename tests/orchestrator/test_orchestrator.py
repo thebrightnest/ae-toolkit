@@ -21,7 +21,7 @@ from unittest.mock import patch
 import pytest
 
 # Ensure the aet-work lib is on the path before importing telemetry.
-from aet import evidence, telemetry
+from aet import evidence, session_log_claude, telemetry
 from aet.cli_adapter import CLIAdapter, resolve_cli_adapter
 from aet.workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
 
@@ -3209,7 +3209,7 @@ class TestUsageCapture(unittest.TestCase):
 
 
 class TestWireTestRunEmission(unittest.TestCase):
-    """Wire-derived test_run records from kimi session logs (ttf-01)."""
+    """Adapter-dispatched test_run records from session logs (tap-03/tap-04)."""
 
     @staticmethod
     def _tool_call(uuid, command, time_ms):
@@ -3253,7 +3253,17 @@ class TestWireTestRunEmission(unittest.TestCase):
             wire.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return session_dir
 
-    def _emit(self, logger, repo_root, session_dir, agent_cli="kimi"):
+    def _write_claude_transcript(self, home, cwd, session_id, records):
+        transcript_dir = home / ".claude" / "projects" / session_log_claude.cwd_slug(cwd)
+        transcript_dir.mkdir(parents=True, exist_ok=True)
+        transcript = transcript_dir / f"{session_id}.jsonl"
+        transcript.write_text(
+            "\n".join(json.dumps(r) for r in records) + "\n",
+            encoding="utf-8",
+        )
+        return transcript
+
+    def _emit(self, logger, repo_root, session_ref, agent_cli="kimi"):
         orchestrator._emit_stage_session(
             logger,
             "demo",
@@ -3267,7 +3277,7 @@ class TestWireTestRunEmission(unittest.TestCase):
             "2026-07-14T00:30:00Z",
             0,
             usage=None,
-            session_dir=session_dir,
+            session_ref=session_ref,
         )
 
     def test_emit_stage_session_emits_one_test_run_per_wire_invocation(self):
@@ -3278,7 +3288,7 @@ class TestWireTestRunEmission(unittest.TestCase):
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
             with tempfile.TemporaryDirectory() as home:
-                session_dir = self._write_session(
+                session_ref = self._write_session(
                     home,
                     "session_t1",
                     {
@@ -3301,10 +3311,12 @@ class TestWireTestRunEmission(unittest.TestCase):
                         ],
                     },
                 )
-                self._emit(logger, repo_root, session_dir)
+                self._emit(logger, repo_root, session_ref)
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
+        stage_record = records[0]
+        self.assertEqual(stage_record["type"], "stage")
+        self.assertEqual(stage_record["session_identifier"], str(session_ref))
         test_runs = [r for r in records if r.get("type") == "test_run"]
-        self.assertEqual(records[0]["type"], "stage")
         self.assertEqual(len(test_runs), 3)
 
         self.assertEqual(test_runs[0]["test_command"], "python3 -m pytest tests/ -q")
@@ -3329,7 +3341,7 @@ class TestWireTestRunEmission(unittest.TestCase):
             self.assertEqual(record["task_id"], "demo")
             self.assertEqual(record["plan_file"], "docs/plans/demo.md")
 
-    def test_emit_stage_session_without_session_dir_emits_no_test_runs(self):
+    def test_emit_stage_session_without_session_ref_emits_no_test_runs(self):
         """Non-kimi CLIs and unresolvable sessions emit nothing."""
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
@@ -3337,8 +3349,9 @@ class TestWireTestRunEmission(unittest.TestCase):
             self._emit(logger, repo_root, None, agent_cli="claude")
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
         self.assertEqual([r["type"] for r in records], ["stage"])
+        self.assertIsNone(records[0].get("session_identifier"))
 
-    def test_emit_stage_session_with_unresolvable_dir_emits_no_test_runs(self):
+    def test_emit_stage_session_with_unresolvable_ref_emits_no_test_runs(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
@@ -3352,12 +3365,12 @@ class TestWireTestRunEmission(unittest.TestCase):
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
             with tempfile.TemporaryDirectory() as home:
-                session_dir = self._write_session(
+                session_ref = self._write_session(
                     home,
                     "session_t2",
                     {"main": [self._tool_call("c1", "pytest tests/", t0)]},
                 )
-                self._emit(logger, repo_root, session_dir)
+                self._emit(logger, repo_root, session_ref)
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
         test_runs = [r for r in records if r.get("type") == "test_run"]
         self.assertEqual(len(test_runs), 1)
@@ -3366,8 +3379,104 @@ class TestWireTestRunEmission(unittest.TestCase):
         self.assertIsNone(test_runs[0]["exit_code"])
         self.assertEqual(test_runs[0]["result"], "unknown")
 
-    def test_spawn_session_resolves_kimi_session_dir(self):
-        """The spawn path threads the resolved wire dir for kimi sessions."""
+    def test_emit_test_runs_noop_on_null_session_reference(self):
+        """A null reference short-circuits before dispatch, same as before."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            logger = telemetry.RunLogger(repo_root, run_id="r1")
+            self._emit(logger, repo_root, None, agent_cli="kimi")
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+        self.assertEqual([r["type"] for r in records], ["stage"])
+
+    def test_emit_test_runs_survives_extraction_exception(self):
+        """Extraction failures are defensive and never block the stage record."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            logger = telemetry.RunLogger(repo_root, run_id="r1")
+            # A file where a directory is expected causes wirelog to raise.
+            bad_ref = Path(repo_root) / "not-a-dir.txt"
+            bad_ref.write_text("junk", encoding="utf-8")
+            self._emit(logger, repo_root, bad_ref, agent_cli="kimi")
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+        self.assertEqual([r["type"] for r in records], ["stage"])
+
+    def test_session_reference_resolved_per_adapter_without_name_branch(self):
+        """The spawn path delegates resolution to the adapter; no adapter.name branch."""
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = CLIAdapter(
+                name="custom",
+                bin="echo",
+                prompt_flag="-p",
+                workdir_flag=None,
+                headless_flag=None,
+            )
+            exit_code, usage, session_ref = orchestrator._spawn_session(
+                adapter, ["echo", "hi"], tmp, os.environ.copy()
+            )
+        self.assertEqual(exit_code, 0)
+        self.assertIsNone(usage)
+        self.assertIsNone(session_ref)
+
+    def test_emit_stage_session_emits_claude_test_runs_from_transcript(self):
+        """A fixture Claude transcript yields observed test_run records."""
+        t0 = "2026-07-14T17:23:20Z"
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            logger = telemetry.RunLogger(repo_root, run_id="r1")
+            with tempfile.TemporaryDirectory() as home:
+                session_ref = self._write_claude_transcript(
+                    Path(home),
+                    "/tmp/proj",
+                    "s1",
+                    [
+                        {
+                            "type": "system",
+                            "subtype": "init",
+                            "cwd": "/tmp/proj",
+                            "session_id": "s1",
+                        },
+                        {
+                            "role": "assistant",
+                            "timestamp": t0,
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_use",
+                                        "id": "tu1",
+                                        "name": "Bash",
+                                        "input": {"command": "pytest tests/"},
+                                    }
+                                ]
+                            },
+                        },
+                        {
+                            "role": "user",
+                            "timestamp": "2026-07-14T17:24:20Z",
+                            "message": {
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": "tu1",
+                                        "is_error": False,
+                                    }
+                                ]
+                            },
+                        },
+                    ],
+                )
+                self._emit(logger, repo_root, session_ref, agent_cli="claude")
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+        stage_record = records[0]
+        self.assertEqual(stage_record["type"], "stage")
+        self.assertEqual(stage_record["session_identifier"], str(session_ref))
+        test_runs = [r for r in records if r.get("type") == "test_run"]
+        self.assertEqual(len(test_runs), 1)
+        self.assertEqual(test_runs[0]["test_command"], "pytest tests/")
+        self.assertEqual(test_runs[0]["duration_seconds"], 60.0)
+        self.assertEqual(test_runs[0]["exit_code"], 0)
+
+    def test_spawn_session_resolves_kimi_session_ref(self):
+        """The spawn path threads the resolved wire reference for kimi sessions."""
         with tempfile.TemporaryDirectory() as tmp:
             bin_path = Path(tmp, "kimi-stub")
             bin_path.write_text(
@@ -3387,13 +3496,13 @@ class TestWireTestRunEmission(unittest.TestCase):
             expected = self._write_session(home / ".kimi-code", "session_stub1", {"main": []})
             env = os.environ.copy()
             with patch.dict(os.environ, {"HOME": str(home)}):
-                exit_code, _usage, session_dir = orchestrator._spawn_session(
+                exit_code, _usage, session_ref = orchestrator._spawn_session(
                     adapter, [str(bin_path)], tmp, env
                 )
         self.assertEqual(exit_code, 0)
-        self.assertEqual(session_dir, expected)
+        self.assertEqual(session_ref, expected)
 
-    def test_spawn_session_non_kimi_yields_none_session_dir(self):
+    def test_spawn_session_non_kimi_yields_none_session_ref(self):
         with tempfile.TemporaryDirectory() as tmp:
             adapter = CLIAdapter(
                 name="test",
@@ -3402,12 +3511,12 @@ class TestWireTestRunEmission(unittest.TestCase):
                 workdir_flag=None,
                 headless_flag=None,
             )
-            exit_code, usage, session_dir = orchestrator._spawn_session(
+            exit_code, usage, session_ref = orchestrator._spawn_session(
                 adapter, ["echo", "hi"], tmp, os.environ.copy()
             )
         self.assertEqual(exit_code, 0)
         self.assertIsNone(usage)
-        self.assertIsNone(session_dir)
+        self.assertIsNone(session_ref)
 
 
 class TestQaFreshnessInjection(unittest.TestCase):

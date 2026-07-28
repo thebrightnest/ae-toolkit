@@ -50,10 +50,10 @@ from aet import (  # noqa: E402
     gate,
     plan_parser,
     plan_size,
+    session_log,
     telemetry,
     track_record,
     triage,
-    wirelog,
 )
 from aet import failure as failure_lib  # noqa: E402
 from aet import usage as usage_lib  # noqa: E402
@@ -560,7 +560,7 @@ def _emit_stage_session(
     end_time: str,
     exit_code: int,
     usage: dict | None = None,
-    session_dir: Path | None = None,
+    session_ref: Path | None = None,
     base_branch: str = "origin/main",
     output: str = "",
     verdict_recorded: bool = False,
@@ -571,10 +571,11 @@ def _emit_stage_session(
     usage mode); it populates ``token_count`` / ``cost_estimate`` on the
     record. Null is the honest value when usage was not measurable.
 
-    ``session_dir`` is the resolved kimi wire dir for the session (``None``
-    for non-kimi CLIs and unresolvable sessions); when present, one
-    wire-derived ``test_run`` record is appended per extracted test
-    invocation, tagged with the session's ``stage``.
+    ``session_ref`` is the adapter-resolved session log reference for the
+    session (a directory for kimi, a transcript file for Claude, ``None``
+    when unresolvable). When present, one observed ``test_run`` record is
+    appended per extracted test invocation, tagged with the session's
+    ``stage``.
 
     ``output`` is the captured session tail used to classify failures on the
     nsr-01 taxonomy. ``verdict_recorded`` is True when the failing session had
@@ -613,30 +614,32 @@ def _emit_stage_session(
             token_count=usage.get("total_tokens") if usage else None,
             cost_estimate=usage.get("cost_usd") if usage else None,
             output_excerpt=(_bounded_output_excerpt(output) if exit_code != 0 else None),
+            session_identifier=(str(session_ref) if session_ref is not None else None),
         ),
         task_id=task_id,
     )
-    _emit_wire_test_runs(logger, task_id, plan_file, stage, session_dir)
+    _emit_session_test_runs(logger, task_id, plan_file, stage, agent_cli, session_ref)
 
 
-def _emit_wire_test_runs(
+def _emit_session_test_runs(
     logger: telemetry.RunLogger,
     task_id: str,
     plan_file: str,
     stage: str,
-    session_dir: Path | None,
+    agent_cli: str,
+    session_ref: Path | None,
 ) -> None:
-    """Append one ``test_run`` record per wire-log test invocation.
+    """Append one ``test_run`` record per session-log test invocation.
 
     Best-effort, mirroring ``_session_diff_stats``: extraction is defensive,
     and any unexpected failure must never block a run.
     """
-    if session_dir is None:
+    if session_ref is None:
         return
     try:
-        invocations = wirelog.extract_test_invocations(session_dir)
+        invocations = session_log.extract_test_invocations(agent_cli, session_ref)
     except Exception as exc:  # noqa: BLE001
-        print(f"   ⚠️  Wire test-run extraction failed (skipping): {exc}")
+        print(f"   ⚠️  Session test-run extraction failed (skipping): {exc}")
         return
     for invocation in invocations:
         logger.append_record(
@@ -886,12 +889,13 @@ def _spawn_session(
     env: dict,
     stall_timeout: float | None = None,
 ) -> tuple[int, dict | None, Path | None]:
-    """Run one agent session, returning ``(exit_code, usage, session_dir)``.
+    """Run one agent session, returning ``(exit_code, usage, session_ref)``.
 
     ``usage`` is parsed from the captured tail only when the adapter declares
     a usage mode; otherwise it is ``None`` and the record keeps null fields.
-    ``session_dir`` is the resolved kimi wire dir (``None`` for non-kimi CLIs
-    and unresolvable sessions); it feeds wire-log test-run extraction.
+    ``session_ref`` is the adapter-resolved session log reference (``None``
+    for unresolvable sessions); it feeds adapter-dispatched test-run
+    extraction.
 
     ``stall_timeout`` defaults to the active adapter's configured value
     (ADR-053).
@@ -910,11 +914,14 @@ def _spawn_session_with_tail(
     env: dict,
     stall_timeout: float | None = None,
 ) -> tuple[int, dict | None, Path | None, str]:
-    """Run one agent session, returning ``(exit_code, usage, session_dir, tail)``.
+    """Run one agent session, returning ``(exit_code, usage, session_ref, tail)``.
 
     The bounded ``tail`` is used by the circuit breaker to classify failures.
     The public ``run_stage``/``run_stage_group`` functions call this helper and
     record signatures when a *task* and *backend* are provided.
+
+    ``session_ref`` is resolved by the adapter from the captured session output;
+    the orchestrator no longer branches on ``adapter.name``.
 
     ``stall_timeout`` defaults to the active adapter's configured value
     (ADR-053).
@@ -927,10 +934,8 @@ def _spawn_session_with_tail(
     usage = None
     if adapter.usage_mode is not None:
         usage = usage_lib.parse_usage(adapter.name, output)
-    session_dir = None
-    if adapter.name == "kimi":
-        session_dir = usage_lib.resolve_kimi_session_dir_from_output(output)
-    return exit_code, usage, session_dir, output
+    session_ref = adapter.resolve_session_ref(output, workdir=worktree_dir)
+    return exit_code, usage, session_ref, output
 
 
 def run_stage(
@@ -948,7 +953,7 @@ def run_stage(
     backend=None,
     stall_timeout: float | None = None,
 ) -> tuple[int, dict | None, Path | None, str]:
-    """Spawn a single stage session, returning ``(exit_code, usage, session_dir, output)``.
+    """Spawn a single stage session, returning ``(exit_code, usage, session_ref, output)``.
 
     When *task* and *backend* are provided, a non-zero exit records a failure
     signature on the task's ledger record for the circuit breaker (nsr-03).
@@ -979,7 +984,7 @@ def run_stage(
         )
 
     print(f"   Invoking: {' '.join(cmd)}")
-    exit_code, usage, session_dir, output = _spawn_session_with_tail(
+    exit_code, usage, session_ref, output = _spawn_session_with_tail(
         adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
     )
     if exit_code != 0 and task is not None:
@@ -997,7 +1002,7 @@ def run_stage(
             current_stage,
             output,
         )
-    return exit_code, usage, session_dir, output
+    return exit_code, usage, session_ref, output
 
 
 def build_stage_group_prompt(
@@ -1049,11 +1054,11 @@ def run_stage_group(
 ) -> tuple[int, dict | None, Path | None, str]:
     """Spawn one session that runs every stage in the group sequentially.
 
-    Returns ``(exit_code, usage, session_dir, output)``; usage covers the whole
-    group session and ``session_dir`` is the resolved kimi wire dir (``None``
-    for non-kimi CLIs and unresolvable sessions). When *task* and *backend* are
-    provided, a non-zero exit records a failure signature on the task's ledger
-    record using the first stage's name (nsr-03).
+    Returns ``(exit_code, usage, session_ref, output)``; usage covers the whole
+    group session and ``session_ref`` is the adapter-resolved session log
+    reference (``None`` for unresolvable sessions). When *task* and *backend*
+    are provided, a non-zero exit records a failure signature on the task's
+    ledger record using the first stage's name (nsr-03).
     """
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
     prompt = build_stage_group_prompt(
@@ -1087,7 +1092,7 @@ def run_stage_group(
             )
 
     print(f"   Invoking group: {' '.join(cmd)}")
-    exit_code, usage, session_dir, output = _spawn_session_with_tail(
+    exit_code, usage, session_ref, output = _spawn_session_with_tail(
         adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
     )
     if exit_code != 0 and task is not None:
@@ -1105,7 +1110,7 @@ def run_stage_group(
             stages[0].name,
             output,
         )
-    return exit_code, usage, session_dir, output
+    return exit_code, usage, session_ref, output
 
 
 def stage_enabled(stage: WorkflowStage, plan_fm: dict) -> bool:
@@ -1297,7 +1302,7 @@ def process_task(
                 )
 
                 start_time = telemetry.iso_now()
-                exit_code, usage, session_dir, output = run_stage_group(
+                exit_code, usage, session_ref, output = run_stage_group(
                     adapter,
                     repo_root,
                     plan_file,
@@ -1324,7 +1329,7 @@ def process_task(
                     end_time,
                     exit_code,
                     usage=usage,
-                    session_dir=session_dir,
+                    session_ref=session_ref,
                     base_branch=base_branch,
                     output=output,
                     verdict_recorded=False,
@@ -1408,7 +1413,7 @@ def process_task(
 
             kind = target_stage.evidence
             start_time = telemetry.iso_now()
-            exit_code, usage, session_dir, output = run_stage(
+            exit_code, usage, session_ref, output = run_stage(
                 adapter,
                 repo_root,
                 plan_file,
@@ -1437,7 +1442,7 @@ def process_task(
                 end_time,
                 exit_code,
                 usage=usage,
-                session_dir=session_dir,
+                session_ref=session_ref,
                 base_branch=base_branch,
                 output=output,
                 verdict_recorded=kind is not None,
@@ -1953,7 +1958,7 @@ def _consult_triage_session(
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
     try:
-        exit_code, _usage, _session_dir, output = _spawn_session_with_tail(
+        exit_code, _usage, _session_ref, output = _spawn_session_with_tail(
             adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
         )
     except Exception:  # pragma: no cover - defensive fallback
