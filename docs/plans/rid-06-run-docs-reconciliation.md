@@ -7,7 +7,7 @@ blocked_by:
   - rid-03-non-streaming-follower
   - rid-04-bounded-completion-report
 pipeline: minimal
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: Documentation-only; touches no executable code path.
 docs_sync: required
@@ -68,5 +68,5 @@ This plan runs last because it describes the finished behavior.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
