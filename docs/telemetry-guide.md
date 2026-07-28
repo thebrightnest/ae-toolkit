@@ -40,7 +40,9 @@ Each task JSONL file contains:
   under `standard` isolation a single session may span several stages, so the
   record carries the session's target `stage` plus a `stages` list capturing the
   span. `full` and `minimal` isolation yield exact per-stage records (`stages`
-  is `null`).
+  is `null`). Each stage record also carries a `session_identifier` pointing at
+  the CLI's own session log — see
+  [Tracing a stage record to its session log](#tracing-a-stage-record-to-its-session-log).
 - environment/dependency issues raised during worktree warmup
 
 `last-run.json` records the run outcome, task counts, and wall-clock time.
@@ -109,6 +111,43 @@ Anchoring is deliberate: a runner merely *mentioned* in an unrelated command
 not match. Where normalisation is ambiguous the resolver declines to match —
 a missed run costs telemetry volume, but a wrong match would record a
 fabricated one.
+
+## Tracing a stage record to its session log
+
+Every stage record carries a `session_identifier`: a reference to the session
+log the agent CLI wrote while producing that stage. It exists so an archived
+record can be taken back to the transcript that explains it — most usefully
+when a stage claims a `test_run` that no observed record confirms.
+
+The orchestrator does not resolve this itself. It asks the active adapter
+(`CLIAdapter.resolve_session_ref`) and stores whatever that returns, so adding a
+CLI does not mean editing the orchestrator (ADR-050). The shape of the reference
+is adapter-defined:
+
+- `kimi` — a **session directory**, resolved from the `kimi -r <sessionId>`
+  resume hint the CLI prints on exit. The wire logs live beneath it at
+  `agents/*/wire.jsonl`.
+- `claude` — a **transcript file** at
+  `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl`. The `sessionId` comes from
+  the `session_id` field of the result envelope on stdout; `<cwd-slug>` is the
+  session's working directory with `/` replaced by `-`
+  (`/Users/alice/proj` → `-Users-alice-proj`). Before the path is accepted, at
+  least one record inside it must report a `cwd` matching the session's working
+  directory.
+
+To go from a record to a log by hand, read `session_identifier` and open it:
+under `claude` it is the transcript path directly; under `kimi` it is the
+directory whose `agents/*/wire.jsonl` files hold the session's calls. Because
+the stored value is a local path, an archive moved between machines or home
+directories needs the leading prefix re-pointed — the `<sessionId>` and
+`<cwd-slug>` components are what identify the session.
+
+`session_identifier` is `null` whenever the reference could not be resolved: no
+resume hint, an unparseable envelope, a transcript that is absent, or one whose
+`cwd` disagrees. A null is honest rather than a guessed path (ADR-031), and it
+is the same signal as a stage that produced no observed `test_run` records — a
+session with a null identifier is exactly a session whose log the extractor
+could not find either.
 
 ## Enabling telemetry in a project
 
