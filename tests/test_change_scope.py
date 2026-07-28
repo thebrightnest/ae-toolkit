@@ -249,3 +249,15 @@ class TestResolvedTargetsMarker:
     def test_marker_absent_for_prose_only_change(self, monkeypatch, capsys):
         out = self._explain(monkeypatch, capsys, ["README.md"])
         assert telemetry.TEST_SCOPE_MARKER_PREFIX not in out
+
+    def test_marker_never_reaches_the_bare_target_list(self, monkeypatch, capsys):
+        """Without ``--explain`` the output *is* ``PYTEST_TARGETS``, marker-free.
+
+        The Makefile interpolates this stdout straight into the pytest target
+        list. A marker line leaking out of the ``--explain`` branch would make
+        pytest run against a non-existent path, so the separation is pinned
+        rather than left to the reader of ``main``.
+        """
+        monkeypatch.setattr(change_scope, "changed_paths", lambda: ["src/aet/queue.py"])
+        change_scope.main([])
+        assert capsys.readouterr().out == "tests/queue\n"

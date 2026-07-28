@@ -189,5 +189,5 @@ identifies exactly which records are affected in either direction.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
