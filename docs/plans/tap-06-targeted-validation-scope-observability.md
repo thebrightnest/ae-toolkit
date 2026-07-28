@@ -103,18 +103,24 @@ docs_sync_reason: the `make` scope contract changes and the marker line becomes 
 
 - `src/aet/change_scope.py`
 - `src/aet/telemetry.py`
-- `src/aet/session_log.py` (pass result output through the invocation shape)
+- `src/aet/wirelog.py` and `src/aet/session_log_claude.py` (pass result output through the
+  invocation shape) — the plan named `src/aet/session_log.py`; that file needed no change,
+  since the seam dispatches and the output travels inside the dicts the readers return
 - `src/aet/cli/orchestrator.py`
 - `src/aet/cli/mine_learnings.py` (output description only)
 - `tests/test_change_scope.py`
 - `tests/telemetry/test_telemetry.py`
 - `tests/session_log/test_session_log_dispatch.py`
+- `tests/wirelog/test_wirelog.py` (pinned invocation shape grew the `output` field)
+- `tests/orchestrator/test_orchestrator_derived.py` (end-to-end scope at the emission site)
 - `docs/telemetry-guide.md`
+- `docs/adr/049-validation-scope-from-change-set.md` (the resolved target list is now a
+  published output; consequence recorded)
 
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Coverage:
+- [x] `make validate` passes — 1328 passed, 177 subtests, 109.7s
+- [x] Coverage:
   - `test_change_scope_emits_resolved_targets_marker` (unit)
   - `test_marker_absent_for_prose_only_change` (unit)
   - `test_classify_scope_reads_marker_and_returns_impact_for_narrowed_targets` (unit)
@@ -124,13 +130,55 @@ docs_sync_reason: the `make` scope contract changes and the marker line becomes 
   - `test_classify_scope_unchanged_for_non_make_commands` (unit) — the heuristic path is
     untouched
   - `test_session_reader_exposes_result_output_to_emission_site` (unit)
-- [ ] R-trace coverage: R-10 by tasks 1, 2, 3, 5; R-13 by tasks 4, 5; no unknown R-ids
-- [ ] For the new marker parsing in `telemetry.py`, tests above name the coverage
-- [ ] End-to-end: a `make validate` narrowed by `change_scope` records `scope: "impact"`; an
-      unnarrowed run still records `full-suite`
-- [ ] `full_suite_runs`/`impact_runs` re-derived over the existing archive, before/after figures
-      recorded in the merge notes
+- [x] R-trace coverage: R-10 by tasks 1, 2, 3, 5; R-13 by tasks 4, 5; no unknown R-ids
+- [x] For the new marker parsing in `telemetry.py`, tests above name the coverage —
+      `_scope_from_marker`/`_is_resolved_target` fully covered (misses in `telemetry.py`
+      start past them)
+- [x] End-to-end: a `make validate` narrowed by `change_scope` records `scope: "impact"`; an
+      unnarrowed run still records `full-suite` — verified at the emission site
+      (`TestSessionTestRunScope`) and by driving the real `change_scope` CLI:
+      `src/aet/queue.py` → `AET_TEST_SCOPE_TARGETS: tests/queue` → `impact`; unmapped path and
+      `tests/conftest.py` → `tests/` → `full-suite`; prose-only → no marker
+- [x] `full_suite_runs`/`impact_runs` re-derived over the existing archive, before/after figures
+      recorded in the merge notes — see **R-13 Measurement** below
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+
+## R-13 Measurement (merge notes)
+
+Re-derived 2026-07-28 over the full local archive (`~/.aet/telemetry`, all projects,
+497 `test_run` records).
+
+**Before** — stored `scope` values: `full-suite` 331, `impact` 152, `unknown` 14.
+
+**After** — unchanged: `full-suite` 331, `impact` 152, `unknown` 14.
+
+**Why nothing moved.** No archived record carries the command's `output`, so no historical
+record can be re-derived through the marker — the shift begins with records written after
+merge. This is the archive-immutability position ADR-051 takes, arrived at from measurement
+rather than assumed: the re-derivation was attempted, and the input it needs does not exist
+in the archive. The re-derivation run additionally asserted, over all 497 records, that
+`classify_test_scope(cmd, None) == classify_test_scope(cmd)`; that property is pinned going
+forward by `test_omitting_output_is_identical_to_the_pre_tap06_heuristic`, so the no-output
+path stays the pre-tap-06 heuristic exactly.
+
+**Population that will shift going forward:** 236 of 497 records (47%) resolve to the `make`
+runner and are labelled `full-suite` — 205 `make validate`, 31 other `make`. That is the
+ceiling, not the expectation: many `make validate` runs genuinely do run the whole suite. The
+`make validate` executed for this plan is one — 15 changed paths spanning unmapped modules
+resolved to `tests/`, and it correctly recorded `full-suite`.
+
+**Residual, deliberately not fixed here:** `make test PYTEST_TARGETS="…"` (4 archived records)
+stays `full-suite`. It is genuinely narrowed, but `make test` never runs `change_scope`, so it
+emits no marker. Closing it means teaching the `test` target to echo a marker — shell the plan
+rejected as untestable.
+
+**Unrelated finding worth recording.** Re-deriving every archived record through *today's*
+classifier disagrees with the stored value on 117 of 497 records (`impact`→`unknown` 52,
+`full-suite`→`unknown` 44, `full-suite`→`impact` 9, `unknown`→`full-suite` 6,
+`unknown`→`impact` 3, `impact`→`full-suite` 3). This is pre-existing drift between the runner
+registry as it stood when each record was written and as it stands now — tap-06 contributes
+none of it. It means `full_suite_runs`/`impact_runs` are already not comparable across the
+archive's history, independent of this change.
 
 ## Rollback Plan
 
@@ -141,5 +189,5 @@ identifies exactly which records are affected in either direction.
 
 ---
 
-*Stage: tdd-complete*
-*Next step: run `aet-implement`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

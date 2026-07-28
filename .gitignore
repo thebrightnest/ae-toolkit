@@ -18,3 +18,4 @@ aet-work-*.log
 *.skill
 .agents/work-archive.json
 .venv
+.coverage

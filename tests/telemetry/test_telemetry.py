@@ -389,6 +389,33 @@ class TestClassifyTestScopeFromMarker(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(telemetry.classify_test_scope(command, marker), expected)
 
+    def test_omitting_output_is_identical_to_the_pre_tap06_heuristic(self):
+        """No archived record carries output, so this path must not move them.
+
+        Every historical `test_run` reaches the classifier with `output=None`.
+        If that answer ever diverges from the one-argument call, tap-06 would
+        silently reclassify the archive — the shift R-13 exists to prevent.
+        """
+        for command in (
+            "make validate",
+            "make test",
+            "make -j4 test",
+            "make build",
+            "pytest",
+            "pytest tests/",
+            "pytest tests/test_queue.py",
+            "python3 -m pytest tests/ -q",
+            "vitest run src/foo.test.ts",
+            "go test ./...",
+            "./run_tests.sh",
+            "",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    telemetry.classify_test_scope(command, None),
+                    telemetry.classify_test_scope(command),
+                )
+
     def test_classify_scope_uses_the_last_marker_in_the_output(self):
         """Two `make validate` runs in one shell call: the final scope wins."""
         output = f"{self._marker('tests/')}\n...\n{self._marker('tests/queue')}\n"

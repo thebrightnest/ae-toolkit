@@ -74,6 +74,14 @@ because the change set is a fact the tool can read, not a prediction the author 
   (e.g. a dependency the installer relies on) must be mapped to the installer target explicitly,
   or it falls back to full-suite — never to silently skipping installer tests on an installer
   change.
+- The resolved target list is now a published output, not just an internal decision.
+  `--explain` prints it as the `AET_TEST_SCOPE_TARGETS:` marker so telemetry can label a
+  `make validate` by what it actually ran (`tap-06`); the sub-make that runs pytest is invisible
+  to a session log, so without the marker every narrowed run recorded as `full-suite` and this
+  ADR's win was unmeasurable. The marker is the machine contract — the human `--explain` prose
+  beside it stays free to change. `telemetry`'s `full-suite`/`impact` vocabulary is unchanged:
+  a run resolving to `tests/` is still `full-suite`, and the fail-toward-more-tests bias carries
+  over, since a missing or malformed marker falls back to `full-suite`.
 
 ## Alternatives Considered
 
