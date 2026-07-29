@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.5.0
+## Current Version: 1.6.0
 
-Last updated: 2026-07-24
+Last updated: 2026-07-29
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, night-shift runtime resilience, and configurable branch models including single-PR integration mode.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, detached-only run invocation with bounded completion reports, adapter-resolved supervision defaults, night-shift runtime resilience, and configurable branch models including single-PR integration mode.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -63,7 +63,7 @@ Keep projects and the toolkit itself healthy.
 | `make install-skills` | Symlinks all skills to `~/.agents/skills/` for local agent use.                                                                      |
 | `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet setup link` installs the console script on `PATH`. |
 | `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates. |
-| Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, and run history. |
+| Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, run history, test-run provenance badges, and session-log traceability. |
 | GitHub Issues         | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                                                  |
 | git-refs backend      | `aet-work` task backend that stores queue state in git refs instead of local JSON files; now the default written backend.              |
 | Git                   | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required.                             |
@@ -71,6 +71,17 @@ Keep projects and the toolkit itself healthy.
 ---
 
 ## What's New
+
+### What's New in v1.6.0
+
+- **Deterministic detached execution** — `aet run` and `aet run-one` now always execute detached with sensible internal defaults and return a bounded completion report instead of streaming logs.
+- **Per-adapter supervision defaults** — stall and wall timeouts resolve from the active `CLIAdapter` instead of manual CLI flags.
+- **Test-run provenance in telemetry** — the panel and desk distinguish observed wire captures from claimed verdicts, so aggregates no longer silently blend the two populations.
+- **Adapter-dispatched session-log readers** — telemetry reads both Kimi wire logs and Claude Code transcripts through a shared dispatch seam.
+- **Traceable stage records** — every stage record carries a `session_identifier` resolved by the adapter, linking it back to the session log that produced it.
+- **Observable targeted validation scope** — `make validate` emits a machine-readable marker and the orchestrator classifies test runs as `full-suite` or `impact` from actual command output.
+- **Task sizes in `aet status`** — status shows each task's declared S/M/L size from plan frontmatter.
+- **Guided configuration** — `aet configure --guided` walks through scope and integration mode interactively, with unattended bypasses.
 
 ### What's New in v1.5.0
 

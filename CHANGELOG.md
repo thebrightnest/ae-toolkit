@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.6.0] — 2026-07-29
+
+### Added
+
+- **Deterministic `aet run` / `aet run-one` invocation** — execution is now detached-only; removed `--foreground`, `--max-jobs`, `--isolation`, and `--stall-timeout` from the CLI surface and applied sensible defaults internally. The follower returns a bounded completion report instead of streaming logs (rid-01..rid-06).
+- **Non-streaming terminal follower** — `aet run-one` and `aet run --follow` wait for a structured, bounded completion report rather than tailing a live log (rid-03, rid-04).
+- **Per-adapter supervision defaults** — `CLIAdapter` carries `stall_timeout` and `wall_backstop` defaults, so watchdog behavior resolves from the active adapter instead of CLI flags (rid-05, ADR-053).
+- **Shared plan-argument resolver** — `aet ship`, `sprint`, `backlog`, and `run-one` share `resolve_plan_arg`, so bare task IDs and plan paths resolve consistently across commands (rid-02).
+- **Adapter-dispatched session-log readers** — telemetry now reads Kimi wire logs and Claude Code transcripts through a shared dispatch seam, capturing test invocations from both agent CLIs (tap-03, ADR-050).
+- **Test-run provenance** — every `test_run` record carries a required `source` (`wire`, `verdict`, or `unknown`), and the panel, desk, and `mine-learnings` split observed and claimed aggregates instead of blending them (tap-05, ADR-051).
+- **Traceable stage records** — stage records include a `session_identifier` resolved by the adapter, so a stage can be traced back to the session log that produced it (tap-04, ADR-031).
+- **Targeted validation scope observability** — `make validate` emits a machine-readable scope marker; the orchestrator classifies test runs as `full-suite` or `impact` from actual command output (tap-06, ADR-049).
+- **Size column in `aet status`** — status output shows each task's declared S/M/L size from plan frontmatter.
+- **Guided setup flow** — `aet configure --guided` offers an interactive two-question flow for scope and integration mode, with non-interactive bypasses for unattended runs (cfg-04).
+
+### Changed
+
+- **Simpler run CLI surface** — `aet run` and `aet run-one` no longer expose concurrency, isolation, or stall tuning flags; defaults are enforced internally.
+- **Test scope classification now reads command output** — previously a string heuristic; for `make` it now uses the resolved-targets marker produced by `change_scope --explain`.
+- **Configuration documentation and upgrade guide** — consolidated config docs, updated skill references for `aet-config.json`, and added `docs/upgrades/v1.5.0-to-v1.6.0.md` (cfg-05).
+
+### Fixed
+
+- **Plan intake status/stage consistency** — `aet plan validate` now rejects plans whose frontmatter `status` and footer `_Stage:` disagree, preventing stages from being skipped.
+- **`aet ship merge` source resolution** — resolves the merge source from the task ID rather than the current checkout.
+- **Panel provenance tooltips** — `Th` now forwards props so the "Tests (claimed)" column header tooltip renders.
+- **Session reference path vs identifier** — `CLIAdapter.resolve_session_ref` returns a session-id string for both Claude and Kimi, deferring path resolution to extraction time and guarding against symlinked worktrees resolving to null.
+- **Targeted validation marker agreement** — multiple scope markers in output must now agree; disagreement falls back to full-suite to avoid misclassifying failing scoped runs.
+- **Nightshift stall timeout** — raised to avoid flaky process-group kills under load (vre-03).
+
+### Documentation
+
+- Added ADR-049, ADR-050, ADR-051, ADR-052, and ADR-053 covering test-run scope observability, session-log adapter extension points, test-run provenance, factory metrics, and per-adapter supervision defaults.
+- Added PRDs and plans for run-invocation determinism and telemetry adapter parity.
+- Updated telemetry guide, run command docs, and skill references for detached execution and adapter-resolved session references.
+
+---
+
 ## [1.5.0] — 2026-07-24
 
 ### Added
