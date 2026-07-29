@@ -3,7 +3,7 @@ id: tap-05-test-run-provenance
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: adds one enum-valued field to a local telemetry record and filters read-side aggregates by it; no new input, auth, network, or write surface beyond the existing archive
 docs_sync: required
@@ -176,5 +176,5 @@ need a migration.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
