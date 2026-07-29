@@ -106,8 +106,10 @@ class TestExtractTestInvocations(unittest.TestCase):
         self.assertIsNone(inv["end_time"])
         self.assertIsNone(inv["duration_seconds"])
         self.assertIsNone(inv["exit_code"])
+        self.assertIsNone(inv["output"])
         self.assertEqual(
-            set(inv), {"command", "start_time", "end_time", "duration_seconds", "exit_code"}
+            set(inv),
+            {"command", "start_time", "end_time", "duration_seconds", "exit_code", "output"},
         )
 
     def test_non_test_commands_are_ignored(self):
@@ -322,7 +324,12 @@ class TestExtractTestInvocations(unittest.TestCase):
 
 
 class TestKimiFixtureRegression(unittest.TestCase):
-    """R-4 regression contract: replaying the captured fixture matches pre-change output."""
+    """R-4 regression contract: replaying the captured fixture matches pre-change output.
+
+    tap-06 added ``output`` to the shape; every other field is pinned exactly
+    as it was, so a reader change that alters a timestamp, duration, or exit
+    code still fails here.
+    """
 
     def test_kimi_fixture_replay_matches_pre_change_output(self):
         session_id = "session_fixture_replay"
@@ -348,6 +355,7 @@ class TestKimiFixtureRegression(unittest.TestCase):
                     "end_time": "2026-07-14T17:24:05Z",
                     "duration_seconds": 45.0,
                     "exit_code": 0,
+                    "output": "631 passed",
                 },
                 {
                     "command": "pytest tests/",
@@ -355,6 +363,7 @@ class TestKimiFixtureRegression(unittest.TestCase):
                     "end_time": "2026-07-14T17:26:00Z",
                     "duration_seconds": 60.0,
                     "exit_code": 1,
+                    "output": "3 failed, 2 passed\nCommand failed with exit code: 1.",
                 },
                 {
                     "command": "pytest tests/test_unpaired.py",
@@ -362,6 +371,7 @@ class TestKimiFixtureRegression(unittest.TestCase):
                     "end_time": None,
                     "duration_seconds": None,
                     "exit_code": None,
+                    "output": None,
                 },
             ]
             invocations = wirelog.extract_test_invocations(

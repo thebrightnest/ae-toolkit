@@ -48,7 +48,7 @@ def extract_test_invocations(
     session directory is located via ``usage.resolve_kimi_session_dir_from_id``.
 
     Returns a list of ``{command, start_time, end_time, duration_seconds,
-    exit_code}`` dicts, ordered by start time. ``start_time``/``end_time``
+    exit_code, output}`` dicts, ordered by start time. ``start_time``/``end_time``
     are ISO-8601 UTC strings (or ``None`` when the wire event lacks a usable
     ``time``); ``duration_seconds`` is ``None`` whenever either timestamp is
     missing — unpaired calls are emitted with null end/duration, never an
@@ -117,6 +117,7 @@ def _on_tool_call(event: dict, time: Any, pending: dict[str, dict[str, Any]]) ->
         "end_time": None,
         "duration_seconds": None,
         "exit_code": None,
+        "output": None,
     }
 
 
@@ -140,7 +141,22 @@ def _on_tool_result(
         if duration >= 0:
             inv["duration_seconds"] = duration
     inv["exit_code"] = _exit_code_from_result(event.get("result"))
+    inv["output"] = _output_from_result(event.get("result"))
     invocations.append(inv)
+
+
+def _output_from_result(result: Any) -> str | None:
+    """Return the command's own output text, or ``None`` when unavailable.
+
+    Consumers read it for markers a command prints about itself — notably the
+    resolved pytest targets of a ``make validate``, whose sub-make the session
+    log never sees. Anything but a string is ``None``: the field reports what
+    the wire carried, never a rendering of it.
+    """
+    if not isinstance(result, dict):
+        return None
+    output = result.get("output")
+    return output if isinstance(output, str) else None
 
 
 def _exit_code_from_result(result: Any) -> int | None:

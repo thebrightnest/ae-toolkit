@@ -303,6 +303,10 @@ def format_report(patterns: dict[str, Any]) -> str:
         f"- Repeated loops: {patterns['repeated_loops']}",
         f"- Full-suite runs (observed): {patterns['full_suite_runs']}",
         f"- Impact-scoped runs (observed): {patterns['impact_runs']}",
+        "  (before tap-06, every `make` run counted as full-suite regardless of "
+        "how much of the suite it ran; records written since carry the scope "
+        "`change_scope` actually resolved, so this split shifts toward "
+        "impact over time and is not comparable across that boundary)",
         f"- Repeated test invocations (observed): {patterns['repeated_test_invocations']}",
         f"- Slow stages (> {SLOW_STAGE_THRESHOLD_S}s): {patterns['slow_stage']}",
         f"- Token-burn stages (> {TOKEN_BURN_THRESHOLD:,} tokens): {patterns['token_burn']}",

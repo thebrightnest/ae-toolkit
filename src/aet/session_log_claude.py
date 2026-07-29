@@ -60,7 +60,7 @@ def extract_test_invocations(
     located or read.
 
     Returns a list of ``{command, start_time, end_time, duration_seconds,
-    exit_code}`` dicts, ordered by start time. ``start_time``/``end_time``
+    exit_code, output}`` dicts, ordered by start time. ``start_time``/``end_time``
     are ISO-8601 UTC strings (or ``None`` when the record lacks a usable
     ``timestamp``); ``duration_seconds`` is ``None`` whenever either timestamp
     is missing — unpaired calls are emitted with null end/duration/exit_code,
@@ -128,6 +128,7 @@ def _on_tool_use(
         "end_time": None,
         "duration_seconds": None,
         "exit_code": None,
+        "output": None,
     }
 
 
@@ -148,7 +149,30 @@ def _on_tool_result(
     if start_dt is not None and end_dt is not None and end_dt >= start_dt:
         inv["duration_seconds"] = (end_dt - start_dt).total_seconds()
     inv["exit_code"] = _exit_code_from_result(block.get("is_error"))
+    inv["output"] = _output_from_content(block.get("content"))
     invocations.append(inv)
+
+
+def _output_from_content(content: Any) -> str | None:
+    """Return the command's own output text, or ``None`` when unavailable.
+
+    Claude's ``tool_result`` content is either a plain string or a list of
+    content blocks; the text blocks are joined in order. Anything else is
+    ``None`` — the field reports what the transcript carried, never a
+    rendering of it.
+    """
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return None
+    texts = [
+        block["text"]
+        for block in content
+        if isinstance(block, dict)
+        and block.get("type") == "text"
+        and isinstance(block.get("text"), str)
+    ]
+    return "\n".join(texts) if texts else None
 
 
 def _exit_code_from_result(is_error: Any) -> int | None:

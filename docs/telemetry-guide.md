@@ -82,11 +82,12 @@ Session-log extraction is adapter-dispatched, mirroring `usage.parse_usage`.
   (`src/aet/session_log_claude.py`).
 
 Each reader returns the same shape (`command`, `start_time`, `end_time`,
-`duration_seconds`, `exit_code`) and applies the same defensive rules: oversized
-lines, malformed JSON, missing pairs, and missing timestamps are skipped or
-recorded as null — never estimated. An adapter without a reader returns no
-observed records; that is an explicit property of the seam, not incidental
-silence (ADR-050).
+`duration_seconds`, `exit_code`, `output`) and applies the same defensive rules:
+oversized lines, malformed JSON, missing pairs, and missing timestamps are
+skipped or recorded as null — never estimated. An adapter without a reader
+returns no observed records; that is an explicit property of the seam, not
+incidental silence (ADR-050). `output` carries the command's own captured
+output, used only to read the scope marker described below.
 
 Before matching, the command is normalised:
 
@@ -111,6 +112,49 @@ Anchoring is deliberate: a runner merely *mentioned* in an unrelated command
 not match. Where normalisation is ambiguous the resolver declines to match —
 a missed run costs telemetry volume, but a wrong match would record a
 fabricated one.
+
+### How `make` reports its scope
+
+`make` is the one runner whose command string cannot say how much of the suite
+ran. `make validate` resolves its pytest targets at runtime from the change set
+(ADR-049) and runs them in a sub-make the session log never sees, so every
+`make` invocation used to classify `full-suite` no matter how little it ran.
+
+To close that gap, `python -m aet.change_scope --explain` prints a marker line
+beside its human-readable one, carrying the targets it resolved:
+
+```text
+→ targeted tests: tests/queue (changed paths: 2)
+AET_TEST_SCOPE_TARGETS: tests/queue
+```
+
+`make validate` already runs `--explain`, so the marker lands in the outer
+command's output where the session reader captures it. The marker — not the
+prose above it — is the contract; the human line may be re-worded freely.
+
+`classify_test_scope(command, output)` reads it **for `make` commands only**:
+
+- marker naming the suite root (`tests/`) → `full-suite`;
+- marker naming any narrower target list → `impact`;
+- no marker, or a marker whose targets fail the resolved-target grammar
+  (a path outside `tests/`, a `..` segment, a shell metacharacter) → the
+  command-string heuristic answers as before, which for `make` means
+  `full-suite`. That is the conservative direction under ADR-049's
+  fail-toward-more-tests bias.
+
+The marker is data. Its targets are matched against the grammar and used only
+to pick a label; nothing read from it is executed, interpolated, or resolved to
+a path, and one bad token discards the whole marker rather than half-trusting
+it. Every non-`make` command takes the pure command-string heuristic, untouched.
+
+Two consequences worth knowing when reading the archive:
+
+- Records written before this change classify every `make` run as
+  `full-suite`. They are still valid — `impact` and `full-suite` were already
+  the vocabulary — but the `full-suite`/`impact` split is not comparable across
+  the boundary, and `aet-evolve`'s mined counts say so in their output.
+- `make test PYTEST_TARGETS="…"` stays `full-suite`. It is genuinely narrowed,
+  but it never runs `change_scope`, so it emits no marker and falls back.
 
 ## Tracing a stage record to its session log
 

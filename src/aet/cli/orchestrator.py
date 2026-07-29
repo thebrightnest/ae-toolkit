@@ -655,7 +655,9 @@ def _emit_session_test_runs(
                 task_id=task_id,
                 plan_file=plan_file,
                 stage=stage,
-                scope=telemetry.classify_test_scope(invocation["command"]),
+                scope=telemetry.classify_test_scope(
+                    invocation["command"], invocation.get("output")
+                ),
                 test_command=invocation["command"],
                 source="wire",
                 start_time=invocation["start_time"],

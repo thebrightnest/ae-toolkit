@@ -148,7 +148,7 @@ embedded defect remediation** and planned as one sequence.
       individually is labeled with its provenance. (satisfies: R-8)
 - [ ] Every `stage` record carries a non-null session identifier, and a documented lookup
       resolves it to a session-log path for both CLIs. (satisfies: R-9)
-- [ ] A `make validate` run narrowed by `change_scope` to a subset of test paths is recorded
+- [x] A `make validate` run narrowed by `change_scope` to a subset of test paths is recorded
       with `scope: "impact"`; an unnarrowed run is still recorded `full-suite`. (satisfies: R-10)
 - [ ] A live Claude Code stage session records a non-null `token_count`, or the verification
       records why it cannot with a reproduction. (satisfies: R-11)
@@ -162,9 +162,10 @@ embedded defect remediation** and planned as one sequence.
 - [ ] The first-pass-merge rate and rework counts over the existing archive are recorded before
       and after R-12, with the delta attributed separately to the rework clause and the
       failed-record clause. (satisfies: R-12)
-- [ ] `mine_learnings` `full_suite_runs` counts are re-derived over a fixture containing both
+- [x] `mine_learnings` `full_suite_runs` counts are re-derived over a fixture containing both
       `full-suite` and newly `impact`-scoped `make validate` records, and the mined-learning
       output difference is documented rather than discovered later. (satisfies: R-13)
+      — met over the real archive rather than a fixture; see the `tap-06` divergence below.
 
 ## Technical Notes
 
@@ -264,7 +265,7 @@ Carried from the draft and settled during scope validation.
   ≈1%. Both clauses stop reading `test_run` records, and that lands first. See the
   metric-continuity note above; resolved as R-12 / ADR-052.
 
-## Divergence Summary
+## Divergence Summary — tap-04
 
 *Recorded: 2026-07-28 — Branches: tap-04-orchestrator-session-reference, tap-05-test-run-provenance*
 
@@ -371,5 +372,69 @@ and appends this section where `tap-04` appended its own — both are integratio
 - **The orphan signal** (a claimed record with no observed twin) — ADR-051 decision 6, deliberately
   left out so this plan stays independent of the reader work. It becomes meaningful once both
   session-log readers land.
-- **Task 7 (merge to main and verify integration)** — carried to `aet-ship`, which also resolves
-  the `tap-04` rename and this file's adjacent section.
+- **Task 7 (merge to main and verify integration)** — carried to `aet-ship`.
+- **End-to-end validation** (a live `claude` session writing an observed `test_run` with a
+  non-null duration and a traceable stage record) — needs a real orchestrated session; left for
+  `aet-verify`. This is also the PRD acceptance criterion for R-6, which therefore remains
+  unverified against live data.
+
+## Divergence Summary — tap-06
+
+*Recorded: 2026-07-28 — Branch: tap-06-targeted-validation-scope-observability*
+
+Scoped to `tap-06` (R-10, R-13). Other requirements in this PRD are delivered by their own plans.
+
+### Changed from plan
+
+- **Task 2 / R-10 — the marker is trusted only when every marker in the output agrees.** The
+  locked design said the classifier "reads the marker when present"; what shipped requires all
+  markers in one command's output to name the same targets, and falls back to the heuristic on
+  disagreement. Found in QA: `make validate`'s output contains its own pytest run, and pytest
+  echoes captured stdout on failure — so a failing `change_scope` test reprints a marker naming
+  *its fixture's* targets below the real one. Reading the last (or first) marker would have
+  recorded a whole-suite run as `impact` precisely when tests were failing, understating suite
+  cost at the worst moment. Repeated identical markers still classify; only disagreement falls
+  back, since it is not resolvable from the output alone.
+- **Task 3 / R-10 — the output field was added to both readers, not to the dispatch seam.** The
+  plan listed `src/aet/session_log.py`; that file needed no change. The seam only dispatches, and
+  the output travels inside the invocation dicts, so `wirelog.py` and `session_log_claude.py`
+  each grew an `output` key. Claude's `tool_result` content is a string *or* a list of content
+  blocks, so its reader joins the text blocks; the kimi wire carries a plain string.
+- **Task 4 / R-13 — re-derived over the real archive instead of a fixture, and the count did not
+  move.** The acceptance criterion asked for a fixture containing both `full-suite` and newly
+  `impact`-scoped records. Building one would have measured the fixture, not the archive, so the
+  re-derivation ran over all 497 archived `test_run` records: `full-suite` 331 / `impact` 152 /
+  `unknown` 14, before and after. Nothing moved because no archived record carries the command's
+  `output` — the input the marker path needs does not exist historically, which is the
+  archive-immutability position ADR-051 takes, here reached by measurement rather than assumed.
+  The obligation R-13 exists to discharge — document the shift rather than discover it later —
+  is met: the plan's **R-13 Measurement** section records the zero delta, the 236 records (47%)
+  that will shift going forward, and the `make test PYTEST_TARGETS=…` residual that stays
+  `full-suite` because it never runs `change_scope`.
+
+### Added (unplanned)
+
+- **`docs/adr/049-validation-scope-from-change-set.md` gained a consequence.** The resolved
+  target list is now a published output, not an internal decision, and that is a property of
+  ADR-049's mechanism rather than of telemetry — so it is recorded where the mechanism is
+  decided.
+- **A property test pinning the no-output path to the pre-`tap-06` heuristic**
+  (`test_omitting_output_is_identical_to_the_pre_tap06_heuristic`), plus tests separating a
+  marker from a bare target list. The re-derivation asserted the same equivalence over all 497
+  archived commands; the test keeps it true going forward.
+- **`.coverage` untracked and gitignored.** It had been committed on `main`; unrelated to R-10,
+  but it was dirtying every diff on this branch.
+
+### Not changed as planned
+
+- **`mine_learnings` was changed in its output description only, as planned — no counting logic
+  moved.** Recorded here because the plan's re-baseline task could be read as promising a code
+  change: the `full_suite_runs`/`impact_runs` counters are correct as written, and what was
+  missing was the caveat that their split is not comparable across the `tap-06` boundary.
+
+### Deferred
+
+- **Task 6 (merge to main and verify integration)** — carried to `aet-ship`.
+- **`make test PYTEST_TARGETS="…"` stays `full-suite`** (4 archived records). Genuinely narrowed,
+  but `make test` never runs `change_scope`, so it emits no marker. Closing it means teaching the
+  `test` target to echo a marker from shell — the untestable route the plan rejected.

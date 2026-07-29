@@ -13,6 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aet import telemetry
+
 pytestmark = pytest.mark.xdist_group("telemetry-dir")
 
 _ORCHESTRATOR_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
@@ -230,3 +232,83 @@ class TestMarkFailed(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSessionTestRunScope(unittest.TestCase):
+    """tap-06 end to end: a `make validate` is labelled by what it actually ran.
+
+    Exercises the whole chain at the emission site — session reader, the
+    resolved-targets marker in the command's output, and the classifier — so a
+    break anywhere between them shows up as a wrong `scope` on the record.
+    """
+
+    def _emit(self, invocations):
+        logger = MagicMock()
+        logger.run_id = "run-1"
+        with patch.object(
+            orchestrator.session_log, "extract_test_invocations", return_value=invocations
+        ):
+            orchestrator._emit_session_test_runs(
+                logger,
+                "demo",
+                "docs/plans/demo.md",
+                "qa",
+                "claude",
+                Path("/session"),
+                "/worktree",
+            )
+        return [call.args[0] for call in logger.append_record.call_args_list]
+
+    def _invocation(self, command, output):
+        return {
+            "command": command,
+            "output": output,
+            "start_time": "2026-07-26T10:00:00Z",
+            "end_time": "2026-07-26T10:01:00Z",
+            "exit_code": 0,
+        }
+
+    def test_narrowed_make_validate_records_impact_scope(self):
+        output = (
+            "→ targeted tests: tests/queue (changed paths: 2)\n"
+            f"{telemetry.TEST_SCOPE_MARKER_PREFIX} tests/queue\n"
+            "✓ All validation checks passed\n"
+        )
+        records = self._emit([self._invocation("make validate", output)])
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["scope"], "impact")
+        self.assertEqual(records[0]["test_command"], "make validate")
+
+    def test_unnarrowed_make_validate_still_records_full_suite(self):
+        output = (
+            "→ full suite (changed paths: 31)\n"
+            f"{telemetry.TEST_SCOPE_MARKER_PREFIX} tests/\n"
+        )
+        records = self._emit([self._invocation("make validate", output)])
+        self.assertEqual(records[0]["scope"], "full-suite")
+
+    def test_make_run_without_marker_stays_full_suite(self):
+        """The conservative pre-tap-06 answer survives for unmarked output."""
+        records = self._emit([self._invocation("make test", "✓ Tests passed\n")])
+        self.assertEqual(records[0]["scope"], "full-suite")
+
+    def test_captured_output_is_read_but_never_archived(self):
+        """Output is a classification input only — it must not reach the record.
+
+        A command's captured output can hold anything the shell printed, up to
+        and including credentials. It is read for the marker and dropped; the
+        archive keeps the scope label, never the text it came from.
+        """
+        secret = "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG"
+        output = f"{telemetry.TEST_SCOPE_MARKER_PREFIX} tests/queue\n{secret}\n"
+        records = self._emit([self._invocation("make validate", output)])
+        self.assertEqual(records[0]["scope"], "impact")
+        self.assertNotIn("output", records[0])
+        self.assertNotIn(secret, json.dumps(records[0]))
+
+    def test_reader_without_output_key_does_not_break_emission(self):
+        """Defensive: an adapter that omits `output` still yields a record."""
+        invocation = self._invocation("make validate", None)
+        del invocation["output"]
+        records = self._emit([invocation])
+        self.assertEqual(records[0]["scope"], "full-suite")
