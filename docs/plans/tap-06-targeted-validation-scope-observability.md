@@ -3,7 +3,7 @@ id: tap-06-targeted-validation-scope-observability
 size: M
 blocked_by: [tap-02-shared-runner-registry]
 pipeline: standard
-status: queued
+status: merged
 security_review: skipped
 security_review_reason: reads a marker line from output the agent's own session log already contains and uses it to label a telemetry field; the marker is never executed, never interpolated into a command, and a malformed marker falls back to the current classification
 docs_sync: required
@@ -193,5 +193,5 @@ identifies exactly which records are affected in either direction.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
