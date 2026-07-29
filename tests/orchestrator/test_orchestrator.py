@@ -2612,17 +2612,29 @@ class TestWireTestRunProvenance(unittest.TestCase):
                     {"AET_TELEMETRY_ARCHIVE_DIR": archive_dir},
                     clear=False,
                 ):
-                    session_dir = self._write_wire_session(
-                        Path(archive_dir), "python3 -m pytest tests/ -q"
-                    )
                     logger = telemetry.RunLogger(repo_root, run_id="r1")
-                    orchestrator._emit_wire_test_runs(
-                        logger,
-                        "demo",
-                        "docs/plans/demo.md",
-                        "implemented",
-                        session_dir,
-                    )
+                    with patch.object(
+                        orchestrator.session_log,
+                        "extract_test_invocations",
+                        return_value=[
+                            {
+                                "command": "python3 -m pytest tests/ -q",
+                                "start_time": "2026-07-28T12:00:00Z",
+                                "end_time": "2026-07-28T12:00:45Z",
+                                "duration_seconds": 45.0,
+                                "exit_code": 0,
+                            }
+                        ],
+                    ):
+                        orchestrator._emit_session_test_runs(
+                            logger,
+                            "demo",
+                            "docs/plans/demo.md",
+                            "implemented",
+                            "kimi",
+                            "session_demo",
+                            repo_root,
+                        )
                     records = telemetry.read_jsonl(logger.task_log_path("demo"))
             test_runs = [r for r in records if r.get("type") == "test_run"]
             self.assertEqual(len(test_runs), 1)
