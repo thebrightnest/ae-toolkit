@@ -135,6 +135,7 @@ Null contract (R-3: unmeasured fields stay `null` — no zeros, no estimates):
 | `stage`            | string          | Pipeline stage where tests ran                                                  |
 | `scope`            | string          | `full-suite`, `impact`, or `unknown` (see `classify_test_scope`)                |
 | `test_command`     | string          | Shell command that was executed                                                 |
+| `source`           | string          | `"wire"` (observed) or `"verdict"` (claimed) — see provenance below            |
 | `start_time`       | string \| null  | ISO-8601 UTC timestamp; `null` when unmeasured                                  |
 | `end_time`         | string \| null  | ISO-8601 UTC timestamp; `null` when unmeasured                                  |
 | `duration_seconds` | float \| null   | Computed from `start_time` and `end_time`; `null` when either is missing        |
@@ -143,6 +144,16 @@ Null contract (R-3: unmeasured fields stay `null` — no zeros, no estimates):
 | `tests_total`      | integer \| null | Total tests executed (optional)                                                 |
 | `tests_passed`     | integer \| null | Tests that passed (optional)                                                    |
 | `tests_failed`     | integer \| null | Tests that failed (optional)                                                    |
+
+Provenance contract (ADR-051): `source` is set by the emitter and is required.
+`"wire"` records are **observed** — the command AET saw run, with real
+timestamps and exit code and no test counts. `"verdict"` records are
+**claimed** — derived from a passing `aet-qa` verdict, carrying the only test
+counts in the archive with `start_time`, `end_time`, and `exit_code` all
+`null`. The two are never aggregated together: timing and pass-rate figures
+read `"wire"`, count figures read `"verdict"`, and records written before
+ADR-051 have no `source`, are read as provenance-unknown, and are excluded from
+both. Provenance is never inferred at read time from which fields are set.
 
 ### `learning_candidate`
 

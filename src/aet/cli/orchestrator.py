@@ -657,6 +657,7 @@ def _emit_session_test_runs(
                 stage=stage,
                 scope=telemetry.classify_test_scope(invocation["command"]),
                 test_command=invocation["command"],
+                source="wire",
                 start_time=invocation["start_time"],
                 end_time=invocation["end_time"],
                 exit_code=invocation["exit_code"],
@@ -744,7 +745,14 @@ def _emit_test_run_from_verdict(
     plan_file: str,
     stage: str,
 ) -> None:
-    """Derive a ``test_run`` telemetry record from a passing qa verdict."""
+    """Derive a ``test_run`` telemetry record from a passing qa verdict.
+
+    The record is ``source: "verdict"`` — a claim, not a measurement (ADR-051).
+    Nothing here was timed or observed, so ``exit_code`` stays null and the
+    record reads ``result: "unknown"`` rather than restating the verdict's own
+    pass as a green test run. Its value is the test counts, which no session log
+    exposes.
+    """
     test_command = record.get("test_command", "")
     logger.append_record(
         telemetry.test_run_record(
@@ -754,9 +762,10 @@ def _emit_test_run_from_verdict(
             stage=stage,
             scope=telemetry.classify_test_scope(test_command),
             test_command=test_command,
+            source="verdict",
             start_time=None,
             end_time=None,
-            exit_code=0,
+            exit_code=None,
             tests_total=record.get("tests_total"),
             tests_passed=record.get("tests_passed"),
             tests_failed=record.get("tests_failed"),

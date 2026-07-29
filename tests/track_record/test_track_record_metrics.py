@@ -82,11 +82,11 @@ def _test_run_record(
         stage=stage,
         scope="impact",
         test_command="pytest tests/foo.py",
+        source=source,
         start_time="2026-07-09T10:00:00Z",
         end_time="2026-07-09T10:01:00Z",
         exit_code=exit_code,
     )
-    record["source"] = source
     return record
 
 

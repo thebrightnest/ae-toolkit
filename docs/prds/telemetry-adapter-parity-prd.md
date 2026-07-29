@@ -266,11 +266,11 @@ Carried from the draft and settled during scope validation.
 
 ## Divergence Summary
 
-*Recorded: 2026-07-28 — Branch: tap-04-orchestrator-session-reference*
+*Recorded: 2026-07-28 — Branches: tap-04-orchestrator-session-reference, tap-05-test-run-provenance*
 
-Scoped to `tap-04` (R-6, R-9). Other requirements in this PRD are delivered by their own plans.
+Scoped to `tap-04` (R-6, R-9) and `tap-05` (R-7, R-8). Other requirements in this PRD are delivered by their own plans.
 
-### Changed from plan
+### tap-04 — Changed from plan
 
 - **Task 1 / R-6 — the `adapter.name` branch moved down a layer rather than disappearing.**
   `CLIAdapter.resolve_session_ref` still does `if self.name == "kimi" / "claude"`. ADR-050's
@@ -284,7 +284,7 @@ Scoped to `tap-04` (R-6, R-9). Other requirements in this PRD are delivered by t
   `agent_cli` parameter.** The `tap-03` dispatch keys on CLI name, so the emission site must pass
   it alongside the reference. The best-effort and null-reference contracts are unchanged.
 
-### Not changed as planned
+### tap-04 — Not changed as planned
 
 - **`src/aet/usage.py` was listed in Files to Modify — "kimi resume-hint resolver moves behind the
   adapter seam" — and was not touched.** `resolve_kimi_session_dir_from_output` stayed in
@@ -293,7 +293,7 @@ Scoped to `tap-04` (R-6, R-9). Other requirements in this PRD are delivered by t
   The seam is honoured by call direction, not by relocation, and `cli_adapter` now depends on
   `usage` internals.
 
-### Added (unplanned)
+### tap-04 — Added (unplanned)
 
 - **`src/aet/session_log_claude.py` gained `cwd_slug` and `transcript_path_for`** — not in Files
   to Modify. The plan assumed `tap-03` had left transcript-path construction available; it had
@@ -312,6 +312,64 @@ Scoped to `tap-04` (R-6, R-9). Other requirements in this PRD are delivered by t
   post-merge correction added a symlinked-worktree cwd test and an R-6 end-to-end integration
   test.
 
-### Deferred
+### tap-04 — Deferred
 
 - **Task 7 (merge to main and verify integration)** — carried to `aet-ship`.
+
+### tap-05 — Changed from plan
+
+This branch was cut before `tap-04` merged, so it edits `_emit_wire_test_runs` under its old name
+and appends this section where `tap-04` appended its own — both are integration work for
+`aet-ship`, not divergences from intent.
+
+### Changed from plan
+
+- **`source` is validated against an enum, not merely required.** The plan and ADR-051 asked for a
+  required argument "so a new emission site cannot omit it". `telemetry.test_run_record` also
+  raises `ValueError` on any value outside `TEST_RUN_SOURCES = ("wire", "verdict")`, because a
+  required argument alone still admits `source="wire "` or a future third emitter inventing a
+  spelling that every reader's `== "wire"` check would silently drop into the unknown bucket.
+- **Task 4 filters all of `mine_learnings`' `test_run` counting to observed, not only the two
+  scope counts.** The plan named `full_suite_runs`/`impact_runs`. The `source != "wire"` guard sits
+  at the top of the `test_run` branch, so `repeated_test_invocations` — derived from the same
+  `task_full_suite_counts` — is observed-only too, and is labeled `(observed)` alongside the other
+  two. Filtering the inputs but not the figure derived from them would have been incoherent.
+- **The plan-level test aggregate is recomputed at the end of `buildPlans` rather than accumulated
+  per record.** Provenance filtering cannot be expressed as a running sum over a mixed stream, so
+  the per-record `p.testsAgg +=` block was removed and `claimedTestCounts`/`observedTestStats` run
+  once over `p.tests`. Same figure shape, different construction.
+
+### Added (unplanned)
+
+- **`Th` now spreads its props (`e14dbbf`).** The provenance column headers and the "Tests
+  (claimed)" headers carry `title` tooltips that explain which population the figure reads —
+  `Th` dropped every prop but `children` and `className`, so the explanations rendered nowhere.
+  Fixed with a regression test. This is a pre-existing panel defect the feature surfaced.
+- **Two observed-side stats on the run and plan detail views** — "Observed pass rate" (both) and
+  "Observed test time" (run). The plan asked for labeled aggregates; with counts declared as
+  claimed, there was no observed figure on screen at all, and the split would have read as the
+  removal of information rather than its separation.
+- **Files beyond the planned list**: `CONTEXT.md` (the **Test Run** term still described the
+  claimed record as `result: success` "true by construction" — corrected to the null `exit_code`
+  this plan ships), `skills/aet-work/references/telemetry-log-schema.md` (where the `test_run`
+  field table actually lives, so `source` is documented next to the fields it qualifies),
+  `reports/2026-07-25-aet-performance-observability-review.md` (its published 80%/85% figures),
+  and two fixture-bearing test files (`tests/telemetry/test_aet_retro.py`,
+  `tests/track_record/test_track_record_metrics.py`).
+
+### Recorded consequence
+
+- **Every provenance-filtered surface reads `—` over the existing archive.** All 495 `test_run`
+  records predate this change and carry no `source`, so ADR-051 decision 5 makes them
+  provenance-unknown and excludes them. The 80% observed pass rate reproduced during validation is
+  recoverable only by field-signature inference — the inference the decision refuses to make the
+  forward contract. The panel's observed figures populate from records written after this change.
+  Any longitudinal read spanning 2026-07-28 has to say so.
+
+### Deferred
+
+- **The orphan signal** (a claimed record with no observed twin) — ADR-051 decision 6, deliberately
+  left out so this plan stays independent of the reader work. It becomes meaningful once both
+  session-log readers land.
+- **Task 7 (merge to main and verify integration)** — carried to `aet-ship`, which also resolves
+  the `tap-04` rename and this file's adjacent section.

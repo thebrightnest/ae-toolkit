@@ -410,8 +410,8 @@ class TestDeskTelemetrySignals:
                 "end_time": "2026-07-16T00:05:00Z",
                 "files_modified": ["a.py", "b.py", "c.py"],
             },
-            {"type": "test_run", "task_id": "t1", "tests_failed": 2},
-            {"type": "test_run", "task_id": "t1", "tests_failed": 4},
+            {"type": "test_run", "task_id": "t1", "source": "verdict", "tests_failed": 2},
+            {"type": "test_run", "task_id": "t1", "source": "verdict", "tests_failed": 4},
         )
         # A different task's telemetry must not leak into t1's signals.
         _append_telemetry(
@@ -440,3 +440,31 @@ class TestDeskTelemetrySignals:
         factors = payload["tasks"][0]["factors"]
         assert "files_modified=3" in factors
         assert "tests_failed>0" in factors
+
+    def test_tests_failed_reads_claimed_records_only(self, tmp_path):
+        """Counts live on claimed records; other provenances are not counted."""
+        _write_plan(tmp_path, "t1")
+        _append_telemetry(
+            tmp_path,
+            "t1",
+            # Observed record: never carries counts in practice, and is not read
+            # for them even when one appears.
+            {"type": "test_run", "task_id": "t1", "source": "wire", "tests_failed": 9},
+            # Pre-ADR-051 record: provenance unknown, not inferred.
+            {"type": "test_run", "task_id": "t1", "tests_failed": 7},
+        )
+        queue_file = _write_queue(
+            tmp_path,
+            [
+                {
+                    "id": "t1",
+                    "state": "awaiting_merge",
+                    "title": "One",
+                    "plan_file": str(_plan_path(tmp_path, "t1")),
+                }
+            ],
+        )
+        history_file = _write_history(tmp_path)
+        payload = _desk_json(queue_file, history_file, str(tmp_path / "plans"))
+        factors = payload["tasks"][0]["factors"]
+        assert "tests_failed>0" not in factors

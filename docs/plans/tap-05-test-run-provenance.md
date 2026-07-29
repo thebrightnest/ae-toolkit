@@ -77,19 +77,31 @@ docs_sync_reason: ADR-051 defines the provenance contract; the telemetry schema 
 
 ## Task List
 
-1. Add a required `source` argument to `telemetry.test_run_record` and set it at both emission
+- [x] 1 · [x] 2 · [x] 3 · [x] 4 · [x] 5 · [x] 6 — task 7 (merge) belongs to `aet-ship`.
+
+1. ✓ Add a required `source` argument to `telemetry.test_run_record` and set it at both emission
    sites; stop passing `exit_code=0` from the verdict emitter — S (traces: R-7)
-2. Split the panel's aggregates by provenance: timing/pass-rate over observed, counts over
+   [Changed: `source` is also enum-validated (`TEST_RUN_SOURCES`), not merely required]
+2. ✓ Split the panel's aggregates by provenance: timing/pass-rate over observed, counts over
    claimed, with labels stating which; mark provenance on the timeline and test-run list rows —
    M (traces: R-8)
-3. Declare provenance in `desk._telemetry_signals`' `tests_failed` read and its docstring —
+   [Changed: plan-level aggregate recomputed at the end of `buildPlans` instead of accumulated
+   per record; added observed pass-rate/test-time stats and a `Th` prop-spreading fix so the
+   label tooltips render]
+3. ✓ Declare provenance in `desk._telemetry_signals`' `tests_failed` read and its docstring —
    S (traces: R-8)
-4. Filter `mine_learnings`' `full_suite_runs`/`impact_runs` counting to observed records and note
+4. ✓ Filter `mine_learnings`' `full_suite_runs`/`impact_runs` counting to observed records and note
    the change in its output — S (traces: R-8)
-5. Document `source` and the observed/claimed split in `docs/telemetry-guide.md`; confirm
+   [Changed: the guard covers the whole `test_run` branch, so `repeated_test_invocations` is
+   observed-only and labeled too]
+5. ✓ Document `source` and the observed/claimed split in `docs/telemetry-guide.md`; confirm
    CONTEXT.md's **Test Run** term matches — S (traces: R-7, R-8)
-6. Tests (see Validation Steps) — M (traces: R-7, R-8)
+   [Changed: CONTEXT.md needed a correction, not a confirmation; the field table in
+   `skills/aet-work/references/telemetry-log-schema.md` was documented too]
+6. ✓ Tests (see Validation Steps) — M (traces: R-7, R-8)
 7. Merge branch to main and verify integration — S
+   [Deferred: `aet-ship`; also resolves the `tap-04` `_emit_wire_test_runs` rename, since this
+   branch was cut before `tap-04` merged]
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -113,10 +125,21 @@ docs_sync_reason: ADR-051 defines the provenance contract; the telemetry schema 
 - `tests/panel/test_panel_test_run_aggregates.py` (new)
 - `docs/telemetry-guide.md`
 
+Also touched during implementation (beyond the planned list):
+
+- `skills/aet-work/references/telemetry-log-schema.md` — the `test_run` schema table lives here,
+  so `source` and the provenance contract are documented alongside the field list
+- `CONTEXT.md` — the **Test Run** term still described the claimed record as `result: success`
+  "true by construction"; corrected to the null `exit_code` / `result: "unknown"` this plan ships
+- `reports/2026-07-25-aet-performance-observability-review.md` — the published 80%/85% figures
+- `tests/telemetry/test_aet_retro.py`, `tests/track_record/test_track_record_metrics.py` —
+  fixtures that construct `test_run` records or assert `mine-learnings` report labels
+
 ## Validation Steps
 
-- [ ] `make validate` passes
-- [ ] Coverage, with the panel aggregates in `tests/panel/test_panel_test_run_aggregates.py`:
+- [x] `make validate` passes (1316 passed, 2026-07-28 — re-run at QA after the `Th`
+      prop-spreading fix and its regression test)
+- [x] Coverage, with the panel aggregates in `tests/panel/test_panel_test_run_aggregates.py`:
   - `test_wire_emitter_writes_source_wire` (unit)
   - `test_verdict_emitter_writes_source_verdict` (unit)
   - `test_verdict_emitter_no_longer_hardcodes_exit_code_zero` (unit) — record reads
@@ -130,10 +153,18 @@ docs_sync_reason: ADR-051 defines the provenance contract; the telemetry schema 
   - `test_legacy_record_rendered_as_provenance_unknown` (panel)
   - `test_timeline_rows_labeled_with_provenance` (panel)
   - `test_mine_learnings_scope_counts_observed_only` (unit)
-- [ ] R-trace coverage: R-7 by tasks 1, 5, 6; R-8 by tasks 2, 3, 4, 5, 6; no unknown R-ids
-- [ ] For the new aggregate-filtering logic in `index.html`, tests above name the coverage
-- [ ] Over the existing archive: the observed pass rate reads 80%, not the mixed 85%, and the
-      change is recorded wherever that figure was previously published
+- [x] R-trace coverage: R-7 by tasks 1, 5, 6; R-8 by tasks 2, 3, 4, 5, 6; no unknown R-ids
+- [x] For the new aggregate-filtering logic in `index.html`, tests above name the coverage —
+      the helper block is extracted verbatim from `index.html` and executed under node, so the
+      assertions run against the code the browser runs
+- [x] Over the existing archive: re-measured 2026-07-28 — 495 `test_run` records, 360 observed
+      (80% pass) and 135 claimed (100% pass), blending to 85%. The report's figures reproduce
+      exactly and the correction is recorded in
+      `reports/2026-07-25-aet-performance-observability-review.md`. **Amended:** all 495 predate
+      the change and carry no `source`, so per ADR-051 decision 5 they are provenance-unknown and
+      excluded — the filtered surfaces read `—` over historical data rather than 80%, and
+      populate from records written after this change. The 80% is recoverable only by field
+      signature, which is the inference the decision refuses to make the forward contract.
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -145,4 +176,5 @@ need a migration.
 
 ---
 
-*Stage: plan-approved*
+*Stage: synced*
+*Next step: run `aet-ship`*

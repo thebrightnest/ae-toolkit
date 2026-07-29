@@ -103,10 +103,10 @@ class TestStructuralScopeCounting(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             archive = Path(tmp)
             records = [
-                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
-                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
-                {"type": "test_run", "task_id": "t2", "scope": "impact"},
-                {"type": "test_run", "task_id": "t3", "scope": "unknown"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "wire"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "wire"},
+                {"type": "test_run", "task_id": "t2", "scope": "impact", "source": "wire"},
+                {"type": "test_run", "task_id": "t3", "scope": "unknown", "source": "wire"},
             ]
             _write_run(archive, "myrepo/main", _today(), "run-1", records)
             patterns = mine_learnings.mine_archive(archive)
@@ -120,19 +120,46 @@ class TestStructuralScopeCounting(unittest.TestCase):
             archive = Path(tmp)
             records = [
                 # t1 ran full suite three times → 2 redundant.
-                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
-                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
-                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "wire"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "wire"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "wire"},
                 # t2 ran full suite once → 0 redundant.
-                {"type": "test_run", "task_id": "t2", "scope": "full-suite"},
+                {"type": "test_run", "task_id": "t2", "scope": "full-suite", "source": "wire"},
                 # t3 ran impact only → ignored for repetition tally.
-                {"type": "test_run", "task_id": "t3", "scope": "impact"},
-                {"type": "test_run", "task_id": "t3", "scope": "impact"},
+                {"type": "test_run", "task_id": "t3", "scope": "impact", "source": "wire"},
+                {"type": "test_run", "task_id": "t3", "scope": "impact", "source": "wire"},
             ]
             _write_run(archive, "myrepo/main", _today(), "run-1", records)
             patterns = mine_learnings.mine_archive(archive)
         self.assertEqual(patterns["full_suite_runs"], 4)
         self.assertEqual(patterns["repeated_test_invocations"], 2)
+
+    def test_mine_learnings_scope_counts_observed_only(self):
+        """Scope counts are about runs AET saw, so only observed records count."""
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            records = [
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "wire"},
+                # Claimed by a QA verdict — AET never saw this invocation.
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "verdict"},
+                {"type": "test_run", "task_id": "t2", "scope": "impact", "source": "verdict"},
+                # Pre-ADR-051: provenance unknown, not inferred.
+                {"type": "test_run", "task_id": "t2", "scope": "impact"},
+            ]
+            _write_run(archive, "myrepo/main", _today(), "run-1", records)
+            patterns = mine_learnings.mine_archive(archive)
+        self.assertEqual(patterns["full_suite_runs"], 1)
+        self.assertEqual(patterns["impact_runs"], 0)
+        # The claimed full-suite record must not read as a redundant repeat.
+        self.assertEqual(patterns["repeated_test_invocations"], 0)
+
+    def test_report_labels_scope_counts_as_observed(self):
+        """The report states the provenance the figures are computed over."""
+        report = mine_learnings.format_report(
+            mine_learnings.mine_archive(Path(tempfile.mkdtemp()))
+        )
+        self.assertIn("Full-suite runs (observed)", report)
+        self.assertIn("Impact-scoped runs (observed)", report)
 
 
 class TestStageAnomalyDetection(unittest.TestCase):

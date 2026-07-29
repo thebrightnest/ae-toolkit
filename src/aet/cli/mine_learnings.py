@@ -237,6 +237,12 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
                                 if token_count is not None and token_count > TOKEN_BURN_THRESHOLD:
                                     counts["token_burn"] += 1
                             elif rtype == "test_run":
+                                # Scope counts describe test runs AET observed,
+                                # so only wire-derived records count (ADR-051).
+                                # Claimed (verdict) and pre-ADR-051 records are
+                                # not measurements of an invocation happening.
+                                if record.get("source") != "wire":
+                                    continue
                                 scope = record.get("scope")
                                 if scope == "full-suite":
                                     counts["full_suite_runs"] += 1
@@ -295,9 +301,9 @@ def format_report(patterns: dict[str, Any]) -> str:
         "",
         f"- Dependency issues: {patterns['dependency_issues']}",
         f"- Repeated loops: {patterns['repeated_loops']}",
-        f"- Full-suite runs: {patterns['full_suite_runs']}",
-        f"- Impact-scoped runs: {patterns['impact_runs']}",
-        f"- Repeated test invocations: {patterns['repeated_test_invocations']}",
+        f"- Full-suite runs (observed): {patterns['full_suite_runs']}",
+        f"- Impact-scoped runs (observed): {patterns['impact_runs']}",
+        f"- Repeated test invocations (observed): {patterns['repeated_test_invocations']}",
         f"- Slow stages (> {SLOW_STAGE_THRESHOLD_S}s): {patterns['slow_stage']}",
         f"- Token-burn stages (> {TOKEN_BURN_THRESHOLD:,} tokens): {patterns['token_burn']}",
         f"- Stage failures: {patterns['stage_failures']}",

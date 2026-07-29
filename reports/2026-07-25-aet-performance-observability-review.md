@@ -242,6 +242,22 @@ Three consequences, in ascending order of seriousness:
 The panel presents both kinds side by side as equivalent test runs. A quarter of what it shows is
 the agent's self-report, unfalsifiable and pre-marked green.
 
+> **Update (2026-07-28, `tap-05`):** fixed. `test_run` records now carry a required `source`
+> (`"wire"` observed / `"verdict"` claimed), the verdict emitter no longer hardcodes
+> `exit_code: 0`, and every consumer declares which population it reads — timing and pass rate
+> over observed, counts over claimed, each labeled where it is displayed (ADR-051).
+>
+> The 80% / 85% figures above stand: re-measured on 2026-07-28 the archive holds 495 `test_run`
+> records, 360 observed (80% pass, 359 decided) and 135 claimed (100% pass), blending to 85%.
+> Published pass rates should be read as the observed 80% — a correction, not a regression.
+>
+> All 495 of those records predate the change and carry no `source`, so per ADR-051 decision 5
+> they are provenance-unknown and are **not** backfilled: the split above is recoverable only by
+> field signature, which is exactly the inference the decision refuses to make the forward
+> contract. The consequence is that provenance-filtered surfaces read `—` over historical data
+> and begin populating with runs recorded after this change. Any longitudinal series spanning
+> 2026-07-28 has to say so.
+
 ## Finding 4: Targeted Validation Is aiskills-Only
 
 `src/aet/change_scope.py` is real, works, and is the right design. It is also **not reachable

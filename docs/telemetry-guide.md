@@ -152,6 +152,50 @@ and it is the same signal as a stage that produced no observed `test_run`
 records — a session with a null identifier is exactly a session whose log the
 extractor could not find either.
 
+## Observed and claimed test runs
+
+Two emitters write `test_run` records, and they measure different things. Every
+record carries a `source` field naming which one wrote it (ADR-051):
+
+| `source`    | Emitter                         | What it is                                                                                             |
+| ----------- | ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `"wire"`    | `_emit_wire_test_runs`          | **Observed.** The command AET saw the agent run: real timestamps, real exit code, never test counts.   |
+| `"verdict"` | `_emit_test_run_from_verdict`   | **Claimed.** The QA agent's self-report: test counts, no timestamps, `exit_code: null`.                |
+
+`source` is written by the emitter and is a required argument to
+`telemetry.test_run_record`, so a new emission site cannot omit it. It is never
+inferred at read time from which fields happen to be populated — that inference
+is correct on today's data only by coincidence of the emitters' current field
+sets, and would silently misclassify the first time either changes.
+
+**The two populations are never aggregated together.** Each consumer declares
+which one it reads:
+
+- timing, throughput, and pass-rate figures read `source == "wire"` — a claimed
+  record's pass is a restatement of the verdict, and counting it as a passing
+  test run counts the verdict as evidence for itself;
+- test counts (`tests_total` / `tests_passed` / `tests_failed`) read
+  `source == "verdict"` — claimed records are the only ones carrying them, and
+  the filter is declared rather than left to the accident that observed records
+  contribute zero.
+
+Concretely: the panel labels its count figures "Tests (claimed)" and shows
+"Observed pass rate" and "Observed test time" beside them, and marks every
+individually rendered test-run row observed, claimed, or unknown;
+`aet desk`'s `tests_failed` risk signal reads claimed records; `mine-learnings`
+counts full-suite and impact runs over observed records only and labels those
+figures "(observed)".
+
+Records written before ADR-051 carry no `source`. They are **provenance-unknown**
+and are not backfilled: they are excluded from every provenance-filtered figure
+and displayed as `unknown`. Any longitudinal comparison spanning this change has
+to say so — there is no clean pre/post series.
+
+A claimed record with no observed twin (same `run_id`, `task_id`, `stage`,
+`scope`, `test_command`) means AET did not see a run the QA agent says happened.
+That is a signal worth surfacing once session-log detection is complete; it is
+not grounds for suppressing either record.
+
 ## Enabling telemetry in a project
 
 1. Make sure the project has the latest AET skills installed:

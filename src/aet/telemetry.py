@@ -318,6 +318,9 @@ def environment_issue_record(
     }
 
 
+TEST_RUN_SOURCES = ("wire", "verdict")
+
+
 def test_run_record(
     run_id: str,
     task_id: str,
@@ -325,6 +328,7 @@ def test_run_record(
     stage: str,
     scope: str,
     test_command: str,
+    source: str,
     start_time: str | None,
     end_time: str | None,
     exit_code: int | None,
@@ -337,7 +341,14 @@ def test_run_record(
     Null contract: ``start_time``/``end_time`` are optional; ``duration_seconds``
     is ``None`` when either is missing — never estimated. A ``None`` ``exit_code``
     (unmeasured, e.g. a killed or unpaired command) yields ``result: "unknown"``.
+
+    Provenance contract (ADR-051): ``source`` is ``"wire"`` for an observed run
+    read off the session log, ``"verdict"`` for a run claimed by a QA verdict.
+    It is required and validated so a new emission site cannot omit it and
+    readers never have to infer provenance from which fields happen to be set.
     """
+    if source not in TEST_RUN_SOURCES:
+        raise ValueError(f"source must be one of {TEST_RUN_SOURCES}, got {source!r}")
     duration_seconds = None
     if start_time is not None and end_time is not None:
         duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
@@ -355,6 +366,7 @@ def test_run_record(
         "stage": stage,
         "scope": scope,
         "test_command": test_command,
+        "source": source,
         "start_time": start_time,
         "end_time": end_time,
         "duration_seconds": duration_seconds,

@@ -266,6 +266,64 @@ function buildRunsFromGroups(groups, dirList, bumpedDirs) {
   return { runs, skippedLines };
 }
 
+/* ---------------- test_run provenance (ADR-051) ---------------- */
+
+// PROVENANCE-HELPERS-START — extracted verbatim and run under node by
+// tests/panel/test_panel_test_run_aggregates.py. Keep this block free of JSX
+// and of anything the browser-only scope provides.
+//
+// A test_run record states where it came from: "wire" (observed — the command
+// AET saw the agent run, with real timestamps and exit code, and never test
+// counts) or "verdict" (claimed — the QA agent's self-report, carrying the only
+// test counts in the archive). Records written before ADR-051 carry no source;
+// they are unknown and belong to neither population. Provenance is never
+// inferred from which fields happen to be set: that is right on today's data by
+// coincidence and rots the moment an emitter's field set changes.
+function testRunProvenance(rec) {
+  const source = rec && rec.source;
+  if (source === "wire") return "observed";
+  if (source === "verdict") return "claimed";
+  return "unknown";
+}
+
+// Timing and pass rate are measurements, so they read observed records only.
+// Nothing observed means no figure — a null, not a zero (ADR-031).
+function observedTestStats(tests) {
+  const observed = (tests || []).filter(t => testRunProvenance(t) === "observed");
+  const timed = observed.filter(t => t.duration_seconds != null);
+  const decided = observed.filter(t => t.result === "success" || t.result === "failure");
+  const passed = decided.filter(t => t.result === "success").length;
+  const totalSeconds = timed.reduce((a, t) => a + t.duration_seconds, 0);
+  return {
+    runs: observed.length,
+    decided: decided.length,
+    passed,
+    passRate: decided.length ? passed / decided.length : null,
+    totalSeconds: timed.length ? totalSeconds : null,
+    meanSeconds: timed.length ? totalSeconds / timed.length : null,
+  };
+}
+
+// Test counts exist only on claimed records, so the count aggregate declares
+// itself over them rather than relying on observed records contributing 0.
+function claimedTestCounts(tests) {
+  return (tests || [])
+    .filter(t => testRunProvenance(t) === "claimed")
+    .reduce(
+      (a, t) => ({
+        total: a.total + (t.tests_total || 0),
+        passed: a.passed + (t.tests_passed || 0),
+        failed: a.failed + (t.tests_failed || 0),
+      }),
+      { total: 0, passed: 0, failed: 0 }
+    );
+}
+// PROVENANCE-HELPERS-END
+
+function fmtPassRate(rate) {
+  return rate == null ? "—" : `${Math.round(rate * 100)}%`;
+}
+
 function buildRun(r) {
   const stages = r.records.filter(x => x.type === "stage");
   const tests = r.records.filter(x => x.type === "test_run");
@@ -289,10 +347,10 @@ function buildRun(r) {
   const duration = r.summary && r.summary.wall_clock_seconds != null
     ? r.summary.wall_clock_seconds
     : stages.reduce((a, s) => a + (s.duration_seconds || 0), 0);
-  const testsAgg = tests.reduce(
-    (a, t) => ({ total: a.total + (t.tests_total || 0), passed: a.passed + (t.tests_passed || 0), failed: a.failed + (t.tests_failed || 0) }),
-    { total: 0, passed: 0, failed: 0 }
-  );
+  // Provenance-split test aggregates (ADR-051): counts from claimed records,
+  // timing and pass rate from observed ones. Never blended.
+  const testsAgg = claimedTestCounts(tests);
+  const testsObserved = observedTestStats(tests);
   // Run-level token/cost: prefer the summary aggregates (orchestrator-written);
   // fall back to summing stage records for summaries written before uct-01.
   const stageTokens = stages.filter(s => s.token_count != null);
@@ -309,7 +367,7 @@ function buildRun(r) {
   const status = r.summary
     ? (r.summary.outcome || (r.summary.tasks_failed > 0 ? "failure" : "success"))
     : (r.bumped ? "live" : liveStatus(lastActivity));
-  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, tokens, cost, lastActivity, status };
+  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, testsObserved, tokens, cost, lastActivity, status };
 }
 
 /* ---------------- plan model ---------------- */
@@ -392,7 +450,6 @@ function buildPlans(runs) {
           runs: [], sessions: [], tests: [], issues: [], learnings: [],
           taskIds: new Set(), spine: new Set(), lastActivity: null, status: "success",
           live: false,
-          testsAgg: { total: 0, passed: 0, failed: 0 },
         };
         plans.set(key, p);
       }
@@ -412,9 +469,6 @@ function buildPlans(runs) {
           }
         } else if (rec.type === "test_run") {
           p.tests.push({ ...rec, runId: r.runId, runDir: r.dir, worktree: worktreeOf(rec.plan_file) });
-          p.testsAgg.total += rec.tests_total || 0;
-          p.testsAgg.passed += rec.tests_passed || 0;
-          p.testsAgg.failed += rec.tests_failed || 0;
         } else if (rec.type === "environment_issue") {
           p.issues.push(rec);
         } else if (rec.type === "learning_candidate") {
@@ -431,6 +485,7 @@ function buildPlans(runs) {
   }
   const out = [...plans.values()].map(p => ({
     ...p, progress: p.spine.size, spineStatus: spineStatusOf(p.sessions), taskIds: [...p.taskIds],
+    testsAgg: claimedTestCounts(p.tests), testsObserved: observedTestStats(p.tests),
   }));
   out.sort((a, b) => (b.lastActivity || "").localeCompare(a.lastActivity || ""));
   return { plans: out, meta: { taskPlanConflicts } };
@@ -529,8 +584,8 @@ function Table({ children, className = "", ...props }) {
     </div>
   );
 }
-function Th({ children, className = "" }) {
-  return <th className={`h-9 px-3 text-left align-middle font-medium text-muted-foreground whitespace-nowrap ${className}`}>{children}</th>;
+function Th({ children, className = "", ...props }) {
+  return <th className={`h-9 px-3 text-left align-middle font-medium text-muted-foreground whitespace-nowrap ${className}`} {...props}>{children}</th>;
 }
 function Td({ children, className = "", ...props }) {
   return <td className={`px-3 py-2 align-middle ${className}`} {...props}>{children}</td>;
@@ -546,6 +601,20 @@ function ResultBadge({ result }) {
   return result === "failure"
     ? <Badge variant="destructive">failure</Badge>
     : <Badge variant="success">success</Badge>;
+}
+
+// Where a test_run record is rendered on its own, it says which population it
+// belongs to (ADR-051): "observed" is a measurement, "claimed" is the QA
+// agent's self-report, "unknown" is a record written before provenance existed.
+const PROVENANCE_TITLES = {
+  observed: "Measured from the session log — counted in timing and pass-rate figures",
+  claimed: "Reported by the QA verdict — counted in test counts only",
+  unknown: "Written before ADR-051 — excluded from every provenance-filtered figure",
+};
+
+function ProvenanceBadge({ provenance }) {
+  const variant = provenance === "observed" ? "outline" : "warning";
+  return <Badge variant={variant} title={PROVENANCE_TITLES[provenance]}>{provenance}</Badge>;
 }
 
 /* ---------------- views ---------------- */
@@ -567,7 +636,7 @@ function RunsTable({ runs, selectedId, onSelect }) {
     <Table>
       <thead>
         <tr className="border-b">
-          <Th>Project</Th><Th>Date</Th><Th>Run</Th><Th>Tasks</Th><Th>Stages</Th><Th>Tests</Th><Th>Duration</Th><Th>Tokens</Th><Th>Cost</Th><Th>Status</Th>
+          <Th>Project</Th><Th>Date</Th><Th>Run</Th><Th>Tasks</Th><Th>Stages</Th><Th title="Test counts come from QA verdicts (claimed), the only records carrying them">Tests (claimed)</Th><Th>Duration</Th><Th>Tokens</Th><Th>Cost</Th><Th>Status</Th>
         </tr>
       </thead>
       <tbody>
@@ -602,7 +671,7 @@ function PlansTable({ plans, selectedKey, onSelect }) {
     <Table>
       <thead>
         <tr className="border-b">
-          <Th>Plan</Th><Th>Project</Th><Th>Runs</Th><Th>Sessions</Th><Th>Tests</Th><Th>Progress</Th><Th>Last activity</Th><Th>Status</Th>
+          <Th>Plan</Th><Th>Project</Th><Th>Runs</Th><Th>Sessions</Th><Th title="Test counts come from QA verdicts (claimed), the only records carrying them">Tests (claimed)</Th><Th>Progress</Th><Th>Last activity</Th><Th>Status</Th>
         </tr>
       </thead>
       <tbody>
@@ -664,7 +733,8 @@ function PlanDetail({ plan, runs, onOpenRun }) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <Stat label="Contributing runs" value={plan.runs.length} testid="plan-detail-runs" />
           <Stat label="Stage sessions" value={plan.sessions.length} />
-          <Stat label="Tests" value={plan.testsAgg.total ? `${plan.testsAgg.passed}/${plan.testsAgg.total} passed` : "—"} />
+          <Stat label="Tests (claimed)" value={plan.testsAgg.total ? `${plan.testsAgg.passed}/${plan.testsAgg.total} passed` : "—"} testid="plan-detail-tests-claimed" />
+          <Stat label="Observed pass rate" value={fmtPassRate(plan.testsObserved.passRate)} testid="plan-detail-observed-pass-rate" />
           <Stat label="Progress" value={`${plan.progress}/6`} />
         </div>
 
@@ -685,7 +755,7 @@ function PlanDetail({ plan, runs, onOpenRun }) {
         <SectionTitle count={timeline.length}>Timeline</SectionTitle>
         <Table>
           <thead><tr className="border-b">
-            <Th>Time</Th><Th>Run</Th><Th>Worktree</Th><Th>Kind</Th><Th>Stage</Th><Th>Duration</Th><Th>Tokens</Th><Th>Cost</Th><Th>Result</Th>
+            <Th>Time</Th><Th>Run</Th><Th>Worktree</Th><Th>Kind</Th><Th>Provenance</Th><Th>Stage</Th><Th>Duration</Th><Th>Tokens</Th><Th>Cost</Th><Th>Result</Th>
           </tr></thead>
           <tbody>
             {timeline.map((r, i) => (
@@ -702,6 +772,9 @@ function PlanDetail({ plan, runs, onOpenRun }) {
                 <Td className="font-mono text-xs" title={r.runId}>{shortId(r.runId)}</Td>
                 <Td data-testid="timeline-worktree" className="whitespace-nowrap">{r.worktree || "—"}</Td>
                 <Td><Badge variant="outline">{r.kind}</Badge></Td>
+                <Td data-testid="timeline-provenance" className="whitespace-nowrap">
+                  {r.kind === "test" ? <ProvenanceBadge provenance={testRunProvenance(r)} /> : "—"}
+                </Td>
                 <Td data-testid="timeline-stage" className="whitespace-nowrap">{r.stage || "—"}</Td>
                 <Td data-testid="timeline-duration" className="whitespace-nowrap">{fmtDuration(r.duration_seconds)}</Td>
                 <Td className="whitespace-nowrap text-muted-foreground">{r.kind === "stage" ? fmtTokens(r.token_count) : "—"}</Td>
@@ -710,7 +783,7 @@ function PlanDetail({ plan, runs, onOpenRun }) {
               </tr>
             ))}
             {timeline.length === 0 && (
-              <tr><td colSpan="9" data-testid="timeline-empty" className="px-3 py-8 text-center text-muted-foreground">No stage sessions or test runs recorded for this plan</td></tr>
+              <tr><td colSpan="10" data-testid="timeline-empty" className="px-3 py-8 text-center text-muted-foreground">No stage sessions or test runs recorded for this plan</td></tr>
             )}
           </tbody>
         </Table>
@@ -840,7 +913,9 @@ function RunDetail({ run }) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <Stat label="Tasks" value={s ? `${s.tasks_succeeded ?? "?"} ok / ${s.tasks_failed ?? "?"} failed` : run.tasks.length} />
           <Stat label="Stage sessions" value={run.stages.length} />
-          <Stat label="Tests" value={run.testsAgg.total ? `${run.testsAgg.passed}/${run.testsAgg.total} passed` : "—"} />
+          <Stat label="Tests (claimed)" value={run.testsAgg.total ? `${run.testsAgg.passed}/${run.testsAgg.total} passed` : "—"} testid="run-detail-tests-claimed" />
+          <Stat label="Observed pass rate" value={fmtPassRate(run.testsObserved.passRate)} testid="run-detail-observed-pass-rate" />
+          <Stat label="Observed test time" value={fmtDuration(run.testsObserved.totalSeconds)} testid="run-detail-observed-test-time" />
           <Stat label="Wall clock" value={fmtDuration(run.duration)} />
           <Stat label="Tokens" value={fmtTokens(run.tokens)} testid="run-detail-tokens" />
           <Stat label="Cost" value={fmtCost(run.cost)} testid="run-detail-cost" />
@@ -883,15 +958,20 @@ function RunDetail({ run }) {
         {run.tests.length > 0 && (
           <>
             <SectionTitle count={run.tests.length}>Test runs</SectionTitle>
+            <p className="text-xs text-muted-foreground mb-2">
+              Observed rows are measurements and feed the pass-rate and test-time figures above;
+              claimed rows are the QA verdict's self-report and feed the test counts only.
+            </p>
             <Table>
               <thead><tr className="border-b">
-                <Th>Task</Th><Th>Stage</Th><Th>Scope</Th><Th>Command</Th><Th>Passed</Th><Th>Failed</Th><Th>Result</Th>
+                <Th>Task</Th><Th>Stage</Th><Th>Provenance</Th><Th>Scope</Th><Th>Command</Th><Th>Passed</Th><Th>Failed</Th><Th>Result</Th>
               </tr></thead>
               <tbody>
                 {run.tests.map((t, i) => (
                   <tr key={i} className="border-b hover:bg-muted/50">
                     <Td className="font-medium whitespace-nowrap">{t.task_id || "—"}</Td>
                     <Td>{t.stage || "—"}</Td>
+                    <Td data-testid="test-run-provenance"><ProvenanceBadge provenance={testRunProvenance(t)} /></Td>
                     <Td><Badge variant="outline">{t.scope || "—"}</Badge></Td>
                     <Td className="font-mono text-xs max-w-[220px] truncate" title={t.test_command}>{t.test_command || "—"}</Td>
                     <Td>{t.tests_passed ?? "—"}{t.tests_total != null ? `/${t.tests_total}` : ""}</Td>

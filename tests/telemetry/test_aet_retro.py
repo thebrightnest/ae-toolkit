@@ -177,9 +177,9 @@ class TestTelemetrySummaryEmbedsMineLearnings(unittest.TestCase):
             archive = Path(tmp) / "archive"
             output = Path(tmp) / "retro.md"
             records = [
-                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
-                {"type": "test_run", "task_id": "t1", "scope": "full-suite"},
-                {"type": "test_run", "task_id": "t2", "scope": "impact"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "wire"},
+                {"type": "test_run", "task_id": "t1", "scope": "full-suite", "source": "wire"},
+                {"type": "test_run", "task_id": "t2", "scope": "impact", "source": "wire"},
                 {"type": "stage", "stage": "qa", "duration_seconds": 1900, "token_count": 0},
                 {"type": "stage", "stage": "implement", "duration_seconds": 0, "token_count": 6_000_000},
             ]
@@ -193,9 +193,9 @@ class TestTelemetrySummaryEmbedsMineLearnings(unittest.TestCase):
 
             # Telemetry Summary block contains the new structural counts.
             summary = text.split("## Telemetry Summary", 1)[1].split("## Findings", 1)[0]
-            self.assertIn("Full-suite runs: 2", summary)
-            self.assertIn("Impact-scoped runs: 1", summary)
-            self.assertIn("Repeated test invocations: 1", summary)
+            self.assertIn("Full-suite runs (observed): 2", summary)
+            self.assertIn("Impact-scoped runs (observed): 1", summary)
+            self.assertIn("Repeated test invocations (observed): 1", summary)
             self.assertIn("Slow stages", summary)
             self.assertIn("Token-burn stages", summary)
 
