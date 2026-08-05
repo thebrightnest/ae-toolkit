@@ -4,7 +4,7 @@ size: S
 work_class: normal
 blocked_by: []
 pipeline: standard
-status: approved
+status: queued
 security_review: skipped
 security_review_reason: changes only the guard condition and error path of an existing commit/push call; introduces no new inputs, no new command construction, no new file writes, and no new external surface
 docs_sync: required
