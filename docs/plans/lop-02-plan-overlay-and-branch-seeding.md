@@ -4,7 +4,7 @@ size: M
 work_class: normal
 blocked_by: [lop-01-unpublished-plan-intake-and-hygiene]
 pipeline: standard
-status: approved
+status: queued
 security_review: required
 security_review_reason: introduces an orchestrator-created git commit inside the task worktree; a staging mistake (`add -A` instead of an explicit path) would sweep unrelated mirrored documents into every PR
 docs_sync: required
