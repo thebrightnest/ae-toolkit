@@ -71,6 +71,8 @@ Do **not** write an ADR for:
 - [050 — Session-Log Extraction Is a Per-Adapter Extension Point](050-session-log-extraction-per-adapter.md)
 - [051 — `test_run` Records Carry Provenance](051-test-run-provenance.md)
 - [052 — Factory Metrics Read Stage Records, Not `test_run` Records](052-first-pass-merge-excludes-test-run-failures.md)
+- [053 — Supervision Defaults Live on the CLI Adapter](053-supervision-defaults-per-adapter.md)
+- [054 — Plan Documents Are Outside the Durability Gate](054-plan-documents-are-outside-the-durability-gate.md)
 
 ## Format
 

@@ -5,7 +5,7 @@ The Agentic Engineering Toolkit uses a local work queue to coordinate sequential
 ## Language
 
 **Work Queue / Sprint Board**:
-The ephemeral, gitignored active list of tasks stored in `.agents/work-queue.json`. It is rebuilt from committed plan files: only plans whose frontmatter `status` is `queued` are sprint members. Approved plans (`status: approved`) and draft plans (`status: draft`) live on the board but are not in the sprint.
+The ephemeral, gitignored active list of tasks stored in `.agents/work-queue.json`. It is rebuilt from the plan files on disk — discovery is filesystem-based, not git-based, so a plan need not be committed to be a sprint member (ADR-054). Only plans whose frontmatter `status` is `queued` are sprint members. Approved plans (`status: approved`) and draft plans (`status: draft`) live on the board but are not in the sprint.
 _Avoid_: issue tracker, backlog.
 
 **Task**:
@@ -13,7 +13,7 @@ A single unit of work represented by one atomic `docs/plans/*.md` file and, whil
 _Avoid_: ticket, story, issue.
 
 **Plan File**:
-The markdown document in `docs/plans/` that describes how to implement a task and records its lifecycle status. It is the durable source of truth for intent and terminal closure.
+The markdown document in `docs/plans/` that describes how to implement a task and records its lifecycle status. It is the source of truth for intent and terminal closure. Its durability is asymmetric (ADR-054): the terminal `status` write at closure is committed and pushed, while a mid-sprint `status` such as `queued` may live only in the working tree until the task's PR carries the plan.
 _Avoid_: PRD, roadmap, spec.
 
 **State**:
@@ -245,4 +245,5 @@ _Avoid_: reading it from the ledger `cost` field (under-counts reworked tasks); 
 - “done” risked re-overloading by `single-pr` completion semantics. Resolved (2026-07-22, epi scope validation): the terminal state stays `merged`; which event it names is keyed by **Integration Mode** (see **Integrated**).
 - “test run” named two different things: a run AET measured from the agent's own transcript, and a run the QA agent said it did. Resolved (2026-07-26, tap scope validation): **Test Run** records carry `source` — **observed** (`wire`) vs **claimed** (`verdict`) — and are never aggregated together (ADR-051). Relatedly, the **Factory Metrics** stopped reading `test_run` records at all (ADR-052): they are intra-session events, and counting them punished visibility rather than measuring quality.
 - “wire log” was used generically for whatever transcript an agent CLI writes, while naming kimi's schema specifically. Resolved (2026-07-26, tap scope validation): the general term is **Session Log**; "wire log" refers to kimi's `wire.jsonl` format only, and each adapter supplies its own reader (ADR-050).
+- “durable” was used as an unqualified property of the **Plan File**, while CONTEXT.md separately claimed the queue is rebuilt from _committed_ plan files — which the code never did (discovery has always been `plans_dir.glob("*.md")`). Resolved (2026-08-05, lop scope validation): durability is asymmetric. Terminal `status` writes are committed and pushed; mid-sprint `status` writes need not be (ADR-054). The stale “committed” wording was a doc-vs-code contradiction that predated this change.
 - “project config” risked overloading the **Project Slug** when config resolution gained a worktree-independent identity. Resolved (2026-07-24, cfg scope validation): config resolution uses the **Config Slug** (main-worktree identity); the **Project Slug** keeps its worktree label for telemetry/reports only. The committed team config file is `.agents/aet-config.json` (renamed from `aet-work.json`); the external `~/.aet/{slug}/config.json` is the personal/**Shadow Mode** layer.
