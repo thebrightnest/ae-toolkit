@@ -300,5 +300,21 @@ toggle spans 13 files: 4 source, 9 test).
   run (working tree and worktree overlay). Only closure mutates status
   post-run, and it operates on the post-merge checkout — no write conflict.
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+## Divergence Summary
+
+*Recorded: 2026-08-06 — Branch: lop-03-closure-fails-closed-on-missing-plan*
+
+### Changed from plan
+
+- No material changes. The fail-closed guard, merged-branch resolution helper, and regression test coverage were implemented as specified.
+
+### Added (unplanned)
+
+- Test fixture cleanup in `tests/backends/test_aet_state_backend.py` and `tests/orchestrator/test_orchestrator.py`: removed or corrected stale `plan_file` references so unrelated tests do not accidentally resolve a plan file and so the missing-plan refusal paths exercise the intended fallthrough case.
+
+### Deferred
+
+- Merge to main and integration verification: deferred to the `aet-ship` stage.
+
+*Stage: synced*
+*Next step: run `aet-ship`*

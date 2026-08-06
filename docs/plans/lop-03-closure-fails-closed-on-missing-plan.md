@@ -79,16 +79,16 @@ resolve returns `1` at `:1130-1135`, and a push failure returns non-zero at
 
 ## Task List
 
-1. Resolve the plan from the merged branch when it is absent from the checkout,
+1. ✓ Resolve the plan from the merged branch when it is absent from the checkout,
    so the new refusal cannot fire on a healthy closure — S (traces: R-6)
-2. Replace the silent fallthrough at `aet_state.py:1119` with a fail-closed
+2. ✓ Replace the silent fallthrough at `aet_state.py:1119` with a fail-closed
    branch that names what was sought, where, and the remedy, and returns
    non-zero — S (traces: R-6)
-3. Tests: deleting the plan before `record-merge` fails with the named remedy
+3. ✓ Tests: deleting the plan before `record-merge` fails with the named remedy
    instead of "Recorded merge"; a plan resolvable only from the merged branch
    still closes successfully; the existing explicit-`--plan` and push-failure
    paths are unchanged — S (traces: R-6)
-4. Merge branch to main and verify integration — S
+4. [Deferred: await `aet-ship`] Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -114,14 +114,14 @@ resolve returns `1` at `:1130-1135`, and a push failure returns non-zero at
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] R-trace coverage: R-6 covered by tasks 1–3
-- [ ] New source files: none introduced
-- [ ] Unit: guard condition and message. Integration: `record-merge` against a
+- [x] Lint passes
+- [x] Tests pass
+- [x] R-trace coverage: R-6 covered by tasks 1–3
+- [x] New source files: none introduced
+- [x] Unit: guard condition and message. Integration: `record-merge` against a
       real repo with the plan deleted, and with the plan present only on the
       merged branch
-- [ ] Regression: existing explicit-`--plan` failure and push-failure paths
+- [x] Regression: existing explicit-`--plan` failure and push-failure paths
       keep their current exit codes and messages
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -143,5 +143,5 @@ implementation stage.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
