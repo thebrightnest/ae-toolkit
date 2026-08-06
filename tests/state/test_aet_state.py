@@ -137,7 +137,6 @@ class TestRecordMerge(unittest.TestCase):
                     "id": "t1",
                     "state": "awaiting_merge",
                     "branch": "feat-001",
-                    "plan_file": "docs/plans/t1.md",
                 }
             ]
         }
@@ -556,6 +555,126 @@ class TestRecordMerge(unittest.TestCase):
 
         self.assertEqual(rc, 1)
         self.assertEqual(plan_path.read_text(encoding="utf-8"), original_content)
+
+    def test_record_merge_fails_closed_when_plan_missing(self):
+        """A task plan file missing from checkout and merged branch refuses closure."""
+        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        plan_path = plan_dir / "t1.md"
+        # Plan file is referenced but never created.
+        self.queue["tasks"][0]["plan_file"] = str(plan_path)
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
+
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+            ("git", "show", "abc1234:docs/plans/t1.md"): (1, "", "Path 'docs/plans/t1.md' does not exist"),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=str(self.queue_file_path),
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 1)
+        # The merge itself is still recorded.
+        task = self._load_task()
+        self.assertEqual(task["state"], "merged")
+        self.assertEqual(task["merge_commit"], "abc1234")
+
+    def test_sealed_task_retry_fails_closed_when_plan_missing(self):
+        """A sealed task whose plan is gone from checkout and branch fails closed."""
+        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        plan_path = plan_dir / "t1.md"
+        # Move the task to history so only the retry path is exercised.
+        self.queue["tasks"] = []
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
+        with open(self.history_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "id": "t1",
+                    "state": "merged",
+                    "merge_commit": "abc1234",
+                    "merge_strategy": "regular",
+                    "plan_file": str(plan_path),
+                    "branch": "feat-001",
+                },
+                f,
+            )
+            f.write("\n")
+
+        responses = {
+            ("git", "show", "abc1234:docs/plans/t1.md"): (1, "", "Path 'docs/plans/t1.md' does not exist"),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=str(self.queue_file_path),
+            dry_run=False,
+        )
+
+        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 1)
+
+    def test_record_merge_resolves_plan_from_merged_branch(self):
+        """A plan absent from checkout but present on the merged branch closes."""
+        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
+        plan_dir.mkdir(parents=True)
+        plan_path = plan_dir / "t1.md"
+        self.queue["tasks"][0]["plan_file"] = str(plan_path)
+        with open(self.queue_file_path, "w", encoding="utf-8") as f:
+            json.dump(self.queue, f)
+
+        plan_abs = os.path.realpath(str(plan_path))
+        plan_rel = os.path.relpath(plan_abs, os.path.realpath(self.tmpdir.name))
+        plan_content = (
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "---\n\n"
+            "*Stage: awaiting_merge*\n"
+        )
+        responses = {
+            ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
+            ("git", "show", "abc1234:docs/plans/t1.md"): (0, plan_content, ""),
+            ("git", "add", plan_rel): (0, "", ""),
+            ("git", "diff", "--cached", "--quiet"): (1, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
+            ("git", "push"): (0, "", ""),
+        }
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=str(self.queue_file_path),
+            dry_run=False,
+        )
+
+        mock = _subprocess_mock(responses)
+        with patch.object(aet_state.subprocess, "run", side_effect=mock):
+            with patch.object(aet_queue_module.subprocess, "run", side_effect=mock):
+                rc = aet_state.cmd_record_merge(args)
+
+        self.assertEqual(rc, 0)
+        content = plan_path.read_text(encoding="utf-8")
+        self.assertIn("status: merged", content)
+        self.assertIn("*Stage: merged*", content)
 
 
 class TestDeriveStatus(unittest.TestCase):

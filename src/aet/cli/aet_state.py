@@ -105,6 +105,44 @@ def is_ancestor_of_target(branch, target_branch, cwd=None):
     return rc == 0
 
 
+def _resolve_plan_for_closure(plan_path, merge_commit, branch, cwd):
+    """Return a usable local path to ``plan_path``, resolving from git if needed.
+
+    ``plan_path`` may be absolute or relative to the repository root. If it
+    already exists in the checkout, it is returned unchanged. Otherwise the file
+    is extracted from ``merge_commit`` (or ``branch`` as a fallback) and written
+    back to the working tree so terminal closure can update and commit it.
+    Returns ``None`` when the plan cannot be found locally or in the merged
+    branch.
+    """
+    repo_root = cwd
+    rc, out, _ = run_git("rev-parse", "--show-toplevel", cwd=cwd)
+    if rc == 0:
+        repo_root = out.strip()
+
+    if os.path.isabs(plan_path):
+        path = Path(plan_path)
+    else:
+        path = Path(repo_root) / plan_path
+
+    if path.exists():
+        return str(path)
+
+    plan_abs = os.path.realpath(str(path))
+    plan_rel = os.path.relpath(plan_abs, os.path.realpath(repo_root))
+
+    for ref in (merge_commit, branch):
+        if not ref:
+            continue
+        rc, out, _ = run_git("show", f"{ref}:{plan_rel}", cwd=repo_root)
+        if rc == 0:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(out, encoding="utf-8")
+            return str(path)
+
+    return None
+
+
 def resolve_merge_commit(branch, cwd=None, trunk_branch="main", target_branch=None):
     """Resolve the merge commit for a branch on the remote target branch.
 
@@ -996,24 +1034,41 @@ def cmd_record_merge(args):
     if sealed_task:
         explicit_plan = getattr(args, "plan", None)
         plan_path = explicit_plan or sealed_task.get("plan_file")
-        if plan_path and Path(plan_path).exists():
-            rc = queue_lib.commit_and_push_status(
-                plan_path, "merged", task_id=args.task_id, cwd=cwd,
-                footer_stage="merged",
+        if plan_path:
+            resolved_path = _resolve_plan_for_closure(
+                plan_path,
+                sealed_task.get("merge_commit"),
+                sealed_task.get("branch"),
+                cwd,
             )
-            if rc != 0:
+            if resolved_path:
+                rc = queue_lib.commit_and_push_status(
+                    resolved_path, "merged", task_id=args.task_id, cwd=cwd,
+                    footer_stage="merged",
+                )
+                if rc != 0:
+                    print(
+                        f"Merge recorded locally, but plan closure could not be pushed "
+                        f"for {args.task_id}. Re-run record-merge to retry.",
+                        file=sys.stderr,
+                    )
+                    return rc
+            elif explicit_plan:
                 print(
-                    f"Merge recorded locally, but plan closure could not be pushed "
-                    f"for {args.task_id}. Re-run record-merge to retry.",
+                    f"Merge recorded, but explicit plan file not found: {explicit_plan}",
                     file=sys.stderr,
                 )
-                return rc
-        elif explicit_plan:
-            print(
-                f"Merge recorded, but explicit plan file not found: {explicit_plan}",
-                file=sys.stderr,
-            )
-            return 1
+                return 1
+            else:
+                print(
+                    f"Merge recorded for {args.task_id}, but plan closure failed: "
+                    f"could not find {plan_path} in the checkout or on the merged "
+                    f"branch. The merge record itself is intact; re-run record-merge "
+                    f"after restoring the plan file, or pass --plan with an existing "
+                    f"plan path.",
+                    file=sys.stderr,
+                )
+                return 1
         print(
             f"Recorded merge for {args.task_id}: "
             f"{sealed_task.get('merge_commit')} ({sealed_task.get('merge_strategy')})"
@@ -1109,30 +1164,44 @@ def cmd_record_merge(args):
             print(str(e), file=sys.stderr)
             return 1
 
-    # Terminal truth lives in the plan file. Update both frontmatter status and
-    # footer stage when a plan path is provided or the task references an
-    # existing plan file, then commit and push so the closure is versioned.
+    # Terminal truth lives in the plan file. Resolve it from the merged branch
+    # when it is absent from the checkout, then update both frontmatter status
+    # and footer stage and commit/push so the closure is versioned.
     explicit_plan = getattr(args, "plan", None)
     plan_path = explicit_plan or task.get("plan_file")
-    if plan_path and Path(plan_path).exists():
-        rc = queue_lib.commit_and_push_status(
-            plan_path, "merged", task_id=args.task_id, cwd=cwd,
-            footer_stage="merged",
+    if plan_path:
+        resolved_path = _resolve_plan_for_closure(
+            plan_path, merge_commit, branch, cwd
         )
-        if rc != 0:
-            # Local commit is intact; recoverable on re-run.
+        if resolved_path:
+            rc = queue_lib.commit_and_push_status(
+                resolved_path, "merged", task_id=args.task_id, cwd=cwd,
+                footer_stage="merged",
+            )
+            if rc != 0:
+                # Local commit is intact; recoverable on re-run.
+                print(
+                    f"Merge recorded locally, but plan closure could not be pushed "
+                    f"for {args.task_id}. Re-run record-merge to retry.",
+                    file=sys.stderr,
+                )
+                return rc
+        elif explicit_plan:
             print(
-                f"Merge recorded locally, but plan closure could not be pushed "
-                f"for {args.task_id}. Re-run record-merge to retry.",
+                f"Merge recorded, but explicit plan file not found: {explicit_plan}",
                 file=sys.stderr,
             )
-            return rc
-    elif explicit_plan:
-        print(
-            f"Merge recorded, but explicit plan file not found: {explicit_plan}",
-            file=sys.stderr,
-        )
-        return 1
+            return 1
+        else:
+            print(
+                f"Merge recorded for {args.task_id}, but plan closure failed: "
+                f"could not find {plan_path} in the checkout or on the merged "
+                f"branch. The merge record itself is intact; re-run record-merge "
+                f"after restoring the plan file, or pass --plan with an existing "
+                f"plan path.",
+                file=sys.stderr,
+            )
+            return 1
 
     print(f"Recorded merge for {args.task_id}: {merge_commit} ({merge_strategy})")
     return 0
