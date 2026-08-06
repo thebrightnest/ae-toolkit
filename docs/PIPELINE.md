@@ -116,6 +116,8 @@ The queue `state` axis (`ready`, `blocked`, `in_progress`, …) remains the runt
 
 Terminal closure is versioned. `aet-state record-merge` updates the plan file frontmatter (`status: merged`) and footer (`*Stage: merged*`), commits the change, and pushes it. A push failure leaves the local commit intact and returns a recoverable error; re-running `record-merge` retries the push without duplicating queue history.
 
+When the plan file is absent from the checkout, `record-merge` first attempts to resolve it from the merged branch (so a squash-merged plan that only existed on the feature branch still closes correctly). If the plan cannot be found in the checkout or on the merged branch, closure fails closed: the merge record remains intact, but the command returns non-zero and reports where it looked and how to recover.
+
 ## Legal Transitions
 
 ```text

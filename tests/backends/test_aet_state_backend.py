@@ -278,7 +278,6 @@ class TestBackendAwareRecordMerge(unittest.TestCase):
                                 "id": "t1",
                                 "state": "awaiting_merge",
                                 "branch": "feat-001",
-                                "plan_file": "docs/plans/t1.md",
                             }
                         ]
                     }

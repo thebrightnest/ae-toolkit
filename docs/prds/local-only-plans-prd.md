@@ -304,13 +304,29 @@ toggle spans 13 files: 4 source, 9 test).
 
 *Recorded: 2026-08-06 — Branch: lop-01-unpublished-plan-intake-and-hygiene*
 
-### Changed from plan
+**Changed from plan (lop-01)**
 
 - **R-3 (worktree materialization)**: Verified that `copy_untracked_files` already mirrors untracked `docs/plans/*.md` into the worktree before the plan-existence check, so the end-to-end path works without modifying materialization logic. The operative plan copy behavior is preserved by existing code.
 
-### Deferred
+**Deferred (lop-01)**
 
 - **R-5 (branch-seeding plan commit), R-6 (closure fail-closed hardening), R-7 (plan-only worktree cleanup)**: These requirements are not implemented in this branch. They are scoped to follow-up plan `lop-02` per the locked design and floor check in `lop-01`, which explicitly cannot share a branch with the behaviour change.
+
+---
+
+*Recorded: 2026-08-06 — Branch: lop-03-closure-fails-closed-on-missing-plan*
+
+**Changed from plan (lop-03)**
+
+- No material changes. The fail-closed guard, merged-branch resolution helper, and regression test coverage were implemented as specified.
+
+**Added unplanned (lop-03)**
+
+- Test fixture cleanup in `tests/backends/test_aet_state_backend.py` and `tests/orchestrator/test_orchestrator.py`: removed or corrected stale `plan_file` references so unrelated tests do not accidentally resolve a plan file and so the missing-plan refusal paths exercise the intended fallthrough case.
+
+**Deferred (lop-03)**
+
+- Merge to main and integration verification: deferred to the `aet-ship` stage.
 
 *Stage: synced*
 *Next step: run `aet-ship`*

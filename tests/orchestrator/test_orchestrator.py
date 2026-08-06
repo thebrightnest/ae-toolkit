@@ -71,8 +71,13 @@ def _init_git_repo(repo_root: str) -> None:
         check=True,
     )
     subprocess.run(
-        ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+        ["git", "-C", repo_root, "config", "receive.denyCurrentBranch", "ignore"],
         check=True,
+    )
+    subprocess.run(
+        ["git", "-C", repo_root, "push", "-u", "origin", "main"],
+        check=True,
+        capture_output=True,
     )
 
 

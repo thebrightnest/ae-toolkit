@@ -121,6 +121,25 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 **When to use:** For one-off plans where you want the full pipeline but don't need a queue.
 
+## `record-merge`
+
+Record a verified merge in the work queue and close the plan file.
+
+**Procedure:**
+
+1. Resolve the task by ID from `.agents/work-queue.json` (or from `.agents/work-history.jsonl` if the task is already sealed).
+2. Verify the merge commit is an ancestor of the resolved trunk/integration branch.
+3. Transition the task to `merged` and seal it to history.
+4. If the task references a plan file (or `--plan` is given), update the plan frontmatter to `status: merged` and the footer to `*Stage: merged*`, commit the change, and push it.
+
+**Fail semantics:**
+
+- Merge verification failures are non-zero; the queue is not mutated.
+- Push failures are non-zero but recoverable: the local commit is intact and a re-run retries the push.
+- If the plan file is missing from the checkout, `record-merge` tries to resolve it from the merged branch before concluding it is gone. If it cannot be found in the checkout or on the merged branch, closure fails closed: the merge record stays intact, the command returns non-zero, and the message names the missing plan path and the recovery options (restore the file or pass `--plan`).
+
+**When to use:** After a PR has merged and you want to record the merge commit and version the terminal plan status.
+
 ## Cleanup
 
 Seal terminal tasks and remove their worktrees atomically. Repairs stale queue entries.
