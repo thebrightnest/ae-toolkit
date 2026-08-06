@@ -218,6 +218,8 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
                     "docs/retros/",
                     "docs/product-briefs/",
                 ],
+                # Seed skip check: the base already carries the plan path.
+                ["git", "-C", "<repo>", "cat-file", "-e", "main:docs/plans/demo-plan.md"],
                 # Telemetry diff stats emitted after each stage/session group.
                 ["git", "-C", "<worktree>", "diff", "--name-only", "origin/main...HEAD"],
                 ["git", "-C", "<worktree>", "rev-list", "--count", "origin/main..HEAD"],
