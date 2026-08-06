@@ -173,5 +173,5 @@ leak risk warrants a separate review pass over an isolated implementation stage.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
