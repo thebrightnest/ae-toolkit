@@ -96,6 +96,7 @@ from aet.worktree import (  # noqa: E402
     push_branch,
     remove_worktree,
     run_git_plain,
+    seed_task_plan,
 )
 
 # Global shutdown flag
@@ -1224,6 +1225,21 @@ def process_task(
     if worktree_dir is None:
         worktree_dir = create_worktree(repo_root, task_id, base_branch=base_branch)
     copy_untracked_files(repo_root, worktree_dir)
+
+    # Seed the task branch with a standalone plan commit when the integration
+    # base does not already carry the plan path (R-5).
+    integration_ref = (
+        base_branch.split("/", 1)[1] if "/" in base_branch else base_branch
+    )
+    try:
+        seeded = seed_task_plan(
+            repo_root, worktree_dir, plan_file, task_id, integration_ref
+        )
+        if seeded:
+            print(f"   🌱 Seeded plan commit for {task_id}")
+    except RuntimeError as exc:
+        print(f"   ❌ {exc}")
+        return False
 
     # Warm up configured worktree dependencies.
     warmup_results = prepare_worktree_dependencies(repo_root, worktree_dir)

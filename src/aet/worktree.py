@@ -73,7 +73,7 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
                 if rebase.returncode != 0:
                     _run_git(["-C", worktree_dir, "rebase", "--abort"], capture_output=True)
                     # Fall through to recreate the worktree from the current base.
-                    remove_worktree(repo_root, task_id)
+                    remove_worktree(repo_root, task_id, base_branch=base)
                 else:
                     return worktree_dir
             else:
@@ -154,31 +154,100 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
     return worktree_dir
 
 
+def _worktree_has_non_deferred_changes(worktree_dir: str, base_branch: str) -> bool:
+    """Return True when the worktree branch differs from base outside deferred paths."""
+    result = subprocess.run(
+        ["git", "-C", worktree_dir, "diff", "--name-only", f"{base_branch}..HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        # Fail closed: if we cannot resolve the diff, assume real work is present.
+        return True
+    for line in result.stdout.splitlines():
+        path = line.strip()
+        if path and not _is_deferred_path(path):
+            return True
+    return False
+
+
 def remove_worktree(repo_root: str, task_id: str, base_branch: str = "origin/main") -> bool:
-    """Remove a worktree if it exists and has no uncommitted changes."""
+    """Remove a worktree if it has no non-deferred changes."""
     worktree_dir = os.path.join(repo_root, ".worktrees", task_id)
     if not os.path.isdir(worktree_dir):
         return True
 
-    # Check for commits ahead of the configured base branch.
-    result = subprocess.run(
-        ["git", "-C", worktree_dir, "rev-list", "--count", f"{base_branch}..HEAD"],
+    if _worktree_has_non_deferred_changes(worktree_dir, base_branch):
+        return False
+
+    try:
+        subprocess.run(
+            ["git", "-C", repo_root, "worktree", "remove", worktree_dir],
+            check=True,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        # Has uncommitted changes or another obstruction; leave for inspection.
+        return False
+
+
+def seed_task_plan(
+    repo_root: str,
+    worktree_dir: str,
+    plan_file: str,
+    task_id: str,
+    integration_branch: str = "main",
+) -> bool:
+    """Create a standalone commit adding only the task's plan file.
+
+    The commit is skipped when the integration base already carries the plan
+    path, which prevents an add/add conflict when the plan lives on an
+    unpushed local commit (R-5).
+
+    Returns ``True`` when a seed commit was created, ``False`` when skipped.
+    """
+    if not os.path.exists(plan_file):
+        return False
+    rel_path = os.path.relpath(plan_file, repo_root)
+    present = (
+        subprocess.run(
+            ["git", "-C", repo_root, "cat-file", "-e", f"{integration_branch}:{rel_path}"],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+    if present:
+        return False
+
+    add = subprocess.run(
+        ["git", "-C", worktree_dir, "add", "--", rel_path],
         capture_output=True,
         text=True,
     )
-    ahead = int(result.stdout.strip() or 0)
+    if add.returncode != 0:
+        raise RuntimeError(
+            f"Could not stage {rel_path} for {task_id}: {add.stderr.strip()}"
+        )
 
-    if ahead == 0:
-        try:
-            subprocess.run(
-                ["git", "-C", repo_root, "worktree", "remove", worktree_dir],
-                check=True,
-            )
-            return True
-        except subprocess.CalledProcessError:
-            # Has uncommitted changes; leave for inspection
-            return False
-    return False
+    # Skip when the worktree branch already carries the same plan content
+    # (e.g. a resumed run on an existing worktree).
+    staged = subprocess.run(
+        ["git", "-C", worktree_dir, "diff", "--cached", "--quiet"],
+        capture_output=True,
+    )
+    if staged.returncode == 0:
+        return False
+
+    commit = subprocess.run(
+        ["git", "-C", worktree_dir, "commit", "-m", f"[{task_id}] Seed plan"],
+        capture_output=True,
+        text=True,
+    )
+    if commit.returncode != 0:
+        raise RuntimeError(
+            f"Could not seed plan for {task_id}: {commit.stderr.strip()}"
+        )
+    return True
 
 
 def run_git_plain(args: list[str], **kwargs) -> tuple[int, str, str]:
@@ -252,8 +321,43 @@ def push_branch(repo_root: str, branch: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _copy_file(src: str, dest: str) -> None:
+    """Copy ``src`` to ``dest``, creating parents and handling read-only targets."""
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    # If the destination exists and is read-only from a previous copy,
+    # temporarily make it writable so copy2 can overwrite it.
+    if os.path.exists(dest) and not os.access(dest, os.W_OK):
+        os.chmod(dest, 0o644)
+    shutil.copy2(src, dest)
+
+
+def _copy_deferred_files(repo_root: str, worktree_dir: str) -> None:
+    """Overlay the deferred ``docs/plans/`` tree into the worktree by content.
+
+    The deferred set's durability is deferred to the PR (ADR-054), so the
+    working-tree version is copied regardless of git state — untracked,
+    modified, or absent from the base all resolve the same way.
+    """
+    plans_dir = os.path.join(repo_root, "docs", "plans")
+    if not os.path.isdir(plans_dir):
+        return
+    for root, _dirs, files in os.walk(plans_dir):
+        for name in files:
+            src = os.path.join(root, name)
+            rel = os.path.relpath(src, repo_root)
+            dest = os.path.join(worktree_dir, rel)
+            _copy_file(src, dest)
+
+
 def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
-    """Copy untracked plan/PRD and referenced docs into the worktree."""
+    """Copy plan/PRD and referenced docs into the worktree.
+
+    ``docs/plans/`` is overlayed by content, not git state, so the agent's
+    local working-tree copy is always the operative plan. The other referenced
+    doc directories remain an untracked-only mirror so we do not silently
+    overwrite tracked PRDs or ADRs with working-tree drafts.
+    """
+    _copy_deferred_files(repo_root, worktree_dir)
     result = subprocess.run(
         [
             "git",
@@ -274,16 +378,11 @@ def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
         check=True,
     )
     for untracked in result.stdout.strip().split("\n"):
-        if not untracked:
+        if not untracked or _is_deferred_path(untracked):
             continue
         src = os.path.join(repo_root, untracked)
         dest = os.path.join(worktree_dir, untracked)
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        # If the destination exists and is read-only from a previous copy,
-        # temporarily make it writable so copy2 can overwrite it.
-        if os.path.exists(dest) and not os.access(dest, os.W_OK):
-            os.chmod(dest, 0o644)
-        shutil.copy2(src, dest)
+        _copy_file(src, dest)
 
 
 def dependency_warmup_required(repo_root: str, worktree_dir: str) -> list[dict]:

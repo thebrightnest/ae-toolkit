@@ -105,25 +105,26 @@ docs_sync_reason: the mid-run edit semantics (the overlay is a snapshot taken at
 
 ## Task List
 
-1. Replace `copy_untracked_files`' untracked-only logic for deferred paths with
+1. ✓ Replace `copy_untracked_files`' untracked-only logic for deferred paths with
    a content sync that runs regardless of git state; leave the six-directory
    untracked mirror intact for the other five directories — M (traces: R-3)
-2. Seed the task branch with a standalone commit adding only the task's own
+2. ✓ Seed the task branch with a standalone commit adding only the task's own
    plan file by explicit path, skipped when
    `git cat-file -e <integration>:<path>` succeeds — M (traces: R-5)
-3. Change `remove_worktree`'s emptiness test from a commit count to a
+3. ✓ Change `remove_worktree`'s emptiness test from a commit count to a
    changed-path classification over the deferred set, and pass the configured
    base at the `worktree.py:76` recovery call site so the predicate is
    evaluated against the right ref under a non-trunk integration branch — S
    (traces: R-7)
-4. Tests: overlay covers untracked / modified / absent-from-base; the seeding
+4. ✓ Tests: overlay covers untracked / modified / absent-from-base; the seeding
    commit contains exactly one file with a decoy plan and decoy PRD present;
    the skip path produces no duplicate commit and merges without conflict; a
    plan-only worktree is removed and an implementation worktree is retained
    (see Validation Steps) — M (traces: R-3, R-5, R-7)
-5. Document the snapshot semantics of the overlay in the aet-work skill
+5. ✓ Document the snapshot semantics of the overlay in the aet-work skill
    reference — S (traces: R-3)
-6. Merge branch to main and verify integration — S
+6. [Deferred: merge happens at `aet-ship` stage] Merge branch to main and verify
+   integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -173,5 +174,5 @@ leak risk warrants a separate review pass over an isolated implementation stage.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
