@@ -194,4 +194,5 @@ because it removes a safety gate and `work_class: critical`.
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
