@@ -4,7 +4,7 @@ size: M
 work_class: critical
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: removes a durability gate that has guarded every unattended run since ADR-027, and changes git-state handling at queue intake; the hygiene narrowing must not admit a stale-base run
 docs_sync: required
@@ -194,5 +194,5 @@ because it removes a safety gate and `work_class: critical`.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
