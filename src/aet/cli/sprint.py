@@ -1,9 +1,10 @@
 """aet-work sprint — Sprint membership commands.
 
 ``aet sprint add <plan>`` promotes an approved plan into the runnable sprint:
-it sets the plan frontmatter to ``status: queued``, commits and pushes that
-change, adds the task to the ephemeral work queue, and mirrors the ready/blocked
-state to any configured projection (e.g. GitHub Issues labels).
+it sets the plan frontmatter to ``status: queued`` (for plan paths the durable
+write is deferred to terminal closure), adds the task to the ephemeral work
+queue, and mirrors the ready/blocked state to any configured projection (e.g.
+GitHub Issues labels).
 """
 
 from __future__ import annotations
@@ -137,7 +138,7 @@ def _add(args: argparse.Namespace) -> int:
     if rc != 0:
         backend.close()
         return _fail(
-            f"Plan promotion failed for {plan_file.name}: could not commit/push "
+            f"Plan promotion failed for {plan_file.name}: could not write "
             f"status update. Fix the git state and re-run `aet sprint add`."
         )
 
