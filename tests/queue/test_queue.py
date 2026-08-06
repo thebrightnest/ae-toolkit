@@ -1,11 +1,13 @@
 """Tests for queue module."""
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from aet.queue import (
+    commit_and_push_status,
     get_next_unblocked,
     has_pending_tasks,
     read_history,
@@ -204,6 +206,77 @@ class TestQueue(unittest.TestCase):
             t2 = next(t for t in live if t["id"] == "t2")
             self.assertEqual(t2["state"], "blocked")
             self.assertEqual(t2["pending_blockers"], 1)
+
+
+class TestCommitAndPushStatusTerminality(unittest.TestCase):
+    def _init_repo(self, repo_root: str) -> None:
+        subprocess.run(["git", "init", "-q", repo_root], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.name", "Test User"],
+            check=True,
+        )
+        Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "init"],
+            check=True,
+        )
+
+    def _make_plan(self, repo_root: str, rel_path: str) -> Path:
+        plan = Path(repo_root) / rel_path
+        plan.parent.mkdir(parents=True, exist_ok=True)
+        plan.write_text("---\nid: test\n---\n\n# Test\n", encoding="utf-8")
+        return plan
+
+    def _commit_count(self, repo_root: str) -> int:
+        result = subprocess.run(
+            ["git", "-C", repo_root, "rev-list", "--count", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return int(result.stdout.strip())
+
+    def test_non_terminal_deferred_plan_writes_file_without_commit(self):
+        """Queued status on a docs/plans path updates the file but does not commit."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            plan = self._make_plan(repo_root, "docs/plans/test.md")
+            initial_commits = self._commit_count(repo_root)
+
+            rc = commit_and_push_status(plan, "queued")
+
+            self.assertEqual(rc, 0)
+            self.assertIn("status: queued", plan.read_text(encoding="utf-8"))
+            self.assertEqual(self._commit_count(repo_root), initial_commits)
+
+    def test_terminal_deferred_plan_commits(self):
+        """Merged status on a docs/plans path still commits and pushes."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            plan = self._make_plan(repo_root, "docs/plans/test.md")
+            initial_commits = self._commit_count(repo_root)
+
+            rc = commit_and_push_status(plan, "merged")
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
+
+    def test_non_terminal_non_deferred_path_commits(self):
+        """A non-deferred path with a non-terminal status commits as before."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            plan = self._make_plan(repo_root, "docs/prds/test-prd.md")
+            initial_commits = self._commit_count(repo_root)
+
+            rc = commit_and_push_status(plan, "draft")
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
 
 
 if __name__ == "__main__":

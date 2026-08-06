@@ -19,8 +19,8 @@ aet = importlib.import_module("aet.cli.main")
 
 
 class TestSprintAdd(unittest.TestCase):
-    def test_sprint_add_promotes_and_commits(self):
-        """sprint add sets status: queued, commits, and adds the task to the queue."""
+    def test_sprint_add_promotes_without_committing(self):
+        """sprint add sets status: queued and adds the task without committing."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             git(["init"], tmp)
@@ -63,13 +63,14 @@ class TestSprintAdd(unittest.TestCase):
                     )
 
             self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+            self.assertIn("queued without publishing", result.output)
 
             # Plan file promoted to queued; footer pipeline stage is preserved.
             plan_text = plan.read_text(encoding="utf-8")
             self.assertIn("status: queued", plan_text)
             self.assertIn("_Stage: plan-approved_", plan_text)
 
-            # Commit was made.
+            # No intake commit is made for plan paths (ADR-054).
             log = subprocess.run(
                 ["git", "log", "--format=%s"],
                 cwd=tmp,
@@ -77,7 +78,7 @@ class TestSprintAdd(unittest.TestCase):
                 text=True,
                 check=True,
             )
-            self.assertIn("chore(feat-001): mark plan as queued", log.stdout)
+            self.assertEqual(log.stdout.strip(), "initial")
 
             # Task added to queue as ready.
             with open(queue_file, "r", encoding="utf-8") as f:
@@ -235,12 +236,22 @@ class TestSprintAdd(unittest.TestCase):
             self.assertEqual(result.exit_code, 1)
             self.assertIn("plan-approved", result.stderr)
 
-    def test_sprint_add_refuses_untracked_plan(self):
-        """The intake durability guard refuses untracked plans."""
+    def test_sprint_add_accepts_untracked_plan(self):
+        """Untracked plans are the normal intake path (ADR-054)."""
         with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
             git(["init"], tmp)
-            plans_dir = Path(tmp) / "docs" / "plans"
+            git(["config", "user.email", "test@example.com"], tmp)
+            git(["config", "user.name", "Test"], tmp)
+
+            plans_dir = tmp_path / "docs" / "plans"
             plans_dir.mkdir(parents=True)
+            prds_dir = tmp_path / "docs" / "prds"
+            prds_dir.mkdir(parents=True)
+            (prds_dir / "default-prd.md").write_text(
+                "# Default PRD\n\n## Requirements\n- **R-1**: default requirement\n",
+                encoding="utf-8",
+            )
             plan = make_plan(plans_dir, "feat-003.md")
             queue_file = write_json_file([])
             history_file = make_history([])
@@ -261,8 +272,10 @@ class TestSprintAdd(unittest.TestCase):
                 cwd=tmp,
             )
 
-            self.assertEqual(result.exit_code, 1)
-            self.assertIn("track", result.stderr.lower())
+            self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+            self.assertIn("queued without publishing", result.output)
+            with open(queue_file, "r", encoding="utf-8") as f:
+                self.assertEqual(len(json.load(f)), 1)
 
 
 class TestBacklogGroup(unittest.TestCase):

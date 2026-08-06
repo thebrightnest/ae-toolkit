@@ -163,18 +163,18 @@ docs_sync_reason: `aet sprint add` loses the `--allow-untracked` flag (user-faci
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] R-trace coverage: R-1, R-2, R-4, R-8, R-9, R-10 each covered by ≥ 1 task
-- [ ] R-10 is checkable, not asserted: `grep -rn "allow-untracked\|refuses
+- [x] Lint passes
+- [x] Tests pass
+- [x] R-trace coverage: R-1, R-2, R-4, R-8, R-9, R-10 each covered by ≥ 1 task
+- [x] R-10 is checkable, not asserted: `grep -rn "allow-untracked\|refuses
       untracked\|commit the plan files" skills/ docs/ AGENTS.md` returns only
       historical records (`docs/bugs/`, `docs/adr/`, `CHANGELOG.md`)
-- [ ] New source files: none introduced; the constant lives in `worktree.py`
+- [x] New source files: none introduced; the constant lives in `worktree.py`
       beside `AET_IGNORED_PATHS` and is covered by the hygiene tests
-- [ ] Unit: deferred-path membership, terminality gate. Integration: intake →
+- [x] Unit: deferred-path membership, terminality gate. Integration: intake →
       queue → run reaches worktree. Boundary: hygiene against a real git repo
       with mixed commits
-- [ ] ADR-027 regression explicitly named: a plan queued against an unpushed
+- [x] ADR-027 regression explicitly named: a plan queued against an unpushed
       tree must reach the worktree, not produce an empty one
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -194,5 +194,5 @@ because it removes a safety gate and `work_class: critical`.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

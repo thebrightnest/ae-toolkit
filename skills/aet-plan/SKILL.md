@@ -184,7 +184,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 
 8. **Set gate routing keys deliberately.** `security_review` and `docs_sync` route the aet-cso and aet-sync-docs stages at plan time, so the engine never judges at run time. Default both to `required`. Set `skipped` only when the gate is genuinely unnecessary for the plan, and always pair a skip with a one-line `security_review_reason` / `docs_sync_reason` recording why — intake rejects a `skipped` key without its reason, and a missing key is treated as `required` (fail-safe: the stage runs).
 
-9. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. **Commit the plan files (and PRD) first so they are tracked in git** — `aet sprint add` refuses untracked plans (the intake durability guard). Then instruct the user to add plans explicitly with `aet sprint add`. Do not write `.agents/work-queue.json` directly from this skill.
+9. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. `aet sprint add` now accepts untracked `docs/plans/*.md` files and queues them without publishing (plan durability is deferred to the PR). Instruct the user to add plans explicitly with `aet sprint add`. Do not write `.agents/work-queue.json` directly from this skill.
 
 **Vertical slice rule:**
 
@@ -194,7 +194,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 **Work queue handoff:**
 
 - `aet-plan` produces `docs/plans/*.md` only
-- Queue management is owned by aet-work. After plan files are created and committed (tracked in git), the user curates the sprint with `aet sprint add <plan-file>`
+- Queue management is owned by aet-work. The user curates the sprint with `aet sprint add <plan-file>`; plans may be untracked at intake
 - This keeps queue format, merge logic, and state management in a single skill
 - See [references/work-queue-format.md](references/work-queue-format.md) for the task record schema
 
@@ -302,7 +302,7 @@ After the `plan` command completes and the plan.md is ready for review:
    ```
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
-4. Commit the new plan files (and PRD) before queue handoff so they are tracked in git — this satisfies the `aet sprint add` intake durability guard, which refuses untracked plans.
+4. The new plan files are ready to queue. Because mid-sprint plan status is local-only, remind the user that untracked plans are load-bearing: `git clean -fdx` or git-following backups will discard in-flight work.
 5. Confirm the new plan files were explicitly added to `.agents/work-queue.json` with `aet sprint add`; run `aet queue sync` only to reconcile existing entries and report drift.
 6. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
 

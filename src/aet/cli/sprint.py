@@ -1,16 +1,16 @@
 """aet-work sprint — Sprint membership commands.
 
 ``aet sprint add <plan>`` promotes an approved plan into the runnable sprint:
-it sets the plan frontmatter to ``status: queued``, commits and pushes that
-change, adds the task to the ephemeral work queue, and mirrors the ready/blocked
-state to any configured projection (e.g. GitHub Issues labels).
+it sets the plan frontmatter to ``status: queued`` (for plan paths the durable
+write is deferred to terminal closure), adds the task to the ephemeral work
+queue, and mirrors the ready/blocked state to any configured projection (e.g.
+GitHub Issues labels).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -43,32 +43,6 @@ def resolve_plan(target: str, plans_dir: Path) -> Path | None:
         return Path(resolve_plan_arg(target, plans_dir=plans_dir))
     except ValueError:
         return None
-
-
-def plan_is_untracked(plan_file: Path) -> bool:
-    """True when ``plan_file`` is inside a git work tree but not tracked.
-
-    Returns False when the file is tracked *or* when it is not inside any git
-    repository — outside version control there is no durability to enforce.
-    aet-work builds task worktrees from ``origin/main``; a queued plan that git
-    cannot retrieve there yields an empty worktree, so intake refuses an
-    untracked plan early instead of failing deep in a run.
-    """
-    resolved = plan_file.resolve()
-    parent = str(resolved.parent)
-    inside = subprocess.run(
-        ["git", "-C", parent, "rev-parse", "--is-inside-work-tree"],
-        capture_output=True,
-        text=True,
-    )
-    if inside.returncode != 0 or inside.stdout.strip() != "true":
-        return False
-    tracked = subprocess.run(
-        ["git", "-C", parent, "ls-files", "--error-unmatch", resolved.name],
-        capture_output=True,
-        text=True,
-    )
-    return tracked.returncode != 0
 
 
 def _fail(message: str) -> int:
@@ -124,15 +98,6 @@ def _add(args: argparse.Namespace) -> int:
             f"only 'plan-approved' plans may enter the sprint."
         )
 
-    if not args.allow_untracked and plan_is_untracked(plan_file):
-        backend.close()
-        return _fail(
-            f"Refusing to promote {plan_file.name}: the plan file is not tracked "
-            f"in git. Commit it first so aet-work can retrieve it from "
-            f"origin/main (it builds task worktrees there); pass "
-            f"--allow-untracked to queue a throwaway spike anyway."
-        )
-
     # Validate the target plan in the context of every plan in plans_dir so
     # blocker references resolve, but only report findings for the target plan.
     all_plan_files = sorted(plans_dir.glob("*.md"))
@@ -173,7 +138,7 @@ def _add(args: argparse.Namespace) -> int:
     if rc != 0:
         backend.close()
         return _fail(
-            f"Plan promotion failed for {plan_file.name}: could not commit/push "
+            f"Plan promotion failed for {plan_file.name}: could not write "
             f"status update. Fix the git state and re-run `aet sprint add`."
         )
 
@@ -190,7 +155,10 @@ def _add(args: argparse.Namespace) -> int:
     projections.on_add(task, is_new=True)
     backend.close()
 
-    print(f"✓ Promoted {plan_file.name} to the sprint as {task['state']}.")
+    print(
+        f"✓ {plan_file.name} queued without publishing "
+        f"(plan durability deferred to PR)."
+    )
     return 0
 
 
@@ -217,15 +185,6 @@ def add(
         "--force",
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     ),
-    allow_untracked: bool = typer.Option(
-        False,
-        "--allow-untracked",
-        help=(
-            "Promote the plan even if its file is not tracked in git. By default "
-            "an untracked plan is refused so aet-work can retrieve it from "
-            "origin/main; use this only for a throwaway spike."
-        ),
-    ),
 ) -> None:
     """Promote an approved plan into the sprint."""
     args = argparse.Namespace(
@@ -235,7 +194,6 @@ def add(
         plans_dir=plans_dir,
         config=config,
         force=force,
-        allow_untracked=allow_untracked,
     )
     rc = _add(args)
     raise typer.Exit(rc)

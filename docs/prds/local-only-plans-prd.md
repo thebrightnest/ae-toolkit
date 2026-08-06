@@ -300,5 +300,17 @@ toggle spans 13 files: 4 source, 9 test).
   run (working tree and worktree overlay). Only closure mutates status
   post-run, and it operates on the post-merge checkout — no write conflict.
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+## Divergence Summary
+
+*Recorded: 2026-08-06 — Branch: lop-01-unpublished-plan-intake-and-hygiene*
+
+### Changed from plan
+
+- **R-3 (worktree materialization)**: Verified that `copy_untracked_files` already mirrors untracked `docs/plans/*.md` into the worktree before the plan-existence check, so the end-to-end path works without modifying materialization logic. The operative plan copy behavior is preserved by existing code.
+
+### Deferred
+
+- **R-5 (branch-seeding plan commit), R-6 (closure fail-closed hardening), R-7 (plan-only worktree cleanup)**: These requirements are not implemented in this branch. They are scoped to follow-up plan `lop-02` per the locked design and floor check in `lop-01`, which explicitly cannot share a branch with the behaviour change.
+
+*Stage: synced*
+*Next step: run `aet-ship`*

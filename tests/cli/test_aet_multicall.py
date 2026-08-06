@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -72,7 +73,7 @@ class TestNestedCommandGroupRouting(unittest.TestCase):
                     )
 
             self.assertEqual(result.exit_code, 0, result.output + result.stderr)
-            self.assertIn("Promoted feat-001.md", result.output)
+            self.assertIn("queued without publishing", result.output)
 
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
@@ -82,6 +83,16 @@ class TestNestedCommandGroupRouting(unittest.TestCase):
 
             plan_text = (plans_dir / "feat-001.md").read_text(encoding="utf-8")
             self.assertIn("status: queued", plan_text)
+
+            # Intake no longer commits plan-path status updates (ADR-054).
+            log = subprocess.run(
+                ["git", "log", "--format=%s"],
+                cwd=tmp_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(log.stdout.strip(), "initial")
 
     def test_backlog_add_routes_through_main_app(self):
         """``aet backlog add <plan>`` adds an approved plan to the backlog board."""

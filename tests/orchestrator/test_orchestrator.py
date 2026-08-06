@@ -289,6 +289,66 @@ class TestEnforceBaseHygiene(unittest.TestCase):
                 self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
 
+class TestDeferredDurabilityNotice(unittest.TestCase):
+    def test_run_batch_prints_deferred_durability_notice(self):
+        """After base hygiene passes, batch mode announces plan-durability posture."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            queue_file = _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": "docs/plans/demo.md",
+                        "blocked_by": [],
+                        "state": "blocked",
+                    }
+                ],
+            )
+            args = argparse.Namespace(
+                queue_file=queue_file,
+                plan_file=None,
+                repo_root=repo_root,
+                cli_bin="echo",
+                isolation="standard",
+                max_jobs=1,
+                task_timeout=60,
+                heartbeat_interval=60,
+                on_failure="continue",
+            )
+            with tempfile.TemporaryDirectory() as archive_dir:
+                env = {"AET_TELEMETRY_ARCHIVE_DIR": archive_dir}
+                buf = io.StringIO()
+                with patch.dict(os.environ, env, clear=False):
+                    with contextlib.redirect_stdout(buf):
+                        rc = orchestrator.run_batch(args, _FAKE_ADAPTER)
+                output = buf.getvalue()
+                self.assertIn("Plan durability is deferred to the PR", output)
+                self.assertEqual(rc, 0)
+
+    def test_run_single_prints_deferred_durability_notice(self):
+        """After base hygiene passes, single-plan mode announces plan-durability posture."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
+            args = _make_args(repo_root, plan_file)
+            buf = io.StringIO()
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("AET_EXECUTION_MODE", None)
+                with patch.object(orchestrator, "process_task", return_value=True):
+                    with contextlib.redirect_stdout(buf):
+                        rc = orchestrator.run_single(args, _FAKE_ADAPTER)
+            output = buf.getvalue()
+            self.assertIn("Plan durability is deferred to the PR", output)
+            self.assertEqual(rc, 0)
+
+
 class TestRunSingleHygiene(unittest.TestCase):
     def test_run_single_halts_when_main_ahead(self):
         with tempfile.TemporaryDirectory() as repo_root:

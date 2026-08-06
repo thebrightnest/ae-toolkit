@@ -368,6 +368,19 @@ Terminal states are `merged` and `abandoned`. Only terminal states satisfy block
 
 `.agents/work-queue.json` holds only non-terminal tasks. When a task reaches a terminal state, the writer appends its final record and history to `.agents/work-history.jsonl` and removes it from the live file atomically. Settled history is retained for auditability but is never loaded for scheduling.
 
+## Base Hygiene
+
+The orchestrator's pre-run hygiene check protects against building worktrees from a dirty or stale base. It is narrowed for plan paths but remains fail-closed for everything else.
+
+Rules:
+
+- Untracked or modified files under `docs/plans/` are ignored by the dirty check and by the ahead-of-origin check. A local branch may be ahead of `origin/main` when every diverging path is in `docs/plans/`.
+- Non-plan dirty paths still halt the run.
+- A branch that is behind `origin/main` still halts.
+- A mixed commit containing both `docs/plans/` and non-plan paths still halts.
+- `aet sprint add` no longer has an `--allow-untracked` flag. Untracked plans are the normal intake state; the durability write happens only at terminal closure (`merged`/`abandoned`).
+- Untracked plans are load-bearing work in progress. `git clean -fdx`, git-following backups, or any process that discards untracked files can destroy queued/in-progress plans.
+
 ## Execution Mode
 
 Skills with interactive approval gates must respect the execution-mode contract so they work correctly in both interactive sessions and unattended orchestration.

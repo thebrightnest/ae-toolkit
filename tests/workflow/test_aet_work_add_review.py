@@ -468,15 +468,19 @@ class TestAddCommand(unittest.TestCase):
             # The live blocker still wires a reverse edge for its decrement.
             self.assertIn("feat-501", tasks["feat-500"]["blocks"])
 
-    def test_add_refuses_untracked_plan_in_git_repo(self):
-        """Intake fails closed on a plan file git does not track.
-
-        aet-work builds worktrees from origin/main; an untracked plan would be
-        absent there, so add refuses it rather than queue a plan that vanishes
-        at execution.
-        """
+    def test_add_accepts_untracked_plan_in_git_repo(self):
+        """Untracked plans are normal intake; sprint add queues them."""
         with tempfile.TemporaryDirectory() as tmp:
             _git(["init"], tmp)
+            _git(["config", "user.email", "test@example.com"], tmp)
+            _git(["config", "user.name", "Test User"], tmp)
+            Path(tmp, "README.md").write_text("# test", encoding="utf-8")
+            _git(["add", "."], tmp)
+            _git(["commit", "-q", "-m", "init"], tmp)
+            _git(["branch", "-M", "main"], tmp)
+            _git(["remote", "add", "origin", tmp], tmp)
+            _git(["update-ref", "refs/remotes/origin/main", "HEAD"], tmp)
+
             plans_dir = Path(tmp) / "docs" / "plans"
             plans_dir.mkdir(parents=True)
             plan = _make_plan(plans_dir, "feat-600.md")  # never git-added
@@ -492,15 +496,31 @@ class TestAddCommand(unittest.TestCase):
                 "--plans-dir", str(plans_dir),
             ])
 
-            self.assertEqual(result.exit_code, 1)
-            self.assertIn("track", result.stderr.lower())
+            self.assertEqual(result.exit_code, 0)
+            self.assertIn("queued without publishing", result.stdout)
             with open(queue_file, "r", encoding="utf-8") as f:
-                self.assertEqual(len(json.load(f)), 0)
+                queue = json.load(f)
+            self.assertEqual(len(queue), 1)
+            self.assertEqual(queue[0]["id"], "feat-600")
+
+            origin_log = subprocess.run(
+                ["git", "-C", tmp, "log", "origin/main", "--oneline"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertEqual(len(origin_log.strip().splitlines()), 1)
 
     def test_add_accepts_tracked_plan_in_git_repo(self):
-        """A git-tracked plan queues normally."""
+        """A git-tracked plan queues normally and is not published at intake."""
         with tempfile.TemporaryDirectory() as tmp:
             _git(["init"], tmp)
+            _git(["config", "user.email", "test@example.com"], tmp)
+            _git(["config", "user.name", "Test User"], tmp)
+            Path(tmp, "README.md").write_text("# test", encoding="utf-8")
+            _git(["add", "."], tmp)
+            _git(["commit", "-q", "-m", "init"], tmp)
+
             plans_dir = Path(tmp) / "docs" / "plans"
             plans_dir.mkdir(parents=True)
             plan = _make_plan(plans_dir, "feat-601.md")
@@ -508,44 +528,21 @@ class TestAddCommand(unittest.TestCase):
             queue_file = _write_json_file([])
             history_file = _make_history([])
 
-            rc = run_typer(aet.app, [
+            result = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
                 "--queue-file", queue_file,
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
-            ]).exit_code
+            ])
 
-            self.assertEqual(rc, 0)
+            self.assertEqual(result.exit_code, 0)
+            self.assertIn("queued without publishing", result.stdout)
             with open(queue_file, "r", encoding="utf-8") as f:
                 queue = json.load(f)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-601")
-
-    def test_add_allow_untracked_bypasses_guard(self):
-        """--allow-untracked queues a spike plan git does not track."""
-        with tempfile.TemporaryDirectory() as tmp:
-            _git(["init"], tmp)
-            plans_dir = Path(tmp) / "docs" / "plans"
-            plans_dir.mkdir(parents=True)
-            plan = _make_plan(plans_dir, "feat-602.md")  # untracked
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
-
-            rc = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(plan),
-                "--allow-untracked",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ]).exit_code
-
-            self.assertEqual(rc, 0)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                self.assertEqual(len(json.load(f)), 1)
 
 
 class TestReviewCommand(unittest.TestCase):

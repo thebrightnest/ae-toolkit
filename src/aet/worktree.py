@@ -425,6 +425,31 @@ AET_IGNORED_PATHS = {
 }
 
 
+# Paths whose durability is deferred until the PR closure writes a terminal
+# status. Mid-sprint mutations to these paths do not block base hygiene or
+# intake (ADR-054).
+DEFERRED_PATH_PREFIXES = ("docs/plans/",)
+
+
+def _is_deferred_path(path: str) -> bool:
+    """Return True when ``path`` is inside the deferred durability set.
+
+    The deferred set covers ``docs/plans/`` and any nested path. The directory
+    itself (``docs/plans``) is also treated as deferred so callers can reason
+    about the prefix without trailing slash ambiguity.
+    """
+    if path == "docs/plans":
+        return True
+    for prefix in DEFERRED_PATH_PREFIXES:
+        if path.startswith(prefix):
+            return True
+    return False
+
+
+# Public alias used by consumers that should not reach into the private name.
+is_deferred_path = _is_deferred_path
+
+
 def _is_ignored_path(path: str) -> bool:
     """Return True when ``path`` matches an AET ignored path or directory.
 
@@ -449,16 +474,14 @@ def check_base_hygiene(
 
     AET-generated paths are excluded from the dirty check because the
     orchestrator mutates them as part of normal operation and they must be
-    gitignored in projects using the toolkit. The shared constant is the same
-    one ``aet setup bootstrap`` writes to ``.gitignore``. The ``.lock``
-    sidecar is never unlinked — deleting an fcntl lock file on release races
-    with concurrent openers — and the ``.lease`` sidecar self-reclaims only
-    on the next mutation, so both linger on disk (including after a crash)
-    and must be ignored here and in project ``.gitignore`` files.
+    gitignored in projects using the toolkit. Plan files under ``docs/plans/``
+    are also excluded: their mid-sprint lifecycle status is local-only until
+    a terminal transition commits them (ADR-054). The ahead-of-origin check
+    still halts when any diverging path is outside the deferred set.
     """
-    # Check working tree, ignoring AET-generated paths. Use
-    # --untracked-files=all so untracked paths are listed individually rather
-    # than collapsed into parent directories.
+    # Check working tree, ignoring AET-generated paths and deferred plan
+    # paths. Use --untracked-files=all so untracked paths are listed
+    # individually rather than collapsed into parent directories.
     result = subprocess.run(
         ["git", "-C", repo_root, "status", "--short", "--untracked-files=all"],
         capture_output=True,
@@ -473,25 +496,47 @@ def check_base_hygiene(
         if len(parts) < 2:
             continue
         path = parts[1]
-        if not _is_ignored_path(path):
+        if not _is_ignored_path(path) and not _is_deferred_path(path):
             dirty_lines.append(line)
     if dirty_lines:
         return False, "Working tree is dirty"
 
-    # Check unpushed commits against the integration branch.
-    result = subprocess.run(
+    # No remote tracking branch means there is nothing to be ahead of or
+    # behind; projects without an origin must not be falsely halted.
+    origin_ref = f"refs/remotes/origin/{integration_branch}"
+    has_origin = (
+        subprocess.run(
+            ["git", "-C", repo_root, "show-ref", "--quiet", "--verify", origin_ref],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+    if not has_origin:
+        return True, ""
+
+    # Check unpushed commits against the integration branch. Plan-only
+    # divergences are allowed; mixed plan+code divergences still halt.
+    diff = subprocess.run(
         [
             "git",
             "-C",
             repo_root,
-            "rev-list",
-            "--count",
+            "diff",
+            "--name-only",
             f"origin/{integration_branch}..{integration_branch}",
         ],
         capture_output=True,
         text=True,
     )
-    if int(result.stdout.strip() or 0) > 0:
+    if diff.returncode == 0:
+        diverging = [p for p in diff.stdout.splitlines() if p.strip()]
+        if diverging and not all(_is_deferred_path(p) for p in diverging):
+            msg = f"Local {integration_branch} is ahead of origin/{integration_branch}"
+            if integration_branch != trunk_branch:
+                msg += f" (trunk: {trunk_branch})"
+            return False, msg
+    else:
+        # Cannot resolve the divergence; fail closed to preserve ADR-027.
         msg = f"Local {integration_branch} is ahead of origin/{integration_branch}"
         if integration_branch != trunk_branch:
             msg += f" (trunk: {trunk_branch})"
