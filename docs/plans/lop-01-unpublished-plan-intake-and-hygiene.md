@@ -194,5 +194,5 @@ because it removes a safety gate and `work_class: critical`.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
