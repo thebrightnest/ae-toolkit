@@ -173,5 +173,5 @@ leak risk warrants a separate review pass over an isolated implementation stage.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
