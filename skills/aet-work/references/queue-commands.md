@@ -31,7 +31,7 @@ Promote an approved plan into the runnable sprint.
 
 1. Resolve `<plan>` to a plan file in `docs/plans/` (by path or by id).
 2. Validate the plan and refuse unless its stage is `plan-approved`.
-3. Set `status: queued`, commit, and push.
+3. Set `status: queued` in the plan frontmatter. No commit or push happens at intake; plan durability is deferred to the PR closure.
 4. Add the task to `.agents/work-queue.json`, computing `ready` or `blocked` from `blocked_by`.
 5. Call the configured projection to relabel the issue to `aet:ready` or `aet:blocked`.
 
@@ -47,7 +47,7 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the orc
 
 2. **Pre-branch git hygiene:**
 
-   Before spawning the first task, the orchestrator ensures the trunk branch is clean and synchronized with its remote tracking branch. If the trunk is dirty, ahead, or behind, the orchestrator prints an actionable reason and halts before creating any worktrees. Trunk hygiene is a mechanical durability hard-stop: the loop halts in unattended mode too (ADR-027). Mutations to `.agents/work-queue.json` and `.agents/work-history.jsonl` are ignored by the dirty check because the orchestrator writes them as part of normal operation; the `.agents/work-queue.json.lock` and `.agents/work-queue.lease` sidecars are ignored too — they linger on disk by design (the lock file is never unlinked; the lease self-reclaims on the next mutation after a crash).
+   Before spawning the first task, the orchestrator ensures the trunk branch is clean and synchronized with its remote tracking branch. If the trunk has dirty non-plan paths, is behind its remote, or is ahead with any non-plan changes, the orchestrator prints an actionable reason and halts before creating any worktrees. Trunk hygiene is a mechanical durability hard-stop: the loop halts in unattended mode too (ADR-027). Mutations to `.agents/work-queue.json` and `.agents/work-history.jsonl` are ignored by the dirty check because the orchestrator writes them as part of normal operation; the `.agents/work-queue.json.lock` and `.agents/work-queue.lease` sidecars are ignored too — they linger on disk by design (the lock file is never unlinked; the lease self-reclaims on the next mutation after a crash). Untracked or modified `docs/plans/*.md` files are also ignored at intake: mid-sprint plan status is local-only until a terminal transition (merged/abandoned) commits it (ADR-054). Operators must treat untracked plans as load-bearing — `git clean -fdx` or git-following backups can discard in-flight work.
 
 3. **Invoke the detached orchestrator:**
 

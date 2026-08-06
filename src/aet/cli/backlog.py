@@ -69,13 +69,13 @@ def _add(args: argparse.Namespace) -> int:
             f"added to the backlog."
         )
 
-    # Commit and push first: the board must never show a status that is not
-    # committed (R-8). This fails closed so a git or network problem aborts
-    # before any remote write.
+    # Update the plan status. For plan paths under docs/plans/, the deferred
+    # durability gate writes the file without committing at intake; terminal
+    # closure still commits the final status.
     rc = commit_and_push_status(plan_file, status)
     if rc != 0:
         return _fail(
-            f"Backlog add failed for {plan_file.name}: could not commit/push "
+            f"Backlog add failed for {plan_file.name}: could not write "
             f"status update. Fix the git state and re-run `aet backlog add`."
         )
 

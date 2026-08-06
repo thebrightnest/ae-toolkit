@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from aet.verifier import read_plan_stage, verify_stage_advancement
+from aet.verifier import read_plan_stage, verify_stage_advancement, working_tree_hash
 
 
 class TestVerifier(unittest.TestCase):
@@ -129,6 +129,39 @@ class TestVerifyStageAdvancement(unittest.TestCase):
 
         params = inspect.signature(verify_stage_advancement).parameters
         self.assertNotIn("retries", params)
+
+
+class TestWorkingTreeHash(unittest.TestCase):
+    def _init_repo(self, repo_root: str) -> None:
+        subprocess.run(["git", "init", "-q", repo_root], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", repo_root, "config", "user.name", "Test User"],
+            check=True,
+        )
+        Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", repo_root, "commit", "-q", "-m", "initial"],
+            check=True,
+        )
+
+    def test_working_tree_hash_includes_untracked_plan_and_is_stable(self):
+        """Untracked plans are part of the working tree fingerprint and hash is stable."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            plan = Path(repo_root, "docs", "plans", "untracked.md")
+            plan.parent.mkdir(parents=True, exist_ok=True)
+            plan.write_text("---\nid: untracked\n---\n\n# Untracked\n", encoding="utf-8")
+
+            h1 = working_tree_hash(repo_root)
+            h2 = working_tree_hash(repo_root)
+
+            self.assertTrue(h1)
+            self.assertEqual(h1, h2)
 
 
 if __name__ == "__main__":

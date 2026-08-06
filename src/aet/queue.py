@@ -17,6 +17,7 @@ from typing import Any, Iterator
 from filelock import FileLock
 
 from aet import plan_size
+from aet.worktree import is_deferred_path
 
 # Tracks whether a queue file was read as a dict wrapper and, if so, its
 # non-task metadata so write_queue can preserve the envelope.
@@ -720,6 +721,11 @@ def commit_and_push_status(
             # file above, so this is a safe local-only short-circuit.
             return 0
     plan_rel = os.path.relpath(plan_abs, os.path.realpath(str(repo_root)))
+
+    # Mid-sprint status updates on deferred plan paths are local-only; the
+    # durable write happens only for terminal transitions (merged/abandoned).
+    if is_deferred_path(plan_rel) and status not in TERMINAL_STATES:
+        return 0
 
     rc, _, err = _run_git("add", plan_rel, cwd=repo_root)
     if rc != 0:

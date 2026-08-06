@@ -2458,6 +2458,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         )
         return 1
 
+    print("   📋 Plan durability is deferred to the PR (docs/plans/ only).")
+
     # Resolve integration_mode once per run through the external-first config
     # chain so every task in the batch sees the same value.
     try:
@@ -2874,6 +2876,8 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         )
         print(f"   📁 Telemetry: {logger.run_dir}")
         return 1
+
+    print("   📋 Plan durability is deferred to the PR (docs/plans/ only).")
 
     # Resolve the workflow once per task and thread it through process_task.
     # A missing or invalid workflow file fails the run loudly at task start;
