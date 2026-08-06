@@ -108,7 +108,9 @@ resolve returns `1` at `:1130-1135`, and a push failure returns non-zero at
 
 - `src/aet/cli/aet_state.py` (`cmd_record_merge` guard and resolution)
 - `tests/state/` — closure resolution and refusal coverage
-- Ship/closure documentation (new refusal)
+- `skills/aet-work/references/queue-commands.md` (`record-merge` — the new
+  refusal joins the documented push-failure outcome)
+- `docs/PIPELINE.md` (closure outcomes)
 
 ## Validation Steps
 

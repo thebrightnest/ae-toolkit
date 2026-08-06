@@ -141,6 +141,22 @@ toggle spans 13 files: 4 source, 9 test).
 - **R-9**: The operator can see the posture: `aet sprint add` reports that
   the plan was queued without publishing, and the orchestrator prints a
   one-line notice at run start that plan durability is deferred to the PR.
+- **R-10**: Every document that instructs or describes the superseded
+  behaviour is corrected in the same change that supersedes it. This is not a
+  cosmetic sync: the planning skills are symlinked and live, so a stale
+  instruction keeps producing the old workflow and the delivered feature is
+  never exercised. Specifically:
+  (a) `skills/aet-plan/SKILL.md` (two places) and
+  `skills/aet-pipeline-plan/SKILL.md` step 3 stop instructing "commit the plan
+  files before queueing" and stop citing an intake guard that no longer exists;
+  (b) `skills/aet-work/references/queue-commands.md` corrects the `sprint add`
+  procedure ("Set `status: queued`, commit, and push") and the base-hygiene
+  paragraph, which currently states that a dirty-or-ahead trunk always halts;
+  (c) `docs/CONVENTIONS.md` and `AGENTS.md` record the narrowed hygiene
+  contract and the removal of `--allow-untracked`;
+  (d) new operator guidance states that untracked plans are now load-bearing —
+  `git clean -fdx`, and any backup or sync that follows git, will discard
+  in-flight work that git no longer knows about.
 
 ## User Stories
 
@@ -196,6 +212,13 @@ toggle spans 13 files: 4 source, 9 test).
 - [ ] Verdict `tree_hash` computed in a worktree with untracked plans matches
   the evidence-comparison path; `aet plans lint` and `aet status` report no
   drift for untracked queued plans (satisfies: R-8).
+- [ ] No document instructs committing a plan before `aet sprint add`, and no
+  document describes a `--allow-untracked` flag or an intake guard that
+  refuses untracked plans: `grep -rn "allow-untracked\|refuses untracked\|
+  commit the plan files" skills/ docs/ AGENTS.md` returns only historical
+  records (`docs/bugs/`, `docs/adr/`, `CHANGELOG.md`) (satisfies: R-10).
+- [ ] The `git clean` hazard is documented where an operator will meet it, not
+  only in the ADR (satisfies: R-10).
 
 ## Technical Notes
 

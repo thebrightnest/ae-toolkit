@@ -8,14 +8,14 @@ status: queued
 security_review: required
 security_review_reason: removes a durability gate that has guarded every unattended run since ADR-027, and changes git-state handling at queue intake; the hygiene narrowing must not admit a stale-base run
 docs_sync: required
-docs_sync_reason: `aet sprint add` loses the `--allow-untracked` flag (user-facing CLI removal), the base-hygiene contract changes, and ADR-027's gate is superseded for plan paths
+docs_sync_reason: `aet sprint add` loses the `--allow-untracked` flag (user-facing CLI removal), the base-hygiene contract changes, ADR-027's gate is superseded for plan paths, and the live planning skills actively instruct the superseded commit-first workflow (R-10)
 ---
 
 # Plan: Stop Publishing Plans at Intake, Narrow Hygiene to Code Paths
 
 ## Context
 
-- PRD: `docs/prds/local-only-plans-prd.md` (R-1, R-2, R-4, R-8, R-9)
+- PRD: `docs/prds/local-only-plans-prd.md` (R-1, R-2, R-4, R-8, R-9, R-10)
 - ADR: `docs/adr/054-plan-documents-are-outside-the-durability-gate.md` —
   decisions 1, 2 and 5 govern this plan.
 - ADR-027 (`docs/adr/027-main-hygiene-halts-unattended.md`) is the gate this
@@ -119,7 +119,15 @@ docs_sync_reason: `aet sprint add` loses the `--allow-untracked` flag (user-faci
    reaches the worktree; a mixed plan+code commit still halts; a non-plan dirty
    path still halts; `tree_hash`, `aet plans lint`, and `aet status` report no
    drift for untracked plans (see Validation Steps) — M (traces: R-4, R-8)
-7. Merge branch to main and verify integration — S
+7. Correct every document that instructs or describes the superseded behaviour:
+   the two commit-first instructions in `skills/aet-plan/SKILL.md` and step 3 of
+   `skills/aet-pipeline-plan/SKILL.md`; the `sprint add` procedure and the
+   base-hygiene paragraph in `skills/aet-work/references/queue-commands.md`;
+   the hygiene contract and `--allow-untracked` removal in
+   `docs/CONVENTIONS.md` and `AGENTS.md`; and new operator guidance that
+   untracked plans are load-bearing, so `git clean -fdx` and git-following
+   backups will discard in-flight work — S (traces: R-10)
+8. Merge branch to main and verify integration — S
 
 **Size definitions:** S ≤ 2 hr / ≤ 150 lines · M ≤ 1 day / ≤ 600 lines.
 
@@ -144,12 +152,23 @@ docs_sync_reason: `aet sprint add` loses the `--allow-untracked` flag (user-faci
 - `src/aet/cli/orchestrator.py` (run-start posture notice)
 - `tests/` — hygiene, intake, verifier, plans-lint, status coverage
 - `docs/CONVENTIONS.md`, `AGENTS.md` (hygiene contract, CLI removal)
+- `skills/aet-plan/SKILL.md` (two commit-first instructions: the queue-handoff
+  step and its restatement in the completion checklist)
+- `skills/aet-pipeline-plan/SKILL.md` (step 3 — "Commit the plan files … before
+  queueing … satisfies the intake durability guard, which refuses untracked
+  plans"; the whole rationale is superseded)
+- `skills/aet-work/references/queue-commands.md` (`sprint add` step "Set
+  `status: queued`, commit, and push"; base-hygiene paragraph's
+  "dirty, ahead, or behind" halt description)
 
 ## Validation Steps
 
 - [ ] Lint passes
 - [ ] Tests pass
-- [ ] R-trace coverage: R-1, R-2, R-4, R-8, R-9 each covered by ≥ 1 task
+- [ ] R-trace coverage: R-1, R-2, R-4, R-8, R-9, R-10 each covered by ≥ 1 task
+- [ ] R-10 is checkable, not asserted: `grep -rn "allow-untracked\|refuses
+      untracked\|commit the plan files" skills/ docs/ AGENTS.md` returns only
+      historical records (`docs/bugs/`, `docs/adr/`, `CHANGELOG.md`)
 - [ ] New source files: none introduced; the constant lives in `worktree.py`
       beside `AET_IGNORED_PATHS` and is covered by the hygiene tests
 - [ ] Unit: deferred-path membership, terminality gate. Integration: intake →
