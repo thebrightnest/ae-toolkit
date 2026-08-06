@@ -229,6 +229,15 @@ def seed_task_plan(
             f"Could not stage {rel_path} for {task_id}: {add.stderr.strip()}"
         )
 
+    # Skip when the worktree branch already carries the same plan content
+    # (e.g. a resumed run on an existing worktree).
+    staged = subprocess.run(
+        ["git", "-C", worktree_dir, "diff", "--cached", "--quiet"],
+        capture_output=True,
+    )
+    if staged.returncode == 0:
+        return False
+
     commit = subprocess.run(
         ["git", "-C", worktree_dir, "commit", "-m", f"[{task_id}] Seed plan"],
         capture_output=True,

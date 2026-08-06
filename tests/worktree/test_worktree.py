@@ -906,6 +906,37 @@ class TestSeedTaskPlan(unittest.TestCase):
             self.assertEqual(merge.returncode, 0, merge.stderr)
             self.assertEqual(plan.read_text(encoding="utf-8"), "plan")
 
+    def test_skips_when_worktree_already_carries_unchanged_plan(self):
+        """Resuming a run does not fail when the plan was already seeded."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            worktree_dir = worktree.create_worktree(
+                repo_root, "task-001", "origin/main"
+            )
+            plan = Path(repo_root, "docs", "plans", "task-001.md")
+            plan.parent.mkdir(parents=True, exist_ok=True)
+            plan.write_text("plan", encoding="utf-8")
+
+            worktree.copy_untracked_files(repo_root, worktree_dir)
+            first = worktree.seed_task_plan(
+                repo_root, worktree_dir, str(plan), "task-001", "main"
+            )
+            self.assertTrue(first)
+
+            # A second call with the same plan content finds nothing to commit.
+            second = worktree.seed_task_plan(
+                repo_root, worktree_dir, str(plan), "task-001", "main"
+            )
+            self.assertFalse(second)
+
+            ahead = subprocess.run(
+                ["git", "-C", worktree_dir, "rev-list", "--count", "origin/main..HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(ahead, "1")
+
 
 class TestRemoveWorktreeClassification(unittest.TestCase):
     def test_removes_plan_only_worktree(self):
