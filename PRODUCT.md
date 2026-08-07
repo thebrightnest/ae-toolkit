@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.6.0
+## Current Version: 1.7.0
 
-Last updated: 2026-07-29
+Last updated: 2026-08-07
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, detached-only run invocation with bounded completion reports, adapter-resolved supervision defaults, night-shift runtime resilience, and configurable branch models including single-PR integration mode.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, detached-only run invocation with bounded completion reports, adapter-resolved supervision defaults, night-shift runtime resilience, configurable branch models including single-PR integration mode, and local-only plans that defer durability to the PR.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -71,6 +71,13 @@ Keep projects and the toolkit itself healthy.
 ---
 
 ## What's New
+
+### What's New in v1.7.0
+
+- **Local-only plans** — queue and run `docs/plans/*.md` files that exist only on your machine; the plan lands in its task branch's PR diff and terminal status is still written durably at closure.
+- **Plan overlay snapshots** — the orchestrator always works from the latest local plan text in the worktree, so mid-sprint edits take effect without a separate publish step.
+- **Focused PR diffs** — each task branch is seeded with only its own plan file, keeping implementation PRs free of unrelated planning documents.
+- **Fail-closed closure** — `aet ship close` now refuses loudly when a plan file cannot be resolved instead of recording a merge silently.
 
 ### What's New in v1.6.0
 

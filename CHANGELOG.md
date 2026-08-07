@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.7.0] — 2026-08-07
+
+### Added
+
+- **Local-only plans** — `docs/plans/*.md` files are no longer committed or pushed at intake. A plan flows from `aet sprint add` through implementation and lands in its task branch's PR diff; terminal status is still written durably at merge closure (lop-01, lop-02, lop-03, ADR-054).
+- **Plan overlay snapshot** — the orchestrator copies the current working-tree version of a task's plan into its worktree regardless of git state, so mid-sprint plan edits take effect without a publish step (lop-02).
+- **Task-branch plan seeding** — the first commit on a task branch adds only that task's own plan file, keeping PR diffs focused (lop-02).
+
+### Fixed
+
+- **Closure fails closed on missing plan** — `aet ship close` and the sealed-task retry path now refuse silently when a plan file cannot be resolved from the checkout or merged branch, and report the recovery path (lop-03).
+
+### Documentation
+
+- Added ADR-054 covering plan documents outside the durability gate.
+- Updated planning skills and `aet-work` references to remove the obsolete "commit plans before queueing" instruction and document the `git clean` hazard for untracked plans.
+
+---
+
 ## [1.6.0] — 2026-07-29
 
 ### Added
