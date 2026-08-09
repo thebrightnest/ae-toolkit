@@ -30,22 +30,25 @@ operational path here.
 
 ## Task List
 
-1. New module `src/aet/ledger.py`: event schema — `kind` ∈ {`cut`, `stage`,
+1. [x] New module `src/aet/ledger.py`: event schema — `kind` ∈ {`cut`, `stage`,
    `verdict`, `land`}, `ref_kind` ∈ {`git-sha`, `pr`, `plan-hash`,
    `evidence-path`}, deterministic id from
    `source:task:kind:(ref | occurred_at)`, `occurred_at` vs `created_at`
    split — M (traces: R-2)
-2. Idempotent write path at the store boundary: duplicate ids are no-ops
+2. [x] Idempotent write path at the store boundary: duplicate ids are no-ops
    (INSERT-IGNORE semantics); events without a ref require an explicit
    caller-supplied `occurred_at`, rejected otherwise for every caller;
    reserved `ingest-backfill` source rejected on the write path — S (traces: R-2)
-3. Remove the chained `content_hash` from the operational path: envelope
+3. [x] Remove the chained `content_hash` from the operational path: envelope
    carries a `schema_version` field instead; `StampMismatch` and its refusal
    path are deleted (warn-and-continue becomes the only degradation mode) — S
    (traces: R-3)
-4. Emit events from the two existing choke points: `cut` at queue intake
+4. [x] Emit events from the two existing choke points: `cut` at queue intake
    (`aet sprint add`), `land` at terminal closure — S (traces: R-2)
-5. Merge branch to main and verify integration — S
+   [Changed: `land` is emitted from `aet state transition`'s terminal path in
+   `src/aet/cli/aet_state.py` rather than from `src/aet/cli/ship.py`, so any
+   terminal closure records the event.]
+5. [ ] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -74,21 +77,22 @@ operational path here.
 - `src/aet/backends/git_refs_backend.py`
 - `src/aet/backends/base.py`
 - `src/aet/cli/sprint.py` (cut emission)
-- `src/aet/cli/ship.py` (land emission)
+- `src/aet/cli/aet_state.py` (land emission via terminal transition)
+- `src/aet/cli/ship.py` (not modified; land emission lives in `aet_state.py`)
 - `tests/ledger/test_ledger.py` (new)
 - `tests/backends/test_git_refs_backend.py`
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`make test`)
-- [ ] `tests/ledger/test_ledger.py` covers `src/aet/ledger.py`: deterministic
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`make test`)
+- [x] `tests/ledger/test_ledger.py` covers `src/aet/ledger.py`: deterministic
   ids, duplicate-write no-op, missing-`occurred_at` rejection,
   `ingest-backfill` rejection, `occurred_at`≠`created_at` (unit)
-- [ ] Envelope round-trip carries `schema_version` and no `content_hash`;
+- [x] Envelope round-trip carries `schema_version` and no `content_hash`;
   a hand-edited envelope no longer bricks reads (integration,
   `tests/backends/test_git_refs_backend.py`)
-- [ ] R-trace coverage: R-2, R-3 covered by tasks 1–4
+- [x] R-trace coverage: R-2, R-3 covered by tasks 1–4
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -104,5 +108,5 @@ ADR-047).
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

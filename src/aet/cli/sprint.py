@@ -10,6 +10,7 @@ GitHub Issues labels).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -19,6 +20,7 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend, resolve_config  # noqa: E402
+from aet.ledger import Ledger  # noqa: E402
 from aet.plan_parser import (  # noqa: E402
     new_task_from_plan,
     resolve_plan_arg,
@@ -152,6 +154,19 @@ def _add(args: argparse.Namespace) -> int:
         return 1
 
     backend.save(queue)
+
+    # Record the intake event in the content-addressed ledger.
+    ledger_path = Path(args.queue_file).resolve().parent / "ledger.jsonl"
+    ledger = Ledger(ledger_path)
+    plan_hash = hashlib.sha256(plan_file.read_bytes()).hexdigest()
+    ledger.write_event(
+        source="sprint-add",
+        task=task["id"],
+        kind="cut",
+        ref=plan_hash,
+        ref_kind="plan-hash",
+    )
+
     projections.on_add(task, is_new=True)
     backend.close()
 
