@@ -140,6 +140,7 @@ def _run(
     backend = create_backend(
         config_path=config_path, queue_file=queue_file, history_file=history_file
     )
+    backend.fetch()
     try:
         data = backend.load()
         queue = data["queue"]

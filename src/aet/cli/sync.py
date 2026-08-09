@@ -34,6 +34,7 @@ def _sync(args: argparse.Namespace) -> int:
         queue_file=queue_file,
         history_file=history_file,
     )
+    backend.fetch()
 
     # Ensure the append-only history log exists so commands recreate missing
     # files on demand without waiting for a terminal record to be appended.

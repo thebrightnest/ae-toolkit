@@ -64,6 +64,7 @@ def _add(args: argparse.Namespace) -> int:
         queue_file=args.queue_file,
         history_file=args.history_file,
     )
+    backend.fetch()
     projections = resolve_projections(resolve_config(args.config))
 
     try:
@@ -154,6 +155,7 @@ def _add(args: argparse.Namespace) -> int:
         return 1
 
     backend.save(queue)
+    backend.push()
 
     # Record the intake event in the content-addressed ledger.
     ledger_path = Path(args.queue_file).resolve().parent / "ledger.jsonl"

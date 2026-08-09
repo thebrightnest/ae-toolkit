@@ -2378,6 +2378,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     repo_root = args.repo_root
     max_jobs = min(args.max_jobs, 8)
     backend = _make_backend(queue_file)
+    backend.fetch()
     breaker_store = breaker.BreakerStore(repo_root)
     systemic_tally = breaker_store.load()
 
@@ -2946,6 +2947,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         # (not a child spawned by run_batch), transition the task to in-progress
         # and record branch/worktree so aet-state record-merge works after shipping.
         backend = _make_backend(queue_file)
+        backend.fetch()
         queued_task = None
         if os.path.exists(queue_file) and not spawned_by_batch:
             queue = backend.load()["queue"]
