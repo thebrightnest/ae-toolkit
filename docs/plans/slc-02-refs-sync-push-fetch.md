@@ -95,5 +95,5 @@ reads them; no data migration is involved.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
