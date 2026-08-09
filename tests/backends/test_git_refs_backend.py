@@ -120,23 +120,25 @@ def test_wrapper_envelope_roundtrip(repo: Path) -> None:
     }
     backend.save([_task("frh-13-git-refs-backend-core")], wrapper=wrapper)
 
-    # Envelope is stored as a blob at the meta ref. Alongside the caller
-    # metadata it carries the tamper-evidence stamp (chained content hash).
+    # Envelope is stored as a blob at the meta ref. It carries caller metadata
+    # and a schema_version; the non-commutative chained content_hash is gone.
     sha = _git(repo, "rev-parse", "--verify", "-q", ENVELOPE_REF).stdout.strip()
     assert sha
     stored = json.loads(_git(repo, "cat-file", "-p", sha).stdout)
     assert {k: stored[k] for k in wrapper} == wrapper
-    assert "content_hash" in stored
-    assert "prev_content_hash" in stored
+    assert stored.get("schema_version") == 1
+    assert "content_hash" not in stored
+    assert "prev_content_hash" not in stored
 
     # A fresh instance re-reads the envelope on load and preserves the caller
-    # metadata on save (the stamp keys advance with the chain).
+    # metadata on save.
     again = _backend()
     again.load()
     again.save([_task("frh-13-git-refs-backend-core")])
     sha2 = _git(repo, "rev-parse", "--verify", "-q", ENVELOPE_REF).stdout.strip()
     stored2 = json.loads(_git(repo, "cat-file", "-p", sha2).stdout)
     assert {k: stored2[k] for k in wrapper} == wrapper
+    assert stored2.get("schema_version") == 1
 
 
 def test_refs_visible_from_second_worktree(repo: Path) -> None:
@@ -196,6 +198,27 @@ def test_concurrent_saves_of_different_tasks_lose_nothing(repo: Path) -> None:
     final = _by_id(_backend().load()["queue"])
     assert final["task-a"]["marker"] == "alpha"
     assert final["task-b"]["marker"] == "beta"
+
+
+def test_hand_edited_envelope_does_not_brick_reads(repo: Path) -> None:
+    backend = _backend()
+    backend.save([_task("task-a")])
+
+    # Hand-edit the envelope blob out-of-band to a bogus schema_version.
+    bogus = json.dumps({"schema_version": 999}).encode("utf-8")
+    result = subprocess.run(
+        ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
+        input=bogus,
+        capture_output=True,
+        check=True,
+    )
+    oid = result.stdout.decode().strip()
+    _git(repo, "update-ref", ENVELOPE_REF, oid)
+
+    # The backend reads live refs as ground truth; a hand-edited envelope
+    # no longer raises an integrity error.
+    loaded = _backend().load()
+    assert _by_id(loaded["queue"]).keys() == {"task-a"}
 
 
 def test_clear_error_outside_git_repo(tmp_path: Path) -> None:

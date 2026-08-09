@@ -22,11 +22,11 @@ class TaskBackend(ABC):
         Returns a dict with at least ``queue`` (list of task dicts) and
         ``history`` (list of settled task dicts).
 
-        ``verify`` controls the tamper-evident envelope check: when true
-        (the default) a stamped queue whose tasks no longer match its
-        ``content_hash`` raises ``QueueIntegrityError`` so mutating callers
-        fail closed. Recovery commands (``audit``, ``heal``) pass
-        ``verify=False`` to load the unverified data they exist to repair.
+        ``verify`` controls the tamper-evident envelope check where the backend
+        supports one.  The JSON backend verifies a ``content_hash`` stamp; the
+        git-refs backend ignores the flag because its envelope carries a
+        ``schema_version`` and the live refs are treated as ground truth
+        (ADR-055).
         """
 
     @abstractmethod

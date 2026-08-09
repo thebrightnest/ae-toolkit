@@ -7,19 +7,22 @@ validates transition legality, and updates footers + queue JSON atomically.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 
 from aet import queue as queue_lib  # noqa: E402
 from aet.backends.factory import create_backend, resolve_config  # noqa: E402, I001
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
+from aet.ledger import Ledger  # noqa: E402
 
 _INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
 
@@ -465,6 +468,50 @@ def _apply_transition(
             )
         backend.seal(task["id"], history_file)
         backend.close_task(task["id"], evidence)
+
+        # Record the terminal closure event in the content-addressed ledger.
+        ledger_path = Path(backend.queue_file).resolve().parent / "ledger.jsonl"
+        ledger = Ledger(ledger_path)
+        merge_ref = task.get("merge_commit")
+        land_payload = _land_digest(task)
+        if merge_ref:
+            ledger.write_event(
+                source="aet-state",
+                task=task["id"],
+                kind="land",
+                ref=merge_ref,
+                ref_kind="git-sha",
+                payload=land_payload,
+            )
+        else:
+            occurred_at = task.get("completed_at") or datetime.now(
+                timezone.utc
+            ).isoformat()
+            ledger.write_event(
+                source="aet-state",
+                task=task["id"],
+                kind="land",
+                occurred_at=occurred_at,
+                payload=land_payload,
+            )
+
+
+def _land_digest(task: dict[str, Any]) -> dict[str, Any]:
+    """Build the R-8 closure digest payload for a ``land`` event."""
+    digest: dict[str, Any] = {
+        "merge_ref": task.get("merge_commit") or task.get("branch")
+    }
+    plan_file = task.get("plan_file")
+    if plan_file:
+        path = Path(plan_file)
+        try:
+            content = path.read_bytes()
+            digest["plan_hash"] = hashlib.sha256(content).hexdigest()
+            text = content.decode("utf-8", errors="ignore")
+            digest["prd_r_ids"] = sorted(set(re.findall(r"R-\d+", text)))
+        except OSError:
+            pass
+    return digest
 
 
 def _set_stage(task, stage, by="orch"):
