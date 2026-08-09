@@ -4,7 +4,7 @@ size: M
 work_class: critical
 blocked_by: []
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: touches the persisted state store and its integrity model
 docs_sync: required
@@ -108,5 +108,5 @@ ADR-047).
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
