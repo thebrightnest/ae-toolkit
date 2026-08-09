@@ -20,13 +20,15 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import click
 import typer
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import evidence  # noqa: E402
+from aet import evidence, telemetry  # noqa: E402
+from aet.ledger import Ledger  # noqa: E402
 from aet.plan_parser import stage_from_plan, title_from_plan  # noqa: E402
 from aet.workflow import Workflow, WorkflowError, load_workflow  # noqa: E402
 
@@ -48,6 +50,21 @@ LEGACY_BUCKETS: dict[str, str] = {
     "awaiting_merge": "awaiting-merge",
     "merged": "closed",
     "abandoned": "closed",
+}
+
+# Map gate kinds to the stage name written in verdict records and plan footers.
+KIND_TO_STAGE: dict[str, str] = {
+    "qa": "qa-complete",
+    "review": "reviewed",
+    "cso": "secure",
+    "sync-docs": "synced",
+}
+
+KIND_TO_SKILL: dict[str, str] = {
+    "qa": "aet-qa",
+    "review": "aet-review",
+    "cso": "aet-cso",
+    "sync-docs": "aet-sync-docs",
 }
 
 
@@ -119,32 +136,134 @@ def run_review(plans_dir: Path) -> int:
     return 0
 
 
+def _parse_pytest_report(path: Path) -> dict[str, Any]:
+    """Extract test counts and command from a pytest JSON report.
+
+    Supports the ``pytest-json-report`` shape (``summary.*``) and a minimal
+    flat schema used by the builder (``tests_total/passed/failed`` and
+    ``test_command``).
+    """
+    raw = path.read_text(encoding="utf-8")
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError("pytest report must be a JSON object")
+
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else data
+
+    total = summary.get("total", summary.get("tests_total", 0))
+    passed = summary.get("passed", summary.get("tests_passed", 0))
+    failed = summary.get("failed", summary.get("tests_failed", 0))
+
+    command = data.get("test_command")
+    if not command:
+        command = data.get("command", "pytest")
+
+    return {
+        "tests_total": int(total or 0),
+        "tests_passed": int(passed or 0),
+        "tests_failed": int(failed or 0),
+        "test_command": str(command),
+    }
+
+
+def _load_divergences(values: list[str]) -> list[str]:
+    """Turn divergence options into a list of strings.
+
+    Values that name an existing file have their contents read; inline
+    strings are kept as-is.
+    """
+    items: list[str] = []
+    for value in values:
+        path = Path(value)
+        if path.is_file():
+            items.append(path.read_text(encoding="utf-8").strip())
+        else:
+            items.append(value)
+    return items
+
+
+def _build_payload(
+    *,
+    stage: str,
+    verdict: str,
+    summary: str | None,
+    from_pytest: Path | None,
+    divergences: list[str],
+    task_id: str,
+    test_command: str | None,
+) -> dict[str, Any]:
+    """Construct a verdict record from CLI builder options."""
+    generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    record: dict[str, Any] = {
+        "task_id": task_id,
+        "stage": KIND_TO_STAGE[stage],
+        "skill": KIND_TO_SKILL[stage],
+        "verdict": verdict,
+        "summary": summary or "",
+        "generated_at": generated_at,
+    }
+
+    if stage == "qa":
+        if from_pytest is None:
+            raise ValueError("--from-pytest is required for qa verdicts")
+        report = _parse_pytest_report(from_pytest)
+        if test_command:
+            report["test_command"] = test_command
+        record.update(report)
+    elif stage in ("review", "cso"):
+        record["findings"] = []
+    elif stage == "sync-docs":
+        record["divergences"] = _load_divergences(divergences)
+
+    return record
+
+
 def _submit(args: argparse.Namespace) -> int:
     stage = args.stage
     if stage not in evidence.SCHEMAS:
         known = ", ".join(sorted(evidence.SCHEMAS))
         return _fail(f"unknown stage {stage!r} (expected one of: {known})")
 
-    evidence_file = Path(args.evidence)
-    try:
-        raw = evidence_file.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return _fail(f"evidence file not found: {evidence_file}")
-    except OSError as exc:
-        return _fail(f"cannot read evidence file {evidence_file}: {exc}")
+    # Builder mode: construct the payload from CLI options when --evidence is
+    # omitted. This is the sanctioned replacement for hand-rolled JSON.
+    if getattr(args, "evidence", None) is None:
+        task_id = os.environ.get("AET_TASK_ID")
+        if not task_id:
+            return _fail("builder mode requires AET_TASK_ID (or pass --evidence)")
 
-    try:
-        record = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        return _fail(f"evidence file is not valid JSON ({evidence_file}): {exc}")
+        try:
+            record = _build_payload(
+                stage=stage,
+                verdict=args.verdict,
+                summary=getattr(args, "summary", None),
+                from_pytest=Path(args.from_pytest) if args.from_pytest else None,
+                divergences=list(args.divergence) if args.divergence else [],
+                task_id=task_id,
+                test_command=getattr(args, "test_command", None),
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return _fail(f"cannot build {stage!r} verdict: {exc}")
+    else:
+        evidence_file = Path(args.evidence)
+        try:
+            raw = evidence_file.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return _fail(f"evidence file not found: {evidence_file}")
+        except OSError as exc:
+            return _fail(f"cannot read evidence file {evidence_file}: {exc}")
 
-    if not isinstance(record, dict):
-        return _fail(f"evidence payload must be a JSON object ({evidence_file})")
+        try:
+            record = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            return _fail(f"evidence file is not valid JSON ({evidence_file}): {exc}")
+
+        if not isinstance(record, dict):
+            return _fail(f"evidence payload must be a JSON object ({evidence_file})")
 
     # Stamp tree_hash before validating so the skill writer contract (which
     # does not require tree_hash) stays unchanged — ADR-025.
     if "tree_hash" not in record:
-        root = evidence.telemetry.resolve_repo_root()
+        root = telemetry.resolve_repo_root()
         record = {**record, "tree_hash": evidence.verifier.working_tree_hash(str(root))}
 
     try:
@@ -165,6 +284,24 @@ def _submit(args: argparse.Namespace) -> int:
     except OSError as exc:
         return _fail(f"cannot write verdict: {exc}")
 
+    # Record the verdict event in the content-addressed ledger.
+    try:
+        repo_root = telemetry.resolve_repo_root()
+        ledger_path = repo_root / ".agents" / "ledger.jsonl"
+        ledger = Ledger(ledger_path)
+        ledger.write_event(
+            source="aet-gate",
+            task=task_id,
+            kind="verdict",
+            ref=str(written),
+            ref_kind="evidence-path",
+            payload={"stage": stage, "verdict": record["verdict"]},
+        )
+    except Exception as exc:
+        # A ledger write failure must not roll back the verdict; it is
+        # advisory provenance. Surface the error but keep the gate exit clean.
+        print(f"warning: ledger verdict event failed: {exc}", file=sys.stderr)
+
     print(f"✓ {stage} verdict written: {written}")
     return 0
 
@@ -174,12 +311,44 @@ app = typer.Typer()
 
 @app.command("submit")
 def submit(
-    stage: str = typer.Option(..., "--stage", help="Verdict stage: qa, review, cso, or sync-docs"),
-    verdict: str = typer.Option(..., "--verdict", help="Declared verdict; must match the payload's verdict field"),
-    evidence: str = typer.Option(..., "--evidence", help="Path to the verdict JSON payload file"),
+    stage: str = typer.Option(
+        ..., "--stage", help="Verdict stage: qa, review, cso, or sync-docs"
+    ),
+    verdict: str = typer.Option(
+        ..., "--verdict", help="Declared verdict; must match the payload's verdict field"
+    ),
+    evidence_path: str | None = typer.Option(
+        None, "--evidence", help="Path to the verdict JSON payload file"
+    ),
+    from_pytest: str | None = typer.Option(
+        None, "--from-pytest", help="Path to a pytest JSON report (qa builder mode)"
+    ),
+    summary: str | None = typer.Option(
+        None, "--summary", help="One-line verdict summary"
+    ),
+    divergence: list[str] = typer.Option(
+        [],
+        "--divergence",
+        help="Divergence item or file path (sync-docs builder mode; repeatable)",
+    ),
+    test_command: str | None = typer.Option(
+        None, "--test-command", help="Override the test command recorded in qa verdicts"
+    ),
 ) -> None:
-    """Validate and write a stage verdict."""
-    args = argparse.Namespace(stage=stage, verdict=verdict, evidence=evidence)
+    """Validate and write a stage verdict.
+
+    When ``--evidence`` is omitted the command builds the verdict payload
+    from the supplied options. In that mode ``AET_TASK_ID`` must be set.
+    """
+    args = argparse.Namespace(
+        stage=stage,
+        verdict=verdict,
+        evidence=evidence_path,
+        from_pytest=from_pytest,
+        summary=summary,
+        divergence=divergence,
+        test_command=test_command,
+    )
     rc = _submit(args)
     raise typer.Exit(rc)
 

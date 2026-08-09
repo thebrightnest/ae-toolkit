@@ -121,10 +121,6 @@ Before updating the plan.md footer, write a JSON verdict record so the orchestra
    aet gate submit --stage qa --verdict <pass|fail> --evidence <payload-file>
    ```
 
-   The CLI schema-validates the payload, resolves the destination (`$AET_EVIDENCE_PATH` → `$AET_EVIDENCE_PATH_QA` → `~/.aet/reports/{project-slug}/{task-id}/qa.json`), and exits non-zero with a named error on any failure. If `aet gate submit` is unavailable, fall back to writing equivalent JSON to the path from `resolve_verdict_path(task_id, "qa")` in `aet-work/lib/evidence.py`.
-
-3. Only update the plan.md footer to `*Stage: qa-complete*` after `aet gate submit` exits 0.
-
 **Browser tooling preference:**
 
 - Prefer a compiled CLI browser tool (e.g., Playwright CLI) over MCP-based browser automation

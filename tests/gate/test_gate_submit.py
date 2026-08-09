@@ -90,10 +90,11 @@ class TestGateSubmit(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("--verdict", err)
 
-    def test_missing_evidence_flag_exits_nonzero(self):
+    def test_missing_evidence_flag_uses_builder_mode(self):
+        """Without --evidence the command enters builder mode and validates inputs."""
         rc, _out, err = self._run(["submit", "--stage", "qa", "--verdict", "pass"])
-        self.assertEqual(rc, 2)
-        self.assertIn("--evidence", err)
+        self.assertEqual(rc, 1)
+        self.assertIn("cannot build 'qa' verdict", err)
 
     def test_evidence_file_not_found_exits_nonzero(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -244,6 +245,169 @@ class TestGateSubmit(unittest.TestCase):
             self.assertEqual(rc, 0, err)
             written = json.loads(dest.read_text(encoding="utf-8"))
             self.assertEqual(written["tree_hash"], "abc123")
+
+
+class TestGateSubmitBuilder(unittest.TestCase):
+    """`gate submit` can build verdict payloads from CLI options."""
+
+    def _run(self, argv):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            rc = gate.main(argv)
+        return rc, stdout.getvalue(), stderr.getvalue()
+
+    def _write_pytest_report(self, tmp: Path, total=10, passed=9, failed=1) -> Path:
+        report = tmp / "pytest-report.json"
+        report.write_text(
+            json.dumps(
+                {
+                    "summary": {
+                        "total": total,
+                        "passed": passed,
+                        "failed": failed,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        return report
+
+    def test_submit_builds_qa_payload_from_pytest(self):
+        """--from-pytest produces a valid qa verdict record."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "qa.json"
+            report = self._write_pytest_report(tmp, total=12, passed=12, failed=0)
+            env = {
+                "AET_EVIDENCE_PATH": str(dest),
+                "AET_TASK_ID": "twe-01",
+                "AET_REPO_ROOT": str(tmp),
+            }
+            with patch.dict(os.environ, env, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "pass",
+                        "--from-pytest",
+                        str(report),
+                        "--summary",
+                        "All tests passed",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["task_id"], "twe-01")
+            self.assertEqual(written["stage"], "qa-complete")
+            self.assertEqual(written["skill"], "aet-qa")
+            self.assertEqual(written["verdict"], "pass")
+            self.assertEqual(written["summary"], "All tests passed")
+            self.assertEqual(written["tests_total"], 12)
+            self.assertEqual(written["tests_passed"], 12)
+            self.assertEqual(written["tests_failed"], 0)
+            self.assertIn("test_command", written)
+
+    def test_submit_builds_sync_docs_payload_from_divergence(self):
+        """--divergence populates the sync-docs verdict record."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "sync-docs.json"
+            divergence_file = tmp / "divergence.md"
+            divergence_file.write_text("PRD task list is out of date", encoding="utf-8")
+            env = {
+                "AET_EVIDENCE_PATH": str(dest),
+                "AET_TASK_ID": "twe-02",
+                "AET_REPO_ROOT": str(tmp),
+            }
+            with patch.dict(os.environ, env, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "sync-docs",
+                        "--verdict",
+                        "fail",
+                        "--summary",
+                        "Docs diverged from implementation",
+                        "--divergence",
+                        str(divergence_file),
+                        "--divergence",
+                        "inline divergence note",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["task_id"], "twe-02")
+            self.assertEqual(written["stage"], "synced")
+            self.assertEqual(written["skill"], "aet-sync-docs")
+            self.assertEqual(written["verdict"], "fail")
+            self.assertEqual(written["divergences"], [
+                "PRD task list is out of date",
+                "inline divergence note",
+            ])
+
+    def test_submit_builder_requires_task_id(self):
+        """Builder mode fails closed when task_id cannot be determined."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            report = self._write_pytest_report(tmp)
+            with patch.dict(os.environ, {"AET_REPO_ROOT": str(tmp)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "pass",
+                        "--from-pytest",
+                        str(report),
+                    ]
+                )
+            self.assertEqual(rc, 1, err)
+            self.assertIn("task_id", err.lower())
+
+    def test_submit_emits_ledger_verdict_event(self):
+        """A successful submit writes a verdict event to the ledger."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            agents_dir = tmp / ".agents"
+            agents_dir.mkdir()
+            dest = tmp / "qa.json"
+            report = self._write_pytest_report(tmp)
+            env = {
+                "AET_EVIDENCE_PATH": str(dest),
+                "AET_TASK_ID": "twe-03",
+                "AET_REPO_ROOT": str(tmp),
+            }
+            with patch.dict(os.environ, env, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "pass",
+                        "--from-pytest",
+                        str(report),
+                        "--summary",
+                        "ok",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            ledger_path = agents_dir / "ledger.jsonl"
+            self.assertTrue(ledger_path.exists(), "ledger file was not created")
+            events = [
+                json.loads(line)
+                for line in ledger_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            verdict_events = [e for e in events if e.get("kind") == "verdict"]
+            self.assertEqual(len(verdict_events), 1)
+            self.assertEqual(verdict_events[0]["source"], "aet-gate")
+            self.assertEqual(verdict_events[0]["task"], "twe-03")
+            self.assertEqual(verdict_events[0]["payload"]["verdict"], "pass")
 
 
 class TestGateDispatcherRouting(unittest.TestCase):

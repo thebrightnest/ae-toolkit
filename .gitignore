@@ -12,6 +12,8 @@ __pycache__
 .agents/work-queue.json.lock
 .agents/work-queue.lease
 .agents/work-history.jsonl
+.agents/ledger.jsonl
+.agents/ledger.jsonl.lock
 .agents/runs/
 aet-work.log
 aet-work-*.log
