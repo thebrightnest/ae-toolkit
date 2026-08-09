@@ -108,5 +108,5 @@ ADR-047).
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
