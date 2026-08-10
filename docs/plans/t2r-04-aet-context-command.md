@@ -251,5 +251,5 @@ typer), and security review stays `required` per frontmatter.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-work`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
