@@ -106,4 +106,5 @@ readable by the pre-change code.
 
 ---
 
-*Stage: reviewed*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
