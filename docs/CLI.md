@@ -242,6 +242,38 @@ Print a human-readable backlog review grouped by pipeline stage.
 
 - `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
 
+## `aet handoff`
+
+Run-scoped handoff note commands.
+
+### Subcommands
+
+- `append`: Append one entry to the run's handoff note.
+- `show`: Render the run's handoff note as a prompt block.
+
+## `aet handoff append`
+
+Append one entry to the run's handoff note.
+
+### Options
+
+- `--stage` *str* — Stage name recording this entry. (required)
+- `--decision` *str* — Repeatable decision taken in this stage. (default: `[]`)
+- `--pre-existing-failure` *str* — Repeatable pre-existing failure encountered in this stage. (default: `[]`)
+- `--validation-command` *str* — Repeatable validation command run in this stage. (default: `[]`)
+- `--evidence-path` *str* — Path to the verdict evidence produced by this stage.
+- `--run-id` *str* — Run id (default: $AET_RUN_ID).
+- `--repo-root` *str* — Repository root (default: current directory).
+
+## `aet handoff show`
+
+Render the run's handoff note as a prompt block.
+
+### Options
+
+- `--run-id` *str* — Run id (default: $AET_RUN_ID).
+- `--repo-root` *str* — Repository root (default: current directory).
+
 ## `aet hooks`
 
 Git hook installation and management.
@@ -266,6 +298,28 @@ Check gate evidence for pushed refs read from stdin.
 ### Options
 
 - `--repo` *str* — Repo root (default: current git toplevel).
+
+## `aet learnings`
+
+Append-only learning journal commands.
+
+### Subcommands
+
+- `append`: Append one canonical learning entry to ``.agents/learnings.jsonl``.
+
+## `aet learnings append`
+
+Append one canonical learning entry to ``.agents/learnings.jsonl``.
+
+### Options
+
+- `--problem` *str* — What went wrong or what was misunderstood. (required)
+- `--layer` *str* — The layer (file, command, skill, etc.) where the issue lives. (required)
+- `--fix` *str* — The concrete change that prevents recurrence. (required)
+- `--prevents` *str* — The failure this learning prevents. (required)
+- `--trigger` *str* — Keyword trigger(s) for retrieval (repeatable). (default: `[]`)
+- `--recurrence` *int* — How many times this issue has recurred (positive integer).
+- `--file` *path* — Path to the learnings JSONL file. (default: `.agents/learnings.jsonl`)
 
 ## `aet plan`
 
@@ -386,6 +440,7 @@ Pre-merge gate, PR creation, and post-merge closure.
 - `merge`: Run the gate, detect conflicts, merge directly into a target branch, and close.
 - `open`: Run the gate and open a PR for the plan.
 - `record-merge`: Hidden alias for close.
+- `verify`: Verify a branch has merged without mutating state.
 
 ## `aet ship default`
 
@@ -427,6 +482,19 @@ Run the gate, detect conflicts, merge directly into a target branch, and close.
 - `--branch` *str* — Target branch to merge into (default: main). (default: `main`)
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
+## `aet ship verify`
+
+Verify a branch has merged without mutating state.
+
+### Options
+
+- `task_id` *str* — Task ID to verify, or path to the plan markdown file. (required)
+- `plan_or_queue` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan).
+- `queue` *str* — Path to the work queue JSON file. (default: `.agents/work-queue.json`)
+- `--squash-fallback` *boolean* — Enable diff-based squash-merge fallback when ancestry and gh fail. (default: `False`)
+- `--branch` *str* — Branch name to verify. Overrides the task's branch field.
+- `--target-branch` *str* — Target branch to verify the merge against (default: configured integration branch).
+
 ## `aet ship close`
 
 Record post-merge closure for a task.
@@ -440,6 +508,7 @@ Record post-merge closure for a task.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of origin/main.
 - `--target-branch` *str* — Target branch the source branch merged into (default: configured integration branch). Use 'main' when closing an epic whose integration branch merged to trunk.
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
+- `--delete-branch` *boolean* — After successful closure, delete the remote and local feature branch. (default: `False`)
 
 ## `aet ship record-merge`
 
@@ -454,6 +523,7 @@ Hidden alias for close.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of origin/main.
 - `--target-branch` *str* — Target branch the source branch merged into (default: configured integration branch). Use 'main' when closing an epic whose integration branch merged to trunk.
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
+- `--delete-branch` *boolean* — After successful closure, delete the remote and local feature branch. (default: `False`)
 
 ## `aet size`
 
@@ -520,6 +590,19 @@ Configure the AET project config.
 - `--non-interactive` *boolean* — Fail if a required value is missing instead of prompting. (default: `False`)
 - `--migrate` *boolean* — Rename legacy .agents/aet-work.json to .agents/aet-config.json. (default: `False`)
 - `--guided` *boolean* — Run the two-question guided setup flow (scope + integration mode). (default: `False`)
+
+## `aet context`
+
+Emit session workflow context as JSON plus a stage banner.
+
+### Options
+
+- `target` *str* — Optional ticket number, task id, or plan path to pin active_plan.
+- `--json` *boolean* — Emit the JSON battery only. (default: `False`)
+- `--budget` *str* — Rendering budget: auto, cli, or mcp.
+- `--max-lines` *int* — Cap the number of rendered lines (human/hook modes).
+- `--memories-only` *boolean* — Emit only the stage line and compact learnings. (default: `False`)
+- `--hook-json` *str* — Wrap output in a SessionStart envelope for the named harness.
 
 ## `aet harness-guard`
 
