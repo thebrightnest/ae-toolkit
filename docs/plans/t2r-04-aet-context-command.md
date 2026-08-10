@@ -95,14 +95,14 @@ is one reviewable contract and t2r-05 is blocked on its full shape.
 Child split per Context: **foundation** (1–3) → **modes** (4–7, each
 depends on task 3) → **closeout** (8–10).
 
-1. `src/aet/plan_parser.py`: add `most_recent_plan(plans_dir)` mirroring
+1. [✓] `src/aet/plan_parser.py`: add `most_recent_plan(plans_dir)` mirroring
    `most_recent_prd` (:216), and change `stage_from_plan` (:161) to
    last-match semantics per the rule documented at
    `src/aet/verifier.py:40-43`; `verifier.read_plan_stage` becomes a thin
    delegate (signature kept; callers `orchestrator.py:288,3090` untouched).
    Existing callers of `stage_from_plan` (`backlog.py:64`, `gate.py:126`,
    `sprint.py:94`) need no edits — S (traces: R-3)
-2. New module `src/aet/cli/context.py`, collectors half: git-backed
+2. [✓] New module `src/aet/cli/context.py`, collectors half: git-backed
    collectors (BRANCH; REPO_STATE = clean/dirty/merge-conflict from
    `git status --porcelain` unmerged entries or `MERGE_HEAD`; LAST_PIV =
    most recent commit date touching both `docs/plans/*.md` and `src/` or
@@ -114,7 +114,7 @@ depends on task 3) → **closeout** (8–10).
    `timestamp` and legacy `date` entry shapes). Every collector fails
    open — non-git directory, missing files, malformed lines yield nulls,
    never a traceback; the command always exits 0 — M (traces: R-3)
-3. Same module, command half: Typer app `context` on the
+3. [✓] Same module, command half: Typer app `context` on the
    `invoke_without_command` pattern (`src/aet/cli/next.py:142-165`).
    Default output = the banner `📍 Current stage: {stage}.` (verbatim;
    ACTIVE_PLAN_STAGE first, else ACTIVE_PRD_STAGE, else no banner)
@@ -126,32 +126,33 @@ depends on task 3) → **closeout** (8–10).
    (`src/aet/plan_parser.py:416`) and `build_ticket_map`
    (`src/aet/plan_parser.py:148`) and pins `active_plan` /
    `active_plan_stage` to that plan — M (traces: R-3)
-4. Token budget (depends on task 3): `--budget {auto,cli,mcp}` and
+4. [✓] Token budget (depends on task 3): `--budget {auto,cli,mcp}` and
    `--max-lines N`. Resolution order: explicit flag → `AET_CONTEXT_CLIENT`
    env → MCP session env markers → `cli`. Budgets reshape the human/hook
    rendering only (`mcp` = compact: top-1 learning, single-line entries;
    `--max-lines` caps rendered lines); the `--json` schema is never
    truncated — S (traces: R-3)
-5. `PRIME.md` wholesale override (depends on task 3): a repo-root
+5. [✓] `PRIME.md` wholesale override (depends on task 3): a repo-root
    `PRIME.md` replaces the human-facing output verbatim in default and
    hook modes; `--json` still emits the computed battery with
    `"prime_md_override": true` so machine consumers can detect the
    override — S (traces: R-3)
-6. `--memories-only` (depends on task 3): emits only the learnings
+6. [✓] `--memories-only` (depends on task 3): emits only the learnings
    selection plus the stage line, in the compact rendering, for hook
    contexts — S (traces: R-3)
-7. `--hook-json {claude-code,codex,gemini}` (depends on tasks 3, 4, 6):
+7. [✓] `--hook-json {claude-code,codex,gemini}` (depends on tasks 3, 4, 6):
    wraps the budget-shaped block (or `PRIME.md` contents) in the
    SessionStart envelope `{"hookSpecificOutput": {"hookEventName":
    "SessionStart", "additionalContext": "..."}}` — one builder for all
    three harnesses per the Context verification; mutually exclusive with
    `--json` (usage error, exit non-zero) — S (traces: R-3)
-8. Register in `src/aet/cli/main.py`: import `context` in the subcommand
+8. [✓] Register in `src/aet/cli/main.py`: import `context` in the subcommand
    import block (:26-53) and `app.add_typer(context.app, name="context")`
    in the top-level single-word block (:80-92) — S (traces: R-3)
-9. New test file `tests/cli/test_context.py` covering tasks 1–8
+9. [✓] New test file `tests/cli/test_context.py` covering tasks 1–8
    (unit/integration split named in Validation Steps) — M (traces: R-3)
-10. Merge branch to main and verify integration — S
+10. [Deferred: merge to main and integration verification happen at the aet-ship stage]
+   Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -202,9 +203,9 @@ depends on task 3) → **closeout** (8–10).
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`make test`)
-- [ ] New-source coverage: `tests/cli/test_context.py` covers
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`make test`)
+- [x] New-source coverage: `tests/cli/test_context.py` covers
   `src/aet/cli/context.py`:
   - unit (single layer): each collector against fixture filesystems/git
     repos (REPO_STATE three-way classification, LAST_PIV bound and null
@@ -221,17 +222,19 @@ depends on task 3) → **closeout** (8–10).
     `claude-code`, `codex`, `gemini` matches a checked-in golden envelope
     byte-for-byte; `--json` + `--hook-json` together exits non-zero
   - no frontend ↔ backend contract exists — no API boundary tests apply
-- [ ] `src/aet/plan_parser.py` / `src/aet/verifier.py` consolidation is
+- [x] `src/aet/plan_parser.py` / `src/aet/verifier.py` consolidation is
   covered by the stage-reader tests above plus the existing suites for
   the unchanged callers (`tests/cli/test_command_groups.py`,
   gate/sprint/orchestrator tests stay green)
-- [ ] `git diff --name-only origin/main...HEAD` contains no `skills/` or
+- [x] `git diff --name-only origin/main...HEAD` contains no `skills/` or
   `.agents/` path (skill absorption is t2r-05)
-- [ ] Observable behavior in this repo: `aet context` exits 0 with all
-  eight battery keys and the banner; `aet context --hook-json claude-code
-  | python -m json.tool` parses; `aet context --json` contains
-  `"active_plan_stage"` whose stage matches this plan's own footer
-- [ ] R-trace coverage: R-3 covered by tasks 1–9; no task cites another
+- [x] Observable behavior in this repo: `.venv/bin/aet context` exits 0
+  with all eight battery keys and the banner; `.venv/bin/aet context
+  --hook-json claude-code | python3 -m json.tool` parses; `.venv/bin/aet
+  context --json` contains `"active_plan_stage"` matching this plan's
+  footer (the `aet` wrapper in `~/.local/bin/` is a stale pre-existing
+  install and not part of this change)
+- [x] R-trace coverage: R-3 covered by tasks 1–9; no task cites another
   R-id
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
@@ -251,5 +254,5 @@ typer), and security review stays `required` per frontmatter.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
