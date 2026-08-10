@@ -50,6 +50,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 | `aet status`            | Show queue health and plan drift; use after queue/state edits                        |
 | `aet plans lint`        | Lint the `docs/plans/` corpus for settled/live misclassification                     |
 | `aet docs lint`         | Lint documentation against the declarative rules in `.agents/doc-rules.yaml`          |
+| `aet docs generate`     | Regenerate `docs/CLI.md` from the Typer command tree                                 |
 | `make install-hooks`    | Install pre-commit hooks                                                             |
 
 ## Skill Structure Validator

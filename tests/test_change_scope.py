@@ -126,6 +126,7 @@ def _reads_repo_markdown(path: Path) -> bool:
 # under-test risk.
 _EXEMPT_READERS = {
     "tests/cli/test_retired_names.py",
+    "tests/cli/test_docs_generate.py",
 }
 
 
