@@ -51,7 +51,7 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 
 ## Acceptance Criteria
 
-- [ ] `aet learnings append` writes a schema-valid entry and the three skill call sites invoke it (satisfies: R-1)
+- [x] `aet learnings append` writes a schema-valid entry and the three skill call sites invoke it (satisfies: R-1)
 - [ ] A squash-merged task verifies via diff-match fallback in code; a stacked PR is detected at `aet ship open`; halt conditions exit non-zero with named codes (satisfies: R-2)
 - [ ] `aet context` emits the full preamble battery as JSON + banner, honors `PRIME.md` override and both hook modes, and the 16 preamble blocks + 11 banners are deleted from skills (satisfies: R-3, R-4)
 - [ ] `aet context` output includes the generated current-rules digest and promoted learnings; no hand-maintained copy of either exists (satisfies: R-5)
@@ -80,7 +80,23 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 4. **Rehearsal fixture ecosystem — RESOLVED:** npm (`npm ci`) for the R-12 fixture (t2r-13); composer coverage arrives with item 0's `worktree_setup`, which the rehearsal then exercises.
 5. **Learnings injection threshold — RESOLVED:** t2r-07 degrades to top-N recent entries; the item-3 recurrence-threshold mechanism plugs into the same selector interface when it lands.
 
+## Divergence Summary
+
+_Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
+
+### Changed from plan
+
+- None — the implementation matches the plan intent for R-1.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- Task 5 (merge branch to main and verify integration): deferred to `aet-ship` closure; not part of the implementation/docs-sync stage.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet sprint add` for the t2r-* plans, then `aet-work`*
+_Stage: synced_
+_Next step: run `aet-ship`_

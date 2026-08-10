@@ -59,7 +59,7 @@ it remains prose.
 
 ## Task List
 
-1. New module `src/aet/cli/learnings.py`: Typer group `learnings` with an
+1. ✓ New module `src/aet/cli/learnings.py`: Typer group `learnings` with an
    `append` command. Required options `--problem`, `--layer`, `--fix`,
    `--prevents` (non-empty after strip, else exit 1 with a named error);
    repeatable `--trigger`; optional `--recurrence` (positive int). The
@@ -67,18 +67,18 @@ it remains prose.
    canonical JSON line, and appends it under a `filelock` lock to
    `.agents/learnings.jsonl` (default path overridable via `--file` for
    tests); it never rewrites or validates existing lines — S (traces: R-1)
-2. Register the group in `src/aet/cli/main.py` (import +
+2. ✓ Register the group in `src/aet/cli/main.py` (import +
    `app.add_typer(learnings.app, name="learnings", ...)` in the noun-scoped
    block) and add `"learnings"` to `_NOUN_GROUPS` in
    `tests/cli/test_command_groups.py:307-319` — S (traces: R-1)
-3. New test file `tests/cli/test_learnings.py`: unit tests for schema
+3. ✓ New test file `tests/cli/test_learnings.py`: unit tests for schema
    validation (missing/empty required field exits 1; `--recurrence 0` and
    negative values rejected; no `--trigger` produces an entry without the
    key) and integration tests via `run_typer` against a temp `--file`
    (appended line parses as JSON with exactly the canonical field set;
    second append preserves the first line byte-for-byte; entry shape matches
    the dominant `timestamp` entries in the real file) — S (traces: R-1)
-4. Migrate the three prose call sites to invoke the command:
+4. ✓ Migrate the three prose call sites to invoke the command:
    `skills/aet-bug-report/SKILL.md:128` (Step 4 item 5) and `:145`
    (integration-table "How" cell); `skills/aet-evolve/SKILL.md:60` and
    `:76-98` (field list, hand-written JSON format block, and trigger-fallback
@@ -86,7 +86,7 @@ it remains prose.
    `skills/aet-evolve/references/escalation-ladder.md:18` (1st-occurrence
    action) and `skills/aet-evolve/references/aet-retro.md:27`;
    `skills/aet-implement/SKILL.md:46` (override logging) — S (traces: R-1)
-5. Merge branch to main and verify integration — S
+5. [Deferred: closure merge handled by `aet-ship`] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -129,26 +129,26 @@ it remains prose.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`make test`)
-- [ ] New-source coverage: `src/aet/cli/learnings.py` is covered by
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`make test`)
+- [x] New-source coverage: `src/aet/cli/learnings.py` is covered by
   `tests/cli/test_learnings.py` — schema-validation tests are unit tests
   (single layer: argument → validation); the temp-file append tests are
   integration tests (CLI → filesystem); no API boundary tests apply (no
   frontend/backend contract)
-- [ ] `tests/cli/test_command_groups.py::TestNounGroups` passes with
+- [x] `tests/cli/test_command_groups.py::TestNounGroups` passes with
   `"learnings"` registered
-- [ ] `grep -n "learnings.jsonl" skills/aet-bug-report/SKILL.md
+- [x] `grep -n "learnings.jsonl" skills/aet-bug-report/SKILL.md
   skills/aet-evolve/SKILL.md skills/aet-evolve/references/escalation-ladder.md
   skills/aet-evolve/references/aet-retro.md skills/aet-implement/SKILL.md`
   shows no hand-append instructions (field lists or raw JSON blocks); every
   remaining mention either invokes `aet learnings append` or reads the file
-- [ ] `aet learnings append --problem p --layer l --fix f --prevents pr`
+- [x] `aet learnings append --problem p --layer l --fix f --prevents pr`
   against a scratch `--file` produces a line whose `timestamp` shape matches
   the dominant entries in `.agents/learnings.jsonl` (observable behavior:
   the written entry is indistinguishable in shape from a correctly
   hand-written one)
-- [ ] R-trace coverage: R-1 covered by tasks 1–4; no task cites another R-id
+- [x] R-trace coverage: R-1 covered by tasks 1–4; no task cites another R-id
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -165,5 +165,5 @@ applies: `standard` was chosen for it over the S-size `minimal` default.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
