@@ -102,5 +102,5 @@ Revert the merge. Prose-only; no data or state involved.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
