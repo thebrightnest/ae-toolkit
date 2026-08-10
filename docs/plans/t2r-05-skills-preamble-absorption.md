@@ -206,5 +206,5 @@ reason), so the standard grouping loses no needed gate.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*

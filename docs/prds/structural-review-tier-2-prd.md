@@ -84,35 +84,37 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 
 ## Divergence Summary
 
-_Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
+### Branch: t2r-01-learnings-append-cli
 
-### Changed from plan
+_Recorded: 2026-08-10_
+
+#### Changed from plan
 
 - None — the implementation matches the plan intent for R-1.
 
-### Added (unplanned)
+#### Added (unplanned)
 
 - None.
 
-### Deferred
+#### Deferred
 
 - Task 5 (merge branch to main and verify integration): deferred to `aet-ship` closure; not part of the implementation/docs-sync stage.
 
----
+### Branch: t2r-02-ship-squash-verify-fallback
 
-_Recorded: 2026-08-10 — Branch: t2r-02-ship-squash-verify-fallback_
+_Recorded: 2026-08-10_
 
-### Changed from plan
+#### Changed from plan
 
 No meaningful divergences between the t2r-02 plan and the implementation.
 
-### Added (unplanned)
+#### Added (unplanned)
 
 - `tests/cli/test_build_parsers.py` updated to register the new `verify`
   subcommand in the parser inventory. This is a mechanical test-maintenance
   change driven by adding `aet ship verify`, not a functional divergence.
 
-### Deferred
+#### Deferred
 
 - R-2 remainder (stacked-PR detection in `aet ship open`, `aet ship split`, and
   trunk substitution) is explicitly deferred to the sibling plan
@@ -120,63 +122,79 @@ No meaningful divergences between the t2r-02 plan and the implementation.
 - The remaining Tier 2 requirements (R-1, R-3 through R-12) are outside the
   t2r-02 slice and remain open on this PRD.
 
----
+### Branch: t2r-04-aet-context-command
 
-_Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command_
+_Recorded: 2026-08-10_
 
-### Changed from plan
+#### Changed from plan
 
 - R-3 (`aet context`) implemented as specified in `docs/plans/t2r-04-aet-context-command.md`; no material contract changes.
 
-### Deferred
+#### Deferred
 
 - t2r-04 task 10 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
 
----
+### Branch: t2r-10-run-handoff-note
 
-_Recorded: 2026-08-10 — Branch: t2r-10-run-handoff-note_
+_Recorded: 2026-08-10_
 
-### Changed from plan
+#### Changed from plan
 
 - R-8 implemented as specified; no material contract changes.
 
-### Deferred
+#### Deferred
 
 - t2r-10 task 8 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
 
----
+### Branch: t2r-11-generated-cli-reference
 
-_Recorded: 2026-08-10 — Branch: t2r-11-generated-cli-reference_
+_Recorded: 2026-08-10_
 
-### Changed from plan
+#### Changed from plan
 
 _No material approach divergences for t2r-11._
 
-### Added (unplanned)
+#### Added (unplanned)
 
 - Supporting test adjustments in `tests/cli/test_build_parsers.py`, `tests/cli/test_retired_names.py`, and `tests/test_change_scope.py` were needed to accommodate the generated `docs/CLI.md` artifact and the new `tests/cli/test_docs_generate.py` drift guard.
 
-### Deferred
+#### Deferred
 
 - t2r-11 Task 6 (merge branch to main and verify integration): deferred to the ship stage.
 
----
+### Branch: t2r-12-plan-archival-at-closure
 
-_Recorded: 2026-08-10 — Branch: t2r-12-plan-archival-at-closure_
+_Recorded: 2026-08-10_
 
-### Changed from plan
+#### Changed from plan
 
 - Task 4 (scan exclusion): only the `plans_lint` module docstring needed updating; corpus scanners already use non-recursive `*.md` globs, so no code-path change was required to exclude `docs/plans/archive/`.
 
-### Added (unplanned)
+#### Added (unplanned)
 
 - `tests/cli/test_ship_close.py`: extended the existing ship-close integration test to assert the plan is archived at terminal closure and that the ledger `land` payload carries `archived_to`.
 - `tests/queue/test_queue.py`: added direct unit tests for `commit_and_push_plan_change` archive move and fail-closed abort behavior.
 - `scripts/validate-skills.sh`: excluded `docs/plans/archive/` from internal markdown link checks so archived relative links do not produce false-positive validation failures.
 
-### Deferred
+#### Deferred
 
 - None.
+
+### Branch: t2r-05-skills-preamble-absorption
+
+_Recorded: 2026-08-10_
+
+#### Changed from plan
+
+- No meaningful divergences between the t2r-05 plan and the implementation.
+
+#### Added (unplanned)
+
+- None.
+
+#### Deferred
+
+- t2r-05 Task 6 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
 
 ---
 
