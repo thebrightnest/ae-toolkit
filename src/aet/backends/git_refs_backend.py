@@ -193,10 +193,16 @@ class GitRefsBackend(TaskBackend):
     def save(
         self, queue: list[dict[str, Any]], wrapper: dict[str, Any] | None = None
     ) -> None:
-        """Persist ``queue`` as per-task refs, pruning tasks that left the queue."""
+        """Persist ``queue`` as per-task refs, pruning tasks that left the queue.
+
+        All ref creations, updates, deletes, and the envelope write are batched
+        into a single ``git update-ref --stdin`` transaction so an interruption
+        cannot leave the backend with a partial ref set (ADR-055, slc-04).
+        """
         if wrapper:
             self._envelope = {**self._envelope, **wrapper}
 
+        updates: list[tuple[str, str, str | None, str | None]] = []
         seen: set[str] = set()
         for task in queue:
             task_id = task.get("id")
@@ -209,25 +215,52 @@ class GitRefsBackend(TaskBackend):
                 continue  # unchanged versus what we loaded -> nothing to write
             ref = TASKS_REF_PREFIX + task_id
             expected = self._loaded_shas.get(task_id) or _NULL_OID
-            result = self._git("update-ref", ref, new_sha, expected)
-            if result.returncode != 0:
-                raise RuntimeError(
-                    f"concurrent update detected for task {task_id}: {ref} "
-                    "changed since last load"
-                )
-            self._loaded_shas[task_id] = new_sha
+            updates.append(("update", ref, new_sha, expected))
 
         # Prune refs for tasks that are no longer in the live queue (sealed or
-        # removed). Deleting an already-absent ref is a harmless no-op.
+        # removed). Use the current ref sha as the compare-and-swap value.
         for ref in self._list_task_refs():
             task_id = ref[len(TASKS_REF_PREFIX) :]
             if task_id not in seen:
-                self._git("update-ref", "-d", ref).check_returncode()
-                self._loaded_shas.pop(task_id, None)
+                current_sha = self._ref_sha(ref)
+                if current_sha is not None:
+                    updates.append(("delete", ref, None, current_sha))
 
         # Persist the envelope with the current schema version.
         self._envelope["schema_version"] = ENVELOPE_SCHEMA_VERSION
-        self._write_envelope()
+        self._envelope.pop("content_hash", None)
+        self._envelope.pop("prev_content_hash", None)
+        envelope_sha = self._write_blob(_canonical_json(self._envelope))
+        current_envelope_sha = self._ref_sha(ENVELOPE_REF)
+        if current_envelope_sha != envelope_sha:
+            updates.append(
+                ("update", ENVELOPE_REF, envelope_sha, current_envelope_sha or _NULL_OID)
+            )
+
+        if not updates:
+            return
+
+        stdin_lines: list[str] = []
+        for action, ref, new_sha, old_sha in updates:
+            if action == "update":
+                stdin_lines.append(f"update {ref} {new_sha} {old_sha}")
+            else:
+                stdin_lines.append(f"delete {ref} {old_sha}")
+        stdin = ("\n".join(stdin_lines) + "\n").encode("utf-8")
+
+        result = self._git("update-ref", "--stdin", input=stdin)
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"atomic ref update failed: {stderr}")
+
+        # Commit the in-memory sha cache only after the transaction succeeds.
+        for action, ref, new_sha, _old_sha in updates:
+            if action == "update" and ref.startswith(TASKS_REF_PREFIX):
+                task_id = ref[len(TASKS_REF_PREFIX) :]
+                self._loaded_shas[task_id] = new_sha  # type: ignore[assignment]
+            elif action == "delete" and ref.startswith(TASKS_REF_PREFIX):
+                task_id = ref[len(TASKS_REF_PREFIX) :]
+                self._loaded_shas.pop(task_id, None)
 
     def close(self) -> None:
         """No-op: every git invocation is self-contained."""

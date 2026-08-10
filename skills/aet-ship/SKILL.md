@@ -72,6 +72,18 @@ For squash merges, the original branch commits are not ancestors of the trunk
 branch. `aet ship close` accepts `--merge-commit <sha>` to record the squashed
 commit that actually landed on trunk.
 
+## Closure
+
+`aet ship close` is a single code transaction. It writes the terminal queue
+state transition, records the `land` event in the content-addressed ledger
+(including the plan content hash, PRD requirement ids, and merge ref), and
+updates the plan footer as a code-maintained breadcrumb. The queue-ref update
+is atomic under a single `git update-ref --stdin` transaction; the mandatory
+push of `refs/aet/*` must succeed before closure reports success.
+
+Do not ask an agent to update the plan footer, queue state, or ledger. Those
+writes are owned by `aet ship close` and `aet gate submit`.
+
 ## Decision Procedure for Ambiguous Merge Verification
 
 Use this only when `aet ship close` reports an ambiguous merge-verification

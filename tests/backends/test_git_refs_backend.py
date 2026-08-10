@@ -221,6 +221,36 @@ def test_hand_edited_envelope_does_not_brick_reads(repo: Path) -> None:
     assert _by_id(loaded["queue"]).keys() == {"task-a"}
 
 
+def test_atomic_save_leaves_no_partial_refs_on_failure(repo: Path) -> None:
+    """A failed ``update-ref --stdin`` transaction writes no refs at all."""
+    backend = _backend()
+    backend.save([_task("task-a"), _task("task-b")])
+
+    original_git = backend._git
+
+    def _failing_git(*args: str, input: bytes | None = None):
+        if args == ("update-ref", "--stdin"):
+            raise RuntimeError("simulated interrupt")
+        return original_git(*args, input=input)
+
+    backend._git = _failing_git  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="simulated interrupt"):
+        backend.save([_task("task-a", marker="changed"), _task("task-b")])
+
+    # Neither task ref should have been partially updated.
+    refs = _git(repo, "for-each-ref", "--format=%(refname)", TASKS_REF_PREFIX).stdout
+    assert "refs/aet/tasks/task-a" in refs
+    task_a = json.loads(
+        _git(
+            repo,
+            "cat-file",
+            "-p",
+            _git(repo, "rev-parse", "refs/aet/tasks/task-a").stdout.strip(),
+        ).stdout
+    )
+    assert "marker" not in task_a
+
+
 def test_clear_error_outside_git_repo(tmp_path: Path) -> None:
     not_a_repo = tmp_path / "plain"
     (not_a_repo / ".agents").mkdir(parents=True, exist_ok=True)

@@ -384,6 +384,7 @@ def _apply_transition(
     trunk_branch="main",
     repair=False,
     integration_branch=None,
+    explicit_plan=None,
 ):
     """Apply a validated state transition and propagate the forward frontier.
 
@@ -391,6 +392,10 @@ def _apply_transition(
     transition, appends history, promotes dependents after terminal transitions,
     persists the queue through the configured backend, and seals terminal tasks
     to the settled history log.
+
+    Terminal transitions also update the plan footer so the breadcrumb is
+    maintained by code, not by skill prose (slc-04).  The caller must already
+    hold the queue lock; the queue-ref write is atomic via the backend.
 
     When ``repair`` is true, lifecycle legality is bypassed so that heal and
     reset can move a task back to its git-derived state; the current-state check
@@ -494,6 +499,36 @@ def _apply_transition(
                 occurred_at=occurred_at,
                 payload=land_payload,
             )
+
+        # Update the plan footer as a code-maintained breadcrumb.  This is part
+        # of the terminal closure transaction: queue state, ledger land event,
+        # and footer are written by the same code path.  A missing plan file is
+        # fail-closed: terminal state is not recorded without the breadcrumb.
+        plan_path = explicit_plan or task.get("plan_file")
+        if plan_path and cwd is not None:
+            resolved_path = _resolve_plan_for_closure(
+                plan_path,
+                task.get("merge_commit"),
+                task.get("branch"),
+                cwd,
+            )
+            if resolved_path:
+                rc = queue_lib.commit_and_push_plan_change(
+                    resolved_path,
+                    footer_stage=to_state,
+                    task_id=task["id"],
+                    cwd=cwd,
+                )
+                if rc != 0:
+                    raise RuntimeError(
+                        f"{to_state} recorded in queue and ledger, but plan "
+                        f"footer update failed for {task['id']}. Re-run closure "
+                        "to retry the footer push."
+                    )
+            else:
+                raise RuntimeError(
+                    f"Plan file not found for closure: {plan_path}"
+                )
 
 
 def _land_digest(task: dict[str, Any]) -> dict[str, Any]:
@@ -1197,6 +1232,7 @@ def cmd_record_merge(args):
         )
         return 1
 
+    explicit_plan = getattr(args, "plan", None)
     with queue_lib.queue_lock(args.queue):
         # Re-load in case another process changed the queue while we talked to git.
         data = backend.load()
@@ -1243,50 +1279,13 @@ def cmd_record_merge(args):
                 by="record-merge", evidence=evidence, cwd=cwd,
                 trunk_branch=trunk_branch,
                 integration_branch=integration_branch,
+                explicit_plan=explicit_plan,
             )
         except RuntimeError as e:
             task["merge_commit"] = previous_merge_commit
             task["merge_strategy"] = previous_merge_strategy
             task["branch"] = previous_branch
             print(str(e), file=sys.stderr)
-            return 1
-
-    # Terminal truth lives in the plan footer. Resolve it from the merged branch
-    # when it is absent from the checkout, then update the footer stage and
-    # commit/push so the closure breadcrumb is versioned.
-    explicit_plan = getattr(args, "plan", None)
-    plan_path = explicit_plan or task.get("plan_file")
-    if plan_path:
-        resolved_path = _resolve_plan_for_closure(
-            plan_path, merge_commit, branch, cwd
-        )
-        if resolved_path:
-            rc = queue_lib.commit_and_push_plan_change(
-                resolved_path, footer_stage="merged", task_id=args.task_id, cwd=cwd,
-            )
-            if rc != 0:
-                # Local commit is intact; recoverable on re-run.
-                print(
-                    f"Merge recorded locally, but plan closure could not be pushed "
-                    f"for {args.task_id}. Re-run record-merge to retry.",
-                    file=sys.stderr,
-                )
-                return rc
-        elif explicit_plan:
-            print(
-                f"Merge recorded, but explicit plan file not found: {explicit_plan}",
-                file=sys.stderr,
-            )
-            return 1
-        else:
-            print(
-                f"Merge recorded for {args.task_id}, but plan closure failed: "
-                f"could not find {plan_path} in the checkout or on the merged "
-                f"branch. The merge record itself is intact; re-run record-merge "
-                f"after restoring the plan file, or pass --plan with an existing "
-                f"plan path.",
-                file=sys.stderr,
-            )
             return 1
 
     try:
