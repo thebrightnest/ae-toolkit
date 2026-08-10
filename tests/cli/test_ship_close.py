@@ -238,6 +238,109 @@ class TestShipCloseTransaction(unittest.TestCase):
         ).stdout.strip()
         self.assertEqual(refs, "")
 
+    def _branch_exists(self, branch: str) -> bool:
+        return (
+            _git(self.repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}", check=False).returncode
+            == 0
+        )
+
+    def _remote_branch_exists(self, branch: str) -> bool:
+        return (
+            _git(self.repo, "show-ref", "--verify", "--quiet", f"refs/remotes/origin/{branch}", check=False).returncode
+            == 0
+        )
+
+    def test_close_delete_branch_removes_remote_and_local_after_record(self):
+        """`--delete-branch` deletes remote and local branches after closure."""
+        plan_path = _write_plan(self.repo, "t1")
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+
+        _git(self.repo, "checkout", "-q", "-b", "t1")
+        (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-q", "-m", "feat(t1): implement")
+        _git(self.repo, "push", "-u", "origin", "t1", check=False)
+        _git(self.repo, "checkout", "-q", "main")
+        _git(self.repo, "merge", "-q", "--no-ff", "t1", "-m", "Merge t1")
+        _git(self.repo, "push", "origin", "main", check=False)
+
+        args = argparse.Namespace(
+            command="close",
+            task_id=str(plan_path),
+            plan=None,
+            queue=queue_file,
+            branch=None,
+            merge_commit=None,
+            target_branch=None,
+            dry_run=False,
+            delete_branch=True,
+        )
+        with patch.dict(os.environ, {"AET_BACKEND": "git-refs"}):
+            rc = ship.cmd_ship(args)
+        self.assertEqual(rc, 0)
+        self.assertFalse(self._branch_exists("t1"))
+        self.assertFalse(self._remote_branch_exists("t1"))
+
+    def test_close_delete_branch_leaves_branches_intact_when_record_fails(self):
+        """A failing record-merge exits EXIT_DELETE_BEFORE_RECORD without deleting branches."""
+        plan_path = _write_plan(self.repo, "t1")
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+
+        _git(self.repo, "checkout", "-q", "-b", "t1")
+        (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-q", "-m", "feat(t1): implement")
+        _git(self.repo, "push", "-u", "origin", "t1", check=False)
+        # Do NOT merge to main, so record-merge fails.
+
+        args = argparse.Namespace(
+            command="close",
+            task_id=str(plan_path),
+            plan=None,
+            queue=queue_file,
+            branch=None,
+            merge_commit=None,
+            target_branch=None,
+            dry_run=False,
+            delete_branch=True,
+        )
+        with patch.dict(os.environ, {"AET_BACKEND": "git-refs"}):
+            rc = ship.cmd_ship(args)
+        self.assertEqual(rc, ship.EXIT_DELETE_BEFORE_RECORD)
+        self.assertTrue(self._branch_exists("t1"))
+        self.assertTrue(self._remote_branch_exists("t1"))
+
+    def test_close_delete_branch_dry_run_does_not_delete(self):
+        """`--delete-branch --dry-run` reports deletions without executing them."""
+        plan_path = _write_plan(self.repo, "t1")
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+
+        _git(self.repo, "checkout", "-q", "-b", "t1")
+        (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-q", "-m", "feat(t1): implement")
+        _git(self.repo, "push", "-u", "origin", "t1", check=False)
+        _git(self.repo, "checkout", "-q", "main")
+        _git(self.repo, "merge", "-q", "--no-ff", "t1", "-m", "Merge t1")
+        _git(self.repo, "push", "origin", "main", check=False)
+
+        args = argparse.Namespace(
+            command="close",
+            task_id=str(plan_path),
+            plan=None,
+            queue=queue_file,
+            branch=None,
+            merge_commit=None,
+            target_branch=None,
+            dry_run=True,
+            delete_branch=True,
+        )
+        with patch.dict(os.environ, {"AET_BACKEND": "git-refs"}):
+            rc = ship.cmd_ship(args)
+        self.assertEqual(rc, 0)
+        self.assertTrue(self._branch_exists("t1"))
+        self.assertTrue(self._remote_branch_exists("t1"))
+
 
 class TestShipCloseParser(unittest.TestCase):
     """Argument parsing for the close subcommand."""

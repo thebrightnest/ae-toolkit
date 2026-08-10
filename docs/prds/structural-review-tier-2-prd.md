@@ -98,5 +98,27 @@ _Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
 
 ---
 
+*Recorded: 2026-08-10 — Branch: t2r-02-ship-squash-verify-fallback*
+
+### Changed from plan
+
+No meaningful divergences between the t2r-02 plan and the implementation.
+
+### Added (unplanned)
+
+- `tests/cli/test_build_parsers.py` updated to register the new `verify`
+  subcommand in the parser inventory. This is a mechanical test-maintenance
+  change driven by adding `aet ship verify`, not a functional divergence.
+
+### Deferred
+
+- R-2 remainder (stacked-PR detection in `aet ship open`, `aet ship split`, and
+  trunk substitution) is explicitly deferred to the sibling plan
+  `t2r-03-ship-stacked-pr-split-trunk`, per the original plan.
+- The remaining Tier 2 requirements (R-1, R-3 through R-12) are outside the
+  t2r-02 slice and remain open on this PRD.
+
+---
+
 _Stage: synced_
 _Next step: run `aet-ship`_
