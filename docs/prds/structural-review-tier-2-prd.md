@@ -82,6 +82,7 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 
 ## Divergence Summary
 
+<<<<<<< HEAD
 _Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
 
 ### Changed from plan
@@ -117,6 +118,31 @@ No meaningful divergences between the t2r-02 plan and the implementation.
   `t2r-03-ship-stacked-pr-split-trunk`, per the original plan.
 - The remaining Tier 2 requirements (R-1, R-3 through R-12) are outside the
   t2r-02 slice and remain open on this PRD.
+
+---
+
+=======
+_Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command_
+
+### Changed from plan
+
+- R-3 (`aet context`) implemented as specified in `docs/plans/t2r-04-aet-context-command.md`; no material contract changes.
+
+### Deferred
+
+- t2r-04 task 10 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
+
+---
+
+_Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command_
+
+### Changed from plan
+
+- R-3 (`aet context`) implemented as specified in `docs/plans/t2r-04-aet-context-command.md`; no material contract changes.
+
+### Deferred
+
+- t2r-04 task 10 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
 
 ---
 

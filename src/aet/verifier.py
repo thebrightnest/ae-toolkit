@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import tempfile
+from pathlib import Path
 
 
 def verify_branch_has_commits(worktree_dir: str) -> tuple[bool, str]:
@@ -37,20 +37,12 @@ def verify_branch_has_commits(worktree_dir: str) -> tuple[bool, str]:
 def read_plan_stage(plan_file: str) -> str | None:
     """Read the *Stage:* value from a plan.md footer.
 
-    The stage line lives in the trailing footer, after the final separator.
-    Body text may mention other stages (e.g. "set fods-06 footer to
-    _Stage: superseded_"), so we take the last match rather than the first.
+    Delegates to :func:`aet.plan_parser.stage_from_plan` so there is a single
+    canonical stage reader across the codebase.
     """
-    if not os.path.exists(plan_file):
-        return None
+    from aet.plan_parser import stage_from_plan
 
-    with open(plan_file, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    matches = re.findall(r"[*_]Stage:\s*([\w-]+)[*_]", content)
-    if matches:
-        return matches[-1]
-    return None
+    return stage_from_plan(Path(plan_file))
 
 
 def verify_stage_advancement(
