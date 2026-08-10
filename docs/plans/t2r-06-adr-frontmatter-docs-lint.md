@@ -197,5 +197,27 @@ surface beyond the lint evaluator itself.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+## Divergence Summary
+
+*Recorded: 2026-08-11 — Branch: t2r-06-adr-frontmatter-docs-lint*
+
+### Changed from plan
+
+- Added directory-target support for `must_contain` / `must_not_contain` rules so
+  the `must_not_contain "commit the plan files" scoped to skills/` rule could be
+  expressed directly. The plan described the rule as scoped to `skills/`; the
+  base rule engine previously only supported file targets.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- Task 9 (merge branch to main and verify integration): deferred to the
+  `aet-ship` closure stage, consistent with the standard pipeline.
+
+---
+
+*Stage: implemented*
+*Next step: run `aet-qa`*

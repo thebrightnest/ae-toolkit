@@ -1,3 +1,7 @@
+---
+subject: settled-ness
+---
+
 # Settled-ness Is Derived from Versioned Plan Data
 
 ## Status

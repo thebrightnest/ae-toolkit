@@ -1,3 +1,8 @@
+---
+# subject: [string or list of strings naming the architectural subject(s)]
+# supersedes: [list of ADR numbers this record replaces, e.g. [10, 34]]
+---
+
 # [Short Title of Solved Problem and Solution]
 
 ## Status

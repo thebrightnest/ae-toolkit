@@ -1,3 +1,8 @@
+---
+subject: work-state
+supersedes: [10]
+---
+
 # Work State Is Recorded Forward, Not Derived on Read
 
 ## Status

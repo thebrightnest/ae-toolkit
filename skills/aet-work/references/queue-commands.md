@@ -166,7 +166,7 @@ Seal terminal tasks and remove their worktrees atomically. Repairs stale queue e
    ```
 
 7. **Stale worktree repair (universal):** For each remaining task with a `worktree` field, regardless of status:
-   - If the directory does not exist, clear `worktree: null` via `aet state transition` (or direct JSON update if the task status is unchanged) and print `Repaired stale worktree field for {task_id}`
+   - If the directory does not exist, clear `worktree: null` via `aet state transition` and print `Repaired stale worktree field for {task_id}`
    - If the directory exists but has 0 commits ahead of trunk (`git rev-list --count <trunk>..HEAD` in the worktree returns 0), remove the worktree and clear `worktree: null`
 8. Report archived, removed, repaired, and remaining worktrees
 

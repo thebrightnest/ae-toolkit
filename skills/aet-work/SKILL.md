@@ -62,7 +62,7 @@ Use `--force` only to deliberately override a lease you know is stale, or to mak
 
 Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails closed on read for mutating commands. Run `aet state audit` to inspect the unverified queue against git ground truth, and `aet state heal --apply` to reconcile and restamp the envelope. Read-only commands like `status` warn and continue.
 
-The `git-refs` backend carries the equivalent protection. Its envelope ref (`refs/aet/meta/queue`) is stamped with a chained `content_hash` over the prior hash plus the current task-ref set (task ids + blob OIDs), so a hand-edited, inserted, or removed task ref — or a rewritten envelope blob — is detected on the next read. Mutating commands fail closed; read-only commands warn and continue; and git-refs data written before this protection (no stamp) is accepted and stamped on the next write. The same `audit` / `heal --apply` recovery applies.
+The `git-refs` backend is `schema_version`-stamped (ADR-055) and treats the live refs as ground truth. A previous chained `content_hash` over the task-ref set has been removed because a chain over a set is non-commutative and made independent writers conflict by construction. The tamper-evident `content_hash` protection therefore applies to the JSON backend only; the same `audit` / `heal --apply` recovery applies there.
 
 ### Queue lifecycle
 

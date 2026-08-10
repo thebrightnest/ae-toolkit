@@ -1,3 +1,8 @@
+---
+subject: settled-ness
+supersedes: [34, 54]
+---
+
 # Settled-ness Lives in a Commutative Provenance Ledger That Travels as Pushed Git Refs
 
 ## Status

@@ -65,5 +65,5 @@ Repeat this section for each breaking change:
 
 _Stage: plan-approved_
 _Work class: critical_
-_Next step: aet-pipeline-implement_
+_Next step: aet-work_
 ```
