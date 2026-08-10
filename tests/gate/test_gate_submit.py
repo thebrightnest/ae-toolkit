@@ -15,6 +15,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet.boundary import BoundaryResult
+
 _REPO_ROOT = Path(__file__).parents[2]
 _GATE_BIN = _REPO_ROOT / "src" / "aet" / "cli" / "gate.py"
 _AET_BIN = _REPO_ROOT / "src" / "aet" / "cli" / "main.py"
@@ -40,6 +42,21 @@ def _qa_payload(**overrides) -> dict:
         "tests_total": 10,
         "tests_passed": 10,
         "tests_failed": 0,
+    }
+    record.update(overrides)
+    return record
+
+
+def _review_payload(**overrides) -> dict:
+    record = {
+        "task_id": "t2r-08-boundary-contract-lens",
+        "stage": "reviewed",
+        "skill": "aet-review",
+        "verdict": "pass",
+        "summary": "Review passed",
+        "generated_at": "2026-08-10T00:00:00Z",
+        "tree_hash": "t0",
+        "findings": [],
     }
     record.update(overrides)
     return record
@@ -409,6 +426,197 @@ class TestGateSubmitBuilder(unittest.TestCase):
             self.assertEqual(verdict_events[0]["source"], "aet-gate")
             self.assertEqual(verdict_events[0]["task"], "twe-03")
             self.assertEqual(verdict_events[0]["payload"]["verdict"], "pass")
+
+
+class TestBoundaryLens(unittest.TestCase):
+    """The boundary-contract lens blocks review submits when both sides changed."""
+
+    def _run(self, argv):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            rc = gate.main(argv)
+        return rc, stdout.getvalue(), stderr.getvalue()
+
+    def _tripped_result(self, pairs):
+        shape_paths = [s for s, _c in pairs]
+        consumer_paths = [c for _s, c in pairs]
+        return BoundaryResult(
+            tripped=True,
+            reason="shape-consumer pair(s) changed without agreement test",
+            shape_paths=shape_paths,
+            consumer_paths=consumer_paths,
+            agreement_tests=[],
+            pairs=pairs,
+        )
+
+    def _clear_result(self):
+        return BoundaryResult(
+            tripped=False,
+            reason="change set does not touch both shape and consumer sides",
+            shape_paths=[],
+            consumer_paths=[],
+            agreement_tests=[],
+            pairs=[],
+        )
+
+    def test_review_pass_refused_when_lens_trips_in_evidence_mode(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "review.json"
+            payload = tmp / "payload.json"
+            payload.write_text(json.dumps(_review_payload()), encoding="utf-8")
+            changed = ["src/serializers/user.py", "src/components/user.tsx"]
+            pairs = [("src/serializers/user.py", "src/components/user.tsx")]
+            with patch.object(
+                gate.change_scope, "changed_paths", return_value=changed
+            ), patch.object(
+                gate.boundary, "check", return_value=self._tripped_result(pairs)
+            ), patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 1, err)
+            self.assertIn("boundary-contract lens tripped", err)
+            self.assertFalse(dest.exists(), "tripped lens must not write verdict")
+
+    def test_review_pass_accepted_when_agreement_test_exists_in_builder_mode(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "review.json"
+            clear = self._clear_result()
+            with patch.object(gate.change_scope, "changed_paths", return_value=["src/utils/helpers.py"]), patch.object(
+                gate.boundary, "check", return_value=clear
+            ), patch.dict(
+                os.environ,
+                {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-08", "AET_REPO_ROOT": str(tmp)},
+                clear=True,
+            ):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--summary",
+                        "Review passed",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            self.assertTrue(dest.is_file())
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "pass")
+            self.assertTrue(
+                any(f.get("lens") == "boundary-contract" for f in written.get("findings", [])),
+                written.get("findings"),
+            )
+
+    def test_review_pass_accepted_when_diff_touches_only_one_side(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "review.json"
+            payload = tmp / "payload.json"
+            payload.write_text(json.dumps(_review_payload()), encoding="utf-8")
+            clear = BoundaryResult(
+                tripped=False,
+                reason="change set does not touch both shape and consumer sides",
+                shape_paths=["src/serializers/user.py"],
+                consumer_paths=[],
+                agreement_tests=[],
+                pairs=[],
+            )
+            with patch.object(
+                gate.change_scope, "changed_paths", return_value=["src/serializers/user.py"]
+            ), patch.object(gate.boundary, "check", return_value=clear), patch.dict(
+                os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True
+            ):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            self.assertTrue(dest.is_file())
+
+    def test_lens_does_not_run_for_non_review_stages(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "qa.json"
+            payload = tmp / "payload.json"
+            payload.write_text(json.dumps(_qa_payload()), encoding="utf-8")
+            changed = ["src/serializers/user.py", "src/components/user.tsx"]
+            pairs = [("src/serializers/user.py", "src/components/user.tsx")]
+            with patch.object(
+                gate.change_scope, "changed_paths", return_value=changed
+            ), patch.object(
+                gate.boundary, "check", return_value=self._tripped_result(pairs)
+            ), patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            self.assertTrue(dest.is_file())
+
+    def test_review_ledger_event_records_lens_outcome(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            agents_dir = tmp / ".agents"
+            agents_dir.mkdir()
+            dest = tmp / "review.json"
+            clear = self._clear_result()
+            with patch.object(gate.change_scope, "changed_paths", return_value=["src/utils/helpers.py"]), patch.object(
+                gate.boundary, "check", return_value=clear
+            ), patch.dict(
+                os.environ,
+                {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-08", "AET_REPO_ROOT": str(tmp)},
+                clear=True,
+            ):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--summary",
+                        "Review passed",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            ledger_path = agents_dir / "ledger.jsonl"
+            self.assertTrue(ledger_path.exists(), "ledger file was not created")
+            events = [
+                json.loads(line)
+                for line in ledger_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            verdict_events = [e for e in events if e.get("kind") == "verdict"]
+            self.assertEqual(len(verdict_events), 1)
+            payload = verdict_events[0]["payload"]
+            self.assertIn("boundary_contract_lens", payload)
+            self.assertEqual(payload["boundary_contract_lens"]["tripped"], False)
 
 
 class TestGateDispatcherRouting(unittest.TestCase):
