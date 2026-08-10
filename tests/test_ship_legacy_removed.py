@@ -71,10 +71,7 @@ class TestShipBareInvocationGrepGuard(unittest.TestCase):
                         offenders.append(f"{path}:{lineno}: {line.strip()}")
                         break
         if offenders:
-            self.fail(
-                "Bare 'ship' invocations found in canonical docs/skills:\n"
-                + "\n".join(offenders)
-            )
+            self.fail("Bare 'ship' invocations found in canonical docs/skills:\n" + "\n".join(offenders))
 
 
 class TestShipCloseMatchesLegacyPositional(unittest.TestCase):
@@ -97,9 +94,7 @@ class TestShipCloseMatchesLegacyPositional(unittest.TestCase):
             return 0
 
         with patch.object(ship.aet_state, "cmd_record_merge", side_effect=fake_record_merge):
-            rc_close = ship.main(
-                ["close", "t1", "/path/to/plan.md", "/path/to/queue.json"]
-            )
+            rc_close = ship.main(["close", "t1", "/path/to/plan.md", "/path/to/queue.json"])
             legacy_ns = ship.aet_state.argparse.Namespace(
                 command="record-merge",
                 task_id="t1",

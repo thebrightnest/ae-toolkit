@@ -175,9 +175,7 @@ class TestShipSplitIntegration(unittest.TestCase):
         self.clone = base / "repo"
         self.clone.mkdir()
 
-        subprocess.run(
-            ["git", "init", "--bare", str(self.origin)], check=True, capture_output=True
-        )
+        subprocess.run(["git", "init", "--bare", str(self.origin)], check=True, capture_output=True)
         subprocess.run(
             ["git", "clone", str(self.origin), str(self.clone)],
             check=True,

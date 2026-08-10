@@ -239,9 +239,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     if not branch:
         branch = _resolve_task_branch(task_id, queue)
     if not branch:
-        return _fail(
-            f"Cannot verify {task_id}: no branch recorded and none provided."
-        )
+        return _fail(f"Cannot verify {task_id}: no branch recorded and none provided.")
 
     target_branch = getattr(args, "target_branch", None)
     trunk_branch = aet_state._resolve_trunk(queue)
@@ -290,9 +288,7 @@ def cmd_ship(args):
 
     # No-self-merge guard: closing a branch against itself is never valid.
     if target_branch and branch and target_branch == branch:
-        return _fail(
-            f"Self-merge refused: branch '{branch}' cannot be closed against target '{target_branch}'."
-        )
+        return _fail(f"Self-merge refused: branch '{branch}' cannot be closed against target '{target_branch}'.")
 
     # Capture the branch to delete before the closure transaction, because the
     # queue entry (and its branch field) may be sealed/removed on success.
@@ -300,9 +296,7 @@ def cmd_ship(args):
     if delete_branch:
         branch_to_delete = branch or _resolve_task_branch(task_id, queue)
         if not branch_to_delete:
-            return _fail(
-                f"Cannot delete branch for {task_id}: no branch recorded and none provided."
-            )
+            return _fail(f"Cannot delete branch for {task_id}: no branch recorded and none provided.")
 
     ns = aet_state.argparse.Namespace(
         command="record-merge",
@@ -353,9 +347,7 @@ def _fail(message: str) -> int:
 
 def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     """Run a git command and return the completed process."""
-    return subprocess.run(
-        ["git", *args], capture_output=True, text=True, check=check
-    )
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=check)
 
 
 def _fetch_origin() -> None:
@@ -386,9 +378,7 @@ def _determine_pr_base() -> StackInfo:
     if merge_base == trunk_sha:
         return StackInfo(trunk_ref=trunk_ref, base_ref=trunk_ref, parent=None, position=None)
 
-    log = _run_git(
-        "log", "--oneline", "--decorate", "--ancestry-path", f"{merge_base}..HEAD"
-    ).stdout
+    log = _run_git("log", "--oneline", "--decorate", "--ancestry-path", f"{merge_base}..HEAD").stdout
     parent: Optional[str] = None
     ancestor_count = 0
     for line in log.splitlines():
@@ -431,14 +421,16 @@ def _rebase_independent_branch(stack: StackInfo, dry_run: bool) -> tuple[bool, s
             f"Would rebase --onto {stack.trunk_ref} {merge_base} {branch}",
             False,
         )
-    result = _run_git(
-        "rebase", "--onto", stack.trunk_ref, merge_base, branch, check=False
-    )
+    result = _run_git("rebase", "--onto", stack.trunk_ref, merge_base, branch, check=False)
     if result.returncode != 0:
-        return False, (
-            f"⛔ Rebase onto {stack.trunk_ref} produced conflicts.\n"
-            "   Resolve them manually, then run aet-ship again."
-        ), False
+        return (
+            False,
+            (
+                f"⛔ Rebase onto {stack.trunk_ref} produced conflicts.\n"
+                "   Resolve them manually, then run aet-ship again."
+            ),
+            False,
+        )
     return True, f"Rebased onto {stack.trunk_ref}.", True
 
 
@@ -463,9 +455,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
     _fetch_origin()
     trunk_ref = _resolve_trunk_ref()
     if args.base:
-        stack = StackInfo(
-            trunk_ref=trunk_ref, base_ref=args.base, parent=None, position=None
-        )
+        stack = StackInfo(trunk_ref=trunk_ref, base_ref=args.base, parent=None, position=None)
         pr_base = args.base
     else:
         stack = _determine_pr_base()
@@ -659,9 +649,7 @@ def _commit_count(pr_base: str) -> int:
 
 def _commit_subjects(pr_base: str) -> list[str]:
     """Return commit subjects in the pr_base..HEAD range."""
-    result = _run_git(
-        "log", f"{pr_base}..HEAD", "--pretty=format:%s", check=False
-    )
+    result = _run_git("log", f"{pr_base}..HEAD", "--pretty=format:%s", check=False)
     if result.returncode != 0:
         return []
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
@@ -687,9 +675,7 @@ def _generate_changelog_entry(subjects: list[str], plan_path: Path) -> str:
     plan_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
     title = plan_parser.title_from_plan(plan_path)
     lines = ["## CHANGELOG entry", ""]
-    lines.append(
-        f"Derived from [{plan_path.name}]({plan_path}) — **{plan_id}**: {title}."
-    )
+    lines.append(f"Derived from [{plan_path.name}]({plan_path}) — **{plan_id}**: {title}.")
     lines.append("")
     if subjects:
         lines.append("Commits in this PR:")
@@ -735,10 +721,7 @@ def _build_pr_body(
         parts.append(f"⚠️ STACKED PR — base is `{stack.base_ref}`, not `{trunk_name}`.")
         parts.append("")
         parts.append(f"After `{stack.base_ref}` merges to `{trunk_name}`, run:")
-        parts.append(
-            f"  git rebase {trunk_name} && git push --force-with-lease && "
-            f"gh pr edit --base {trunk_name}"
-        )
+        parts.append(f"  git rebase {trunk_name} && git push --force-with-lease && gh pr edit --base {trunk_name}")
         parts.append("before merging this PR.")
         parts.append("")
 
@@ -801,9 +784,7 @@ def _check_release_guard(pr_base: str) -> str | None:
     """Block ``chore(release)`` commits and VERSION changes on feature branches."""
     for subject in _commit_subjects(pr_base):
         if re.match(r"^chore\(release\)", subject):
-            return (
-                f"Release guard: commit '{subject}' is a chore(release) on a feature branch."
-            )
+            return f"Release guard: commit '{subject}' is a chore(release) on a feature branch."
     diff = _run_git("diff", pr_base, "--name-only", check=False)
     if diff.returncode == 0:
         for line in diff.stdout.splitlines():
@@ -840,9 +821,7 @@ def cmd_open(args: argparse.Namespace) -> int:
             "Run `aet ship split` to split it into logical pieces before opening the PR."
         )
 
-    changelog_entry = _generate_changelog_entry(
-        _commit_subjects(result.pr_base), plan_path
-    )
+    changelog_entry = _generate_changelog_entry(_commit_subjects(result.pr_base), plan_path)
 
     print("Pushing branch...")
     ok, output = _push_branch(result.rebased, args.dry_run)
@@ -915,16 +894,13 @@ def cmd_split(args: argparse.Namespace) -> int:
     path_groups = args.paths or []
     if len(messages) != len(path_groups):
         return _fail(
-            "Mismatched --message/--paths groups: "
-            f"{len(messages)} message(s) and {len(path_groups)} path group(s)."
+            f"Mismatched --message/--paths groups: {len(messages)} message(s) and {len(path_groups)} path group(s)."
         )
     if not messages:
         return _fail("At least one --message/--paths group is required.")
 
     if not _is_working_tree_clean():
-        return _fail(
-            "Working tree is dirty. Stash, commit, or abort before splitting."
-        )
+        return _fail("Working tree is dirty. Stash, commit, or abort before splitting.")
 
     if args.base:
         pr_base = args.base
@@ -957,8 +933,7 @@ def cmd_split(args: argparse.Namespace) -> int:
     diff = _run_git("diff", f"{original_head}..HEAD", check=False)
     if diff.returncode != 0 or diff.stdout.strip():
         print(
-            "⛔ Split post-condition failed: the resulting tree does not match the "
-            "original HEAD tree.",
+            "⛔ Split post-condition failed: the resulting tree does not match the original HEAD tree.",
             file=sys.stderr,
         )
         status = _run_git("status", check=False)
@@ -998,9 +973,9 @@ def _find_target_worktree(branch: str) -> Optional[Path]:
     current_path: Optional[Path] = None
     for line in result.stdout.splitlines():
         if line.startswith("worktree "):
-            current_path = Path(line[len("worktree "):])
+            current_path = Path(line[len("worktree ") :])
         elif line.startswith("branch ") and current_path is not None:
-            ref = line[len("branch "):]
+            ref = line[len("branch ") :]
             if ref == f"refs/heads/{branch}":
                 return current_path
     return None
@@ -1011,13 +986,15 @@ def _create_temp_worktree(target_branch: str) -> Path:
     repo_root = Path(_run_git("rev-parse", "--show-toplevel").stdout.strip())
     worktree_dir = repo_root / ".worktrees" / f".merge-{target_branch}-{os.getpid()}"
     result = _run_git(
-        "worktree", "add", "--checkout", str(worktree_dir), f"origin/{target_branch}",
+        "worktree",
+        "add",
+        "--checkout",
+        str(worktree_dir),
+        f"origin/{target_branch}",
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(
-            f"Could not create worktree for {target_branch}: {result.stderr}"
-        )
+        raise RuntimeError(f"Could not create worktree for {target_branch}: {result.stderr}")
     return worktree_dir
 
 
@@ -1026,9 +1003,7 @@ def _remove_worktree(path: Path) -> None:
     _run_git("worktree", "remove", "--force", str(path), check=False)
 
 
-def _merge_into_target(
-    target_branch: str, feature_branch: str, dry_run: bool
-) -> tuple[bool, str, Optional[str]]:
+def _merge_into_target(target_branch: str, feature_branch: str, dry_run: bool) -> tuple[bool, str, Optional[str]]:
     """Merge *feature_branch* into *target_branch* and push.
 
     Returns (ok, message, merge_commit). *merge_commit* is None on failure or
@@ -1060,15 +1035,11 @@ def _merge_into_target(
                 None,
             )
 
-        checkout_result = _run_git(
-            "-C", str(worktree), "checkout", target_branch, check=False
-        )
+        checkout_result = _run_git("-C", str(worktree), "checkout", target_branch, check=False)
         if checkout_result.returncode != 0:
             return False, f"Could not checkout {target_branch}: {checkout_result.stderr}", None
 
-        pull_result = _run_git(
-            "-C", str(worktree), "pull", "origin", target_branch, check=False
-        )
+        pull_result = _run_git("-C", str(worktree), "pull", "origin", target_branch, check=False)
         if pull_result.returncode != 0:
             return False, f"Could not pull {target_ref}: {pull_result.stderr}", None
 
@@ -1096,9 +1067,7 @@ def _merge_into_target(
             return False, f"Could not read merge commit SHA: {sha_result.stderr}", None
         merge_commit = sha_result.stdout.strip()
 
-        push_result = _run_git(
-            "-C", str(worktree), "push", "origin", target_branch, check=False
-        )
+        push_result = _run_git("-C", str(worktree), "push", "origin", target_branch, check=False)
         if push_result.returncode != 0:
             return (
                 False,
@@ -1111,8 +1080,13 @@ def _merge_into_target(
         # or misresolved source) that would otherwise report success while leaving the
         # branch's commits behind.
         ancestry = _run_git(
-            "-C", str(worktree), "merge-base", "--is-ancestor",
-            feature_branch, target_branch, check=False,
+            "-C",
+            str(worktree),
+            "merge-base",
+            "--is-ancestor",
+            feature_branch,
+            target_branch,
+            check=False,
         )
         if ancestry.returncode != 0:
             return (
@@ -1181,8 +1155,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         and f"origin/{target_branch}" == trunk_ref
     ):
         return _fail(
-            f"Stacked branch detected: merge into `{result.stack.base_ref}` or "
-            f"rebase onto `{trunk_ref}` first."
+            f"Stacked branch detected: merge into `{result.stack.base_ref}` or rebase onto `{trunk_ref}` first."
         )
 
     guard_error = _check_release_guard(result.pr_base)
@@ -1225,10 +1198,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         )
     )
     if rc != 0:
-        return _fail(
-            "Merge succeeded, but recording closure failed. "
-            "Run `aet ship close` manually to finish."
-        )
+        return _fail("Merge succeeded, but recording closure failed. Run `aet ship close` manually to finish.")
 
     print("✅ aet ship merge complete.")
     return 0
@@ -1751,9 +1721,7 @@ def ship_close(
     ),
 ) -> None:
     """Record post-merge closure for a task."""
-    resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(
-        task_id, plan, queue
-    )
+    resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(task_id, plan, queue)
     raise typer.Exit(
         _run_ship_close(
             resolved_task_id,
@@ -1813,9 +1781,7 @@ def ship_record_merge(
     ),
 ) -> None:
     """Hidden alias for close."""
-    resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(
-        task_id, plan, queue
-    )
+    resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(task_id, plan, queue)
     raise typer.Exit(
         _run_ship_close(
             resolved_task_id,

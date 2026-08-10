@@ -144,12 +144,8 @@ class TestDeterminePrBase(unittest.TestCase):
 
     def test_behind_main_independent_branch_resolves_to_origin_main(self):
         """A branch merely behind origin/main bases its PR on origin/main, not itself."""
-        responses = self._walk_responses(
-            "22400d8c (HEAD -> feat-001, origin/feat-001) feat: do a thing\n"
-        )
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        responses = self._walk_responses("22400d8c (HEAD -> feat-001, origin/feat-001) feat: do a thing\n")
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             stack = ship._determine_pr_base()
         self.assertEqual(stack.base_ref, "origin/main")
         self.assertIsNone(stack.parent)
@@ -161,9 +157,7 @@ class TestDeterminePrBase(unittest.TestCase):
             "aaaaaaa (HEAD -> feat-child, origin/feat-child) child commit\n"
             "bbbbbbb (feat-parent, origin/feat-parent) parent commit\n"
         )
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             stack = ship._determine_pr_base()
         self.assertEqual(stack.base_ref, "feat-parent")
         self.assertEqual(stack.parent, "feat-parent")
@@ -175,9 +169,7 @@ class TestDeterminePrBase(unittest.TestCase):
             "aaaaaaa (HEAD -> feat-child, origin/feat-child) child commit\n"
             "bbbbbbb (feat-parent, origin/feat-parent) parent commit\n"
         )
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             stack = ship._determine_pr_base()
         self.assertIn("PR", stack.position)
         self.assertIn("feat-parent", stack.position)
@@ -252,9 +244,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
@@ -280,9 +270,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
@@ -291,9 +279,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
     def test_open_generates_changelog_entry(self):
         """The changelog entry references the plan and lists commit subjects."""
-        entry = ship._generate_changelog_entry(
-            ["feat: add open", "feat: wire parser"], self.plan_path
-        )
+        entry = ship._generate_changelog_entry(["feat: add open", "feat: wire parser"], self.plan_path)
         self.assertIn("Plan T1", entry)
         self.assertIn("t1", entry)
         self.assertIn("feat: add open", entry)
@@ -308,16 +294,12 @@ class TestShipOpenChecks(unittest.TestCase):
             "old-merge-base\n",
             "",
         )
-        responses[
-            ("git", "rebase", "--onto", "origin/main", "old-merge-base", "feat-001")
-        ] = (0, "", "")
+        responses[("git", "rebase", "--onto", "origin/main", "old-merge-base", "feat-001")] = (0, "", "")
         env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertEqual(rc, 0)
@@ -336,9 +318,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertEqual(rc, 0)
@@ -354,9 +334,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertEqual(rc, 0)
@@ -368,9 +346,7 @@ class TestShipOpenChecks(unittest.TestCase):
         os.chdir(self.tmpdir.name)
         responses = self._base_responses()
 
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             rc = ship.cmd_open(ship.parse_args(["open", "no-such-task"]))
 
         self.assertNotEqual(rc, 0)
@@ -436,9 +412,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
@@ -456,9 +430,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
@@ -481,12 +453,15 @@ class TestShipOpenChecks(unittest.TestCase):
             dry_run=False,
             message="Gate passed.",
         )
-        with patch.object(ship, "_run_gate", return_value=gate_result), \
-             patch.object(ship, "_check_release_guard", return_value=None), \
-             patch.object(ship, "_is_monolithic_commit", return_value=False), \
-             patch.object(ship, "_push_branch", return_value=(True, "")), \
-             patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")):
+        with (
+            patch.object(ship, "_run_gate", return_value=gate_result),
+            patch.object(ship, "_check_release_guard", return_value=None),
+            patch.object(ship, "_is_monolithic_commit", return_value=False),
+            patch.object(ship, "_push_branch", return_value=(True, "")),
+            patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")),
+        ):
             from io import StringIO
+
             stdout_capture = StringIO()
             with patch.object(sys, "stdout", stdout_capture):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
@@ -519,12 +494,14 @@ class TestShipOpenChecks(unittest.TestCase):
             captured.append(kwargs)
             return {"id": "fake"}
 
-        with patch.object(ship, "_run_gate", return_value=gate_result), \
-             patch.object(ship, "_check_release_guard", return_value=None), \
-             patch.object(ship, "_is_monolithic_commit", return_value=False), \
-             patch.object(ship, "_push_branch", return_value=(True, "")), \
-             patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")), \
-             patch.object(ship.Ledger, "write_event", side_effect=fake_write_event):
+        with (
+            patch.object(ship, "_run_gate", return_value=gate_result),
+            patch.object(ship, "_check_release_guard", return_value=None),
+            patch.object(ship, "_is_monolithic_commit", return_value=False),
+            patch.object(ship, "_push_branch", return_value=(True, "")),
+            patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")),
+            patch.object(ship.Ledger, "write_event", side_effect=fake_write_event),
+        ):
             rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertEqual(rc, 0)
@@ -553,9 +530,7 @@ class TestShipOpenIntegration(unittest.TestCase):
         self.clone = base / "repo"
         self.clone.mkdir()
 
-        subprocess.run(
-            ["git", "init", "--bare", str(self.origin)], check=True, capture_output=True
-        )
+        subprocess.run(["git", "init", "--bare", str(self.origin)], check=True, capture_output=True)
         subprocess.run(
             ["git", "clone", str(self.origin), str(self.clone)],
             check=True,
