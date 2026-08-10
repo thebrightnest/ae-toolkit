@@ -106,5 +106,5 @@ ADR-047).
 
 ---
 
-*Stage: plan-approved*
+*Stage: synced*
 *Next step: run `aet-work`*
