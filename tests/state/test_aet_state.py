@@ -292,7 +292,6 @@ class TestRecordMerge(unittest.TestCase):
         plan_path.write_text(
             "---\n"
             "id: t1\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Plan T1\n\n"
             "---\n\n"
@@ -311,7 +310,7 @@ class TestRecordMerge(unittest.TestCase):
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
             ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
-            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan stage merged"): (0, "", ""),
             ("git", "push"): (0, "", ""),
         }
 
@@ -332,7 +331,7 @@ class TestRecordMerge(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         content = plan_path.read_text(encoding="utf-8")
-        self.assertIn("status: merged", content)
+        self.assertNotIn("status:", content)
         self.assertIn("*Stage: merged*", content)
 
         # Queue task should be sealed to history.
@@ -350,7 +349,6 @@ class TestRecordMerge(unittest.TestCase):
         plan_path.write_text(
             "---\n"
             "id: t1\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Plan T1\n\n"
             "---\n\n"
@@ -375,7 +373,7 @@ class TestRecordMerge(unittest.TestCase):
             ),
             ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
-            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan stage merged"): (0, "", ""),
             ("git", "push"): (0, "", ""),
         }
 
@@ -413,7 +411,6 @@ class TestRecordMerge(unittest.TestCase):
         plan_path.write_text(
             "---\n"
             "id: t1\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Plan T1\n\n"
             "---\n\n"
@@ -436,7 +433,7 @@ class TestRecordMerge(unittest.TestCase):
             ),
             ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
-            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan stage merged"): (0, "", ""),
             ("git", "push"): (1, "", "network unreachable"),
         }
 
@@ -458,10 +455,10 @@ class TestRecordMerge(unittest.TestCase):
         # Push failure is reported as non-zero but the local commit is intact.
         self.assertNotEqual(rc, 0)
         content = plan_path.read_text(encoding="utf-8")
-        self.assertIn("status: merged", content)
+        self.assertNotIn("status:", content)
         self.assertIn("*Stage: merged*", content)
 
-        # Simulate re-run with connectivity restored. The status update is
+        # Simulate re-run with connectivity restored. The footer update is
         # idempotent (no diff), so only the push is attempted and succeeds.
         responses[("git", "push")] = (0, "", "")
         responses[("git", "diff", "--cached", "--quiet")] = (0, "", "")
@@ -478,7 +475,6 @@ class TestRecordMerge(unittest.TestCase):
         original_content = (
             "---\n"
             "id: t1\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Plan T1\n\n"
             "---\n\n"
@@ -520,7 +516,6 @@ class TestRecordMerge(unittest.TestCase):
         original_content = (
             "---\n"
             "id: t1\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Plan T1\n\n"
             "---\n\n"
@@ -642,7 +637,6 @@ class TestRecordMerge(unittest.TestCase):
         plan_content = (
             "---\n"
             "id: t1\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Plan T1\n\n"
             "---\n\n"
@@ -655,7 +649,7 @@ class TestRecordMerge(unittest.TestCase):
             ("git", "show", "abc1234:docs/plans/t1.md"): (0, plan_content, ""),
             ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
-            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (0, "", ""),
+            ("git", "commit", "-m", "chore(t1): mark plan stage merged"): (0, "", ""),
             ("git", "push"): (0, "", ""),
         }
 
@@ -673,7 +667,7 @@ class TestRecordMerge(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         content = plan_path.read_text(encoding="utf-8")
-        self.assertIn("status: merged", content)
+        self.assertNotIn("status:", content)
         self.assertIn("*Stage: merged*", content)
 
 

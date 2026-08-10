@@ -5,7 +5,6 @@ work_class: normal
 blocked_by:
   - slc-01-content-addressed-ledger-events
 pipeline: standard
-status: queued
 security_review: required
 security_review_reason: rewrites the verdict-ingestion path every gate depends on
 docs_sync: required

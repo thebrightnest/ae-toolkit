@@ -1,8 +1,8 @@
 """aet-work backlog — Backlog curation commands.
 
 ``aet backlog add <plan>`` puts a plan on the GitHub board. It resolves the
-plan by id, commits and pushes the plan's status, then calls the configured
-projection to create or reconcile exactly one issue keyed by plan id.
+plan by id and calls the configured projection to create or reconcile exactly
+one issue keyed by plan id. The plan file is not mutated.
 """
 
 from __future__ import annotations
@@ -16,13 +16,13 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_parser  # noqa: E402
 from aet.backends.factory import resolve_config  # noqa: E402
+from aet.plan_parser import stage_from_plan  # noqa: E402
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
-from aet.queue import commit_and_push_status  # noqa: E402
 
-# Plans accepted by the backlog entry point. Draft and approved plans both
-# belong on the board; queued/in-progress plans are sprint members and are
-# promoted through ``aet sprint add`` instead.
-_BACKLOG_STATUSES = {"draft", "approved"}
+# Plans accepted by the backlog entry point. Plans that are not already sprint
+# members may be added to the board; sprint members are managed through
+# ``aet sprint add`` instead.
+_BACKLOG_STAGES = {"plan-draft", "plan-approved"}
 
 
 def resolve_plan(target: str, plans_dir: Path) -> Path | None:
@@ -49,7 +49,7 @@ def _task_from_plan(plan_file: Path) -> dict:
     return {
         "id": task_id,
         "title": plan_parser.title_from_plan(plan_file),
-        "status": data.get("status"),
+        "state": "backlog",
         "plan_file": str(plan_file),
     }
 
@@ -60,33 +60,22 @@ def _add(args: argparse.Namespace) -> int:
     if plan_file is None:
         return _fail(f"No plan found for '{args.target}' in {plans_dir}")
 
-    data = plan_parser.parse_frontmatter(plan_file)
-    status = data.get("status")
-    if status not in _BACKLOG_STATUSES:
+    stage = stage_from_plan(plan_file)
+    if stage not in _BACKLOG_STAGES:
         return _fail(
-            f"Refusing to add {plan_file.name}: plan status is "
-            f"'{status or 'unknown'}'; only 'draft' or 'approved' plans may be "
+            f"Refusing to add {plan_file.name}: plan stage is "
+            f"'{stage or 'unknown'}'; only draft or approved plans may be "
             f"added to the backlog."
         )
 
-    # Update the plan status. For plan paths under docs/plans/, the deferred
-    # durability gate writes the file without committing at intake; terminal
-    # closure still commits the final status.
-    rc = commit_and_push_status(plan_file, status)
-    if rc != 0:
-        return _fail(
-            f"Backlog add failed for {plan_file.name}: could not write "
-            f"status update. Fix the git state and re-run `aet backlog add`."
-        )
-
     # The projection is fail-open: a missing ``gh`` or network problem warns
-    # but does not block the commit+push above (R-4).
+    # but does not block the local record (R-4).
     config = resolve_config(args.config)
     projections = resolve_projections(config)
     task = _task_from_plan(plan_file)
     projections.on_add(task, is_new=True)
 
-    print(f"✓ Added {plan_file.name} to the backlog as aet:{status}.")
+    print(f"✓ Added {plan_file.name} to the backlog as aet:backlog.")
     return 0
 
 

@@ -58,7 +58,6 @@ class TestShipClosure(unittest.TestCase):
         self.plan_path.write_text(
             "---\n"
             "id: t1\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Plan T1\n\n"
             "---\n\n"
@@ -70,7 +69,7 @@ class TestShipClosure(unittest.TestCase):
             "tasks": [
                 {
                     "id": "t1",
-                    "status": "awaiting_merge",
+                    "state": "awaiting_merge",
                     "branch": "feat-001",
                     "plan_file": str(self.plan_path),
                 }
@@ -94,7 +93,7 @@ class TestShipClosure(unittest.TestCase):
             ),
             ("git", "add", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
-            ("git", "commit", "-m", "chore(t1): mark plan as merged"): (
+            ("git", "commit", "-m", "chore(t1): mark plan stage merged"): (
                 0,
                 "",
                 "",
@@ -131,7 +130,7 @@ class TestShipClosure(unittest.TestCase):
         self.assertEqual(rc, 0)
 
         content = self.plan_path.read_text(encoding="utf-8")
-        self.assertIn("status: merged", content)
+        self.assertNotIn("status:", content)
         self.assertIn("*Stage: merged*", content)
 
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))
@@ -239,7 +238,7 @@ class TestShipClosure(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         content = self.plan_path.read_text(encoding="utf-8")
-        self.assertIn("status: merged", content)
+        self.assertNotIn("status:", content)
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))
         self.assertEqual(live["tasks"], [])
 
@@ -271,7 +270,7 @@ class TestShipClosure(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         content = self.plan_path.read_text(encoding="utf-8")
-        self.assertIn("status: merged", content)
+        self.assertNotIn("status:", content)
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))
         self.assertEqual(live["tasks"], [])
 
@@ -303,7 +302,7 @@ class TestShipClosure(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         content = self.plan_path.read_text(encoding="utf-8")
-        self.assertIn("status: merged", content)
+        self.assertNotIn("status:", content)
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))
         self.assertEqual(live["tasks"], [])
 
@@ -328,7 +327,6 @@ class TestShipClosure(unittest.TestCase):
         plan_b.write_text(
             "---\n"
             "id: t2\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Plan T2\n",
             encoding="utf-8",
@@ -369,7 +367,6 @@ class TestShipClosure(unittest.TestCase):
         stem_plan = self.plan_path.parent / "fallback-stem.md"
         stem_plan.write_text(
             "---\n"
-            "status: awaiting_merge\n"
             "---\n\n"
             "# Fallback Stem Plan\n\n"
             "---\n\n"
@@ -381,7 +378,7 @@ class TestShipClosure(unittest.TestCase):
             "tasks": [
                 {
                     "id": "fallback-stem",
-                    "status": "awaiting_merge",
+                    "state": "awaiting_merge",
                     "branch": "feat-001",
                     "plan_file": str(stem_plan),
                 }
@@ -393,7 +390,7 @@ class TestShipClosure(unittest.TestCase):
         stem_abs = os.path.realpath(str(stem_plan))
         stem_rel = os.path.relpath(stem_abs, os.path.realpath(str(self.queue_path.parent)))
         responses[("git", "add", stem_rel)] = (0, "", "")
-        responses[("git", "commit", "-m", "chore(fallback-stem): mark plan as merged")] = (
+        responses[("git", "commit", "-m", "chore(fallback-stem): mark plan stage merged")] = (
             0,
             "",
             "",
@@ -401,7 +398,7 @@ class TestShipClosure(unittest.TestCase):
         t1_abs = os.path.realpath(str(self.plan_path))
         t1_rel = os.path.relpath(t1_abs, os.path.realpath(str(self.queue_path.parent)))
         responses.pop(("git", "add", t1_rel), None)
-        responses.pop(("git", "commit", "-m", "chore(t1): mark plan as merged"), None)
+        responses.pop(("git", "commit", "-m", "chore(t1): mark plan stage merged"), None)
 
         with patch.object(
             sys,
@@ -428,7 +425,7 @@ class TestShipClosure(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         content = stem_plan.read_text(encoding="utf-8")
-        self.assertIn("status: merged", content)
+        self.assertNotIn("status:", content)
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))
         self.assertEqual(live["tasks"], [])
 

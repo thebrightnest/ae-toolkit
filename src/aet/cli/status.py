@@ -1,7 +1,7 @@
 """aet-work status — Show the current state of the work queue.
 
-Checks plan drift against the active queue and the settled history log, reads
-the stored state, and reports counts, next tasks, failed tasks, and worktree health.
+Reads the stored state and reports counts, next tasks, failed tasks, and
+worktree health.
 """
 
 from __future__ import annotations
@@ -143,7 +143,6 @@ def _run(
     try:
         data = backend.load()
         queue = data["queue"]
-        integrity_failed = False
     except QueueIntegrityError as exc:
         print(
             f"⚠️  {exc}; read-only status continues with unverified data.",
@@ -153,22 +152,11 @@ def _run(
         # git-refs backend keeps no work-queue.json, so read_queue would
         # return an empty list and hide the very tasks status must surface.
         queue = backend.load(verify=False)["queue"]
-        integrity_failed = True
     runs_dir = Path.cwd() / ".agents" / "runs"
 
     if json_output:
         print(json.dumps(_json_projection(queue, queue_file, runs_dir), indent=2))
         return 0
-
-    orphaned = [] if integrity_failed else backend.plan_drift(plans_dir)
-
-    if orphaned:
-        print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")
-        for pf in orphaned:
-            print(f"  - {pf}")
-        print("Run `aet init-queue` to sync if you want these plans tracked.")
-    else:
-        print("✅ No plan drift detected. All plans are tracked in the queue.")
 
     counts = {
         "planned": 0,

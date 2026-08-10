@@ -5,15 +5,11 @@ work_class: [trivial/normal/critical]
 blocked_by:
   - [blocker-plan-id]
 pipeline: standard
-status: draft
 security_review: required
 security_review_reason: [one line]
 docs_sync: required
 docs_sync_reason: [one line]
 ---
-
-<!-- `status` is the plan lifecycle value (CONTEXT.md): one of `draft`,
-`approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, `abandoned`. -->
 
 <!-- `work_class` is the risk/impact dimension `aet metrics` buckets by
 (`plan_parser.py`): one of `trivial`, `normal`, `critical`. It is the only

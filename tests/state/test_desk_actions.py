@@ -35,7 +35,6 @@ def _write_plan(tmp_path: Path, plan_id: str, status: str = "approved") -> Path:
         "---",
         f"id: {plan_id}",
         "size: M",
-        f"status: {status}",
         "---",
         "",
         f"# {plan_id}",
@@ -186,7 +185,7 @@ class TestAbandonSuccess:
         assert transition_entry["evidence"]["reason"] == "no longer needed"
 
         # Plan file should reflect the terminal state.
-        assert "status: abandoned" in plan.read_text(encoding="utf-8")
+        assert "status:" not in plan.read_text(encoding="utf-8")
         assert "_Stage: abandoned_" in plan.read_text(encoding="utf-8")
 
 
@@ -275,7 +274,7 @@ class TestMergeSuccess:
 
         # Plan file should reflect the terminal state.
         plan_text = plan.read_text(encoding="utf-8")
-        assert "status: merged" in plan_text
+        assert "status:" not in plan_text
         assert "_Stage: merged_" in plan_text
 
     def test_no_second_closure_writer(self, tmp_path, monkeypatch):

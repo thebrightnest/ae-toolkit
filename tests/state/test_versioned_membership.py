@@ -44,10 +44,10 @@ class MockResult:
         self.stderr = stderr
 
 
-def _write_plan(plans_dir: Path, stem: str, status: str = "queued", blocked_by=None):
-    """Write a minimal valid plan file."""
+def _write_plan(plans_dir: Path, stem: str, blocked_by=None):
+    """Write a minimal valid plan file without frontmatter status."""
     path = plans_dir / f"{stem}.md"
-    lines = ["---", f"id: {stem}", "size: S", f"status: {status}"]
+    lines = ["---", f"id: {stem}", "size: S"]
     if blocked_by:
         lines.append("blocked_by:")
         for b in blocked_by:
@@ -113,23 +113,58 @@ def _history_file(root: Path) -> Path:
     return root / ".agents" / "work-history.jsonl"
 
 
-class TestQueueMembershipDerivedFromStatusQueued(unittest.TestCase):
-    """Sprint membership is derived from committed status: queued."""
+def _write_queue_file(queue_file: Path, tasks: list[dict]) -> None:
+    """Write a queue file with the given task list."""
+    queue_file.parent.mkdir(parents=True, exist_ok=True)
+    queue_file.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
 
-    def test_init_queue_includes_queued_and_excludes_draft_approved(self):
-        """init-queue only includes plans whose status is queued."""
+
+class TestQueueMembershipFromExplicitRecord(unittest.TestCase):
+    """Sprint membership is the explicit queue record, never frontmatter status."""
+
+    def test_init_queue_does_not_auto_add_from_status(self):
+        """init-queue preserves explicit members; status no longer selects membership."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             plans_dir = root / "docs" / "plans"
             plans_dir.mkdir(parents=True)
             _write_default_prd(plans_dir)
             _git_init(root)
-            _write_plan(plans_dir, "queued", status="queued")
-            _write_plan(plans_dir, "draft", status="draft")
-            _write_plan(plans_dir, "approved", status="approved")
+            queued_plan = _write_plan(plans_dir, "queued")
+            draft_plan = _write_plan(plans_dir, "draft")
+            approved_plan = _write_plan(plans_dir, "approved")
             queue_file = _queue_file(root)
             history_file = _history_file(root)
             config_file = root / ".agents" / "aet-config.json"
+            _write_queue_file(
+                queue_file,
+                [
+                    {
+                        "id": "queued",
+                        "title": "Queued",
+                        "plan_file": str(queued_plan),
+                        "blocked_by": [],
+                        "blocks": [],
+                        "state": "planned",
+                    },
+                    {
+                        "id": "draft",
+                        "title": "Draft",
+                        "plan_file": str(draft_plan),
+                        "blocked_by": [],
+                        "blocks": [],
+                        "state": "planned",
+                    },
+                    {
+                        "id": "approved",
+                        "title": "Approved",
+                        "plan_file": str(approved_plan),
+                        "blocked_by": [],
+                        "blocks": [],
+                        "state": "planned",
+                    },
+                ],
+            )
 
             with patch.object(
                 sys,
@@ -153,51 +188,44 @@ class TestQueueMembershipDerivedFromStatusQueued(unittest.TestCase):
             self.assertEqual(rc, 0)
             data = json.loads(queue_file.read_text(encoding="utf-8"))
             ids = {t["id"] for t in data.get("tasks", [])}
-            self.assertIn("queued", ids)
-            self.assertNotIn("draft", ids)
-            self.assertNotIn("approved", ids)
+            self.assertEqual(ids, {"queued", "draft", "approved"})
 
-    def test_sync_filters_non_sprint_members(self):
-        """sync removes tasks whose plan is no longer a sprint member."""
+    def test_sync_preserves_explicit_members_regardless_of_status(self):
+        """sync does not remove tasks based on frontmatter status changes."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             plans_dir = root / "docs" / "plans"
             plans_dir.mkdir(parents=True)
             _write_default_prd(plans_dir)
             _git_init(root)
-            queued_plan = _write_plan(plans_dir, "queued", status="queued")
-            draft_plan = _write_plan(plans_dir, "draft", status="queued")
-            # Change the draft plan to status: draft after queue creation.
+            queued_plan = _write_plan(plans_dir, "queued")
+            draft_plan = _write_plan(plans_dir, "draft")
+            # Inject a stale status line into one plan; membership is still explicit.
             content = draft_plan.read_text(encoding="utf-8")
-            draft_plan.write_text(content.replace("status: queued", "status: draft"))
+            draft_plan.write_text(content.replace("---\n", "---\nstatus: draft\n", 1))
 
             queue_file = _queue_file(root)
             history_file = _history_file(root)
-            queue_file.parent.mkdir(parents=True, exist_ok=True)
-            queue_file.write_text(
-                json.dumps(
+            _write_queue_file(
+                queue_file,
+                [
                     {
-                        "tasks": [
-                            {
-                                "id": "queued",
-                                "title": "Queued",
-                                "plan_file": str(queued_plan),
-                                "blocked_by": [],
-                                "blocks": [],
-                                "state": "ready",
-                            },
-                            {
-                                "id": "draft",
-                                "title": "Draft",
-                                "plan_file": str(draft_plan),
-                                "blocked_by": [],
-                                "blocks": [],
-                                "state": "ready",
-                            },
-                        ]
-                    }
-                ),
-                encoding="utf-8",
+                        "id": "queued",
+                        "title": "Queued",
+                        "plan_file": str(queued_plan),
+                        "blocked_by": [],
+                        "blocks": [],
+                        "state": "ready",
+                    },
+                    {
+                        "id": "draft",
+                        "title": "Draft",
+                        "plan_file": str(draft_plan),
+                        "blocked_by": [],
+                        "blocks": [],
+                        "state": "ready",
+                    },
+                ],
             )
 
             with patch.object(
@@ -218,23 +246,37 @@ class TestQueueMembershipDerivedFromStatusQueued(unittest.TestCase):
             self.assertEqual(rc, 0)
             data = json.loads(queue_file.read_text(encoding="utf-8"))
             ids = {t["id"] for t in data.get("tasks", [])}
-            self.assertIn("queued", ids)
-            self.assertNotIn("draft", ids)
+            self.assertEqual(ids, {"queued", "draft"})
 
 
 class TestTwoClonesSelectSameTaskAfterPull(unittest.TestCase):
     """After a pull, two clones derive the same queue membership."""
 
     def test_second_checkout_selects_same_task(self):
-        """A simulated second checkout sees the same queued plans as the first."""
+        """A simulated second checkout rebuilds the same explicit queue members."""
         with tempfile.TemporaryDirectory() as tmp:
             origin = Path(tmp) / "origin"
             origin.mkdir()
             plans_dir = origin / "docs" / "plans"
             plans_dir.mkdir(parents=True)
             _write_default_prd(plans_dir)
-            _write_plan(plans_dir, "queued", status="queued")
-            _write_plan(plans_dir, "draft", status="draft")
+            queued_plan = _write_plan(plans_dir, "queued")
+            _write_plan(plans_dir, "draft")
+            queue_file = _queue_file(origin)
+            history_file = _history_file(origin)
+            _write_queue_file(
+                queue_file,
+                [
+                    {
+                        "id": "queued",
+                        "title": "Queued",
+                        "plan_file": str(queued_plan),
+                        "blocked_by": [],
+                        "blocks": [],
+                        "state": "planned",
+                    }
+                ],
+            )
             _git_init(origin)
 
             clone_a = Path(tmp) / "clone-a"
@@ -285,11 +327,32 @@ class TestReadyBlockedStillComputedFromBlockedBy(unittest.TestCase):
             plans_dir.mkdir(parents=True)
             _write_default_prd(plans_dir)
             _git_init(root)
-            _write_plan(plans_dir, "ready", status="queued")
-            _write_plan(plans_dir, "blocked", status="queued", blocked_by=["ready"])
+            ready_plan = _write_plan(plans_dir, "ready")
+            blocked_plan = _write_plan(plans_dir, "blocked", blocked_by=["ready"])
             queue_file = _queue_file(root)
             history_file = _history_file(root)
             config_file = root / ".agents" / "aet-config.json"
+            _write_queue_file(
+                queue_file,
+                [
+                    {
+                        "id": "ready",
+                        "title": "Ready",
+                        "plan_file": str(ready_plan),
+                        "blocked_by": [],
+                        "blocks": [],
+                        "state": "planned",
+                    },
+                    {
+                        "id": "blocked",
+                        "title": "Blocked",
+                        "plan_file": str(blocked_plan),
+                        "blocked_by": ["ready"],
+                        "blocks": [],
+                        "state": "planned",
+                    },
+                ],
+            )
 
             with patch.object(
                 sys,

@@ -3,7 +3,6 @@ id: cfg-01-config-resolution-overhaul
 size: M
 blocked_by: []
 pipeline: standard
-status: queued
 security_review: required
 security_review_reason: changes config-resolution precedence and file locations; a precedence bug could silently read the wrong config or fail open into trunk-based defaults
 docs_sync: required

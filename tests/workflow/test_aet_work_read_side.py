@@ -166,15 +166,14 @@ class TestStatusStoredState(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         output = result.stdout
-        self.assertIn("No plan drift detected", output)
         self.assertIn("Queue is empty.", output)
         self.assertNotIn("Queue summary:", output)
         self.assertIn("No ready tasks.", output)
         self.assertNotIn("Next ready tasks:", output)
         self.assertNotIn("None.", output)
 
-    def test_plan_drift_is_informational(self):
-        """status exits 0 and still reports active queue state when plan drift exists."""
+    def test_status_ignores_extra_plan_files(self):
+        """status reports queue state and ignores plans not in the queue."""
         plans_dir_tmp = _make_plans_dir(["orphan.md", "t1.md"])
         plans_dir = plans_dir_tmp.name
         queue_file = _make_queue(_resolve_plan_files([
@@ -191,7 +190,7 @@ class TestStatusStoredState(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         output = result.stdout
-        self.assertIn("Plan drift detected", output)
+        self.assertNotIn("Plan drift", output)
         self.assertIn("ready: 1", output)
         self.assertIn("Next ready tasks:", output)
         self.assertIn("One", output)
@@ -397,8 +396,8 @@ class TestStatusJson(unittest.TestCase):
 
 
 class TestNextStoredState(unittest.TestCase):
-    def test_warns_but_picks_ready_on_plan_drift(self):
-        """next warns about plan drift but still picks a stored-ready task."""
+    def test_picks_ready_ignoring_extra_plan_files(self):
+        """next picks a stored-ready task and ignores plans not in the queue."""
         plans_dir_tmp = _make_plans_dir(["orphan.md", "t1.md"])
         plans_dir = plans_dir_tmp.name
         queue_file = _make_queue(_resolve_plan_files([
@@ -425,7 +424,7 @@ class TestNextStoredState(unittest.TestCase):
             any("t1" in c and "transition" in c and "in_progress" in c for c in transition_calls),
             f"Expected transition to in_progress for t1, got {transition_calls}",
         )
-        self.assertIn("Plan drift detected", result.stdout)
+        self.assertNotIn("Plan drift", result.stdout)
 
     def test_picks_first_stored_ready_and_transitions(self):
         """next picks the first stored-ready task and transitions it to in_progress."""

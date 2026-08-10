@@ -253,14 +253,9 @@ class GitHubBackend(Projection):
     def _task_state(self, task: dict[str, Any]) -> str:
         """Map a task to the label key that reflects its current projection.
 
-        Pre-sprint plan status drives the label; in-sprint queue state drives it
-        once the task has been queued.
+        The recorded queue ``state`` drives the label. Backlog entries that were
+        never queued carry ``state: backlog``.
         """
-        status = task.get("status")
-        if status == "draft":
-            return "draft"
-        if status in {"approved", "backlog"}:
-            return "backlog"
         return task.get("state") or "planned"
 
     def _state_label(self, state: str | None) -> str:

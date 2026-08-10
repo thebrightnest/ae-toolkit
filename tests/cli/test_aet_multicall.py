@@ -28,7 +28,7 @@ gate = importlib.import_module("aet.cli.gate")
 class TestNestedCommandGroupRouting(unittest.TestCase):
     """Noun groups route to their Typer subcommands and execute them."""
 
-    def _make_git_repo_with_plan(self, tmp_path: Path, *, status: str = "approved"):
+    def _make_git_repo_with_plan(self, tmp_path: Path):
         """Initialise a git repo with a default PRD and one plan file."""
         plans_dir = tmp_path / "docs" / "plans"
         plans_dir.mkdir(parents=True)
@@ -38,7 +38,7 @@ class TestNestedCommandGroupRouting(unittest.TestCase):
             "# Default PRD\n\n## Requirements\n- **R-1**: default requirement\n",
             encoding="utf-8",
         )
-        make_plan(plans_dir, "feat-001.md", status=status)
+        make_plan(plans_dir, "feat-001.md")
         git(["init"], tmp_path)
         git(["config", "user.email", "test@example.com"], tmp_path)
         git(["config", "user.name", "Test"], tmp_path)
@@ -82,7 +82,8 @@ class TestNestedCommandGroupRouting(unittest.TestCase):
             self.assertEqual(queue[0]["state"], "ready")
 
             plan_text = (plans_dir / "feat-001.md").read_text(encoding="utf-8")
-            self.assertIn("status: queued", plan_text)
+            self.assertNotIn("status:", plan_text)
+            self.assertIn("_Stage: plan-approved_", plan_text)
 
             # Intake no longer commits plan-path status updates (ADR-054).
             log = subprocess.run(
@@ -98,7 +99,7 @@ class TestNestedCommandGroupRouting(unittest.TestCase):
         """``aet backlog add <plan>`` adds an approved plan to the backlog board."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            plans_dir = self._make_git_repo_with_plan(tmp_path, status="approved")
+            plans_dir = self._make_git_repo_with_plan(tmp_path)
 
             with patch.object(backlog, "resolve_projections", return_value=MagicMock()):
                 with patch.object(backlog, "resolve_config", return_value={}):

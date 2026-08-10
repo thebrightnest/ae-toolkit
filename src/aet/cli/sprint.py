@@ -1,10 +1,9 @@
 """aet-work sprint — Sprint membership commands.
 
 ``aet sprint add <plan>`` promotes an approved plan into the runnable sprint:
-it sets the plan frontmatter to ``status: queued`` (for plan paths the durable
-write is deferred to terminal closure), adds the task to the ephemeral work
-queue, and mirrors the ready/blocked state to any configured projection (e.g.
-GitHub Issues labels).
+it adds the task to the ephemeral work queue and records a ``cut`` event in
+the content-addressed ledger. The plan file itself is no longer mutated; queue
+membership is the explicit sprint-add record.
 """
 
 from __future__ import annotations
@@ -30,7 +29,6 @@ from aet.projections.dispatcher import resolve_projections  # noqa: E402
 from aet.queue import (  # noqa: E402
     QueueIntegrityError,
     build_blocks,
-    commit_and_push_status,
     lease_guard,
 )
 
@@ -134,18 +132,7 @@ def _add(args: argparse.Namespace) -> int:
             print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
         return 1
 
-    # Promote the plan to sprint member before touching the queue. The commit
-    # is the durable source of truth; the queue is rebuilt from it.
-    rc = commit_and_push_status(plan_file, "queued")
-    if rc != 0:
-        backend.close()
-        return _fail(
-            f"Plan promotion failed for {plan_file.name}: could not write "
-            f"status update. Fix the git state and re-run `aet sprint add`."
-        )
-
     task = new_task_from_plan(plan_file, settled_ids=settled_ids)
-    task["status"] = "queued"
     queue.append(task)
     build_blocks(queue)
 

@@ -48,13 +48,12 @@ def _make_plan(
     plans_dir: Path,
     name: str,
     *,
-    status: str,
+    stage: str = "plan-approved",
 ) -> Path:
     path = plans_dir / name
     body = f"""---
 id: {Path(name).stem}
 size: M
-status: {status}
 ---
 
 # Plan: {name}
@@ -77,7 +76,7 @@ PRD: docs/prds/default-prd.md
 
 ---
 
-_Stage: plan-approved_
+_Stage: {stage}_
 _Next step: run `aet-backlog-add`_
 """
     path.write_text(body, encoding="utf-8")
@@ -131,8 +130,8 @@ class TestBacklogAdd(unittest.TestCase):
             self.assertEqual(result.exit_code, 1)
             self.assertIn("No plan found", result.stderr)
 
-    def test_backlog_add_draft_plan_labels_aet_draft(self):
-        """A draft plan is boarded with the aet:draft label."""
+    def test_backlog_add_draft_plan_labels_aet_backlog(self):
+        """A draft plan is boarded with the aet:backlog label."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             _git(["init"], tmp)
@@ -141,7 +140,7 @@ class TestBacklogAdd(unittest.TestCase):
 
             plans_dir = tmp_path / "docs" / "plans"
             plans_dir.mkdir(parents=True)
-            plan = _make_plan(plans_dir, "feat-001.md", status="draft")
+            plan = _make_plan(plans_dir, "feat-001.md", stage="plan-draft")
             _git(["add", "-A"], tmp)
             _git(["commit", "-m", "initial"], tmp)
 
@@ -168,8 +167,8 @@ class TestBacklogAdd(unittest.TestCase):
             self.assertEqual(result.exit_code, 0)
 
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn("status: draft", plan_text)
-            self.assertIn("_Stage: plan-approved_", plan_text)
+            self.assertNotIn("status:", plan_text)
+            self.assertIn("_Stage: plan-draft_", plan_text)
 
             create_calls = [
                 call.args[1]
@@ -177,7 +176,7 @@ class TestBacklogAdd(unittest.TestCase):
                 if call.args[1][:3] == ["issue", "create", "--repo"]
             ]
             self.assertEqual(len(create_calls), 1)
-            self.assertIn("aet:draft", create_calls[0])
+            self.assertIn("aet:backlog", create_calls[0])
 
     def test_backlog_add_approved_plan_labels_aet_backlog(self):
         """An approved plan is boarded with the aet:backlog label."""
@@ -189,7 +188,7 @@ class TestBacklogAdd(unittest.TestCase):
 
             plans_dir = tmp_path / "docs" / "plans"
             plans_dir.mkdir(parents=True)
-            plan = _make_plan(plans_dir, "feat-002.md", status="approved")
+            plan = _make_plan(plans_dir, "feat-002.md", stage="plan-approved")
             _git(["add", "-A"], tmp)
             _git(["commit", "-m", "initial"], tmp)
 
@@ -233,7 +232,7 @@ class TestBacklogAdd(unittest.TestCase):
 
             plans_dir = tmp_path / "docs" / "plans"
             plans_dir.mkdir(parents=True)
-            plan = _make_plan(plans_dir, "feat-003.md", status="draft")
+            plan = _make_plan(plans_dir, "feat-003.md", stage="plan-draft")
             _git(["add", "-A"], tmp)
             _git(["commit", "-m", "initial"], tmp)
 
@@ -251,13 +250,13 @@ class TestBacklogAdd(unittest.TestCase):
                     if args[:3] == ["issue", "list", "--repo"]:
                         return _completed(stdout=json.dumps(existing_issues))
                     if args[:3] == ["issue", "create", "--repo"]:
-                        existing_issues.append(_issue(44, "feat-003", ["aet:draft"]))
+                        existing_issues.append(_issue(44, "feat-003", ["aet:backlog"]))
                         return _completed(
                             stdout="https://github.com/owner/repo/issues/44\n"
                         )
                     if args[:2] == ["issue", "view"]:
                         return _completed(
-                            stdout=json.dumps({"labels": [{"name": "aet:draft"}]})
+                            stdout=json.dumps({"labels": [{"name": "aet:backlog"}]})
                         )
                     if args[:2] == ["issue", "edit"]:
                         return _completed(stdout="")
@@ -288,7 +287,7 @@ class TestBacklogAdd(unittest.TestCase):
 
             plans_dir = tmp_path / "docs" / "plans"
             plans_dir.mkdir(parents=True)
-            plan = _make_plan(plans_dir, "feat-004.md", status="draft")
+            plan = _make_plan(plans_dir, "feat-004.md", stage="plan-draft")
             _git(["add", "-A"], tmp)
             _git(["commit", "-m", "initial"], tmp)
 
@@ -333,9 +332,7 @@ class TestBacklogAdd(unittest.TestCase):
                 for call in mock_run.call_args_list
                 if call.args[1][:2] == ["issue", "edit"]
             ]
-            self.assertEqual(len(edit_calls), 1)
-            self.assertIn("aet:draft", edit_calls[0])
-            self.assertIn("aet:backlog", edit_calls[0])
+            self.assertEqual(len(edit_calls), 0)
 
     def test_backlog_add_succeeds_and_warns_when_projection_unavailable(self):
         """A projection failure warns but does not fail the commit."""
@@ -347,7 +344,7 @@ class TestBacklogAdd(unittest.TestCase):
 
             plans_dir = tmp_path / "docs" / "plans"
             plans_dir.mkdir(parents=True)
-            plan = _make_plan(plans_dir, "feat-005.md", status="draft")
+            plan = _make_plan(plans_dir, "feat-005.md", stage="plan-draft")
             _git(["add", "-A"], tmp)
             _git(["commit", "-m", "initial"], tmp)
 
@@ -366,8 +363,8 @@ class TestBacklogAdd(unittest.TestCase):
             self.assertIn("GitHubBackend", result.stderr)
 
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn("status: draft", plan_text)
-            self.assertIn("_Stage: plan-approved_", plan_text)
+            self.assertNotIn("status:", plan_text)
+            self.assertIn("_Stage: plan-draft_", plan_text)
 
 
 if __name__ == "__main__":

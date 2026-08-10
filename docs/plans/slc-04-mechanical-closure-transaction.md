@@ -6,7 +6,6 @@ blocked_by:
   - slc-01-content-addressed-ledger-events
   - slc-03-frontmatter-status-removal
 pipeline: standard
-status: queued
 security_review: required
 security_review_reason: rewrites the merge-closure path that records terminal state
 docs_sync: required

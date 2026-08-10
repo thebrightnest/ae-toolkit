@@ -54,26 +54,24 @@ class TestCorpusLint(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_clean_corpus_passes(self):
-        """Statusless and terminal plans classify as settled; live plans do not."""
-        make_plan(self.plans_dir / "legacy.md")
-        make_plan(self.plans_dir / "merged.md", status="merged")
-        make_plan(self.plans_dir / "abandoned.md", status="abandoned")
-        make_plan(self.plans_dir / "queued.md", status="queued")
-        make_plan(self.plans_dir / "draft.md", status="draft")
+        """Plans without a status field pass the linter."""
+        make_plan(self.plans_dir / "one.md")
+        make_plan(self.plans_dir / "two.md")
 
         violations = plans_lint.lint_corpus(self.plans_dir)
 
         self.assertEqual(violations, [])
 
-    def test_invalid_status_fails(self):
-        """An unrecognized status value is reported per offending plan."""
-        make_plan(self.plans_dir / "bad.md", status="unknown")
+    def test_status_field_fails(self):
+        """A live (non-terminal) status frontmatter field is reported as a violation."""
+        make_plan(self.plans_dir / "legacy.md", status="queued")
+        make_plan(self.plans_dir / "terminal.md", status="merged")
 
         violations = plans_lint.lint_corpus(self.plans_dir)
 
         self.assertEqual(len(violations), 1)
-        self.assertEqual(violations[0][0].name, "bad.md")
-        self.assertIn("unknown", violations[0][1])
+        self.assertEqual(violations[0][0].name, "legacy.md")
+        self.assertIn("live status field is present", violations[0][1])
 
     def test_empty_corpus_passes(self):
         """An empty plans directory produces no violations."""
@@ -113,33 +111,32 @@ class TestPlansLintCli(unittest.TestCase):
         )
 
     def test_plans_lint_routed_through_aet_dispatcher(self):
-        """``aet plans lint`` runs the corpus classifier and exits 0."""
+        """``aet plans lint`` runs the corpus linter and exits 0."""
         repo = self.root / "repo"
         plans_dir = repo / "docs" / "plans"
         plans_dir.mkdir(parents=True)
         subprocess.run(["git", "init", "-q"], cwd=str(repo), check=True)
-        make_plan(plans_dir / "legacy.md")
-        make_plan(plans_dir / "merged.md", status="merged")
+        make_plan(plans_dir / "clean.md")
 
         result = self._run_aet(repo, "plans", "lint")
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("all 2 plans classified correctly", result.stdout)
+        self.assertIn("all 1 plans passed lint", result.stdout)
 
-    def test_plans_lint_reports_invalid_status_file(self):
-        """``aet plans lint`` names the plan file with the invalid status."""
+    def test_plans_lint_reports_status_field(self):
+        """``aet plans lint`` names the plan file with the live status field."""
         repo = self.root / "repo"
         plans_dir = repo / "docs" / "plans"
         plans_dir.mkdir(parents=True)
         subprocess.run(["git", "init", "-q"], cwd=str(repo), check=True)
-        make_plan(plans_dir / "legacy.md")
-        make_plan(plans_dir / "bad.md", status="unknown")
+        make_plan(plans_dir / "clean.md")
+        make_plan(plans_dir / "bad.md", status="queued")
 
         result = self._run_aet(repo, "plans", "lint")
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("bad.md", result.stderr)
-        self.assertIn("unknown", result.stderr)
+        self.assertIn("live status field is present", result.stderr)
 
 
 if __name__ == "__main__":

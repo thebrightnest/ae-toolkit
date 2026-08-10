@@ -1,9 +1,10 @@
-"""aet-work init-queue — Rebuild the work queue from docs/plans/*.md.
+"""aet-work init-queue — Rebuild the work queue from the existing sprint record.
 
-Reads every atomic plan, validates the frontmatter contract, rebuilds
-dependency facts, preserves terminal metadata from an existing queue, and
-writes a fresh `.agents/work-queue.json`.
-It does **not** derive actionable status or promote tasks.
+Reads the plans that are already represented in the queue, validates the
+frontmatter contract, rebuilds dependency facts, preserves terminal metadata
+from the settled history log and git ancestry, and writes a fresh
+`.agents/work-queue.json`. It does **not** auto-add new plans or derive
+actionable status.
 """
 
 from __future__ import annotations
@@ -55,15 +56,44 @@ def plan_footer_stage(plan_file: str | Path) -> str | None:
     path = Path(plan_file)
     if not path.is_file():
         return None
-    # Footer stage lines look like: _Stage: plan-approved_ or _Stage: merged_
+    # Footer stage lines look like: _Stage: plan-approved_ or *Stage: merged*
     for line in path.read_text(errors="ignore").splitlines():
         stripped = line.strip()
-        if stripped.lower().startswith("_stage:") or stripped.lower().startswith("*stage:*"):
+        lowered = stripped.lower()
+        if lowered.startswith("_stage:") or lowered.startswith("*stage:"):
             # Extract value after the colon, trimming markdown emphasis.
             value = stripped.split(":", 1)[1].strip()
             value = value.strip("_").strip("*").strip()
             return value or None
     return None
+
+
+def _is_settled_from_authority(
+    plan_file: str | Path,
+    history_by_id: dict[str, dict],
+    repo_root: str | Path | None = None,
+) -> bool:
+    """Return True when a plan is settled from the ledger or git ancestry.
+
+    Settled-ness is derived from the append-only settled history, a merge
+    commit mentioning the task id on ``origin/main``, or a terminal footer
+    stage. It is never derived from plan frontmatter ``status``.
+    """
+    path = Path(plan_file)
+    tid = path.stem
+
+    hist = history_by_id.get(tid)
+    if hist and hist.get("state") in HISTORY_TERMINAL_STATES:
+        return True
+
+    if git_merge_commit_for(tid, repo_root=repo_root):
+        return True
+
+    footer = plan_footer_stage(path)
+    if footer in ("merged", "abandoned"):
+        return True
+
+    return False
 
 
 def reconcile_terminal_state(
@@ -215,20 +245,6 @@ def _run(
     existing_by_file = {t.get("plan_file"): t for t in queue if t.get("plan_file")}
     history_by_id = {t.get("id"): t for t in history if t.get("id")}
 
-    plan_files = sorted(plans_dir.glob("*.md"))
-
-    # Scope validation to the plans that will actually be included in the queue.
-    # Settled and non-sprint plans are skipped anyway; if they also fail validation
-    # we warn and continue instead of aborting the rebuild (ADR-013 regeneration
-    # guarantee). Included plans keep the fail-closed contract.
-    included_plan_files: list[Path] = []
-    excluded_plan_files: list[Path] = []
-    for pf in plan_files:
-        if plan_validate.is_settled_plan(pf) or not plan_validate.is_sprint_member(pf):
-            excluded_plan_files.append(pf)
-        else:
-            included_plan_files.append(pf)
-
     repo_root = Path(
         subprocess.run(
             ["git", "-C", str(plans_dir), "rev-parse", "--show-toplevel"],
@@ -238,17 +254,20 @@ def _run(
         or str(plans_dir.parent.parent)
     )
 
-    # Warn for invalid plans that are being skipped for unrelated reasons.
-    if excluded_plan_files:
-        excluded_findings = plan_validate.validate(excluded_plan_files, repo_root=repo_root)
-        excluded_texts = {pf: pf.read_text(errors="ignore") for pf in excluded_plan_files}
-        excluded_findings = plan_validate.apply_acks(excluded_findings, excluded_texts)
-        for finding in excluded_findings:
-            if not finding.acked:
-                print(
-                    f"⚠️ {finding.plan.name}: {finding.check_id}: {finding.message}",
-                    file=sys.stderr,
-                )
+    # Queue membership is the explicit sprint-add record. Rebuild only the
+    # plans that are already represented in the queue, skip plans that are
+    # settled according to the ledger or git ancestry, and validate the
+    # remaining included set fail-closed.
+    included_plan_files: list[Path] = []
+    skipped_settled = 0
+    for pf_str, existing in existing_by_file.items():
+        pf = Path(pf_str)
+        if not pf.is_file():
+            continue
+        if _is_settled_from_authority(pf, history_by_id, repo_root=repo_root):
+            skipped_settled += 1
+            continue
+        included_plan_files.append(pf)
 
     # Fail closed for invalid plans in the included set.
     findings = plan_validate.validate(included_plan_files, repo_root=repo_root)
@@ -265,36 +284,16 @@ def _run(
 
     preserved = 0
     added = 0
-    skipped_settled = 0
-    skipped_non_sprint = 0
     reconciled_terminal = 0
     final_queue: list[dict] = []
     seen_files = set()
 
-    for pf in plan_files:
+    for pf in included_plan_files:
         pf_str = str(pf)
-
-        # Settled-ness is derived from committed plan data (status frontmatter),
-        # not from the local gitignored history log.
-        if plan_validate.is_settled_plan(pf):
-            skipped_settled += 1
-            continue
-
-        # Sprint membership is derived from committed status. Only plans whose
-        # frontmatter status is ``queued`` belong in the live queue; approved or
-        # draft plans live on the board but are not in the sprint.
-        if not plan_validate.is_sprint_member(pf):
-            skipped_non_sprint += 1
-            continue
-
-        if pf_str in existing_by_file:
-            existing = existing_by_file[pf_str]
-            fresh = new_task_from_plan(pf)
-            task = preserve_task_metadata(existing, fresh, history_by_id, repo_root=repo_root)
-            preserved += 1
-        else:
-            task = new_task_from_plan(pf)
-            added += 1
+        existing = existing_by_file[pf_str]
+        fresh = new_task_from_plan(pf)
+        task = preserve_task_metadata(existing, fresh, history_by_id, repo_root=repo_root)
+        preserved += 1
 
         if reconcile_terminal_state(task, history_by_id, pf, repo_root=repo_root):
             tid = task.get("id")
@@ -335,7 +334,7 @@ def _run(
 
     print(
         f"✅ init-queue complete: {added} new tasks added, {preserved} existing tasks preserved, "
-        f"{skipped_settled} settled tasks skipped, {skipped_non_sprint} non-sprint tasks skipped, "
+        f"{skipped_settled} settled tasks skipped, "
         f"{reconciled_terminal} reconciled as terminal, {len(final_queue)} active tasks."
     )
     backend.close()

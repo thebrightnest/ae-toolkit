@@ -1,7 +1,6 @@
 ---
 id: tll-04-evolve-metrics-learning-loop
 size: S
-status: queued
 blocked_by:
   - tll-03-metrics-cli-surface
 pipeline: minimal

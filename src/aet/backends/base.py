@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import Any
 
 
@@ -38,10 +37,6 @@ class TaskBackend(ABC):
         ``wrapper`` contains optional envelope metadata (e.g. ``source_prd``,
         ``queue_updated_at``) that JSON-backed stores may merge into the file.
         """
-
-    @abstractmethod
-    def plan_drift(self, plans_dir: str | Path) -> list[str]:
-        """Return a list of plan files that are not tracked in queue or history."""
 
     @abstractmethod
     def close(self) -> None:

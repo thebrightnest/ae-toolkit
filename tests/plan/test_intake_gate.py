@@ -282,7 +282,7 @@ class TestAddIntakeGate(unittest.TestCase):
 
 class TestInitQueueIntakeGate(unittest.TestCase):
     def test_init_queue_rejects_failing_unacked_plan(self):
-        """init-queue runs the full suite and fails closed on unacked findings."""
+        """init-queue runs the full suite and fails closed on included unacked findings."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             plans_dir = root / "docs" / "plans"
@@ -294,7 +294,21 @@ class TestInitQueueIntakeGate(unittest.TestCase):
             bad.write_text(
                 "---\nsize: S\nstatus: queued\n---\n\n# Bad\n", encoding="utf-8"
             )
-            queue_file = _write_json_file([])
+            queue_file = _write_json_file({
+                "tasks": [{
+                    "id": "bad",
+                    "title": "Bad",
+                    "plan_file": str(bad),
+                    "blocked_by": [],
+                    "blocks": [],
+                    "state": "planned",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                    "completed_at": None,
+                    "merged_at": None,
+                }]
+            })
             history_file = _make_history([])
 
             result = run_typer(aet.app, [
@@ -309,18 +323,33 @@ class TestInitQueueIntakeGate(unittest.TestCase):
             self.assertIn("missing id", result.stderr.lower())
             # Queue must not be mutated.
             with open(queue_file, "r", encoding="utf-8") as f:
-                self.assertEqual(json.load(f), [])
+                data = json.load(f)
+            self.assertEqual([t["id"] for t in data.get("tasks", [])], ["bad"])
 
     def test_init_queue_admits_clean_plan(self):
-        """A clean plan passes the full suite and is ingested."""
+        """A clean included plan passes validation and is preserved."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             plans_dir = root / "docs" / "plans"
             prds_dir = root / "docs" / "prds"
             plans_dir.mkdir(parents=True)
             prds_dir.mkdir(parents=True)
-            _make_clean_plan(plans_dir, prds_dir, "good.md")
-            queue_file = _write_json_file([])
+            good = _make_clean_plan(plans_dir, prds_dir, "good.md")
+            queue_file = _write_json_file({
+                "tasks": [{
+                    "id": "good",
+                    "title": "Good",
+                    "plan_file": str(good),
+                    "blocked_by": [],
+                    "blocks": [],
+                    "state": "planned",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                    "completed_at": None,
+                    "merged_at": None,
+                }]
+            })
             history_file = _make_history([])
 
             result = run_typer(aet.app, [

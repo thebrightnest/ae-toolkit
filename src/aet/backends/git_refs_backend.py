@@ -206,22 +206,6 @@ class GitRefsBackend(TaskBackend):
         self._envelope["schema_version"] = ENVELOPE_SCHEMA_VERSION
         self._write_envelope()
 
-    def plan_drift(self, plans_dir: str | Path) -> list[str]:
-        """Return plan files that are not present in queue or history."""
-        data = self.load()
-        queued_files = {
-            t.get("plan_file") for t in data["queue"] if t.get("plan_file")
-        }
-        settled_files = {
-            t.get("plan_file") for t in data["history"] if t.get("plan_file")
-        }
-        plan_files = sorted(Path(plans_dir).glob("*.md"))
-        return [
-            str(pf)
-            for pf in plan_files
-            if str(pf) not in queued_files and str(pf) not in settled_files
-        ]
-
     def close(self) -> None:
         """No-op: every git invocation is self-contained."""
         return
