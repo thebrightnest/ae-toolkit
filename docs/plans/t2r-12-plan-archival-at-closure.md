@@ -181,5 +181,5 @@ pipeline to `standard`.
 
 ---
 
-*Stage: implemented*
+*Stage: qa-complete*
 *Next step: run `aet-work`*
