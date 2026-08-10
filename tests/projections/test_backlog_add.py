@@ -101,21 +101,30 @@ def _make_config(project_dir: Path) -> Path:
 
 
 class TestBacklogAdd(unittest.TestCase):
-    def _run_backlog_add(self, cwd: str, target: str, config_path: Path, plans_dir: Path):
+    def _run_backlog_add(
+        self,
+        cwd: str,
+        target: str,
+        config_path: Path,
+        plans_dir: Path,
+        queue_file: Path | None = None,
+        history_file: Path | None = None,
+    ):
         """Run the backlog add command and return its result."""
-        return run_typer(
-            aet.app,
-            [
-                "backlog",
-                "add",
-                target,
-                "--config",
-                str(config_path),
-                "--plans-dir",
-                str(plans_dir),
-            ],
-            cwd=cwd,
-        )
+        argv = [
+            "backlog",
+            "add",
+            target,
+            "--config",
+            str(config_path),
+            "--plans-dir",
+            str(plans_dir),
+        ]
+        if queue_file is not None:
+            argv.extend(["--queue-file", str(queue_file)])
+        if history_file is not None:
+            argv.extend(["--history-file", str(history_file)])
+        return run_typer(aet.app, argv, cwd=cwd)
 
     def test_backlog_add_unknown_plan_id_fails_closed(self):
         """Backlog add exits non-zero when the plan file or task ID is unknown."""
@@ -221,6 +230,78 @@ class TestBacklogAdd(unittest.TestCase):
             ]
             self.assertEqual(len(create_calls), 1)
             self.assertIn("aet:backlog", create_calls[0])
+
+    def test_backlog_add_rejects_sprint_member(self):
+        """A plan already in the sprint queue is rejected, not re-boarded."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            _git(["init"], tmp)
+            _git(["config", "user.email", "test@example.com"], tmp)
+            _git(["config", "user.name", "Test"], tmp)
+
+            plans_dir = tmp_path / "docs" / "plans"
+            plans_dir.mkdir(parents=True)
+            plan = _make_plan(plans_dir, "feat-002.md", stage="plan-approved")
+            _git(["add", "-A"], tmp)
+            _git(["commit", "-m", "initial"], tmp)
+
+            config_path = _make_config(tmp_path)
+            queue_file = tmp_path / ".agents" / "work-queue.json"
+            queue_file.parent.mkdir(parents=True, exist_ok=True)
+            queue_file.write_text(
+                json.dumps(
+                    [{"id": "feat-002", "state": "planned", "plan_file": str(plan)}]
+                ),
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(
+                GitHubBackend, "_run_gh", autospec=True
+            ) as mock_run:
+                mock_run.side_effect = AssertionError(
+                    "sprint member must not reach the projection"
+                )
+                result = self._run_backlog_add(
+                    tmp, str(plan), config_path, plans_dir, queue_file=queue_file
+                )
+
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("already a sprint member", result.stderr)
+
+    def test_backlog_add_rejects_settled_history(self):
+        """A plan already settled in history is rejected, not re-boarded."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            _git(["init"], tmp)
+            _git(["config", "user.email", "test@example.com"], tmp)
+            _git(["config", "user.name", "Test"], tmp)
+
+            plans_dir = tmp_path / "docs" / "plans"
+            plans_dir.mkdir(parents=True)
+            plan = _make_plan(plans_dir, "feat-002.md", stage="plan-approved")
+            _git(["add", "-A"], tmp)
+            _git(["commit", "-m", "initial"], tmp)
+
+            config_path = _make_config(tmp_path)
+            history_file = tmp_path / ".agents" / "work-history.jsonl"
+            history_file.parent.mkdir(parents=True, exist_ok=True)
+            history_file.write_text(
+                json.dumps({"id": "feat-002", "state": "merged"}) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(
+                GitHubBackend, "_run_gh", autospec=True
+            ) as mock_run:
+                mock_run.side_effect = AssertionError(
+                    "settled task must not reach the projection"
+                )
+                result = self._run_backlog_add(
+                    tmp, str(plan), config_path, plans_dir, history_file=history_file
+                )
+
+            self.assertEqual(result.exit_code, 1)
+            self.assertIn("already settled in history", result.stderr)
 
     def test_backlog_add_twice_creates_no_duplicate(self):
         """Re-running backlog add finds the existing issue by plan id."""

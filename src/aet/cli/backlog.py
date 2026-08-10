@@ -15,9 +15,10 @@ import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_parser  # noqa: E402
-from aet.backends.factory import resolve_config  # noqa: E402
+from aet.backends.factory import create_backend, resolve_config  # noqa: E402
 from aet.plan_parser import stage_from_plan  # noqa: E402
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
+from aet.queue import QueueIntegrityError  # noqa: E402
 
 # Plans accepted by the backlog entry point. Plans that are not already sprint
 # members may be added to the board; sprint members are managed through
@@ -68,12 +69,50 @@ def _add(args: argparse.Namespace) -> int:
             f"added to the backlog."
         )
 
+    backend = create_backend(
+        config_path=args.config,
+        queue_file=args.queue_file,
+        history_file=args.history_file,
+    )
+    try:
+        data = backend.load()
+    except QueueIntegrityError as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        backend.close()
+        return 1
+    queue = data["queue"]
+    history = data["history"]
+
+    plan_str = str(plan_file)
+    existing = next(
+        (
+            t
+            for t in queue
+            if t.get("plan_file") == plan_str or t.get("id") == plan_file.stem
+        ),
+        None,
+    )
+    if existing is not None:
+        backend.close()
+        return _fail(
+            f"Refusing to add {plan_file.name}: already a sprint member "
+            f"({existing.get('state', 'planned')})."
+        )
+
+    settled_ids = {t.get("id") for t in history if t.get("id")}
+    if plan_file.stem in settled_ids:
+        backend.close()
+        return _fail(
+            f"Refusing to add {plan_file.name}: task is already settled in history."
+        )
+
     # The projection is fail-open: a missing ``gh`` or network problem warns
     # but does not block the local record (R-4).
     config = resolve_config(args.config)
     projections = resolve_projections(config)
     task = _task_from_plan(plan_file)
     projections.on_add(task, is_new=True)
+    backend.close()
 
     print(f"✓ Added {plan_file.name} to the backlog as aet:backlog.")
     return 0
@@ -87,12 +126,20 @@ def add(
     target: str = typer.Argument(..., help="Plan file path or task ID to add to the backlog"),
     plans_dir: str = typer.Option("docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"),
     config: str = typer.Option(".agents/aet-config.json", "--config", help="Path to AET backend configuration"),
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json", "--queue-file", help="Path to work-queue.json"
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"
+    ),
 ) -> None:
     """Add a plan to the backlog."""
     args = argparse.Namespace(
         target=target,
         plans_dir=plans_dir,
         config=config,
+        queue_file=queue_file,
+        history_file=history_file,
     )
     rc = _add(args)
     raise typer.Exit(rc)
