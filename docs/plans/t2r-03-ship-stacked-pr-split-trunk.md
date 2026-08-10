@@ -72,7 +72,7 @@ Collision notes:
 
 ## Task List
 
-1. Trunk substitution in `src/aet/cli/ship.py`: resolve trunk via
+1. ✓ Trunk substitution in `src/aet/cli/ship.py`: resolve trunk via
    `resolve_trunk_branch(repo_root, resolve_config(".agents/aet-config.json"))`
    (the `aet_state.py:38-44` pattern) and thread the resolved ref
    through `_determine_pr_base()`, `_rebase_independent_branch()`,
@@ -82,7 +82,7 @@ Collision notes:
    "main". Delete the "substitute `<trunk>`" prose at
    `skills/aet-ship/references/squash-merge-handling.md:3` (if the file
    survives t2r-02-ship-squash-verify-fallback) — M (traces: R-2)
-2. Stacked-PR completion in `aet ship open`: refactor
+2. ✓ Stacked-PR completion in `aet ship open`: refactor
    `_determine_pr_base()` to return the stack (trunk ref, parent branch,
    position in chain) instead of a bare base string; `_build_pr_body()`
    injects a stack section naming the parent branch, the position
@@ -91,12 +91,12 @@ Collision notes:
    trunk. Delete `skills/aet-ship/examples/stacked-branch-example.md`
    wholesale — detection, parent identification, body injection, and
    the stop-note are now code — M (traces: R-2)
-3. Stacked merge guard in `cmd_merge`: when the detected stack parent
+3. ✓ Stacked merge guard in `cmd_merge`: when the detected stack parent
    differs from the resolved trunk and `--branch` targets the trunk,
    exit non-zero naming the parent ("merge into `<parent>` or rebase
    onto `<trunk>` first"); skipped when `--base` explicitly overrides
    detection — S (traces: R-2)
-4. `aet ship split` subcommand (argparse + Typer wiring in
+4. ✓ `aet ship split` subcommand (argparse + Typer wiring in
    `src/aet/cli/ship.py`): refuses on a dirty tree or empty PR range;
    prints the original HEAD SHA for recovery, runs
    `git reset --soft <pr_base>`, then commits caller-supplied groups
@@ -107,17 +107,17 @@ Collision notes:
    Slim `skills/aet-ship/references/commit-splitting.md` to the
    bisectability judgment sections, pointing mechanics at the command;
    add the command to `skills/aet-ship/SKILL.md` Commands — M (traces: R-2)
-5. Ledger fact on stacked PR open: after successful PR creation with a
+5. ✓ Ledger fact on stacked PR open: after successful PR creation with a
    non-trunk base, emit `Ledger().write_event(source="aet-ship",
    task=<plan id>, kind="cut", ref=<PR URL>, ref_kind="pr",
    payload={"pr_base": ..., "stacked": True, "parent": ...})` —
    S (traces: R-2)
-6. Tests: new `tests/test_ship_split.py` (unit + fixture-repo
+6. ✓ Tests: new `tests/test_ship_split.py` (unit + fixture-repo
    integration); extend `tests/test_ship_open.py` (stacked body
    injection + ledger event), `tests/test_ship_merge.py` (stacked merge
    guard), and `tests/test_ship_gate.py` (non-`main` trunk fixture) —
    M (traces: R-2)
-7. Merge branch to main and verify integration — S
+7. [Deferred: deferred to `aet-ship` closure] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -203,5 +203,5 @@ surface; default grouping applies, no isolation override warranted.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
