@@ -5,7 +5,7 @@ work_class: critical
 blocked_by:
   - slc-01-content-addressed-ledger-events
 pipeline: standard
-status: queued
+status: merged
 security_review: required
 security_review_reason: adds network transport of queue state to the forge remote
 docs_sync: required
@@ -99,5 +99,5 @@ reads them; no data migration is involved.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
