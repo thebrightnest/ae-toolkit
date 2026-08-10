@@ -203,5 +203,5 @@ surface; default grouping applies, no isolation override warranted.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
