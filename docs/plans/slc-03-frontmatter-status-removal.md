@@ -106,4 +106,5 @@ readable by the pre-change code.
 
 ---
 
-*Stage: implemented*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
