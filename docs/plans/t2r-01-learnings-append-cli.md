@@ -165,5 +165,5 @@ applies: `standard` was chosen for it over the S-size `minimal` default.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
