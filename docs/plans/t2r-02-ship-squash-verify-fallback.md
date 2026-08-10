@@ -70,7 +70,7 @@ state.
 
 ## Task List
 
-1. Line-drift tolerant diff-match in `src/aet/cli/aet_state.py`: extend
+1. ✓ Line-drift tolerant diff-match in `src/aet/cli/aet_state.py`: extend
    `resolve_by_diff` (or add a sibling helper it delegates to) so that after
    the exact-match pass over the last 20 `origin/<target>` commits, a second
    pass accepts a candidate whose commit diff differs from the branch diff by
@@ -78,7 +78,7 @@ state.
    SHA so callers can report it. Keep exact match preferred — drift match only
    fires when no exact match exists. Covered by new unit tests in
    `tests/ship/test_squash_fallback.py` — M (traces: R-2)
-2. `aet ship verify <task_id|plan> [--squash-fallback]` in
+2. ✓ `aet ship verify <task_id|plan> [--squash-fallback]` in
    `src/aet/cli/ship.py`: runs the existing resolution ladder (ancestry →
    `gh pr view` mergeCommit → diff fallback from task 1), prints the resolved
    merge SHA, strategy, and match kind, and mutates nothing. Halt conditions
@@ -87,7 +87,7 @@ state.
    branch may be unmerged) and `EXIT_VERIFY_AMBIGUOUS` (empty branch diff, or
    more than one drift-match candidate). Covered by new integration tests in
    `tests/cli/test_ship_verify.py` — M (traces: R-2)
-3. `aet ship close --delete-branch` in `src/aet/cli/ship.py`: run the existing
+3. ✓ `aet ship close --delete-branch` in `src/aet/cli/ship.py`: run the existing
    `cmd_record_merge` closure first; only after it returns success (queue
    transition + ledger `land` event + footer push all landed) delete the
    remote branch (`git push origin --delete`) and the local branch
@@ -96,7 +96,7 @@ state.
    and the command exits `EXIT_DELETE_BEFORE_RECORD`. Honor `--dry-run` by
    printing the deletions that would follow a successful record. Covered by
    extending `tests/cli/test_ship_close.py` — M (traces: R-2)
-4. Skill prose: delete `skills/aet-ship/references/squash-merge-handling.md`
+4. ✓ Skill prose: delete `skills/aet-ship/references/squash-merge-handling.md`
    wholesale; rewrite `skills/aet-ship/examples/squash-merge-example.md` to
    drive `aet ship verify --squash-fallback` and `aet ship close
    --delete-branch` instead of manual `gh`/`git branch -D` choreography; in
@@ -191,5 +191,5 @@ per ADR-047 precedent from slc-05).
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
