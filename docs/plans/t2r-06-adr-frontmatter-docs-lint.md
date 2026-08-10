@@ -69,42 +69,42 @@ Check.
 
 ## Task List
 
-1. Write ADR-056 (new file `056-adr-relations-as-frontmatter.md` under
+1. [x] Write ADR-056 (new file `056-adr-relations-as-frontmatter.md` under
    `docs/adr/`): extends ADR-040's
    grammar with the ADR frontmatter contract (`subject:` list, `supersedes:`
    list of ADR numbers) and the new `unique_live_subject` rule type
    (one subject, one live rule); register it in the `docs/adr/README.md`
    index — S (traces: R-9)
-2. Add the frontmatter contract to `docs/adr/000-template.md`: YAML
+2. [x] Add the frontmatter contract to `docs/adr/000-template.md`: YAML
    frontmatter block with `subject:` and `supersedes:` keys and a one-line
    statement of the one-live-rule invariant — S (traces: R-9)
-3. Backfill frontmatter on the existing ADRs covering the five review-named
+3. [x] Backfill frontmatter on the existing ADRs covering the five review-named
    subjects — state, evidence, branch model, unattended gates, metrics —
    choosing subject names granularly and recording `supersedes:` edges where
    a later ADR replaced an earlier mechanism (e.g. 055's ledger settled-ness
    supersedes 034's versioned-plan-data mechanism), so every declared
    subject resolves to exactly one live ADR and `aet docs lint` passes on
    the real corpus — M (traces: R-9)
-4. Implement `unique_live_subject` in `src/aet/docs_lint.py`: extend
+4. [x] Implement `unique_live_subject` in `src/aet/docs_lint.py`: extend
    `VALID_RULE_TYPES` (line 13) and the evaluator to load every `*.md`
    under the rule's target directory (excluding `000-template.md` and
    `README.md`), parse frontmatter with `yaml.safe_load` only, group by
    `subject:`, and fail when a subject has more than one ADR not named in
    another ADR's `supersedes:` — the violation message names the subject
    and all live ADR ids — M (traces: R-9)
-5. Resolve contradiction 2: delete the "direct JSON update" permission at
+5. [x] Resolve contradiction 2: delete the "direct JSON update" permission at
    `skills/aet-work/references/queue-commands.md:169` (the stale-worktree
    repair goes through `aet state transition` only, matching line 271), and
    rewrite `skills/aet-work/SKILL.md:65` to the post-slc-01 truth —
    git-refs envelope is `schema_version`-stamped with live refs as ground
    truth (ADR-055); tamper-evident `content_hash` protection applies to the
    JSON backend only — S (traces: R-9)
-6. Resolve contradiction 3: change
+6. [x] Resolve contradiction 3: change
    `skills/aet-upgrade/references/breaking-change-template.md:68` from
    `Next step: aet-pipeline-implement` to `Next step: aet-work`, matching
    the canonical footer in `skills/aet-upgrade/SKILL.md:100-106` — S
    (traces: R-9)
-7. Codify all three resolutions in `.agents/doc-rules.yaml`: the
+7. [x] Codify all three resolutions in `.agents/doc-rules.yaml`: the
    `unique_live_subject` rule targeting `docs/adr/`; `must_contain` "No
    commit or push happens at intake" on `skills/aet-work/SKILL.md` and
    `skills/aet-work/references/queue-commands.md`; `must_not_contain`
@@ -113,12 +113,12 @@ Check.
    `skills/aet-upgrade/references/breaking-change-template.md`;
    `must_not_contain` "direct JSON update" on
    `skills/aet-work/references/queue-commands.md` — S (traces: R-9)
-8. Add unit tests for the new rule type in
+8. [x] Add unit tests for the new rule type in
    `tests/scripts/test_docs_lint.py`: dual-live subject fails, superseded
    subject passes, ADR without frontmatter is ignored, malformed frontmatter
    fails closed with a diagnostic message, message names subject and live
    ids — S (traces: R-9)
-9. Merge branch to main and verify integration — S
+9. [ ] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -164,24 +164,24 @@ Check.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`); full gate `make validate` green
-- [ ] Tests pass (`make test`)
-- [ ] `tests/scripts/test_docs_lint.py` covers `unique_live_subject` (unit,
+- [x] Lint passes (`make lint-py`); full gate `make validate` green
+- [x] Tests pass (`make test`)
+- [x] `tests/scripts/test_docs_lint.py` covers `unique_live_subject` (unit,
       single layer: rules fixture + tmp ADR tree): dual-live subject fails
       naming subject and live ids; superseded subject passes; frontmatter
       parsed with `yaml.safe_load` only
-- [ ] Integration (real corpus): `aet docs lint` exits 0 after the backfill,
+- [x] Integration (real corpus): `aet docs lint` exits 0 after the backfill,
       and exits 1 when a fixture ADR claims an already-live subject (the
       PRD's deliberately-introduced-dual-live-rule acceptance criterion)
-- [ ] `grep -rn "aet-pipeline-implement" skills/ docs/adr/ .agents/` returns
+- [x] `grep -rn "aet-pipeline-implement" skills/ docs/adr/ .agents/` returns
       no live-surface hits; `grep -n "direct JSON update"
       skills/aet-work/references/queue-commands.md` is empty;
       `grep -n "content_hash" skills/aet-work/SKILL.md` no longer describes
       the git-refs backend
-- [ ] No new source file introduced without a named test: `docs_lint.py` is
+- [x] No new source file introduced without a named test: `docs_lint.py` is
       extended in place and covered by the named `test_docs_lint.py` cases
       (no API-boundary tests — no frontend/backend contract touched)
-- [ ] R-trace coverage: R-9 covered by tasks 1–8; no task cites another R-id
+- [x] R-trace coverage: R-9 covered by tasks 1–8; no task cites another R-id
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -219,5 +219,5 @@ surface beyond the lint evaluator itself.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*

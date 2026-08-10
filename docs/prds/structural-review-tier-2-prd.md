@@ -80,6 +80,8 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 4. **Rehearsal fixture ecosystem — RESOLVED:** npm (`npm ci`) for the R-12 fixture (t2r-13); composer coverage arrives with item 0's `worktree_setup`, which the rehearsal then exercises.
 5. **Learnings injection threshold — RESOLVED:** t2r-07 degrades to top-N recent entries; the item-3 recurrence-threshold mechanism plugs into the same selector interface when it lands.
 
+<!-- markdownlint-disable MD024 -->
+
 ## Divergence Summary
 
 _Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
@@ -98,7 +100,7 @@ _Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
 
 ---
 
-*Recorded: 2026-08-10 — Branch: t2r-02-ship-squash-verify-fallback*
+_Recorded: 2026-08-10 — Branch: t2r-02-ship-squash-verify-fallback_
 
 ### Changed from plan
 
@@ -120,7 +122,7 @@ No meaningful divergences between the t2r-02 plan and the implementation.
 
 ---
 
-*Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command*
+_Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command_
 
 ### Changed from plan
 
@@ -132,7 +134,7 @@ No meaningful divergences between the t2r-02 plan and the implementation.
 
 ---
 
-*Recorded: 2026-08-10 — Branch: t2r-10-run-handoff-note*
+_Recorded: 2026-08-10 — Branch: t2r-10-run-handoff-note_
 
 ### Changed from plan
 
@@ -177,6 +179,28 @@ _Recorded: 2026-08-10 — Branch: t2r-12-plan-archival-at-closure_
 - None.
 
 ---
+
+_Recorded: 2026-08-11 — Branch: t2r-06-adr-frontmatter-docs-lint_
+
+### Changed from plan
+
+- Added directory-target support for `must_contain` / `must_not_contain` rules so
+  the `must_not_contain "commit the plan files" scoped to skills/` rule could be
+  expressed directly. The plan described the rule as scoped to `skills/`; the
+  base rule engine previously only supported file targets.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- Task 9 (merge branch to main and verify integration): deferred to the
+  `aet-ship` closure stage, consistent with the standard pipeline.
+
+---
+
+<!-- markdownlint-enable MD024 -->
 
 _Stage: synced_
 _Next step: run `aet-ship`_
