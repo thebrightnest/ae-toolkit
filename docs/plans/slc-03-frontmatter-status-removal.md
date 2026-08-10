@@ -45,7 +45,7 @@ than patched.
 5. [x] Regression test: a plan with `status: queued` in frontmatter and
    `*Stage: merged*` in its footer is NOT re-queued by `init-queue`
    (the five-plan defect as a fixture) — S (traces: R-1)
-6. [x] Merge branch to main and verify integration — S
+6. [Deferred: merge happens at `aet-ship` stage] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -92,7 +92,7 @@ than patched.
 - [x] `aet plans lint` errors on a live `status` field (unit)
 - [x] `grep -rn "plan_drift" src/aet` returns nothing (structural)
 - [x] R-trace coverage: R-1, R-9 covered by tasks 1–5
-- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [Deferred: pending `aet-ship`] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -106,5 +106,5 @@ readable by the pre-change code.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*

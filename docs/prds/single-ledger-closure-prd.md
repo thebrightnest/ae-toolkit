@@ -306,5 +306,21 @@ this PRD are mutually exclusive work).
 - **UI Coverage Lens** — not applied: CLI-only change, no user-facing
   interface.
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+## Divergence Summary
+
+*Recorded: 2026-08-10 — Branch: slc-03-frontmatter-status-removal*
+
+### Changed from plan
+
+- **Task 6 (merge to main):** The plan marked merge verification as complete, but the branch has not yet been merged into `origin/main`. Merge and final ancestor verification will be performed during the `aet-ship` stage rather than before documentation sync.
+
+### Added (unplanned)
+
+- **Expanded file footprint:** Removing `status` authority cascaded through queue membership, backlog projection, and state transitions. Beyond the files listed in the plan, implementation also touched `src/aet/cli/backlog.py`, `src/aet/cli/sprint.py`, `src/aet/cli/sync.py`, `src/aet/projections/reconcile.py`, `src/aet/queue.py`, `src/aet/backends/github_backend.py`, and additional test files to make sprint membership explicit and to remove all `status`-derived behavior. This is scope-consistent with task 4 (queue membership is the explicit `aet sprint add` record only).
+
+### Deferred
+
+- **Task 6 merge verification:** Pending `aet-ship` closure.
+
+*Stage: synced*
+*Next step: run `aet-ship`*
