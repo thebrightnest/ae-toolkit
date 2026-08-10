@@ -191,5 +191,5 @@ per ADR-047 precedent from slc-05).
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
