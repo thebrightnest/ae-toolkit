@@ -112,36 +112,50 @@ def _resolve_plan_for_closure(plan_path, merge_commit, branch, cwd):
     """Return a usable local path to ``plan_path``, resolving from git if needed.
 
     ``plan_path`` may be absolute or relative to the repository root. If it
-    already exists in the checkout, it is returned unchanged. Otherwise the file
-    is extracted from ``merge_commit`` (or ``branch`` as a fallback) and written
-    back to the working tree so terminal closure can update and commit it.
-    Returns ``None`` when the plan cannot be found locally or in the merged
-    branch.
+    already exists in the checkout, it is returned unchanged. Plans that have
+    been archived are also resolved from ``docs/plans/archive/`` before falling
+    back to extraction from ``merge_commit`` (or ``branch``). Returns ``None``
+    when the plan cannot be found locally or in the merged branch.
     """
     repo_root = cwd
     rc, out, _ = run_git("rev-parse", "--show-toplevel", cwd=cwd)
     if rc == 0:
         repo_root = out.strip()
+    repo_root_real = os.path.realpath(repo_root)
 
     if os.path.isabs(plan_path):
         path = Path(plan_path)
     else:
-        path = Path(repo_root) / plan_path
+        path = Path(repo_root_real) / plan_path
 
     if path.exists():
         return str(path)
 
     plan_abs = os.path.realpath(str(path))
-    plan_rel = os.path.relpath(plan_abs, os.path.realpath(repo_root))
+    plan_rel = os.path.relpath(plan_abs, repo_root_real)
+
+    # Archived plans live in docs/plans/archive/; prefer that location when the
+    # original live path no longer exists.
+    archive_path = None
+    archive_rel = None
+    if plan_rel.startswith("docs/plans/") and not plan_rel.startswith(
+        "docs/plans/archive/"
+    ):
+        archive_rel = f"docs/plans/archive/{Path(plan_rel).name}"
+        archive_path = Path(repo_root_real) / archive_rel
+        if archive_path.exists():
+            return str(archive_path)
 
     for ref in (merge_commit, branch):
         if not ref:
             continue
-        rc, out, _ = run_git("show", f"{ref}:{plan_rel}", cwd=repo_root)
-        if rc == 0:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(out, encoding="utf-8")
-            return str(path)
+        for rel in ((archive_rel,) if archive_rel else ()) + (plan_rel,):
+            rc, out, _ = run_git("show", f"{ref}:{rel}", cwd=repo_root)
+            if rc == 0:
+                target = archive_path if rel == archive_rel else path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(out, encoding="utf-8")
+                return str(target)
 
     return None
 
@@ -533,11 +547,48 @@ def _apply_transition(
         backend.seal(task["id"], history_file)
         backend.close_task(task["id"], evidence)
 
+        # Update the plan footer as a code-maintained breadcrumb.  This is part
+        # of the terminal closure transaction: queue state, ledger land event,
+        # and footer are written by the same code path.  A missing plan file is
+        # fail-closed: terminal state is not recorded without the breadcrumb.
+        plan_path = explicit_plan or task.get("plan_file")
+        resolved_path = None
+        archive_to = None
+        if plan_path and cwd is not None:
+            resolved_path = _resolve_plan_for_closure(
+                plan_path,
+                task.get("merge_commit"),
+                task.get("branch"),
+                cwd,
+            )
+            if resolved_path:
+                repo_root_real = os.path.realpath(
+                    run_git("rev-parse", "--show-toplevel", cwd=cwd)[1].strip()
+                    or cwd
+                )
+                resolved_real = os.path.realpath(resolved_path)
+                resolved_rel = os.path.relpath(resolved_real, repo_root_real)
+                if resolved_rel.startswith("docs/plans/") and not resolved_rel.startswith(
+                    "docs/plans/archive/"
+                ):
+                    archive_to = (
+                        Path(repo_root_real)
+                        / "docs"
+                        / "plans"
+                        / "archive"
+                        / Path(resolved_real).name
+                    )
+
         # Record the terminal closure event in the content-addressed ledger.
         ledger_path = Path(backend.queue_file).resolve().parent / "ledger.jsonl"
         ledger = Ledger(ledger_path)
         merge_ref = task.get("merge_commit")
-        land_payload = _land_digest(task)
+        land_payload = _land_digest(
+            task,
+            archived_to=os.path.relpath(archive_to, repo_root_real)
+            if archive_to
+            else None,
+        )
         if merge_ref:
             ledger.write_event(
                 source="aet-state",
@@ -559,42 +610,35 @@ def _apply_transition(
                 payload=land_payload,
             )
 
-        # Update the plan footer as a code-maintained breadcrumb.  This is part
-        # of the terminal closure transaction: queue state, ledger land event,
-        # and footer are written by the same code path.  A missing plan file is
-        # fail-closed: terminal state is not recorded without the breadcrumb.
-        plan_path = explicit_plan or task.get("plan_file")
-        if plan_path and cwd is not None:
-            resolved_path = _resolve_plan_for_closure(
-                plan_path,
-                task.get("merge_commit"),
-                task.get("branch"),
-                cwd,
+        if resolved_path:
+            rc = queue_lib.commit_and_push_plan_change(
+                resolved_path,
+                footer_stage=to_state,
+                task_id=task["id"],
+                cwd=cwd,
+                archive_to=archive_to,
             )
-            if resolved_path:
-                rc = queue_lib.commit_and_push_plan_change(
-                    resolved_path,
-                    footer_stage=to_state,
-                    task_id=task["id"],
-                    cwd=cwd,
-                )
-                if rc != 0:
-                    raise RuntimeError(
-                        f"{to_state} recorded in queue and ledger, but plan "
-                        f"footer update failed for {task['id']}. Re-run closure "
-                        "to retry the footer push."
-                    )
-            else:
+            if rc != 0:
                 raise RuntimeError(
-                    f"Plan file not found for closure: {plan_path}"
+                    f"{to_state} recorded in queue and ledger, but plan "
+                    f"footer update failed for {task['id']}. Re-run closure "
+                    "to retry the footer push."
                 )
+        elif plan_path and cwd is not None:
+            raise RuntimeError(
+                f"Plan file not found for closure: {plan_path}"
+            )
 
 
-def _land_digest(task: dict[str, Any]) -> dict[str, Any]:
+def _land_digest(
+    task: dict[str, Any], archived_to: str | None = None
+) -> dict[str, Any]:
     """Build the R-8 closure digest payload for a ``land`` event."""
     digest: dict[str, Any] = {
         "merge_ref": task.get("merge_commit") or task.get("branch")
     }
+    if archived_to is not None:
+        digest["archived_to"] = archived_to
     plan_file = task.get("plan_file")
     if plan_file:
         path = Path(plan_file)

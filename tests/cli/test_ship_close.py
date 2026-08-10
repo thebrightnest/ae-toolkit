@@ -144,8 +144,11 @@ class TestShipCloseTransaction(unittest.TestCase):
             rc = ship.cmd_ship(args)
         self.assertEqual(rc, 0)
 
-        # Footer matches terminal state.
-        content = plan_path.read_text(encoding="utf-8")
+        # Footer matches terminal state and the plan is archived.
+        archive_path = plan_path.parent / "archive" / plan_path.name
+        self.assertFalse(plan_path.exists())
+        self.assertTrue(archive_path.exists())
+        content = archive_path.read_text(encoding="utf-8")
         self.assertIn("*Stage: merged*", content)
         self.assertNotIn("status:", content)
 
@@ -154,7 +157,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         data = backend.load()
         self.assertEqual(data["queue"], [])
 
-        # Ledger contains a land event with the R-8 digest.
+        # Ledger contains a land event with the R-8 digest and archive path.
         ledger_path = self.repo / ".agents" / "ledger.jsonl"
         events = [
             json.loads(line)
@@ -171,6 +174,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         self.assertIn("R-8", land["payload"]["prd_r_ids"])
         self.assertTrue(land["payload"]["merge_ref"])
         self.assertTrue(land["payload"]["plan_hash"])
+        self.assertEqual(land["payload"]["archived_to"], "docs/plans/archive/t1.md")
 
     def test_close_refuses_missing_plan_fail_closed(self):
         """A plan file missing from checkout and merged branch refuses closure."""

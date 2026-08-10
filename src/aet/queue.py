@@ -644,8 +644,13 @@ def commit_and_push_plan_change(
     footer_stage: str | None = None,
     task_id: str | None = None,
     cwd: str | Path | None = None,
+    archive_to: str | Path | None = None,
 ) -> int:
     """Update the plan footer stage and commit/push the change.
+
+    When ``archive_to`` is provided, the plan is moved into that path with
+    ``git mv`` before the commit so the footer update and the archival land
+    in the same single commit.
 
     The local commit is preserved if the push fails, so the operation is
     idempotent on re-run: the same footer update produces no diff on a second
@@ -679,17 +684,41 @@ def commit_and_push_plan_change(
             # commit or push. The footer update has already been written to the
             # file above, so this is a safe local-only short-circuit.
             return 0
-    plan_rel = os.path.relpath(plan_abs, os.path.realpath(str(repo_root)))
+    repo_root_real = os.path.realpath(str(repo_root))
+    plan_rel = os.path.relpath(plan_abs, repo_root_real)
 
     # Mid-sprint footer updates on deferred plan paths are local-only; the
     # durable write happens only for terminal transitions (merged/abandoned).
     if is_deferred_path(plan_rel) and footer_stage not in TERMINAL_STATES:
         return 0
 
-    rc, _, err = _run_git("add", plan_rel, cwd=repo_root)
-    if rc != 0:
-        print(f"git add failed for {plan_abs}: {err}", file=sys.stderr)
-        return rc
+    if archive_to is not None:
+        archive_abs = os.path.realpath(str(archive_to))
+        archive_rel = os.path.relpath(archive_abs, repo_root_real)
+        archive_parent = Path(archive_abs).parent
+        try:
+            archive_parent.mkdir(parents=True, exist_ok=True)
+        except FileExistsError:
+            # Parent exists as a non-directory; let git mv report the failure.
+            pass
+
+        # git mv requires the source to be tracked. Plans in the live corpus
+        # are normally already committed, but freshly created test repos may
+        # need the file staged first.
+        _run_git("add", plan_rel, cwd=repo_root)
+
+        rc, _, err = _run_git("mv", plan_rel, archive_rel, cwd=repo_root)
+        if rc != 0:
+            print(
+                f"git mv failed for {plan_rel} -> {archive_rel}: {err}",
+                file=sys.stderr,
+            )
+            return rc
+    else:
+        rc, _, err = _run_git("add", plan_rel, cwd=repo_root)
+        if rc != 0:
+            print(f"git add failed for {plan_abs}: {err}", file=sys.stderr)
+            return rc
 
     rc, _, err = _run_git("diff", "--cached", "--quiet", cwd=repo_root)
     if rc == 0:
