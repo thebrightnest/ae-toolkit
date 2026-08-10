@@ -74,7 +74,7 @@ t2r-05 / t2r-10 merges last should expect a trivial rebase on those files.
 
 ## Task List
 
-1. New module `src/aet/handoff.py`: schema v1 and the read/append/render
+1. [x] New module `src/aet/handoff.py`: schema v1 and the read/append/render
    core. `handoff_path(repo_root, run_id)` →
    `.agents/runs/<run-id>/handoff.json`; `append_entry(...)` creates the
    file lazily on first append and writes one entry under a `filelock`
@@ -101,7 +101,7 @@ t2r-05 / t2r-10 merges last should expect a trivial rebase on those files.
    ```
 
    — M (traces: R-8)
-2. New CLI module `src/aet/cli/handoff.py`: Typer group `handoff` with
+2. [x] New CLI module `src/aet/cli/handoff.py`: Typer group `handoff` with
    `append` (options `--stage` required; repeatable `--decision`,
    `--pre-existing-failure`, `--validation-command`; optional
    `--evidence-path`; run id from `--run-id` or `AET_RUN_ID`, missing →
@@ -110,7 +110,7 @@ t2r-05 / t2r-10 merges last should expect a trivial rebase on those files.
    group in `src/aet/cli/main.py` (import + `app.add_typer` in the
    noun-scoped block) and add `"handoff"` to `_NOUN_GROUPS` in
    `tests/cli/test_command_groups.py:307-319` — S (traces: R-8)
-3. Orchestrator injection in `src/aet/cli/orchestrator.py`: add a
+3. [x] Orchestrator injection in `src/aet/cli/orchestrator.py`: add a
    `handoff_clause: str = ""` parameter to `build_prompt`
    (orchestrator.py:445-461) appended after the freshness clause; add
    `_handoff_clause(repo_root, run_id)` mirroring `_qa_freshness_decision`
@@ -132,7 +132,7 @@ t2r-05 / t2r-10 merges last should expect a trivial rebase on those files.
    `render_prompt_block` caps the block at 4000 chars with an explicit
    truncation marker so a verbose run cannot bloat the prompt — M
    (traces: R-8)
-4. Tests: new `tests/test_handoff.py` (unit: schema round-trip, lazy
+4. [x] Tests: new `tests/test_handoff_note.py` (unit: schema round-trip, lazy
    create, corrupt-file read returns `None`, render cap, at-least-one-field
    rule) and `tests/cli/test_handoff.py` (integration via `run_typer`:
    append → file round-trip, `AET_RUN_ID` env resolution, missing run id
@@ -140,7 +140,7 @@ t2r-05 / t2r-10 merges last should expect a trivial rebase on those files.
    `tests/orchestrator/test_orchestrator.py` (prompt injection: note
    present → block in single-stage and group prompts; note absent → prompt
    byte-identical to today) — M (traces: R-8)
-5. Skill updates — write/consume wiring, one block each:
+5. [x] Skill updates — write/consume wiring, one block each:
    `skills/aet-implement/SKILL.md` (Completion Protocol: when `AET_RUN_ID`
    is set, write the run's first entry via `aet handoff append` with all
    four fields — decisions taken, pre-existing failures encountered,
@@ -246,5 +246,5 @@ surface that would justify `full`.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
