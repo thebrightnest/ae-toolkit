@@ -48,6 +48,7 @@ from aet import (  # noqa: E402
     breaker,
     evidence,
     gate,
+    handoff,
     plan_parser,
     plan_size,
     session_log,
@@ -442,12 +443,33 @@ def _qa_freshness_decision(
         return ""
 
 
+def _handoff_clause(repo_root: str, run_id: str | None) -> str:
+    """Run handoff note prompt block for ``run_id``, or "" on any error.
+
+    Never raises: a stage spawn must not hinge on run-scoped working memory.
+    """
+    if not run_id:
+        return ""
+    try:
+        note = handoff.read_note(repo_root, run_id)
+    except Exception:
+        return ""
+    if note is None:
+        return ""
+    try:
+        block = handoff.render_prompt_block(note)
+    except Exception:
+        return ""
+    return "\n\n" + block
+
+
 def build_prompt(
     skills: list[str],
     plan_file: str,
     current_stage: str,
     next_stage: str,
     freshness_clause: str = "",
+    handoff_clause: str = "",
 ) -> str:
     skills_str = " → ".join(skills)
     return (
@@ -456,7 +478,7 @@ def build_prompt(
         f"Execute only this stage. Do not proceed to subsequent stages.\n"
         f"Run validations (tests, lint, format checks) in the foreground and "
         f"wait for them to finish — never background validations or end your "
-        f"turn while one is still running.{freshness_clause}\n"
+        f"turn while one is still running.{freshness_clause}{handoff_clause}\n"
         f"Commit your work before exiting."
     )
 
@@ -992,9 +1014,11 @@ def run_stage(
     signature on the task's ledger record for the circuit breaker (nsr-03).
     """
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
+    handoff_clause = _handoff_clause(repo_root, run_id)
     prompt = build_prompt(
         skills, plan_file, current_stage, next_stage,
         freshness_clause=_freshness_clause(freshness),
+        handoff_clause=handoff_clause,
     )
     cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
 
@@ -1043,6 +1067,7 @@ def build_stage_group_prompt(
     stages: list[WorkflowStage],
     workflow: Workflow,
     freshness_clause: str = "",
+    handoff_clause: str = "",
 ) -> str:
     """Build a compound prompt for running multiple stages in one session.
 
@@ -1057,7 +1082,7 @@ def build_stage_group_prompt(
         "Do not proceed past the final stage listed. "
         "Run validations (tests, lint, format checks) in the foreground and "
         "wait for them to finish — never background validations or end your "
-        "turn while one is still running." + freshness_clause
+        "turn while one is still running." + freshness_clause + handoff_clause
     )
     blocks = [preamble]
     for stage in stages:
@@ -1095,8 +1120,11 @@ def run_stage_group(
     ledger record using the first stage's name (nsr-03).
     """
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
+    handoff_clause = _handoff_clause(repo_root, run_id)
     prompt = build_stage_group_prompt(
-        plan_file, stages, workflow, freshness_clause=_freshness_clause(freshness)
+        plan_file, stages, workflow,
+        freshness_clause=_freshness_clause(freshness),
+        handoff_clause=handoff_clause,
     )
     cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
 

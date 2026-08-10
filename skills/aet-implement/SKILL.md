@@ -147,14 +147,29 @@ Worktree mode puts each implementation on its own branch using standard git comm
 
 After `implement` completes and all validation passes:
 
-1. The plan.md footer will read:
+1. **Run handoff note.** If `AET_RUN_ID` is set in the environment, append the
+   run's first handoff entry so later stages inherit this session's context:
+
+   ```bash
+   aet handoff append \
+     --stage implemented \
+     --decision "<decision taken>" \
+     --pre-existing-failure "<pre-existing failure encountered>" \
+     --validation-command "<command run>" \
+     --evidence-path "<evidence path if any>"
+   ```
+
+   Include all four fields when they are non-empty. Do not hand-edit
+   `.agents/runs/<run-id>/handoff.json`; use `aet handoff append`.
+
+2. The plan.md footer will read:
 
    ```
    *Stage: implemented*
    *Next step: run `aet-qa`*
    ```
 
-2. Print: `"✓ Stage: implemented → Next step: run \`aet-qa\`"`
+3. Print: `"✓ Stage: implemented → Next step: run \`aet-qa\`"`
 
 ## Key Principles
 
