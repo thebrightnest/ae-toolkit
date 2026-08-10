@@ -92,7 +92,8 @@ class TestGateSubmit(unittest.TestCase):
 
     def test_missing_evidence_flag_uses_builder_mode(self):
         """Without --evidence the command enters builder mode and validates inputs."""
-        rc, _out, err = self._run(["submit", "--stage", "qa", "--verdict", "pass"])
+        with patch.dict(os.environ, {"AET_TASK_ID": "ewl-01-gate-submit-cli"}, clear=False):
+            rc, _out, err = self._run(["submit", "--stage", "qa", "--verdict", "pass"])
         self.assertEqual(rc, 1)
         self.assertIn("cannot build 'qa' verdict", err)
 
