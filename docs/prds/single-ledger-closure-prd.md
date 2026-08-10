@@ -306,6 +306,33 @@ this PRD are mutually exclusive work).
 - **UI Coverage Lens** — not applied: CLI-only change, no user-facing
   interface.
 
+## Divergence Summary — slc-06
+
+*Recorded: 2026-08-10 — Branch: slc-06-doc-sweep-operator-guidance*
+
+The slc-06 implementation slice (R-10) matches the planned behavior. The
+doc sweep updated the documents that describe or instruct the superseded
+status/footer-write behavior, plus operator guidance for the multi-machine
+refs posture.
+
+### Added (unplanned)
+
+- `docs/PIPELINE.md` and `docs/WORKFLOW-github.md`: updated to reflect the
+  pushed-`refs/aet/*` state model and the new multi-machine operator posture.
+  These files were not listed in the plan's "Files to Modify" but contained
+  stale references to the old `status`/`footer` workflow.
+- `skills/aet-work/references/{context-isolation,queue-commands,reconcile,
+  upgrading-existing-project}.md`: updated as part of the R-10 corpus sweep
+  for stale status/footer-write duties and multi-machine guidance. The plan
+  named `skills/aet-work/SKILL.md` but not the reference docs.
+
+### Deferred
+
+- Merge to `main` and integration verification: remains for the `aet-ship`
+  stage.
+
+No meaningful behavioral divergences were introduced.
+
 ## Divergence Summary
 
 *Recorded: 2026-08-10 — Branch: slc-05-set-stage-gate-submit-atomicity*

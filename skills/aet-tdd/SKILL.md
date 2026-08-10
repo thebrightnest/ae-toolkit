@@ -176,7 +176,7 @@ Before declaring `tdd-complete`, run the test suite with coverage. List every ne
 
 After `refactor` completes, all tests pass, and coverage completeness is satisfied:
 
-1. Update the plan.md footer to:
+1. The plan.md footer will read:
 
    ```
    *Stage: tdd-complete*

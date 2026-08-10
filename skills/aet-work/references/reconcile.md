@@ -44,16 +44,15 @@ and optionally applies the smallest corrective write.
 The expected label for a live plan follows the same mapping as the rest of the
 projection:
 
-- `status: draft` → `aet:draft`
-- `status: approved` → `aet:backlog`
-- `status: queued` with pending blockers → `aet:blocked`
-- `status: queued` with no pending blockers → `aet:ready`
-- `status: in_progress` → `aet:in-progress`
-- `status: awaiting_merge` → `aet:awaiting-merge`
+- Plan footer stage `plan-draft` (backlog) → `aet:draft`
+- Plan footer stage `plan-approved` (backlog) → `aet:backlog`
+- Queue state `blocked` → `aet:blocked`
+- Queue state `ready` → `aet:ready`
+- Queue state `in_progress` → `aet:in-progress`
+- Queue state `awaiting_merge` → `aet:awaiting-merge`
 
 If a queued plan is also present in the local work queue, the queue state takes
-precedence. Missing live plans get a synthetic task derived from their
-frontmatter.
+precedence.
 
 ## Usage
 

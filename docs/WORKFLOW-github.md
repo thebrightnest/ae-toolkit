@@ -7,26 +7,24 @@ AET is the only writer to GitHub Issues. Do not create, relabel, or close issues
 ## The loop
 
 ```
-aet-pipeline-plan  →  docs/plans/foo.md (status: draft)  →  commit + push
+aet-pipeline-plan  →  docs/plans/foo.md (footer stage: plan-approved)
 
 aet backlog add docs/plans/foo.md          "put it on the board"
-  → commits + pushes the plan's status
-  → creates issue #N, labeled by status:
-      status: draft     → aet:draft
-      status: approved  → aet:backlog
+  → creates issue #N, labeled by stage:
+      plan-draft      → aet:draft
+      plan-approved   → aet:backlog
 
 aet sprint add docs/plans/foo.md           ← the human decision: "work on this"
-  → status: queued, committed + pushed
   → AET computes the DAG and labels #N:
       blockers unmet    → aet:blocked
       no blockers       → aet:ready
 
 aet run                                    (laptop or cloud — identical)
-  → git pull → queue derived from committed status → runs what AET marked ready
+  → fetch refs/aet/* → queue derived from ledger → runs what AET marked ready
   → transitions relabel #N (aet:in-progress → aet:awaiting-merge)
 
 aet ship → merge → record-merge
-  → status: merged, committed + pushed
+  → terminal ledger event + footer *Stage: merged*
   → closes #N
 ```
 
@@ -35,9 +33,9 @@ aet ship → merge → record-merge
 | Command | When to use | What it writes to GitHub |
 |---|---|---|
 | `aet backlog add <plan>` | A plan exists and should be visible on the board. | Creates one issue keyed by plan id; labels `aet:draft` or `aet:backlog`. |
-| `aet sprint add <plan>` | You are choosing to work on an approved plan now. | Sets `status: queued`, commits + pushes, labels `aet:ready` or `aet:blocked`. |
+| `aet sprint add <plan>` | You are choosing to work on an approved plan now. | Adds to the sprint; labels `aet:ready` or `aet:blocked`. No commit or push at intake. |
 | `aet run` | The queue has ready work and you want the orchestrator to pick it up. | Updates labels as the task progresses (`aet:in-progress`, `aet:awaiting-merge`). |
-| `aet ship` / `record-merge` | The branch is merged to `main`. | Closes the issue. |
+| `aet ship` / `record-merge` | The branch is merged to `main`. | Records terminal closure and closes the issue. |
 
 ## Rules
 

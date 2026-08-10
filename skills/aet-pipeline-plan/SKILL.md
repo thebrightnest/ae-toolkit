@@ -117,7 +117,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
 **Step 3 — aet sprint add + sync:**
 
-1. Run `aet sprint add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. `aet sprint add` accepts untracked plans and queues them without publishing; plan durability is deferred to the PR closure. Only explicitly added plans enter `.agents/work-queue.json`; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
+1. Run `aet sprint add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. `aet sprint add` accepts untracked plans; it does not set a `status` key in frontmatter, and it does not commit or push at intake. Plan durability is deferred to terminal closure (`merged`/`abandoned`). Only explicitly added plans enter the queue; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
 2. Run `aet queue sync` to reconcile existing queue entries, recompute reverse `blocks` edges, and report plan drift. Sync never auto-adds new plans.
 3. Preserve all existing queue entries and their states
 4. Run `aet status` and verify:

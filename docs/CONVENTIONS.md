@@ -346,6 +346,7 @@ Workflow state is recorded at transition time and trusted on read.
 - `aet state transition` is the only writer of `tasks[].state`.
 - `aet status`, `aet next`, and the orchestrator read stored `state` directly and make zero git calls on the read path.
 - `aet state audit` reconciles stored state against git ground truth on demand; it never runs during normal operation.
+- The default `git-refs` backend stores queue state in `refs/aet/*` and pushes/fetches from origin; `.agents/work-queue.json` is the `json` backend for non-git contexts.
 
 ### Legal Transitions
 
@@ -380,6 +381,10 @@ Rules:
 - A mixed commit containing both `docs/plans/` and non-plan paths still halts.
 - `aet sprint add` no longer has an `--allow-untracked` flag. Untracked plans are the normal intake state; the durability write happens only at terminal closure (`merged`/`abandoned`).
 - Untracked plans are load-bearing work in progress. `git clean -fdx`, git-following backups, or any process that discards untracked files can destroy queued/in-progress plans.
+
+### Multi-machine state
+
+Queue and ledger state travel with the repo via `refs/aet/*` on origin; a fresh clone must fetch them explicitly with `git fetch origin 'refs/aet/*:refs/aet/*'`. Config, telemetry, and reports stay machine-local in `~/.aet`. Offline work is safe; closure is the syncing boundary.
 
 ## Execution Mode
 

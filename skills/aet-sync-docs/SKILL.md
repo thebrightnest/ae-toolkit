@@ -85,27 +85,13 @@ Compare the original plan against what was actually built, and update both the P
 
 **Evidence verdict (writer contract):**
 
-Before updating the plan.md footer, write a JSON verdict record so the orchestrator can gate the stage machine-checkably. The footer remains a human breadcrumb only.
+Submit the stage verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Do not hand-edit plan footers or queue state.
 
-1. Build a verdict record matching the `sync-docs` schema:
+```bash
+aet gate submit --stage sync-docs --verdict <pass|fail> --evidence <payload-file>
+```
 
-   ```json
-   {
-     "task_id": "{task-id}",
-     "stage": "synced",
-     "skill": "aet-sync-docs",
-     "verdict": "pass" | "fail",
-     "summary": "One-line outcome",
-     "generated_at": "{ISO-8601 timestamp}",
-     "divergences": []
-   }
-   ```
-
-2. Submit the verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Write the payload JSON to a scratch file outside the tracked tree, then run:
-
-   ```bash
-   aet gate submit --stage sync-docs --verdict <pass|fail> --evidence <payload-file>
-   ```
+Write `<payload-file>` to a scratch path outside the tracked tree. The payload follows the `sync-docs` schema expected by `aet gate submit`; consult the command help or reference docs for the current fields.
 
 ## Completion Protocol
 

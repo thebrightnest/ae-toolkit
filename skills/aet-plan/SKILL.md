@@ -159,7 +159,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
    ---
    id: { ticket-id }
    size: S/M/L
-   status: draft
+   work_class: normal
    blocked_by:
      - { blocker-id }
    pipeline: standard
@@ -173,7 +173,6 @@ Break the PRD into vertically-sliced, independently implementable tickets.
    - `id` must match the plan filename stem and must be unique within the PRD.
    - `blocked_by` is a list of blocking task IDs; an empty list means no blockers.
    - `size` is the S/M/L complexity label. `stage` lives only in the task record, never in frontmatter.
-   - `status` is the plan lifecycle value (CONTEXT.md): `draft`, `approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, or `abandoned`. New plans are born `draft`; `aet-validate-scope` advances it to `approved` when the footer moves to `plan-approved`.
    - `pipeline` controls orchestrator isolation. Declare it explicitly in every plan; there is no orchestrator auto-switch. See ADR-047 (`docs/adr/047-pipeline-mode-by-plan-size.md`) for the full rationale.
      - Size-based advisory default:
        - **S** (≤ 2 hr human time / ≤ 100 expected diff lines) → `minimal`
@@ -302,7 +301,7 @@ After the `plan` command completes and the plan.md is ready for review:
    ```
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
-4. The new plan files are ready to queue. Because mid-sprint plan status is local-only, remind the user that untracked plans are load-bearing: `git clean -fdx` or git-following backups will discard in-flight work.
+4. The new plan files are ready to queue. Because mid-sprint queue state is local-only, remind the user that untracked plans are load-bearing: `git clean -fdx` or git-following backups will discard in-flight work.
 5. Confirm the new plan files were explicitly added to `.agents/work-queue.json` with `aet sprint add`; run `aet queue sync` only to reconcile existing entries and report drift.
 6. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
 

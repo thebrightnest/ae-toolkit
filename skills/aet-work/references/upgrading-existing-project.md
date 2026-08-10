@@ -58,8 +58,12 @@ Review the reconciliation report it emits. Every plan must have:
 id: <filename-stem-or-explicit-id>
 blocked_by: []
 size: S | M | L
+work_class: normal
 ---
 ```
+
+`status` has been removed from the plan frontmatter contract (ADR-055). Do not
+add or migrate a `status` key.
 
 ### 4. Seal legacy terminal tasks to settled history
 
@@ -77,7 +81,7 @@ This appends terminal tasks to `.agents/work-history.jsonl` and removes them fro
 aet init-queue
 ```
 
-This re-ingests every `docs/plans/*.md` using the new frontmatter contract and normalizes legacy statuses.
+This re-ingests every `docs/plans/*.md` using the new frontmatter contract and normalizes legacy task states.
 
 ### 6. Record merges for already-merged branches
 
