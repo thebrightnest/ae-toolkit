@@ -5,9 +5,12 @@ Usage:
   aet ship <plan_file|task_id>        Run the gate, then open a PR.
   aet ship gate <plan_file|task_id>   Run the pre-merge gate (steps 1-9).
   aet ship open <plan_file|task_id>   Run the gate and open a PR.
-  aet ship merge <plan_file|task_id> --branch <target>
+  aet ship merge <plan_file|task_id> [--branch <target>]
                                       Run the gate, detect conflicts against the target branch,
-                                      merge directly into it, and record closure.
+                                      merge directly into it, and record closure. Target defaults to
+                                      the resolved trunk branch.
+  aet ship split <plan_file|task_id> --message <msg> --paths <path>...
+                                      Split the PR range into logical commits.
   aet ship close <plan_file>          Record post-merge closure (task id derived from plan frontmatter).
   aet ship close <task_id>            Record post-merge closure (plan derived from queue task).
   aet ship close <task_id> <plan_file> [queue_file]
@@ -15,9 +18,9 @@ Usage:
   aet ship record-merge <task_id> <plan_file> [queue_file]
                                       Hidden alias for ``close``.
 
-A bare task id given to ``gate``, ``open``, ``merge``, or the default command resolves to
+A bare task id given to ``gate``, ``open``, ``merge``, ``split``, or the default command resolves to
 the conventional ``docs/plans/<task_id>.md`` path. The pre-merge gate, PR
-creation, direct merge, and merge closure are all implemented in code.
+creation, direct merge, split, and merge closure are all implemented in code.
 """
 
 from __future__ import annotations
@@ -32,13 +35,16 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import NamedTuple, Optional
 
 import typer
 from typer.core import TyperGroup
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_parser  # noqa: E402
+from aet.backends.factory import resolve_config  # noqa: E402
+from aet.branch_ref import resolve_trunk_branch  # noqa: E402
+from aet.ledger import Ledger  # noqa: E402
 
 # Load aet-state as a module so we can reuse its merge-resolution and
 # queue-mutation logic rather than duplicating it.
@@ -56,6 +62,22 @@ EXIT_VERIFY_AMBIGUOUS = 11
 EXIT_DELETE_BEFORE_RECORD = 12
 
 
+class StackInfo(NamedTuple):
+    """Resolved stack position for a branch.
+
+    ``trunk_ref`` is the remote trunk ref (e.g. ``origin/main``).
+    ``base_ref`` is the PR base: the parent branch for stacked PRs, or the trunk
+    ref for independent branches.
+    ``parent`` is the local parent branch name when stacked, otherwise ``None``.
+    ``position`` is a human-readable stack position (e.g. "PR 2 of 2").
+    """
+
+    trunk_ref: str
+    base_ref: str
+    parent: Optional[str]
+    position: Optional[str]
+
+
 class GateResult:
     """Structured result of the pre-merge gate for reuse by ``ship open``."""
 
@@ -67,6 +89,7 @@ class GateResult:
         scope_audit: list[str],
         dry_run: bool,
         message: str = "",
+        stack: Optional[StackInfo] = None,
     ):
         self.ok = ok
         self.pr_base = pr_base
@@ -74,6 +97,7 @@ class GateResult:
         self.scope_audit = scope_audit
         self.dry_run = dry_run
         self.message = message
+        self.stack = stack
 
 
 def _task_id_from_plan(plan_path: str | Path) -> str:
@@ -338,49 +362,84 @@ def _fetch_origin() -> None:
     _run_git("fetch", "origin")
 
 
-def _determine_pr_base() -> str:
-    """Return the PR base ref: origin/main for independent branches, else the stacked parent."""
-    merge_base = _run_git("merge-base", "HEAD", "origin/main").stdout.strip()
-    origin_main = _run_git("rev-parse", "origin/main").stdout.strip()
-    if merge_base == origin_main:
-        return "origin/main"
+def _resolve_trunk_ref() -> str:
+    """Resolve the remote trunk ref (e.g. ``origin/main``).
+
+    Uses the same precedence as ``aet-state``: config ``trunk_branch`` →
+    ``git symbolic-ref refs/remotes/origin/HEAD`` → ``main`` fallback.
+    """
+    repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
+    config = resolve_config(".agents/aet-config.json", repo_root=repo_root)
+    trunk = resolve_trunk_branch(repo_root, config)
+    return f"origin/{trunk.ref}"
+
+
+def _determine_pr_base() -> StackInfo:
+    """Resolve the PR base ref and stack position.
+
+    Returns a :class:`StackInfo` where ``base_ref`` is the trunk for independent
+    branches or the nearest named ancestor for stacked branches.
+    """
+    trunk_ref = _resolve_trunk_ref()
+    merge_base = _run_git("merge-base", "HEAD", trunk_ref).stdout.strip()
+    trunk_sha = _run_git("rev-parse", trunk_ref).stdout.strip()
+    if merge_base == trunk_sha:
+        return StackInfo(trunk_ref=trunk_ref, base_ref=trunk_ref, parent=None, position=None)
 
     log = _run_git(
         "log", "--oneline", "--decorate", "--ancestry-path", f"{merge_base}..HEAD"
     ).stdout
+    parent: Optional[str] = None
+    ancestor_count = 0
     for line in log.splitlines():
         match = re.match(r"^[0-9a-f]+ \((.*?)\) ", line)
         if not match:
             continue
         refs = [r.strip() for r in match.group(1).split(",")]
+        local_refs: list[str] = []
         for r in refs:
             if r.startswith("HEAD -> "):
                 continue  # current branch — the one being shipped, never its own parent
             r = r.strip()
             if r in ("HEAD",) or r.startswith("origin/") or r.startswith("tag:"):
                 continue
-            return r
-    return "origin/main"
+            local_refs.append(r)
+        if local_refs:
+            ancestor_count += 1
+            if parent is None:
+                parent = local_refs[0]
+
+    if parent is None:
+        return StackInfo(trunk_ref=trunk_ref, base_ref=trunk_ref, parent=None, position=None)
+
+    position = f"PR {ancestor_count + 1} of {ancestor_count + 1} (parent: {parent})"
+    return StackInfo(trunk_ref=trunk_ref, base_ref=parent, parent=parent, position=position)
 
 
-def _rebase_independent_branch(pr_base: str, dry_run: bool) -> tuple[bool, str, bool]:
-    """Rebase independent branches onto origin/main; return (ok, message, rebased)."""
-    if pr_base != "origin/main":
+def _rebase_independent_branch(stack: StackInfo, dry_run: bool) -> tuple[bool, str, bool]:
+    """Rebase independent branches onto the trunk; return (ok, message, rebased)."""
+    if stack.base_ref != stack.trunk_ref:
         return True, "Stacked branch; keeping parent base.", False
-    merge_base = _run_git("merge-base", "HEAD", "origin/main").stdout.strip()
-    origin_main = _run_git("rev-parse", "origin/main").stdout.strip()
-    if merge_base == origin_main:
-        return True, "Already based on origin/main.", False
+    merge_base = _run_git("merge-base", "HEAD", stack.trunk_ref).stdout.strip()
+    trunk_sha = _run_git("rev-parse", stack.trunk_ref).stdout.strip()
+    if merge_base == trunk_sha:
+        return True, f"Already based on {stack.trunk_ref}.", False
     branch = _run_git("branch", "--show-current").stdout.strip()
     if dry_run:
-        return True, f"Would rebase --onto origin/main {merge_base} {branch}", False
-    result = _run_git("rebase", "--onto", "origin/main", merge_base, branch, check=False)
+        return (
+            True,
+            f"Would rebase --onto {stack.trunk_ref} {merge_base} {branch}",
+            False,
+        )
+    result = _run_git(
+        "rebase", "--onto", stack.trunk_ref, merge_base, branch, check=False
+    )
     if result.returncode != 0:
         return False, (
-            "⛔ Rebase onto origin/main produced conflicts.\n"
+            f"⛔ Rebase onto {stack.trunk_ref} produced conflicts.\n"
             "   Resolve them manually, then run aet-ship again."
         ), False
-    return True, "Rebased onto origin/main.", True
+    return True, f"Rebased onto {stack.trunk_ref}.", True
 
 
 def _is_working_tree_clean() -> bool:
@@ -402,9 +461,17 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
         )
 
     _fetch_origin()
-    pr_base = args.base or _determine_pr_base()
+    trunk_ref = _resolve_trunk_ref()
+    if args.base:
+        stack = StackInfo(
+            trunk_ref=trunk_ref, base_ref=args.base, parent=None, position=None
+        )
+        pr_base = args.base
+    else:
+        stack = _determine_pr_base()
+        pr_base = stack.base_ref
 
-    ok, message, rebased = _rebase_independent_branch(pr_base, args.dry_run)
+    ok, message, rebased = _rebase_independent_branch(stack, args.dry_run)
     if not ok:
         return GateResult(
             ok=False,
@@ -413,6 +480,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
             scope_audit=[],
             dry_run=args.dry_run,
             message=message,
+            stack=stack,
         )
 
     if not _is_working_tree_clean():
@@ -423,6 +491,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
             scope_audit=[],
             dry_run=args.dry_run,
             message="Working tree is dirty. Stash, commit, or abort before shipping.",
+            stack=stack,
         )
 
     test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
@@ -435,6 +504,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
             scope_audit=[],
             dry_run=args.dry_run,
             message=f"Test suite failed:\n{test_result.stdout}\n{test_result.stderr}",
+            stack=stack,
         )
 
     coverage_cmd = os.environ.get("AET_SHIP_COVERAGE_CMD")
@@ -460,6 +530,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                     "Critical-class task requires aet-verify evidence.\n"
                     f"Attach evidence at .agents/verify/{task_id}-evidence.md before shipping."
                 ),
+                stack=stack,
             )
 
     flagged = _scope_audit(plan_path, pr_base)
@@ -470,6 +541,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
         scope_audit=flagged,
         dry_run=args.dry_run,
         message="Pre-merge gate passed.",
+        stack=stack,
     )
 
 
@@ -631,7 +703,7 @@ def _generate_changelog_entry(subjects: list[str], plan_path: Path) -> str:
 
 def _build_pr_body(
     plan_path: Path,
-    pr_base: str,
+    stack: StackInfo,
     scope_audit: list[str],
     changelog_entry: str,
 ) -> str:
@@ -652,12 +724,20 @@ def _build_pr_body(
             parts.append(f"- {path}")
         parts.append("")
 
-    if pr_base != "origin/main":
-        parts.append(f"⚠️ STACKED PR — base is `{pr_base}`, not main.")
+    if stack.parent is not None:
+        trunk_name = stack.trunk_ref.removeprefix("origin/")
+        parts.append("## Stack")
         parts.append("")
-        parts.append(f"After `{pr_base}` merges to main, run:")
+        parts.append(f"- Position: {stack.position}")
+        parts.append(f"- Parent: `{stack.parent}`")
+        parts.append(f"- Trunk: `{stack.trunk_ref}`")
+        parts.append("")
+        parts.append(f"⚠️ STACKED PR — base is `{stack.base_ref}`, not `{trunk_name}`.")
+        parts.append("")
+        parts.append(f"After `{stack.base_ref}` merges to `{trunk_name}`, run:")
         parts.append(
-            "  git rebase main && git push --force-with-lease && gh pr edit --base main"
+            f"  git rebase {trunk_name} && git push --force-with-lease && "
+            f"gh pr edit --base {trunk_name}"
         )
         parts.append("before merging this PR.")
         parts.append("")
@@ -757,7 +837,7 @@ def cmd_open(args: argparse.Namespace) -> int:
         return _fail(
             "Monolithic commit detected: one commit spans the entire PR range "
             "while the plan lists multiple tasks.\n"
-            "STOP and split the commit manually into logical pieces before opening the PR."
+            "Run `aet ship split` to split it into logical pieces before opening the PR."
         )
 
     changelog_entry = _generate_changelog_entry(
@@ -773,7 +853,13 @@ def cmd_open(args: argparse.Namespace) -> int:
 
     plan_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
     title = f"{plan_id}: {plan_parser.title_from_plan(plan_path)}"
-    body = _build_pr_body(plan_path, result.pr_base, result.scope_audit, changelog_entry)
+    stack = result.stack or StackInfo(
+        trunk_ref=_resolve_trunk_ref(),
+        base_ref=result.pr_base,
+        parent=None,
+        position=None,
+    )
+    body = _build_pr_body(plan_path, stack, result.scope_audit, changelog_entry)
 
     print("Creating PR...")
     ok, output = _create_pr(result.pr_base, title, body, args.dry_run)
@@ -782,13 +868,106 @@ def cmd_open(args: argparse.Namespace) -> int:
     if output.strip():
         print(f"   {output.strip()}")
 
-    if result.pr_base != "origin/main":
+    pr_url = output.strip().splitlines()[0].strip() if output.strip() else ""
+
+    if result.stack and result.stack.parent is not None:
+        trunk_name = result.stack.trunk_ref.removeprefix("origin/")
         print(
-            f"⚠️  STACKED PR: this PR targets {result.pr_base}, not main.\n"
-            f"     After {result.pr_base} merges, rebase onto main and update the base before merging."
+            f"⚠️  STACKED PR: this PR targets {result.stack.base_ref}, not {trunk_name}.\n"
+            f"     After {result.stack.base_ref} merges, rebase onto {trunk_name} "
+            "and update the base before merging."
         )
+        if pr_url:
+            Ledger().write_event(
+                source="aet-ship",
+                task=plan_id,
+                kind="cut",
+                ref=pr_url,
+                ref_kind="pr",
+                payload={
+                    "pr_base": result.stack.base_ref,
+                    "stacked": True,
+                    "parent": result.stack.parent,
+                },
+            )
 
     print("✅ aet ship open complete.")
+    return 0
+
+
+def cmd_split(args: argparse.Namespace) -> int:
+    """Split the PR range into caller-supplied commit groups.
+
+    Refuses on a dirty tree or empty range, prints the original HEAD SHA for
+    recovery, runs ``git reset --soft <pr_base>``, then commits each
+    ``--message``/``--paths`` group in order. The fail-closed post-condition
+    requires that the resulting tree matches the original HEAD tree.
+    """
+    try:
+        args.plan = plan_parser.resolve_plan_arg(args.plan)
+    except ValueError as exc:
+        return _fail(str(exc))
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        return _fail(f"Plan file not found: {plan_path}")
+
+    messages = args.message or []
+    path_groups = args.paths or []
+    if len(messages) != len(path_groups):
+        return _fail(
+            "Mismatched --message/--paths groups: "
+            f"{len(messages)} message(s) and {len(path_groups)} path group(s)."
+        )
+    if not messages:
+        return _fail("At least one --message/--paths group is required.")
+
+    if not _is_working_tree_clean():
+        return _fail(
+            "Working tree is dirty. Stash, commit, or abort before splitting."
+        )
+
+    if args.base:
+        pr_base = args.base
+    else:
+        stack = _determine_pr_base()
+        pr_base = stack.base_ref
+
+    commit_count = _commit_count(pr_base)
+    if commit_count == 0:
+        return _fail(f"No commits between {pr_base} and HEAD.")
+
+    original_head = _run_git("rev-parse", "HEAD").stdout.strip()
+    print(f"Original HEAD: {original_head}")
+    print(f"Recovery command: git reset --soft {original_head}")
+
+    if args.dry_run:
+        print(f"[dry-run] Would reset --soft {pr_base}")
+        for message, paths in zip(messages, path_groups):
+            print(f"[dry-run] Would add {paths} and commit with message: {message}")
+        return 0
+
+    _run_git("reset", "--soft", pr_base)
+
+    for message, paths in zip(messages, path_groups):
+        # Unstage everything so each group is committed independently.
+        _run_git("reset")
+        _run_git("add", *paths)
+        _run_git("commit", "-m", message)
+
+    diff = _run_git("diff", f"{original_head}..HEAD", check=False)
+    if diff.returncode != 0 or diff.stdout.strip():
+        print(
+            "⛔ Split post-condition failed: the resulting tree does not match the "
+            "original HEAD tree.",
+            file=sys.stderr,
+        )
+        status = _run_git("status", check=False)
+        print(status.stdout, file=sys.stderr)
+        print(status.stderr, file=sys.stderr)
+        print(f"Recover with: git reset --soft {original_head}", file=sys.stderr)
+        return 1
+
+    print("✅ aet ship split complete.")
     return 0
 
 
@@ -964,7 +1143,8 @@ def cmd_merge(args: argparse.Namespace) -> int:
     if not plan_path.is_file():
         return _fail(f"Plan file not found: {plan_path}")
 
-    target_branch = args.branch
+    trunk_ref = _resolve_trunk_ref()
+    target_branch = args.branch or trunk_ref.removeprefix("origin/")
     task_id = _task_id_from_plan(plan_path)
     feature_branch = _resolve_feature_branch(task_id)
     if not feature_branch:
@@ -983,11 +1163,27 @@ def cmd_merge(args: argparse.Namespace) -> int:
 
     # The gate should treat the target branch as the merge base so tests and
     # checks run against the same integration point we will merge into.
+    explicit_base = bool(getattr(args, "base", None))
     args.base = f"origin/{target_branch}"
     result = _run_gate(args)
     if not result.ok:
         return _fail(f"Gate failed: {result.message}")
     print("   Gate passed.")
+
+    # Stacked merge guard: if detection found a parent that is not the trunk and
+    # the user asked to merge into the trunk without explicitly overriding the
+    # base, refuse rather than silently merge a stacked branch into trunk.
+    if (
+        not explicit_base
+        and result.stack
+        and result.stack.parent is not None
+        and result.stack.base_ref != trunk_ref
+        and f"origin/{target_branch}" == trunk_ref
+    ):
+        return _fail(
+            f"Stacked branch detected: merge into `{result.stack.base_ref}` or "
+            f"rebase onto `{trunk_ref}` first."
+        )
 
     guard_error = _check_release_guard(result.pr_base)
     if guard_error:
@@ -997,7 +1193,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         return _fail(
             "Monolithic commit detected: one commit spans the entire merge range "
             "while the plan lists multiple tasks.\n"
-            "STOP and split the commit manually into logical pieces before merging."
+            "Run `aet ship split` to split it into logical pieces before merging."
         )
 
     print(f"Checking for merge conflicts against origin/{target_branch}...")
@@ -1065,7 +1261,7 @@ def _add_close_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--merge-commit",
-        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
+        help="Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.",
     )
     parser.add_argument(
         "--target-branch",
@@ -1101,7 +1297,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gate_parser.add_argument(
         "--base",
-        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     )
     gate_parser.add_argument(
         "--dry-run",
@@ -1119,7 +1315,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     open_parser.add_argument(
         "--base",
-        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     )
     open_parser.add_argument(
         "--dry-run",
@@ -1137,10 +1333,40 @@ def build_parser() -> argparse.ArgumentParser:
     )
     merge_parser.add_argument(
         "--branch",
-        default="main",
-        help="Target branch to merge into (default: main).",
+        default=None,
+        help="Target branch to merge into (default: resolved trunk branch).",
     )
     merge_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes.",
+    )
+
+    split_parser = sub.add_parser(
+        "split",
+        help="Split the PR range into caller-supplied commit groups.",
+    )
+    split_parser.add_argument(
+        "plan",
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+    )
+    split_parser.add_argument(
+        "--base",
+        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
+    )
+    split_parser.add_argument(
+        "--message",
+        "-m",
+        action="append",
+        help="Commit message for one group. Repeat for each group.",
+    )
+    split_parser.add_argument(
+        "--paths",
+        action="append",
+        nargs="+",
+        help="Paths for one group. Repeat for each group, after its --message.",
+    )
+    split_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Show what would be done without making changes.",
@@ -1204,7 +1430,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     default_parser.add_argument(
         "--base",
-        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     )
     default_parser.add_argument(
         "--dry-run",
@@ -1215,7 +1441,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-_KNOWN_SUBCOMMANDS = {"gate", "open", "merge", "verify", "close", "record-merge"}
+_KNOWN_SUBCOMMANDS = {"gate", "open", "merge", "split", "verify", "close", "record-merge"}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -1243,6 +1469,8 @@ def main(argv: list[str] | None = None):
         return cmd_open(args)
     if args.command == "merge":
         return cmd_merge(args)
+    if args.command == "split":
+        return cmd_split(args)
     if args.command == "verify":
         return cmd_verify(args)
     if args.command in ("close", "record-merge"):
@@ -1287,7 +1515,7 @@ def ship_default(
     base: Optional[str] = typer.Option(
         None,
         "--base",
-        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -1309,7 +1537,7 @@ def ship_gate(
     base: Optional[str] = typer.Option(
         None,
         "--base",
-        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -1331,7 +1559,7 @@ def ship_open(
     base: Optional[str] = typer.Option(
         None,
         "--base",
-        help="Override the PR base branch/ref (default: origin/main or stacked parent).",
+        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -1350,10 +1578,10 @@ def ship_merge(
         ...,
         help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
     ),
-    branch: str = typer.Option(
-        "main",
+    branch: Optional[str] = typer.Option(
+        None,
         "--branch",
-        help="Target branch to merge into (default: main).",
+        help="Target branch to merge into (default: resolved trunk branch).",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -1363,6 +1591,48 @@ def ship_merge(
 ) -> None:
     """Run the gate, detect conflicts, merge directly into a target branch, and close."""
     rc = cmd_merge(argparse.Namespace(plan=plan, branch=branch, dry_run=dry_run))
+    raise typer.Exit(rc)
+
+
+@app.command(name="split")
+def ship_split(
+    plan: str = typer.Argument(
+        ...,
+        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+    ),
+    base: Optional[str] = typer.Option(
+        None,
+        "--base",
+        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
+    ),
+    message: Optional[list[str]] = typer.Option(
+        None,
+        "--message",
+        "-m",
+        help="Commit message for one group. Repeat for each group.",
+    ),
+    paths: Optional[list[str]] = typer.Option(
+        None,
+        "--paths",
+        help="Comma-separated paths for one group. Repeat for each group, after its --message.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show what would be done without making changes.",
+    ),
+) -> None:
+    """Split the PR range into caller-supplied commit groups."""
+    path_groups = [p.split(",") for p in paths] if paths else None
+    rc = cmd_split(
+        argparse.Namespace(
+            plan=plan,
+            base=base,
+            message=message,
+            paths=path_groups,
+            dry_run=dry_run,
+        )
+    )
     raise typer.Exit(rc)
 
 
@@ -1461,7 +1731,7 @@ def ship_close(
     merge_commit: Optional[str] = typer.Option(
         None,
         "--merge-commit",
-        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
+        help="Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.",
     ),
     target_branch: Optional[str] = typer.Option(
         None,
@@ -1523,7 +1793,7 @@ def ship_record_merge(
     merge_commit: Optional[str] = typer.Option(
         None,
         "--merge-commit",
-        help="Merge commit SHA to record directly. Must be an ancestor of origin/main.",
+        help="Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.",
     ),
     target_branch: Optional[str] = typer.Option(
         None,

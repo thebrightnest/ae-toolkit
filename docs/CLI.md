@@ -440,6 +440,7 @@ Pre-merge gate, PR creation, and post-merge closure.
 - `merge`: Run the gate, detect conflicts, merge directly into a target branch, and close.
 - `open`: Run the gate and open a PR for the plan.
 - `record-merge`: Hidden alias for close.
+- `split`: Split the PR range into caller-supplied commit groups.
 - `verify`: Verify a branch has merged without mutating state.
 
 ## `aet ship default`
@@ -449,7 +450,7 @@ Run the gate and, if it passes, open a PR (default behavior).
 ### Options
 
 - `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
-- `--base` *str* — Override the PR base branch/ref (default: origin/main or stacked parent).
+- `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship gate`
@@ -459,7 +460,7 @@ Run the pre-merge validation gate.
 ### Options
 
 - `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
-- `--base` *str* — Override the PR base branch/ref (default: origin/main or stacked parent).
+- `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship open`
@@ -469,7 +470,7 @@ Run the gate and open a PR for the plan.
 ### Options
 
 - `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
-- `--base` *str* — Override the PR base branch/ref (default: origin/main or stacked parent).
+- `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship merge`
@@ -479,7 +480,19 @@ Run the gate, detect conflicts, merge directly into a target branch, and close.
 ### Options
 
 - `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
-- `--branch` *str* — Target branch to merge into (default: main). (default: `main`)
+- `--branch` *str* — Target branch to merge into (default: resolved trunk branch).
+- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
+
+## `aet ship split`
+
+Split the PR range into caller-supplied commit groups.
+
+### Options
+
+- `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
+- `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
+- `--message` *str* — Commit message for one group. Repeat for each group.
+- `--paths` *str* — Comma-separated paths for one group. Repeat for each group, after its --message.
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship verify`
@@ -505,7 +518,7 @@ Record post-merge closure for a task.
 - `plan` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan). Must be a .md file unless the first arg is already a plan.
 - `queue` *str* — Path to the work queue JSON file. (default: `.agents/work-queue.json`)
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
-- `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of origin/main.
+- `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.
 - `--target-branch` *str* — Target branch the source branch merged into (default: configured integration branch). Use 'main' when closing an epic whose integration branch merged to trunk.
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 - `--delete-branch` *boolean* — After successful closure, delete the remote and local feature branch. (default: `False`)
@@ -520,7 +533,7 @@ Hidden alias for close.
 - `plan` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan). Must be a .md file unless the first arg is already a plan.
 - `queue` *str* — Path to the work queue JSON file. (default: `.agents/work-queue.json`)
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
-- `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of origin/main.
+- `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.
 - `--target-branch` *str* — Target branch the source branch merged into (default: configured integration branch). Use 'main' when closing an epic whose integration branch merged to trunk.
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 - `--delete-branch` *boolean* — After successful closure, delete the remote and local feature branch. (default: `False`)

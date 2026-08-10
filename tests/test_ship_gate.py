@@ -104,6 +104,7 @@ class TestShipGateChecks(unittest.TestCase):
         """Default happy-path git responses (independent branch, no rebase needed)."""
         origin_main = "origin-main-sha"
         return {
+            ("git", "rev-parse", "--show-toplevel"): (0, "/repo\n", ""),
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "merge-base", "HEAD", "origin/main"): (0, f"{origin_main}\n", ""),
             ("git", "rev-parse", "origin/main"): (0, f"{origin_main}\n", ""),
@@ -369,3 +370,31 @@ class TestShipGateIntegration(unittest.TestCase):
         with patch.dict(os.environ, env):
             rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
         self.assertEqual(rc, 0)
+
+    def test_gate_uses_non_main_trunk_when_origin_head_points_elsewhere(self):
+        """When refs/remotes/origin/HEAD points at a non-main branch, gate uses it."""
+        # Create and push a develop branch, then make it the remote HEAD symbol.
+        self._git("checkout", "-b", "develop")
+        self._git("push", "-u", "origin", "develop")
+        self._git("remote", "set-head", "origin", "develop")
+        self._git("checkout", "feat-001")
+        os.chdir(str(self.clone))
+        env = {"AET_SHIP_TEST_CMD": "true"}
+        commands: list[tuple[str, ...]] = []
+        original_run = ship.subprocess.run
+
+        def _recording_run(cmd, **kwargs):
+            commands.append(tuple(cmd))
+            return original_run(cmd, **kwargs)
+
+        with patch.dict(os.environ, env):
+            with patch.object(ship.subprocess, "run", side_effect=_recording_run):
+                rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(
+            any(
+                c[0] == "git" and c[1] == "merge-base" and "origin/develop" in c
+                for c in commands
+            )
+        )

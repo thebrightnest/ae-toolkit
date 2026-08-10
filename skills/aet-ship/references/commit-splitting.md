@@ -15,7 +15,7 @@ A commit is bisectable when it contains exactly one logical change that can be i
 ### How to Split
 
 1. **Identify logical units** — what are the independent changes?
-2. **Use git add -p** — stage only the hunks for one logical change
+2. **Use `git add -p`** — stage only the hunks for one logical change
 3. **Commit with clear message** — describe the single change
 4. **Repeat** until all changes are committed separately
 
@@ -37,9 +37,13 @@ commit 3: "docs: update README with auth setup instructions"
 
 ## Auto-Splitting in aet-ship
 
-If `aet ship` (or `aet ship open`) detects non-bisectable commits:
+If `aet ship` (or `aet ship open`) detects non-bisectable commits, stop and use the dedicated command:
 
-1. Analyze the diff for logical boundaries
-2. Use `git reset --soft HEAD~1` + `git add -p` to re-stage
-3. Create separate commits with auto-generated messages
-4. Warn the user what was split and why
+```bash
+aet ship split docs/plans/TASK-001.md \
+  --message "feat(auth): add login endpoint" --paths src/auth/login.py \
+  --message "style: fix linting" --paths src/auth/*.py \
+  --message "docs: update README" --paths README.md
+```
+
+`aet ship split` resets the PR range softly and commits each `--message`/`--paths` group in order. It fails closed if the resulting tree does not match the original HEAD, so an incomplete grouping is safe to recover with the printed original HEAD SHA.

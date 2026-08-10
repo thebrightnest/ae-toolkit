@@ -32,13 +32,13 @@ class MockResult:
 class TestShipMergeParser(unittest.TestCase):
     """Argument parsing for the merge subcommand."""
 
-    def test_merge_subcommand_defaults_branch_to_main(self):
-        """aet ship merge defaults --branch to main when omitted."""
+    def test_merge_subcommand_defaults_branch_to_none(self):
+        """aet ship merge defaults --branch to None for runtime trunk resolution."""
         parser = ship.build_parser()
         args = parser.parse_args(["merge", "docs/plans/t1.md"])
         self.assertEqual(args.command, "merge")
         self.assertEqual(args.plan, "docs/plans/t1.md")
-        self.assertEqual(args.branch, "main")
+        self.assertIsNone(args.branch)
 
     def test_merge_subcommand_parses_branch(self):
         """aet ship merge accepts an explicit --branch."""
@@ -122,10 +122,10 @@ class TestShipMergeCommand(unittest.TestCase):
     def _write_plan(self, content: str) -> None:
         self.plan_path.write_text(content, encoding="utf-8")
 
-    def test_merge_defaults_branch_to_main(self):
-        """Typer/argparse defaults --branch to main when omitted."""
+    def test_merge_defaults_branch_to_none_for_runtime_resolution(self):
+        """argparse defaults --branch to None so cmd_merge resolves the trunk at runtime."""
         args = ship.parse_args(["merge", str(self.plan_path)])
-        self.assertEqual(args.branch, "main")
+        self.assertIsNone(args.branch)
 
     def test_merge_refuses_to_proceed_when_gate_fails(self):
         """If the gate reports failure, merge exits before conflict/merge checks."""
@@ -238,6 +238,116 @@ class TestShipMergeCommand(unittest.TestCase):
                                 )
         self.assertEqual(rc, 0)
         close_mock.assert_not_called()
+
+    def test_merge_stacked_targeting_trunk_exits_naming_parent(self):
+        """Merging a stacked branch into trunk without explicit base is refused."""
+        stack = ship.StackInfo(
+            trunk_ref="origin/main",
+            base_ref="origin/feat-parent",
+            parent="feat-parent",
+            position="PR 2 of 2",
+        )
+        gate_result = ship.GateResult(
+            ok=True,
+            pr_base="origin/feat-parent",
+            stack=stack,
+            rebased=False,
+            scope_audit=[],
+            dry_run=False,
+            message="Gate passed.",
+        )
+        with patch.object(ship, "_run_gate", return_value=gate_result), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"):
+            with patch.object(ship, "_check_release_guard", return_value=None):
+                with patch.object(ship, "_is_monolithic_commit", return_value=False):
+                    with patch.object(
+                        ship, "_has_merge_conflicts", return_value=(False, "")
+                    ):
+                        with patch.object(
+                            ship, "_merge_into_target", return_value=(True, "merged", "abc123")
+                        ) as merge_mock:
+                            with patch.object(ship.aet_state, "cmd_record_merge") as close_mock:
+                                rc = ship.cmd_merge(
+                                    argparse.Namespace(
+                                        plan=str(self.plan_path), branch="main", dry_run=False
+                                    )
+                                )
+        self.assertNotEqual(rc, 0)
+        merge_mock.assert_not_called()
+        close_mock.assert_not_called()
+
+    def test_merge_stacked_targeting_parent_is_allowed(self):
+        """Merging a stacked branch into its detected parent is allowed."""
+        stack = ship.StackInfo(
+            trunk_ref="origin/main",
+            base_ref="origin/feat-parent",
+            parent="feat-parent",
+            position="PR 2 of 2",
+        )
+        gate_result = ship.GateResult(
+            ok=True,
+            pr_base="origin/feat-parent",
+            stack=stack,
+            rebased=False,
+            scope_audit=[],
+            dry_run=False,
+            message="Gate passed.",
+        )
+        with patch.object(ship, "_run_gate", return_value=gate_result), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"):
+            with patch.object(ship, "_check_release_guard", return_value=None):
+                with patch.object(ship, "_is_monolithic_commit", return_value=False):
+                    with patch.object(
+                        ship, "_has_merge_conflicts", return_value=(False, "")
+                    ):
+                        with patch.object(
+                            ship, "_merge_into_target", return_value=(True, "merged", "abc123")
+                        ):
+                            with patch.object(ship.aet_state, "cmd_record_merge", return_value=0):
+                                rc = ship.cmd_merge(
+                                    argparse.Namespace(
+                                        plan=str(self.plan_path), branch="feat-parent", dry_run=False
+                                    )
+                                )
+        self.assertEqual(rc, 0)
+
+    def test_merge_stacked_with_explicit_base_skips_guard(self):
+        """An explicit --base override skips the stacked merge guard."""
+        stack = ship.StackInfo(
+            trunk_ref="origin/main",
+            base_ref="origin/feat-parent",
+            parent="feat-parent",
+            position="PR 2 of 2",
+        )
+        gate_result = ship.GateResult(
+            ok=True,
+            pr_base="origin/feat-parent",
+            stack=stack,
+            rebased=False,
+            scope_audit=[],
+            dry_run=False,
+            message="Gate passed.",
+        )
+        with patch.object(ship, "_run_gate", return_value=gate_result), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"):
+            with patch.object(ship, "_check_release_guard", return_value=None):
+                with patch.object(ship, "_is_monolithic_commit", return_value=False):
+                    with patch.object(
+                        ship, "_has_merge_conflicts", return_value=(False, "")
+                    ):
+                        with patch.object(
+                            ship, "_merge_into_target", return_value=(True, "merged", "abc123")
+                        ):
+                            with patch.object(ship.aet_state, "cmd_record_merge", return_value=0):
+                                rc = ship.cmd_merge(
+                                    argparse.Namespace(
+                                        plan=str(self.plan_path),
+                                        branch="main",
+                                        base="origin/feat-parent",
+                                        dry_run=False,
+                                    )
+                                )
+        self.assertEqual(rc, 0)
 
     def _init_repo_with_task_branch(self, task_id: str) -> Path:
         """Create a real temp git repo whose HEAD is on ``main`` and which also
