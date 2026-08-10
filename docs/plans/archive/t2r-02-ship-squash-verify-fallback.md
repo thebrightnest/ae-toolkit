@@ -191,5 +191,5 @@ per ADR-047 precedent from slc-05).
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
