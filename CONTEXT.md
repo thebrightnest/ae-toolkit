@@ -58,6 +58,16 @@ _Avoid_: calling this "size" unqualified — the whole point of recording it is 
 **Band**:
 The expected **Delivered Size** range attached to each **Declared Size** label. A band is a falsifiable claim about delivery, re-checkable against the recorded distribution — not an intake limit.
 
+**Pipeline Mode**:
+The per-plan orchestration-isolation setting declared in plan frontmatter: `minimal` (all skilled stages in one session), `standard` (default stage groups), or `full` (one session per stage). Advisory default follows **Declared Size**; changes touching auth, data models, API contracts, dependencies, or persisted state override to `standard`/`full` regardless of size (ADR-047).
+_Avoid_: confusing it with **Integration Mode**, which is repo configuration, not per-plan frontmatter.
+
+**Integration Mode**:
+The repo-level configuration (`integration_mode: pr-per-task | single-pr`) controlling whether each task ships its own PR or tasks accumulate onto one integration branch (ADR-045). Under `single-pr`, "done" has a second meaning — task merged into the integration branch vs. epic merged into trunk.
+
+**Shadow Config**:
+The project-local configuration layer that overrides the team config for one repo (ADR-048). The configuration used in anger pairs `single-pr` with a shadow config and a heavy dependency environment — distinct from the dogfooded configuration (trunk + team config + no dependencies).
+
 ## Relationships
 
 - A **Task** has exactly one **Plan File**.

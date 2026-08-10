@@ -39,5 +39,11 @@ The work queue currently carries both a `merge_verified` boolean field and a `st
 
 ---
 
-_Stage: scope-validated_
-_Next step: run `aet-pipeline-implement` (single task) or `aet-work` (multi-task queue)_
+## Disposition (2026-08-10, structural-review-tier-2 scope validation)
+
+**Closed — superseded.** mvr-01 merged (the only plan this PRD produced; no `mvr-*` siblings exist). The PRD's premise — "`status` as the single source of truth" — was voided when ADR-055 deleted the `status` field from the plan contract; settled-ness is now derived from the provenance ledger plus git ancestry.
+
+---
+
+_Stage: closed (superseded by ADR-055; delivered by mvr-01)_
+_Next step: none_
