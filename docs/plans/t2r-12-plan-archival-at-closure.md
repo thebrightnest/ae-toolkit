@@ -60,32 +60,35 @@ Relevant prior decisions:
 
 ## Task List
 
-1. Extend `commit_and_push_plan_change` (`src/aet/queue.py:641`) with an
+1. ✓ Extend `commit_and_push_plan_change` (`src/aet/queue.py:641`) with an
    optional archive destination: when set, `git mv` the plan into
    `docs/plans/archive/` and stage both paths so the footer update and the
    move land in the same single commit it already produces — S (traces: R-11)
-2. Wire the move into the terminal leg of `_apply_transition`
+2. ✓ Wire the move into the terminal leg of `_apply_transition`
    (`src/aet/cli/aet_state.py:503-531`): pass the archive destination for
    `merged`/`abandoned` closures, keep the fail-closed behavior (a failed
    move aborts closure the same way a failed footer push does today), and
    add `archived_to` to the `_land_digest` payload; extend
    `tests/state/test_aet_state.py` for the closure move and the task-3
    retry fallback — S (traces: R-11)
-3. Add an `archive/` fallback to `_resolve_plan_for_closure`
+3. ✓ Add an `archive/` fallback to `_resolve_plan_for_closure`
    (`src/aet/cli/aet_state.py:111`) so `cmd_record_merge` retries resolve an
    already-archived plan instead of restoring it to the live directory — S
    (traces: R-11)
-4. Pin the scan exclusion: update the `plans_lint` module docstring to
+4. ✓ Pin the scan exclusion: update the `plans_lint` module docstring to
    state `archive/` is out of corpus, and extend
    `tests/plan/test_plans_lint.py` and
    `tests/queue/test_init_queue_scoped_validation.py` asserting
    `docs/plans/archive/*.md` is invisible to `aet plans lint` and to
    init-queue's scoped validation — S (traces: R-11)
-5. One-time sweep: `git mv` every settled plan (terminal footer stage or
+   [Changed: only the module docstring needed updating; corpus scanners
+   already use non-recursive `*.md` globs, so no code path change was
+   required to exclude `archive/`.]
+5. ✓ One-time sweep: `git mv` every settled plan (terminal footer stage or
    terminal frontmatter `status`, per `_is_settled_from_authority`'s
    definition) from `docs/plans/` into `docs/plans/archive/` in one
    mechanical commit — S (traces: R-11)
-6. Update the plans-layout docs: AGENTS.md (`aet plans lint` row and the
+6. ✓ Update the plans-layout docs: AGENTS.md (`aet plans lint` row and the
    `docs/plans/` intake line) and `docs/CONVENTIONS.md` docs-boundaries
    table to state settled plans live in `docs/plans/archive/` — S
    (traces: R-11)
@@ -181,5 +184,5 @@ pipeline to `standard`.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
