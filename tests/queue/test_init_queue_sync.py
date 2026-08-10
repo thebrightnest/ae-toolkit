@@ -12,6 +12,49 @@ REPO_ROOT = Path(__file__).parents[2]
 from aet import plan_parser  # noqa: E402
 
 
+def _seed_queue_from_plans(queue_file, plans_dir):
+    """Create a minimal queue file containing every plan in ``plans_dir``.
+
+    This simulates the explicit sprint-add record that ``init-queue`` rebuilds
+    from; tests that run ``init-queue`` without a pre-existing queue get the
+    same membership they would have after ``aet sprint add``.
+    """
+    tasks = []
+    for pf in sorted(Path(plans_dir).glob("*.md")):
+        tasks.append(
+            {
+                "id": pf.stem,
+                "title": pf.stem,
+                "plan_file": str(pf),
+                "blocked_by": [],
+                "blocks": [],
+                "state": "planned",
+                "merge_commit": None,
+                "branch": None,
+                "worktree": None,
+                "completed_at": None,
+                "merged_at": None,
+            }
+        )
+    Path(queue_file).write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
+
+
+def _queue_is_empty_or_missing(queue_file):
+    """Return True when the queue file is absent or holds an empty task list."""
+    path = Path(queue_file)
+    if not path.exists():
+        return True
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return True
+    if data == []:
+        return True
+    if isinstance(data, dict) and not data.get("tasks"):
+        return True
+    return False
+
+
 def run_script(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=None):
     """Run a queue script in an isolated environment and return its result."""
     env = os.environ.copy()
@@ -30,6 +73,11 @@ def run_script(script_name, cwd, queue_file, history_file, plans_dir, prds_dir=N
     fake_python3.chmod(0o755)
     env["PATH"] = str(fake_bin) + os.pathsep + env["PATH"]
     env["FAKE_PYTHON3_LOG"] = str(log_file)
+
+    # init-queue rebuilds the existing sprint-add record; seed a minimal record
+    # when the test has not provided one.
+    if script_name == "init-queue" and _queue_is_empty_or_missing(queue_file):
+        _seed_queue_from_plans(queue_file, plans_dir)
 
     module_name = script_name.replace("-", "_")
     cmd = [
@@ -84,7 +132,7 @@ def _ensure_default_prd(path: Path) -> None:
         )
 
 
-def make_plan(path, title, blocked_by=None, size="M", extra_body="", status="queued"):
+def make_plan(path, title, blocked_by=None, size="M", extra_body="", status=None):
     """Write a plan markdown file that passes the full intake validation suite.
 
     ``extra_body`` is inserted before the default task list/validation content so
@@ -92,7 +140,9 @@ def make_plan(path, title, blocked_by=None, size="M", extra_body="", status="que
     still inheriting a PRD reference and other intake-valid boilerplate.
     """
     stem = path.stem
-    lines = ["---", f"id: {stem}", f"size: {size}", f"status: {status}"]
+    lines = ["---", f"id: {stem}", f"size: {size}"]
+    if status is not None:
+        lines.append(f"status: {status}")
     if blocked_by:
         lines.append("blocked_by:")
         for blocker in blocked_by:
@@ -566,7 +616,7 @@ class TestFrontmatterIntake(unittest.TestCase):
         """A plan with a legacy dependency section is rejected, not ingested as empty."""
         plan = self.plans_dir / "legacy.md"
         plan.write_text(
-            "---\nid: legacy\nsize: S\nstatus: queued\n---\n\n# Legacy\n\n"
+            "---\nid: legacy\nsize: S\n---\n\n# Legacy\n\n"
             "## Blocked by\n- missing-link\n\n"
             "---\n\n*Stage: plan-approved*\n",
             encoding="utf-8",
@@ -581,7 +631,7 @@ class TestFrontmatterIntake(unittest.TestCase):
             self.prds_dir,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(self.queue_file.exists())
+        self.assertIn("legacy dependency section", result.stderr)
 
 
 class TestGateKeyIntakeValidation(unittest.TestCase):
@@ -751,6 +801,19 @@ class TestInitQueue(unittest.TestCase):
                     "merged_at": "2026-01-01T00:00:00Z",
                 },
                 {
+                    "id": "new",
+                    "title": "New task",
+                    "plan_file": str(self.plans_dir / "new.md"),
+                    "blocked_by": [],
+                    "blocks": [],
+                    "state": "planned",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                    "completed_at": None,
+                    "merged_at": None,
+                },
+                {
                     "id": "stale",
                     "title": "Stale task",
                     "plan_file": str(self.plans_dir / "stale.md"),
@@ -810,7 +873,18 @@ class TestInitQueue(unittest.TestCase):
                     "merge_strategy": "squash",
                     "branch": "feat-old",
                     "worktree": "/worktrees/old",
-                }
+                },
+                {
+                    "id": "new",
+                    "title": "New task",
+                    "plan_file": str(self.plans_dir / "new.md"),
+                    "blocked_by": [],
+                    "blocks": [],
+                    "state": "planned",
+                    "merge_commit": None,
+                    "branch": None,
+                    "worktree": None,
+                },
             ]
         }
         self.queue_file.write_text(json.dumps(initial))
@@ -842,6 +916,50 @@ class TestInitQueue(unittest.TestCase):
         self.assertNotIn("old", tasks)
         self.assertEqual(tasks["new"]["state"], "ready")
         self.assertNotIn("status", tasks["new"])
+
+    def test_status_queued_with_footer_merged_is_not_resurrected(self):
+        """A plan with a stale queued status but a merged footer stays settled."""
+        stale = self.plans_dir / "stale.md"
+        stale.write_text(
+            "---\nid: stale\nsize: S\nstatus: queued\n---\n\n# Stale task\n\n"
+            "## Task List\n1. Do something (traces: R-1).\n\n"
+            "## Files to Modify\n- `src/widget.py` (new)\n\n"
+            "## Validation Steps\n- [ ] test_widget_creation verifies widget.py\n\n"
+            "---\n\n*Stage: merged*\n",
+            encoding="utf-8",
+        )
+        _ensure_default_prd(stale)
+        self.queue_file.write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "stale",
+                            "title": "Stale task",
+                            "plan_file": str(stale),
+                            "blocked_by": [],
+                            "blocks": [],
+                            "state": "planned",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result, _ = run_script(
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertNotIn("stale", tasks)
+        self.assertIn("1 settled tasks skipped", result.stdout)
 
     def test_does_not_call_derive(self):
         """init-queue must not invoke aet-state derive."""
@@ -887,8 +1005,15 @@ class TestInitQueue(unittest.TestCase):
         )
 
     def test_skips_settled_plans_from_history(self):
-        """init-queue skips plans whose committed status is terminal."""
-        make_plan(self.plans_dir / "settled.md", "Settled task", status="merged")
+        """init-queue skips plans whose footer or history says they are terminal."""
+        settled_plan = self.plans_dir / "settled.md"
+        settled_plan.write_text(
+            "---\nid: settled\nsize: S\n---\n\n# Settled task\n\n"
+            "## Task List\n1. Done (traces: R-1).\n\n"
+            "---\n\n*Stage: merged*\n",
+            encoding="utf-8",
+        )
+        _ensure_default_prd(settled_plan)
         make_plan(self.plans_dir / "active.md", "Active task")
 
         result, _ = run_script(
@@ -996,8 +1121,8 @@ class TestSync(unittest.TestCase):
         self.assertEqual(tasks["missing"]["state"], "in_progress")
         self.assertIn("drift", result.stdout.lower())
 
-    def test_normalizes_merge_verified_to_merged(self):
-        """sync normalizes legacy merge_verified statuses to merged."""
+    def test_drops_legacy_merge_verified_terminal_records(self):
+        """sync drops legacy terminal statuses (merge_verified -> merged) from the live queue."""
         existing_plan = self.plans_dir / "legacy.md"
         make_plan(existing_plan, "Legacy task")
         initial = {
@@ -1025,7 +1150,8 @@ class TestSync(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
         tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
-        self.assertEqual(tasks["legacy"]["state"], "merged")
+        self.assertNotIn("legacy", tasks)
+        self.assertIn("1 skipped (already settled)", result.stdout)
 
     def test_does_not_call_derive(self):
         """sync must not invoke aet-state derive."""

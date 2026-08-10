@@ -83,17 +83,17 @@ def make_plan(
     name: str,
     *,
     footer_stage: str = "plan-approved",
-    status: str = "approved",
+    status: str | None = None,
     blocked_by: list[str] | None = None,
 ) -> Path:
     """Create a minimal atomic plan file in ``plans_dir``."""
     path = plans_dir / name
     blocked_lines = "".join(f"  - {b}\n" for b in (blocked_by or []))
+    status_line = f"status: {status}\n" if status is not None else ""
     body = f"""---
 id: {Path(name).stem}
 size: M
-status: {status}
-blocked_by:
+{status_line}blocked_by:
 {blocked_lines}---
 
 # Plan: {name}

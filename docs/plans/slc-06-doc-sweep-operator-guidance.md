@@ -7,7 +7,6 @@ blocked_by:
   - slc-04-mechanical-closure-transaction
   - slc-05-set-stage-gate-submit-atomicity
 pipeline: minimal
-status: queued
 security_review: skipped
 security_review_reason: prose-only change; no code, auth, data, or dependency surface
 docs_sync: required

@@ -5,7 +5,6 @@ work_class: critical
 blocked_by:
   - slc-01-content-addressed-ledger-events
 pipeline: standard
-status: queued
 security_review: required
 security_review_reason: changes the settled-ness authority every gate and scheduler decision reads
 docs_sync: required
@@ -31,22 +30,22 @@ than patched.
 
 ## Task List
 
-1. Remove `status` from the plan contract: `.agents/templates/plan-template.md`,
-   `plan_parser.py` validation, and intake no longer require or validate the
+1. [x] Remove `status` from the plan contract: `.agents/templates/plan-template.md`,
+   `plan_validate.py`, and intake no longer require or validate the
    field; `aet plans lint` flags a live `status` field as an error — M
    (traces: R-1)
-2. `init-queue` and `aet next`/`status` derive settled-ness from the ledger
+2. [x] `init-queue` and `aet next`/`status` derive settled-ness from the ledger
    (settled ids) + git ancestry, never from plan frontmatter; legacy plans
    with terminal `status` still read as settled via ancestry — M (traces: R-1)
-3. Delete the redundancy police: `plan_drift` from the backend interface and
+3. [x] Delete the redundancy police: `plan_drift` from the backend interface and
    all three backends, the "No plan drift detected" report path
    (`status.py:163`), and the footer↔status validator — S (traces: R-9)
-4. Queue membership is the explicit `aet sprint add` record only — the
+4. [x] Queue membership is the explicit `aet sprint add` record only — the
    "frontmatter `queued` status loads the sprint" path dies — S (traces: R-1)
-5. Regression test: a plan with `status: queued` in frontmatter and
+5. [x] Regression test: a plan with `status: queued` in frontmatter and
    `*Stage: merged*` in its footer is NOT re-queued by `init-queue`
    (the five-plan defect as a fixture) — S (traces: R-1)
-6. Merge branch to main and verify integration — S
+6. [Deferred: merge happens at `aet-ship` stage] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -86,14 +85,14 @@ than patched.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`make test`)
-- [ ] Five-plan fixture: frontmatter `queued` + footer `merged` is not
-  resurrected (integration, `tests/cli/test_init_queue.py`)
-- [ ] `aet plans lint` errors on a live `status` field (unit)
-- [ ] `grep -rn "plan_drift" src/aet` returns nothing (structural)
-- [ ] R-trace coverage: R-1, R-9 covered by tasks 1–5
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`make test`)
+- [x] Five-plan fixture: frontmatter `queued` + footer `merged` is not
+  resurrected (integration, `tests/queue/test_init_queue_sync.py`)
+- [x] `aet plans lint` errors on a live `status` field (unit)
+- [x] `grep -rn "plan_drift" src/aet` returns nothing (structural)
+- [x] R-trace coverage: R-1, R-9 covered by tasks 1–5
+- [Deferred: pending `aet-ship`] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -107,5 +106,5 @@ readable by the pre-change code.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

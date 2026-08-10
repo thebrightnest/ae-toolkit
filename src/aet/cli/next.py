@@ -1,7 +1,8 @@
 """aet-work next — Pick the next stored-ready task.
 
-Reads stored state, warns about plan drift without blocking, and
-transitions the first topological ready task to in_progress.
+Reads stored state and transitions the first topological ready task to
+in_progress. Queue membership is the explicit sprint-add record; the queue
+itself is the authority.
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ from pathlib import Path
 import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend  # noqa: E402
 from aet.queue import (  # noqa: E402
     QueueIntegrityError,
@@ -22,38 +22,12 @@ from aet.queue import (  # noqa: E402
 )
 
 
-def report_plan_drift(queue: list[dict], history: list[dict], plans_dir: Path) -> None:
-    """Print an informational warning if queued plans are not tracked.
-
-    Only plans whose committed status is ``queued`` are expected to be in the
-    live queue. Draft/approved plans are on the board but not in the sprint,
-    and terminal/statusless plans are settled.
-    """
-    tracked_files = {t.get("plan_file") for t in queue if t.get("plan_file")}
-    tracked_files.update(
-        t.get("plan_file") for t in history if t.get("plan_file")
-    )
-
-    orphaned: list[str] = []
-    for pf in sorted(plans_dir.glob("*.md")):
-        if not plan_validate.is_sprint_member(pf):
-            continue
-        pf_str = str(pf)
-        if pf_str not in tracked_files:
-            orphaned.append(pf_str)
-
-    if orphaned:
-        print(f"⚠️ Plan drift detected: {len(orphaned)} plan file(s) not in queue")
-        for pf in orphaned:
-            print(f"  - {pf}")
-        print("Run `aet init-queue` to sync if you want these plans tracked.")
-
-
 def derive_queue(queue: list[dict]) -> list[dict]:
-    """Return only tasks whose plan file is still a sprint member.
+    """Return only tasks whose plan file still exists.
 
-    Membership is rebuilt from committed plan status on every read, so a plan
-    that leaves ``queued`` (or disappears) is not pickable.
+    Queue membership is the explicit sprint-add record. A task whose plan file
+    has disappeared is retained in the stored queue (drift is reported by
+    ``aet queue status`` / ``aet queue sync``) but is not pickable.
     """
     derived: list[dict] = []
     for task in queue:
@@ -61,8 +35,7 @@ def derive_queue(queue: list[dict]) -> list[dict]:
         if not pf:
             derived.append(task)
             continue
-        path = Path(pf)
-        if path.is_file() and plan_validate.is_sprint_member(path):
+        if Path(pf).is_file():
             derived.append(task)
     return derived
 
@@ -146,9 +119,6 @@ def _run(
         print(f"⛔ {exc}", file=sys.stderr)
         return 1
     queue = data["queue"]
-    history = data["history"]
-
-    report_plan_drift(queue, history, plans_dir)
 
     derived_queue = derive_queue(queue)
     task = pick_next_ready(derived_queue)

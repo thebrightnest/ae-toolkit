@@ -84,8 +84,7 @@ class TestGitHubProjection(unittest.TestCase):
         task = {
             "id": "feat-001",
             "title": "First task",
-            "status": "draft",
-            "state": "planned",
+            "state": "backlog",
             "plan_file": "docs/plans/feat-001.md",
         }
 
@@ -100,7 +99,7 @@ class TestGitHubProjection(unittest.TestCase):
         create_call = create_calls[0]
         body = create_call[create_call.index("--body") + 1]
         self.assertIn("<!-- aet-id: feat-001 -->", body)
-        self.assertIn("aet:draft", create_call)
+        self.assertIn("aet:backlog", create_call)
 
     @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_issue_identity_is_plan_id_not_title(self, mock_run):
@@ -189,7 +188,6 @@ class TestGitHubProjection(unittest.TestCase):
         task = {
             "id": "feat-001",
             "title": "First task",
-            "status": "draft",
             "state": "planned",
             "plan_file": "docs/plans/feat-001.md",
         }
@@ -203,8 +201,8 @@ class TestGitHubProjection(unittest.TestCase):
         self.assertEqual(created_names, missing - set(existing))
 
     @mock.patch("aet.backends.github_backend.subprocess.run")
-    def test_draft_and_backlog_labels_from_plan_status(self, mock_run):
-        """Backlog add labels issues by plan status, not queue state."""
+    def test_labels_driven_by_queue_state(self, mock_run):
+        """Issue labels are driven by the recorded queue state."""
 
         def side_effect(cmd, **kwargs):
             if cmd[:3] == ["gh", "label", "list"]:
@@ -223,16 +221,15 @@ class TestGitHubProjection(unittest.TestCase):
 
         mock_run.side_effect = side_effect
 
-        for status, expected_label in (("draft", "aet:draft"), ("approved", "aet:backlog")):
-            with self.subTest(status=status):
+        for state, expected_label in (("planned", "aet:planned"), ("backlog", "aet:backlog")):
+            with self.subTest(state=state):
                 mock_run.reset_mock()
                 self.backend._labels_ensured = False
                 task = {
-                    "id": f"feat-{status}",
-                    "title": f"{status} task",
-                    "status": status,
-                    "state": "planned",
-                    "plan_file": f"docs/plans/feat-{status}.md",
+                    "id": f"feat-{state}",
+                    "title": f"{state} task",
+                    "state": state,
+                    "plan_file": f"docs/plans/feat-{state}.md",
                 }
 
                 self.backend.on_add(task, is_new=True)
@@ -248,7 +245,6 @@ class TestGitHubProjection(unittest.TestCase):
                 {
                     "id": "task",
                     "state": "in_progress",
-                    "status": "queued",
                     "github_issue_number": 10,
                     "plan_file": "docs/plans/task.md",
                 }
@@ -292,7 +288,6 @@ class TestGitHubProjection(unittest.TestCase):
                 {
                     "id": "task",
                     "state": "merged",
-                    "status": "queued",
                     "github_issue_number": 11,
                     "plan_file": "docs/plans/task.md",
                 }

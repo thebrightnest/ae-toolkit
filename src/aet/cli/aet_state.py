@@ -1068,7 +1068,7 @@ def cmd_record_merge(args):
         return 1
 
     # Load task. If a previous record-merge already transitioned the task to
-    # merged but failed to push the plan status commit, retry only the plan
+    # merged but failed to push the plan footer update, retry only the plan
     # closure push.
     with queue_lib.queue_lock(args.queue):
         data = backend.load()
@@ -1097,9 +1097,8 @@ def cmd_record_merge(args):
                 cwd,
             )
             if resolved_path:
-                rc = queue_lib.commit_and_push_status(
-                    resolved_path, "merged", task_id=args.task_id, cwd=cwd,
-                    footer_stage="merged",
+                rc = queue_lib.commit_and_push_plan_change(
+                    resolved_path, footer_stage="merged", task_id=args.task_id, cwd=cwd,
                 )
                 if rc != 0:
                     print(
@@ -1219,9 +1218,9 @@ def cmd_record_merge(args):
             print(str(e), file=sys.stderr)
             return 1
 
-    # Terminal truth lives in the plan file. Resolve it from the merged branch
-    # when it is absent from the checkout, then update both frontmatter status
-    # and footer stage and commit/push so the closure is versioned.
+    # Terminal truth lives in the plan footer. Resolve it from the merged branch
+    # when it is absent from the checkout, then update the footer stage and
+    # commit/push so the closure breadcrumb is versioned.
     explicit_plan = getattr(args, "plan", None)
     plan_path = explicit_plan or task.get("plan_file")
     if plan_path:
@@ -1229,9 +1228,8 @@ def cmd_record_merge(args):
             plan_path, merge_commit, branch, cwd
         )
         if resolved_path:
-            rc = queue_lib.commit_and_push_status(
-                resolved_path, "merged", task_id=args.task_id, cwd=cwd,
-                footer_stage="merged",
+            rc = queue_lib.commit_and_push_plan_change(
+                resolved_path, footer_stage="merged", task_id=args.task_id, cwd=cwd,
             )
             if rc != 0:
                 # Local commit is intact; recoverable on re-run.

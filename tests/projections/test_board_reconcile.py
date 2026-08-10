@@ -33,14 +33,11 @@ def _make_plan(
     plans_dir: Path,
     name: str,
     *,
-    status: str = "approved",
     blocked_by: list[str] | None = None,
 ) -> Path:
     blocked_lines = "".join(f"  - {b}\n" for b in (blocked_by or []))
     body = f"""---
 id: {Path(name).stem}
-status: {status}
-blocked_by:
 {blocked_lines}---
 
 # Plan: {name}
@@ -79,8 +76,13 @@ class TestBoardReconcile(unittest.TestCase):
             history_file=self.history_file,
             plans_dir=str(self.plans_dir),
         )
-        Path(self.queue_file).write_text("[]", encoding="utf-8")
+        self._write_queue([])
         Path(self.history_file).write_text("", encoding="utf-8")
+
+    def _write_queue(self, tasks: list[dict]) -> None:
+        Path(self.queue_file).write_text(
+            json.dumps({"tasks": tasks}), encoding="utf-8"
+        )
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -92,7 +94,17 @@ class TestBoardReconcile(unittest.TestCase):
     @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_dryrun_reports_missing_issues_and_mutates_nothing(self, mock_run):
         """A dry run prints missing drift and never creates or edits issues."""
-        _make_plan(self.plans_dir, "feat-001.md", status="approved")
+        plan = _make_plan(self.plans_dir, "feat-001.md")
+        self._write_queue(
+            [
+                {
+                    "id": "feat-001",
+                    "title": "Plan: feat-001.md",
+                    "state": "backlog",
+                    "plan_file": str(plan),
+                }
+            ]
+        )
 
         def side_effect(cmd, **kwargs):
             if cmd[:3] == ["gh", "label", "list"]:
@@ -118,8 +130,24 @@ class TestBoardReconcile(unittest.TestCase):
     @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_apply_creates_missing_and_corrects_labels(self, mock_run):
         """--apply creates missing issues and relabels mislabeled ones."""
-        _make_plan(self.plans_dir, "feat-001.md", status="approved")
-        _make_plan(self.plans_dir, "feat-002.md", status="queued")
+        plan1 = _make_plan(self.plans_dir, "feat-001.md")
+        plan2 = _make_plan(self.plans_dir, "feat-002.md")
+        self._write_queue(
+            [
+                {
+                    "id": "feat-001",
+                    "title": "Plan: feat-001.md",
+                    "state": "backlog",
+                    "plan_file": str(plan1),
+                },
+                {
+                    "id": "feat-002",
+                    "title": "Plan: feat-002.md",
+                    "state": "ready",
+                    "plan_file": str(plan2),
+                },
+            ]
+        )
 
         existing_issues = [_issue(7, "feat-002", ["aet:draft"])]
 
@@ -159,7 +187,17 @@ class TestBoardReconcile(unittest.TestCase):
     @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_reports_hand_closed_live_issue(self, mock_run):
         """A live plan whose issue was hand-closed is reported; --apply reopens it."""
-        _make_plan(self.plans_dir, "feat-003.md", status="queued")
+        plan = _make_plan(self.plans_dir, "feat-003.md")
+        self._write_queue(
+            [
+                {
+                    "id": "feat-003",
+                    "title": "Plan: feat-003.md",
+                    "state": "ready",
+                    "plan_file": str(plan),
+                }
+            ]
+        )
         existing_issues = [_issue(8, "feat-003", ["aet:ready"], state="closed")]
 
         def side_effect(cmd, **kwargs):
@@ -194,7 +232,7 @@ class TestBoardReconcile(unittest.TestCase):
     @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_orphan_issue_reported_not_deleted(self, mock_run):
         """An issue for a non-live plan is reported and never deleted."""
-        _make_plan(self.plans_dir, "feat-004.md", status="merged")
+        _make_plan(self.plans_dir, "feat-004.md")
         existing_issues = [_issue(9, "feat-099", ["aet:backlog"])]
 
         def side_effect(cmd, **kwargs):
@@ -217,7 +255,17 @@ class TestBoardReconcile(unittest.TestCase):
     @mock.patch("aet.backends.github_backend.subprocess.run")
     def test_second_apply_is_empty(self, mock_run):
         """After a successful --apply, the next reconcile reports no drift."""
-        _make_plan(self.plans_dir, "feat-005.md", status="approved")
+        plan = _make_plan(self.plans_dir, "feat-005.md")
+        self._write_queue(
+            [
+                {
+                    "id": "feat-005",
+                    "title": "Plan: feat-005.md",
+                    "state": "backlog",
+                    "plan_file": str(plan),
+                }
+            ]
+        )
 
         existing_issues: list[dict] = []
 

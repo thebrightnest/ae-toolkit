@@ -95,38 +95,6 @@ class TestJsonBackend(unittest.TestCase):
         self.assertEqual(data.get("queue_updated_at"), "2026-01-01T00:00:00Z")
         self.assertEqual(data["tasks"][0]["state"], "in_progress")
 
-    def test_plan_drift_returns_orphaned_plans(self):
-        (self.plans_dir / "tracked.md").write_text("# Tracked", encoding="utf-8")
-        (self.plans_dir / "orphan.md").write_text("# Orphan", encoding="utf-8")
-
-        with open(self.queue_file, "w", encoding="utf-8") as f:
-            json.dump([{"id": "t1", "plan_file": str(self.plans_dir / "tracked.md")}], f)
-
-        backend = JsonBackend(self.queue_file, self.history_file)
-        orphaned = backend.plan_drift(str(self.plans_dir))
-
-        self.assertEqual(orphaned, [str(self.plans_dir / "orphan.md")])
-
-    def test_plan_drift_returns_empty_when_all_tracked(self):
-        (self.plans_dir / "tracked.md").write_text("# Tracked", encoding="utf-8")
-
-        with open(self.queue_file, "w", encoding="utf-8") as f:
-            json.dump([{"id": "t1", "plan_file": str(self.plans_dir / "tracked.md")}], f)
-
-        backend = JsonBackend(self.queue_file, self.history_file)
-        orphaned = backend.plan_drift(str(self.plans_dir))
-        self.assertEqual(orphaned, [])
-
-    def test_plan_drift_considers_history(self):
-        (self.plans_dir / "settled.md").write_text("# Settled", encoding="utf-8")
-
-        with open(self.history_file, "w", encoding="utf-8") as f:
-            f.write(f'{{"id": "t1", "plan_file": "{self.plans_dir / "settled.md"}"}}\n')
-
-        backend = JsonBackend(self.queue_file, self.history_file)
-        orphaned = backend.plan_drift(str(self.plans_dir))
-        self.assertEqual(orphaned, [])
-
     def test_close_is_safe(self):
         backend = JsonBackend(self.queue_file, self.history_file)
         backend.close()

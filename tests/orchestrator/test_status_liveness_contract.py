@@ -1,4 +1,4 @@
-"""Tests for the status liveness contract (gib-03)."""
+"""Tests for the post-ADR-055 plan contract: no frontmatter status authority."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from aet import plan_validate
+from aet import plans_lint
 
 _REPO_ROOT = Path(__file__).parents[2]
 
@@ -24,6 +24,7 @@ def _make_plan(
     *,
     frontmatter: dict | None = None,
     body: str = "",
+    footer: str = "",
     prd: str = "docs/prds/default-prd.md",
 ) -> Path:
     """Create a minimal plan file with the given frontmatter and PRD context."""
@@ -41,6 +42,7 @@ def _make_plan(
             fm_lines.append(f"{key}: {value}")
 
     fm_block = "\n".join(fm_lines)
+    footer_block = f"\n\n---\n\n{footer}" if footer else ""
     text = (
         f"---\n{fm_block}\n---\n\n"
         f"# Plan\n\n"
@@ -48,68 +50,36 @@ def _make_plan(
         f"PRD: {prd}\n\n"
         f"## Task List\n\n"
         f"1. Do something (traces: R-1).\n\n"
-        f"{body}\n"
+        f"{body}"
+        f"{footer_block}"
     )
     path.write_text(text, encoding="utf-8")
     return path
 
 
-class TestStatusValidation(unittest.TestCase):
-    """Status field validation in plan_validate."""
+class TestStatusFieldRejected(unittest.TestCase):
+    """The status frontmatter field is no longer part of the plan contract."""
 
-    def test_status_required_for_new_plan(self):
-        """A plan that declares status must use a legal lifecycle value."""
+    def test_plans_lint_flags_any_status_field(self):
+        """Any live status frontmatter field is reported as an error."""
         with tempfile.TemporaryDirectory() as tmp:
             plans_dir = Path(tmp) / "docs" / "plans"
             plans_dir.mkdir(parents=True)
-            plan = _make_plan(
+            _make_plan(
                 plans_dir,
                 "has-status.md",
                 frontmatter={"status": "draft"},
             )
-            findings = plan_validate.validate([plan])
-            self.assertFalse(
-                any(f.check_id == "status" for f in findings),
-                "legal status: draft should not produce a status finding",
-            )
-
-    def test_statusless_legacy_plan_is_exempt_and_settled(self):
-        """A plan with no status field is exempt from the requirement and settled."""
-        with tempfile.TemporaryDirectory() as tmp:
-            plans_dir = Path(tmp) / "docs" / "plans"
-            plans_dir.mkdir(parents=True)
-            plan = _make_plan(plans_dir, "legacy.md")
-            findings = plan_validate.validate([plan])
-            self.assertFalse(
-                any(f.check_id == "status" for f in findings),
-                "statusless legacy plan should be exempt from the status requirement",
-            )
-            self.assertTrue(
-                plan_validate.is_settled_plan(plan),
-                "statusless legacy plan should be classified as settled",
-            )
-
-    def test_illegal_status_value_rejected(self):
-        """An illegal status value is rejected."""
-        with tempfile.TemporaryDirectory() as tmp:
-            plans_dir = Path(tmp) / "docs" / "plans"
-            plans_dir.mkdir(parents=True)
-            plan = _make_plan(
-                plans_dir,
-                "bad-status.md",
-                frontmatter={"status": "unknown"},
-            )
-            findings = plan_validate.validate([plan])
-            status_findings = [f for f in findings if f.check_id == "status"]
-            self.assertEqual(len(status_findings), 1, status_findings)
-            self.assertIn("unknown", status_findings[0].message)
+            violations = plans_lint.lint_corpus(plans_dir)
+            self.assertEqual(len(violations), 1, violations)
+            self.assertIn("status", violations[0][1])
 
 
 class TestSettledDecision(unittest.TestCase):
-    """Settled-ness derives from committed plan data, not local history."""
+    """Settled-ness derives from footer stage and git ancestry, not status."""
 
-    def test_settled_decision_ignores_history_log(self):
-        """init-queue rebuild skips settled plans even when history log is absent."""
+    def test_init_queue_skips_terminal_footer_without_history(self):
+        """init-queue skips plans whose footer says they are terminal."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             plans_dir = root / "docs" / "plans"
@@ -121,9 +91,16 @@ class TestSettledDecision(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            _make_plan(plans_dir, "legacy.md")
-            _make_plan(plans_dir, "merged.md", frontmatter={"status": "merged"})
-            _make_plan(plans_dir, "live.md", frontmatter={"status": "queued"})
+            live = _make_plan(
+                plans_dir,
+                "live.md",
+                footer="*Stage: plan-approved*",
+            )
+            _make_plan(
+                plans_dir,
+                "merged.md",
+                footer="*Stage: merged*",
+            )
 
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             subprocess.run(
@@ -143,11 +120,36 @@ class TestSettledDecision(unittest.TestCase):
                 check=True,
             )
 
-            queue_file = root / ".agents" / "work-queue.json"
-            history_file = root / ".agents" / "work-history.jsonl"
-            config_file = root / ".agents" / "aet-config.json"
+            agents_dir = root / ".agents"
+            agents_dir.mkdir(parents=True)
+            queue_file = agents_dir / "work-queue.json"
+            history_file = agents_dir / "work-history.jsonl"
+            config_file = agents_dir / "aet-config.json"
+            queue_file.write_text(
+                json.dumps({
+                    "tasks": [
+                        {
+                            "id": "live",
+                            "title": "Live",
+                            "plan_file": str(live),
+                            "blocked_by": [],
+                            "blocks": [],
+                            "state": "planned",
+                        },
+                        {
+                            "id": "merged",
+                            "title": "Merged",
+                            "plan_file": str(root / "docs" / "plans" / "merged.md"),
+                            "blocked_by": [],
+                            "blocks": [],
+                            "state": "planned",
+                        },
+                    ]
+                }),
+                encoding="utf-8",
+            )
 
-            # No history file exists — this is the R-7 regression case.
+            # No history file exists — settled-ness comes from the plan footer.
             result = subprocess.run(
                 [
                     sys.executable,
@@ -170,5 +172,4 @@ class TestSettledDecision(unittest.TestCase):
             queue = json.loads(queue_file.read_text(encoding="utf-8"))
             ids = {t["id"] for t in queue["tasks"]}
             self.assertIn("live", ids)
-            self.assertNotIn("legacy", ids)
             self.assertNotIn("merged", ids)

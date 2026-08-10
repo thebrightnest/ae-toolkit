@@ -28,7 +28,7 @@ from aet import (  # noqa: E402
     track_record,
 )
 from aet.backends.factory import create_backend  # noqa: E402
-from aet.queue import current_state, update_plan_status  # noqa: E402
+from aet.queue import current_state, update_plan_footer  # noqa: E402
 
 # Load aet-state as a module so desk actions can reuse queue mutations and
 # plan-footer updates rather than re-implementing closure logic.
@@ -445,8 +445,8 @@ def _run_abandon(args: argparse.Namespace) -> int:
     plan_path = task.get("plan_file")
     if plan_path and Path(plan_path).exists():
         try:
-            update_plan_status(plan_path, "abandoned", footer_stage="abandoned")
-        except ValueError as exc:
+            update_plan_footer(plan_path, "abandoned")
+        except (OSError, ValueError) as exc:
             print(
                 f"Abandoned recorded, but plan update failed: {exc}",
                 file=sys.stderr,

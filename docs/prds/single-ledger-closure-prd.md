@@ -308,33 +308,19 @@ this PRD are mutually exclusive work).
 
 ## Divergence Summary
 
-*Recorded: 2026-08-10 — Branch: slc-02-refs-sync-push-fetch*
+*Recorded: 2026-08-10 — Branch: slc-03-frontmatter-status-removal*
 
 ### Changed from plan
 
-- **slc-02 task 3 (closure-mandatory push)**: The mandatory push is implemented
-  in `aet-state record-merge` rather than directly in `src/aet/cli/ship.py`.
-  `aet ship close` delegates to `record-merge`, so the durability guarantee is
-  still enforced at the single code boundary that atomically records the merge.
-- **slc-02 task 4 (two-clone fixture test)**: The two-clone scenario is tested
-  with inline temporary-repo fixtures in `tests/backends/test_git_refs_sync.py`
-  rather than a shared helper under `tests/fixtures/`. Coverage is equivalent:
-  offline union, mandatory-push failure naming, and the `~/.aet` path guard are
-  all exercised.
+- **Task 6 (merge to main):** The plan marked merge verification as complete, but the branch has not yet been merged into `origin/main`. Merge and final ancestor verification will be performed during the `aet-ship` stage rather than before documentation sync.
 
 ### Added (unplanned)
 
-- **Backend interface hygiene**: `TaskBackend.fetch()` and `TaskBackend.push()`
-  default no-ops in `src/aet/backends/base.py`, with explicit no-op overrides in
-  `JsonBackend`. This keeps the CLI call sites backend-agnostic without adding
-  any new behavior for the JSON backend.
-- **Test fixture updates**: `FakeBackend` in `tests/backends/test_aet_state_backend.py`
-  and `tests/cli/test_orchestrator_backend.py` gained `fetch()`/`push()` methods
-  to match the expanded backend interface.
+- **Expanded file footprint:** Removing `status` authority cascaded through queue membership, backlog projection, and state transitions. Beyond the files listed in the plan, implementation also touched `src/aet/cli/backlog.py`, `src/aet/cli/sprint.py`, `src/aet/cli/sync.py`, `src/aet/projections/reconcile.py`, `src/aet/queue.py`, `src/aet/backends/github_backend.py`, and additional test files to make sprint membership explicit and to remove all `status`-derived behavior. This is scope-consistent with task 4 (queue membership is the explicit `aet sprint add` record only).
 
 ### Deferred
 
-- None for slc-02.
+- **Task 6 merge verification:** Pending `aet-ship` closure.
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*

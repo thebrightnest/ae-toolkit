@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """aet plans — corpus-level commands for the plan directory.
 
-``aet plans lint`` classifies every plan under ``docs/plans/`` as settled or
-live and reports any file whose classification disagrees with its committed
-frontmatter ``status`` (R-5).
+``aet plans lint`` scans every plan under ``docs/plans/`` and reports any file
+that still carries a ``status`` frontmatter field. The field left the plan
+contract in ADR-055; settled-ness now lives in the ledger and git ancestry.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def cmd_lint(args: argparse.Namespace) -> int:
             print(f"{plan.name}: {message}", file=sys.stderr)
         return 1
 
-    print(f"✓ all {len(plan_files)} plans classified correctly")
+    print(f"✓ all {len(plan_files)} plans passed lint")
     return 0
 
 

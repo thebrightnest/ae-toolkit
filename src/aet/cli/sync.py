@@ -1,10 +1,10 @@
 """aet queue sync — Reconcile the existing work queue against docs/plans/*.md.
 
-Loads the existing queue and settled history log, drops settled and non-sprint
-entries, validates the frontmatter contract and atomicity, recomputes the
-dependency DAG, reports drift, and updates wrapper metadata. Intake is curated:
-sync **never adds new plans** (that is `aet sprint add`), and it does **not**
-derive status or promote tasks.
+Loads the existing queue and settled history log, drops settled entries,
+validates the frontmatter contract and atomicity, recomputes the dependency
+DAG, reports missing-plan drift, and updates wrapper metadata. Intake is
+curated: sync **never adds new plans** (that is `aet sprint add`), and it does
+**not** derive status or promote tasks.
 """
 
 from __future__ import annotations
@@ -21,7 +21,8 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend  # noqa: E402
-from aet.queue import QueueIntegrityError, build_blocks, lease_guard  # noqa: E402
+from aet.cli.init_queue import _is_settled_from_authority  # noqa: E402
+from aet.queue import QueueIntegrityError, build_blocks, current_state, lease_guard  # noqa: E402
 
 
 def _sync(args: argparse.Namespace) -> int:
@@ -50,28 +51,41 @@ def _sync(args: argparse.Namespace) -> int:
         print(f"⛔ {exc}", file=sys.stderr)
         return 1
     queue = data["queue"]
+    history = data["history"]
+    history_by_id = {t.get("id"): t for t in history if t.get("id")}
 
     plan_files = sorted(plans_dir.glob("*.md"))
     plan_file_set = {str(pf) for pf in plan_files}
+
+    repo_root = Path(
+        subprocess.run(
+            ["git", "-C", str(plans_dir), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        or str(plans_dir.parent.parent)
+    )
 
     # Curated intake: only plans already in the queue are reconciled. New plans
     # must be explicitly added via ``aet-work add``; sync never auto-adds them.
     final_queue: list[dict] = []
     preserved = 0
     skipped_settled = 0
-    skipped_non_sprint = 0
     for task in queue:
+        # A task already recorded as terminal is settled regardless of plan
+        # file state; it should not remain in the live queue.
+        if current_state(task) in {"merged", "abandoned"}:
+            skipped_settled += 1
+            continue
+
         pf = task.get("plan_file")
-        # Settled-ness is derived from committed plan data (status frontmatter),
-        # not from the local gitignored history log. A missing plan file cannot
-        # be classified as settled; it is reported as drift below.
+        # Settled-ness is derived from the ledger and git ancestry, not from
+        # plan frontmatter. A missing plan file cannot be classified as settled;
+        # it is reported as drift below.
         pf_path = Path(pf) if pf else None
         if pf_path and pf_path.is_file():
-            if plan_validate.is_settled_plan(pf_path):
+            if _is_settled_from_authority(pf_path, history_by_id, repo_root=repo_root):
                 skipped_settled += 1
-                continue
-            if not plan_validate.is_sprint_member(pf_path):
-                skipped_non_sprint += 1
                 continue
         final_queue.append(task)
         if pf:
@@ -88,14 +102,6 @@ def _sync(args: argparse.Namespace) -> int:
             if plan_path.is_file():
                 plan_files_to_validate.append(plan_path)
 
-    repo_root = Path(
-        subprocess.run(
-            ["git", "-C", str(plans_dir), "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-        or str(plans_dir.parent.parent)
-    )
     findings = plan_validate.validate(plan_files_to_validate, repo_root=repo_root)
     plan_texts = {
         pf: pf.read_text(errors="ignore") for pf in plan_files_to_validate
@@ -129,7 +135,7 @@ def _sync(args: argparse.Namespace) -> int:
 
     print(
         f"\n✅ Sync complete: 0 new tasks added, {preserved} existing tasks preserved, "
-        f"{skipped_settled} skipped (already settled), {skipped_non_sprint} skipped (not in sprint), "
+        f"{skipped_settled} skipped (already settled), "
         f"{drifted} drifted tasks reported."
     )
     backend.close()

@@ -65,9 +65,9 @@ class TestSprintAdd(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output + result.stderr)
             self.assertIn("queued without publishing", result.output)
 
-            # Plan file promoted to queued; footer pipeline stage is preserved.
+            # Plan file is not mutated with status; footer pipeline stage is preserved.
             plan_text = plan.read_text(encoding="utf-8")
-            self.assertIn("status: queued", plan_text)
+            self.assertNotIn("status:", plan_text)
             self.assertIn("_Stage: plan-approved_", plan_text)
 
             # No intake commit is made for plan paths (ADR-054).

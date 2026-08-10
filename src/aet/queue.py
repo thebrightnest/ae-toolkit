@@ -627,51 +627,6 @@ def update_plan_footer(plan_path: str | Path, stage: str) -> None:
     path.write_text(new_content, encoding="utf-8")
 
 
-def update_plan_frontmatter_status(plan_path: str | Path, status: str) -> None:
-    """Update the `status` key in a markdown file's YAML frontmatter.
-
-    If a ``status`` key already exists, its value is replaced. If not, the key
-    is appended to the frontmatter block. The file is rewritten in place.
-    """
-    path = Path(plan_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Plan file not found: {plan_path}")
-
-    content = path.read_text(encoding="utf-8")
-    match = re.match(r"^(---\n)(.*?)(\n---\n)", content, re.DOTALL)
-    if not match:
-        raise ValueError(f"No YAML frontmatter found in {plan_path}")
-
-    frontmatter = match.group(2)
-    if re.search(r"^status:\s*", frontmatter, re.MULTILINE):
-        new_frontmatter = re.sub(
-            r"^(status:\s*).*$",
-            r"\1" + status,
-            frontmatter,
-            flags=re.MULTILINE,
-        )
-    else:
-        new_frontmatter = frontmatter.rstrip() + f"\nstatus: {status}"
-
-    new_content = content[: match.start(2)] + new_frontmatter + content[match.end(2):]
-    path.write_text(new_content, encoding="utf-8")
-
-
-def update_plan_status(
-    plan_path: str | Path, status: str, *, footer_stage: str | None = None
-) -> None:
-    """Update the frontmatter status and optionally the footer stage.
-
-    The footer stage is a pipeline-stage breadcrumb (e.g. ``plan-approved``,
-    ``implemented``) and is only touched when the caller explicitly supplies
-    ``footer_stage``.  Lifecycle status values such as ``queued`` must never
-    overwrite the pipeline stage.
-    """
-    update_plan_frontmatter_status(plan_path, status)
-    if footer_stage is not None:
-        update_plan_footer(plan_path, footer_stage)
-
-
 def _run_git(*args: str, cwd: str | Path | None = None) -> tuple[int, str, str]:
     """Run a git command; return (returncode, stdout, stderr)."""
     try:
@@ -683,25 +638,22 @@ def _run_git(*args: str, cwd: str | Path | None = None) -> tuple[int, str, str]:
     return (result.returncode, result.stdout, result.stderr)
 
 
-def commit_and_push_status(
+def commit_and_push_plan_change(
     plan_path: str | Path,
-    status: str,
     *,
+    footer_stage: str | None = None,
     task_id: str | None = None,
     cwd: str | Path | None = None,
-    footer_stage: str | None = None,
 ) -> int:
-    """Update a plan's status, commit the change, and push it.
+    """Update the plan footer stage and commit/push the change.
 
     The local commit is preserved if the push fails, so the operation is
-    idempotent on re-run: the same status update produces no diff on a second
+    idempotent on re-run: the same footer update produces no diff on a second
     call, and a subsequent push will succeed once connectivity is restored.
-
-    ``footer_stage`` is only supplied when the terminal closure should also
-    update the pipeline-stage breadcrumb in the plan footer (e.g. ``merged``).
     """
     path = Path(plan_path)
-    update_plan_status(path, status, footer_stage=footer_stage)
+    if footer_stage is not None:
+        update_plan_footer(path, footer_stage)
 
     plan_abs = os.path.realpath(str(path))
     # Determine the git repository root from the plan and run all git
@@ -717,14 +669,14 @@ def commit_and_push_status(
             repo_root = out.strip()
         else:
             # The plan is not inside a git repository; there is nothing to
-            # commit or push. The status update has already been written to the
+            # commit or push. The footer update has already been written to the
             # file above, so this is a safe local-only short-circuit.
             return 0
     plan_rel = os.path.relpath(plan_abs, os.path.realpath(str(repo_root)))
 
-    # Mid-sprint status updates on deferred plan paths are local-only; the
+    # Mid-sprint footer updates on deferred plan paths are local-only; the
     # durable write happens only for terminal transitions (merged/abandoned).
-    if is_deferred_path(plan_rel) and status not in TERMINAL_STATES:
+    if is_deferred_path(plan_rel) and footer_stage not in TERMINAL_STATES:
         return 0
 
     rc, _, err = _run_git("add", plan_rel, cwd=repo_root)
@@ -741,7 +693,7 @@ def commit_and_push_status(
         return rc
 
     commit_task = task_id or path.stem
-    commit_msg = f"chore({commit_task}): mark plan as {status}"
+    commit_msg = f"chore({commit_task}): mark plan stage {footer_stage}"
     rc, _, err = _run_git("commit", "-m", commit_msg, cwd=repo_root)
     if rc != 0:
         print(f"git commit failed: {err}", file=sys.stderr)

@@ -11,7 +11,6 @@ Plan files use YAML frontmatter between leading `---` fences.  The
 ## Optional keys
 
 - `blocked_by` — list of task ids.  Missing or empty means no blockers.
-- `status` — plan lifecycle status (e.g., `queued`, `merged`).
 - `work_class` — one of `trivial`, `normal`, `critical`.
 - `pipeline` — pipeline name (e.g., `standard`).
 - `security_review` — `required` or `skipped`; `skipped` requires

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from aet.queue import (
-    commit_and_push_status,
+    commit_and_push_plan_change,
     get_next_unblocked,
     has_pending_tasks,
     read_history,
@@ -208,7 +208,7 @@ class TestQueue(unittest.TestCase):
             self.assertEqual(t2["pending_blockers"], 1)
 
 
-class TestCommitAndPushStatusTerminality(unittest.TestCase):
+class TestCommitAndPushPlanChangeTerminality(unittest.TestCase):
     def _init_repo(self, repo_root: str) -> None:
         subprocess.run(["git", "init", "-q", repo_root], check=True)
         subprocess.run(
@@ -241,41 +241,43 @@ class TestCommitAndPushStatusTerminality(unittest.TestCase):
         )
         return int(result.stdout.strip())
 
-    def test_non_terminal_deferred_plan_writes_file_without_commit(self):
-        """Queued status on a docs/plans path updates the file but does not commit."""
+    def test_non_terminal_deferred_plan_writes_footer_without_commit(self):
+        """A non-terminal footer update on a docs/plans path writes locally but does not commit."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo(repo_root)
             plan = self._make_plan(repo_root, "docs/plans/test.md")
             initial_commits = self._commit_count(repo_root)
 
-            rc = commit_and_push_status(plan, "queued")
+            rc = commit_and_push_plan_change(plan, footer_stage="plan-approved")
 
             self.assertEqual(rc, 0)
-            self.assertIn("status: queued", plan.read_text(encoding="utf-8"))
+            self.assertIn("*Stage: plan-approved*", plan.read_text(encoding="utf-8"))
             self.assertEqual(self._commit_count(repo_root), initial_commits)
 
     def test_terminal_deferred_plan_commits(self):
-        """Merged status on a docs/plans path still commits and pushes."""
+        """A terminal footer update on a docs/plans path still commits and pushes."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo(repo_root)
             plan = self._make_plan(repo_root, "docs/plans/test.md")
             initial_commits = self._commit_count(repo_root)
 
-            rc = commit_and_push_status(plan, "merged")
+            rc = commit_and_push_plan_change(plan, footer_stage="merged")
 
             self.assertEqual(rc, 0)
+            self.assertIn("*Stage: merged*", plan.read_text(encoding="utf-8"))
             self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
 
     def test_non_terminal_non_deferred_path_commits(self):
-        """A non-deferred path with a non-terminal status commits as before."""
+        """A non-terminal footer update on a non-deferred path commits as before."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo(repo_root)
             plan = self._make_plan(repo_root, "docs/prds/test-prd.md")
             initial_commits = self._commit_count(repo_root)
 
-            rc = commit_and_push_status(plan, "draft")
+            rc = commit_and_push_plan_change(plan, footer_stage="plan-approved")
 
             self.assertEqual(rc, 0)
+            self.assertIn("*Stage: plan-approved*", plan.read_text(encoding="utf-8"))
             self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
 
 

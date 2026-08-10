@@ -5,7 +5,7 @@ The Agentic Engineering Toolkit uses a local work queue to coordinate sequential
 ## Language
 
 **Work Queue / Sprint Board**:
-The ephemeral, gitignored active list of tasks stored in `.agents/work-queue.json`. It is rebuilt from the plan files on disk — discovery is filesystem-based, not git-based, so a plan need not be committed to be a sprint member (ADR-054). Only plans whose frontmatter `status` is `queued` are sprint members. Approved plans (`status: approved`) and draft plans (`status: draft`) live on the board but are not in the sprint.
+The ephemeral, gitignored active list of tasks stored in `.agents/work-queue.json`. It is rebuilt from the existing sprint-add record; plans enter the queue only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is filesystem-based for the plans already in the queue, not git-based, so a plan need not be committed to be a sprint member (ADR-054).
 _Avoid_: issue tracker, backlog.
 
 **Task**:
@@ -21,8 +21,8 @@ The canonical workflow state stored in `tasks[].state` while a task is in the qu
 _Avoid_: using `state` for terminal truth.
 
 **Status (plan lifecycle)**:
-The lifecycle value stored in a plan file's frontmatter: `draft`, `approved`, `queued`, `in_progress`, `awaiting_merge`, `merged`, or `abandoned`. It is the source of truth for whether a task is open or closed. New plans carry `status: draft`; intake validation requires any declared `status` to be from this set. Plans with no `status` field are grandfathered as legacy settled work.
-_Avoid_: using plan `status` for runtime scheduling decisions; use queue `state` while the task is active.
+_Deprecated._ The `status` frontmatter field left the plan contract in ADR-055 and is now rejected by `aet plans lint`. Settled-ness is derived from the append-only settled history log plus git ancestry; the plan footer `_Stage:_` remains a human breadcrumb only.
+_Avoid_: using plan `status` for any runtime scheduling or settled-ness decision.
 
 **Blocker**:
 A task that must reach a terminal state before another task can become pickable.
@@ -60,9 +60,9 @@ The expected **Delivered Size** range attached to each **Declared Size** label. 
 - A **Task** may have zero or more **Blockers**.
 - A **Task** may be a **Blocker** for zero or more **Dependents**.
 - A **Dependent** becomes `ready` only when all its **Blockers** have a **Terminal State**; the writer promotes it forward when the last blocker reaches terminal.
-- A plan with `status: approved` is part of the **Plan Backlog** until it is explicitly promoted to `status: queued`; only `status: queued` plans are loaded into the **Work Queue**.
-- A plan is closed when its `status` is `merged` or `abandoned`; at that point it no longer appears in the **Work Queue**.
-- Closure updates the plan file (`status` and `*Stage:*`) and the change is committed and pushed so the terminal state is versioned and reproducible across clones.
+- A plan enters the **Work Queue** only when explicitly promoted via `aet sprint add`; queue membership is the sprint-add record, not a frontmatter field.
+- A plan is closed when its task reaches the terminal state `merged` or `abandoned`; at that point it no longer appears in the **Work Queue**.
+- Closure records the terminal event in the ledger and updates the plan footer `*Stage:*`; the change is committed and pushed so the terminal breadcrumb is versioned and reproducible across clones.
 - A **Task** has one **Declared Size** (predicted at plan time) and, once closed, one **Delivered Size** (measured at closure). The pair is what makes a **Band** checkable; neither substitutes for the other.
 
 ## Example dialogue
@@ -236,8 +236,8 @@ _Avoid_: reading it from the ledger `cost` field (under-counts reworked tasks); 
 
 ## Flagged ambiguities
 
-- “status” was used to mean both stored state and derived state. Resolved: `state` is the canonical stored value for active tasks; plan frontmatter `status` is the source of truth for lifecycle closure.
-- The legacy queue-record `status` key (coexistence shim from fods-02..05) is retired by frh-06/frh-07 (2026-07-09): task records carry `state` only, legacy records are normalized on read, and plan-frontmatter `status` is unaffected.
+- “status” was used to mean both stored state and derived state. Resolved: `state` is the canonical stored value for active tasks; the plan frontmatter `status` field has been removed from the contract (ADR-055).
+- The legacy queue-record `status` key (coexistence shim from fods-02..05) is retired by frh-06/frh-07 (2026-07-09): task records carry `state` only, and legacy records are normalized on read.
 - “done” was used interchangeably with `merged`. Resolved: `merged` is the canonical terminal state; `done` is legacy.
 - “workflow” was used loosely for the lifecycle state machine (e.g. “canonical workflow state”). Resolved (2026-07-11, roadmap Phase 1): **Workflow** is the named stage-sequence data file; lifecycle states are just **State**. Where older text says “workflow state,” read “lifecycle state.”
 - “execution log” was used for the telemetry archive in panel docs. Resolved (2026-07-11, thp scope validation): **Execution Log** = `.agents/work-history.jsonl` only; the browsable store is the **Telemetry Archive** (panel README rewording lands with thp-05).
