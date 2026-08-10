@@ -251,5 +251,5 @@ typer), and security review stays `required` per frontmatter.
 
 ---
 
-*Stage: plan-approved*
+*Stage: tdd-complete*
 *Next step: run `aet-work`*
