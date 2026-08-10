@@ -43,5 +43,11 @@ Revert edits to `aet-review/SKILL.md`; delete `aet-review/references/test-covera
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-pipeline-implement` or `aet-work`_
+## Disposition (2026-08-10, structural-review-tier-2 scope validation)
+
+**Superseded by `t2r-08-boundary-contract-lens`.** The review-side tests/coverage lens is delivered mechanically there (diff-triggered, refuse-pass in code) instead of as this plan's scripted prose procedure.
+
+---
+
+_Stage: abandoned_
+_Next step: none — superseded by t2r-08_

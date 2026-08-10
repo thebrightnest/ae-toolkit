@@ -212,12 +212,13 @@ through a single PR, while still using AET's queue and state machine locally.
 
 The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/`; all other planning artifacts belong in their designated directories.
 
-| Directory        | Purpose                                                                        | Queue Ingestion                                           |
-| ---------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `docs/plans/`    | Atomic, implementable task plans (single session, one coherent behaviour change) | Yes — `aet init-queue` and `aet queue sync` scan this directory |
-| `docs/prds/`     | Product Requirements Documents                                                 | No                                                        |
-| `docs/roadmaps/` | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
-| `docs/audits/`   | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
+| Directory             | Purpose                                                                        | Queue Ingestion                                           |
+| --------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `docs/plans/`         | Atomic, implementable task plans (single session, one coherent behaviour change) | Yes — `aet init-queue` and `aet queue sync` scan this directory |
+| `docs/plans/archive/` | Settled plans (`merged`/`abandoned`) moved here at terminal closure; excluded from scans | No                                                        |
+| `docs/prds/`          | Product Requirements Documents                                                 | No                                                        |
+| `docs/roadmaps/`      | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
+| `docs/audits/`        | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
 
 Rules:
 

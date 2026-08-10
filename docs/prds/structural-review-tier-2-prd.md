@@ -59,7 +59,7 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 - [x] A run's review-stage prompt contains the handoff note written by its implement session; the note records all four fields (satisfies: R-8)
 - [ ] `aet docs lint` fails on a deliberately introduced dual-live-rule subject; the three known contradictions are gone (satisfies: R-9)
 - [ ] The CLI reference carries `AUTO-GENERATED` and is reproducible from the command tree; stale mirrors are deleted (satisfies: R-10)
-- [ ] Merged plans no longer occupy the live `docs/plans/` scan set; closure moves them to `archive/` (satisfies: R-11)
+- [x] Merged plans no longer occupy the live `docs/plans/` scan set; closure moves them to `archive/` (satisfies: R-11)
 - [ ] The `single-pr` + shadow-config + real-deps rehearsal passes on a fixture repo and is wired to run when integration/worktree paths change (satisfies: R-12)
 
 ## Technical Notes
@@ -82,7 +82,6 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 
 ## Divergence Summary
 
-<<<<<<< HEAD
 _Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
 
 ### Changed from plan
@@ -158,6 +157,24 @@ _No material approach divergences for t2r-11._
 ### Deferred
 
 - t2r-11 Task 6 (merge branch to main and verify integration): deferred to the ship stage.
+
+---
+
+_Recorded: 2026-08-10 — Branch: t2r-12-plan-archival-at-closure_
+
+### Changed from plan
+
+- Task 4 (scan exclusion): only the `plans_lint` module docstring needed updating; corpus scanners already use non-recursive `*.md` globs, so no code-path change was required to exclude `docs/plans/archive/`.
+
+### Added (unplanned)
+
+- `tests/cli/test_ship_close.py`: extended the existing ship-close integration test to assert the plan is archived at terminal closure and that the ledger `land` payload carries `archived_to`.
+- `tests/queue/test_queue.py`: added direct unit tests for `commit_and_push_plan_change` archive move and fail-closed abort behavior.
+- `scripts/validate-skills.sh`: excluded `docs/plans/archive/` from internal markdown link checks so archived relative links do not produce false-positive validation failures.
+
+### Deferred
+
+- None.
 
 ---
 

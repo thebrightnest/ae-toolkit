@@ -269,6 +269,58 @@ class TestInitQueueScopedValidation(unittest.TestCase):
         self.assertNotIn("settled-bad", tasks)
         self.assertNotIn("draft-bad", tasks)
 
+    def test_archived_plans_not_in_scan_set(self):
+        """Settled plans under plans/archive/ are skipped by scoped validation."""
+        make_plan(self.plans_dir / "active.md", "Active task")
+        archive_dir = self.plans_dir / "archive"
+        archive_dir.mkdir()
+        archived = archive_dir / "archived-settled.md"
+        archived.write_text(
+            "---\nid: archived-settled\nsize: M\n---\n\n# Archived settled\n\n"
+            "---\n\n*Stage: merged*\n",
+            encoding="utf-8",
+        )
+        self.queue_file.write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "active",
+                            "title": "active",
+                            "plan_file": str(self.plans_dir / "active.md"),
+                            "blocked_by": [],
+                            "blocks": [],
+                            "state": "planned",
+                        },
+                        {
+                            "id": "archived-settled",
+                            "title": "archived-settled",
+                            "plan_file": str(archived),
+                            "blocked_by": [],
+                            "blocks": [],
+                            "state": "planned",
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result, _ = run_script(
+            "init-queue",
+            self.root,
+            self.queue_file,
+            self.history_file,
+            self.plans_dir,
+            self.prds_dir,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        self.assertIn("active", tasks)
+        self.assertNotIn("archived-settled", tasks)
+        self.assertIn("1 settled tasks skipped", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

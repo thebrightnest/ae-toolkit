@@ -280,6 +280,53 @@ class TestCommitAndPushPlanChangeTerminality(unittest.TestCase):
             self.assertIn("*Stage: plan-approved*", plan.read_text(encoding="utf-8"))
             self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
 
+    def test_terminal_deferred_plan_archives_when_destination_provided(self):
+        """A terminal closure moves the plan into archive/ in the same commit."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            plan = self._make_plan(repo_root, "docs/plans/test.md")
+            archive = Path(repo_root) / "docs" / "plans" / "archive" / "test.md"
+            initial_commits = self._commit_count(repo_root)
+
+            rc = commit_and_push_plan_change(
+                plan,
+                footer_stage="merged",
+                archive_to=archive,
+            )
+
+            self.assertEqual(rc, 0)
+            self.assertFalse(plan.exists())
+            self.assertTrue(archive.exists())
+            self.assertIn("*Stage: merged*", archive.read_text(encoding="utf-8"))
+            self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
+            log = subprocess.run(
+                ["git", "-C", repo_root, "log", "-1", "--name-status", "--pretty=format:"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertIn("docs/plans/archive/test.md", log.stdout)
+
+    def test_failed_archive_move_aborts_commit(self):
+        """A failed archive move leaves the repository unchanged (fail-closed)."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            plan = self._make_plan(repo_root, "docs/plans/test.md")
+            # Point archive_to at a path inside a non-directory file so git mv fails.
+            archive = Path(repo_root) / "docs" / "plans" / "archive"
+            archive.write_text("not a directory", encoding="utf-8")
+            initial_commits = self._commit_count(repo_root)
+
+            rc = commit_and_push_plan_change(
+                plan,
+                footer_stage="merged",
+                archive_to=archive / "test.md",
+            )
+
+            self.assertNotEqual(rc, 0)
+            self.assertTrue(plan.exists())
+            self.assertEqual(self._commit_count(repo_root), initial_commits)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -57,5 +57,11 @@ Revert edits to `aet-tdd/SKILL.md` and `aet-tdd/references/mocking.md`; delete `
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet-pipeline-implement` or `aet-work`_
+## Disposition (2026-08-10, structural-review-tier-2 scope validation)
+
+**Abandoned.** Item 3 (API-boundary mandate) already shipped as prose (`skills/aet-tdd/SKILL.md:103`); the R-6 boundary-contract lens (`t2r-08-boundary-contract-lens`) makes the boundary portion mechanical. The tdd-side remainder (plan-tests enumeration, coverage→0% completion check) is declined — no incident evidence in the structural-review corpus; reopen if defects surface.
+
+---
+
+_Stage: abandoned_
+_Next step: none — superseded/declined at t2r scope validation_

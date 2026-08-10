@@ -86,6 +86,17 @@ class TestCorpusLint(unittest.TestCase):
 
         self.assertEqual(violations, [])
 
+    def test_archived_plans_are_excluded_from_corpus(self):
+        """Plans under docs/plans/archive/ are invisible to the linter."""
+        make_plan(self.plans_dir / "active.md")
+        archive_dir = self.plans_dir / "archive"
+        archive_dir.mkdir()
+        make_plan(archive_dir / "settled.md", status="merged")
+
+        violations = plans_lint.lint_corpus(self.plans_dir)
+
+        self.assertEqual(violations, [])
+
 
 class TestPlansLintCli(unittest.TestCase):
     """``aet plans lint`` reaches the new binary through the dispatcher."""
