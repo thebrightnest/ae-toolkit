@@ -251,5 +251,5 @@ typer), and security review stays `required` per frontmatter.
 
 ---
 
-*Stage: implemented*
+*Stage: qa-complete*
 *Next step: run `aet-work`*
