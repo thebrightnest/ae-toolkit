@@ -308,19 +308,25 @@ this PRD are mutually exclusive work).
 
 ## Divergence Summary
 
-*Recorded: 2026-08-10 — Branch: slc-03-frontmatter-status-removal*
+*Recorded: 2026-08-10 — Branch: slc-05-set-stage-gate-submit-atomicity*
+
+The slc-05 implementation slice (R-6, R-7) matches the planned behavior.
+The following file-list expectations from the plan did not require modification:
 
 ### Changed from plan
 
-- **Task 6 (merge to main):** The plan marked merge verification as complete, but the branch has not yet been merged into `origin/main`. Merge and final ancestor verification will be performed during the `aet-ship` stage rather than before documentation sync.
+- `src/aet/queue.py` was not modified. `update_plan_footer()` already existed
+  in the queue module and satisfied the atomic footer write without changes.
+- `skills/aet-work/references/migration-aet-state.md` was not modified. The
+  stale-`failure_reason` reactivation rule was folded into the
+  `cmd_set_stage` docstring/comment instead of a separate migration doc edit.
+- Tests landed under `tests/gate/test_gate_submit.py` and
+  `tests/state/test_aet_state.py` rather than `tests/cli/*`, following the
+  project's existing directory conventions for gate and state tests.
 
-### Added (unplanned)
+No meaningful behavioral divergences were introduced.
 
-- **Expanded file footprint:** Removing `status` authority cascaded through queue membership, backlog projection, and state transitions. Beyond the files listed in the plan, implementation also touched `src/aet/cli/backlog.py`, `src/aet/cli/sprint.py`, `src/aet/cli/sync.py`, `src/aet/projections/reconcile.py`, `src/aet/queue.py`, `src/aet/backends/github_backend.py`, and additional test files to make sprint membership explicit and to remove all `status`-derived behavior. This is scope-consistent with task 4 (queue membership is the explicit `aet sprint add` record only).
-
-### Deferred
-
-- **Task 6 merge verification:** Pending `aet-ship` closure.
+---
 
 *Stage: synced*
 *Next step: run `aet-ship`*

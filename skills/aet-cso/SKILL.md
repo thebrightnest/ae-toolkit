@@ -99,10 +99,6 @@ Before updating the plan.md footer, write a JSON verdict record so the orchestra
    aet gate submit --stage cso --verdict <pass|fail> --evidence <payload-file>
    ```
 
-   The CLI schema-validates the payload, resolves the destination (`$AET_EVIDENCE_PATH` → `$AET_EVIDENCE_PATH_CSO` → `~/.aet/reports/{project-slug}/{task-id}/cso.json`), and exits non-zero with a named error on any failure. If `aet gate submit` is unavailable, fall back to writing equivalent JSON to the path from `resolve_verdict_path(task_id, "cso")` in `aet-work/lib/evidence.py`.
-
-3. Only update the plan.md footer to `*Stage: secure*` after `aet gate submit` exits 0.
-
 **Pass/fail gate:**
 
 - **Pass** — no Critical or High findings; Medium findings have documented mitigations

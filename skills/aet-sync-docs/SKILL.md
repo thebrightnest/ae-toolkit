@@ -107,10 +107,6 @@ Before updating the plan.md footer, write a JSON verdict record so the orchestra
    aet gate submit --stage sync-docs --verdict <pass|fail> --evidence <payload-file>
    ```
 
-   The CLI schema-validates the payload, resolves the destination (`$AET_EVIDENCE_PATH` → `$AET_EVIDENCE_PATH_SYNC_DOCS` → `~/.aet/reports/{project-slug}/{task-id}/sync-docs.json`), and exits non-zero with a named error on any failure. If `aet gate submit` is unavailable, fall back to writing equivalent JSON to the path from `resolve_verdict_path(task_id, "sync-docs")` in `aet-work/lib/evidence.py`.
-
-3. Only update the plan.md footer to `*Stage: synced*` after `aet gate submit` exits 0.
-
 ## Completion Protocol
 
 After `sync` completes:

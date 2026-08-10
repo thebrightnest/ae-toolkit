@@ -532,13 +532,20 @@ def _set_stage(task, stage, by="orch"):
     queue_lib.append_history(task, previous_stage, stage, by, {"kind": "stage"})
 
 def cmd_set_stage(args):
-    """Set the pipeline stage sub-state for a task in the queue."""
+    """Set the pipeline stage sub-state for a task in the queue.
+
+    Updates the plan footer atomically with the queue write and clears any
+    stale ``failure_reason`` left over from reactivation. A ``stage`` event is
+    emitted to the content-addressed ledger after the queue is persisted.
+    """
     backend = make_backend(args.queue)
     backend.fetch()
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1
 
+    plan_file = None
+    previous_stage = None
     with queue_lib.queue_lock(args.queue):
         data = backend.load()
         queue = data["queue"]
@@ -567,10 +574,36 @@ def cmd_set_stage(args):
             print(str(e), file=sys.stderr)
             return 1
 
+        previous_stage = task["history"][-1]["from"] if task.get("history") else None
+        plan_file = task.get("plan_file")
+        if plan_file:
+            plan_path = Path(plan_file)
+            if not plan_path.is_absolute():
+                plan_path = Path(args.queue).resolve().parent.parent / plan_path
+            if plan_path.exists():
+                queue_lib.update_plan_footer(plan_path, args.stage)
+
+        # Stale failure_reason from a previous failure/abandonment must not
+        # survive reactivation (migration-aet-state.md:55).
+        if task.get("failure_reason"):
+            del task["failure_reason"]
+
         backend.save(queue)
     backend.push()
 
     print(f"Set stage for {args.task_id}: {args.stage}")
+
+    ledger_path = Path(backend.queue_file).resolve().parent / "ledger.jsonl"
+    ledger = Ledger(ledger_path)
+    occurred_at = datetime.now(timezone.utc).isoformat()
+    ledger.write_event(
+        source="aet-state",
+        task=args.task_id,
+        kind="stage",
+        occurred_at=occurred_at,
+        payload={"stage": args.stage, "previous_stage": previous_stage},
+    )
+
     return 0
 
 

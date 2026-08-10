@@ -934,6 +934,146 @@ class TestSetStage(unittest.TestCase):
         self.assertEqual(task["stage"], "plan-approved")
         self.assertNotIn("history", task)
 
+    def test_set_stage_updates_plan_footer_atomically(self):
+        """set-stage rewrites the plan footer to match the new stage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plan_path = Path(tmpdir) / "plans" / "t1.md"
+            plan_path.parent.mkdir(parents=True)
+            plan_path.write_text("# Plan\n\n*Stage: plan-approved*\n", encoding="utf-8")
+            queue_path = Path(tmpdir) / "work-queue.json"
+            queue_path.write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "t1",
+                                "state": "in_progress",
+                                "stage": "plan-approved",
+                                "plan_file": str(plan_path),
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            args = aet_state.argparse.Namespace(
+                command="set-stage",
+                task_id="t1",
+                stage="implemented",
+                queue=str(queue_path),
+                dry_run=False,
+            )
+
+            rc = aet_state.cmd_set_stage(args)
+
+            self.assertEqual(rc, 0)
+            content = plan_path.read_text(encoding="utf-8")
+            self.assertIn("*Stage: implemented*", content)
+
+    def test_set_stage_resolves_relative_plan_file_from_queue_dir(self):
+        """Relative plan_file paths are resolved from the queue file's directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir) / "repo"
+            repo_root.mkdir()
+            plan_path = repo_root / "docs" / "plans" / "t1.md"
+            plan_path.parent.mkdir(parents=True)
+            plan_path.write_text("# Plan\n\n*Stage: plan-approved*\n", encoding="utf-8")
+            queue_path = repo_root / ".agents" / "work-queue.json"
+            queue_path.parent.mkdir(parents=True)
+            queue_path.write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "t1",
+                                "state": "in_progress",
+                                "stage": "plan-approved",
+                                "plan_file": "docs/plans/t1.md",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            args = aet_state.argparse.Namespace(
+                command="set-stage",
+                task_id="t1",
+                stage="implemented",
+                queue=str(queue_path),
+                dry_run=False,
+            )
+
+            rc = aet_state.cmd_set_stage(args)
+
+            self.assertEqual(rc, 0)
+            content = plan_path.read_text(encoding="utf-8")
+            self.assertIn("*Stage: implemented*", content)
+
+    def test_set_stage_clears_stale_failure_reason(self):
+        """set-stage wipes a stale failure_reason left over from reactivation."""
+        queue_path = self._write_queue(
+            [
+                {
+                    "id": "t1",
+                    "state": "in_progress",
+                    "stage": "plan-approved",
+                    "failure_reason": "previous failure",
+                }
+            ]
+        )
+
+        args = aet_state.argparse.Namespace(
+            command="set-stage",
+            task_id="t1",
+            stage="implemented",
+            queue=queue_path,
+            dry_run=False,
+        )
+
+        rc = aet_state.cmd_set_stage(args)
+
+        self.assertEqual(rc, 0)
+        task = self._load_task(queue_path)
+        self.assertEqual(task["stage"], "implemented")
+        self.assertNotIn("failure_reason", task)
+
+    def test_set_stage_emits_ledger_stage_event(self):
+        """set-stage writes a stage event to the content-addressed ledger."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "work-queue.json"
+            queue_path.write_text(
+                json.dumps(
+                    {"tasks": [{"id": "t1", "state": "in_progress", "stage": "plan-approved"}]}
+                ),
+                encoding="utf-8",
+            )
+
+            args = aet_state.argparse.Namespace(
+                command="set-stage",
+                task_id="t1",
+                stage="implemented",
+                queue=str(queue_path),
+                dry_run=False,
+            )
+
+            rc = aet_state.cmd_set_stage(args)
+
+            self.assertEqual(rc, 0)
+            ledger_path = queue_path.with_name("ledger.jsonl")
+            self.assertTrue(ledger_path.exists(), "ledger file was not created")
+            events = [
+                json.loads(line)
+                for line in ledger_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            stage_events = [e for e in events if e.get("kind") == "stage"]
+            self.assertEqual(len(stage_events), 1)
+            self.assertEqual(stage_events[0]["source"], "aet-state")
+            self.assertEqual(stage_events[0]["task"], "t1")
+            self.assertEqual(stage_events[0]["payload"]["stage"], "implemented")
+
 
 class TestStateTransition(unittest.TestCase):
     """Tests for the forward-only recorded state lifecycle (fods-02)."""

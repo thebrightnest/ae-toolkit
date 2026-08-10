@@ -97,10 +97,6 @@ Before updating the plan.md footer, write a JSON verdict record so the orchestra
    aet gate submit --stage review --verdict <pass|fail> --evidence <payload-file>
    ```
 
-   The CLI schema-validates the payload, resolves the destination (`$AET_EVIDENCE_PATH` → `$AET_EVIDENCE_PATH_REVIEW` → `~/.aet/reports/{project-slug}/{task-id}/review.json`), and exits non-zero with a named error on any failure. If `aet gate submit` is unavailable, fall back to writing equivalent JSON to the path from `resolve_verdict_path(task_id, "review")` in `aet-work/lib/evidence.py`.
-
-3. Only update the plan.md footer to `*Stage: reviewed*` after `aet gate submit` exits 0.
-
 ### `codex-review`
 
 Cross-model adversarial review. If another AI model is available, run an independent review and compare findings.

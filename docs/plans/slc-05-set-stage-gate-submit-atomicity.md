@@ -30,20 +30,17 @@ work is wiring and deleting prose.
 
 ## Task List
 
-1. `aet state set-stage` writes the footer via `update_plan_footer()` in the
+1. ✓ `aet state set-stage` writes the footer via `update_plan_footer()` in the
    same code path as the queue stage write (atomic pair); stale
-   `failure_reason` cleared on reactivation
-   (`aet-work/references/migration-aet-state.md:55` rule folds in) — S
-   (traces: R-6)
-2. The footer flip moves onto `aet gate submit`'s success path — "footer
+   `failure_reason` cleared on reactivation — S (traces: R-6)
+2. ✓ The footer flip moves onto `aet gate submit`'s success path — "footer
    only after verdict" becomes structural; gate-ordering prose constraints
-   in the four skills (aet-qa `SKILL.md:118-126`, aet-review `:102`,
-   aet-cso `:104`, aet-sync-docs `:112`) are deleted — M (traces: R-6)
-3. `aet gate submit` builds verdict payloads in code: `--from-pytest`,
+   in the four skills are deleted — M (traces: R-6)
+3. ✓ `aet gate submit` builds verdict payloads in code: `--from-pytest`,
    `--summary`, `--divergence`; the hand-constructed verdict-JSON fallback
    instructions in the four skills are deleted in the same change — M
    (traces: R-7)
-4. Emit `stage` and `verdict` events to the ledger from these two paths —
+4. ✓ Emit `stage` and `verdict` events to the ledger from these two paths —
    S (traces: R-6, R-7)
 5. Merge branch to main and verify integration — S
 
@@ -107,5 +104,5 @@ ADR-047).
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*
