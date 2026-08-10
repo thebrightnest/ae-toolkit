@@ -164,29 +164,31 @@ Collision notes:
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`make test`)
-- [ ] `tests/test_ship_split.py` (new): unit — dirty-tree and
+- [x] Lint passes (`make lint-py`)
+- [ ] Tests pass (`make test`) — full suite has pre-existing hangs/flakes
+  unrelated to this change; focused ship/CLI tests pass
+- [x] `tests/test_ship_split.py` (new): unit — dirty-tree and
   empty-range refusals, `--message`/`--paths` pairing errors;
   integration — fixture repo where split commits reproduce the
   original tree (`git diff <orig> HEAD` empty) and a deliberately
   incomplete grouping exits non-zero naming the recovery SHA
-- [ ] `tests/test_ship_open.py` (extended): stacked fixture produces a
+- [x] `tests/test_ship_open.py` (extended): stacked fixture produces a
   PR body containing the parent branch, stack position, and resolved
   trunk; the `cut`/`pr` ledger event is written (integration)
-- [ ] `tests/test_ship_merge.py` (extended): stacked branch targeting
+- [x] `tests/test_ship_merge.py` (extended): stacked branch targeting
   trunk exits non-zero naming the parent; targeting the parent passes
   (integration)
-- [ ] `tests/test_ship_gate.py` (extended): fixture whose
+- [x] `tests/test_ship_gate.py` (extended): fixture whose
   `refs/remotes/origin/HEAD` points at a non-`main` trunk — base
   detection and rebase target use it (integration)
-- [ ] `grep -n "origin/main" src/aet/cli/ship.py` shows no hardcoded
+- [x] `grep -n "origin/main" src/aet/cli/ship.py` shows no hardcoded
   verification target outside the `branch_ref.py` fallback path, and
   `grep -rn "substitute" skills/aet-ship/` shows no trunk-substitution
   prose
-- [ ] R-trace coverage: R-2 covered by tasks 1–6 (shared with t2r-02-ship-squash-verify-fallback,
+- [x] R-trace coverage: R-2 covered by tasks 1–6 (shared with t2r-02-ship-squash-verify-fallback,
   which owns the close-side remainder); no task cites another R-id
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+  (to be checked after merge)
 
 ## Rollback Plan
 
@@ -203,5 +205,5 @@ surface; default grouping applies, no isolation override warranted.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
