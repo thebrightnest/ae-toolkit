@@ -70,7 +70,7 @@ state.
 
 ## Task List
 
-1. Line-drift tolerant diff-match in `src/aet/cli/aet_state.py`: extend
+1. [x] Line-drift tolerant diff-match in `src/aet/cli/aet_state.py`: extend
    `resolve_by_diff` (or add a sibling helper it delegates to) so that after
    the exact-match pass over the last 20 `origin/<target>` commits, a second
    pass accepts a candidate whose commit diff differs from the branch diff by
@@ -78,7 +78,7 @@ state.
    SHA so callers can report it. Keep exact match preferred — drift match only
    fires when no exact match exists. Covered by new unit tests in
    `tests/ship/test_squash_fallback.py` — M (traces: R-2)
-2. `aet ship verify <task_id|plan> [--squash-fallback]` in
+2. [x] `aet ship verify <task_id|plan> [--squash-fallback]` in
    `src/aet/cli/ship.py`: runs the existing resolution ladder (ancestry →
    `gh pr view` mergeCommit → diff fallback from task 1), prints the resolved
    merge SHA, strategy, and match kind, and mutates nothing. Halt conditions
@@ -87,7 +87,7 @@ state.
    branch may be unmerged) and `EXIT_VERIFY_AMBIGUOUS` (empty branch diff, or
    more than one drift-match candidate). Covered by new integration tests in
    `tests/cli/test_ship_verify.py` — M (traces: R-2)
-3. `aet ship close --delete-branch` in `src/aet/cli/ship.py`: run the existing
+3. [x] `aet ship close --delete-branch` in `src/aet/cli/ship.py`: run the existing
    `cmd_record_merge` closure first; only after it returns success (queue
    transition + ledger `land` event + footer push all landed) delete the
    remote branch (`git push origin --delete`) and the local branch
@@ -96,7 +96,7 @@ state.
    and the command exits `EXIT_DELETE_BEFORE_RECORD`. Honor `--dry-run` by
    printing the deletions that would follow a successful record. Covered by
    extending `tests/cli/test_ship_close.py` — M (traces: R-2)
-4. Skill prose: delete `skills/aet-ship/references/squash-merge-handling.md`
+4. [x] Skill prose: delete `skills/aet-ship/references/squash-merge-handling.md`
    wholesale; rewrite `skills/aet-ship/examples/squash-merge-example.md` to
    drive `aet ship verify --squash-fallback` and `aet ship close
    --delete-branch` instead of manual `gh`/`git branch -D` choreography; in
@@ -153,25 +153,25 @@ state.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`); skill structure validator passes
+- [x] Lint passes (`make lint-py`); skill structure validator passes
   (`scripts/validate-skills.sh`) after the reference deletion
-- [ ] Tests pass (`make test`)
-- [ ] `tests/ship/test_squash_fallback.py` covers the tolerant matcher
+- [x] Tests pass (`make test`)
+- [x] `tests/ship/test_squash_fallback.py` covers the tolerant matcher
   (unit): exact match preferred over drift; drift ≤ 20 lines accepted;
   drift > 20 lines rejected; search window capped at 20 commits
-- [ ] `tests/cli/test_ship_verify.py` covers the command against a fixture
+- [x] `tests/cli/test_ship_verify.py` covers the command against a fixture
   git repo (integration): squash-merged branch resolves with strategy
   `squash` and correct match kind; unmerged branch exits
   `EXIT_VERIFY_NO_MATCH`; empty branch diff exits `EXIT_VERIFY_AMBIGUOUS`;
   no queue, ledger, or footer file is touched
-- [ ] `tests/cli/test_ship_close.py` extended (integration): `--delete-branch`
+- [x] `tests/cli/test_ship_close.py` extended (integration): `--delete-branch`
   removes remote + local branch after a successful record; a failing
   record-merge leaves both branches intact and exits
   `EXIT_DELETE_BEFORE_RECORD`; `--dry-run` deletes nothing
-- [ ] `grep -rn "branch -D\|merge-base --is-ancestor" skills/aet-ship/` shows
+- [x] `grep -rn "branch -D\|merge-base --is-ancestor" skills/aet-ship/` shows
   no manual choreography remains outside the rewritten example's command
   output illustrations
-- [ ] R-trace coverage: R-2 (this slice) covered by tasks 1–4; stacked-PR
+- [x] R-trace coverage: R-2 (this slice) covered by tasks 1–4; stacked-PR
   detection, `aet ship split`, and trunk substitution explicitly deferred to
   the sibling plan; no task cites an R-id outside R-2
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
@@ -191,5 +191,5 @@ per ADR-047 precedent from slc-05).
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

@@ -50,6 +50,11 @@ _spec = importlib.util.spec_from_loader(
 aet_state = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(aet_state)
 
+# Named exit codes for the merge-verification surface (t2r-02).
+EXIT_VERIFY_NO_MATCH = 10
+EXIT_VERIFY_AMBIGUOUS = 11
+EXIT_DELETE_BEFORE_RECORD = 12
+
 
 class GateResult:
     """Structured result of the pre-merge gate for reuse by ``ship open``."""
@@ -150,6 +155,100 @@ def _normalize_close_args(
     return resolved_task_id, resolved_plan, resolved_queue
 
 
+def _normalize_verify_args(
+    task_id: str,
+    plan: Optional[str],
+    queue: str,
+) -> tuple[str, Optional[str], str]:
+    """Resolve flexible ``aet ship verify`` argument forms.
+
+    Supported forms:
+      - ``verify <plan_file>`` — derive task id from plan frontmatter.
+      - ``verify <plan_file> <queue_file>`` — derive task id; explicit queue.
+      - ``verify <task_id>`` — plan is read from the queue task's ``plan_file``.
+      - ``verify <task_id> <queue_file>`` — explicit task id and queue.
+    """
+
+    def _is_plan_path(value: str) -> bool:
+        return value.lower().endswith(".md")
+
+    if _is_plan_path(task_id):
+        resolved_plan = task_id
+        resolved_task_id = _task_id_from_plan(resolved_plan)
+        resolved_queue = plan if plan else queue
+        return resolved_task_id, resolved_plan, resolved_queue
+
+    return task_id, plan, queue
+
+
+def _resolve_task_branch(task_id: str, queue: str) -> Optional[str]:
+    """Return the branch recorded for *task_id* in *queue*, or None."""
+    try:
+        backend = aet_state.make_backend(queue)
+        backend.fetch()
+        data = backend.load()
+        task = aet_state.find_task(data["queue"], task_id)
+        if task:
+            return task.get("branch")
+    except Exception:
+        pass
+    return None
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Verify that a branch has merged without mutating queue or ledger state.
+
+    Runs the resolution ladder (ancestry, GitHub CLI, optional diff fallback)
+    and prints the resolved merge commit, strategy, and match kind. Exits with
+    a named code when the merge cannot be determined or is ambiguous.
+    """
+    try:
+        task_id, plan, queue = _normalize_verify_args(
+            args.task_id,
+            getattr(args, "plan_or_queue", None),
+            getattr(args, "queue", ".agents/work-queue.json"),
+        )
+    except ValueError as exc:
+        return _fail(str(exc))
+
+    branch = getattr(args, "branch", None)
+    if not branch:
+        branch = _resolve_task_branch(task_id, queue)
+    if not branch:
+        return _fail(
+            f"Cannot verify {task_id}: no branch recorded and none provided."
+        )
+
+    target_branch = getattr(args, "target_branch", None)
+    trunk_branch = aet_state._resolve_trunk(queue)
+    integration_branch = target_branch or aet_state._resolve_integration(queue)
+
+    merge_commit, merge_strategy, match_kind = aet_state.resolve_merge_commit(
+        branch,
+        cwd=".",
+        trunk_branch=trunk_branch,
+        target_branch=integration_branch,
+        use_diff_fallback=args.squash_fallback,
+    )
+
+    if not merge_commit:
+        if match_kind == "ambiguous":
+            print(
+                f"Merge verification failed for {task_id}: ambiguous result.",
+                file=sys.stderr,
+            )
+            return EXIT_VERIFY_AMBIGUOUS
+        print(
+            f"Merge verification failed for {task_id}: no match found on origin/{integration_branch}.",
+            file=sys.stderr,
+        )
+        return EXIT_VERIFY_NO_MATCH
+
+    kind_display = f" ({match_kind})" if match_kind else ""
+    print(f"{merge_commit} {merge_strategy}{kind_display}")
+    return 0
+
+
 def cmd_ship(args):
     """Run the post-merge closure for a task or epic."""
     try:
@@ -163,12 +262,23 @@ def cmd_ship(args):
 
     target_branch = getattr(args, "target_branch", None)
     branch = getattr(args, "branch", None)
+    delete_branch = getattr(args, "delete_branch", False)
 
     # No-self-merge guard: closing a branch against itself is never valid.
     if target_branch and branch and target_branch == branch:
         return _fail(
             f"Self-merge refused: branch '{branch}' cannot be closed against target '{target_branch}'."
         )
+
+    # Capture the branch to delete before the closure transaction, because the
+    # queue entry (and its branch field) may be sealed/removed on success.
+    branch_to_delete = None
+    if delete_branch:
+        branch_to_delete = branch or _resolve_task_branch(task_id, queue)
+        if not branch_to_delete:
+            return _fail(
+                f"Cannot delete branch for {task_id}: no branch recorded and none provided."
+            )
 
     ns = aet_state.argparse.Namespace(
         command="record-merge",
@@ -180,7 +290,19 @@ def cmd_ship(args):
         merge_commit=getattr(args, "merge_commit", None),
         target_branch=target_branch,
     )
-    return aet_state.cmd_record_merge(ns)
+    rc = aet_state.cmd_record_merge(ns)
+    if rc != 0:
+        return EXIT_DELETE_BEFORE_RECORD if delete_branch else rc
+
+    if delete_branch:
+        if args.dry_run:
+            print(f"[dry-run] Would delete remote branch origin/{branch_to_delete}")
+            print(f"[dry-run] Would delete local branch {branch_to_delete}")
+        else:
+            _run_git("push", "origin", "--delete", branch_to_delete, check=False)
+            _run_git("branch", "-D", branch_to_delete, check=False)
+
+    return 0
 
 
 def cmd_default(args: argparse.Namespace) -> int:
@@ -955,6 +1077,11 @@ def _add_close_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Show what would be done without making changes.",
     )
+    parser.add_argument(
+        "--delete-branch",
+        action="store_true",
+        help="After successful closure, delete the remote and local feature branch.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1019,6 +1146,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show what would be done without making changes.",
     )
 
+    verify_parser = sub.add_parser(
+        "verify",
+        help="Verify a branch has merged without mutating state.",
+    )
+    verify_parser.add_argument(
+        "task_id",
+        help="Task ID to verify, or path to the plan markdown file.",
+    )
+    verify_parser.add_argument(
+        "plan_or_queue",
+        nargs="?",
+        default=None,
+        help="Plan path (when first arg is a task ID) or queue path (when first arg is a plan).",
+    )
+    verify_parser.add_argument(
+        "queue",
+        nargs="?",
+        default=".agents/work-queue.json",
+        help="Path to the work queue JSON file.",
+    )
+    verify_parser.add_argument(
+        "--squash-fallback",
+        action="store_true",
+        help="Enable diff-based squash-merge fallback when ancestry and gh fail.",
+    )
+    verify_parser.add_argument(
+        "--branch",
+        help="Branch name to verify. Overrides the task's branch field.",
+    )
+    verify_parser.add_argument(
+        "--target-branch",
+        help="Target branch to verify the merge against (default: configured integration branch).",
+    )
+
     close_parser = sub.add_parser(
         "close",
         help="Record post-merge closure for a task.",
@@ -1054,7 +1215,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-_KNOWN_SUBCOMMANDS = {"gate", "open", "merge", "close", "record-merge"}
+_KNOWN_SUBCOMMANDS = {"gate", "open", "merge", "verify", "close", "record-merge"}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -1082,6 +1243,8 @@ def main(argv: list[str] | None = None):
         return cmd_open(args)
     if args.command == "merge":
         return cmd_merge(args)
+    if args.command == "verify":
+        return cmd_verify(args)
     if args.command in ("close", "record-merge"):
         return cmd_ship(args)
     if args.command == "default":
@@ -1211,6 +1374,7 @@ def _run_ship_close(
     merge_commit: Optional[str],
     target_branch: Optional[str],
     dry_run: bool,
+    delete_branch: bool = False,
 ) -> int:
     return cmd_ship(
         argparse.Namespace(
@@ -1222,8 +1386,54 @@ def _run_ship_close(
             branch=branch,
             merge_commit=merge_commit,
             target_branch=target_branch,
+            delete_branch=delete_branch,
         )
     )
+
+
+@app.command(name="verify")
+def ship_verify(
+    task_id: str = typer.Argument(
+        ...,
+        help="Task ID to verify, or path to the plan markdown file.",
+    ),
+    plan_or_queue: Optional[str] = typer.Argument(
+        None,
+        help="Plan path (when first arg is a task ID) or queue path (when first arg is a plan).",
+    ),
+    queue: str = typer.Argument(
+        ".agents/work-queue.json",
+        help="Path to the work queue JSON file.",
+    ),
+    squash_fallback: bool = typer.Option(
+        False,
+        "--squash-fallback",
+        help="Enable diff-based squash-merge fallback when ancestry and gh fail.",
+    ),
+    branch: Optional[str] = typer.Option(
+        None,
+        "--branch",
+        help="Branch name to verify. Overrides the task's branch field.",
+    ),
+    target_branch: Optional[str] = typer.Option(
+        None,
+        "--target-branch",
+        help="Target branch to verify the merge against (default: configured integration branch).",
+    ),
+) -> None:
+    """Verify a branch has merged without mutating state."""
+    rc = cmd_verify(
+        argparse.Namespace(
+            command="verify",
+            task_id=task_id,
+            plan=plan_or_queue,
+            queue=queue,
+            squash_fallback=squash_fallback,
+            branch=branch,
+            target_branch=target_branch,
+        )
+    )
+    raise typer.Exit(rc)
 
 
 @app.command(name="close")
@@ -1264,6 +1474,11 @@ def ship_close(
         "--dry-run",
         help="Show what would be done without making changes.",
     ),
+    delete_branch: bool = typer.Option(
+        False,
+        "--delete-branch",
+        help="After successful closure, delete the remote and local feature branch.",
+    ),
 ) -> None:
     """Record post-merge closure for a task."""
     resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(
@@ -1278,6 +1493,7 @@ def ship_close(
             merge_commit,
             target_branch,
             dry_run,
+            delete_branch,
         )
     )
 
@@ -1320,6 +1536,11 @@ def ship_record_merge(
         "--dry-run",
         help="Show what would be done without making changes.",
     ),
+    delete_branch: bool = typer.Option(
+        False,
+        "--delete-branch",
+        help="After successful closure, delete the remote and local feature branch.",
+    ),
 ) -> None:
     """Hidden alias for close."""
     resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(
@@ -1334,6 +1555,7 @@ def ship_record_merge(
             merge_commit,
             target_branch,
             dry_run,
+            delete_branch,
         )
     )
 

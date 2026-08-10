@@ -146,21 +146,27 @@ def _resolve_plan_for_closure(plan_path, merge_commit, branch, cwd):
     return None
 
 
-def resolve_merge_commit(branch, cwd=None, trunk_branch="main", target_branch=None):
+def resolve_merge_commit(
+    branch, cwd=None, trunk_branch="main", target_branch=None, use_diff_fallback=True
+):
     """Resolve the merge commit for a branch on the remote target branch.
 
     Tries, in order:
       1. Regular merge: branch tip is an ancestor of origin/<target_branch>.
       2. Squash merge via `gh pr view <branch> --json mergeCommit`.
-      3. Diff-equivalence fallback against recent origin/<target_branch> commits.
+      3. Diff-equivalence fallback against recent origin/<target_branch> commits
+         (only when ``use_diff_fallback`` is True).
 
     ``target_branch`` defaults to ``trunk_branch`` so ``pr-per-task`` behavior is
     unchanged; ``single-pr`` callers pass the epic integration branch.
 
-    Returns (merge_commit, merge_strategy) or (None, None) if unresolved.
+    Returns (merge_commit, merge_strategy, match_kind). ``match_kind`` is
+    ``ancestry`` for regular merges, ``gh-api`` for squash merges resolved
+    through GitHub, ``exact``/``drift`` for diff fallback, ``ambiguous`` when
+    the fallback cannot distinguish candidates, and ``None`` when unresolved.
     """
     if not branch:
-        return None, None
+        return None, None, None
 
     target = target_branch or trunk_branch
 
@@ -169,7 +175,7 @@ def resolve_merge_commit(branch, cwd=None, trunk_branch="main", target_branch=No
     if rc == 0:
         tip = out.strip()
         if is_ancestor_of_target(tip, target, cwd=cwd):
-            return tip, "regular"
+            return tip, "regular", "ancestry"
 
     # 2. Squash merge via GitHub CLI.
     rc, out, _ = run_gh(["pr", "view", branch, "--json", "mergeCommit"], cwd=cwd)
@@ -178,52 +184,105 @@ def resolve_merge_commit(branch, cwd=None, trunk_branch="main", target_branch=No
             data = json.loads(out)
             sha = data.get("mergeCommit", {}).get("oid")
             if sha and is_ancestor_of_target(sha, target, cwd=cwd):
-                return sha, "squash"
+                return sha, "squash", "gh-api"
         except json.JSONDecodeError:
             pass
 
     # 3. Diff-equivalence fallback.
-    sha = resolve_by_diff(branch, cwd=cwd, trunk_branch=trunk_branch, target_branch=target)
-    if sha:
-        return sha, "squash"
+    if use_diff_fallback:
+        sha, match_kind = resolve_by_diff(
+            branch, cwd=cwd, trunk_branch=trunk_branch, target_branch=target
+        )
+        if sha:
+            return sha, "squash", match_kind
+        if match_kind == "ambiguous":
+            return None, None, "ambiguous"
 
-    return None, None
+    return None, None, None
 
 
-def resolve_by_diff(branch, cwd=None, max_commits=20, trunk_branch="main", target_branch=None):
-    """Find a squash merge by matching the branch diff to a recent target commit."""
+def _diff_changed_lines(diff: str) -> set[str]:
+    """Return the set of changed content lines in a unified diff.
+
+    Context lines and file headers are ignored. Content is stripped so that
+    trailing/leading whitespace churn does not create false drift.
+    """
+    changed: set[str] = set()
+    for line in diff.splitlines():
+        if line.startswith("+") and not line.startswith("+++"):
+            changed.add(line[1:].strip())
+        elif line.startswith("-") and not line.startswith("---"):
+            changed.add(line[1:].strip())
+    return changed
+
+
+def resolve_by_diff(
+    branch,
+    cwd=None,
+    max_commits=20,
+    trunk_branch="main",
+    target_branch=None,
+    drift_threshold=20,
+):
+    """Find a squash merge by matching the branch diff to a recent target commit.
+
+    First scans the last ``max_commits`` on ``origin/<target_branch>`` for an
+    exact diff match. If none is found, performs a second pass that accepts a
+    candidate whose changed-line set drifts from the branch diff by no more than
+    ``drift_threshold`` lines.
+
+    Returns ``(sha, match_kind)``. ``match_kind`` is ``exact`` or ``drift`` on
+    success, ``ambiguous`` when the branch diff is empty or more than one drift
+    candidate exists, and ``None`` when no match is found.
+    """
     target = target_branch or trunk_branch
     rc, merge_base, _ = run_git(
         "merge-base", branch, f"origin/{target}", cwd=cwd
     )
     if rc != 0:
-        return None
+        return None, None
     merge_base = merge_base.strip()
 
     rc, branch_diff, _ = run_git("diff", f"{merge_base}..{branch}", cwd=cwd)
     if rc != 0:
-        return None
+        return None, None
     branch_diff = branch_diff.strip()
     if not branch_diff:
-        return None
+        return None, "ambiguous"
 
     rc, commits_out, _ = run_git(
         "rev-list", "--max-count", str(max_commits), f"origin/{target}", cwd=cwd
     )
     if rc != 0:
-        return None
+        return None, None
+    commits = [c.strip() for c in commits_out.strip().splitlines() if c.strip()]
 
-    for commit in commits_out.strip().splitlines():
-        commit = commit.strip()
-        if not commit:
-            continue
+    # First pass: exact match.
+    for commit in commits:
         rc, commit_diff, _ = run_git("diff", f"{commit}^..{commit}", cwd=cwd)
         if rc != 0:
             continue
         if commit_diff.strip() == branch_diff:
-            return commit
+            return commit, "exact"
 
-    return None
+    # Second pass: tolerant drift match.
+    branch_changed = _diff_changed_lines(branch_diff)
+    drift_candidates = []
+    for commit in commits:
+        rc, commit_diff, _ = run_git("diff", f"{commit}^..{commit}", cwd=cwd)
+        if rc != 0:
+            continue
+        commit_changed = _diff_changed_lines(commit_diff)
+        drift = len(branch_changed.symmetric_difference(commit_changed))
+        if drift <= drift_threshold:
+            drift_candidates.append((commit, drift))
+
+    if len(drift_candidates) == 1:
+        return drift_candidates[0][0], "drift"
+    if len(drift_candidates) > 1:
+        return None, "ambiguous"
+
+    return None, None
 
 
 def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main", integration_branch=None):
@@ -1221,7 +1280,7 @@ def cmd_record_merge(args):
         if not branch:
             print(f"Task {args.task_id} has no branch. Use --branch or --merge-commit.", file=sys.stderr)
             return 1
-        merge_commit, merge_strategy = resolve_merge_commit(
+        merge_commit, merge_strategy, _match_kind = resolve_merge_commit(
             branch, cwd=cwd, trunk_branch=trunk_branch, target_branch=integration_branch
         )
 
