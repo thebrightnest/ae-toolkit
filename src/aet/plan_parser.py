@@ -159,11 +159,18 @@ def build_ticket_map(plan_files: list[Path]) -> dict[str, str]:
 
 
 def stage_from_plan(path: Path) -> str | None:
-    """Extract the *Stage:* footer value from a plan file."""
+    """Extract the *Stage:* footer value from a plan file.
+
+    Body text may mention other stages (e.g. "set fods-06 footer to
+    _Stage: superseded_"), so we take the last match rather than the first.
+    A missing file fails open and returns ``None``.
+    """
+    if not path.exists():
+        return None
     content = path.read_text(errors="ignore")
-    match = re.search(r"(?im)^[_\*]Stage:\s*(.+?)[_\*]$", content)
-    if match:
-        return match.group(1).strip()
+    matches = re.findall(r"[*_]Stage:\s*([\w-]+)[*_]", content)
+    if matches:
+        return matches[-1]
     return None
 
 
@@ -219,6 +226,14 @@ def most_recent_prd(prds_dir: Path) -> Path | None:
         return None
     prds = sorted(prds_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
     return prds[0] if prds else None
+
+
+def most_recent_plan(plans_dir: Path) -> Path | None:
+    """Return the most recently modified plan file, or None."""
+    if not plans_dir.exists():
+        return None
+    plans = sorted(plans_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return plans[0] if plans else None
 
 
 def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[str, Any]:

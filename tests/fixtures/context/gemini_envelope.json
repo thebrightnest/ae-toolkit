@@ -1,0 +1,7 @@
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "📍 Current stage: plan-approved.\n{\n  \"schema_version\": 1,\n  \"branch\": \"main\",\n  \"repo_state\": \"clean\",\n  \"agents_md\": {\n    \"path\": \"AGENTS.md\",\n    \"mtime\": \"2026-08-01T12:00:00+00:00\"\n  },\n  \"learnings\": [\n    {\n      \"timestamp\": \"2026-08-03T10:00:00Z\",\n      \"trigger\": [\n        \"newest\"\n      ]\n    },\n    {\n      \"timestamp\": \"2026-08-02T10:00:00Z\",\n      \"trigger\": [\n        \"middle\"\n      ]\n    },\n    {\n      \"timestamp\": \"2026-08-01T10:00:00Z\",\n      \"trigger\": [\n        \"old\"\n      ]\n    }\n  ],\n  \"active_plan\": \"docs/plans/feat-002.md\",\n  \"last_piv\": \"2026-08-05T12:00:00Z\",\n  \"active_prd_stage\": \"scope-validated\",\n  \"active_plan_stage\": \"plan-approved\"\n}",
+    "harness": "gemini"
+  }
+}
