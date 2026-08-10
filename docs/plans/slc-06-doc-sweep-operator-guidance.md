@@ -102,5 +102,5 @@ Revert the merge. Prose-only; no data or state involved.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-sync-docs`*
