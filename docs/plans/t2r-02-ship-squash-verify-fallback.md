@@ -191,5 +191,5 @@ per ADR-047 precedent from slc-05).
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
