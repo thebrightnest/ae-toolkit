@@ -82,6 +82,7 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 
 ## Divergence Summary
 
+<<<<<<< HEAD
 _Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
 
 ### Changed from plan
@@ -141,6 +142,22 @@ No meaningful divergences between the t2r-02 plan and the implementation.
 ### Deferred
 
 - t2r-10 task 8 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
+
+---
+
+_Recorded: 2026-08-10 — Branch: t2r-11-generated-cli-reference_
+
+### Changed from plan
+
+_No material approach divergences for t2r-11._
+
+### Added (unplanned)
+
+- Supporting test adjustments in `tests/cli/test_build_parsers.py`, `tests/cli/test_retired_names.py`, and `tests/test_change_scope.py` were needed to accommodate the generated `docs/CLI.md` artifact and the new `tests/cli/test_docs_generate.py` drift guard.
+
+### Deferred
+
+- t2r-11 Task 6 (merge branch to main and verify integration): deferred to the ship stage.
 
 ---
 

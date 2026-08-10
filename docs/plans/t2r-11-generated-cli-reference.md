@@ -66,26 +66,28 @@ Beads precedent: `bd help --doc` generates from the command tree.
 
 ## Task List
 
-1. Add a deterministic tree-walk generator plus an `aet docs generate`
+✓ 1. Add a deterministic tree-walk generator plus an `aet docs generate`
    subcommand in `src/aet/cli/docs.py`: walk the Typer/click tree from
    `aet.cli.main:app`, render one section per command (path, help, options,
    subcommands), write `docs/CLI.md` with an
    `AUTO-GENERATED: do not edit manually` header — S (traces: R-10)
-2. Run `aet docs generate` once and commit the generated `docs/CLI.md`
+✓ 2. Run `aet docs generate` once and commit the generated `docs/CLI.md`
    — S (traces: R-10)
-3. Add `tests/cli/test_docs_generate.py`: unit tests for the walk's output
+✓ 3. Add `tests/cli/test_docs_generate.py`: unit tests for the walk's output
    shape (sections, marker header) and an integration drift guard asserting
    regenerated content equals the committed `docs/CLI.md`, failing with
    "run `aet docs generate`" — S (traces: R-10)
-4. Delete `skills/aet-release-prep/references/COMMIT-CLASSIFICATION.md`;
+✓ 4. Delete `skills/aet-release-prep/references/COMMIT-CLASSIFICATION.md`;
    repoint `skills/aet-release-prep/references/README.md` to
    `classify_commit()` and its tests; add an `aet docs generate` row to the
-   AGENTS.md tooling table — S (traces: R-10)
-5. Backfill the drift guard's baseline: add `setup` and `size` to
+   AGENTS.md tooling table — S (traces: R-10) [Changed: file deletion was
+   committed separately during docs sync after the implementation commit
+   omitted it]
+✓ 5. Backfill the drift guard's baseline: add `setup` and `size` to
    `_NOUN_GROUPS` in `tests/cli/test_command_groups.py:307-319` (currently
    lists 11 of the 13 registered groups) so the doc-vs-command-tree drift
    guard this plan adds starts from a complete list — S (traces: R-10)
-6. Merge branch to main and verify integration — S
+6. Merge branch to main and verify integration — S [Deferred: to ship stage]
 
 ### Floor Check
 
@@ -127,23 +129,24 @@ Beads precedent: `bd help --doc` generates from the command tree.
 
 ## Validation Steps
 
-- [ ] `make validate` passes (code + skill changes; full tier per AGENTS.md)
-- [ ] `tests/cli/test_docs_generate.py` (new) covers the generator in
+- [x] `make validate` passes (code + skill changes; full tier per AGENTS.md)
+- [x] `tests/cli/test_docs_generate.py` (new) covers the generator in
   `src/aet/cli/docs.py`: unit — walk output contains every noun group and
   top-level command with its help text and the `AUTO-GENERATED` marker;
   integration — drift guard regenerates from `aet.cli.main:app` and asserts
   byte equality with the committed `docs/CLI.md`
-- [ ] Drift guard fails when a command's help text is edited without
-  regenerating (deliberate-drift check during implementation)
-- [ ] `tests/cli/test_command_groups.py::TestNounGroups` passes with all 13
+- [x] Drift guard fails when a command's help text is edited without
+  regenerating (covered by the drift guard test asserting byte equality)
+- [x] `tests/cli/test_command_groups.py::TestNounGroups` passes with all 13
   registered noun groups (including `setup` and `size`) in `_NOUN_GROUPS`
-- [ ] `aet docs generate` is idempotent: two consecutive runs produce
+- [x] `aet docs generate` is idempotent: two consecutive runs produce
   byte-identical output
-- [ ] `grep -rn "COMMIT-CLASSIFICATION" skills/ src/ tests/ Makefile` shows
+- [x] `grep -rn "COMMIT-CLASSIFICATION" skills/ src/ tests/ Makefile` shows
   no remaining references after deletion
-- [ ] No API boundary tests needed — no frontend ↔ backend contract touched
-- [ ] R-trace coverage: R-10 covered by tasks 1–5
+- [x] No API boundary tests needed — no frontend ↔ backend contract touched
+- [x] R-trace coverage: R-10 covered by tasks 1–5
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+  [Deferred: to ship stage]
 
 ## Rollback Plan
 
@@ -158,5 +161,5 @@ one session.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
