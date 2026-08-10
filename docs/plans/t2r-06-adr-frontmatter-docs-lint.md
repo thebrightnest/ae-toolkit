@@ -219,5 +219,5 @@ surface beyond the lint evaluator itself.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: reviewed*
+*Next step: run `aet-cso`*
