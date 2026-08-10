@@ -64,7 +64,7 @@ Check the current plan/PRD against existing documentation and code. Surface cont
 7. **Closure Check** — before declaring scope validated, verify the handoff artifact exists:
    - At least one `docs/plans/*.md` file references the PRD (via Context or frontmatter).
    - If the check fails, stop and redirect: do not update the PRD footer to `scope-validated`.
-   - Do **not** check `.agents/work-queue.json` here. Queue intake happens after this skill runs: `aet sprint add` requires the `plan-approved` stamp that this skill's Completion Protocol applies, and requires the plan to be committed first. Queue verification belongs to `aet-pipeline-plan` step 3, which runs post-intake.
+   - Do **not** check `.agents/work-queue.json` here. Queue intake happens after this skill runs via `aet sprint add`; plans may be untracked at intake.
 8. Present findings as a concise list (not a 20-question interview)
 9. Ask **targeted questions** about the gaps found — one at a time
 
@@ -182,16 +182,14 @@ After `validate` completes, conflicts are resolved, and the closure check passes
    *Next step: run `aet-work` (single-plan or multi-task queue)*
    ```
 
-2. Update the plan.md frontmatter `status` to `approved` (it must stay in sync with the footer stage; this is the approval gate where both advance together).
-
-3. Update the plan.md footer to:
+2. Update the plan.md footer to:
 
    ```
    *Stage: plan-approved*
    *Next step: run `aet-work`*
    ```
 
-4. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-work\`"`
+3. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-work\`"`
 
 ## Key Principles
 

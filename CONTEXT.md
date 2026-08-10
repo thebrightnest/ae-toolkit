@@ -1,11 +1,15 @@
 # AE Toolkit Work Queue Context
 
-The Agentic Engineering Toolkit uses a local work queue to coordinate sequential and parallel task execution across planning, implementation, review, and shipping skills.
+The Agentic Engineering Toolkit uses a work queue and a provenance ledger to coordinate sequential and parallel task execution across planning, implementation, review, and shipping skills.
 
 ## Language
 
+**Provenance Ledger**:
+The append-only, content-addressed store of task transition and closure events. It is the sole authority for settled-ness, together with git ancestry. Under the default `git-refs` backend the ledger lives in `refs/aet/*` and travels with the repository; under the `json` backend it is stored locally. Events are idempotent and commutative — concurrent appends from independent writers merge without conflict (ADR-055).
+_Avoid_: deriving settled-ness from plan frontmatter or footer; treating `.agents/work-history.jsonl` as the ledger (it is write-only telemetry).
+
 **Work Queue / Sprint Board**:
-The ephemeral, gitignored active list of tasks stored in `.agents/work-queue.json`. It is rebuilt from the existing sprint-add record; plans enter the queue only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is filesystem-based for the plans already in the queue, not git-based, so a plan need not be committed to be a sprint member (ADR-054).
+The ephemeral active list of tasks. Under the default `git-refs` backend it is stored in `refs/aet/meta/queue` and pushed to/fetched from origin; under the `json` backend it is `.agents/work-queue.json`. It is rebuilt from the existing sprint-add record and the ledger; plans enter the queue only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is filesystem-based for the plans already in the queue, not git-based, so a plan need not be committed to be a sprint member (ADR-054).
 _Avoid_: issue tracker, backlog.
 
 **Task**:
@@ -13,7 +17,7 @@ A single unit of work represented by one atomic `docs/plans/*.md` file and, whil
 _Avoid_: ticket, story, issue.
 
 **Plan File**:
-The markdown document in `docs/plans/` that describes how to implement a task and records its lifecycle status. It is the source of truth for intent and terminal closure. Its durability is asymmetric (ADR-054): the terminal `status` write at closure is committed and pushed, while a mid-sprint `status` such as `queued` may live only in the working tree until the task's PR carries the plan.
+The markdown document in `docs/plans/` that describes how to implement a task. It is the source of truth for intent. Terminal closure is recorded in the **Provenance Ledger** and reflected in the plan footer `*Stage:*` as a human breadcrumb maintained by code. Plan edits are local-only until terminal closure; queue and ledger state travel via `refs/aet/*`.
 _Avoid_: PRD, roadmap, spec.
 
 **State**:
@@ -21,7 +25,7 @@ The canonical workflow state stored in `tasks[].state` while a task is in the qu
 _Avoid_: using `state` for terminal truth.
 
 **Status (plan lifecycle)**:
-_Deprecated._ The `status` frontmatter field left the plan contract in ADR-055 and is now rejected by `aet plans lint`. Settled-ness is derived from the append-only settled history log plus git ancestry; the plan footer `_Stage:_` remains a human breadcrumb only.
+_Deprecated._ The `status` frontmatter field left the plan contract in ADR-055 and is now rejected by `aet plans lint`. Settled-ness is derived from the **Provenance Ledger** plus git ancestry; the plan footer `_Stage:_` remains a human breadcrumb only.
 _Avoid_: using plan `status` for any runtime scheduling or settled-ness decision.
 
 **Blocker**:
@@ -31,7 +35,7 @@ A task that must reach a terminal state before another task can become pickable.
 A task that is blocked by another task.
 
 **Terminal State**:
-A plan `status` value that ends a task's lifecycle and satisfies blockers: `merged` or `abandoned`.
+A terminal ledger event that ends a task's lifecycle and satisfies blockers: `merged` or `abandoned`.
 _Avoid_: done.
 
 **Plan Backlog**:
@@ -62,7 +66,7 @@ The expected **Delivered Size** range attached to each **Declared Size** label. 
 - A **Dependent** becomes `ready` only when all its **Blockers** have a **Terminal State**; the writer promotes it forward when the last blocker reaches terminal.
 - A plan enters the **Work Queue** only when explicitly promoted via `aet sprint add`; queue membership is the sprint-add record, not a frontmatter field.
 - A plan is closed when its task reaches the terminal state `merged` or `abandoned`; at that point it no longer appears in the **Work Queue**.
-- Closure records the terminal event in the ledger and updates the plan footer `*Stage:*`; the change is committed and pushed so the terminal breadcrumb is versioned and reproducible across clones.
+- Closure records the terminal event in the **Provenance Ledger** and updates the plan footer `*Stage:*` through a single code transaction; the commit is pushed so the terminal breadcrumb is versioned and reproducible across clones.
 - A **Task** has one **Declared Size** (predicted at plan time) and, once closed, one **Delivered Size** (measured at closure). The pair is what makes a **Band** checkable; neither substitutes for the other.
 
 ## Example dialogue
@@ -71,6 +75,16 @@ The expected **Delivered Size** range attached to each **Declared Size** label. 
 >
 > **Expert:** “Approved plans are not added to the sprint automatically. Run `aet sprint add docs/plans/<id>.md` to put it in the queue; it will become `ready` if it has no blockers. Use `aet gate review` to see all approved plans that are not yet queued.”
 
+## Multi-Machine Operator Posture
+
+Queue and ledger state travel with the repository via `refs/aet/*` on origin. A fresh clone must fetch them explicitly:
+
+```bash
+git fetch origin 'refs/aet/*:refs/aet/*'
+```
+
+`~/.aet` stays machine-local: it holds config, telemetry, and reports, and is never pushed. Offline work is safe; mutation pushes are best-effort everywhere except closure, where a failed push fails the closure loudly (ADR-055).
+
 ## Forward-Only State Model (ADR-011, revised by ADR-013)
 
 **State**:
@@ -78,7 +92,7 @@ The canonical workflow state stored in `tasks[].state` while a task is active in
 _Avoid_: using `state` for terminal truth.
 
 **Terminal State**:
-A plan `status` value that ends a task's lifecycle and satisfies blockers: `merged` or `abandoned`. `failed` is **not** terminal and does **not** unblock dependents.
+A terminal ledger event that ends a task's lifecycle and satisfies blockers: `merged` or `abandoned`. `failed` is **not** terminal and does **not** unblock dependents.
 _Avoid_: treating `failed` or legacy `done` as terminal.
 
 **Quarantined**:
@@ -101,8 +115,8 @@ A bounded judgment session spawned on a failure under the default `--on-failure=
 _Avoid_: reading "triage" as a runtime conditional embedded in the engine — the engine holds no hidden branch; it spawns a session and enforces the result, as it does for any stage.
 
 **Per-Task Cost**:
-Token and dollar totals rolled up per task from stage telemetry onto the task's ledger record at close, stored as `cost: {tokens, usd}`. **Analytics only** — read by the desk and the scoreboard, never by any gate, kill, or triage path. Null is preserved honestly: when no stage record carried a measurable value, the field is omitted rather than zeroed or written as a null-valued object. (ADR-031)
-_Avoid_: treating cost as a budget ceiling or any execution-control signal.
+Token and dollar totals rolled up per task from stage telemetry onto the task's closure record at close, stored as `cost: {tokens, usd}`. **Analytics only** — read by the desk and the scoreboard, never by any gate, kill, or triage path. Null is preserved honestly: when no stage record carried a measurable value, the field is omitted rather than zeroed or written as a null-valued object. (ADR-031)
+_Avoid_: treating cost as a budget ceiling or any execution-control signal; conflating the closure record with the **Provenance Ledger**.
 
 ## Run Supervision (ADR-053, supersedes ADR-031 item 2)
 
@@ -136,10 +150,10 @@ Append-only log of transition entries and closure events written to the optional
 Counter maintained forward by the state writer; a task becomes `ready` only when `pending_blockers == 0`.
 
 **Stage**:
-Sub-state of `in_progress` recorded in the task record (e.g., `implement`, `qa`, `review`) and reflected in the plan footer `*Stage:*`.
+Sub-state of `in_progress` recorded in the task record (e.g., `implement`, `qa`, `review`) and reflected in the plan footer `*Stage:*`, which is maintained by code as a human breadcrumb.
 
 **Live Set**:
-Active tasks in `.agents/work-queue.json`; the only set loaded for scheduling. The queue is gitignored and recreated as needed.
+Active tasks in the queue backend (`refs/aet/meta/queue` for `git-refs`, `.agents/work-queue.json` for `json`); the only set loaded for scheduling. The queue is recreated as needed.
 
 **Execution Log**:
 Optional, gitignored `.agents/work-history.jsonl` containing transitions and closure evidence. Projects may omit it.
@@ -233,17 +247,3 @@ _Avoid_: counting `failure_signatures` as rework (a separate signal); a second d
 **Cost per Merged Task**:
 The sum of a task's stage telemetry (`token_count` / `cost_estimate`) across the whole **Telemetry Archive** — cross-run — reported with explicit coverage counts. Null-honest: all-null stays null (Kimi `usd` is null by design), never estimated. Distinct from **Per-Task Cost**, which is the settling-run rollup stored on the ledger record for desk display. Analytics only, per ADR-031. (ADR-035)
 _Avoid_: reading it from the ledger `cost` field (under-counts reworked tasks); treating it as a budget or control signal.
-
-## Flagged ambiguities
-
-- “status” was used to mean both stored state and derived state. Resolved: `state` is the canonical stored value for active tasks; the plan frontmatter `status` field has been removed from the contract (ADR-055).
-- The legacy queue-record `status` key (coexistence shim from fods-02..05) is retired by frh-06/frh-07 (2026-07-09): task records carry `state` only, and legacy records are normalized on read.
-- “done” was used interchangeably with `merged`. Resolved: `merged` is the canonical terminal state; `done` is legacy.
-- “workflow” was used loosely for the lifecycle state machine (e.g. “canonical workflow state”). Resolved (2026-07-11, roadmap Phase 1): **Workflow** is the named stage-sequence data file; lifecycle states are just **State**. Where older text says “workflow state,” read “lifecycle state.”
-- “execution log” was used for the telemetry archive in panel docs. Resolved (2026-07-11, thp scope validation): **Execution Log** = `.agents/work-history.jsonl` only; the browsable store is the **Telemetry Archive** (panel README rewording lands with thp-05).
-- “failure class” was overloaded by the non-trunk integration PRD for engine-level integration outcomes. Resolved (2026-07-22, epi scope validation): **Failure Class** remains the five-value agent-session menu (ADR-030); engine-level integration outcomes are **Integration Failure**, a separate category outside triage and the Circuit Breaker.
-- “done” risked re-overloading by `single-pr` completion semantics. Resolved (2026-07-22, epi scope validation): the terminal state stays `merged`; which event it names is keyed by **Integration Mode** (see **Integrated**).
-- “test run” named two different things: a run AET measured from the agent's own transcript, and a run the QA agent said it did. Resolved (2026-07-26, tap scope validation): **Test Run** records carry `source` — **observed** (`wire`) vs **claimed** (`verdict`) — and are never aggregated together (ADR-051). Relatedly, the **Factory Metrics** stopped reading `test_run` records at all (ADR-052): they are intra-session events, and counting them punished visibility rather than measuring quality.
-- “wire log” was used generically for whatever transcript an agent CLI writes, while naming kimi's schema specifically. Resolved (2026-07-26, tap scope validation): the general term is **Session Log**; "wire log" refers to kimi's `wire.jsonl` format only, and each adapter supplies its own reader (ADR-050).
-- “durable” was used as an unqualified property of the **Plan File**, while CONTEXT.md separately claimed the queue is rebuilt from _committed_ plan files — which the code never did (discovery has always been `plans_dir.glob("*.md")`). Resolved (2026-08-05, lop scope validation): durability is asymmetric. Terminal `status` writes are committed and pushed; mid-sprint `status` writes need not be (ADR-054). The stale “committed” wording was a doc-vs-code contradiction that predated this change.
-- “project config” risked overloading the **Project Slug** when config resolution gained a worktree-independent identity. Resolved (2026-07-24, cfg scope validation): config resolution uses the **Config Slug** (main-worktree identity); the **Project Slug** keeps its worktree label for telemetry/reports only. The committed team config file is `.agents/aet-config.json` (renamed from `aet-work.json`); the external `~/.aet/{slug}/config.json` is the personal/**Shadow Mode** layer.

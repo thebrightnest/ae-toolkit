@@ -103,18 +103,18 @@ Workflow state is **recorded at transition time and trusted on read**.
 
 ## Sprint Membership
 
-The live queue is an **ephemeral cache** rebuilt from committed plan truth (ADR-013).
+The live queue is an **ephemeral cache** rebuilt from the ledger and plan footer stages (ADR-013, ADR-055).
 
-- `init-queue` scans `docs/plans/*.md` and includes only plans whose frontmatter `status` is `queued`.
-- `status: approved` and `status: draft` plans remain on the board but are excluded from the sprint.
-- `sync` removes any live task whose plan is no longer `queued` and adds newly `queued` plans.
-- `next` selects from the derived queue, so two clones produce the same sprint after a `git pull`.
+- `init-queue` scans `docs/plans/*.md` and includes plans whose footer stage is `plan-approved` (and not already settled).
+- Plans in earlier planning stages remain on the board but are excluded from the sprint.
+- `sync` reconciles the live task set against current plans and their blockers.
+- `next` selects from the derived queue, so two clones produce the same sprint after fetching `refs/aet/*`.
 
 The queue `state` axis (`ready`, `blocked`, `in_progress`, …) remains the runtime scheduling signal; `ready`/`blocked` are still computed solely from `blocked_by` (R-12), never from labels or human edits.
 
 ## Closure Push
 
-Terminal closure is versioned. `aet-state record-merge` updates the plan file frontmatter (`status: merged`) and footer (`*Stage: merged*`), commits the change, and pushes it. A push failure leaves the local commit intact and returns a recoverable error; re-running `record-merge` retries the push without duplicating queue history.
+Terminal closure is versioned. `aet-state record-merge` records the terminal ledger event and updates the plan footer (`*Stage: merged*`) through the closure transaction, then pushes the resulting commit. A push failure leaves the local commit intact and returns a recoverable error; re-running `record-merge` retries the push without duplicating queue history.
 
 When the plan file is absent from the checkout, `record-merge` first attempts to resolve it from the merged branch (so a squash-merged plan that only existed on the feature branch still closes correctly). If the plan cannot be found in the checkout or on the merged branch, closure fails closed: the merge record remains intact, but the command returns non-zero and reports where it looked and how to recover.
 

@@ -147,7 +147,7 @@ Worktree mode puts each implementation on its own branch using standard git comm
 
 After `implement` completes and all validation passes:
 
-1. Update the plan.md footer to:
+1. The plan.md footer will read:
 
    ```
    *Stage: implemented*

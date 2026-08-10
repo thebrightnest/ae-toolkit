@@ -75,27 +75,13 @@ Staff-level diff review with multiple lenses.
 
 **Evidence verdict (writer contract):**
 
-Before updating the plan.md footer, write a JSON verdict record so the orchestrator can gate the stage machine-checkably. The footer remains a human breadcrumb only.
+Submit the stage verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Do not hand-edit plan footers or queue state.
 
-1. Build a verdict record matching the `review` schema:
+```bash
+aet gate submit --stage review --verdict <pass|fail> --evidence <payload-file>
+```
 
-   ```json
-   {
-     "task_id": "{task-id}",
-     "stage": "reviewed",
-     "skill": "aet-review",
-     "verdict": "pass" | "fail",
-     "summary": "One-line outcome",
-     "generated_at": "{ISO-8601 timestamp}",
-     "findings": []
-   }
-   ```
-
-2. Submit the verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Write the payload JSON to a scratch file outside the tracked tree, then run:
-
-   ```bash
-   aet gate submit --stage review --verdict <pass|fail> --evidence <payload-file>
-   ```
+Write `<payload-file>` to a scratch path outside the tracked tree. The payload follows the `review` schema expected by `aet gate submit`; consult the command help or reference docs for the current fields.
 
 ### `codex-review`
 
@@ -121,7 +107,7 @@ After `review` completes with pass status:
 1. Determine next step:
    - Diff touches auth, data models, API endpoints, or dependencies → `aet-cso`
    - Diff does not touch those → `aet-sync-docs`
-2. Update the plan.md footer:
+2. The plan.md footer will read:
 
    ```
    *Stage: reviewed*

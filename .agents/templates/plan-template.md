@@ -17,6 +17,10 @@ source of that value — an omitted key records `unclassified`, and a queue of
 unclassified tasks makes the per-class breakdown in `aet metrics` and
 `aet retro` permanently empty. Choose one; do not leave the placeholder. -->
 
+<!-- `status` has been removed from the plan frontmatter contract (ADR-055).
+     Stage and settled-ness live in the ledger and task record, not in plan
+     frontmatter. -->
+
 <!-- `pipeline` selects the orchestrator isolation mode. Size-based defaults:
      S → minimal, M → standard, L → standard or full. Override to standard/full
      for auth, data-model, API, dependency, or infrastructure changes.

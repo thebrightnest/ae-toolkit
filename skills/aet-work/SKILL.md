@@ -66,13 +66,13 @@ The `git-refs` backend carries the equivalent protection. Its envelope ref (`ref
 
 ### Queue lifecycle
 
-1. Plan is authored with `status: approved`.
+1. Plan reaches footer stage `plan-approved`.
 2. User runs `aet sprint add docs/plans/FEAT-001.md` → task appears in queue as `ready` (or `blocked` if it has pending blockers).
 3. `aet next` or `aet run` transitions it through `in_progress` and its stage sub-states.
 4. Task reaches `awaiting_merge`.
 5. PR is opened and merged into the resolved trunk branch.
 6. `aet-ship` verifies the merge commit is on the resolved trunk branch.
-7. `aet-ship` sets plan `status: merged`, appends closure to `.agents/work-history.jsonl`, and removes the task from `.agents/work-queue.json`.
+7. `aet-ship` records the terminal ledger event, appends closure to `.agents/work-history.jsonl`, and removes the task from `.agents/work-queue.json`. The plan footer `*Stage: merged*` is updated by code as part of the closure transaction.
 
 ## Task Backends
 
@@ -95,15 +95,28 @@ Valid values for `task_backend` are `git-refs` (default) and `json`. Run
 
 ### git-refs backend
 
-The default backend stores the active queue in git refs under `refs/aet/meta/`
-and the optional execution log in `.agents/work-history.jsonl`. No GitHub
-access is required.
+The default backend stores queue state and the ledger in git refs under
+`refs/aet/*`. Reads and writes push to and fetch from origin best-effort except
+at closure, where the push is required. No GitHub access is required beyond the
+git remote.
 
 ### json backend
 
 The local JSON backend stores the active queue in `.agents/work-queue.json` and
 the optional execution log in `.agents/work-history.jsonl`. Use this for
 non-git projects or while debugging the git-refs backend.
+
+### Multi-machine posture
+
+Queue and ledger state travel with the repo via `refs/aet/*` on origin. A fresh
+clone must fetch them explicitly:
+
+```bash
+git fetch origin 'refs/aet/*:refs/aet/*'
+```
+
+`~/.aet` stays machine-local (config, telemetry, reports). Offline work is safe;
+closure is the syncing boundary.
 
 ### GitHub Issues projection
 
@@ -163,7 +176,7 @@ aet sprint add docs/plans/FEAT-001.md
 aet sprint add FEAT-001
 ```
 
-Accepts a plan file path or a task ID. Refuses plans that are not `plan-approved`, terminal plans (`merged`, `abandoned`), and settled tasks. Sets the plan frontmatter to `status: queued`, commits and pushes the change, then adds the task to the ephemeral queue. Blockers already settled in `work-history.jsonl` do not count toward `pending_blockers` — a plan whose blockers have all merged enters as `ready`, never deadlocked.
+Accepts a plan file path or a task ID. Refuses plans that are not `plan-approved`, terminal plans (`merged`, `abandoned`), and settled tasks. Adds the task to the queue. No commit or push happens at intake; plan durability is deferred to terminal closure. Blockers already settled in `work-history.jsonl` do not count toward `pending_blockers` — a plan whose blockers have all merged enters as `ready`, never deadlocked.
 
 ### `backlog add`
 

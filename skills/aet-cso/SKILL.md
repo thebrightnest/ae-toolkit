@@ -77,27 +77,13 @@ Scan the current branch diff for security issues.
 
 **Evidence verdict (writer contract):**
 
-Before updating the plan.md footer, write a JSON verdict record so the orchestrator can gate the stage machine-checkably. The footer remains a human breadcrumb only.
+Submit the stage verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Do not hand-edit plan footers or queue state.
 
-1. Build a verdict record matching the `cso` schema:
+```bash
+aet gate submit --stage cso --verdict <pass|fail> --evidence <payload-file>
+```
 
-   ```json
-   {
-     "task_id": "{task-id}",
-     "stage": "secure",
-     "skill": "aet-cso",
-     "verdict": "pass" | "fail",
-     "summary": "One-line outcome",
-     "generated_at": "{ISO-8601 timestamp}",
-     "findings": []
-   }
-   ```
-
-2. Submit the verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Write the payload JSON to a scratch file outside the tracked tree, then run:
-
-   ```bash
-   aet gate submit --stage cso --verdict <pass|fail> --evidence <payload-file>
-   ```
+Write `<payload-file>` to a scratch path outside the tracked tree. The payload follows the `cso` schema expected by `aet gate submit`; consult the command help or reference docs for the current fields.
 
 **Pass/fail gate:**
 
@@ -108,7 +94,7 @@ Before updating the plan.md footer, write a JSON verdict record so the orchestra
 
 After `cso` completes with pass status (no Critical or High findings):
 
-1. Update the plan.md footer to:
+1. The plan.md footer will read:
 
    ```
    *Stage: secure*

@@ -31,25 +31,25 @@ code, never ahead of it.
 
 ## Task List
 
-1. CONTEXT.md rewrite: mint the **Provenance Ledger** term; rewrite **Status
+1. [x] CONTEXT.md rewrite: mint the **Provenance Ledger** term; rewrite **Status
    (plan lifecycle)**, **Work Queue / Sprint Board** (membership is the
    explicit sprint-add record), **Plan File** (source of truth for intent;
    terminal closure lives in the ledger), and the closure bullet in
    Relationships; fix the casual "ledger record" in **Per-Task Cost**;
    collapse the eight-store flagged ambiguities that R-1/R-9 resolved — M
    (traces: R-10)
-2. Skills corpus sweep: completion-protocol and footer-write duties not
+2. [x] Skills corpus sweep: completion-protocol and footer-write duties not
    already deleted by slc-05 (~remaining instances from the study's 19
    across 10 skills), the aet-plan frontmatter contract, aet-validate-scope's
    completion protocol and its stale "sprint add requires committed plans"
    note, aet-pipeline-plan step 3 — M (traces: R-10)
-3. AGENTS.md: update the state-model references (ADR-039 taxonomy line and
+3. [x] AGENTS.md: update the state-model references (ADR-039 taxonomy line and
    the decision log entry for ADR-054) to cite ADR-055 — S (traces: R-10)
-4. Operator guidance for the multi-machine posture: state travels via
+4. [x] Operator guidance for the multi-machine posture: state travels via
    `refs/aet/*` on origin; a fresh clone fetches it; `~/.aet` stays
    machine-local; offline work is safe and closure is the syncing
    boundary — S (traces: R-10)
-5. Merge branch to main and verify integration — S
+5. [ ] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -81,15 +81,15 @@ code, never ahead of it.
 
 ## Validation Steps
 
-- [ ] `make lint` passes
-- [ ] `aet docs lint` passes
-- [ ] `grep -rn "status: draft\|frontmatter.*status\|commit the plan files\|
+- [x] `make lint` passes
+- [x] `aet docs lint` passes
+- [x] `grep -rn "status: draft\|frontmatter.*status\|commit the plan files\|
   requires.*committed" skills/ docs/ AGENTS.md CONTEXT.md` returns only
   historical records (docs/adr/, CHANGELOG.md) and the aet-plans-lint error
   description (structural)
-- [ ] Every behavior claim in the rewritten CONTEXT.md is verifiable against
+- [x] Every behavior claim in the rewritten CONTEXT.md is verifiable against
   merged slc-01..05 code (manual review checklist in the PR)
-- [ ] R-trace coverage: R-10 covered by tasks 1–4
+- [x] R-trace coverage: R-10 covered by tasks 1–4
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -102,5 +102,5 @@ Revert the merge. Prose-only; no data or state involved.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

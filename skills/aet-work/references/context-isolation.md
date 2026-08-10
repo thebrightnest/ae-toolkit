@@ -153,7 +153,7 @@ When `aet run` or `aet run-one` materializes a task worktree, the orchestrator o
 
 The overlay is a **snapshot** taken at worktree creation and refresh. Editing a plan in the main checkout after the task has started does **not** propagate into the running worktree. Closure later operates on the post-merge checkout, so there is no write race between the two copies.
 
-This behavior is intentional. Plan durability is deferred to the PR closure: `status: queued` lives only on disk (and in the worktree overlay) until a terminal transition commits it. See [`queue-commands.md`](queue-commands.md) for intake semantics and ADR-054 for the durability contract.
+This behavior is intentional. Plan edits are local-only until terminal closure; the queue record and ledger state travel with the repo via `refs/aet/*`. See [`queue-commands.md`](queue-commands.md) for intake semantics and ADR-054 / ADR-055 for the durability contract.
 
 ## Further Reading
 

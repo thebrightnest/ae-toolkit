@@ -96,30 +96,13 @@ Run tiered automated validation.
 
 **Evidence verdict (writer contract):**
 
-Before updating the plan.md footer, write a JSON verdict record so the orchestrator can gate the stage machine-checkably. The footer remains a human breadcrumb only.
+Submit the stage verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Do not hand-edit plan footers or queue state.
 
-1. Build a verdict record matching the `qa` schema:
+```bash
+aet gate submit --stage qa --verdict <pass|fail> --evidence <payload-file>
+```
 
-   ```json
-   {
-     "task_id": "{task-id}",
-     "stage": "qa-complete",
-     "skill": "aet-qa",
-     "verdict": "pass" | "fail",
-     "summary": "One-line outcome",
-     "generated_at": "{ISO-8601 timestamp}",
-     "test_command": "{command that was run}",
-     "tests_total": 0,
-     "tests_passed": 0,
-     "tests_failed": 0
-   }
-   ```
-
-2. Submit the verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Write the payload JSON to a scratch file outside the tracked tree, then run:
-
-   ```bash
-   aet gate submit --stage qa --verdict <pass|fail> --evidence <payload-file>
-   ```
+Write `<payload-file>` to a scratch path outside the tracked tree. The payload follows the `qa` schema expected by `aet gate submit`; consult the command help or reference docs for the current fields.
 
 **Browser tooling preference:**
 
@@ -137,7 +120,7 @@ Before updating the plan.md footer, write a JSON verdict record so the orchestra
 
 After `qa` completes and all tiers pass:
 
-1. Update the plan.md footer to:
+1. The plan.md footer will read:
 
    ```
    *Stage: qa-complete*
