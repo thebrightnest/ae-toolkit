@@ -33,10 +33,14 @@ class TestLearningsAppend(unittest.TestCase):
     def test_append_writes_canonical_entry(self):
         """A minimal append produces the dominant timestamp-shaped JSONL entry."""
         result, path = self._run_append(
-            "--problem", "p",
-            "--layer", "l",
-            "--fix", "f",
-            "--prevents", "pr",
+            "--problem",
+            "p",
+            "--layer",
+            "l",
+            "--fix",
+            "f",
+            "--prevents",
+            "pr",
         )
         self.assertEqual(result.exit_code, 0, result.output)
         lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line]
@@ -64,10 +68,14 @@ class TestLearningsAppend(unittest.TestCase):
                 "append",
                 "--file",
                 str(path),
-                "--problem", "p",
-                "--layer", "l",
-                "--fix", "f",
-                "--prevents", "pr",
+                "--problem",
+                "p",
+                "--layer",
+                "l",
+                "--fix",
+                "f",
+                "--prevents",
+                "pr",
             ],
         )
         self.assertEqual(result.exit_code, 0, result.output)
@@ -115,32 +123,46 @@ class TestLearningsAppend(unittest.TestCase):
     def test_recurrence_zero_rejected(self):
         """Recurrence must be a positive integer; zero is rejected."""
         result, _ = self._run_append(
-            "--problem", "p",
-            "--layer", "l",
-            "--fix", "f",
-            "--prevents", "pr",
-            "--recurrence", "0",
+            "--problem",
+            "p",
+            "--layer",
+            "l",
+            "--fix",
+            "f",
+            "--prevents",
+            "pr",
+            "--recurrence",
+            "0",
         )
         self.assertEqual(result.exit_code, 1, result.output)
 
     def test_recurrence_negative_rejected(self):
         """Recurrence must be a positive integer; negative values are rejected."""
         result, _ = self._run_append(
-            "--problem", "p",
-            "--layer", "l",
-            "--fix", "f",
-            "--prevents", "pr",
-            "--recurrence", "-3",
+            "--problem",
+            "p",
+            "--layer",
+            "l",
+            "--fix",
+            "f",
+            "--prevents",
+            "pr",
+            "--recurrence",
+            "-3",
         )
         self.assertEqual(result.exit_code, 1, result.output)
 
     def test_no_trigger_omits_key(self):
         """When no --trigger is supplied, the entry has no trigger field."""
         result, path = self._run_append(
-            "--problem", "p",
-            "--layer", "l",
-            "--fix", "f",
-            "--prevents", "pr",
+            "--problem",
+            "p",
+            "--layer",
+            "l",
+            "--fix",
+            "f",
+            "--prevents",
+            "pr",
         )
         self.assertEqual(result.exit_code, 0, result.output)
         entry = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
@@ -149,12 +171,18 @@ class TestLearningsAppend(unittest.TestCase):
     def test_multiple_triggers_preserved(self):
         """Repeatable --trigger is collected into a list."""
         result, path = self._run_append(
-            "--problem", "p",
-            "--layer", "l",
-            "--fix", "f",
-            "--prevents", "pr",
-            "--trigger", "a",
-            "--trigger", "b",
+            "--problem",
+            "p",
+            "--layer",
+            "l",
+            "--fix",
+            "f",
+            "--prevents",
+            "pr",
+            "--trigger",
+            "a",
+            "--trigger",
+            "b",
         )
         self.assertEqual(result.exit_code, 0, result.output)
         entry = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
@@ -163,11 +191,16 @@ class TestLearningsAppend(unittest.TestCase):
     def test_recurrence_positive_accepted(self):
         """A positive recurrence integer is stored in the entry."""
         result, path = self._run_append(
-            "--problem", "p",
-            "--layer", "l",
-            "--fix", "f",
-            "--prevents", "pr",
-            "--recurrence", "2",
+            "--problem",
+            "p",
+            "--layer",
+            "l",
+            "--fix",
+            "f",
+            "--prevents",
+            "pr",
+            "--recurrence",
+            "2",
         )
         self.assertEqual(result.exit_code, 0, result.output)
         entry = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
