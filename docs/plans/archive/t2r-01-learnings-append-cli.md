@@ -165,5 +165,5 @@ applies: `standard` was chosen for it over the S-size `minimal` default.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
