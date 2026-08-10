@@ -24,22 +24,14 @@ This skill produces **plans and PRDs only**. It never writes, modifies, or delet
 
 If the user describes a change imperatively ("remove X", "adapt Y", "change Z to W"), treat it as a **planning target**, not a command to execute immediately.
 
-## Before You Start
+## Context
 
-Before executing, collect the following context:
+Run `aet context` and parse its JSON for session context (branch, repo
+state, AGENTS.md, learnings, active plan/PRD stage); print the stage
+banner it emits. Do not ask the user for this context manually.
 
-- `BRANCH` — current git branch
-- `REPO_STATE` — clean / dirty / merge-conflict
-- `AGENTS_MD` — presence and last-modified date of AGENTS.md
-- `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `EXISTING_BRIEFS` — any `docs/product-briefs/*.md` (list titles + dates) — context only; discover is not run
 - `EXISTING_PRDS` — any `docs/prds/*.md` (list titles + dates)
-- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
-- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
-
-Use this context to ground all recommendations. Do not ask the user to provide it manually.
-
-If a stage is found, print at the start of execution: `"📍 Current stage: {stage} — resuming pipeline from the appropriate step."`
 
 ## Intake Triage
 

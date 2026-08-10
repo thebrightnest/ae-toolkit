@@ -81,13 +81,16 @@ nothing here writes through `aet gate submit` or `aet state set-stage`.
 
 ## Task List
 
-1. Confirm t2r-04-aet-context-command has merged and `aet context` runs on `main`; record its
+1. [x] Confirm t2r-04-aet-context-command has merged and `aet context` runs on `main`; record its
    emitted JSON field list and banner format in the task notes as the
    replacement contract. If any fixed-battery field (e.g. `LAST_PIV`,
    `ACTIVE_PLAN`) is missing from the emitted shape, stop and raise at
    scope validation rather than silently dropping the field — S
    (traces: R-4)
-2. In each of the 12 `## Shared Preamble` skills (`skills/aet-prime/SKILL.md`,
+   - Verified contract: `aet context` emits `branch`, `repo_state`, `agents_md`,
+     `learnings`, `active_plan`, `last_piv`, `active_prd_stage`, `active_plan_stage`
+     and banner `"📍 Current stage: {stage}."`
+2. [x] In each of the 12 `## Shared Preamble` skills (`skills/aet-prime/SKILL.md`,
    `skills/aet-evolve/SKILL.md`, `skills/aet-design-system-creation/SKILL.md`,
    `skills/aet-plan/SKILL.md`, `skills/aet-cso/SKILL.md`,
    `skills/aet-review/SKILL.md`, `skills/aet-sync-docs/SKILL.md`,
@@ -107,17 +110,17 @@ nothing here writes through `aet gate submit` or `aet state set-stage`.
 
    keeping any retained skill-specific bullets (per Context assumptions) as
    short lines under the same section — M (traces: R-4)
-3. Apply the same replacement to the 4 `## Before You Start` skills
+3. [x] Apply the same replacement to the 4 `## Before You Start` skills
    (`skills/aet-tdd/SKILL.md`, `skills/aet-upgrade/SKILL.md`,
    `skills/aet-validate-scope/SKILL.md`, `skills/aet-pipeline-plan/SKILL.md`),
    and collapse the dead `## Before You Start` wrapper headings in
    `skills/aet-plan/SKILL.md:17` and
    `skills/aet-design-system-creation/SKILL.md:31` into the single
    `## Context` section — S (traces: R-4)
-4. Delete the 11 stage-banner print instructions, including the variant
+4. [x] Delete the 11 stage-banner print instructions, including the variant
    text at `skills/aet-pipeline-plan/SKILL.md:42` (the banner is emitted by
    `aet context`; no skill-side print remains) — S (traces: R-4)
-5. Sweep each edited SKILL.md for dangling references to the deleted block
+5. [x] Sweep each edited SKILL.md for dangling references to the deleted block
    (`Shared Preamble`, `BRANCH`, `REPO_STATE`, `📍 Current stage`,
    `Before You Start`) and re-point or delete them; confirm every file
    stays under 400 lines and all relative links still resolve — S
@@ -171,22 +174,22 @@ nothing here writes through `aet gate submit` or `aet state set-stage`.
 
 ## Validation Steps
 
-- [ ] `scripts/validate-skills.sh` passes (structure, frontmatter, link
+- [x] `scripts/validate-skills.sh` passes (structure, frontmatter, link
   resolution, 400-line limit)
-- [ ] `make lint` passes on the edited SKILL.md files
-- [ ] No new source files — no new tests required; coverage is structural
+- [x] `make lint` passes on the edited SKILL.md files
+- [x] No new source files — no new tests required; coverage is structural
   (validator + grep-zero checks below), not unit/integration/API
-- [ ] `grep -rn "## Shared Preamble" skills/` returns zero matches
-- [ ] `grep -rn "📍 Current stage" skills/` returns zero matches
-- [ ] `grep -rn "Before You Start" skills/` returns zero matches
-- [ ] `grep -rln "aet context" skills/` lists exactly the 16 edited files
-- [ ] Retained skill-specific bullets survive: `grep -n "TEST_SETUP"
+- [x] `grep -rn "## Shared Preamble" skills/` returns zero matches
+- [x] `grep -rn "📍 Current stage" skills/` returns zero matches
+- [x] `grep -rn "Before You Start" skills/` returns zero matches
+- [x] `grep -rln "aet context" skills/` lists exactly the 16 edited files
+- [x] Retained skill-specific bullets survive: `grep -n "TEST_SETUP"
   skills/aet-tdd/SKILL.md`, `grep -n "SCAN_TARGET"
   skills/aet-extract-stack/SKILL.md`, `grep -n "QA_REPORT_PATH"
   skills/aet-verify/SKILL.md` each return a match
-- [ ] `wc -l skills/*/SKILL.md` shows every file under 400 lines
-- [ ] R-trace coverage: R-4 covered by tasks 1–5; no task cites another R-id
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] `wc -l skills/*/SKILL.md` shows every file under 400 lines
+- [x] R-trace coverage: R-4 covered by tasks 1–5; no task cites another R-id
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to `aet-ship`)
 
 ## Rollback Plan
 
@@ -203,5 +206,5 @@ reason), so the standard grouping loses no needed gate.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

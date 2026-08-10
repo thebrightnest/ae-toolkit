@@ -14,20 +14,16 @@ Upgrade planning for agentic engineering. Treats dependency and framework upgrad
 - You need a risk-mapped plan with evidence before executing an upgrade
 - The upgrade touches infrastructure, data models, or auth-adjacent code
 
-## Before You Start
+## Context
 
-Before executing any command in this skill, collect the following context:
+Run `aet context` and parse its JSON for session context (branch, repo
+state, AGENTS.md, learnings, active plan/PRD stage); print the stage
+banner it emits. Do not ask the user for this context manually.
 
-- `BRANCH` — current git branch
-- `REPO_STATE` — clean / dirty / merge-conflict
-- `AGENTS_MD` — presence and last-modified date of AGENTS.md
-- `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
 - `DEPENDENCY` — name and target version of the dependency being upgraded
 - `CURRENT_VERSION` — currently installed version (from lockfile, package.json, composer.lock, etc.)
 - `PACKAGE_MANAGER` — npm, composer, pip, cargo, etc.
 - `SMOKE_STATUS` — result of the most recent foundation smoke check (pass / fail / unknown)
-
-Use this context to ground all recommendations. Do not ask the user to provide it manually.
 
 ## Commands
 

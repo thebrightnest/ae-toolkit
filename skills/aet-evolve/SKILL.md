@@ -15,20 +15,11 @@ System evolution for agentic engineering. When the agent makes a mistake, don't 
 - You want to improve the AI layer (rules, commands, templates)
 - End of sprint / weekly retrospective
 
-## Shared Preamble
+## Context
 
-Before executing any command in this skill, collect the following context:
-
-- `BRANCH` — current git branch
-- `REPO_STATE` — clean / dirty / merge-conflict
-- `AGENTS_MD` — presence and last-modified date of AGENTS.md
-- `LEARNINGS` — entries from `.agents/learnings.jsonl` whose `trigger` field matches the current context (task type, files touched, or error class). If no trigger match, fall back to the most recent 3 entries.
-- `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
-- `LAST_PIV` — date of last completed plan-implement-validate cycle (from git log if available)
-- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
-- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
-
-Use this context to ground all recommendations. Do not ask the user to provide it manually.
+Run `aet context` and parse its JSON for session context (branch, repo
+state, AGENTS.md, learnings, active plan/PRD stage); print the stage
+banner it emits. Do not ask the user for this context manually.
 
 ## Prerequisites
 

@@ -43,22 +43,14 @@ This skill is **extraction-only**. No application source code is written, modifi
 - Do not run application tests, linting, or type-checking in the scanned project
 - Do not modify the scanned project's existing configs
 
-## Shared Preamble
+## Context
 
-Before executing any command in this skill, collect the following context:
+Run `aet context` and parse its JSON for session context (branch, repo
+state, AGENTS.md, learnings, active plan/PRD stage); print the stage
+banner it emits. Do not ask the user for this context manually.
 
-- `BRANCH` — current git branch
-- `REPO_STATE` — clean / dirty / merge-conflict
-- `AGENTS_MD` — presence and last-modified date of AGENTS.md
-- `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
-- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
-- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
 - `SCAN_TARGET` — the project path to scan (default: current working directory)
 - `OUTPUT_DIR` — where to write the scaffold (default: `./scaffold/`)
-
-Use this context to ground all recommendations. Do not ask the user to provide it manually.
-
-If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 
