@@ -203,5 +203,5 @@ surface; default grouping applies, no isolation override warranted.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-cso`*
+*Stage: secure*
+*Next step: run `aet-sync-docs`, then `aet-ship`*
