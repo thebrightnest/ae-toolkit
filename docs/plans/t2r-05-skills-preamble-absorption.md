@@ -206,5 +206,5 @@ reason), so the standard grouping loses no needed gate.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
