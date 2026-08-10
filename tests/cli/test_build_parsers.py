@@ -26,7 +26,7 @@ _MODULES = {
     "aet.cli.backlog": {"commands": ["add"]},
     "aet.cli.configure_backend": {"callback": True},
     "aet.cli.desk": {"commands": ["merge", "abandon"], "callback": True},
-    "aet.cli.docs": {"commands": ["lint"]},
+    "aet.cli.docs": {"commands": ["lint", "generate"]},
     "aet.cli.gate": {"commands": ["submit", "review"]},
     "aet.cli.harness_guard": {"commands": ["install", "check"]},
     "aet.cli.hooks": {"commands": ["install", "check"]},

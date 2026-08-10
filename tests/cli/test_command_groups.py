@@ -316,7 +316,9 @@ class TestNounGroups(unittest.TestCase):
         "plan",
         "plans",
         "queue",
+        "setup",
         "ship",
+        "size",
         "sprint",
     ]
 

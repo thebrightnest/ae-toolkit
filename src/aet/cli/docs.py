@@ -6,12 +6,20 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Optional
 
+import click
 import typer
+import typer.core as typer_core
+import typer.main as typer_main
 
 from aet import docs_lint
+
+AUTO_GENERATED_HEADER = (
+    "<!-- AUTO-GENERATED: do not edit manually — run `aet docs generate` to refresh. -->"
+)
 
 
 def _repo_root_from(path: Path) -> Path:
@@ -34,6 +42,81 @@ def _repo_root_from(path: Path) -> Path:
 def _fail(message: str) -> int:
     print(f"error: {message}", file=sys.stderr)
     return 1
+
+
+def _walk_commands(
+    click_group: click.Group,
+    prefix: tuple[str, ...],
+) -> Iterator[tuple[tuple[str, ...], click.Command]]:
+    """Yield (path, command) for every command reachable from *click_group*."""
+    ctx = click.Context(click_group)
+    for name in click_group.list_commands(ctx):
+        cmd = click_group.get_command(ctx, name)
+        if cmd is None:
+            continue
+        path = (*prefix, name)
+        yield path, cmd
+        if isinstance(cmd, (click.Group, typer_core.TyperGroup)):
+            yield from _walk_commands(cmd, path)
+
+
+def _format_option(param: click.Parameter) -> str:
+    """Format a click parameter as a markdown list item."""
+    name = param.opts[0] if param.opts else param.name
+    parts = [f"`{name}`"]
+    if param.type.name not in ("STRING", "TEXT"):
+        parts.append(f"*{param.type.name}*")
+    if param.help:
+        parts.append(f"— {param.help}")
+    if param.default is not None and not param.required:
+        default = param.default
+        if isinstance(default, Path):
+            default = str(default)
+        parts.append(f"(default: `{default}`)")
+    if param.required:
+        parts.append("(required)")
+    return " ".join(parts)
+
+
+def _format_command(path: tuple[str, ...], cmd: click.Command) -> list[str]:
+    """Render a single command as markdown lines."""
+    invocation = " ".join(path)
+    lines = [f"## `{invocation}`", ""]
+    if cmd.help:
+        lines.append(cmd.help)
+        lines.append("")
+    if cmd.params:
+        lines.append("### Options")
+        lines.append("")
+        for param in cmd.params:
+            lines.append(f"- {_format_option(param)}")
+        lines.append("")
+    if isinstance(cmd, (click.Group, typer_core.TyperGroup)) and cmd.commands:
+        lines.append("### Subcommands")
+        lines.append("")
+        for subname in sorted(cmd.commands):
+            subcmd = cmd.commands[subname]
+            help_text = (subcmd.help or "").split("\n")[0]
+            if help_text:
+                lines.append(f"- `{subname}`: {help_text}")
+            else:
+                lines.append(f"- `{subname}`")
+        lines.append("")
+    return lines
+
+
+def generate_cli_reference(typer_app: typer.Typer, output: Path) -> None:
+    """Generate the CLI reference markdown file from *typer_app* to *output*."""
+    click_group = typer_main.get_group(typer_app)
+    lines = [
+        AUTO_GENERATED_HEADER,
+        "",
+        "# AE Toolkit CLI Reference",
+        "",
+    ]
+    for path, cmd in _walk_commands(click_group, ("aet",)):
+        lines.extend(_format_command(path, cmd))
+    output.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
@@ -80,6 +163,26 @@ def lint(
     args = argparse.Namespace(rules=rules, repo_root=repo_root)
     rc = cmd_lint(args)
     raise typer.Exit(rc)
+
+
+@app.command("generate")
+def generate(
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        help="Output file path (default: docs/CLI.md under repo root).",
+    ),
+) -> None:
+    """Generate the CLI reference markdown file."""
+    from aet.cli.main import app as main_app
+
+    repo_root = _repo_root_from(Path.cwd())
+    if output is None:
+        output = repo_root / "docs" / "CLI.md"
+    output = output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    generate_cli_reference(main_app, output)
+    print(f"✓ Generated {output}")
 
 
 if __name__ == "__main__":

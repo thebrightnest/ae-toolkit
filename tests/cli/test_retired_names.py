@@ -21,6 +21,7 @@ _SEARCH_ROOTS = [
 # Files that legitimately discuss the retired names as part of this test.
 _EXCLUDED_FILES = {
     _REPO_ROOT / "tests" / "cli" / "test_retired_names.py",
+    _REPO_ROOT / "docs" / "CLI.md",
 }
 
 # Historical doc directories are allowed to reference the retired names; only
