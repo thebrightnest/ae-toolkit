@@ -181,5 +181,5 @@ pipeline to `standard`.
 
 ---
 
-*Stage: plan-approved*
+*Stage: implemented*
 *Next step: run `aet-work`*
