@@ -102,5 +102,5 @@ Revert the merge. Prose-only; no data or state involved.
 
 ---
 
-*Stage: plan-approved*
+*Stage: synced*
 *Next step: run `aet-work`*
