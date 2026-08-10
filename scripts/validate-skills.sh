@@ -187,6 +187,11 @@ broken = False
 for dirpath, dirnames, filenames in os.walk("."):
     if dirpath == ".":
         dirnames[:] = [d for d in dirnames if d not in (".git", "content", ".worktrees")]
+    # Archived plans are settled and excluded from corpus scans; their relative
+    # links were written for docs/plans/ and are intentionally not maintained
+    # after the move to docs/plans/archive/.
+    if dirpath.startswith("./docs/plans/archive"):
+        continue
     for fname in filenames:
         if not fname.endswith(".md"):
             continue
