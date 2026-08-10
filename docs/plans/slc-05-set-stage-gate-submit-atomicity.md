@@ -109,3 +109,4 @@ ADR-047).
 ---
 
 *Stage: reviewed*
+*Next step: run `aet-cso`*
