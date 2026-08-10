@@ -49,7 +49,7 @@ code, never ahead of it.
    `refs/aet/*` on origin; a fresh clone fetches it; `~/.aet` stays
    machine-local; offline work is safe and closure is the syncing
    boundary — S (traces: R-10)
-5. [ ] Merge branch to main and verify integration — S
+5. [ ] Merge branch to main and verify integration — S [Deferred: remains for `aet-ship` closure]
 
 ### Floor Check
 
@@ -90,7 +90,7 @@ code, never ahead of it.
 - [x] Every behavior claim in the rewritten CONTEXT.md is verifiable against
   merged slc-01..05 code (manual review checklist in the PR)
 - [x] R-trace coverage: R-10 covered by tasks 1–4
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` [Deferred: verified at `aet-ship` merge]
 
 ## Rollback Plan
 
@@ -102,5 +102,5 @@ Revert the merge. Prose-only; no data or state involved.
 
 ---
 
-*Stage: reviewed*
-*Next step: run `aet-sync-docs`*
+*Stage: synced*
+*Next step: run `aet-ship`*
