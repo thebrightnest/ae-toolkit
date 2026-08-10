@@ -254,5 +254,5 @@ typer), and security review stays `required` per frontmatter.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
