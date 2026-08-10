@@ -15,7 +15,7 @@ When a learning recurs, escalate its enforcement strength so the same bug class 
 
 | Recurrence     | Action                                                                                                               |
 | -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1st occurrence | Document in `learnings.jsonl` with `trigger`.                                                                        |
+| 1st occurrence | Run `aet learnings append --trigger <keyword>` to document the learning.                                             |
 | 2nd occurrence | Convert to a **checklist item** in the relevant command or template.                                                 |
 | 3rd occurrence | Promote to a **review lens** in `aet-review/SKILL.md`.                                                               |
 | 4th occurrence | Implement an **executable gate** (script, pre-commit hook, or test) that fails the build if the pattern is detected. |

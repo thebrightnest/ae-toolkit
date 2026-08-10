@@ -57,7 +57,7 @@ Analyze what went wrong in the last loop and identify the systemic root cause.
    - **Templates** (`.agents/templates/*.md`) — gaps in PRD/plan/retro structure
    - **On-demand context** (`docs/CONVENTIONS.md`, architecture notes) — outdated or AI-unreadable docs
 5. Use `.agents/templates/retro-template.md` to produce a retro document.
-6. Create `docs/retros/` if it doesn't exist. Save to `docs/retros/{date}-retro.md` or append to `.agents/learnings.jsonl`.
+6. Create `docs/retros/` if it doesn't exist. Save to `docs/retros/{date}-retro.md` or run `aet learnings append` to persist the learning.
 
 ### `system-evolve`
 
@@ -73,29 +73,20 @@ Update the layer that allowed the issue so it doesn't happen again.
    - If template — add a missing section or example
 3. Show the exact diff before applying.
 4. Apply the change and commit it to source control.
-5. Document the learning in `.agents/learnings.jsonl` with:
-   - `date`
-   - `trigger` — string or list of keywords that describe when this learning applies (e.g., `["test factories", "catch blocks"]`)
-   - `problem`
-   - `layer`
-   - `fix`
-   - `prevents`
-   - Optional: `recurrence` — count of how many times this issue has recurred (used for escalation; see `references/escalation-ladder.md`)
+5. Persist the learning by running `aet learnings append`:
 
-**Learning persistence format (`.agents/learnings.jsonl`):**
+   ```bash
+   aet learnings append \
+     --problem "Agent forgot to run tests before committing" \
+     --layer "commands/implement.md" \
+     --fix "Added explicit 'run tests' step to validation strategy in plan template" \
+     --prevents "Untested code being committed" \
+     --trigger "test factories" \
+     --trigger "catch blocks"
+   ```
 
-```json
-{
-  "date": "2026-05-03",
-  "trigger": ["test factories", "catch blocks"],
-  "problem": "Agent forgot to run tests before committing",
-  "layer": "commands/implement.md",
-  "fix": "Added explicit 'run tests' step to validation strategy in plan template",
-  "prevents": "Untested code being committed"
-}
-```
-
-Entries without a `trigger` field remain valid; matching falls back to recency.
+   - `--trigger` is repeatable; omit it when no keywords apply.
+   - `--recurrence N` is optional and must be a positive integer.
 
 ### `aet retro`
 

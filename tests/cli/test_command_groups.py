@@ -311,6 +311,7 @@ class TestNounGroups(unittest.TestCase):
         "docs",
         "gate",
         "hooks",
+        "learnings",
         "plan",
         "plans",
         "queue",
