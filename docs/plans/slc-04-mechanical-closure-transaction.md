@@ -116,5 +116,5 @@ ADR-047).
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
