@@ -457,7 +457,7 @@ def build_prompt(
         f"Run validations (tests, lint, format checks) in the foreground and "
         f"wait for them to finish — never background validations or end your "
         f"turn while one is still running.{freshness_clause}\n"
-        f"Commit your work and update the plan footer to *Stage: {next_stage}* before exiting."
+        f"Commit your work before exiting."
     )
 
 
@@ -1047,13 +1047,14 @@ def build_stage_group_prompt(
     """Build a compound prompt for running multiple stages in one session.
 
     Each stage block preserves the single-stage prompt format so the agent
-    can execute them sequentially, committing and updating the plan footer
-    between stages. Successors resolve through the workflow's list order.
+    can execute them sequentially, committing between stages. Plan footer
+    updates are performed by the engine, not the agent. Successors resolve
+    through the workflow's list order.
     """
     preamble = (
         "Execute the following consecutive pipeline stages in order. "
-        "Complete each stage (including its commit and plan-footer update) "
-        "before starting the next. Do not proceed past the final stage listed. "
+        "Complete each stage (including its commit) before starting the next. "
+        "Do not proceed past the final stage listed. "
         "Run validations (tests, lint, format checks) in the foreground and "
         "wait for them to finish — never background validations or end your "
         "turn while one is still running." + freshness_clause
@@ -1066,7 +1067,7 @@ def build_stage_group_prompt(
             f"Run {skills_str} on {plan_file}\n"
             f"Current stage: {stage.name}. Target stage: {next_stage}.\n"
             f"Execute only this stage. Do not proceed to subsequent stages.\n"
-            f"Commit your work and update the plan footer to *Stage: {next_stage}* before exiting."
+            f"Commit your work before exiting."
         )
     return "\n\n".join(blocks)
 
@@ -1294,7 +1295,7 @@ def process_task(
             print(f"   ❌ {exc}")
             return False
 
-    # Determine current stage from the task record; footer is only a breadcrumb.
+    # Determine current stage from the task record.
     current_stage = get_current_stage(task, plan_file, workflow.entry_stage)
 
     # A terminal or unknown stage with no commits means the plan footer (or a
@@ -1395,8 +1396,7 @@ def process_task(
 
                 # Fail-closed evidence gates: every stage in the group span
                 # with an evidence binding must have a schema-valid passing
-                # verdict. Group advancement is determined by evidence, not
-                # the plan footer (which is a breadcrumb only).
+                # verdict. Group advancement is determined by evidence.
                 for stage in runnable:
                     kind = stage.evidence
                     if kind is None:
@@ -3086,7 +3086,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
 
         end_time = telemetry.iso_now()
 
-        # Read the final stage from the synthetic task record; the footer is only a breadcrumb.
+        # Read the final stage from the synthetic task record.
         final_stage = task.get("stage") or read_plan_stage(plan_file) or wf.entry_stage
 
         total_tokens, total_cost_usd = _usage_aggregates(logger)

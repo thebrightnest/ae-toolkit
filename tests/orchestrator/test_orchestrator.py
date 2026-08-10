@@ -1286,7 +1286,9 @@ class TestRunStageGroup(unittest.TestCase):
         self.assertIn("aet-qa", prompt)
         self.assertIn("Target stage: implemented", prompt)
         self.assertIn("Target stage: qa-complete", prompt)
-        self.assertIn("Commit your work and update the plan footer", prompt)
+        self.assertIn("Commit your work before exiting.", prompt)
+        self.assertNotIn("update the plan footer", prompt)
+        self.assertNotIn("queue", prompt.lower())
 
     def test_returns_adapter_exit_code(self):
         """run_stage_group returns the adapter subprocess exit code."""
@@ -3007,6 +3009,48 @@ class TestStagePromptValidationDiscipline(unittest.TestCase):
         )
         self.assertIn("foreground", prompt)
         self.assertIn("never background validations", prompt)
+
+    def test_single_stage_prompt_contains_no_state_mutation_duty(self):
+        """The agent must not be asked to mutate plan footer, status, or queue."""
+        prompt = orchestrator.build_prompt(
+            ["aet-implement"], "docs/plans/x.md", "plan-approved", "implemented"
+        )
+        self.assertNotIn("update the plan footer", prompt)
+        self.assertNotIn("footer", prompt.lower())
+        self.assertNotIn("status", prompt.lower())
+        self.assertNotIn("queue", prompt.lower())
+
+    def test_stage_group_prompt_contains_no_state_mutation_duty(self):
+        """The compound prompt must not ask the agent to mutate footer/status/queue."""
+        stages = [
+            WorkflowStage(
+                name="plan-approved",
+                skills=["aet-implement"],
+                evidence=None,
+                gate_key=None,
+            ),
+            WorkflowStage(
+                name="implemented", skills=["aet-qa"], evidence=None, gate_key=None
+            ),
+        ]
+        workflow = Workflow(
+            version=1,
+            name="test",
+            done_state="done",
+            stages=stages,
+            stage_map={s.name: s for s in stages},
+            execution_policy=ExecutionPolicy(
+                session_groups=[["plan-approved", "implemented"]]
+            ),
+            routing=Routing(default={"harness": "test", "model": None}, by_stage={}),
+        )
+        prompt = orchestrator.build_stage_group_prompt(
+            "docs/plans/x.md", stages, workflow
+        )
+        self.assertNotIn("update the plan footer", prompt)
+        self.assertNotIn("footer", prompt.lower())
+        self.assertNotIn("status", prompt.lower())
+        self.assertNotIn("queue", prompt.lower())
 
 
 class TestBatchIntegrityRefusal(unittest.TestCase):

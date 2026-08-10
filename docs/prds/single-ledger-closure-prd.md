@@ -326,6 +326,33 @@ The following file-list expectations from the plan did not require modification:
 
 No meaningful behavioral divergences were introduced.
 
+## Divergence Summary — slc-04
+
+*Recorded: 2026-08-10 — Branch: slc-04-mechanical-closure-transaction*
+
+The slc-04 implementation slice (R-5, R-8) matches the planned behavior.
+The closure transaction is implemented in `aet_state._apply_transition` and
+`cmd_record_merge`, not in `src/aet/cli/ship.py`.
+
+### Changed from plan
+
+- `src/aet/cli/ship.py` was not modified. `aet ship close` already delegates
+  to the record-merge closure path; the single-transaction logic landed in
+  `src/aet/cli/aet_state.py`.
+- Atomic ref updates required modifying `src/aet/backends/git_refs_backend.py`
+  (single `git update-ref --stdin` transaction), which was not listed in the
+  plan's file list.
+- Tests also landed in `tests/backends/test_git_refs_backend.py` for the
+  atomic-save failure path, in addition to the planned
+  `tests/cli/test_ship_close.py` and `tests/orchestrator/test_orchestrator.py`.
+
+### Deferred
+
+- Merge to `main` and integration verification: remains for the `aet-ship`
+  stage.
+
+No meaningful behavioral divergences were introduced.
+
 ---
 
 *Stage: synced*

@@ -31,24 +31,33 @@ digest event, and deletes the prompt duty.
 
 ## Task List
 
-1. `aet ship` close executes one code transaction: footer breadcrumb update
-   (via `update_plan_footer()`, `queue.py:602`), queue stage transition,
-   and the terminal `land` event — no partial state on failure (refs
-   updated via a single `git update-ref --stdin` transaction) — M
-   (traces: R-5)
-2. Route every terminal path through it: enumerate flows that reach
-   `merged`/`abandoned` and remove any that write terminal state outside
-   the transaction — M (traces: R-5)
-3. Digest payload on the `land` event: plan content hash, PRD requirement
-   ids, merge ref — so "what was the plan for this merge" is answerable
-   from ledger + PRD + diff — S (traces: R-8)
-4. Delete the prompt-delegated footer duty from the orchestrator prompt
-   template (`:460`, `:1069`) and the "footer is only a breadcrumb"
-   defensive comments it made necessary (`:1297`, `:1399`, `:3087`) — S
-   (traces: R-5)
-5. Kill-mid-transaction consistency test plus closure on a footer the
-   agent never touched — S (traces: R-5)
-6. Merge branch to main and verify integration — S
+✓ `aet ship` close executes one code transaction: footer breadcrumb update
+  (via `update_plan_footer()`, `queue.py:602`), queue stage transition,
+  and the terminal `land` event — no partial state on failure (refs
+  updated via a single `git update-ref --stdin` transaction) — M
+  (traces: R-5) [Changed: transaction implemented in
+  `src/aet/cli/aet_state.py` (`_apply_transition` / `cmd_record_merge`);
+  `src/aet/cli/ship.py` was not modified because it already delegates to
+  the record-merge path. Atomic ref write landed in
+  `src/aet/backends/git_refs_backend.py`.]
+✓ Route every terminal path through it: enumerate flows that reach
+  `merged`/`abandoned` and remove any that write terminal state outside
+  the transaction — M (traces: R-5) [Changed: `src/aet/cli/desk.py`
+  abandonment path now routes through the terminal closure transaction.]
+✓ Digest payload on the `land` event: plan content hash, PRD requirement
+  ids, merge ref — so "what was the plan for this merge" is answerable
+  from ledger + PRD + diff — S (traces: R-8)
+✓ Delete the prompt-delegated footer duty from the orchestrator prompt
+  template (`:460`, `:1069`) and the "footer is only a breadcrumb"
+  defensive comments it made necessary (`:1297`, `:1399`, `:3087`) — S
+  (traces: R-5)
+✓ Kill-mid-transaction consistency test plus closure on a footer the
+  agent never touched — S (traces: R-5) [Changed: added
+  `tests/backends/test_git_refs_backend.py` atomic-save failure test in
+  addition to the planned `tests/cli/test_ship_close.py`.]
+
+- Merge branch to main and verify integration — S [Deferred: remains for
+  the `aet-ship` stage.]
 
 ### Floor Check
 
@@ -82,17 +91,18 @@ digest event, and deletes the prompt duty.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`make test`)
-- [ ] `tests/cli/test_ship_close.py` covers the transaction: success path
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`make test`)
+- [x] `tests/cli/test_ship_close.py` covers the transaction: success path
   consistency (footer, queue, ledger agree), kill-mid-transaction leaves
   no partial refs, missing-plan refusal still fail-closed (lop-03
   regression) (integration)
-- [ ] Orchestrator prompt contains no footer/status/queue mutation
+- [x] Orchestrator prompt contains no footer/status/queue mutation
   instruction (unit assertion on `build_prompt`)
-- [ ] The `land` event carries plan hash, R-ids, and merge ref (unit)
-- [ ] R-trace coverage: R-5, R-8 covered by tasks 1–5
+- [x] The `land` event carries plan hash, R-ids, and merge ref (unit)
+- [x] R-trace coverage: R-5, R-8 covered by tasks 1–5
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+  [Deferred: aet-ship stage]
 
 ## Rollback Plan
 
@@ -107,4 +117,4 @@ ADR-047).
 ---
 
 *Stage: synced*
-*Next step: run `aet-work`*
+*Next step: run `aet-ship`*

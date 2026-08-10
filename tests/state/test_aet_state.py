@@ -366,6 +366,11 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "--show-toplevel"): (
+                0,
+                os.path.realpath(self.tmpdir.name) + "\n",
+                "",
+            ),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (
                 0,
                 "",
@@ -426,6 +431,11 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "--show-toplevel"): (
+                0,
+                os.path.realpath(self.tmpdir.name) + "\n",
+                "",
+            ),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (
                 0,
                 "",

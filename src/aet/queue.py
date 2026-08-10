@@ -660,9 +660,16 @@ def commit_and_push_plan_change(
     # commands inside it. Using the repo that owns the plan keeps absolute
     # paths inside temporary test repositories (e.g. macOS /var/folders
     # symlinks) valid.
-    repo_root = cwd
-    if repo_root is None:
-        rc, out, err = _run_git(
+    if cwd is not None:
+        rc, out, _err = _run_git("rev-parse", "--show-toplevel", cwd=cwd)
+        if rc == 0:
+            repo_root = out.strip()
+        else:
+            # Caller-supplied cwd is not a git repository; local-only short-
+            # circuit. The footer update has already been written to the file.
+            return 0
+    else:
+        rc, out, _err = _run_git(
             "rev-parse", "--show-toplevel", cwd=os.path.dirname(plan_abs)
         )
         if rc == 0:
