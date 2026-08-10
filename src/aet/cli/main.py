@@ -33,6 +33,7 @@ from aet.cli import (
     harness_guard,
     hooks,
     init_queue,
+    learnings,
     metrics,
     mine_learnings,
     next as next_module,
@@ -68,6 +69,7 @@ app.add_typer(desk.app, name="desk", help="Review cockpit for awaiting_merge tas
 app.add_typer(docs.app, name="docs", help="Documentation linting and syncing.")
 app.add_typer(gate.app, name="gate", help="Fail-closed verdict writer and review board renderer.")
 app.add_typer(hooks.app, name="hooks", help="Git hook installation and management.")
+app.add_typer(learnings.app, name="learnings", help="Append-only learning journal commands.")
 app.add_typer(plan.app, name="plan", help="Plan-quality commands.")
 app.add_typer(plans.app, name="plans", help="Bulk plan operations and corpus linting.")
 app.add_typer(sync.app, name="queue", help="Work queue sync and related operations.")

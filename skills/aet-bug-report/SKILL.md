@@ -125,7 +125,7 @@ Confirm the fix is correct and safe.
 3. If tests are missing for this code path, note it in the bug report. Do not
    mandate test creation; `aet-tdd` is a separate concern.
 4. If the bug touches auth, data, or trust boundaries, invoke `aet-cso`
-5. Append lessons learned to `.agents/learnings.jsonl` for `aet-evolve`
+5. Persist lessons learned with `aet learnings append --problem <...> --layer <...> --fix <...> --prevents <...> [--trigger <...>]` for `aet-evolve`
 
 **Output:** Validation results and lessons learned in the bug report.
 
@@ -142,7 +142,7 @@ Save to `docs/bugs/{timestamp}-{slug}.md` or return inline if `docs/bugs/` does 
 | ------------ | --------------------------------------------- | ----------------------------------- |
 | `aet-tdd`    | User wants test-first bug fix                 | Call before Step 3 (Fix)            |
 | `aet-cso`    | Bug touches auth, data, or boundaries         | Call during Step 4 (Validate)       |
-| `aet-evolve` | Lessons learned surface a pattern             | Append to `.agents/learnings.jsonl` |
+| `aet-evolve` | Lessons learned surface a pattern             | Run `aet learnings append --problem ... --layer ... --fix ... --prevents ... [--trigger ...]` |
 | `aet-plan`   | Issue is not reproducible / requires redesign | Redirect from Hard Gate             |
 
 ## Rules

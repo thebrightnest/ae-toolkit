@@ -24,7 +24,7 @@ Run `aet retro`; `aet setup link` puts the `aet` dispatcher on `PATH` (run via `
 
 3. The command writes `docs/retros/YYYY-MM-DD-aet-retro.md`.
 4. Review the split between project-level and AET-level findings.
-5. For AET-level findings, run `aet-evolve system-evolve` and append a learning to `.agents/learnings.jsonl`.
+5. For AET-level findings, run `aet-evolve system-evolve` and persist the learning with `aet learnings append`.
 6. For project-level findings, create or queue fixes in the current project.
 
 ## Options

@@ -43,7 +43,7 @@ Execute a plan.md from start to finish with self-validation.
    - **Refuse to start.** Print the oversized task(s).
    - If `AET_EXECUTION_MODE=unattended` (check via `env` or equivalent): **hard stop.** Print `⛔ Unattended mode cannot override ATOMIC OVERSIZED. Replan with smaller tasks.` and exit with a non-zero status so the orchestrator marks this task as failed.
    - Otherwise (interactive session): ask for explicit user confirmation (`--force` or interactive approval) to proceed despite the warning.
-   - If confirmed, log the override to `.agents/learnings.jsonl` and continue.
+   - If confirmed, log the override with `aet learnings append --problem <...> --layer <...> --fix <...> --prevents <...>` and continue.
    - If not confirmed, stop and instruct the user to replan with smaller tasks.
 
 1. **Approval checkpoint:** Before writing any code, confirm the implementation scope:
