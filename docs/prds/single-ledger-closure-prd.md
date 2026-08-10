@@ -306,5 +306,35 @@ this PRD are mutually exclusive work).
 - **UI Coverage Lens** — not applied: CLI-only change, no user-facing
   interface.
 
+## Divergence Summary
+
+*Recorded: 2026-08-10 — Branch: slc-02-refs-sync-push-fetch*
+
+### Changed from plan
+
+- **slc-02 task 3 (closure-mandatory push)**: The mandatory push is implemented
+  in `aet-state record-merge` rather than directly in `src/aet/cli/ship.py`.
+  `aet ship close` delegates to `record-merge`, so the durability guarantee is
+  still enforced at the single code boundary that atomically records the merge.
+- **slc-02 task 4 (two-clone fixture test)**: The two-clone scenario is tested
+  with inline temporary-repo fixtures in `tests/backends/test_git_refs_sync.py`
+  rather than a shared helper under `tests/fixtures/`. Coverage is equivalent:
+  offline union, mandatory-push failure naming, and the `~/.aet` path guard are
+  all exercised.
+
+### Added (unplanned)
+
+- **Backend interface hygiene**: `TaskBackend.fetch()` and `TaskBackend.push()`
+  default no-ops in `src/aet/backends/base.py`, with explicit no-op overrides in
+  `JsonBackend`. This keeps the CLI call sites backend-agnostic without adding
+  any new behavior for the JSON backend.
+- **Test fixture updates**: `FakeBackend` in `tests/backends/test_aet_state_backend.py`
+  and `tests/cli/test_orchestrator_backend.py` gained `fetch()`/`push()` methods
+  to match the expanded backend interface.
+
+### Deferred
+
+- None for slc-02.
+
 *Stage: scope-validated*
 *Next step: run `aet-work` (single-plan or multi-task queue)*

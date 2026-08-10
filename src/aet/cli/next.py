@@ -137,6 +137,7 @@ def _run(
         queue_file=queue_file,
         history_file=history_file,
     )
+    backend.fetch()
     try:
         data = backend.load()
     except QueueIntegrityError as exc:

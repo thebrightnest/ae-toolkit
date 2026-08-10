@@ -143,6 +143,13 @@ class FakeBackend:
     def close(self) -> None:
         self.calls.append(("close", {}))
 
+    def fetch(self) -> None:
+        self.calls.append(("fetch", {}))
+
+    def push(self, *, mandatory: bool = False) -> bool:
+        self.calls.append(("push", {"mandatory": mandatory}))
+        return True
+
     def sync_task(self, task: dict, is_new: bool) -> None:
         self.calls.append(("sync_task", {"task": task, "is_new": is_new}))
 

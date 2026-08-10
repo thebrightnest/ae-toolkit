@@ -81,6 +81,29 @@ class TaskBackend(ABC):
         """
         return
 
+    def fetch(self) -> None:
+        """Pull remote state into the backend store.
+
+        For git-native backends this fetches the relevant ref namespace from
+        ``origin``; for file-backed backends it is a no-op. The default
+        implementation does nothing.
+        """
+        return
+
+    def push(self, *, mandatory: bool = False) -> bool:
+        """Push backend state to the forge remote.
+
+        ``mandatory`` is ``True`` for terminal closure boundaries where the push
+        is part of the durability guarantee. Backends that do not support remote
+        synchronization return ``True``.
+
+        Returns ``True`` when the push succeeded or when there is nothing to push
+        (no remote), and ``False`` on a best-effort failure. When ``mandatory``
+        is ``True``, failures are raised as :exc:`RefsPushError` with a named
+        remedy instead of returning ``False``.
+        """
+        return True
+
     def seal(self, task_id: str, history_file: str) -> dict[str, Any]:
         """Move a terminal task from the live queue to the settled history log.
 

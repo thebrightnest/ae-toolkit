@@ -75,6 +75,13 @@ class FakeBackend:
     def close(self):
         self.calls.append(("close", {}))
 
+    def fetch(self):
+        self.calls.append(("fetch", {}))
+
+    def push(self, *, mandatory=False):
+        self.calls.append(("push", {"mandatory": mandatory}))
+        return True
+
     def on_transition(self, task_id, from_state, to_state, evidence=None):
         self.calls.append(
             (

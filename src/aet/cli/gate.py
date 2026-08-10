@@ -27,6 +27,7 @@ import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import evidence  # noqa: E402
+from aet.backends.factory import create_backend  # noqa: E402
 from aet.plan_parser import stage_from_plan, title_from_plan  # noqa: E402
 from aet.workflow import Workflow, WorkflowError, load_workflow  # noqa: E402
 
@@ -120,25 +121,37 @@ def run_review(plans_dir: Path) -> int:
 
 
 def _submit(args: argparse.Namespace) -> int:
+    backend = create_backend(
+        config_path=".agents/aet-config.json",
+        queue_file=".agents/work-queue.json",
+        history_file=".agents/work-history.jsonl",
+    )
+    backend.fetch()
+
     stage = args.stage
     if stage not in evidence.SCHEMAS:
         known = ", ".join(sorted(evidence.SCHEMAS))
+        backend.close()
         return _fail(f"unknown stage {stage!r} (expected one of: {known})")
 
     evidence_file = Path(args.evidence)
     try:
         raw = evidence_file.read_text(encoding="utf-8")
     except FileNotFoundError:
+        backend.close()
         return _fail(f"evidence file not found: {evidence_file}")
     except OSError as exc:
+        backend.close()
         return _fail(f"cannot read evidence file {evidence_file}: {exc}")
 
     try:
         record = json.loads(raw)
     except json.JSONDecodeError as exc:
+        backend.close()
         return _fail(f"evidence file is not valid JSON ({evidence_file}): {exc}")
 
     if not isinstance(record, dict):
+        backend.close()
         return _fail(f"evidence payload must be a JSON object ({evidence_file})")
 
     # Stamp tree_hash before validating so the skill writer contract (which
@@ -150,9 +163,11 @@ def _submit(args: argparse.Namespace) -> int:
     try:
         evidence.validate_verdict(record, stage)
     except (evidence.VerdictValidationError, evidence.VerdictValueError) as exc:
+        backend.close()
         return _fail(f"invalid {stage!r} verdict payload: {exc}")
 
     if record["verdict"] != args.verdict:
+        backend.close()
         return _fail(
             f"--verdict {args.verdict!r} does not match payload verdict "
             f"{record['verdict']!r}"
@@ -163,8 +178,11 @@ def _submit(args: argparse.Namespace) -> int:
         dest = evidence.resolve_verdict_path(task_id=task_id, kind=stage)
         written = evidence.write_verdict(task_id, stage, record, path=dest)
     except OSError as exc:
+        backend.close()
         return _fail(f"cannot write verdict: {exc}")
 
+    backend.push()
+    backend.close()
     print(f"✓ {stage} verdict written: {written}")
     return 0
 

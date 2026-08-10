@@ -534,6 +534,7 @@ def _set_stage(task, stage, by="orch"):
 def cmd_set_stage(args):
     """Set the pipeline stage sub-state for a task in the queue."""
     backend = make_backend(args.queue)
+    backend.fetch()
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1
@@ -567,6 +568,7 @@ def cmd_set_stage(args):
             return 1
 
         backend.save(queue)
+    backend.push()
 
     print(f"Set stage for {args.task_id}: {args.stage}")
     return 0
@@ -632,6 +634,7 @@ def cmd_audit(args):
     ``aet state heal --apply`` to reconcile and restamp the envelope.
     """
     backend = make_backend(args.queue)
+    backend.fetch()
     try:
         backend.load()
     except _INTEGRITY_ERRORS:
@@ -690,6 +693,7 @@ def cmd_heal(args):
     verifiable again — including when there is nothing else to fix.
     """
     backend = make_backend(args.queue)
+    backend.fetch()
     integrity_ok = True
     try:
         backend.load()
@@ -887,6 +891,7 @@ def cmd_heal(args):
 
 def cmd_validate(args):
     backend = make_backend(args.queue)
+    backend.fetch()
     data = backend.load()
     queue = data["queue"]
     task = find_task(queue, args.task_id)
@@ -919,6 +924,7 @@ def cmd_reset(args):
     supported way to un-start a task whose branch/worktree has disappeared.
     """
     backend = make_backend(args.queue)
+    backend.fetch()
     try:
         backend.load()
     except _INTEGRITY_ERRORS:
@@ -1002,6 +1008,7 @@ def cmd_reset(args):
 
 def cmd_transition(args):
     backend = make_backend(args.queue)
+    backend.fetch()
     cwd = os.path.dirname(args.queue) if args.queue else "."
     trunk_branch = _resolve_trunk(args.queue)
     integration_branch = _resolve_integration(args.queue)
@@ -1051,6 +1058,7 @@ def cmd_transition(args):
 def cmd_record_merge(args):
     """Resolve and record the merge commit for a task atomically."""
     backend = make_backend(args.queue)
+    backend.fetch()
     cwd = os.path.dirname(args.queue) if args.queue else "."
     history_file = getattr(backend, "history_file", None)
     trunk_branch = _resolve_trunk(args.queue)
@@ -1249,6 +1257,12 @@ def cmd_record_merge(args):
                 file=sys.stderr,
             )
             return 1
+
+    try:
+        backend.push(mandatory=True)
+    except backend.RefsPushError as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        return 1
 
     print(f"Recorded merge for {args.task_id}: {merge_commit} ({merge_strategy})")
     return 0

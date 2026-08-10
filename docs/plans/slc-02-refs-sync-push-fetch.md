@@ -30,17 +30,21 @@ invisible to every PR diff (deployment configurations 2, 3, 4).
 
 ## Task List
 
-1. Push `refs/aet/*` after each state-mutating command boundary (sprint add,
+1. [x] Push `refs/aet/*` after each state-mutating command boundary (sprint add,
    set-stage, gate submit, ship); best-effort — a failed push never blocks
    local operation and is retried at the next boundary — M (traces: R-4)
-2. Fetch `refs/aet/*` at the start of operational commands that read or
+2. [x] Fetch `refs/aet/*` at the start of operational commands that read or
    write queue state (`aet run`, `run-one`, `status`, `next`, `state`,
    `gate submit`, `sprint add`, `ship`) — S (traces: R-4)
-3. Closure-mandatory push: `aet ship` close fails loudly with a named
-   remedy when the refs push fails — S (traces: R-4)
-4. Two-clone fixture test: both clones append events offline, both push,
-   fetch yields the union with no conflict; guard test that `~/.aet` paths
-   are never pushed — M (traces: R-3, R-4)
+3. [Changed: implemented in `aet-state record-merge`, which `aet ship close`
+   delegates to, rather than directly in `src/aet/cli/ship.py`] Closure-mandatory
+   push: `aet ship` close fails loudly with a named remedy when the refs push
+   fails — S (traces: R-4)
+4. [Changed: inline temporary-repo fixtures in
+   `tests/backends/test_git_refs_sync.py` rather than a shared
+   `tests/fixtures/` helper] Two-clone fixture test: both clones append events
+   offline, both push, fetch yields the union with no conflict; guard test that
+   `~/.aet` paths are never pushed — M (traces: R-3, R-4)
 5. Merge branch to main and verify integration — S
 
 ### Floor Check
@@ -95,5 +99,5 @@ reads them; no data migration is involved.
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: synced*
+*Next step: run `aet-ship`*

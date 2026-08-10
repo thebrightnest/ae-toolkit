@@ -57,6 +57,14 @@ class JsonBackend(TaskBackend):
         """No-op for the JSON backend — files are closed after each operation."""
         return
 
+    def fetch(self) -> None:
+        """No-op: JSON backend has no remote ref namespace to fetch."""
+        return
+
+    def push(self, *, mandatory: bool = False) -> bool:
+        """No-op: JSON backend has no remote ref namespace to push."""
+        return True
+
     def sync_task(self, task: dict[str, Any], is_new: bool) -> None:
         """No-op: JSON backend has no external task mirror to maintain."""
         return

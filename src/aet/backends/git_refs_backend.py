@@ -33,6 +33,23 @@ TASKS_REF_PREFIX = "refs/aet/tasks/"
 ENVELOPE_REF = "refs/aet/meta/queue"
 ENVELOPE_SCHEMA_VERSION = 1
 
+# Refspec used to fetch and push the backend's private namespace. The leading
+# '+' on fetch allows remote refs to overwrite local ones in the namespace,
+# which is safe because the namespace is backend-owned and tasks are identified
+# by their ref names, not by a linear history.
+_AET_FETCH_REFSPEC = "+refs/aet/*:refs/aet/*"
+_AET_PUSH_REFSPEC = "refs/aet/*"
+
+
+def _has_remote(repo_root: str) -> bool:
+    """Return True when the repository has at least one remote."""
+    result = subprocess.run(
+        ["git", "-C", repo_root, "remote"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and bool(result.stdout.strip())
+
 # Git's null object id: used as the ``oldvalue`` of a compare-and-swap create
 # so a fresh task ref is only written when it does not already exist.
 _NULL_OID = "0" * 40
@@ -47,6 +64,12 @@ def _canonical_json(value: Any) -> bytes:
 
 class GitRefsBackend(TaskBackend):
     """Git-native implementation of the task backend interface."""
+
+    class RefsPushError(RuntimeError):
+        """Raised when a mandatory push of ``refs/aet/*`` fails."""
+
+        def __init__(self, message: str) -> None:
+            super().__init__(message)
 
     def __init__(
         self,
@@ -225,6 +248,49 @@ class GitRefsBackend(TaskBackend):
     def close(self) -> None:
         """No-op: every git invocation is self-contained."""
         return
+
+    def fetch(self) -> None:
+        """Fetch ``refs/aet/*`` from ``origin``.
+
+        Best-effort: a missing remote or transient network failure is ignored,
+        because read-only commands should not fail when offline. The fetched
+        refs overwrite local ones in the backend namespace.
+        """
+        if not _has_remote(self.repo_root):
+            return
+        self._git("fetch", "origin", _AET_FETCH_REFSPEC)
+
+    def push(self, *, mandatory: bool = False) -> bool:
+        """Push ``refs/aet/*`` to ``origin``.
+
+        Best-effort by default: returns ``False`` on failure without raising so
+        local operation is never blocked. When ``mandatory`` is ``True`` (terminal
+        closure boundary), a failure raises :exc:`RefsPushError` naming the
+        recovery action.
+
+        A repository with no remote is treated as success for best-effort pushes
+        (there is nothing to push), but mandatory pushes raise because the
+        durability guarantee cannot be satisfied without a remote.
+        """
+        if not _has_remote(self.repo_root):
+            if mandatory:
+                raise self.RefsPushError(
+                    "No remote configured; cannot satisfy mandatory push of refs/aet/*.\n"
+                    "Add an origin remote and re-run `aet ship close` to retry the push."
+                )
+            return True
+
+        result = self._git("push", "origin", _AET_PUSH_REFSPEC)
+        if result.returncode == 0:
+            return True
+
+        if mandatory:
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            raise self.RefsPushError(
+                f"Mandatory push of refs/aet/* failed: {stderr}\n"
+                "Local closure is intact. Re-run `aet ship close` to retry the push."
+            )
+        return False
 
     def sync_task(self, task: dict[str, Any], is_new: bool) -> None:
         """No-op: the git-refs backend has no external task mirror."""
