@@ -165,5 +165,5 @@ applies: `standard` was chosen for it over the S-size `minimal` default.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
