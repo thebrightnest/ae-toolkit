@@ -31,6 +31,7 @@ from aet.cli import (
     desk,
     docs,
     gate,
+    handoff,
     harness_guard,
     hooks,
     init_queue,
@@ -69,6 +70,7 @@ app.add_typer(backlog.app, name="backlog", help="Backlog curation commands.")
 app.add_typer(desk.app, name="desk", help="Review cockpit for awaiting_merge tasks.")
 app.add_typer(docs.app, name="docs", help="Documentation linting and syncing.")
 app.add_typer(gate.app, name="gate", help="Fail-closed verdict writer and review board renderer.")
+app.add_typer(handoff.app, name="handoff", help="Run-scoped handoff note commands.")
 app.add_typer(hooks.app, name="hooks", help="Git hook installation and management.")
 app.add_typer(learnings.app, name="learnings", help="Append-only learning journal commands.")
 app.add_typer(plan.app, name="plan", help="Plan-quality commands.")

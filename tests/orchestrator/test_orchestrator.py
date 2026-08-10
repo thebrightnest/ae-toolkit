@@ -4057,5 +4057,161 @@ class TestQaFreshnessInjection(unittest.TestCase):
             self.assertIn("do NOT re-run", " ".join(captured["cmd"]))
 
 
+class TestHandoffInjection(unittest.TestCase):
+    """The orchestrator injects a run-scoped handoff note into stage prompts."""
+
+    def _write_handoff_note(self, repo: str, run_id: str = "run-test") -> None:
+        from aet import handoff
+
+        handoff.append_entry(
+            repo,
+            run_id,
+            stage="plan-approved",
+            decisions=["use JSON"],
+            pre_existing_failures=["flaky integration"],
+            validation_commands=["make test"],
+            evidence_path="/path/to/evidence.json",
+            recorded_at="2026-08-10T09:30:00+00:00",
+        )
+
+    def _capture_run_stage(self, repo: str, run_id: str = "run-test") -> dict:
+        captured: dict = {}
+
+        def fake_spawn(adapter, cmd, worktree_dir, env, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = env
+            return 0, None, None, ""
+
+        with patch.object(orchestrator, "_spawn_session_with_tail", side_effect=fake_spawn):
+            orchestrator.run_stage(
+                _FAKE_ADAPTER,
+                repo,
+                str(Path(repo) / "docs" / "plans" / "demo.md"),
+                repo,
+                ["aet-implement"],
+                "plan-approved",
+                "implemented",
+                task_id="demo",
+                run_id=run_id,
+            )
+        return captured
+
+    def test_handoff_note_injects_block_for_next_stage(self):
+        with tempfile.TemporaryDirectory() as repo:
+            _init_git_repo(repo)
+            self._write_handoff_note(repo)
+            captured = self._capture_run_stage(repo)
+            prompt = " ".join(captured["cmd"])
+            self.assertIn("Run handoff note", prompt)
+            self.assertIn("[stage: plan-approved]", prompt)
+            self.assertIn("decisions: use JSON", prompt)
+            self.assertIn("pre-existing failures: flaky integration", prompt)
+            self.assertIn("validation commands: make test", prompt)
+            self.assertIn("evidence path: /path/to/evidence.json", prompt)
+
+    def test_missing_handoff_note_keeps_prompt_identical(self):
+        with tempfile.TemporaryDirectory() as repo:
+            _init_git_repo(repo)
+            captured = self._capture_run_stage(repo)
+            prompt_with_empty_clause = orchestrator.build_prompt(
+                ["aet-implement"],
+                str(Path(repo) / "docs" / "plans" / "demo.md"),
+                "plan-approved",
+                "implemented",
+            )
+            self.assertEqual(captured["cmd"][-1], prompt_with_empty_clause)
+
+    def test_handoff_clause_never_raises_on_bad_paths(self):
+        # A missing repo yields an empty clause, never an exception.
+        self.assertEqual(orchestrator._handoff_clause("/nope", "run-test"), "")
+
+    def test_handoff_note_injects_block_in_group_prompt(self):
+        with tempfile.TemporaryDirectory() as repo:
+            _init_git_repo(repo)
+            self._write_handoff_note(repo)
+            captured: dict = {}
+
+            def fake_spawn(adapter, cmd, worktree_dir, env, **kwargs):
+                captured["cmd"] = cmd
+                captured["env"] = env
+                return 0, None, None, ""
+
+            stages = [
+                WorkflowStage(
+                    name="implemented",
+                    skills=["aet-implement"],
+                    evidence=None,
+                    gate_key=None,
+                ),
+            ]
+            workflow = Workflow(
+                version=1,
+                name="test",
+                done_state="done",
+                stages=stages,
+                stage_map={s.name: s for s in stages},
+                execution_policy=ExecutionPolicy(session_groups=[["implemented"]]),
+                routing=Routing(default={"harness": "test", "model": None}, by_stage={}),
+            )
+            with patch.object(orchestrator, "_spawn_session_with_tail", side_effect=fake_spawn):
+                orchestrator.run_stage_group(
+                    _FAKE_ADAPTER,
+                    repo,
+                    str(Path(repo) / "docs" / "plans" / "demo.md"),
+                    repo,
+                    stages,
+                    task_id="demo",
+                    run_id="run-test",
+                    workflow=workflow,
+                )
+            prompt = " ".join(captured["cmd"])
+            self.assertIn("Run handoff note", prompt)
+            self.assertIn("decisions: use JSON", prompt)
+
+    def test_missing_handoff_note_keeps_group_prompt_identical(self):
+        with tempfile.TemporaryDirectory() as repo:
+            _init_git_repo(repo)
+            captured: dict = {}
+
+            def fake_spawn(adapter, cmd, worktree_dir, env, **kwargs):
+                captured["cmd"] = cmd
+                return 0, None, None, ""
+
+            stages = [
+                WorkflowStage(
+                    name="implemented",
+                    skills=["aet-implement"],
+                    evidence=None,
+                    gate_key=None,
+                ),
+            ]
+            workflow = Workflow(
+                version=1,
+                name="test",
+                done_state="done",
+                stages=stages,
+                stage_map={s.name: s for s in stages},
+                execution_policy=ExecutionPolicy(session_groups=[["implemented"]]),
+                routing=Routing(default={"harness": "test", "model": None}, by_stage={}),
+            )
+            with patch.object(orchestrator, "_spawn_session_with_tail", side_effect=fake_spawn):
+                orchestrator.run_stage_group(
+                    _FAKE_ADAPTER,
+                    repo,
+                    str(Path(repo) / "docs" / "plans" / "demo.md"),
+                    repo,
+                    stages,
+                    task_id="demo",
+                    run_id="run-test",
+                    workflow=workflow,
+                )
+            prompt_with_empty_clause = orchestrator.build_stage_group_prompt(
+                str(Path(repo) / "docs" / "plans" / "demo.md"),
+                stages,
+                workflow,
+            )
+            self.assertEqual(captured["cmd"][-1], prompt_with_empty_clause)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -56,7 +56,7 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 - [ ] `aet context` emits the full preamble battery as JSON + banner, honors `PRIME.md` override and both hook modes, and the 16 preamble blocks + 11 banners are deleted from skills (satisfies: R-3, R-4)
 - [ ] `aet context` output includes the generated current-rules digest and promoted learnings; no hand-maintained copy of either exists (satisfies: R-5)
 - [ ] A diff touching a response shape and its client consumer fails the gate without an agreement test; a plan introducing a second identifier for one entity fails without naming both (satisfies: R-6, R-7)
-- [ ] A run's review-stage prompt contains the handoff note written by its implement session; the note records all four fields (satisfies: R-8)
+- [x] A run's review-stage prompt contains the handoff note written by its implement session; the note records all four fields (satisfies: R-8)
 - [ ] `aet docs lint` fails on a deliberately introduced dual-live-rule subject; the three known contradictions are gone (satisfies: R-9)
 - [ ] The CLI reference carries `AUTO-GENERATED` and is reproducible from the command tree; stale mirrors are deleted (satisfies: R-10)
 - [ ] Merged plans no longer occupy the live `docs/plans/` scan set; closure moves them to `archive/` (satisfies: R-11)
@@ -82,7 +82,6 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 
 ## Divergence Summary
 
-<<<<<<< HEAD
 _Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
 
 ### Changed from plan
@@ -121,8 +120,7 @@ No meaningful divergences between the t2r-02 plan and the implementation.
 
 ---
 
-=======
-_Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command_
+*Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command*
 
 ### Changed from plan
 
@@ -134,15 +132,15 @@ _Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command_
 
 ---
 
-_Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command_
+*Recorded: 2026-08-10 — Branch: t2r-10-run-handoff-note*
 
 ### Changed from plan
 
-- R-3 (`aet context`) implemented as specified in `docs/plans/t2r-04-aet-context-command.md`; no material contract changes.
+- R-8 implemented as specified; no material contract changes.
 
 ### Deferred
 
-- t2r-04 task 10 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
+- t2r-10 task 8 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
 
 ---
 

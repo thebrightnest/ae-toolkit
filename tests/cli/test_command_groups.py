@@ -310,6 +310,7 @@ class TestNounGroups(unittest.TestCase):
         "desk",
         "docs",
         "gate",
+        "handoff",
         "hooks",
         "learnings",
         "plan",

@@ -39,14 +39,17 @@ Staff-level diff review with multiple lenses.
 
 **Procedure:**
 
-1. Read the git diff for the current branch scoped to the PR base:
+1. **Consume the run handoff note.** If the orchestrator injected a handoff
+   block into the stage prompt, treat its decisions and pre-existing failures
+   as settled inputs — they are not review targets.
+2. Read the git diff for the current branch scoped to the PR base:
    - Determine the PR base: `origin/main` unless the branch was created from another branch, in which case use that parent branch.
    - Compute it with `git merge-base HEAD origin/main` or `git merge-base HEAD <parent-branch>`.
    - Review `git diff <base>..HEAD` (not `git diff` against the working tree).
    - If the user explicitly specified files, review those files instead of the diff.
-2. Read the corresponding `docs/plans/{ticket}-plan.md` to compare implementation against plan
-3. **Noise filtering:** ignore changes to project-level noise files — `.gitignore`, `AGENTS.md`, `docs/CONVENTIONS.md`, and similar project-level documentation — unless the task explicitly modifies them. Treat them as noise, not review signal. A noise file is considered in-scope only when the task's acceptance criteria or plan explicitly names it; otherwise skip it.
-4. Run through review lenses:
+3. Read the corresponding `docs/plans/{ticket}-plan.md` to compare implementation against plan
+4. **Noise filtering:** ignore changes to project-level noise files — `.gitignore`, `AGENTS.md`, `docs/CONVENTIONS.md`, and similar project-level documentation — unless the task explicitly modifies them. Treat them as noise, not review signal. A noise file is considered in-scope only when the task's acceptance criteria or plan explicitly names it; otherwise skip it.
+5. Run through review lenses:
 
    - **Project Structure** — do new files/directories follow the same pattern as existing ones? If the project uses symlinks, are new entries created in the real location (symlink target) and linked correctly? Run `ls -la` on the parent directory for any path where new files were created.
    - **Architecture** — does the change fit the existing structure? Are modules deep or shallow?
@@ -65,9 +68,9 @@ Staff-level diff review with multiple lenses.
 
    - **Removal Safety** — if the diff deletes symbols from bridge, API, registry, preload, or handler files, extract the deleted names and grep the codebase for remaining references. Flag any matches.
 
-5. For each issue found: classify as fix-now or flag-for-human
-6. Auto-fix obvious issues (typos, style, missing imports)
-7. Produce a review report:
+6. For each issue found: classify as fix-now or flag-for-human
+7. Auto-fix obvious issues (typos, style, missing imports)
+8. Produce a review report:
    - Determine the task ID from the active plan filename or branch name
    - Write the report to `/tmp/aet-reports/{task-id}/review-report.md`
    - Include: pass/fail status, issues found, auto-fixes applied, human flags
@@ -82,6 +85,20 @@ aet gate submit --stage review --verdict <pass|fail> --evidence <payload-file>
 ```
 
 Write `<payload-file>` to a scratch path outside the tracked tree. The payload follows the `review` schema expected by `aet gate submit`; consult the command help or reference docs for the current fields.
+
+After submitting the verdict, if `AET_RUN_ID` is set, append the review handoff
+entry so later stages inherit the verdict and evidence path:
+
+```bash
+aet handoff append \
+  --stage reviewed \
+  --decision "<review decisions taken>" \
+  --pre-existing-failure "<pre-existing failures observed>" \
+  --validation-command "<commands run>" \
+  --evidence-path "<path to the review evidence payload>"
+```
+
+Do not hand-edit `.agents/runs/<run-id>/handoff.json`; use `aet handoff append`.
 
 ### `codex-review`
 
