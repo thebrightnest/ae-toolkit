@@ -702,10 +702,10 @@ def commit_and_push_plan_change(
             # Parent exists as a non-directory; let git mv report the failure.
             pass
 
-        # git mv requires the source to be tracked. Plans in the live corpus
-        # are normally already committed, but freshly created test repos may
-        # need the file staged first.
-        _run_git("add", plan_rel, cwd=repo_root)
+        # git mv requires the source to be tracked or staged. Live plans may be
+        # gitignored transient working copies, so force-add to stage them before
+        # the archival move.
+        _run_git("add", "-f", plan_rel, cwd=repo_root)
 
         rc, _, err = _run_git("mv", plan_rel, archive_rel, cwd=repo_root)
         if rc != 0:
@@ -715,7 +715,7 @@ def commit_and_push_plan_change(
             )
             return rc
     else:
-        rc, _, err = _run_git("add", plan_rel, cwd=repo_root)
+        rc, _, err = _run_git("add", "-f", plan_rel, cwd=repo_root)
         if rc != 0:
             print(f"git add failed for {plan_abs}: {err}", file=sys.stderr)
             return rc
