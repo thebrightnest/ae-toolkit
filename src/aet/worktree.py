@@ -13,6 +13,14 @@ def _run_git(args: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], **kwargs)
 
 
+def _configured_remotes(repo_root: str) -> set[str]:
+    """Return the names of remotes configured in ``repo_root``."""
+    result = _run_git(["-C", repo_root, "remote"], capture_output=True, text=True)
+    if result.returncode != 0:
+        return set()
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
 def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/main") -> str:
     """Create or refresh a git worktree for the task. Return the worktree path.
 
@@ -20,15 +28,24 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
     worktrees do not accidentally inherit commits from the parent session's
     current branch. Existing worktrees are refreshed: ``base_branch`` is fetched
     and the branch is rebased onto it when it has advanced.
+
+    ``base_branch`` may also be a local ref — a project with no remote, or an
+    integration branch that has not been pushed. Local bases are used as-is;
+    there is nothing to fetch. See ``branch_ref.resolve_base_ref``.
     """
     worktree_dir = os.path.join(repo_root, ".worktrees", task_id)
     branch_name = task_id
     base = base_branch
 
     # Parse remote/ref from a remote-tracking base branch (e.g. origin/main).
+    # The leading segment must name a configured remote: branch names contain
+    # slashes too (``fix/catalog-job-runtime``), and treating one as a remote
+    # would issue a bogus fetch and mis-drive the refresh path below.
     fetch_remote = fetch_ref = ""
     if "/" in base:
-        fetch_remote, _, fetch_ref = base.partition("/")
+        candidate_remote, _, candidate_ref = base.partition("/")
+        if candidate_remote in _configured_remotes(repo_root):
+            fetch_remote, fetch_ref = candidate_remote, candidate_ref
 
     # Refresh the base branch in the main repo.
     if fetch_remote and fetch_ref:
