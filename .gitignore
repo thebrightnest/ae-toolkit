@@ -20,3 +20,5 @@ aet-work-*.log
 .agents/work-archive.json
 .venv
 .coverage
+# Live plans are transient working copies; durable state is in docs/plans/archive/
+docs/plans/*.md
