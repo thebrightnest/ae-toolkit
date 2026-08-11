@@ -58,7 +58,7 @@ validation, not a diff task here.
 
 ## Task List
 
-1. New module `src/aet/boundary.py`: path classifier (default pattern tables
+1. ✓ New module `src/aet/boundary.py`: path classifier (default pattern tables
    for response-shape files — serializers/controllers/schemas/resources/DTOs —
    and client-consumer files — components/repositories/api-clients/hooks/stores;
    overridable via a `boundary_contract` key in `.agents/aet-config.json`,
@@ -67,10 +67,10 @@ validation, not a diff task here.
    consumer files and searches test files for an agreement test (a test
    referencing both sides, or using the boundary-mock marker vocabulary).
    Covered by new `tests/test_boundary.py` (unit). — M (traces: R-6)
-2. Register the new module in the `src/aet/change_scope.py` `_PATH_TARGETS`
+2. ✓ Register the new module in the `src/aet/change_scope.py` `_PATH_TARGETS`
    table (`src/aet/boundary.py` → `tests/test_boundary.py`) so ADR-049 scoping
    stays complete. — S (traces: R-6)
-3. `src/aet/cli/gate.py`: on `gate submit --stage review` (builder and
+3. ✓ `src/aet/cli/gate.py`: on `gate submit --stage review` (builder and
    `--evidence` modes alike), run `boundary.check()` over
    `change_scope.changed_paths()`; when the lens trips (both sides touched, no
    agreement test), refuse the verdict with a named error and exit 1 even when
@@ -79,17 +79,17 @@ validation, not a diff task here.
    payload's `findings` and in the ledger `verdict` event `payload`.
    Covered by extending `tests/gate/test_gate_submit.py` (integration). — M
    (traces: R-6)
-4. Update `skills/aet-review/SKILL.md` Tests lens to state the
+4. ✓ Update `skills/aet-review/SKILL.md` Tests lens to state the
    boundary-contract half is enforced mechanically at `aet gate submit`
    (reviewer judgment no longer carries it); update
    `skills/aet-review/references/test-coverage-check.md` §3 to point at the
    code gate, retiring its shell heuristic. — S (traces: R-6)
-5. Add ADR-057 (new file `057-boundary-contract-lens-in-code.md` under
+5. ✓ Add ADR-057 (new file `057-boundary-contract-lens-in-code.md` under
    `docs/adr/`) recording the carrier
    decision and the supersession of cov-04's part (b); register it in the
    `docs/adr/README.md` index (056 is allocated to t2r-06's
    `056-adr-relations-as-frontmatter.md`). — S (traces: R-6)
-6. Merge branch to main and verify integration — S
+6. [Deferred: to `aet-ship` closure] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -170,5 +170,5 @@ valid additive facts.
 
 ---
 
-*Stage: secure*
-*Next step: run `aet-sync-docs`, then `aet-ship`*
+*Stage: synced*
+*Next step: run `aet-ship`*
