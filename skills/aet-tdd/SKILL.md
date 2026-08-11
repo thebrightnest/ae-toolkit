@@ -15,21 +15,13 @@ Test-driven development for agentic engineering. Write behavior-driven tests thr
 - Code exists but lacks tests and the user wants to backfill with TDD discipline
 - Refactoring existing code and the user wants tests as safety rails
 
-## Before You Start
+## Context
 
-Before executing any command in this skill, collect the following context:
+Run `aet context` and parse its JSON for session context (branch, repo
+state, AGENTS.md, learnings, active plan/PRD stage); print the stage
+banner it emits. Do not ask the user for this context manually.
 
-- `BRANCH` — current git branch
-- `REPO_STATE` — clean / dirty / merge-conflict
-- `AGENTS_MD` — presence and last-modified date of AGENTS.md
 - `TEST_SETUP` — test runner, coverage tool, existing test patterns
-- `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
-- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
-- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
-
-Use this context to ground all recommendations. Do not ask the user to provide it manually.
-
-If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Philosophy
 

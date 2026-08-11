@@ -25,23 +25,14 @@ This skill is **validation-only**. No application source code is written, modifi
 
 If validation reveals that code changes are needed, stop and redirect to `aet-plan` or aet-work.
 
-## Before You Start
+## Context
 
-Before executing any command in this skill, collect the following context:
+Run `aet context` and parse its JSON for session context (branch, repo
+state, AGENTS.md, learnings, active plan/PRD stage); print the stage
+banner it emits. Do not ask the user for this context manually.
 
-- `BRANCH` — current git branch
-- `REPO_STATE` — clean / dirty / merge-conflict
-- `AGENTS_MD` — presence and last-modified date of AGENTS.md
 - `CONTEXT_MD` — presence and last-modified date of CONTEXT.md (or CONTEXT-MAP.md)
 - `DOCS_ADR` — presence of docs/adr/ and count of ADRs
-- `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
-- `ACTIVE_PLAN` — any `docs/plans/*.md` or `docs/prds/*.md` modified in last 7 days
-- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
-- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
-
-Use this context to ground all recommendations. Do not ask the user to provide it manually.
-
-If a stage is found, print at the start of execution: `"📍 Current stage: {stage}."`
 
 ## Commands
 

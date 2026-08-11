@@ -14,24 +14,15 @@ Live verification that captures observed evidence of behavior in the running sys
 - **Reproduction mode** — when investigating a bug report; reproduce the issue and capture steps + evidence
 - Skip entirely for trivial and normal work-class tasks
 
-## Shared Preamble
+## Context
 
-Before executing any command in this skill, collect the following context:
+Run `aet context` and parse its JSON for session context (branch, repo
+state, AGENTS.md, learnings, active plan/PRD stage); print the stage
+banner it emits. Do not ask the user for this context manually.
 
-- `BRANCH` — current git branch
-- `REPO_STATE` — clean / dirty / merge-conflict
-- `AGENTS_MD` — presence and last-modified date of AGENTS.md
-- `LEARNINGS` — top-3 relevant entries from `.agents/learnings.jsonl` (if exists)
-- `ACTIVE_PLAN` — any `docs/plans/*.md` modified in last 7 days
 - `WORK_CLASS` — from the plan footer (`*Work class:`) or infer from task scope (trivial / normal / critical)
 - `SMOKE_CMD` — the project's smoke command (`make smoke`, `npm run smoke`, etc.) or check `.agents/smoke/`
 - `QA_REPORT_PATH` — `/tmp/aet-reports/{task-id}/qa-report.md` (standard aet-qa output location)
-- `ACTIVE_PRD_STAGE` — current `*Stage:` value from the most-recently-modified `docs/prds/*.md` footer (if exists)
-- `ACTIVE_PLAN_STAGE` — current `*Stage:` value from the most-recently-modified `docs/plans/*.md` footer (if exists)
-
-Use this context to ground all recommendations. Do not ask the user to provide it manually.
-
-If a work class is found, print at the start of execution: `"📍 Work class: {class} — running verification accordingly."`
 
 ## Commands
 
