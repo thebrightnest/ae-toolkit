@@ -91,7 +91,7 @@ class TestShipClosure(unittest.TestCase):
                 "",
                 "",
             ),
-            ("git", "add", plan_rel): (0, "", ""),
+            ("git", "add", "-f", plan_rel): (0, "", ""),
             ("git", "diff", "--cached", "--quiet"): (1, "", ""),
             ("git", "commit", "-m", "chore(t1): mark plan stage merged"): (
                 0,
@@ -389,7 +389,7 @@ class TestShipClosure(unittest.TestCase):
         responses = self._success_responses()
         stem_abs = os.path.realpath(str(stem_plan))
         stem_rel = os.path.relpath(stem_abs, os.path.realpath(str(self.queue_path.parent)))
-        responses[("git", "add", stem_rel)] = (0, "", "")
+        responses[("git", "add", "-f", stem_rel)] = (0, "", "")
         responses[("git", "commit", "-m", "chore(fallback-stem): mark plan stage merged")] = (
             0,
             "",
@@ -397,7 +397,7 @@ class TestShipClosure(unittest.TestCase):
         )
         t1_abs = os.path.realpath(str(self.plan_path))
         t1_rel = os.path.relpath(t1_abs, os.path.realpath(str(self.queue_path.parent)))
-        responses.pop(("git", "add", t1_rel), None)
+        responses.pop(("git", "add", "-f", t1_rel), None)
         responses.pop(("git", "commit", "-m", "chore(t1): mark plan stage merged"), None)
 
         with patch.object(
