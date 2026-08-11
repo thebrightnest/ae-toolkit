@@ -203,5 +203,5 @@ surface; default grouping applies, no isolation override warranted.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
