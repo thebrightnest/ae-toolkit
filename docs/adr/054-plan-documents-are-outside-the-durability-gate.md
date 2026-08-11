@@ -150,3 +150,15 @@ unrecoverable and documents whose loss is not.
 6. **Keep the gate and have `aet sprint add` auto-commit silently** — Rejected.
    It is today's behavior with the refusal hidden; the operator still gets
    bookkeeping commits on the integration branch before any code exists.
+
+## Addendum (2026-08-11): gitignored live plans require force-add
+
+Repos may ignore `docs/plans/*.md` so transient live plans stay out of
+`git status` (this repo does, `.gitignore:24`). Gitignore rules still apply
+inside task worktrees, so every code path that stages a plan path by explicit
+name must use `git add -f`. Both known paths do: closure/archival
+(`src/aet/queue.py`, fixed in `95fb26e`) and the task-branch seed
+(`seed_task_plan`, `src/aet/worktree.py`, fixed the same day the gap
+quarantined `t2r-07`). Seed failures now also record an `environment` failure
+signature with stage `seed`, so triage sees the real cause instead of an empty
+signature. Any future plan-path staging must follow the same rule.

@@ -219,8 +219,10 @@ def seed_task_plan(
     if present:
         return False
 
+    # Live plans may be gitignored transient working copies (ADR-054), so
+    # force-add to stage them for the seed commit.
     add = subprocess.run(
-        ["git", "-C", worktree_dir, "add", "--", rel_path],
+        ["git", "-C", worktree_dir, "add", "-f", "--", rel_path],
         capture_output=True,
         text=True,
     )

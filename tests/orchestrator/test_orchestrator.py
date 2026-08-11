@@ -590,6 +590,47 @@ class TestProcessTaskPlanPresence(unittest.TestCase):
                 )
 
 
+class TestSeedFailureSignature(unittest.TestCase):
+    def test_seed_failure_records_environment_signature(self):
+        """A seed_task_plan failure records a signature so triage gets context."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with patch.object(
+                orchestrator,
+                "seed_task_plan",
+                side_effect=RuntimeError("Could not stage docs/plans/demo.md"),
+            ):
+                result = orchestrator.process_task(
+                    task, repo_root, _FAKE_ADAPTER, "standard"
+                )
+
+            self.assertFalse(result)
+            signatures = task.get("failure_signatures", [])
+            self.assertEqual(len(signatures), 1)
+            entry = signatures[-1]
+            self.assertEqual(entry["class"], "environment")
+            self.assertEqual(entry["stage"], "seed")
+            self.assertIn("Could not stage", entry["tail_preview"])
+            self.assertTrue(entry["signature"])
+
+
 def _write_queue(repo_root: str, tasks: list[dict]) -> str:
     """Write a wrapper-format queue file and return its path."""
     queue_file = os.path.join(repo_root, ".agents", "work-queue.json")

@@ -1268,6 +1268,13 @@ def process_task(
             print(f"   🌱 Seeded plan commit for {task_id}")
     except RuntimeError as exc:
         print(f"   ❌ {exc}")
+        _record_failure_on_task(
+            backend,
+            task,
+            failure_lib.FailureClass.ENVIRONMENT,
+            "seed",
+            str(exc),
+        )
         return False
 
     # Warm up configured worktree dependencies.

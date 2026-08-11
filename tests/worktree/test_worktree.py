@@ -834,6 +834,42 @@ class TestSeedTaskPlan(unittest.TestCase):
             self.assertIn("docs/plans/decoy-plan.md", status)
             self.assertIn("docs/prds/decoy-prd.md", status)
 
+    def test_seeds_gitignored_plan(self):
+        """A live plan ignored by .gitignore (ADR-054) is still force-staged."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            Path(repo_root, ".gitignore").write_text(
+                "docs/plans/*.md\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "-C", repo_root, "add", ".gitignore"], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "ignore live plans"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
+
+            plan = Path(repo_root, "docs", "plans", "task-001.md")
+            plan.parent.mkdir(parents=True, exist_ok=True)
+            plan.write_text("plan", encoding="utf-8")
+
+            worktree.copy_untracked_files(repo_root, worktree_dir)
+            seeded = worktree.seed_task_plan(
+                repo_root, worktree_dir, str(plan), "task-001", "main"
+            )
+            self.assertTrue(seeded)
+
+            tracked = subprocess.run(
+                ["git", "-C", worktree_dir, "ls-files", "docs/plans/task-001.md"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(tracked, "docs/plans/task-001.md")
+
     def test_skips_when_base_carries_plan(self):
         """Seeding is skipped when the integration base already has the plan path."""
         with tempfile.TemporaryDirectory() as repo_root:
