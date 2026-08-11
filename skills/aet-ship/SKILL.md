@@ -20,7 +20,8 @@ Pre-merge gate, PR creation, merge, and post-merge closure for AET tasks.
 - `aet ship <plan_file|task_id>` — run the gate, then open a PR.
 - `aet ship gate <plan_file|task_id>` — run the pre-merge gate only.
 - `aet ship open <plan_file|task_id>` — run the gate and open a PR.
-- `aet ship merge <plan_file|task_id> --branch <target>` — run the gate, detect conflicts against the target branch, merge directly into it, and record closure. `--branch` defaults to the resolved trunk branch.
+- `aet ship merge <plan_file|task_id> [--branch <target>]` — run the gate, detect conflicts against the target branch, merge directly into it, and record closure. `--branch` defaults to the resolved trunk branch.
+- `aet ship split <plan_file|task_id> --message <msg> --paths <path>...` — split a monolithic PR range into logical commits. Repeat `--message`/`--paths` pairs in order. Fails closed if the resulting tree does not match the original HEAD.
 - `aet ship verify <task_id|plan> [--squash-fallback]` — verify a branch has merged without mutating queue or ledger state. Prints `<merge-sha> <strategy> (<match-kind>)`.
 - `aet ship close <plan_file>` — record post-merge closure (task id derived from plan frontmatter).
 - `aet ship close <task_id>` — record post-merge closure (plan derived from the queue task's `plan_file`).

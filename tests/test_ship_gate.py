@@ -104,6 +104,7 @@ class TestShipGateChecks(unittest.TestCase):
         """Default happy-path git responses (independent branch, no rebase needed)."""
         origin_main = "origin-main-sha"
         return {
+            ("git", "rev-parse", "--show-toplevel"): (0, "/repo\n", ""),
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "merge-base", "HEAD", "origin/main"): (0, f"{origin_main}\n", ""),
             ("git", "rev-parse", "origin/main"): (0, f"{origin_main}\n", ""),
@@ -122,9 +123,7 @@ class TestShipGateChecks(unittest.TestCase):
         # Make the branch independent but behind origin/main.
         responses[("git", "merge-base", "HEAD", "origin/main")] = (0, "old-merge-base\n", "")
         responses[("git", "rev-parse", "origin/main")] = (0, "origin-main-sha\n", "")
-        responses[
-            ("git", "rebase", "--onto", "origin/main", "old-merge-base", "feat-001")
-        ] = (1, "", "conflict")
+        responses[("git", "rebase", "--onto", "origin/main", "old-merge-base", "feat-001")] = (1, "", "conflict")
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
@@ -148,9 +147,7 @@ class TestShipGateChecks(unittest.TestCase):
         env = {"AET_SHIP_TEST_CMD": "false"}
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
@@ -165,9 +162,7 @@ class TestShipGateChecks(unittest.TestCase):
         }
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
         self.assertEqual(rc, 0)
@@ -178,14 +173,7 @@ class TestShipGateChecks(unittest.TestCase):
         if tasks is not None:
             task_block = "## Task List\n\n" + "\n".join(tasks) + "\n\n"
         self.plan_path.write_text(
-            "---\n"
-            "id: t1\n"
-            "status: awaiting_merge\n"
-            "---\n\n"
-            "# Plan T1\n\n"
-            f"{task_block}"
-            "---\n\n"
-            f"*Stage: {stage}*\n",
+            f"---\nid: t1\nstatus: awaiting_merge\n---\n\n# Plan T1\n\n{task_block}---\n\n*Stage: {stage}*\n",
             encoding="utf-8",
         )
 
@@ -196,9 +184,7 @@ class TestShipGateChecks(unittest.TestCase):
         env = {"AET_SHIP_TEST_CMD": "true"}
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
         self.assertEqual(rc, 0)
@@ -209,9 +195,7 @@ class TestShipGateChecks(unittest.TestCase):
         responses = self._base_responses()
         env = {"AET_SHIP_TEST_CMD": "true"}
 
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
@@ -223,9 +207,7 @@ class TestShipGateChecks(unittest.TestCase):
         responses = self._base_responses()
         env = {"AET_SHIP_TEST_CMD": "true"}
 
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
@@ -237,9 +219,7 @@ class TestShipGateChecks(unittest.TestCase):
         responses = self._base_responses()
         env = {"AET_SHIP_TEST_CMD": "true"}
 
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
@@ -259,9 +239,7 @@ class TestShipGateChecks(unittest.TestCase):
         responses = self._base_responses()
         env = {"AET_SHIP_TEST_CMD": "true"}
 
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
@@ -278,9 +256,7 @@ class TestShipGateChecks(unittest.TestCase):
         )
         env = {"AET_SHIP_TEST_CMD": "true"}
 
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
@@ -292,9 +268,7 @@ class TestShipGateChecks(unittest.TestCase):
         responses = self._base_responses()
         env = {"AET_SHIP_TEST_CMD": "true"}
 
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
                 rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
 
@@ -358,9 +332,7 @@ class TestShipGateIntegration(unittest.TestCase):
         self.addCleanup(os.chdir, self.cwd)
 
     def _git(self, *args):
-        return subprocess.run(
-            ["git", *args], cwd=str(self.clone), check=True, capture_output=True, text=True
-        )
+        return subprocess.run(["git", *args], cwd=str(self.clone), check=True, capture_output=True, text=True)
 
     def test_gate_integration_happy_path(self):
         """The full gate runs successfully against a real git repo."""
@@ -369,3 +341,26 @@ class TestShipGateIntegration(unittest.TestCase):
         with patch.dict(os.environ, env):
             rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
         self.assertEqual(rc, 0)
+
+    def test_gate_uses_non_main_trunk_when_origin_head_points_elsewhere(self):
+        """When refs/remotes/origin/HEAD points at a non-main branch, gate uses it."""
+        # Create and push a develop branch, then make it the remote HEAD symbol.
+        self._git("checkout", "-b", "develop")
+        self._git("push", "-u", "origin", "develop")
+        self._git("remote", "set-head", "origin", "develop")
+        self._git("checkout", "feat-001")
+        os.chdir(str(self.clone))
+        env = {"AET_SHIP_TEST_CMD": "true"}
+        commands: list[tuple[str, ...]] = []
+        original_run = ship.subprocess.run
+
+        def _recording_run(cmd, **kwargs):
+            commands.append(tuple(cmd))
+            return original_run(cmd, **kwargs)
+
+        with patch.dict(os.environ, env):
+            with patch.object(ship.subprocess, "run", side_effect=_recording_run):
+                rc = ship.cmd_gate(ship.parse_args(["gate", str(self.plan_path)]))
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(any(c[0] == "git" and c[1] == "merge-base" and "origin/develop" in c for c in commands))

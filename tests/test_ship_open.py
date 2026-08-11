@@ -121,16 +121,17 @@ class TestDeterminePrBase(unittest.TestCase):
 
     A branch whose fork point is behind origin/main (the normal state of a queued
     worktree once other plans have merged ahead of it) must resolve its PR base to
-    origin/main, not to its own name. The bug: the branch's own tip decoration
+    origin/main, not to itself. The bug: the branch's own tip decoration
     ``HEAD -> <branch>`` was stripped and returned as if it were a stacked parent,
     so ``gh pr create`` rejected head == base.
     """
 
-    def _walk_responses(self, log_stdout):
+    def _walk_responses(self, log_stdout, trunk_ref="origin/main"):
         """Git responses that force _determine_pr_base into the ancestry-path walk."""
         return {
-            ("git", "merge-base", "HEAD", "origin/main"): (0, "old-fork\n", ""),
-            ("git", "rev-parse", "origin/main"): (0, "new-main\n", ""),
+            ("git", "rev-parse", "--show-toplevel"): (0, "/repo\n", ""),
+            ("git", "merge-base", "HEAD", trunk_ref): (0, "old-fork\n", ""),
+            ("git", "rev-parse", trunk_ref): (0, "new-trunk\n", ""),
             (
                 "git",
                 "log",
@@ -143,13 +144,12 @@ class TestDeterminePrBase(unittest.TestCase):
 
     def test_behind_main_independent_branch_resolves_to_origin_main(self):
         """A branch merely behind origin/main bases its PR on origin/main, not itself."""
-        responses = self._walk_responses(
-            "22400d8c (HEAD -> feat-001, origin/feat-001) feat: do a thing\n"
-        )
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
-            self.assertEqual(ship._determine_pr_base(), "origin/main")
+        responses = self._walk_responses("22400d8c (HEAD -> feat-001, origin/feat-001) feat: do a thing\n")
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            stack = ship._determine_pr_base()
+        self.assertEqual(stack.base_ref, "origin/main")
+        self.assertIsNone(stack.parent)
+        self.assertEqual(stack.trunk_ref, "origin/main")
 
     def test_genuinely_stacked_branch_resolves_to_parent(self):
         """A branch stacked on a parent feature branch keeps the parent as its base."""
@@ -157,10 +157,22 @@ class TestDeterminePrBase(unittest.TestCase):
             "aaaaaaa (HEAD -> feat-child, origin/feat-child) child commit\n"
             "bbbbbbb (feat-parent, origin/feat-parent) parent commit\n"
         )
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
-            self.assertEqual(ship._determine_pr_base(), "feat-parent")
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            stack = ship._determine_pr_base()
+        self.assertEqual(stack.base_ref, "feat-parent")
+        self.assertEqual(stack.parent, "feat-parent")
+        self.assertEqual(stack.trunk_ref, "origin/main")
+
+    def test_stacked_branch_reports_position_and_trunk(self):
+        """The stack result names the parent branch, position, and resolved trunk."""
+        responses = self._walk_responses(
+            "aaaaaaa (HEAD -> feat-child, origin/feat-child) child commit\n"
+            "bbbbbbb (feat-parent, origin/feat-parent) parent commit\n"
+        )
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            stack = ship._determine_pr_base()
+        self.assertIn("PR", stack.position)
+        self.assertIn("feat-parent", stack.position)
 
 
 class TestShipOpenChecks(unittest.TestCase):
@@ -195,6 +207,7 @@ class TestShipOpenChecks(unittest.TestCase):
         """Default happy-path git responses (independent branch, no rebase)."""
         origin_main = "origin-main-sha"
         return {
+            ("git", "rev-parse", "--show-toplevel"): (0, "/repo\n", ""),
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "merge-base", "HEAD", "origin/main"): (
                 0,
@@ -231,9 +244,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
@@ -259,9 +270,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
@@ -270,9 +279,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
     def test_open_generates_changelog_entry(self):
         """The changelog entry references the plan and lists commit subjects."""
-        entry = ship._generate_changelog_entry(
-            ["feat: add open", "feat: wire parser"], self.plan_path
-        )
+        entry = ship._generate_changelog_entry(["feat: add open", "feat: wire parser"], self.plan_path)
         self.assertIn("Plan T1", entry)
         self.assertIn("t1", entry)
         self.assertIn("feat: add open", entry)
@@ -287,16 +294,12 @@ class TestShipOpenChecks(unittest.TestCase):
             "old-merge-base\n",
             "",
         )
-        responses[
-            ("git", "rebase", "--onto", "origin/main", "old-merge-base", "feat-001")
-        ] = (0, "", "")
+        responses[("git", "rebase", "--onto", "origin/main", "old-merge-base", "feat-001")] = (0, "", "")
         env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertEqual(rc, 0)
@@ -315,9 +318,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertEqual(rc, 0)
@@ -333,9 +334,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertEqual(rc, 0)
@@ -347,9 +346,7 @@ class TestShipOpenChecks(unittest.TestCase):
         os.chdir(self.tmpdir.name)
         responses = self._base_responses()
 
-        with patch.object(
-            ship.subprocess, "run", side_effect=_subprocess_mock(responses)
-        ):
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             rc = ship.cmd_open(ship.parse_args(["open", "no-such-task"]))
 
         self.assertNotEqual(rc, 0)
@@ -358,7 +355,7 @@ class TestShipOpenChecks(unittest.TestCase):
         """The PR body contains a scope-audit section when files are flagged."""
         body = ship._build_pr_body(
             self.plan_path,
-            "origin/main",
+            ship.StackInfo(trunk_ref="origin/main", base_ref="origin/main", parent=None, position=None),
             ["docs/plans/OTHER-01.md"],
             "changelog\n",
         )
@@ -368,22 +365,38 @@ class TestShipOpenChecks(unittest.TestCase):
     def test_open_pr_body_omits_scope_audit_when_empty(self):
         """The PR body has no scope-audit section when nothing is flagged."""
         body = ship._build_pr_body(
-            self.plan_path, "origin/main", [], "changelog\n"
+            self.plan_path,
+            ship.StackInfo(trunk_ref="origin/main", base_ref="origin/main", parent=None, position=None),
+            [],
+            "changelog\n",
         )
         self.assertNotIn("Scope audit", body)
 
     def test_open_pr_body_includes_stacked_warning_when_not_main(self):
         """The PR body warns when the base is a feature branch."""
         body = ship._build_pr_body(
-            self.plan_path, "origin/feat-parent", [], "changelog\n"
+            self.plan_path,
+            ship.StackInfo(
+                trunk_ref="origin/main",
+                base_ref="feat-parent",
+                parent="feat-parent",
+                position="PR 2 of 2",
+            ),
+            [],
+            "changelog\n",
         )
         self.assertIn("STACKED PR", body)
-        self.assertIn("origin/feat-parent", body)
+        self.assertIn("feat-parent", body)
+        self.assertIn("PR 2 of 2", body)
+        self.assertIn("origin/main", body)
 
     def test_open_pr_body_omits_stacked_warning_when_main(self):
         """The PR body has no stacked-PR warning when the base is origin/main."""
         body = ship._build_pr_body(
-            self.plan_path, "origin/main", [], "changelog\n"
+            self.plan_path,
+            ship.StackInfo(trunk_ref="origin/main", base_ref="origin/main", parent=None, position=None),
+            [],
+            "changelog\n",
         )
         self.assertNotIn("STACKED PR", body)
 
@@ -399,9 +412,7 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
@@ -419,13 +430,91 @@ class TestShipOpenChecks(unittest.TestCase):
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
-            with patch.object(
-                ship.subprocess, "run", side_effect=_open_mock(responses, commands)
-            ):
+            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
                 rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
+
+    def test_open_stacked_branch_prints_trunk_in_stop_note(self):
+        """The terminal stop-note names the resolved trunk, not hardcoded main."""
+        stack = ship.StackInfo(
+            trunk_ref="origin/trunk",
+            base_ref="origin/feat-parent",
+            parent="feat-parent",
+            position="PR 2 of 2",
+        )
+        gate_result = ship.GateResult(
+            ok=True,
+            pr_base="origin/feat-parent",
+            stack=stack,
+            rebased=False,
+            scope_audit=[],
+            dry_run=False,
+            message="Gate passed.",
+        )
+        with (
+            patch.object(ship, "_run_gate", return_value=gate_result),
+            patch.object(ship, "_check_release_guard", return_value=None),
+            patch.object(ship, "_is_monolithic_commit", return_value=False),
+            patch.object(ship, "_push_branch", return_value=(True, "")),
+            patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")),
+        ):
+            from io import StringIO
+
+            stdout_capture = StringIO()
+            with patch.object(sys, "stdout", stdout_capture):
+                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+        self.assertEqual(rc, 0)
+        output = stdout_capture.getvalue()
+        self.assertIn("STACKED PR", output)
+        self.assertIn("trunk", output)
+        self.assertNotIn("main", output)
+
+    def test_open_stacked_branch_writes_cut_ledger_event(self):
+        """A successful stacked PR open records a cut/pr ledger fact."""
+        stack = ship.StackInfo(
+            trunk_ref="origin/main",
+            base_ref="origin/feat-parent",
+            parent="feat-parent",
+            position="PR 2 of 2",
+        )
+        gate_result = ship.GateResult(
+            ok=True,
+            pr_base="origin/feat-parent",
+            stack=stack,
+            rebased=False,
+            scope_audit=[],
+            dry_run=False,
+            message="Gate passed.",
+        )
+        captured = []
+
+        def fake_write_event(**kwargs):
+            captured.append(kwargs)
+            return {"id": "fake"}
+
+        with (
+            patch.object(ship, "_run_gate", return_value=gate_result),
+            patch.object(ship, "_check_release_guard", return_value=None),
+            patch.object(ship, "_is_monolithic_commit", return_value=False),
+            patch.object(ship, "_push_branch", return_value=(True, "")),
+            patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")),
+            patch.object(ship.Ledger, "write_event", side_effect=fake_write_event),
+        ):
+            rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(captured), 1)
+        event = captured[0]
+        self.assertEqual(event["source"], "aet-ship")
+        self.assertEqual(event["task"], "t1")
+        self.assertEqual(event["kind"], "cut")
+        self.assertEqual(event["ref"], "https://github.com/org/repo/pull/99")
+        self.assertEqual(event["ref_kind"], "pr")
+        self.assertEqual(event["payload"]["pr_base"], "origin/feat-parent")
+        self.assertTrue(event["payload"]["stacked"])
+        self.assertEqual(event["payload"]["parent"], "feat-parent")
 
 
 class TestShipOpenIntegration(unittest.TestCase):
@@ -441,9 +530,7 @@ class TestShipOpenIntegration(unittest.TestCase):
         self.clone = base / "repo"
         self.clone.mkdir()
 
-        subprocess.run(
-            ["git", "init", "--bare", str(self.origin)], check=True, capture_output=True
-        )
+        subprocess.run(["git", "init", "--bare", str(self.origin)], check=True, capture_output=True)
         subprocess.run(
             ["git", "clone", str(self.origin), str(self.clone)],
             check=True,
