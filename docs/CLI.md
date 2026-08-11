@@ -718,7 +718,7 @@ Generate a retro from AET telemetry, split by project-level and AET-level fixes.
 
 ### Options
 
-- `--archive-dir` *path* — Telemetry archive root (default: ~/.aet/telemetry). (default: `/Users/pedrorocha/.aet/telemetry`)
+- `--archive-dir` *path* — Telemetry archive root (default: ~/.aet/telemetry). (default: `~/.aet/telemetry`)
 - `--project-slug` *str* — Project slug in the telemetry archive (default: writer-derived <dir>/<label>).
 - `--lookback-days` *int* — How many days of telemetry to read for the current project (default: 7). (default: `7`)
 - `--output` *path* — Retro output path (default: docs/retros/YYYY-MM-DD-aet-retro.md).

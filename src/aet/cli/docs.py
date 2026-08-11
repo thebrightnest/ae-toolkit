@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -60,6 +61,23 @@ def _walk_commands(
             yield from _walk_commands(cmd, path)
 
 
+def _render_default(default: object) -> str:
+    """Render a default value with the user's home collapsed to ``~``.
+
+    Defaults derived from ``Path.home()`` — the telemetry archive root, for
+    one — otherwise bake the generating machine's home directory into the
+    committed reference. The generated file must be identical on every
+    machine, or the drift guard passes only for whoever last regenerated it.
+    """
+    text = str(default)
+    home = str(Path.home())
+    if text == home:
+        return "~"
+    if text.startswith(home + os.sep):
+        return "~" + text[len(home) :]
+    return text
+
+
 def _format_option(param: click.Parameter) -> str:
     """Format a click parameter as a markdown list item."""
     name = param.opts[0] if param.opts else param.name
@@ -69,10 +87,7 @@ def _format_option(param: click.Parameter) -> str:
     if param.help:
         parts.append(f"— {param.help}")
     if param.default is not None and not param.required:
-        default = param.default
-        if isinstance(default, Path):
-            default = str(default)
-        parts.append(f"(default: `{default}`)")
+        parts.append(f"(default: `{_render_default(param.default)}`)")
     if param.required:
         parts.append("(required)")
     return " ".join(parts)

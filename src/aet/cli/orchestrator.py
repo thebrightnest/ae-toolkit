@@ -64,7 +64,11 @@ from aet.backends.factory import (  # noqa: E402
     resolve_config,
     resolve_integration_mode,
 )
-from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
+from aet.branch_ref import (  # noqa: E402
+    resolve_base_ref,
+    resolve_integration_branch,
+    resolve_trunk_branch,
+)
 from aet.cli_adapter import resolve_cli_adapter  # noqa: E402
 from aet.integration_lock import (  # noqa: E402
     IntegrationFailureError,
@@ -2487,9 +2491,10 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     integration = resolve_integration_branch(
         repo_root, config, cli_base=getattr(args, "base", None)
     )
-    base_branch = f"origin/{integration.ref}"
+    base_branch = resolve_base_ref(repo_root, integration.ref)
     print(f"   Trunk: {trunk.ref} ({trunk.provenance})")
     print(f"   Integration: {integration.ref} ({integration.provenance})")
+    print(f"   Worktree base: {base_branch}")
 
     # Check base hygiene
     if not enforce_base_hygiene(repo_root, integration.ref, trunk.ref):
@@ -2906,7 +2911,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     integration = resolve_integration_branch(
         repo_root, config, cli_base=getattr(args, "base", None)
     )
-    base_branch = f"origin/{integration.ref}"
+    base_branch = resolve_base_ref(repo_root, integration.ref)
 
     # Check base hygiene before any worktree work — but only for top-level
     # run-one invocations. Batch children rely on the parent-level check.

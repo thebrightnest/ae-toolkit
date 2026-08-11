@@ -110,7 +110,19 @@ ADAPTERS: dict[str, CLIAdapter] = {
         workdir_flag=None,
         headless_flag="--dangerously-skip-permissions",
         usage_mode="json-envelope",
-        stall_timeout=1800.0,
+        # ``json-envelope`` adds ``--output-format json``, which emits a single
+        # envelope at exit and nothing before it. This adapter's observed silent
+        # interval is therefore the whole session, not a stage — so per ADR-053's
+        # own rule (exceed the observed silent interval) the stall timeout must
+        # equal the wall backstop. Below that it is not a stall detector at all
+        # but a shorter wall clock, and it killed healthy sessions at ~1800 s.
+        #
+        # The value cannot be lowered to restore real stall detection until the
+        # adapter emits incrementally (``--output-format stream-json``), and it
+        # must not be raised past ``wall_backstop``: ``run_single`` enforces no
+        # wall-clock timeout of its own (only ``run_batch`` does), so for
+        # ``aet run-one`` this is the sole ceiling on a session.
+        stall_timeout=7200.0,
         wall_backstop=7200.0,
     ),
 }

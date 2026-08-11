@@ -183,6 +183,10 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
             git_calls = _normalize(_git_only(recorder.calls), repo_root, worktree_dir)
 
             expected = [
+                # Read-only probe: a base is only fetched when its leading
+                # segment names a configured remote, so `fix/x` is not mistaken
+                # for remote `fix` + ref `x`.
+                ["git", "-C", "<repo>", "remote"],
                 ["git", "-C", "<repo>", "fetch", "origin", "main"],
                 ["git", "-C", "<repo>", "rev-parse", "origin/main"],
                 [

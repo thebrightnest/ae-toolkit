@@ -444,6 +444,66 @@ class TestNonMainBase(unittest.TestCase):
             ).stdout.strip()
             self.assertEqual(branch_sha, dev_sha)
 
+    def test_create_worktree_accepts_a_local_base_in_a_repo_with_no_remote(self):
+        """A project with no remote must still get a worktree off its trunk."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "init"], check=True
+            )
+            head = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            worktree_dir = worktree.create_worktree(repo_root, "task-local", "main")
+
+            self.assertTrue(os.path.isdir(worktree_dir))
+            branch_sha = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "task-local"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(branch_sha, head)
+
+    def test_create_worktree_treats_slashed_branch_name_as_a_local_base(self):
+        """``fix/x`` is a branch, not remote ``fix`` + ref ``x`` — the leading
+        segment is only a remote when it names a configured one."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "init"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "branch", "fix/catalog-job-runtime"], check=True
+            )
+            base_sha = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "fix/catalog-job-runtime"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            worktree_dir = worktree.create_worktree(
+                repo_root, "task-slashed", "fix/catalog-job-runtime"
+            )
+
+            self.assertTrue(os.path.isdir(worktree_dir))
+            branch_sha = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "task-slashed"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(branch_sha, base_sha)
+
     def test_remove_worktree_counts_against_non_main_base(self):
         """Cleanup counts against the resolved integration branch, not main."""
         with tempfile.TemporaryDirectory() as repo_root:

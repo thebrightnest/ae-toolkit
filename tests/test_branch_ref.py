@@ -5,7 +5,11 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch
+from aet.branch_ref import (
+    resolve_base_ref,
+    resolve_integration_branch,
+    resolve_trunk_branch,
+)
 
 
 def _init_repo(path: Path) -> None:
@@ -112,3 +116,61 @@ def test_integration_branch_falls_back_to_trunk(tmp_path: Path) -> None:
 
     assert ref.ref == "main"
     assert ref.provenance == "trunk"
+
+
+def _set_remote_ref(repo: Path, ref: str) -> None:
+    """Point ``refs/remotes/<ref>`` at HEAD, as a fetch would."""
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "update-ref", f"refs/remotes/{ref}", head],
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_base_ref_prefers_remote_tracking_ref(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    _set_remote_ref(repo, "origin/main")
+
+    assert resolve_base_ref(repo, "main") == "origin/main"
+
+
+def test_base_ref_falls_back_to_local_when_no_remote(tmp_path: Path) -> None:
+    """A project with no remote must still get a usable worktree base."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+
+    assert resolve_base_ref(repo, "main") == "main"
+
+
+def test_base_ref_falls_back_when_integration_branch_is_unpushed(tmp_path: Path) -> None:
+    """single-pr integration branches are often local-only for their first run."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    _set_remote_ref(repo, "origin/main")
+    subprocess.run(
+        ["git", "-C", str(repo), "branch", "fix/catalog-job-runtime"],
+        check=True,
+        capture_output=True,
+    )
+
+    assert resolve_base_ref(repo, "fix/catalog-job-runtime") == "fix/catalog-job-runtime"
+
+
+def test_base_ref_leaves_an_already_qualified_ref_alone(tmp_path: Path) -> None:
+    """``--base origin/main`` must not become ``origin/origin/main``."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    _set_remote_ref(repo, "origin/main")
+
+    assert resolve_base_ref(repo, "origin/main") == "origin/main"
