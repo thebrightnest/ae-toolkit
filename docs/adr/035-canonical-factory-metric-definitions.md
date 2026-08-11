@@ -1,3 +1,7 @@
+---
+subject: factory-metrics
+---
+
 # Canonical Factory-Metric Definitions
 
 ## Status

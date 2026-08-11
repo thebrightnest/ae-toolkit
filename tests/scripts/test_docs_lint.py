@@ -311,6 +311,166 @@ def test_unknown_rule_type_fails(tmp_path):
     assert "unknown type 'must_frobnicate'" in violations[0][1]
 
 
+def _write_adr(path: Path, frontmatter: dict | None, body: str = "# ADR\n") -> None:
+    if frontmatter is None:
+        path.write_text(body, encoding="utf-8")
+    else:
+        import yaml
+
+        fm = yaml.safe_dump(frontmatter).strip()
+        path.write_text(f"---\n{fm}\n---\n{body}", encoding="utf-8")
+
+
+def test_unique_live_subject_fails_on_dual_live(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adr_dir = repo / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    _write_adr(adr_dir / "011-state.md", {"subject": "state"}, "# ADR-011\n")
+    _write_adr(adr_dir / "012-state.md", {"subject": "state"}, "# ADR-012\n")
+    rules = repo / "rules.yaml"
+    _write_rules(
+        rules,
+        [{"type": "unique_live_subject", "target": "docs/adr", "reason": "One live rule per subject"}],
+    )
+
+    violations = docs_lint.lint_docs(rules, repo)
+    assert len(violations) == 1
+    assert "subject 'state' has multiple live ADRs" in violations[0][1]
+    assert "ADR-011" in violations[0][1]
+    assert "ADR-012" in violations[0][1]
+
+
+def test_unique_live_subject_passes_when_superseded(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adr_dir = repo / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    _write_adr(adr_dir / "010-state.md", {"subject": "state"}, "# ADR-010\n")
+    _write_adr(adr_dir / "011-state.md", {"subject": "state", "supersedes": [10]}, "# ADR-011\n")
+    rules = repo / "rules.yaml"
+    _write_rules(
+        rules,
+        [{"type": "unique_live_subject", "target": "docs/adr", "reason": "One live rule per subject"}],
+    )
+
+    assert docs_lint.lint_docs(rules, repo) == []
+
+
+def test_unique_live_subject_ignores_adr_without_frontmatter(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adr_dir = repo / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    _write_adr(adr_dir / "011-state.md", {"subject": "state"}, "# ADR-011\n")
+    _write_adr(adr_dir / "012-nofm.md", None, "# ADR-012\n")
+    rules = repo / "rules.yaml"
+    _write_rules(
+        rules,
+        [{"type": "unique_live_subject", "target": "docs/adr", "reason": "One live rule per subject"}],
+    )
+
+    assert docs_lint.lint_docs(rules, repo) == []
+
+
+def test_unique_live_subject_fails_on_malformed_frontmatter(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adr_dir = repo / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    adr = adr_dir / "011-state.md"
+    adr.write_text("---\nnot: [valid yaml: :\n---\n# ADR-011\n", encoding="utf-8")
+    rules = repo / "rules.yaml"
+    _write_rules(
+        rules,
+        [{"type": "unique_live_subject", "target": "docs/adr", "reason": "One live rule per subject"}],
+    )
+
+    violations = docs_lint.lint_docs(rules, repo)
+    assert len(violations) == 1
+    assert "malformed frontmatter" in violations[0][1]
+
+
+def test_unique_live_subject_excludes_template_and_readme(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adr_dir = repo / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    _write_adr(adr_dir / "000-template.md", {"subject": "state"}, "# Template\n")
+    _write_adr(adr_dir / "README.md", {"subject": "state"}, "# README\n")
+    _write_adr(adr_dir / "011-state.md", {"subject": "state"}, "# ADR-011\n")
+    rules = repo / "rules.yaml"
+    _write_rules(
+        rules,
+        [{"type": "unique_live_subject", "target": "docs/adr", "reason": "One live rule per subject"}],
+    )
+
+    assert docs_lint.lint_docs(rules, repo) == []
+
+
+def test_unique_live_subject_accepts_string_or_list_subject(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adr_dir = repo / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    _write_adr(adr_dir / "011-state.md", {"subject": "state"}, "# ADR-011\n")
+    _write_adr(adr_dir / "012-other.md", {"subject": ["other"]}, "# ADR-012\n")
+    rules = repo / "rules.yaml"
+    _write_rules(
+        rules,
+        [{"type": "unique_live_subject", "target": "docs/adr", "reason": "One live rule per subject"}],
+    )
+
+    assert docs_lint.lint_docs(rules, repo) == []
+
+
+def test_unique_live_subject_fails_on_invalid_subject_type(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    adr_dir = repo / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    _write_adr(adr_dir / "011-state.md", {"subject": 123}, "# ADR-011\n")
+    rules = repo / "rules.yaml"
+    _write_rules(
+        rules,
+        [{"type": "unique_live_subject", "target": "docs/adr", "reason": "One live rule per subject"}],
+    )
+
+    violations = docs_lint.lint_docs(rules, repo)
+    assert len(violations) == 1
+    assert "'subject' must be a string or list" in violations[0][1]
+
+
+def test_must_not_contain_on_directory_scans_all_markdown_files(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    skills = repo / "skills"
+    skills.mkdir()
+    clean = skills / "clean.md"
+    clean.write_text("# Clean\n", encoding="utf-8")
+    bad_dir = skills / "bad"
+    bad_dir.mkdir()
+    bad = bad_dir / "bad.md"
+    bad.write_text("# Bad\n\ncommit the plan files\n", encoding="utf-8")
+    rules = repo / "rules.yaml"
+    _write_rules(
+        rules,
+        [
+            {
+                "type": "must_not_contain",
+                "target": "skills",
+                "value": "commit the plan files",
+                "reason": "Skills must not instruct committing plan files at intake",
+            }
+        ],
+    )
+
+    violations = docs_lint.lint_docs(rules, repo)
+    assert len(violations) == 1
+    assert violations[0][0].name == "bad.md"
+    assert "commit the plan files" in violations[0][1]
+
+
 def test_cli_dispatcher_routes_docs_lint(tmp_path):
     """``aet docs lint`` runs through the dispatcher and exits 0 on a clean repo."""
     repo = tmp_path / "repo"

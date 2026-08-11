@@ -1,3 +1,7 @@
+---
+subject: autonomous-merge
+---
+
 # Autonomous Merge Is a Fail-Closed Gate
 
 ## Status

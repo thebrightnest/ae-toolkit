@@ -73,6 +73,7 @@ Do **not** write an ADR for:
 - [052 — Factory Metrics Read Stage Records, Not `test_run` Records](052-first-pass-merge-excludes-test-run-failures.md)
 - [053 — Supervision Defaults Live on the CLI Adapter](053-supervision-defaults-per-adapter.md)
 - [054 — Plan Documents Are Outside the Durability Gate](054-plan-documents-are-outside-the-durability-gate.md)
+- [056 — ADR Relations Are Declared in ADR Frontmatter](056-adr-relations-as-frontmatter.md)
 
 ## Format
 

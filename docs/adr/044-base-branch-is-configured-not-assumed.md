@@ -1,3 +1,7 @@
+---
+subject: base-branch
+---
+
 # The Base Branch Is Configured, Not Assumed
 
 ## Status

@@ -1,3 +1,7 @@
+---
+subject: verdict-provenance
+---
+
 # Validation Freshness: Gate Stages Trust a Fresh QA Verdict Instead of Re-Running
 
 ## Status

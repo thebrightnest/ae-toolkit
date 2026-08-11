@@ -1,3 +1,7 @@
+---
+subject: metrics-test-run-treatment
+---
+
 # Factory Metrics Read Stage Records, Not `test_run` Records
 
 ## Status

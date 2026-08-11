@@ -150,3 +150,36 @@ rules:
       - "migrate-plans-to-frontmatter.py"
       - "migrate-telemetry-slugs.py"
     reason: "Archive README documents releases"
+
+  # t2r-06: one subject, one live ADR
+  - type: unique_live_subject
+    target: docs/adr
+    reason: "Each architectural subject must resolve to exactly one live ADR"
+
+  # t2r-06: intake-commit rules are pinned in data
+  - type: must_contain
+    target: skills/aet-work/SKILL.md
+    value: "No commit or push happens at intake"
+    reason: "aet-work SKILL.md must state the intake durability rule"
+
+  - type: must_contain
+    target: skills/aet-work/references/queue-commands.md
+    value: "No commit or push happens at intake"
+    reason: "queue-commands reference must state the intake durability rule"
+
+  - type: must_not_contain
+    target: skills
+    value: "commit the plan files"
+    reason: "Skills must never instruct committing plan files at intake"
+
+  # t2r-06: footer-format-string contradiction
+  - type: must_not_contain
+    target: skills/aet-upgrade/references/breaking-change-template.md
+    value: "aet-pipeline-implement"
+    reason: "Breaking-change template must reference the current next-step skill"
+
+  # t2r-06: direct-JSON-edit contradiction
+  - type: must_not_contain
+    target: skills/aet-work/references/queue-commands.md
+    value: "direct JSON update"
+    reason: "Stale-worktree repair must go through aet state transition only"

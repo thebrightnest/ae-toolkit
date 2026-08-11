@@ -1,3 +1,7 @@
+---
+subject: work-state
+---
+
 # Queue State Is Derived from Persistent Facts
 
 ## Status

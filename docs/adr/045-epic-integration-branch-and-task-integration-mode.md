@@ -1,3 +1,7 @@
+---
+subject: integration-mode
+---
+
 # Epic Integration Branch and Per-Task Integration Mode
 
 ## Status

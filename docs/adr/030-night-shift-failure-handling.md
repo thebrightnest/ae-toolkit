@@ -1,3 +1,7 @@
+---
+subject: night-shift
+---
+
 # Night-Shift Failure Handling: Quarantine State, Circuit Breaker, Triage-by-Default
 
 ## Status

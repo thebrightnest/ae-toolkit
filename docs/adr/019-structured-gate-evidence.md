@@ -1,3 +1,7 @@
+---
+subject: gate-evidence
+---
+
 # Structured Gate Evidence Replaces Footer Regex for Stage Gating
 
 ## Status

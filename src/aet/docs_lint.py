@@ -10,7 +10,9 @@ from pathlib import Path
 
 import yaml
 
-VALID_RULE_TYPES = frozenset({"must_contain", "must_not_contain", "path_exists", "path_absent"})
+VALID_RULE_TYPES = frozenset(
+    {"must_contain", "must_not_contain", "path_exists", "path_absent", "unique_live_subject"}
+)
 
 
 class DocsLintError(Exception):
@@ -93,6 +95,115 @@ def _extract_section(text: str, section: str) -> str | None:
     return None
 
 
+def _adr_id_from_path(path: Path) -> str:
+    """Return an ``ADR-NNN`` style identifier from *path*'s filename stem."""
+    stem = path.stem
+    number_part = stem.split("-", 1)[0]
+    if number_part.isdigit():
+        return f"ADR-{int(number_part):03d}"
+    return stem
+
+
+def _load_adr_frontmatter(path: Path) -> tuple[dict | None, str | None]:
+    """Load YAML frontmatter from an ADR markdown file.
+
+    Returns ``(data, error)``. *data* is ``None`` when the file has no
+    frontmatter block. *error* is a non-empty diagnostic string when the
+    frontmatter block exists but cannot be parsed.
+    """
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return None, None
+    try:
+        end = text.index("\n---\n", 4)
+    except ValueError:
+        return None, "missing closing frontmatter delimiter"
+    try:
+        data = yaml.safe_load(text[4:end])
+    except yaml.YAMLError as exc:
+        return None, f"malformed frontmatter: {exc}"
+    if data is None:
+        return {}, None
+    if not isinstance(data, dict):
+        return None, "frontmatter must be a mapping"
+    return data, None
+
+
+def _normalize_adr_id(value: object) -> str | None:
+    """Return an ``ADR-NNN`` identifier from a *supersedes* value."""
+    if isinstance(value, int):
+        return f"ADR-{value:03d}"
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.isdigit():
+            return f"ADR-{int(stripped):03d}"
+        upper = stripped.upper()
+        if upper.startswith("ADR-"):
+            return upper
+    return None
+
+
+def _evaluate_unique_live_subject(
+    target_path: Path, reason: str, repo_root: Path
+) -> list[tuple[Path, str]]:
+    """Evaluate the ``unique_live_subject`` rule against *target_path*."""
+    violations: list[tuple[Path, str]] = []
+    subjects: dict[str, list[tuple[str, Path]]] = {}
+    superseded: set[str] = set()
+
+    for md_path in sorted(target_path.glob("*.md")):
+        if md_path.name in ("000-template.md", "README.md"):
+            continue
+
+        rel = _relative(md_path, repo_root)
+        data, error = _load_adr_frontmatter(md_path)
+        if error:
+            violations.append((rel, f"{reason} ({error})"))
+            continue
+        if data is None:
+            # ADRs without frontmatter are ignored.
+            continue
+
+        adr_id = _adr_id_from_path(md_path)
+
+        raw_subject = data.get("subject")
+        if raw_subject is None:
+            continue
+        if isinstance(raw_subject, str):
+            subject_values = [raw_subject]
+        elif isinstance(raw_subject, list) and all(isinstance(s, str) for s in raw_subject):
+            subject_values = raw_subject
+        else:
+            violations.append((rel, f"{reason} ('subject' must be a string or list of strings)"))
+            continue
+
+        raw_supersedes = data.get("supersedes", [])
+        if isinstance(raw_supersedes, (str, int)):
+            raw_supersedes = [raw_supersedes]
+        if not isinstance(raw_supersedes, list):
+            violations.append((rel, f"{reason} ('supersedes' must be a list)"))
+            continue
+
+        for value in raw_supersedes:
+            normalized = _normalize_adr_id(value)
+            if normalized is None:
+                violations.append((rel, f"{reason} (invalid 'supersedes' value: {value!r})"))
+                continue
+            superseded.add(normalized)
+
+        for subject in subject_values:
+            subjects.setdefault(subject, []).append((adr_id, rel))
+
+    for subject, entries in sorted(subjects.items()):
+        live = [(adr_id, rel) for adr_id, rel in entries if adr_id not in superseded]
+        if len(live) > 1:
+            ids = ", ".join(sorted(adr_id for adr_id, _ in live))
+            first_path = live[0][1]
+            violations.append((first_path, f"{reason} (subject '{subject}' has multiple live ADRs: {ids})"))
+
+    return violations
+
+
 def _validate_rule(raw: object, index: int) -> dict:
     """Validate and normalize a single rule mapping."""
     if not isinstance(raw, dict):
@@ -108,7 +219,35 @@ def _validate_rule(raw: object, index: int) -> dict:
         if "value" not in rule:
             raise RuleError(index, f"'value' is required for {rtype}")
         rule["value"] = _normalize_values(rule["value"])
+    if rtype == "unique_live_subject" and "value" in rule:
+        raise RuleError(index, "'value' is not allowed for unique_live_subject")
     return rule
+
+
+def _check_text(path: Path, text: str, rule: dict, reason: str) -> str | None:
+    """Evaluate a ``must_contain`` or ``must_not_contain`` rule against *text*."""
+    section = rule.get("section")
+    haystack = text
+    section_note = ""
+    if section:
+        section_body = _extract_section(text, section)
+        if section_body is None:
+            return f"{reason} (section not found: {section})"
+        haystack = section_body
+        section_note = f" in section '{section}'"
+
+    values = rule["value"]
+    rtype = rule["type"]
+    if rtype == "must_contain":
+        missing = [v for v in values if v not in haystack]
+        if missing:
+            return f"{reason} (expected {missing!r}{section_note})"
+    elif rtype == "must_not_contain":
+        present = [v for v in values if v in haystack]
+        if present:
+            plural = "" if len(present) == 1 else "s"
+            return f"{reason} (found forbidden substring{plural} {present!r}{section_note})"
+    return None
 
 
 def lint_docs(rules_file: Path, repo_root: Path) -> list[tuple[Path, str]]:
@@ -152,6 +291,32 @@ def lint_docs(rules_file: Path, repo_root: Path) -> list[tuple[Path, str]]:
                 violations.append((rel_target, f"{reason} (expected path to be absent: {target})"))
             continue
 
+        if rtype == "unique_live_subject":
+            if not target_path.exists():
+                violations.append((rel_target, f"{reason} (target directory missing: {target})"))
+            elif not target_path.is_dir():
+                violations.append((rel_target, f"{reason} (target must be a directory: {target})"))
+            else:
+                violations.extend(_evaluate_unique_live_subject(target_path, reason, repo_root))
+            continue
+
+        if target_path.is_dir() and rtype in ("must_contain", "must_not_contain"):
+            found_any = False
+            for md_path in sorted(target_path.rglob("*.md")):
+                found_any = True
+                rel_md = _relative(md_path, repo_root)
+                try:
+                    text = md_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError) as exc:
+                    violations.append((rel_md, f"{reason} (cannot read file: {exc})"))
+                    continue
+                message = _check_text(md_path, text, rule, reason)
+                if message:
+                    violations.append((rel_md, message))
+            if not found_any:
+                violations.append((rel_target, f"{reason} (no markdown files found in directory: {target})"))
+            continue
+
         if not target_path.exists():
             violations.append((rel_target, f"{reason} (target file missing: {target})"))
             continue
@@ -161,27 +326,8 @@ def lint_docs(rules_file: Path, repo_root: Path) -> list[tuple[Path, str]]:
             violations.append((rel_target, f"{reason} (cannot read file: {exc})"))
             continue
 
-        section = rule.get("section")
-        haystack = text
-        section_note = ""
-        if section:
-            section_body = _extract_section(text, section)
-            if section_body is None:
-                violations.append((rel_target, f"{reason} (section not found: {section})"))
-                continue
-            haystack = section_body
-            section_note = f" in section '{section}'"
-
-        values = rule["value"]
-        if rtype == "must_contain":
-            missing = [v for v in values if v not in haystack]
-            if missing:
-                detail = f"expected {missing!r}{section_note}"
-                violations.append((rel_target, f"{reason} ({detail})"))
-        elif rtype == "must_not_contain":
-            present = [v for v in values if v in haystack]
-            if present:
-                detail = f"found forbidden substring{'' if len(present) == 1 else 's'} {present!r}{section_note}"
-                violations.append((rel_target, f"{reason} ({detail})"))
+        message = _check_text(target_path, text, rule, reason)
+        if message:
+            violations.append((rel_target, message))
 
     return violations
