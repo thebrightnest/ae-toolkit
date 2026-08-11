@@ -391,14 +391,15 @@ class TestContextCommand(unittest.TestCase):
         git(["commit", "-m", "initial"], tmp_path)
 
     def test_context_default_emits_banner_and_battery(self):
-        """Default output includes the verbatim banner and all eight battery keys."""
+        """Default output includes the banner, digest section, and battery keys."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             self._make_populated_repo(tmp_path)
             result = run_typer(aet.app, ["context"], cwd=tmp_path)
             self.assertEqual(result.exit_code, 0, result.output + result.stderr)
             self.assertIn("📍 Current stage: plan-approved.", result.output)
-            data = json.loads(result.output.split("📍 Current stage: plan-approved.")[1])
+            self.assertIn("Current rules: none", result.output)
+            data = json.loads(result.output[result.output.index("{"):])
             self.assertEqual(data["schema_version"], 1)
             self.assertIn("branch", data)
             self.assertIn("repo_state", data)
@@ -636,3 +637,113 @@ class TestContextCommand(unittest.TestCase):
             data = json.loads(result.output)
             self.assertEqual(len(data["learnings"]), 2)
             self.assertEqual(data["learnings"][0]["trigger"], ["newest"])
+
+
+def _write_adr(
+    adr_dir: Path,
+    name: str,
+    *,
+    subject: str | None = None,
+    supersedes: list[int] | None = None,
+) -> Path:
+    """Write a minimal ADR file with optional subject/supersedes frontmatter."""
+    lines = ["---"]
+    if subject is not None:
+        lines.append(f"subject: {subject}")
+    if supersedes:
+        lines.append(f"supersedes: [{', '.join(str(n) for n in supersedes)}]")
+    lines.append("---")
+    lines.append("")
+    lines.append(f"# {name}")
+    path = adr_dir / name
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+class TestContextDigestInjection(unittest.TestCase):
+    """Integration tests for the R-5 digest/insight fields in ``aet context``."""
+
+    def _make_digest_repo(self, tmp_path: Path) -> None:
+        """Set up a repo with ADR frontmatter and learnings."""
+        _make_git_repo(tmp_path)
+        plans_dir = tmp_path / "docs" / "plans"
+        adr_dir = tmp_path / "docs" / "adr"
+        agents_dir = tmp_path / ".agents"
+        for d in (plans_dir, adr_dir, agents_dir):
+            d.mkdir(parents=True)
+
+        _write_plan(plans_dir, "feat-001.md", stage="plan-approved")
+        _write_adr(adr_dir, "010-old-work-state.md", subject="work-state")
+        _write_adr(
+            adr_dir, "011-new-work-state.md", subject="work-state", supersedes=[10]
+        )
+        _write_adr(adr_dir, "003-branch-cleanup.md", subject="branch-cleanup")
+        _write_adr(adr_dir, "001-no-subject.md")
+
+        entries = [
+            {"timestamp": f"2026-08-0{i}T10:00:00Z", "problem": f"p{i}"}
+            for i in range(1, 8)
+        ]
+        _write_learnings(agents_dir, entries)
+
+        git(["add", "-A"], tmp_path)
+        git(["commit", "-m", "initial"], tmp_path)
+
+    def test_context_json_includes_rules_digest_and_durable_insights(self):
+        """The JSON battery carries both new R-5 fields with resolved content."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            self._make_digest_repo(tmp_path)
+            result = run_typer(aet.app, ["context", "--json"], cwd=tmp_path)
+            self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+            data = json.loads(result.output)
+
+            digest = data["rules_digest"]
+            self.assertEqual([r["subject"] for r in digest], ["branch-cleanup", "work-state"])
+            work_state = digest[1]
+            self.assertEqual(work_state["status"], "live")
+            self.assertEqual(work_state["live"], "011-new-work-state")
+            self.assertEqual(work_state["lineage"], ["010-old-work-state"])
+
+            insights = data["durable_insights"]
+            self.assertEqual(len(insights), 5)
+            self.assertEqual(insights[0]["problem"], "p7")
+            self.assertEqual(insights[-1]["problem"], "p3")
+
+    def test_context_banner_renders_digest_section(self):
+        """The human-facing banner includes the generated digest section."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            self._make_digest_repo(tmp_path)
+            result = run_typer(aet.app, ["context"], cwd=tmp_path)
+            self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+            self.assertIn("Current rules:", result.output)
+            self.assertIn(
+                "- work-state: 011-new-work-state (supersedes 010-old-work-state)",
+                result.output,
+            )
+            self.assertIn("- branch-cleanup: 003-branch-cleanup", result.output)
+
+    def test_context_degrades_to_empty_sections(self):
+        """No ADR frontmatter and no learnings yield empty sections, not errors."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            _make_git_repo(tmp_path)
+            plans_dir = tmp_path / "docs" / "plans"
+            adr_dir = tmp_path / "docs" / "adr"
+            plans_dir.mkdir(parents=True)
+            adr_dir.mkdir(parents=True)
+            _write_plan(plans_dir, "feat-001.md")
+            _write_adr(adr_dir, "001-no-subject.md")
+            git(["add", "-A"], tmp_path)
+            git(["commit", "-m", "initial"], tmp_path)
+
+            result = run_typer(aet.app, ["context", "--json"], cwd=tmp_path)
+            self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+            data = json.loads(result.output)
+            self.assertEqual(data["rules_digest"], [])
+            self.assertEqual(data["durable_insights"], [])
+
+            result = run_typer(aet.app, ["context"], cwd=tmp_path)
+            self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+            self.assertIn("Current rules: none", result.output)

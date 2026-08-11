@@ -11,14 +11,16 @@ import pytest
 # sys.path first and propagate it to subprocesses before pytest imports tests.
 _REPO_ROOT = Path(__file__).parent.parent
 _WORKTREE_SRC = _REPO_ROOT / "src"
-if str(_WORKTREE_SRC) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE_SRC))
-else:
-    sys.path.remove(str(_WORKTREE_SRC))
-    sys.path.insert(0, str(_WORKTREE_SRC))
+for _path in (str(_WORKTREE_SRC), str(_REPO_ROOT)):
+    if _path in sys.path:
+        sys.path.remove(_path)
+    sys.path.insert(0, _path)
 _prev_pythonpath = os.environ.get("PYTHONPATH", "")
 os.environ["PYTHONPATH"] = (
-    str(_WORKTREE_SRC) + (os.pathsep + _prev_pythonpath if _prev_pythonpath else "")
+    str(_WORKTREE_SRC)
+    + os.pathsep
+    + str(_REPO_ROOT)
+    + (os.pathsep + _prev_pythonpath if _prev_pythonpath else "")
 )
 
 

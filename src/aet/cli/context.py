@@ -17,6 +17,7 @@ from typing import Any
 
 import typer
 
+from aet import context_digest
 from aet.plan_parser import (
     build_ticket_map,
     most_recent_plan,
@@ -367,6 +368,8 @@ def build_context(
         "last_piv": collect_last_piv(cwd),
         "active_prd_stage": collect_active_prd_stage(cwd),
         "active_plan_stage": pinned_stage or collect_active_plan_stage(cwd, plans_dir),
+        "rules_digest": context_digest.build_rules_digest(cwd / "docs" / "adr"),
+        "durable_insights": context_digest.select_durable_insights(cwd / LEARNINGS_FILE),
     }
 
     prime_path = cwd / PRIME_FILE
@@ -429,7 +432,8 @@ def _human_render(
     if memories_only:
         lines.append(_compact_learnings(battery.get("learnings", [])))
     elif budget == "mcp":
-        # Compact: top-1 learning plus minimal key/value pairs.
+        # Compact: rules digest, top-1 learning, minimal key/value pairs.
+        lines.append(context_digest.render_digest_section(battery.get("rules_digest", [])))
         learnings = battery.get("learnings", [])
         if learnings:
             lines.append(_compact_learnings(learnings[:1]))
@@ -440,6 +444,7 @@ def _human_render(
             if value is not None:
                 lines.append(f"{key}: {value}")
     else:
+        lines.append(context_digest.render_digest_section(battery.get("rules_digest", [])))
         lines.append(json.dumps(battery, indent=2, ensure_ascii=False))
 
     output = "\n".join(lines)
