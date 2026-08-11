@@ -49,7 +49,7 @@ Staff-level diff review with multiple lenses.
    - **Tests** — coverage completeness check:
 
      1. For each new source file in the diff, verify at least one test file imports or references it. If none exists, classify as **fix-now**.
-     2. If the diff introduces both a new backend route/controller and new frontend API client code, verify an API boundary test exists. If none exists, classify as **fix-now**.
+     2. **API boundary contract is enforced mechanically** by `aet gate submit` (review stage). When the changed-file set touches both a response-shape file and a client-consumer file and no agreement test exists, the gate refuses the verdict. The reviewer no longer carries this check as a judgment item, but should still confirm the agreement test is meaningful when present.
 
      A "new source file" is any file added by the diff that is not a test file, config file, migration, seed, or type-only definition. Apply judgment — a file exporting only interfaces does not require a test; a file containing business logic, a controller, an observer, or a job does. See `references/test-coverage-check.md` for the mechanical procedure.
 

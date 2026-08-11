@@ -84,9 +84,9 @@ The structural review (`content/aet-structural-review/`, 2026-08-09) identified 
 
 ## Divergence Summary
 
-### Branch: t2r-01-learnings-append-cli
+### t2r-01-learnings-append-cli
 
-_Recorded: 2026-08-10_
+_Recorded: 2026-08-10 — Branch: t2r-01-learnings-append-cli_
 
 #### Changed from plan
 
@@ -100,9 +100,9 @@ _Recorded: 2026-08-10_
 
 - Task 5 (merge branch to main and verify integration): deferred to `aet-ship` closure; not part of the implementation/docs-sync stage.
 
-### Branch: t2r-02-ship-squash-verify-fallback
+### t2r-02-ship-squash-verify-fallback
 
-_Recorded: 2026-08-10_
+_Recorded: 2026-08-10 — Branch: t2r-02-ship-squash-verify-fallback_
 
 #### Changed from plan
 
@@ -122,9 +122,9 @@ No meaningful divergences between the t2r-02 plan and the implementation.
 - The remaining Tier 2 requirements (R-1, R-3 through R-12) are outside the
   t2r-02 slice and remain open on this PRD.
 
-### Branch: t2r-04-aet-context-command
+### t2r-04-aet-context-command
 
-_Recorded: 2026-08-10_
+_Recorded: 2026-08-10 — Branch: t2r-04-aet-context-command_
 
 #### Changed from plan
 
@@ -134,9 +134,9 @@ _Recorded: 2026-08-10_
 
 - t2r-04 task 10 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
 
-### Branch: t2r-10-run-handoff-note
+### t2r-10-run-handoff-note
 
-_Recorded: 2026-08-10_
+_Recorded: 2026-08-10 — Branch: t2r-10-run-handoff-note_
 
 #### Changed from plan
 
@@ -146,7 +146,7 @@ _Recorded: 2026-08-10_
 
 - t2r-10 task 8 (merge branch to main and verify integration) is deferred to the `aet-ship` stage, consistent with the standard pipeline.
 
-### Branch: t2r-11-generated-cli-reference
+### t2r-11-generated-cli-reference
 
 _Recorded: 2026-08-10_
 
@@ -162,7 +162,7 @@ _No material approach divergences for t2r-11._
 
 - t2r-11 Task 6 (merge branch to main and verify integration): deferred to the ship stage.
 
-### Branch: t2r-12-plan-archival-at-closure
+### t2r-12-plan-archival-at-closure
 
 _Recorded: 2026-08-10_
 

@@ -74,6 +74,7 @@ Do **not** write an ADR for:
 - [053 — Supervision Defaults Live on the CLI Adapter](053-supervision-defaults-per-adapter.md)
 - [054 — Plan Documents Are Outside the Durability Gate](054-plan-documents-are-outside-the-durability-gate.md)
 - [056 — ADR Relations Are Declared in ADR Frontmatter](056-adr-relations-as-frontmatter.md)
+- [057 — Boundary-Contract Lens Rides the Review Verdict in Code](057-boundary-contract-lens-in-code.md)
 
 ## Format
 

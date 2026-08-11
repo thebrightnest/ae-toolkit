@@ -41,15 +41,12 @@ done < source-files.txt
 
 ### 3. Check for API Boundary Tests (Vertical Slices)
 
-If the diff adds both a new backend route/controller **and** new frontend API client code:
+The API boundary-contract lens is enforced mechanically at `aet gate submit` (review stage). The gate uses `src/aet/boundary.py` to pair changed response-shape files (serializers, controllers, schemas, resources, DTOs) with changed client-consumer files (components, repositories, api-clients, hooks, stores) and requires an agreement test that references both sides or uses a boundary-mock marker (`msw`, `nock`, `Http::fake`, `mirage`).
+
+Do **not** rely on the retired shell heuristic below. It is preserved only as background on the marker vocabulary that seeded the classifier defaults:
 
 ```bash
-# Detect backend endpoint addition
-git diff --name-status HEAD~1 | grep -qE '(routes|controllers|api|handlers)/' && BACKEND=1
-
-# Detect frontend API client addition
-git diff --name-status HEAD~1 | grep -qE '(api|clients|services|fetch|http)/' && FRONTEND=1
-
+# RETIRED — for reference only; the gate enforces this in code.
 if [ -n "$BACKEND" ] && [ -n "$FRONTEND" ]; then
   if ! grep -rlE '(msw|nock|Http::fake|mirage|intercept|boundary)' \
        --include='*.test.*' --include='*.spec.*' . > /dev/null 2>&1; then
