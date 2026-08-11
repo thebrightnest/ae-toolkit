@@ -86,7 +86,10 @@ is atomic under a single `git update-ref --stdin` transaction; the mandatory
 push of `refs/aet/*` must succeed before closure reports success.
 
 Do not ask an agent to update the plan footer, queue state, or ledger. Those
-writes are owned by `aet ship close` and `aet gate submit`.
+writes are owned by `aet ship close` and `aet gate submit`. In particular, never
+hand-edit `.agents/ledger.jsonl`: it is content-addressed, so changing a line
+changes the event id and the system will treat the edited event as missing on
+the next load.
 
 ## Merge-Verification Exit Codes
 

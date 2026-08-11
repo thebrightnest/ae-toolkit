@@ -42,6 +42,9 @@ This means:
 | `docs/plans/{id}.md`         | Source of truth for intent, stage, and terminal closure | Yes             |
 | `.agents/work-queue.json`    | Ephemeral sprint board: active tasks only               | No (gitignored) |
 | `.agents/work-history.jsonl` | Optional execution log for transitions and timing       | No (gitignored) |
+| `.agents/ledger.jsonl`       | Content-addressed provenance ledger (settled-ness)      | No (gitignored) |
+
+The ledger is an append-only, content-addressed event store. Do not edit it by hand: each event id is a SHA256 over its canonical fields, so any manual change makes the event unrecognizable to the system and can silently drop settled tasks on the next load.
 
 ### Mutation guard
 
@@ -50,6 +53,8 @@ While a batch or `run-one` is live, the orchestrator writes a run lease to `.age
 Use `--force` only to deliberately override a lease you know is stale, or to make an urgent manual edit during a batch. It prints a loud warning and can corrupt a live run, so prefer re-running after the batch finishes.
 
 Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails closed on read for mutating commands. Run `aet state audit` to inspect the unverified queue against git ground truth, and `aet state heal --apply` to reconcile and restamp the envelope. Read-only commands like `status` warn and continue.
+
+The ledger (`.agents/ledger.jsonl`) is also system-managed. It is append-only and content-addressed; the only supported way to repair it is to avoid hand-editing and let `aet ship close`, `aet state transition`, and `aet gate submit` write events through the `Ledger` class. If the ledger appears wrong, run `aet state audit` first.
 
 The `git-refs` backend is `schema_version`-stamped (ADR-055) and treats the live refs as ground truth. A previous chained `content_hash` over the task-ref set has been removed because a chain over a set is non-commutative and made independent writers conflict by construction. The tamper-evident `content_hash` protection therefore applies to the JSON backend only; the same `audit` / `heal --apply` recovery applies there.
 
@@ -309,6 +314,7 @@ aet state transition FEAT-001 <current_status> abandoned --reason="duplicate"
 - **Plans are the source of truth** — queue is a runtime view
 - **Explicit curation** — only `add` puts work in the sprint
 - **Gitignored sprint board** — `.agents/work-queue.json` and `.agents/work-history.jsonl` are never committed
+- **System-managed ledger** — `.agents/ledger.jsonl` is append-only and content-addressed; never edit it by hand
 - **Forward-only state** — transitions are recorded by code and trusted on read
 - **Queue-unaware pipeline** — individual skills know nothing about the queue
 - **Session isolation** — `run` spawns fresh OS processes per stage
