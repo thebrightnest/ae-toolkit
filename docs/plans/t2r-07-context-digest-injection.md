@@ -172,5 +172,5 @@ auth/data/dependency risk that would justify `full`.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: plan-approved*
+*Next step: run `aet-work`*
