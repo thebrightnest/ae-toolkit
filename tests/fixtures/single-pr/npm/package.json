@@ -1,0 +1,9 @@
+{
+  "name": "single-pr-rehearsal-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned runtime dependency for the single-pr rehearsal.",
+  "dependencies": {
+    "is-number": "7.0.0"
+  }
+}
