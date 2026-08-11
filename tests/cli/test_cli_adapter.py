@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aet import session_log_claude
-from aet.cli_adapter import CLIAdapter, resolve_cli_adapter
+from aet.cli_adapter import ADAPTERS, CLIAdapter, resolve_cli_adapter
 
 
 class TestCLIAdapter(unittest.TestCase):
@@ -83,11 +83,25 @@ class TestCLIAdapter(unittest.TestCase):
         self.assertGreater(adapter.stall_timeout, 300)
         self.assertGreater(adapter.wall_backstop, adapter.stall_timeout)
 
-    def test_claude_supervision_defaults_exceed_suite_silence(self):
-        """claude's stall timeout and wall backstop are adapter data (ADR-053)."""
+    def test_claude_stall_timeout_covers_a_whole_silent_session(self):
+        """An adapter that emits nothing until exit has no sub-session silence
+        interval, so its stall timeout must equal its wall backstop (ADR-053).
+
+        ``json-envelope`` adds ``--output-format json``: one envelope at exit
+        and no output before it. Any smaller stall timeout is a shorter wall
+        clock wearing a stall detector's name, and kills healthy sessions.
+        """
         adapter = resolve_cli_adapter("claude")
-        self.assertGreater(adapter.stall_timeout, 300)
-        self.assertGreater(adapter.wall_backstop, adapter.stall_timeout)
+        self.assertEqual(adapter.usage_mode, "json-envelope")
+        self.assertEqual(adapter.stall_timeout, adapter.wall_backstop)
+
+    def test_no_adapter_stall_timeout_exceeds_its_wall_backstop(self):
+        """``run_single`` enforces no wall clock of its own — only ``run_batch``
+        does — so for ``aet run-one`` the stall timeout is the sole ceiling on a
+        session and must never be looser than the declared backstop."""
+        for name, adapter in ADAPTERS.items():
+            with self.subTest(adapter=name):
+                self.assertLessEqual(adapter.stall_timeout, adapter.wall_backstop)
 
     def test_wire_file_mode_appends_no_flags(self):
         """wire-file parsing needs no CLI flags — the tee captures the hint."""
