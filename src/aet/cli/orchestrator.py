@@ -474,15 +474,25 @@ def build_prompt(
     next_stage: str,
     freshness_clause: str = "",
     handoff_clause: str = "",
+    verdict_kind: str | None = None,
 ) -> str:
     skills_str = " → ".join(skills)
+    evidence_clause = ""
+    if verdict_kind is not None:
+        evidence_clause = (
+            f"\n\nThis stage requires a {verdict_kind!r} verdict. Submit it with: "
+            f"`aet gate submit --stage {verdict_kind} --verdict pass "
+            f"--evidence <payload-file>`. The required output path is in "
+            f"`$AET_EVIDENCE_PATH`. The stage is not complete until the verdict "
+            f"is written."
+        )
     return (
         f"Run {skills_str} on {plan_file}\n"
         f"Current stage: {current_stage}. Target stage: {next_stage}.\n"
         f"Execute only this stage. Do not proceed to subsequent stages.\n"
         f"Run validations (tests, lint, format checks) in the foreground and "
         f"wait for them to finish — never background validations or end your "
-        f"turn while one is still running.{freshness_clause}{handoff_clause}\n"
+        f"turn while one is still running.{freshness_clause}{handoff_clause}{evidence_clause}\n"
         f"Commit your work before exiting."
     )
 
@@ -1023,6 +1033,7 @@ def run_stage(
         skills, plan_file, current_stage, next_stage,
         freshness_clause=_freshness_clause(freshness),
         handoff_clause=handoff_clause,
+        verdict_kind=verdict_kind,
     )
     cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
 
@@ -1092,11 +1103,21 @@ def build_stage_group_prompt(
     for stage in stages:
         next_stage = workflow.next_stage(stage.name) or stage.name
         skills_str = " → ".join(stage.skills)
+        evidence_clause = ""
+        if stage.evidence is not None:
+            env_var = evidence.evidence_path_env_var(stage.evidence)
+            evidence_clause = (
+                f"\n\nThis stage requires a {stage.evidence!r} verdict. Submit it "
+                f"with: `aet gate submit --stage {stage.evidence} --verdict pass "
+                f"--evidence <payload-file>`. The required output path is in "
+                f"`${env_var}`. The stage is not complete until the verdict is "
+                f"written."
+            )
         blocks.append(
             f"Run {skills_str} on {plan_file}\n"
             f"Current stage: {stage.name}. Target stage: {next_stage}.\n"
             f"Execute only this stage. Do not proceed to subsequent stages.\n"
-            f"Commit your work before exiting."
+            f"Commit your work before exiting.{evidence_clause}"
         )
     return "\n\n".join(blocks)
 

@@ -31,11 +31,16 @@ Run tiered automated validation.
 1. **Consume the run handoff note.** If the orchestrator injected a handoff
    block into the stage prompt, treat its decisions and pre-existing failures
    as settled inputs — do not re-derive setup context or re-investigate them.
-2. Determine tier (default: Standard if not specified):
+2. **Submit a stage verdict if required.** When the prompt or environment says
+   the stage requires a verdict (e.g., `AET_EVIDENCE_PATH` / `AET_EVIDENCE_PATH_QA`
+   is set), you **must** submit it through `aet gate submit` before marking the
+   stage complete. Do not rely on the plan footer or a commit alone; the
+   orchestrator gate is fail-closed on the verdict file.
+3. Determine tier (default: Standard if not specified):
    - **Quick** — critical paths only: core user flows, auth, payment (if applicable)
    - **Standard** — + medium priority flows: error handling, edge cases, data validation
    - **Exhaustive** — + all states/cosmetic: responsive layouts, loading states, empty states
-3. Run automated test suite:
+4. Run automated test suite:
    - **Default to impact-scoped tests.** Use `git diff --name-only <pr-base>..HEAD` to identify changed files, map them to test files via project conventions or heuristics, and run only the tests that cover them. For Python use `pytest path/to/test.py`; for JS/TS use `vitest run path/to/test.ts` or `jest path/to/test.ts`.
    - **Full-suite fallback.** Run the complete test suite only when the diff touches any of the following. Otherwise, the impact-scoped test run is sufficient.
      - test harness
@@ -47,44 +52,44 @@ Run tiered automated validation.
    - Integration tests
    - Type checking
    - Linting
-4. **Coverage check:**
+5. **Coverage check:**
    - Run the test suite with coverage reporting (use the project's existing coverage tool)
    - Identify all source files that are new or modified in the current diff
    - When a diff introduces new source files, verify each has coverage > 0% — the completeness property for the test coverage domain
    - Any new file at 0% coverage is a QA failure at all tiers
    - Any modified file where all changed lines are uncovered is flagged for human review
-5. **Call completeness check** (if diff touches API, bridge, preload, or handler files):
+6. **Call completeness check** (if diff touches API, bridge, preload, or handler files):
    - Grep renderer/client code for API call patterns using project conventions or heuristics (`*Api`, `*Bridge`, `invoke`, `fetch`, `rpc`, etc.)
    - List all unique external calls found in new or modified renderer code
    - Cross-reference each call with backend handlers, preload definitions, or API route files
    - Flag any orphaned call (no backend match) as a QA failure
-6. If browser testing is available (Playwright configured):
+7. If browser testing is available (Playwright configured):
    - Launch headless browser
    - Navigate through critical user flows
    - Fill forms, click buttons, verify state changes
    - Capture screenshots for visual regression
-7. For any bug found:
+8. For any bug found:
    - Fix the bug in source
    - Generate a regression test that would have caught it
    - Commit the fix and test atomically
-8. **Stage-failure triage:** If any validation stage fails, gather the following evidence before retrying or escalating to a human. Append the triage block to the QA report; do not write it to the repository.
+9. **Stage-failure triage:** If any validation stage fails, gather the following evidence before retrying or escalating to a human. Append the triage block to the QA report; do not write it to the repository.
    - Failing command and full output
    - Files touched by the current diff
    - Last successful stage
    - Relevant environment variables (`AET_*`)
    - Whether the failure reproduces outside the orchestrator (run the same command manually in the worktree)
-9. Produce a QA report:
-   - Determine the task ID from the active plan filename or branch name
-   - Write the report to `/tmp/aet-reports/{task-id}/qa-report.md`
-   - Include:
-     - pass/fail status per tier
-     - bugs found and fixed
-     - regression tests added
-     - screenshot diffs (if browser mode used)
-     - coverage delta
-     - **Coverage section:** list files checked, their coverage %, and which (if any) failed the 0% gate
-     - **Triage section:** stage-failure evidence, if any stage failed
-   - Do NOT write `.qa-report.md` to the repository root
+10. Produce a QA report:
+    - Determine the task ID from the active plan filename or branch name
+    - Write the report to `/tmp/aet-reports/{task-id}/qa-report.md`
+    - Include:
+      - pass/fail status per tier
+      - bugs found and fixed
+      - regression tests added
+      - screenshot diffs (if browser mode used)
+      - coverage delta
+      - **Coverage section:** list files checked, their coverage %, and which (if any) failed the 0% gate
+      - **Triage section:** stage-failure evidence, if any stage failed
+    - Do NOT write `.qa-report.md` to the repository root
 
 **Evidence verdict (writer contract):**
 
