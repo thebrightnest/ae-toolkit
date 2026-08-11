@@ -219,5 +219,5 @@ surface beyond the lint evaluator itself.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
