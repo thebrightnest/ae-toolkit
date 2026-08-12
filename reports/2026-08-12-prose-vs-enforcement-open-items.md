@@ -16,7 +16,7 @@ source tree here; where their framing was off, the correction is noted.
 | `45e788ef` | `evidence.submit_command` single-sources builder mode; four skills document it       |
 | `328f7b2c` | Missing-verdict recovery session; stage prompts derive their submit command          |
 | `c0d35b1c` | Corrected a false repair hint and two warnings describing a non-existent mechanism   |
-| *(pending)* | Group prompt no longer contradicts itself; recovery stops asserting completion      |
+| `29601183` | Group prompt no longer contradicts itself; recovery stops asserting completion       |
 
 Full suite green (1675 tests), plus `ruff`, `skills-lint`, `validate-skills`,
 `plans lint`, `docs lint`, `validate-workflows`, markdownlint.
