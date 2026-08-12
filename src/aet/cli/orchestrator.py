@@ -2266,8 +2266,34 @@ def _finalize_task(
         queue = backend.load()["queue"]
         task = next((t for t in queue if t.get("id") == task_id), None)
         from_state = current_state(task) if task else "in_progress"
-        # Single-pr mode: integration already happened under the lock and the
-        # worktree was removed; the merge_commit is the evidence of completion.
+        # Single-pr mode: the child has already integrated locally, recorded the
+        # merge commit, and transitioned to awaiting_merge. Seal it to merged in
+        # the batch parent so dependents unblock and the queue reflects ADR-045
+        # "done means integrated". The ancestry check uses the recorded merge
+        # commit against the resolved integration branch.
+        if task and task.get("merge_commit") and from_state == "awaiting_merge":
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    aet_state_bin,
+                    "transition",
+                    task_id,
+                    "awaiting_merge",
+                    "merged",
+                    queue_file,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return {"successes": 1, "failures": 0, "stop_spawn": False}
+            print(
+                f"   ⚠️  Could not transition {task_id} to merged: "
+                f"{result.stderr.strip()}"
+            )
+            # Fall through to awaiting-merge bookkeeping.
+        # A recorded merge_commit that is already terminal (or could not be
+        # sealed above) counts as a success.
         if task and task.get("merge_commit"):
             return {"successes": 1, "failures": 0, "stop_spawn": False}
         # In single-pr mode the child may already have integrated the task and

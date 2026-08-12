@@ -10,6 +10,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 from aet import change_scope, telemetry
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -230,6 +232,34 @@ class TestTargetsAndTier:
 
         sig = inspect.signature(change_scope.tier)
         assert "stage" not in sig.parameters
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "src/aet/cli/orchestrator.py",
+            "src/aet/integration_lock.py",
+            "src/aet/worktree.py",
+            "src/aet/backends/factory.py",
+        ],
+    )
+    def test_rehearsal_trigger_prefix_adds_single_pr_rehearsal(self, path):
+        targets = change_scope.targets([path])
+        assert change_scope.REHEARSAL_TARGET in targets
+        # The mapped target for the changed file is still present.
+        assert change_scope._target_for(path) in targets
+
+    def test_rehearsal_trigger_is_additive_and_does_not_narrow(self):
+        targets = change_scope.targets(["src/aet/queue.py"])
+        assert change_scope.REHEARSAL_TARGET not in targets
+        assert targets == ["tests/queue"]
+
+    def test_rehearsal_trigger_falls_back_to_full_suite_on_shared_fixture(self):
+        targets = change_scope.targets(["src/aet/integration_lock.py", "tests/conftest.py"])
+        assert targets == ["tests/"]
+
+    def test_rehearsal_trigger_falls_back_to_full_suite_on_unmapped_path(self):
+        targets = change_scope.targets(["src/aet/integration_lock.py", "some/unrecognized/binary"])
+        assert targets == ["tests/"]
 
 
 class TestResolvedTargetsMarker:

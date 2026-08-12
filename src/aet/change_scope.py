@@ -45,10 +45,24 @@ _PATH_TARGETS: list[tuple[str, str]] = [
     ("src/aet/cli/release_prep.py", "tests/test_release_prep.py"),
     ("src/aet/cli/ship.py", "tests/ship"),
     ("src/aet/cli/orchestrator.py", "tests/orchestrator"),
+    ("src/aet/integration_lock.py", "tests/orchestrator"),
     ("scripts/install.sh", "tests/installer/test_installer.py"),
     ("src/aet/cli/setup.py", "tests/installer/test_installer.py"),
     ("scripts/", "tests/scripts"),
 ]
+
+# Path prefixes that exercise the single-pr / non-trunk integration surface.
+# When the change set touches any of them, the rehearsal is added to the target
+# list so the production-shaped config path is exercised (ADR-049).
+REHEARSAL_TRIGGER_PREFIXES: frozenset[str] = frozenset(
+    {
+        "src/aet/cli/orchestrator.py",
+        "src/aet/integration_lock.py",
+        "src/aet/worktree.py",
+        "src/aet/backends/factory.py",
+    }
+)
+REHEARSAL_TARGET = "tests/orchestrator/test_single_pr_rehearsal.py"
 
 
 def is_code_path(path: str) -> bool:
@@ -159,19 +173,29 @@ def targets(paths: list[str] | None) -> list[str]:
     - ``None`` or an empty diff → ``["tests/"]`` (fail-safe).
     - Prose-only change → ``[]`` (the Makefile skips pytest).
     - ``conftest.py``, shared fixtures, or an unmapped code path → ``["tests/"]``.
-    - Otherwise, the deduplicated, sorted target list from :data:`_PATH_TARGETS`.
+    - Otherwise, the deduplicated, sorted target list from :data:`_PATH_TARGETS`,
+      plus the single-pr rehearsal when the change touches that surface.
     """
     if paths is None:
         return ["tests/"]
     code_paths = [p for p in paths if is_code_path(p)]
     if not code_paths:
         return []
+    rehearsal_triggered = any(
+        p.startswith(prefix)
+        for p in code_paths
+        for prefix in REHEARSAL_TRIGGER_PREFIXES
+    )
     if any(_is_shared_fixture(p) for p in code_paths):
         return ["tests/"]
     mapped = [_target_for(p) for p in code_paths]
     if None in mapped:
         return ["tests/"]
-    return sorted(set(mapped))
+    result = sorted(set(mapped))
+    if rehearsal_triggered and REHEARSAL_TARGET not in result:
+        result.append(REHEARSAL_TARGET)
+        result.sort()
+    return result
 
 
 def decide(paths: list[str] | None) -> str:
