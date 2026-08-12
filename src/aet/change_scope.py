@@ -39,6 +39,7 @@ _PATH_TARGETS: list[tuple[str, str]] = [
     ("src/aet/plans_lint.py", "tests/plan"),
     ("src/aet/verifier.py", "tests/plan"),
     ("src/aet/boundary.py", "tests/test_boundary.py"),
+    ("src/aet/identity.py", "tests/test_identity.py"),
     ("src/aet/branch_ref.py", "tests/test_branch_ref.py"),
     ("src/aet/change_scope.py", "tests/test_change_scope.py"),
     ("src/aet/cli/release_prep.py", "tests/test_release_prep.py"),

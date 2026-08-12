@@ -9,6 +9,14 @@ security_review: required
 security_review_reason: [one line]
 docs_sync: required
 docs_sync_reason: [one line]
+# Optional identity declarations for plans that conflate two identifiers for
+# the same entity. Required when the identity-conflation lens fires; omitted
+# otherwise. Each entry names the entity, the conflated identifiers, and which
+# one persists. Example:
+# identity:
+#   - entity: project
+#     identifiers: [projectPath, projectId]
+#     persists: projectId
 ---
 
 <!-- `work_class` is the risk/impact dimension `aet metrics` buckets by

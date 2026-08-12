@@ -28,7 +28,7 @@ import click
 import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import boundary, change_scope, evidence, telemetry  # noqa: E402
+from aet import boundary, change_scope, evidence, identity, telemetry  # noqa: E402
 from aet.backends.factory import create_backend  # noqa: E402
 from aet.ledger import Ledger  # noqa: E402
 from aet.plan_parser import stage_from_plan, title_from_plan  # noqa: E402
@@ -295,33 +295,64 @@ def _submit(args: argparse.Namespace) -> int:
             f"{record['verdict']!r}"
         )
 
-    # Boundary-contract lens (R-8): only applies to the review stage.
-    lens_payload: dict[str, Any] | None = None
+    # Mechanical lenses (R-8 boundary, R-9 identity): only review stage.
+    boundary_lens_payload: dict[str, Any] | None = None
+    identity_lens_payload: dict[str, Any] | None = None
     if stage == "review":
         paths = change_scope.changed_paths()
         repo_root = telemetry.resolve_repo_root()
-        lens_result = boundary.check(paths, repo_root=repo_root)
-        if lens_result.tripped:
+        task_id_for_lenses = os.environ.get("AET_TASK_ID") or record.get("task_id")
+
+        boundary_result = boundary.check(paths, repo_root=repo_root)
+        if boundary_result.tripped:
             backend.close()
             return _fail(
-                f"boundary-contract lens tripped: {lens_result.reason}; "
-                f"pairs={lens_result.pairs}; add an agreement test"
+                f"boundary-contract lens tripped: {boundary_result.reason}; "
+                f"pairs={boundary_result.pairs}; add an agreement test"
             )
-        lens_payload = {
-            "tripped": lens_result.tripped,
-            "shape_paths": lens_result.shape_paths,
-            "consumer_paths": lens_result.consumer_paths,
-            "agreement_tests": lens_result.agreement_tests,
+        boundary_lens_payload = {
+            "tripped": boundary_result.tripped,
+            "shape_paths": boundary_result.shape_paths,
+            "consumer_paths": boundary_result.consumer_paths,
+            "agreement_tests": boundary_result.agreement_tests,
         }
-        finding = {
-            "lens": "boundary-contract",
-            "tripped": lens_result.tripped,
-            "shape_paths": lens_result.shape_paths,
-            "consumer_paths": lens_result.consumer_paths,
-            "agreement_tests": lens_result.agreement_tests,
-            "pairs": lens_result.pairs,
+        record.setdefault("findings", []).append(
+            {
+                "lens": "boundary-contract",
+                "tripped": boundary_result.tripped,
+                "shape_paths": boundary_result.shape_paths,
+                "consumer_paths": boundary_result.consumer_paths,
+                "agreement_tests": boundary_result.agreement_tests,
+                "pairs": boundary_result.pairs,
+            }
+        )
+
+        identity_result = identity.check(
+            paths, repo_root=repo_root, task_id=task_id_for_lenses
+        )
+        if identity_result.tripped:
+            backend.close()
+            return _fail(
+                f"identity-conflation lens tripped: {identity_result.reason}; "
+                f"findings={identity_result.findings}"
+            )
+        identity_lens_payload = {
+            "tripped": identity_result.tripped,
+            "findings": identity_result.findings,
+            "indeterminate": identity_result.indeterminate,
+            "declaration_valid": identity_result.declaration_valid,
+            "declaration_errors": identity_result.declaration_errors,
         }
-        record.setdefault("findings", []).append(finding)
+        record.setdefault("findings", []).append(
+            {
+                "lens": "identity-conflation",
+                "tripped": identity_result.tripped,
+                "findings": identity_result.findings,
+                "indeterminate": identity_result.indeterminate,
+                "declaration_valid": identity_result.declaration_valid,
+                "declaration_errors": identity_result.declaration_errors,
+            }
+        )
 
     task_id = os.environ.get("AET_TASK_ID") or record["task_id"]
     try:
@@ -337,8 +368,10 @@ def _submit(args: argparse.Namespace) -> int:
         ledger_path = repo_root / ".agents" / "ledger.jsonl"
         ledger = Ledger(ledger_path)
         ledger_payload: dict[str, Any] = {"stage": stage, "verdict": record["verdict"]}
-        if lens_payload is not None:
-            ledger_payload["boundary_contract_lens"] = lens_payload
+        if boundary_lens_payload is not None:
+            ledger_payload["boundary_contract_lens"] = boundary_lens_payload
+        if identity_lens_payload is not None:
+            ledger_payload["identity_conflation_lens"] = identity_lens_payload
         ledger.write_event(
             source="aet-gate",
             task=task_id,
