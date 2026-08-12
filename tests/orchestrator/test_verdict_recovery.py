@@ -227,6 +227,49 @@ def test_recovery_prompt_asks_only_for_the_verdict(gate_env):
     assert "--evidence <payload-file>" not in prompt
 
 
+def test_recovery_prompt_does_not_assert_the_stage_completed(gate_env):
+    """"Verdict missing" and "stage never ran" are indistinguishable from here.
+
+    A group session can skip a later stage entirely (the group prompt used to
+    contradict itself and stop after stage 1), so asserting completion would
+    put a false premise in front of the agent and invite a fabricated pass.
+    """
+    adapter = FakeAdapter()
+    calls: list[dict] = []
+    with patch.object(
+        orchestrator,
+        "_spawn_session_with_tail",
+        _spawn_stub(calls, writes_verdict=True),
+    ):
+        _run_gate(gate_env, adapter=adapter)
+
+    prompt = adapter.prompts[0]
+    assert "work is complete and committed" not in prompt
+    assert "do not assume the stage completed" in prompt
+    assert "not performed at all" in prompt
+    assert "Do not pass a stage that did not run." in prompt
+
+
+def test_group_prompt_does_not_contradict_its_own_preamble(gate_env):
+    """The preamble orders all stages; a block must not forbid the next one."""
+    workflow = _workflow()
+    prompt = orchestrator.build_stage_group_prompt(
+        "docs/plans/vrc-01.md", workflow.stages, workflow
+    )
+    assert "Execute the following consecutive pipeline stages in order" in prompt
+    assert "Execute only this stage" not in prompt
+    assert "Do not proceed to subsequent stages" not in prompt
+    assert "continue to the next stage block in this prompt" in prompt
+
+
+def test_single_stage_prompt_still_forbids_later_stages(gate_env):
+    """The single-stage builder's copy is correct and must stay restrictive."""
+    prompt = orchestrator.build_prompt(
+        ["aet-qa"], "docs/plans/vrc-01.md", "implemented", "qa-complete",
+    )
+    assert "Execute only this stage. Do not proceed to subsequent stages." in prompt
+
+
 def test_recovery_session_carries_task_and_evidence_path(gate_env):
     calls: list[dict] = []
     with patch.object(

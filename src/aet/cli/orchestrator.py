@@ -871,27 +871,38 @@ def _run_verdict_recovery(
 ) -> None:
     """Spawn one narrow session whose only job is to write the missing verdict.
 
-    A missing verdict file is not a failed stage: the tests ran, the work is
-    committed, and the gate is refusing over an artifact that costs one command
-    to produce. Discarding the whole stage and re-running it from scratch pays
-    for the entire session again to recover a file. This asks once, for that
-    file only, with no license to touch the tree.
+    A missing verdict file is often not a failed stage: the work is committed
+    and the gate is refusing over an artifact that costs one command to
+    produce. Discarding the whole stage and re-running it from scratch pays for
+    the entire session again to recover a file. This asks once, for that file
+    only, with no license to touch the tree.
+
+    The prompt deliberately does **not** assert that the stage's work was
+    completed. A group session can end having skipped a later stage entirely,
+    so "verdict missing" and "stage never ran" are indistinguishable from here.
+    Asserting completion would put a false premise in front of the agent and
+    invite a fabricated pass; asking it to distinguish the two turns the
+    ambiguity into a reported signal instead.
 
     The session is telemetry-visible as another attempt at the same stage, so
     recovery cost stays attributable and a stage that needs it every run is
     legible as a defect rather than hidden in a retry.
     """
     prompt = (
-        f"The {stage} stage for {task_id} has already run: its work is complete "
-        f"and committed. The only missing artifact is the required {kind!r} "
-        f"stage verdict, which the orchestrator gate is fail-closed on.\n\n"
+        f"The {stage} stage session for {task_id} has ended without writing "
+        f"the required {kind!r} stage verdict, which the orchestrator gate is "
+        f"fail-closed on.\n\n"
         f"Write that verdict now, and nothing else. Submit it with: "
         f"`{evidence.submit_command(kind)}`. The required output path is in "
         f"`$AET_EVIDENCE_PATH`.\n\n"
-        f"Report the verdict the completed work actually earned — if the stage "
-        f"found blocking problems, submit `--verdict fail`. Do not modify, "
-        f"re-run, or commit anything in the repository; the verdict file is "
-        f"written outside the working tree."
+        f"First establish what actually happened, from the branch's commits and "
+        f"the working tree — do not assume the stage completed. Then:\n"
+        f"- If its work is complete, submit the verdict that work earned; if it "
+        f"found blocking problems, that is `--verdict fail`.\n"
+        f"- If the stage was not performed at all, submit `--verdict fail` with "
+        f"a summary saying so. Do not pass a stage that did not run.\n\n"
+        f"Do not modify, re-run, or commit anything in the repository; the "
+        f"verdict file is written outside the working tree."
     )
     if kind == "qa":
         keys = ", ".join(evidence.QA_REPORT_MINIMAL_KEYS)
@@ -1253,7 +1264,8 @@ def build_stage_group_prompt(
         blocks.append(
             f"Run {skills_str} on {plan_file}\n"
             f"Current stage: {stage.name}. Target stage: {next_stage}.\n"
-            f"Execute only this stage. Do not proceed to subsequent stages.\n"
+            f"Finish this stage completely, then continue to the next stage "
+            f"block in this prompt. Do not go past the last block.\n"
             f"Commit your work before exiting.{evidence_clause}"
         )
     return "\n\n".join(blocks)

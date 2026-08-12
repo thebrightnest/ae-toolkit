@@ -1,11 +1,12 @@
 # Mechanical Enforcement over Prose: What Shipped, What Is Still Open
 
 **Date:** 2026-08-12
-**Branch:** `fix/mechanical-enforcement-over-prose` (5 commits, unpushed)
+**Branch:** `fix/mechanical-enforcement-over-prose` (6 commits, unpushed)
 **Scope:** items 1–3 of the prose-vs-enforcement review, plus everything found
-while implementing them. Items 4–5 below were surfaced by a parallel session
-investigating a downstream AET project's halt loop and re-verified here; where
-that session's framing was off, the correction is noted.
+while implementing them. Later items were surfaced by two parallel sessions — one
+investigating a downstream AET project's halt loop, one running the
+poc-03a/03b/05 batch (`aet-toolkit-defects.md`) — and re-verified against the
+source tree here; where their framing was off, the correction is noted.
 
 ## What shipped
 
@@ -15,6 +16,7 @@ that session's framing was off, the correction is noted.
 | `45e788ef` | `evidence.submit_command` single-sources builder mode; four skills document it       |
 | `328f7b2c` | Missing-verdict recovery session; stage prompts derive their submit command          |
 | `c0d35b1c` | Corrected a false repair hint and two warnings describing a non-existent mechanism   |
+| *(pending)* | Group prompt no longer contradicts itself; recovery stops asserting completion      |
 
 Full suite green (1675 tests), plus `ruff`, `skills-lint`, `validate-skills`,
 `plans lint`, `docs lint`, `validate-workflows`, markdownlint.
@@ -79,60 +81,69 @@ terminology collision, and it did not, because both senses are legitimate
 domain terms. Leaving four files asserting an unbuilt model is the worst of the
 three options.
 
-### 2. Every orchestrated run splits its provenance across two ledger files and deletes half
+### 2. The ledger path is not single-sourced, and which file a run writes depends on how it was launched
 
-Ledger path derivation is not single-sourced. Four call sites, three different
-answers:
+Four call sites, four derivations:
 
-| Call site                    | Derivation                                                   | Resolves to      |
-| ---------------------------- | ------------------------------------------------------------ | ---------------- |
-| `cli/gate.py:368`            | `telemetry.resolve_repo_root() / ".agents" / "ledger.jsonl"`  | **worktree** root |
-| `cli/aet_state.py:583,734`   | `Path(backend.queue_file).resolve().parent / "ledger.jsonl"`  | main repo         |
-| `cli/sprint.py:148`          | `Path(args.queue_file).resolve().parent / "ledger.jsonl"`     | main repo         |
-| `cli/ship.py:860`            | bare `Ledger()` → CWD-relative default                        | wherever CWD is  |
+| Call site                  | Derivation                                                   |
+| -------------------------- | ------------------------------------------------------------ |
+| `cli/gate.py:368`          | `telemetry.resolve_repo_root() / ".agents" / "ledger.jsonl"` |
+| `cli/aet_state.py:583,734` | `Path(backend.queue_file).resolve().parent / "ledger.jsonl"` |
+| `cli/sprint.py:148`        | `Path(args.queue_file).resolve().parent / "ledger.jsonl"`    |
+| `cli/ship.py:860`          | bare `Ledger()` → CWD-relative default                       |
 
-`resolve_repo_root()` runs `git rev-parse --show-toplevel` (`project_id.py:26`),
-which **inside a git worktree returns the worktree's own root**. Verified with a
-probe: from `/tmp/wt-probe/wt` it returned `/tmp/wt-probe/wt`, not the main
-repo. Meanwhile `_record_stage` (`cli/orchestrator.py:305`) passes an
-**absolute** main-repo queue path to `aet state set-stage`, so stage events
-resolve to the main repo.
+`resolve_repo_root()` (`project_id.py:16`) checks `AET_REPO_ROOT` **first**, then
+falls back to `git rev-parse --show-toplevel` — which inside a git worktree
+returns the worktree's own root (verified with a probe: from `/tmp/wt-probe/wt`
+it returned `/tmp/wt-probe/wt`). Only one launch path sets that variable:
 
-Consequence, on the normal path of every orchestrated run:
+- **`aet run` (batch).** The batch loop spawns a per-task child orchestrator with
+  `env["AET_REPO_ROOT"] = repo_root` (`cli/orchestrator.py:2895`, passed to
+  `Popen(cmd, env=env)`), so the child and every stage session it spawns inherit
+  it. A worktree session's `aet gate submit` therefore writes the **main
+  checkout's** ledger.
+- **`aet run-one`, or a directly invoked orchestrator.** `_spawn_detached`
+  (`cli/main.py:343`) copies the environment and sets only `AET_RUN_ID`. With
+  `AET_REPO_ROOT` unset, the same command writes the **worktree's** ledger —
+  which `.worktrees/` gitignores and `aet ship close` deletes with
+  `git worktree remove --force` (`cli/ship.py:1003`).
 
-- `aet gate submit` runs inside the stage session, whose cwd is the worktree →
-  **every `verdict` event lands in `<worktree>/.agents/ledger.jsonl`**, together
-  with the boundary-contract (ADR-057) and identity-conflation lens payloads
-  that ride it.
-- `aet state set-stage` and closure → `<main repo>/.agents/ledger.jsonl`.
-- `.worktrees/` is in `AET_IGNORED_PATHS`, and `aet ship close` runs
-  `git worktree remove --force` (`cli/ship.py:1003`). **The verdict half of the
-  run's provenance is deleted at closure.**
+So one call site writes to different files depending on launch mode, and in one
+of those modes the events are discarded at closure. An earlier draft of this
+report asserted the worktree case unconditionally and concluded that verdict
+events are always deleted; that is wrong for the batch path, which is the
+dominant one. Under `aet run` the symptom is the inverse, and it is what a
+downstream session hit: a worktree session greps its own `.agents/ledger.jsonl`,
+sees nothing, and concludes the gate never ran.
 
-This produces no symptom today only because nothing reads the ledger (item 1) —
-a fragmented, half-discarded store and a healthy one are indistinguishable to a
-codebase with no readers. It becomes a data-loss bug the moment item 1 is
-wired, and it is already a data-loss bug in the honest sense: events the system
-recorded on purpose are destroyed.
+**Under the `git-refs` backend there are no `stage` events at all.**
+`_record_stage` (`cli/orchestrator.py:305`) probes a hardcoded
+`os.path.join(repo_root, ".agents", "work-queue.json")` and shells out to `aet
+state set-stage` only if that file exists. `git_refs_backend` keeps a
+`queue_file` attribute (`:76-79`) for path derivation but never writes the file,
+so under `git-refs` the branch is never taken: the advanced stage is persisted
+only to an in-memory dict, no `stage` ledger event is written, and every task ref
+carries `"stage": null` permanently. `get_current_stage` (`:293`) then falls back
+to the plan footer — which its docstring calls a "backward-compatible fallback"
+while it is in fact the only path, and which is exactly the input the plan
+overlay corrupts (item 10). Backend-blind path probing inside backend-agnostic
+code: the same defect class as `gate.py:368`.
 
-Two smaller divergences in the same table:
+Two smaller divergences:
 
-- `ship.py:860`'s bare `Ledger()` is CWD-relative, so `aet ship` invoked from a
-  subdirectory reads and writes a different ledger than every other call site.
-  Real, and worth its own fix, but the least severe of the three — it needs an
-  unusual invocation, whereas the worktree split is the default path.
-- `--queue-file` / the `queue` argument are user-settable
+- `ship.py:860`'s bare `Ledger()` is CWD-relative, so `aet ship` from a
+  subdirectory reads and writes a different file than every other call site.
+- `--queue-file` and the `queue` argument are user-settable
   (`cli/sprint.py:175`, `cli/aet_state.py:1409`). A non-default value moves the
-  ledger with it while `gate.py` stays at the repo root — a fourth answer,
-  conditional on flags.
+  ledger with it while `gate.py` stays at the repo root.
 
-**Suggested shape:** one exported derivation, the way ADR-023 already solved
-this exact problem for verdict paths (`evidence.resolve_verdict_path`, "writers
-and the gate must share this single derivation; hand-computing slugs from the
-worktree CWD is out of contract"). The ledger needs the same treatment, and the
-precedent means this is a known-solved problem applied to a second store, not a
-design question. A test should assert all call sites agree from inside a
-worktree.
+**Suggested shape:** one exported derivation, the way ADR-023 already solved this
+exact problem for verdict paths (`evidence.resolve_verdict_path` — "writers and
+the gate must share this single derivation; hand-computing slugs from the
+worktree CWD is out of contract"). The precedent makes this a known-solved
+problem applied to a second store, not a design question. Tests should assert
+that all call sites agree from inside a worktree, under both launch modes and
+both backends.
 
 ### 3. Downstream projects hit an unrecoverable halt loop: the ledger is missing from `AET_IGNORED_PATHS`
 
@@ -164,6 +175,19 @@ file the toolkit writes on every run. That distinction changes the fix: not
 "build an automatic mechanism" but "add the entry, and add a test asserting
 every file AET writes under `.agents/` appears in `AET_IGNORED_PATHS`". The
 second half is what stops the next store from repeating this.
+
+**`.agents/learnings.jsonl` is the same halt, and needs the opposite fix.** It is
+tracked in this repo, written by `aet learnings append`, and absent from both
+allow-lists — so appending a learning (which `aet-evolve` asks for on every
+retro) dirties the tree and halts the next run until it is committed. But
+gitignoring it would be wrong: it is *meant* to be tracked. `AET_IGNORED_PATHS`
+conflates two different properties — "do not track this" (it feeds the
+`.gitignore` writer) and "tolerate this dirty" (it feeds the hygiene gate) — and
+a tracked-but-tolerated file cannot be expressed in it. `DEFERRED_PATH_PREFIXES`
+is exactly that second concept, already used for `docs/plans/`. So: ledger →
+`AET_IGNORED_PATHS`, learnings → `DEFERRED_PATH_PREFIXES`. Splitting the two
+consumers apart is the durable fix; adding the ledger to one shared set is the
+one-liner.
 
 **Caveat that makes it a decision, not a cleanup:** adding the entry embeds the
 "ledger is machine-local" answer to item 1's architectural question. The halt is
@@ -261,6 +285,126 @@ ledger. Belongs with `docs/prds/single-ledger-closure-prd.md`.
 - **Reinstall before trusting `aet` behaviour.** The installed CLI is a
   snapshot; the five files changed on this branch differ from what `aet` on
   PATH executes until reinstall.
+
+## Defects from the poc-03a/03b/05 batch
+
+A downstream session running that batch against 1.8.0 produced
+`aet-toolkit-defects.md` (13 items, D1–D13). Its D4 and D6 are items 3 and 1
+above, found independently. Its D13 corrected item 2 of this report. Everything
+load-bearing below was re-verified against the source tree; four fixes exist
+only as edits to that session's `site-packages` tree and are **not upstream**.
+
+### 10. Fixed here: the stage-group prompt contradicted itself (D1)
+
+`build_stage_group_prompt` opened with "Execute the following consecutive
+pipeline stages in order … Do not proceed past the final stage listed", then
+appended one block per stage carrying the **single-stage** wording verbatim:
+"Execute only this stage. Do not proceed to subsequent stages." The agent obeys
+the nearer, more specific instruction, so a group session completes its first
+stage and the next gate fails closed on a later stage's verdict. Field-observed
+on `poc-03a`, with the child stating it stopped deliberately — and
+**nondeterministic**: another group in the same run completed both stages, so a
+green batch is no evidence of absence.
+
+Fixed in this branch: the per-stage block now says to finish the stage and
+continue to the next block in the prompt. The single-stage builder's copy is
+correct and was deliberately left alone; a test now pins both.
+
+This is the one item in this report whose fix is legitimately more prose — a
+prompt is irreducibly prose, and "do every stage in this session" is not
+checkable from inside it. The mechanical backstop already exists (the group gate
+checks each stage's verdict); what was missing is covered next.
+
+### 11. Fixed here: verdict recovery asserted a premise the orchestrator cannot check
+
+The recovery session added in `328f7b2c` told the agent "its work is complete and
+committed". D1 makes that reachable and false: when a group session skips a later
+stage, "verdict missing" and "stage never ran" are indistinguishable at the gate,
+so recovery would have asked for a verdict on work that never happened — a false
+premise in a prompt, inviting a fabricated pass. The prompt now states only that
+the session ended without writing the verdict, tells the agent to establish what
+happened from the branch's commits, and requires `--verdict fail` naming the
+omission if the stage was not performed. Ambiguity becomes a reported signal
+instead of a coerced pass.
+
+### 12. The plan overlay clobbers an advanced worktree plan (D2) — open
+
+`_copy_deferred_files` (`worktree.py:353`) overlays `docs/plans/` from the main
+checkout into the worktree "regardless of git state", and `copy_untracked_files`
+runs unconditionally on every task start including a resume
+(`cli/orchestrator.py:1282`). ADR-054 deliberately leaves the main copy
+un-advanced mid-sprint, so a resume regresses the worktree's plan footer to the
+entry stage and presents a diff deleting the stage notes — 166 lines on
+`poc-03a`, after which the pipeline re-ran `aet-tdd`, `aet-implement`, `aet-qa`
+and `aet-review` over already-reviewed code at a measured **~$24**.
+
+Compounded by item 2's `_record_stage` no-op: with the task record's stage always
+null under `git-refs`, the clobbered footer is the *only* stage input.
+
+Their mtime-guard fix is sound but changes overlay semantics (an operator edit no
+longer wins if the worktree copy is newer), so it wants a test and an ADR note
+against ADR-054 rather than a quiet patch.
+
+### 13. The halt message discards its own diagnosis (D5) — open, one-liner
+
+`check_base_hygiene` returns a bare `"Working tree is dirty"`
+(`worktree.py:620`) while holding `dirty_lines`. For an unattended run that
+cannot ask, the entire cost of the halt is that the operator must reproduce
+`git status` by hand and cross-check two allow-lists. Naming up to N offending
+paths makes the halt self-diagnosing. Squarely on this report's theme: a
+mechanical check that computed the answer and threw it away.
+
+### 14. Only `verdict` is value-checked in evidence payloads (D12) — open
+
+`aet gate submit` stamps `tree_hash` only when the key is **absent**
+(`cli/gate.py:378`), and `validate_verdict` type-checks every field but
+value-checks only `verdict` (`evidence.py:167-186`). So a payload carrying
+`"tree_hash": "pending"` type-checks as `str`, suppresses the real stamp, and is
+accepted — silently defeating ADR-025's freshness comparison, whose entire input
+is that hash. Builder mode dodges it (the key is always absent, so the stamp
+always happens), which is another reason to prefer it, but the `--evidence` path
+remains open. Fix: stamp unconditionally, or value-check the field. Cheap.
+
+### 15. Offline paths, and a state-machine gap (D7, D8, D10, D11) — open
+
+Outside this report's theme but verified and worth a defect backlog:
+
+- **D7** — `_run_git` defaults to `check=True` (`cli/ship.py:348`), so
+  `_fetch_origin()` (`:353`, called at `:455`) raises on a repo with no remote.
+  Every `aet ship` subcommand runs the pre-merge gate, so `gate`, `open`, `merge`
+  and `split` all die identically. The `git-refs` backend's own `fetch()` is
+  deliberately remote-safe; ship bypasses that guard.
+- **D8** — `cmd_record_merge` runs an unconditional `git fetch origin` and
+  returns 1 on failure (`cli/aet_state.py:1308`), so no invocation succeeds
+  offline, while `aet state transition` handles the same case correctly.
+- **D10** — `_BATCH_ACTIONABLE_STATES` includes `in_progress` on the documented
+  assumption that such a task "has a live child" (`cli/orchestrator.py:1931`),
+  but `get_next_ready_task` spawns only `ready`. A task whose child died is
+  therefore neither run nor given up on. `aet state reset` derives from git, and
+  a worktree with commits derives `in_progress`, so it converts a visibly-failed
+  task into a silently-stuck one; `aet state transition failed ready` is the
+  correct recovery.
+- **D11** — an `aet status` that reported an empty queue while
+  `refs/aet/tasks/*` held five tasks, alongside a stale
+  `.agents/work-queue.json.lock`. Unreproduced and self-resolving, so not
+  actionable as stated, but a fail-open read on the authoritative store invites
+  destructive "recovery" such as `aet init-queue`. Worth reproducing before
+  filing.
+
+### Corrections to that document
+
+- **D6 claims `cli/sprint.py:148` "reads it for settled-ness".** It writes a
+  `cut` event; `read_events()` has no production caller (item 1). The
+  "load-bearing" premise is what justifies their "keep tracking the ledger"
+  recommendation, and it does not hold — tracking it buys no durability today and
+  costs the hygiene halt.
+- **D13's mechanism was inferred, not tested.** It is right for `aet run` and
+  wrong for `run-one`; the difference is `AET_REPO_ROOT` (item 2). My own earlier
+  claim had the same shape of error in the other direction.
+- **D4's "once the ledger is tracked"** understates it: hygiene runs
+  `--untracked-files=all`, so an untracked ledger halts the run too.
+- **D8's "returns 1 before it ever reads `--merge-commit`"** is imprecise — the
+  value is read at `:1305`, just unused before the early return.
 
 ## Closed — do not reopen
 
