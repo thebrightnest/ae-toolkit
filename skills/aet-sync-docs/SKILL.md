@@ -77,11 +77,16 @@ Compare the original plan against what was actually built, and update both the P
 
 Submit the stage verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Do not hand-edit plan footers or queue state.
 
+Use builder mode, which constructs the payload in code:
+
 ```bash
-aet gate submit --stage sync-docs --verdict <pass|fail> --evidence <payload-file>
+aet gate submit --stage sync-docs --verdict <pass|fail> \
+  --summary "<one line>" --divergence "<item or file>"
 ```
 
-Write `<payload-file>` to a scratch path outside the tracked tree. The payload follows the `sync-docs` schema expected by `aet gate submit`; consult the command help or reference docs for the current fields.
+Builder mode constructs the payload in code, stamping every schema field itself. `--divergence` is repeatable and accepts either an inline string or a file path whose contents are read. It needs `AET_TASK_ID`, which orchestrated sessions already have.
+
+Hand-authoring the full payload and passing `--evidence <payload-file>` still works, but you would be reproducing schema fields you cannot see — the cause of past rejected verdicts. Prefer builder mode; `docs/CLI.md` carries the generated option reference.
 
 ## Completion Protocol
 
