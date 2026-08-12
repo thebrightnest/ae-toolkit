@@ -49,9 +49,12 @@ SCHEMA_VERSION = 1
 # other state, so the remedy is always restore-or-rebuild, never hand-repair.
 _REPAIR_HINT = (
     "The ledger is append-only and content-addressed: an edited line's id no "
-    "longer attests its body, and the original cannot be re-derived. Restore "
-    "the file from a backup, or delete it and rebuild provenance from the "
-    "queue with `aet state audit`. Never hand-edit it."
+    "longer attests its body, and the original cannot be re-derived. There is "
+    "no rebuild path — the file is gitignored, and no other store holds these "
+    "events. Restore it from a backup, or remove it and accept the loss of "
+    "provenance for events already recorded. (`aet state audit` diagnoses "
+    "queue-vs-git drift, which is a different question; it does not rebuild "
+    "the ledger.) Never hand-edit it."
 )
 
 
