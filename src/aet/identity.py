@@ -25,8 +25,10 @@ from typing import Any
 from aet import change_scope, plan_parser, telemetry
 
 # Suffix groups.  The camel/Pascal regex tries shorter suffixes first, but
-# case prevents ``Id`` from matching ``ID`` and vice-versa.
-_WORD_RE = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
+# case prevents ``Id`` from matching ``ID`` and vice-versa.  A negative
+# lookbehind for ``\\`` avoids treating the ``n`` of ``\\n`` (an escaped
+# newline in a string literal) as the start of an identifier.
+_WORD_RE = re.compile(r"(?<!\\)\b[A-Za-z_][A-Za-z0-9_]*\b")
 
 # camelCase/PascalCase identifier suffixes, longest first to avoid ``UUID``
 # being parsed as ``ID``.
