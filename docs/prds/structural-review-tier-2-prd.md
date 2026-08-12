@@ -218,6 +218,23 @@ _Recorded: 2026-08-11 — Branch: t2r-06-adr-frontmatter-docs-lint_
 
 ---
 
+### t2r-07-context-digest-injection
+
+_Recorded: 2026-08-11 — Branch: t2r-07-context-digest-injection_
+
+#### Changed from plan
+
+- None — the implementation matches the R-5 plan intent.
+
+#### Added (unplanned)
+
+- `tests/conftest.py`: extended `sys.path`/`PYTHONPATH` setup to include the repo root alongside `src/`, keeping test imports consistent with the new R-5 test fixtures.
+- `tests/fixtures/context/{claude_code,codex,gemini}_envelope.json`: updated the hook-mode SessionStart envelope fixtures to include the new `rules_digest` and `durable_insights` fields introduced by the extended `aet context` JSON shape.
+
+#### Deferred
+
+- Task 7 (merge branch to main and verify integration): deferred to the `aet-ship` closure stage, consistent with the standard pipeline.
+
 <!-- markdownlint-enable MD024 -->
 
 _Stage: synced_
