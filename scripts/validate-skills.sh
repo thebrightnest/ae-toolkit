@@ -187,6 +187,9 @@ broken = False
 for dirpath, dirnames, filenames in os.walk("."):
     if dirpath == ".":
         dirnames[:] = [d for d in dirnames if d not in (".git", "content", ".worktrees")]
+    # Skip dependency directories and build artifacts; their markdown files are
+    # third-party content and not part of the maintained corpus.
+    dirnames[:] = [d for d in dirnames if d != "node_modules"]
     # Archived plans are settled and excluded from corpus scans; their relative
     # links were written for docs/plans/ and are intentionally not maintained
     # after the move to docs/plans/archive/.
