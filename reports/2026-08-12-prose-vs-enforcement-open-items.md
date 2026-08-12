@@ -1,7 +1,7 @@
 # Mechanical Enforcement over Prose: What Shipped, What Is Still Open
 
 **Date:** 2026-08-12
-**Branch:** `fix/mechanical-enforcement-over-prose` (6 commits, unpushed)
+**Branch:** `fix/mechanical-enforcement-over-prose` (9 commits, unpushed: 5 code, 4 this report)
 **Scope:** items 1–3 of the prose-vs-enforcement review, plus everything found
 while implementing them. Later items were surfaced by two parallel sessions — one
 investigating a downstream AET project's halt loop, one running the
@@ -18,7 +18,7 @@ source tree here; where their framing was off, the correction is noted.
 | `c0d35b1c` | Corrected a false repair hint and two warnings describing a non-existent mechanism   |
 | `29601183` | Group prompt no longer contradicts itself; recovery stops asserting completion       |
 
-Full suite green (1675 tests), plus `ruff`, `skills-lint`, `validate-skills`,
+Full suite green (1678 tests), plus `ruff`, `skills-lint`, `validate-skills`,
 `plans lint`, `docs lint`, `validate-workflows`, markdownlint.
 
 ## Open items, most consequential first
@@ -126,7 +126,7 @@ only to an in-memory dict, no `stage` ledger event is written, and every task re
 carries `"stage": null` permanently. `get_current_stage` (`:293`) then falls back
 to the plan footer — which its docstring calls a "backward-compatible fallback"
 while it is in fact the only path, and which is exactly the input the plan
-overlay corrupts (item 10). Backend-blind path probing inside backend-agnostic
+overlay corrupts (item 12). Backend-blind path probing inside backend-agnostic
 code: the same defect class as `gate.py:368`.
 
 Two smaller divergences:
