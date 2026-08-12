@@ -70,21 +70,21 @@ other Shared Preamble blocks with `aet context` consumption is **t2r-05**
 
 ## Task List
 
-1. New module `src/aet/context_digest.py`: ADR reader — walk `docs/adr/*.md`,
+1. [x] New module `src/aet/context_digest.py`: ADR reader — walk `docs/adr/*.md`,
    parse frontmatter via `plan_parser.parse_frontmatter`, collect `subject:`
    and `supersedes:`; ADRs without `subject:` are excluded, never errors —
    S (traces: R-5)
-2. Chain resolution in `src/aet/context_digest.py`: group by subject,
+2. [x] Chain resolution in `src/aet/context_digest.py`: group by subject,
    resolve the `supersedes:` chain to the single live ADR (the
    rule-as-it-stands). Cycles, dangling `supersedes:` refs, and dual-live
    subjects render as an explicit `CONFLICT` marker in the digest — never a
    silent pick; enforcement of one-live-rule stays with t2r-06-adr-frontmatter-docs-lint's
    `aet docs lint` — M (traces: R-5)
-3. Digest renderer in `src/aet/context_digest.py`: stable subject-sorted
+3. [x] Digest renderer in `src/aet/context_digest.py`: stable subject-sorted
    section; each rule cites its ADR chain (live ADR + superseded lineage).
    Generated on every invocation — no committed artifact, nothing
    hand-maintained — S (traces: R-5)
-4. Durable-insight reader + selector interface in
+4. [x] Durable-insight reader + selector interface in
    `src/aet/context_digest.py`: read `.agents/learnings.jsonl` directly
    (line-delimited JSON, malformed lines skipped, missing file yields empty),
    sorted by recency descending (`timestamp`, tolerating legacy `date`); a
@@ -92,16 +92,16 @@ other Shared Preamble blocks with `aet context` consumption is **t2r-05**
    `TopNRecentSelector` (default N=5) as the shipped degrade path, so the
    recurrence-threshold promotion selector plugs in later without call-site
    changes — M (traces: R-5)
-5. Wire both into `aet context` output (extend `src/aet/cli/context.py`
+5. [x] Wire both into `aet context` output (extend `src/aet/cli/context.py`
    created by t2r-04-aet-context-command): add `rules_digest` and `durable_insights` fields to
    the JSON shape and a digest section to the banner rendering; empty inputs
    (no `subject:` frontmatter yet, no learnings file) degrade to empty
    sections, never errors — S (traces: R-5)
-6. Tests: `tests/test_context_digest.py` (new — unit: parsing, chain
+6. [x] Tests: `tests/test_context_digest.py` (new — unit: parsing, chain
    resolution, conflict rendering, selector ordering/degradation) and
    `tests/cli/test_context.py` (created by t2r-04-aet-context-command; extended — integration:
    both fields present in `aet context` JSON and banner) — M (traces: R-5)
-7. Merge branch to main and verify integration — S
+7. [Deferred: merge to main deferred to `aet-ship` closure] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -144,21 +144,21 @@ other Shared Preamble blocks with `aet context` consumption is **t2r-05**
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`make test`)
-- [ ] `tests/test_context_digest.py` (unit): ADRs without `subject:` are
+- [x] Lint passes (`make lint-py`)
+- [x] Tests pass (`make test`)
+- [x] `tests/test_context_digest.py` (unit): ADRs without `subject:` are
   excluded; chain resolution picks the single live rule; dual-live subjects
   render `CONFLICT`; `TopNRecentSelector` orders by recency (`timestamp`,
   tolerating legacy `date`) descending and caps at N; malformed JSONL lines
   and a missing learnings file yield empty, not errors
-- [ ] `tests/cli/test_context.py` (integration): `aet context` JSON contains
+- [x] `tests/cli/test_context.py` (integration): `aet context` JSON contains
   `rules_digest` and `durable_insights`; the banner renders the digest
   section; both degrade to empty sections on a fixture without ADR
   frontmatter or learnings
-- [ ] No committed digest artifact: `git ls-files | grep -i current-rules`
+- [x] No committed digest artifact: `git ls-files | grep -i current-rules`
   is empty — the digest exists only at runtime
-- [ ] R-trace coverage: R-5 covered by tasks 1–6; no task cites another R-id
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] R-trace coverage: R-5 covered by tasks 1–6; no task cites another R-id
+- [x] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
 
@@ -172,5 +172,5 @@ auth/data/dependency risk that would justify `full`.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: synced*
+*Next step: run `aet-ship`*
