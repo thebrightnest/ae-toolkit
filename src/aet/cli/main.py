@@ -56,6 +56,7 @@ from aet.cli import (
 )
 # isort: on
 from aet import telemetry
+from aet.ledger import LedgerCorruptionError
 from aet.plan_parser import resolve_plan_arg
 
 app = typer.Typer(
@@ -425,6 +426,12 @@ def main() -> int:
         if isinstance(exc.code, int):
             return exc.code
         return 0
+    except LedgerCorruptionError as exc:
+        # The message carries the offending lines and the repair path. A
+        # traceback is technically loud but buries both, and this is the one
+        # failure whose remedy the operator has to read.
+        typer.echo(f"⛔ ledger integrity failure\n{exc}", err=True)
+        return 1
     return 0
 
 
