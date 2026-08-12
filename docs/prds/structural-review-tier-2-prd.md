@@ -218,6 +218,31 @@ _Recorded: 2026-08-11 — Branch: t2r-06-adr-frontmatter-docs-lint_
 
 ---
 
+_Recorded: 2026-08-12 — Branch: t2r-13-single-pr-rehearsal_
+
+### Changed from plan
+
+- Task 4 end-state assertions: the existing `_finalize_task` path did not seal a
+  single-pr task to `merged` after the child had already integrated locally and
+  recorded a `merge_commit`. The implementation added that sealed transition in
+  `src/aet/cli/orchestrator.py` so both tasks reach `merged` and unblock
+  dependents, matching the ADR-045 "done means integrated" contract the
+  rehearsal asserts.
+
+### Added (unplanned)
+
+- `scripts/validate-skills.sh`: skip `node_modules` directories during the
+  internal markdown link scan. This prevents the corpus validator from treating
+  third-party dependency markdown as maintained content when the npm fixture is
+  installed locally.
+
+### Deferred
+
+- Task 6 (merge branch to main and verify integration): deferred to the
+  `aet-ship` closure stage, consistent with the standard pipeline.
+
+---
+
 <!-- markdownlint-enable MD024 -->
 
 _Stage: synced_

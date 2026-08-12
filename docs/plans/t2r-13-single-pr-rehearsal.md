@@ -79,16 +79,16 @@ Recorded assumptions and collisions:
 
 ## Task List
 
-1. Fixture npm package under `tests/fixtures/single-pr/npm/`: `package.json`
+1. ✓ Fixture npm package under `tests/fixtures/single-pr/npm/`: `package.json`
    pinning one tiny runtime dependency, a committed reproducible
    `package-lock.json` (generated with `npm install --package-lock-only` and
    verified by a clean `npm ci`), and `index.js` that requires the installed
    dependency and writes its result to a marker file — S (traces: R-12)
-2. Fixture plans `tests/fixtures/single-pr/first-task.md` and
+2. ✓ Fixture plans `tests/fixtures/single-pr/first-task.md` and
    `tests/fixtures/single-pr/second-task.md` (frontmatter `workflow:
    rehearsal`; second task `blocked_by` the first), modeled on
    `tests/fixtures/nightshift/*.md` — S (traces: R-12)
-3. `tests/orchestrator/test_single_pr_rehearsal.py` (new, marked
+3. ✓ `tests/orchestrator/test_single_pr_rehearsal.py` (new, marked
    `xdist_group("process-group")` to serialize with the nightshift rehearsal):
    temp repo + bare origin on the nightshift pattern; non-trunk integration
    branch `epic-rehearsal`; **no in-tree config** — `integration_mode:
@@ -101,7 +101,7 @@ Recorded assumptions and collisions:
    `AET_INTEGRATION_VALIDATE_CMD="npm ci && node index.js"` so the post-rebase
    validation re-runs the real install; `pytest.skip` with a named reason when
    `npm` is absent from `PATH` — M (traces: R-12)
-4. Rehearsal assertions, all observable end states: both tasks reach `merged`;
+4. ✓ Rehearsal assertions, all observable end states: both tasks reach `merged`;
    `git ls-remote --heads origin` shows only `main` and `epic-rehearsal` (no
    per-task branches); `git log origin/epic-rehearsal` contains both
    `Integrate <task>` squash commits in dependency order; the second task's
@@ -109,7 +109,7 @@ Recorded assumptions and collisions:
    live-tip sequencing through the real install);
    `resolve_integration_mode_with_provenance` reports the shadow layer
    (`config (user)`) for the fixture repo — S (traces: R-12)
-5. Trigger wiring in `src/aet/change_scope.py` per ADR-049: add a
+5. ✓ Trigger wiring in `src/aet/change_scope.py` per ADR-049: add a
    `REHEARSAL_TRIGGER_PREFIXES` set (the single-pr/worktree surface:
    `src/aet/cli/orchestrator.py`, `src/aet/integration_lock.py`,
    `src/aet/worktree.py`, `src/aet/backends/factory.py`) — when the changed
@@ -119,7 +119,7 @@ Recorded assumptions and collisions:
    `("src/aet/integration_lock.py", "tests/orchestrator")` mapping entry;
    extend `tests/test_change_scope.py` with unit tests for the union and the
    new mapping — S (traces: R-12)
-6. Merge branch to main and verify integration — S
+6. [Deferred: to `aet-ship` closure] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -211,5 +211,5 @@ against collapsing stages into one `minimal` session.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: synced*
+*Next step: run `aet-ship`*
