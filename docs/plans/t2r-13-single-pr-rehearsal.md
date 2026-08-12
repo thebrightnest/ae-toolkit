@@ -27,8 +27,9 @@ deps). ADR-045 names this dual meaning of "done" as the most likely source of
 future bugs; R-12 rehearses the production-shaped configuration before the
 next production incident does.
 
-Precedent: the nightshift rehearsal (`tests/orchestrator/test_nightshift_rehearsal.py`,
-`tests/fixtures/nightshift/{healthy,deterministic-failure,stall}.md`, and an
+Precedent: the nightshift rehearsal (`tests/orchestrator/test_nightshift_rehearsal.py`
+
++ `tests/fixtures/nightshift/{healthy,deterministic-failure,stall}.md` + an
 inline `rehearsal.json` workflow) runs a real `run_batch` loop against a temp
 repo with a fake `claude` CLI. This plan follows that shape exactly, swapping
 the fixture behavior for a real `npm ci` install and the queue semantics for
@@ -211,4 +212,4 @@ against collapsing stages into one `minimal` session.
 ---
 
 *Stage: implemented*
-*Next step: run `aet-qa`*
+*Next step: run `aet-work`*
