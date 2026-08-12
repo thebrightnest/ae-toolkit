@@ -211,5 +211,5 @@ against collapsing stages into one `minimal` session.
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
