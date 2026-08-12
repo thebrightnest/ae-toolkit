@@ -57,8 +57,14 @@ Prose asserting the unbuilt behaviour as fact, beyond those two:
   ledger." Doubly false: the ledger is not refs-borne, and nothing derives the
   queue from it.
 - `git_refs_backend.py:13` — "Nothing here pushes `refs/aet/*`: the backend is
-  local-only by default", so even the *queue* half of decision 4 is conditional
-  on configuration.
+  local-only by default." This one is false about its own module: `push()` is
+  implemented at `:280` and called by `aet_state.py:730`, `aet_state.py:1395`
+  (mandatory at closure), `gate.py:388`, and `sprint.py:145`. The queue half of
+  decision 4 **is** built and does travel; an earlier draft of this report took
+  the docstring at face value and concluded otherwise. What does not travel is
+  the ledger — and `.agents/work-history.jsonl`, which this same docstring
+  correctly notes is "left in the append-only work-history.jsonl file", is
+  gitignored, and is what `_is_settled_from_authority` actually reads.
 
 Neither authoritative store travels. `.agents/work-history.jsonl` — the store
 that actually answers "is it done?" — is itself in `AET_IGNORED_PATHS`, i.e.
