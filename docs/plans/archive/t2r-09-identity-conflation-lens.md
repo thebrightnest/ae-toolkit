@@ -184,5 +184,5 @@ sufficient (no auth, data-model, or dependency surface).
 
 ---
 
-*Stage: synced*
+*Stage: merged*
 *Next step: run `aet-ship`*
