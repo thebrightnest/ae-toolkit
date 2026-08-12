@@ -68,7 +68,7 @@ is explicitly out of scope.
 
 ## Task List
 
-1. New module `src/aet/identity.py` implementing the detection half
+1. ✓ New module `src/aet/identity.py` implementing the detection half
    of the lens: scan added lines of the diff against `origin/main` (reusing
    `change_scope.BASE_REF` and the `_git` helper pattern) for
    identifier-shaped symbols (`*Id`, `*ID`, `*Uuid`, `*UUID`, `*_id`,
@@ -78,13 +78,13 @@ is explicitly out of scope.
    silent pass (ADR-049/ADR-025 fail-safe bias). Unit-tested in
    `tests/test_identity.py` with the four evidenced pairs as
    fixtures — M (traces: R-7)
-2. Plan-frontmatter `identity:` declaration block, owned and validated by
+2. ✓ Plan-frontmatter `identity:` declaration block, owned and validated by
    the lens (no `plan_parser` contract change): when the lens fires, the
    plan must carry an `identity:` entry per conflated entity naming both
    identifiers and a `persists:` designation that is one of them; a fired
    lens with a missing or malformed declaration is a gate failure — S
    (traces: R-7)
-3. Carrier wiring in `src/aet/cli/gate.py` (mirroring t2r-08's task 3): on
+3. ✓ Carrier wiring in `src/aet/cli/gate.py` (mirroring t2r-08's task 3): on
    `gate submit --stage review` (builder and `--evidence` modes alike), run
    the identity check over `change_scope.changed_paths()`; a
    fired-but-undeclared result refuses the verdict with a named error and
@@ -93,14 +93,14 @@ is explicitly out of scope.
    the review payload's `findings` and in the ledger `verdict` event
    `payload`. Covered by extending `tests/gate/test_gate_submit.py`
    (integration) — S (traces: R-7)
-4. Add a `change_scope._PATH_TARGETS` entry mapping `src/aet/identity.py` →
+4. ✓ Add a `change_scope._PATH_TARGETS` entry mapping `src/aet/identity.py` →
    `tests/test_identity.py` (t2r-08's task-2 pattern) so lens changes run
    targeted tests instead of the full suite; extend
    `tests/test_change_scope.py` for the mapping — S (traces: R-7)
-5. Document the optional `identity:` block in
+5. ✓ Document the optional `identity:` block in
    `.agents/templates/plan-template.md` with one worked example
    (`projectPath` vs `projectId`, persists: `projectId`) — S (traces: R-7)
-6. Merge branch to main and verify integration — S
+6. [Deferred: ship stage] Merge branch to main and verify integration — S
 
 ### Floor Check
 
@@ -144,27 +144,30 @@ is explicitly out of scope.
 
 ## Validation Steps
 
-- [ ] Lint passes (`make lint-py`)
-- [ ] Tests pass (`make test`)
-- [ ] `tests/test_identity.py` (unit, single layer) covers:
+- [x] Lint passes (`make lint-py`)
+- [ ] Tests pass (`make test`) — targeted tests pass; full suite has one
+  unrelated failure in `tests/test_orchestrator_daemonize.py::TestFollowerWaitsSilently::test_follow_live_run_waits_for_returncode`
+  (rc 0 != 13) that does not touch identity, gate, or change_scope surfaces
+- [x] `tests/test_identity.py` (unit, single layer) covers:
   token extraction for each identifier shape; entity-stem grouping; each of
   the four evidenced pairs detected (path vs UUID, provider session id vs
   application UUID, `projectPath` vs `projectId`, route param vs resolved
   id); a single-identifier diff does not fire; a malformed `identity:`
   block (one identifier, or `persists:` not among the named identifiers)
   fails validation
-- [ ] Integration (cross-layer, `tests/gate/test_gate_submit.py`): a fixture
+- [x] Integration (cross-layer, `tests/gate/test_gate_submit.py`): a fixture
   change set with a dual-identifier diff and no `identity:` declaration
   refuses a `pass` review verdict at `aet gate submit` (exit 1, named
   error); adding the declaration lets the submit pass; an undeterminable
   diff yields the indeterminate finding, not a silent pass
-- [ ] API boundary tests: not applicable — no frontend ↔ backend surface
+- [x] API boundary tests: not applicable — no frontend ↔ backend surface
   changes
-- [ ] `tests/test_change_scope.py` covers the `src/aet/identity.py` →
+- [x] `tests/test_change_scope.py` covers the `src/aet/identity.py` →
   `tests/test_identity.py` mapping
-- [ ] `grep -rn "identity" skills/*/SKILL.md` shows no prose lens
-  instructions — the check exists only in code
-- [ ] R-trace coverage: R-7 covered by tasks 1–5
+- [x] `grep -rn "identity" skills/*/SKILL.md` shows no prose lens
+  instructions — the check exists only in code (the one hit in
+  `skills/aet-setup/SKILL.md` refers to login/auth identity, not the lens)
+- [x] R-trace coverage: R-7 covered by tasks 1–5
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -181,5 +184,5 @@ sufficient (no auth, data-model, or dependency surface).
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: synced*
+*Next step: run `aet-ship`*

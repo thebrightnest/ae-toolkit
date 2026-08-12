@@ -218,6 +218,26 @@ _Recorded: 2026-08-11 — Branch: t2r-06-adr-frontmatter-docs-lint_
 
 ---
 
+_Recorded: 2026-08-12 — Branch: t2r-09-identity-conflation-lens_
+
+### Changed from plan
+
+- No meaningful divergences between the t2r-09 plan and the implementation.
+  The identity-conflation lens (`src/aet/identity.py`), gate wiring
+  (`src/aet/cli/gate.py`), targeted tests, `change_scope` mapping, and plan
+  template documentation all match the plan intent.
+
+### Added (unplanned)
+
+- None.
+
+### Deferred
+
+- Task 6 (merge branch to main and verify integration): deferred to the
+  `aet-ship` closure stage, consistent with the standard pipeline.
+
+---
+
 <!-- markdownlint-enable MD024 -->
 
 _Stage: synced_
