@@ -9,6 +9,7 @@ security_review: required
 security_review_reason: adds a new mechanical check to the gate path every merge depends on
 docs_sync: required
 docs_sync_reason: adds an optional plan-frontmatter key documented in the plan template
+identity: [{entity: project, identifiers: [projectId, projectPath, projectUuid, projectUUID, project_id, project_uuid], persists: projectId}, {entity: session, identifiers: [sessionId, sessionUuid], persists: sessionUuid}]
 ---
 
 # Plan: Identity-Conflation Lens — Dual Identifiers Must Name Which One Persists
@@ -180,5 +181,5 @@ sufficient (no auth, data-model, or dependency surface).
 
 ---
 
-*Stage: plan-approved*
-*Next step: run `aet-work`*
+*Stage: implemented*
+*Next step: run `aet-qa`*

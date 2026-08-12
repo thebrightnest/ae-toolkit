@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aet.boundary import BoundaryResult
+from aet.identity import IdentityResult
 
 _REPO_ROOT = Path(__file__).parents[2]
 _GATE_BIN = _REPO_ROOT / "src" / "aet" / "cli" / "gate.py"
@@ -492,8 +493,17 @@ class TestBoundaryLens(unittest.TestCase):
             tmp = Path(tmpdir)
             dest = tmp / "review.json"
             clear = self._clear_result()
+            identity_clear = IdentityResult(
+                tripped=False,
+                reason="no identity conflation detected",
+                findings=[],
+                declaration_valid=True,
+                declaration_errors=[],
+            )
             with patch.object(gate.change_scope, "changed_paths", return_value=["src/utils/helpers.py"]), patch.object(
                 gate.boundary, "check", return_value=clear
+            ), patch.object(
+                gate.identity, "check", return_value=identity_clear
             ), patch.dict(
                 os.environ,
                 {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-08", "AET_REPO_ROOT": str(tmp)},
@@ -533,9 +543,18 @@ class TestBoundaryLens(unittest.TestCase):
                 agreement_tests=[],
                 pairs=[],
             )
+            identity_clear = IdentityResult(
+                tripped=False,
+                reason="no identity conflation detected",
+                findings=[],
+                declaration_valid=True,
+                declaration_errors=[],
+            )
             with patch.object(
                 gate.change_scope, "changed_paths", return_value=["src/serializers/user.py"]
-            ), patch.object(gate.boundary, "check", return_value=clear), patch.dict(
+            ), patch.object(gate.boundary, "check", return_value=clear), patch.object(
+                gate.identity, "check", return_value=identity_clear
+            ), patch.dict(
                 os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True
             ):
                 rc, _out, err = self._run(
@@ -586,8 +605,17 @@ class TestBoundaryLens(unittest.TestCase):
             agents_dir.mkdir()
             dest = tmp / "review.json"
             clear = self._clear_result()
+            identity_clear = IdentityResult(
+                tripped=False,
+                reason="no identity conflation detected",
+                findings=[],
+                declaration_valid=True,
+                declaration_errors=[],
+            )
             with patch.object(gate.change_scope, "changed_paths", return_value=["src/utils/helpers.py"]), patch.object(
                 gate.boundary, "check", return_value=clear
+            ), patch.object(
+                gate.identity, "check", return_value=identity_clear
             ), patch.dict(
                 os.environ,
                 {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-08", "AET_REPO_ROOT": str(tmp)},
@@ -617,6 +645,192 @@ class TestBoundaryLens(unittest.TestCase):
             payload = verdict_events[0]["payload"]
             self.assertIn("boundary_contract_lens", payload)
             self.assertEqual(payload["boundary_contract_lens"]["tripped"], False)
+
+
+class TestIdentityLens(unittest.TestCase):
+    """The identity-conflation lens blocks review submits without a declaration."""
+
+    def _run(self, argv):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            rc = gate.main(argv)
+        return rc, stdout.getvalue(), stderr.getvalue()
+
+    def _tripped_result(self, findings=None, declaration_valid=False):
+        return IdentityResult(
+            tripped=True,
+            reason="identity conflation detected but plan declaration is missing",
+            findings=findings or [{"entity": "project", "identifiers": ["projectId", "projectPath"]}],
+            declaration_valid=declaration_valid,
+            declaration_errors=["identity conflation detected but plan declaration is missing"],
+        )
+
+    def _clear_result(self):
+        return IdentityResult(
+            tripped=False,
+            reason="no identity conflation detected",
+            findings=[],
+            declaration_valid=True,
+            declaration_errors=[],
+        )
+
+    def _review_payload(self, **overrides):
+        record = {
+            "task_id": "t2r-09-identity-conflation-lens",
+            "stage": "reviewed",
+            "skill": "aet-review",
+            "verdict": "pass",
+            "summary": "Review passed",
+            "generated_at": "2026-08-10T00:00:00Z",
+            "tree_hash": "t0",
+            "findings": [],
+        }
+        record.update(overrides)
+        return record
+
+    def test_review_pass_refused_when_identity_lens_trips_in_evidence_mode(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "review.json"
+            payload = tmp / "payload.json"
+            payload.write_text(json.dumps(self._review_payload()), encoding="utf-8")
+            with patch.object(
+                gate.change_scope, "changed_paths", return_value=["src/api.py"]
+            ), patch.object(
+                gate.boundary, "check", return_value=BoundaryResult(
+                    tripped=False,
+                    reason="no changed paths to analyze",
+                    shape_paths=[],
+                    consumer_paths=[],
+                    agreement_tests=[],
+                    pairs=[],
+                )
+            ), patch.object(
+                gate.identity, "check", return_value=self._tripped_result()
+            ), patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 1, err)
+            self.assertIn("identity-conflation lens tripped", err)
+            self.assertFalse(dest.exists(), "tripped lens must not write verdict")
+
+    def test_review_pass_accepted_when_identity_declaration_exists(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "review.json"
+            clear = self._clear_result()
+            with patch.object(gate.change_scope, "changed_paths", return_value=["src/utils/helpers.py"]), patch.object(
+                gate.boundary, "check", return_value=BoundaryResult(
+                    tripped=False,
+                    reason="change set does not touch both shape and consumer sides",
+                    shape_paths=[],
+                    consumer_paths=[],
+                    agreement_tests=[],
+                    pairs=[],
+                )
+            ), patch.object(gate.identity, "check", return_value=clear), patch.dict(
+                os.environ,
+                {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-09", "AET_REPO_ROOT": str(tmp)},
+                clear=True,
+            ):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--summary",
+                        "Review passed",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            self.assertTrue(dest.is_file())
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "pass")
+            lens_findings = [f for f in written.get("findings", []) if f.get("lens") == "identity-conflation"]
+            self.assertEqual(len(lens_findings), 1)
+            self.assertFalse(lens_findings[0]["tripped"])
+
+    def test_lens_does_not_run_for_non_review_stages(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "qa.json"
+            payload = tmp / "payload.json"
+            payload.write_text(json.dumps(_qa_payload()), encoding="utf-8")
+            with patch.object(
+                gate.change_scope, "changed_paths", return_value=["src/api.py"]
+            ), patch.object(
+                gate.identity, "check", return_value=self._tripped_result()
+            ), patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            self.assertTrue(dest.is_file())
+
+    def test_review_ledger_event_records_identity_lens_outcome(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            agents_dir = tmp / ".agents"
+            agents_dir.mkdir()
+            dest = tmp / "review.json"
+            clear = self._clear_result()
+            with patch.object(gate.change_scope, "changed_paths", return_value=["src/utils/helpers.py"]), patch.object(
+                gate.boundary, "check", return_value=BoundaryResult(
+                    tripped=False,
+                    reason="change set does not touch both shape and consumer sides",
+                    shape_paths=[],
+                    consumer_paths=[],
+                    agreement_tests=[],
+                    pairs=[],
+                )
+            ), patch.object(gate.identity, "check", return_value=clear), patch.dict(
+                os.environ,
+                {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-09", "AET_REPO_ROOT": str(tmp)},
+                clear=True,
+            ):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--summary",
+                        "Review passed",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            ledger_path = agents_dir / "ledger.jsonl"
+            self.assertTrue(ledger_path.exists(), "ledger file was not created")
+            events = [
+                json.loads(line)
+                for line in ledger_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            verdict_events = [e for e in events if e.get("kind") == "verdict"]
+            self.assertEqual(len(verdict_events), 1)
+            payload = verdict_events[0]["payload"]
+            self.assertIn("identity_conflation_lens", payload)
+            self.assertEqual(payload["identity_conflation_lens"]["tripped"], False)
 
 
 class TestGateDispatcherRouting(unittest.TestCase):

@@ -210,6 +210,9 @@ class TestTargetsAndTier:
             "tests/installer/test_installer.py"
         ]
 
+    def test_change_scope_maps_identity_lens_to_unit_test(self):
+        assert change_scope.targets(["src/aet/identity.py"]) == ["tests/test_identity.py"]
+
     def test_change_scope_omits_installer_target_for_unrelated_change(self):
         assert "tests/installer/test_installer.py" not in change_scope.targets(
             ["src/aet/queue.py"]
