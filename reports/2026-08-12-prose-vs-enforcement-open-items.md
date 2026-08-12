@@ -137,13 +137,21 @@ Two smaller divergences:
   (`cli/sprint.py:175`, `cli/aet_state.py:1409`). A non-default value moves the
   ledger with it while `gate.py` stays at the repo root.
 
-**Suggested shape:** one exported derivation, the way ADR-023 already solved this
-exact problem for verdict paths (`evidence.resolve_verdict_path` — "writers and
-the gate must share this single derivation; hand-computing slugs from the
-worktree CWD is out of contract"). The precedent makes this a known-solved
-problem applied to a second store, not a design question. Tests should assert
-that all call sites agree from inside a worktree, under both launch modes and
-both backends.
+**Suggested shape — two separate fixes, not one.**
+
+1. *The ledger path.* One exported derivation, the way ADR-023 already solved
+   this exact problem for verdict paths (`evidence.resolve_verdict_path` —
+   "writers and the gate must share this single derivation; hand-computing slugs
+   from the worktree CWD is out of contract"). The precedent makes this a
+   known-solved problem applied to a second store, not a design question. Tests
+   should assert all call sites agree from inside a worktree, under both launch
+   modes and both backends.
+2. *The stage writer.* `_record_stage` needs to route through the configured
+   backend instead of probing for a JSON file — a backend-aware writer, not a
+   path fix. This is design work: the sole-writer rule (ADR-020) currently rides
+   a subprocess call to `aet state set-stage`, and making it backend-aware means
+   deciding whether the orchestrator calls the backend directly or the CLI grows
+   a backend-agnostic entry point.
 
 ### 3. Downstream projects hit an unrecoverable halt loop: the ledger is missing from `AET_IGNORED_PATHS`
 
@@ -246,6 +254,13 @@ in skills against the real CLI, and it caught a draft in this session citing
 `aet gate submit --help` — a flag that does not exist. Items 1 and 3 show the
 target set is wider than `skills/`: the false claims live in module docstrings,
 inline comments, `CONVENTIONS.md`, and `WORKFLOW-github.md`.
+
+The class has at least four recorded instances: skill verdict examples omitting
+the then-required `tree_hash` while `evidence.SCHEMAS` demanded it (learning
+2026-07-14); hand-authored payload instructions in four skills while builder mode
+sat undocumented; `aet state audit` named as a ledger rebuild that does not exist
+(`c0d35b1c`); and the ADR-055 claims in item 1. Each was prose restating a fact
+code owned, and each drifted.
 
 ### 7. `aet state set-stage` writes the ledger after the queue is already pushed
 
@@ -391,6 +406,36 @@ Outside this report's theme but verified and worth a defect backlog:
   destructive "recovery" such as `aet init-queue`. Worth reproducing before
   filing.
 
+### 16. `AET_REPO_ROOT` carries two incompatible meanings (D9, and worse) — open
+
+Their D9: `aet setup verify` resolves the wrong repo root. Verified.
+`_repo_root()` (`cli/setup.py:29`) returns *the AE Toolkit's* root — its docstring
+says so, and `setup link` needs it to find `skills/`. Line 310 reuses it to locate
+**the user's project** config (`repo_root / ".agents" / "aet-config.json"`), so
+under a venv install it points inside `site-packages`, the project config is never
+found, and `verify` prints built-in defaults as though they were the project's
+configuration. The tell is provenance reading `default` / `trunk` instead of
+`config (project)`. `install.sh` sets `AET_BIN_DIR` but not `AET_REPO_ROOT` for
+the `verify` step (`:192`), so the fallback is what runs.
+
+The underlying defect is larger than the one call site. **`AET_REPO_ROOT` means
+two different things to two readers:**
+
+- `cli/setup.py:38` reads it as *the toolkit's* root, and `scripts/install.sh:197`
+  feeds it exactly that (`REPO_DIR="$AET_DATA_DIR/repo"`) for `setup skills`.
+- `project_id.py:21` reads it as *the project's* root, and
+  `cli/orchestrator.py:2895` feeds it exactly that — which is what item 2's whole
+  launch-mode split turns on.
+
+So the same variable is deliberately set to two different values by two callers
+and consumed by two functions that each assume their own. `aet setup skills` run
+inside an orchestrated session would link skills from the project directory
+instead of the toolkit. This is the same shape as the two senses of "ledger" in
+item 1: one name, two referents, no enforcement — except here the collision is in
+a live environment variable rather than in prose, so it fails silently instead of
+merely misleading. Fix: two distinct variable names, and a test that pins which
+reader owns which.
+
 ### Corrections to that document
 
 - **D6 claims `cli/sprint.py:148` "reads it for settled-ness".** It writes a
@@ -405,6 +450,25 @@ Outside this report's theme but verified and worth a defect backlog:
   `--untracked-files=all`, so an untracked ledger halts the run too.
 - **D8's "returns 1 before it ever reads `--merge-commit`"** is imprecise — the
   value is read at `:1305`, just unused before the early return.
+
+## Their four venv patches: which are now upstream
+
+`aet-toolkit-defects.md` records four fixes applied only to that session's
+`~/.local/share/ae-toolkit/venv/.../aet/` tree — unversioned, unreviewed, and
+reverted by the next upgrade. Status against this branch:
+
+| Their patch                        | Upstream here          | Action for them                          |
+| ---------------------------------- | ---------------------- | ---------------------------------------- |
+| D1 group-prompt wording            | **Yes** (`29601183`)   | Drop the local patch after release       |
+| D5 halt message names paths        | No (item 13)           | Keep until taken upstream                |
+| D4 ledger in `AET_IGNORED_PATHS`   | No — held (item 3)     | Keep; it also needs the deferred split   |
+| D2 plan-overlay mtime guard        | No (item 12)           | Keep, but it is a semantics change       |
+
+Their proposed remedy — wiring `deny-toolkit-venv-writes.sh` via
+`permissions.deny` plus a `PreToolUse` hook so the venv is read-only while still
+readable for diagnosis — is the right shape and is theirs to enable; it is
+recorded here only so the dependency is visible. The durable half is upstream
+releases, which is what items 12–16 are for.
 
 ## Closed — do not reopen
 
