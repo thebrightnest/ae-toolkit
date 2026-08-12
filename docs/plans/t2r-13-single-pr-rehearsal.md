@@ -211,5 +211,5 @@ against collapsing stages into one `minimal` session.
 
 ---
 
-*Stage: implemented*
-*Next step: run `aet-work`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
