@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.8.0] — 2026-08-12
+
+### Added
+
+- **`aet learnings append`** — new CLI command for append-only JSONL learnings with schema validation and integration tests (t2r-01).
+- **`aet context`** — top-level context command that collects git and filesystem state, reads canonical plan stages, supports TARGET pinning, budgets, PRIME.md override, `--memories-only`, and `--hook-json` SessionStart envelopes (t2r-04).
+- **`aet handoff`** — run-scoped handoff note command with `append` and `show` subcommands; the orchestrator injects handoff clauses into stage prompts so agents can pass context between sessions (t2r-10).
+- **`aet docs generate`** — deterministic tree-walk generator that regenerates `docs/CLI.md` from the Typer command tree, with a drift guard to keep the reference current and machine-independent (t2r-11).
+- **Plan archival at terminal closure** — settled plans are automatically moved to `docs/plans/archive/` when a task reaches `merged` or `abandoned`; closure also force-adds gitignored live plans so archival commits succeed (t2r-12, ADR-054).
+- **Identity-conflation lens** — mechanical gate-review lens that blocks commits mixing identifier namespaces; wired into `aet gate submit --stage review` (t2r-09).
+- **Boundary-contract lens** — mechanical gate-review lens that enforces path-level boundary contracts and agreement tests; wired into `aet gate submit --stage review` with ADR-057 recording the carrier decision (t2r-08).
+- **Single-PR rehearsal** — end-to-end rehearsal fixture with shadow-layer config and real `npm ci`, validating post-rebase behavior and that only the epic branch is pushed (t2r-13).
+- **Skills preamble absorption** — shared skill preambles and banners are absorbed into `aet context` instead of duplicated in every skill prompt (t2r-05).
+- **ADR frontmatter docs lint** — `aet docs lint` gains the `unique_live_subject` rule and directory-target support for `must_contain`/`must_not_contain`; ADR-056 documents the frontmatter contract (t2r-06).
+- **Content-addressed ledger events** — queue stage and verdict events are written to an append-only, content-addressed ledger with commutative envelope semantics; skills warn against hand-editing the ledger (slc-01).
+- **git-refs sync across command boundaries** — `TaskBackend.fetch()`/`push()` for `refs/aet/*` is invoked after sprint add, set-stage, gate submit, and ship close, enabling multi-machine workflows without leaking local `~/.aet` state (slc-02).
+- **Mechanical closure transaction** — `aet ship` batches git-refs backend updates in a single `update-ref --stdin` transaction and routes terminal transitions through one code path (slc-04).
+- **Atomic set-stage footer and gate submit builders** — `aet state set-stage` updates the plan footer atomically with the queue stage write and clears stale `failure_reason`; `aet gate submit` builds verdict payloads from `--from-pytest`, `--summary`, and `--divergence` when `--evidence` is omitted (slc-05).
+- **Current-rules digest and durable insights** — `aet context` includes a current-rules digest from ADR frontmatter and top-N recent learnings from `.agents/learnings.jsonl` (t2r-07).
+
+### Changed
+
+- **`aet ship verify --squash-fallback` and `aet ship close --delete-branch`** — drift-tolerant diff fallback for squash merges, an explicit `verify` command with `EXIT_VERIFY_NO_MATCH` / `EXIT_VERIFY_AMBIGUOUS` exits, and optional branch deletion on close (t2r-02).
+- **Stacked PR split and trunk substitution** — `aet ship split` resets soft and groups commits; trunk resolves via `branch_ref.py`; stack info is injected into the PR body; a stacked merge guard blocks risky merges; and a `cut/pr` ledger event records stacked PR opens (t2r-03).
+- **Plan status authority removed** — settled-ness now derives from settled history, git ancestry, and the terminal footer instead of plan frontmatter `status`; `aet backlog add` guards against sprint members and settled history (slc-03).
+
+### Fixed
+
+- **Worktree base without remote** — `resolve_base_ref()` now prefers the remote-tracking ref, leaves already-qualified refs alone, and falls back to the local branch so repos without `origin` or unpushed integration branches no longer fail at `git worktree add`.
+- **Claude stall timeout** — raised to the wall backstop so healthy `json-envelope` sessions are not killed after 30 minutes of silence.
+- **Machine-independent generated CLI reference** — default option rendering collapses `Path.home()` to `~`, so `docs/CLI.md` no longer embeds one contributor's home directory (t2r-11).
+- **Ignored live plan staging** — `git add -f` is used for gitignored live plans during closure and seeding, with environment failure signatures recorded when seeding fails (t2r-12).
+- **False identity lens stems** — escaped newlines no longer produce false stems in the identity-conflation lens (t2r-09).
+- **Stage verdict prompts** — orchestrator prompts explicitly require agents to submit the required verdict via `aet gate submit` and state that the stage is not complete until the verdict is written.
+- **Ledger hand-edit warning** — `aet-work` and `aet-ship` skill instructions warn that `.agents/ledger.jsonl` is append-only and content-addressed.
+- **Internal link checks** — `validate-skills.sh` skips `node_modules` and excludes `docs/plans/archive/` from internal link checks.
+
+### Documentation
+
+- Added ADR-055 (provenance ledger / single-ledger closure), ADR-056 (ADR frontmatter contract), and ADR-057 (boundary-contract lens carrier decision).
+- Added PRDs and plans for the t2r-01..t2r-13 and slc-01..slc-06 improvement sprints.
+- Updated `CONTEXT.md`, `docs/CONVENTIONS.md`, `docs/PIPELINE.md`, and `docs/WORKFLOW-github.md` for ADR-055 multi-machine posture, provenance ledger terminology, and plan archival layout.
+
+---
+
 ## [1.7.0] — 2026-08-07
 
 ### Added

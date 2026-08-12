@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.7.0
+## Current Version: 1.8.0
 
-Last updated: 2026-08-07
+Last updated: 2026-08-12
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, detached-only run invocation with bounded completion reports, adapter-resolved supervision defaults, night-shift runtime resilience, configurable branch models including single-PR integration mode, and local-only plans that defer durability to the PR.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, detached-only run invocation with bounded completion reports, adapter-resolved supervision defaults, night-shift runtime resilience, configurable branch models including single-PR integration mode, local-only plans that defer durability to the PR, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, and mechanical terminal closure that archives plans automatically.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -32,16 +32,16 @@ Run plans with isolation, quality gates, and traceability.
 
 Verify code before it ships.
 
-- **aet-review** — Staff-level code review with multi-lens checks.
-- **aet-cso** — Diff-focused security audit.
-- **aet-qa** — Automated QA with tiered validation. Defaults to impact-scoped tests and falls back to the full suite when needed.
+- **aet-review** — Staff-level code review with multi-lens checks, supported by mechanical identity-conflation and boundary-contract lenses at `aet gate submit --stage review`.
+- **aet-cso** — Diff-focused security audit. Verdicts are submitted via `aet gate submit` with built-in evidence builders.
+- **aet-qa** — Automated QA with tiered validation. Defaults to impact-scoped tests and falls back to the full suite when needed. Verdicts are submitted via `aet gate submit` with built-in pytest, summary, and divergence builders.
 - **aet-verify** — Conditional live verification with evidence capture.
 
 ### Shipping and Release Skills
 
 Land code cleanly and document releases.
 
-- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, and provider-specific merge-guard harness detection. Accepts plan paths or bare task ids across open, gate, close, and merge.
+- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, provider-specific merge-guard harness detection, squash-merge verification fallback, stacked PR split and trunk substitution, and optional branch deletion on close. Accepts plan paths or bare task ids across open, gate, close, merge, split, and verify.
 - **aet-release-prep** — Release preparation: commit analysis, changelog updates, and version bump suggestions.
 - **aet-sync-docs** — Sync PRD and `plan.md` to reflect what was actually built.
 
@@ -54,6 +54,14 @@ Keep projects and the toolkit itself healthy.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
 
+### Context and Memory Commands
+
+Carry context and lessons across runs.
+
+- **aet context** — Loads git state, filesystem facts, canonical plan stages, budgets, rules digest, and durable insights into a structured payload for agent session start. Supports `--memories-only`, `--hook-json` SessionStart envelopes, and `PRIME.md` override.
+- **aet learnings append** — Records append-only JSONL learnings with schema validation.
+- **aet handoff** — Writes and reads run-scoped handoff notes so agents can pass context between sessions.
+
 ---
 
 ## Integrations
@@ -62,6 +70,7 @@ Keep projects and the toolkit itself healthy.
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `make install-skills` | Symlinks all skills to `~/.agents/skills/` for local agent use.                                                                      |
 | `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet setup link` installs the console script on `PATH`. |
+| `aet context`         | Session-start context loader that surfaces git state, plan stages, budgets, rules digest, and recent learnings. |
 | `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates. |
 | Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, run history, test-run provenance badges, and session-log traceability. |
 | GitHub Issues         | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                                                  |
@@ -71,6 +80,16 @@ Keep projects and the toolkit itself healthy.
 ---
 
 ## What's New
+
+### What's New in v1.8.0
+
+- **New context commands** — `aet context` loads project state for session start, `aet learnings append` records lessons, and `aet handoff` passes notes between runs.
+- **Mechanical review lenses** — identity-conflation and boundary-contract lenses catch mixed namespaces and boundary violations when you run `aet gate submit --stage review`.
+- **More reliable shipping** — mechanical closure transaction, stacked PR split, squash-merge verification fallback, and `--delete-branch` on close.
+- **Multi-machine state sync** — `refs/aet/*` push/fetch keeps queue state and verdicts in sync across clones without leaking local `~/.aet` files.
+- **Generated CLI reference** — `aet docs generate` keeps `docs/CLI.md` current and machine-independent.
+- **Cleaner plan lifecycle** — live plans are transient working copies and are archived to `docs/plans/archive/` at terminal closure; frontmatter `status` is no longer authoritative.
+- **Atomic stage gates** — `aet state set-stage` and `aet gate submit` update the plan footer and ledger together, removing hand-built verdict JSON.
 
 ### What's New in v1.7.0
 
