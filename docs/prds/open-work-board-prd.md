@@ -75,6 +75,7 @@ This is not a migration to GitHub. Storage stays local in git-refs, which alread
 ### Cross-cutting — configuration honesty
 
 - **R-20**: A configuration value that cannot take effect is an error, not a silent no-op. Resolution rejects unknown and misspelled keys, refuses combinations that contradict each other, names the layer each effective value came from (ADR-048), and states the legal alternatives. A removed key — such as `task_backend` after R-11 — fails with a migration message rather than being ignored. An *inferred* value that changes durability behaviour — shadow posture under R-15 — is announced, never assumed silently.
+- **R-23**: `aet configure` offers an explicit, named way to declare a project shared across devices, and the documentation states the default plainly: a project nobody configured is local. Opting in is one command, not a matter of knowing that creating project-scope config happens to change push behaviour.
 
 ### Documentation truth
 
@@ -175,9 +176,13 @@ CONTEXT.md was corrected at scope validation to describe today's reality — the
 - **No `claim` operation** until multi-user arrives.
 - **Shadow posture is inferred** from the absence of project-scope config, and announced on every run (R-15, R-20).
 
-### Live risk carried forward
+### Default posture, and how it is made obvious
 
-Inference cannot distinguish *deliberately shadow* from *not yet configured*. It fails toward not pushing, which is the right direction for client confidentiality, but it silently breaks the plan-on-A-run-on-B scenario (R-19) for any project that has simply not run `aet configure` yet — **including this repository, which has no `.agents/aet-config.json` today.** The announcement required by R-15 and R-20 is what converts that from silent breakage into one actionable message. If the announcement proves insufficient in practice, the fallback is an explicit user-scope posture key; this note records that inference was chosen with the trade understood.
+Inference cannot distinguish *deliberately shadow* from *not yet configured*, and that is acceptable because the two want the same behaviour: **a project nobody configured is local.** Staying local is the correct default and the safe direction — a project can never leak `refs/aet/*` to someone else's remote by omission. Multi-device is the deliberate choice, so it is the one that requires saying so.
+
+What remains is discoverability, not correctness. Two requirements cover it: R-15 makes every run announce the inferred posture and its consequence, so the reason machine B cannot see the board is one message rather than an investigation; and R-23 makes opting in an explicit named command with the default documented, rather than a side effect of creating a config file.
+
+This repository has no `.agents/aet-config.json`, so it is local by this rule — correct today, and one `aet configure` away from the plan-on-A-run-on-B scenario in R-19.
 
 ---
 
