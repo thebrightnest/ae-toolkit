@@ -5,11 +5,13 @@ The Agentic Engineering Toolkit uses a work queue and a provenance ledger to coo
 ## Language
 
 **Provenance Ledger**:
-The append-only, content-addressed store of task transition and closure events. It is the sole authority for settled-ness, together with git ancestry. Under the default `git-refs` backend the ledger lives in `refs/aet/*` and travels with the repository; under the `json` backend it is stored locally. Events are idempotent and commutative — concurrent appends from independent writers merge without conflict (ADR-055).
-_Avoid_: deriving settled-ness from plan frontmatter or footer; treating `.agents/work-history.jsonl` as the ledger (it is write-only telemetry).
+The append-only, content-addressed store of task transition and closure events, at `.agents/ledger.jsonl`. Events are idempotent and commutative — concurrent appends from independent writers merge without conflict — and the store verifies every line against its own content address on load, refusing a file whose ids no longer attest their bodies.
+It has **five writers and no production reader**: `aet sprint add`, `aet state set-stage`, terminal closure, `aet gate submit`, and `aet ship open` append to it, and nothing in `src/aet` calls `read_events()`. It is a working-tree file under **every** backend — no backend implements ledger storage — and it is gitignored, so it does not travel between machines.
+ADR-055 decides that this store is the sole authority for settled-ness and that it travels as pushed git refs. **That decision is not implemented.** Until it is, treat the ledger as provenance only, and see **Settled-ness Authority** for what actually answers "is it done?".
+_Avoid_: describing the ledger as refs-borne or as the settled-ness authority; deriving settled-ness from plan frontmatter.
 
 **Work Queue / Sprint Board**:
-The ephemeral active list of tasks. Under the default `git-refs` backend it is stored in `refs/aet/meta/queue` and pushed to/fetched from origin; under the `json` backend it is `.agents/work-queue.json`. It is rebuilt from the existing sprint-add record and the ledger; plans enter the queue only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is filesystem-based for the plans already in the queue, not git-based, so a plan need not be committed to be a sprint member (ADR-054).
+The ephemeral active list of tasks. Under the default `git-refs` backend it is stored in `refs/aet/meta/queue` and pushed to/fetched from origin; under the `json` backend it is `.agents/work-queue.json`. It is rebuilt by `aet init-queue` from `docs/plans/*.md`, filtered through **Settled-ness Authority**; the ledger is not consulted. Plans enter the queue only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is filesystem-based for the plans already in the queue, not git-based, so a plan need not be committed to be a sprint member (ADR-054).
 _Avoid_: issue tracker, backlog.
 
 **Task**:
@@ -25,7 +27,7 @@ The canonical workflow state stored in `tasks[].state` while a task is in the qu
 _Avoid_: using `state` for terminal truth.
 
 **Status (plan lifecycle)**:
-_Deprecated._ The `status` frontmatter field left the plan contract in ADR-055 and is now rejected by `aet plans lint`. Settled-ness is derived from the **Provenance Ledger** plus git ancestry; the plan footer `_Stage:_` remains a human breadcrumb only.
+_Deprecated._ The `status` frontmatter field left the plan contract in ADR-055 and is now rejected by `aet plans lint`. Settled-ness is derived by **Settled-ness Authority**, which still reads the plan footer as one of its three inputs — so `_Stage:_` is not yet a breadcrumb only, despite ADR-055's intent.
 _Avoid_: using plan `status` for any runtime scheduling or settled-ness decision.
 
 **Blocker**:
@@ -42,7 +44,12 @@ _Avoid_: done.
 Approved plans in `docs/plans/` that are not yet in the queue and not yet closed.
 
 **Execution Log**:
-`.agents/work-history.jsonl`, the optional, gitignored append-only log of transitions and closures. It supports project-management reporting but is not used to determine whether a task is closed.
+`.agents/work-history.jsonl`, the gitignored append-only log of transitions and closures. It feeds project-management reporting (`aet metrics`, `aet retro`, and ADR-028's zero-review track record) **and** it is one of the three inputs to **Settled-ness Authority** — it is not optional in practice, and it is read, not write-only.
+_Avoid_: calling it write-only telemetry, or assuming a task's closure survives its loss.
+
+**Settled-ness Authority**:
+What actually answers "is it done?": `_is_settled_from_authority` (`src/aet/cli/init_queue.py`), used by `aet queue sync` and `init-queue`. It reads three things — a terminal record in the **Execution Log**, a merge commit naming the task id on `origin/main`, or a terminal `_Stage:_` footer in the plan file. Two of the three are machine-local, so a fresh clone's answer depends on which machine it is standing on.
+_Avoid_: attributing this role to the **Provenance Ledger** (ADR-055 assigns it there; the code does not implement it).
 
 **Source PRD**:
 The product requirements document that generated the plan, referenced from the plan file's Context section.
@@ -87,7 +94,7 @@ The project-local configuration layer that overrides the team config for one rep
 
 ## Multi-Machine Operator Posture
 
-Queue and ledger state travel with the repository via `refs/aet/*` on origin. A fresh clone must fetch them explicitly:
+Queue state travels with the repository via `refs/aet/*` on origin — `refs/aet/tasks/<id>` per task plus the `refs/aet/meta/queue` envelope. The **Provenance Ledger** and the **Execution Log** do **not** travel: both are gitignored working-tree files with no transport. A fresh clone must fetch the queue explicitly:
 
 ```bash
 git fetch origin 'refs/aet/*:refs/aet/*'
