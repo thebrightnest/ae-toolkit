@@ -2,365 +2,185 @@
 
 ## Overview
 
-AET keeps progress-management state in the repository, and the symptoms are
-measurable: **129 of 1,717 commits (7% of history) record nothing but a card
-moving across a board**; 53 live plan files are still tracked despite
-`.gitignore:24` declaring them transient, so the pollution continues; and five
-ADRs (011 → 013 → 034 → 054 → 055) have each *relocated* the question "is it
-done?" without ever removing it, the last one unbuilt.
+AET keeps progress-management state in the repository, and the symptoms are measurable: **129 of 1,717 commits (7% of history) record nothing but a card moving across a board**; 53 live plan files are still tracked despite `.gitignore:24` declaring them transient, so the pollution continues; and five ADRs (011 → 013 → 034 → 054 → 055) have each *relocated* the question "is it done?" without ever removing it, the last one unbuilt.
 
-The reframe: **a plan is a task card — progress-management information, not
-documentation.** The durable record of intent is the PRD, which is project
-documentation and stays committed. The durable record of outcome is the commit
-history. Everything between is transient.
+The reframe: **a plan is a task card — progress-management information, not documentation.** The durable record of intent is the PRD, which is project documentation and stays committed. The durable record of outcome is the commit history. Everything between is transient.
 
-The deeper insight is that settled-ness only needs deriving because
-`init-queue` and `queue sync` re-enumerate the board from `docs/plans/*.md` — an
-append-only directory that never forgets. **Stop re-deriving the board from the
-plans directory and "is it done?" stops being a question**: the board is the set
-of open work, and finished work is simply not in it. ADR-013 already defines the
-board that way; nothing implements it that way.
+The deeper insight is that settled-ness only needs deriving because `init-queue` and `queue sync` re-enumerate the board from `docs/plans/*.md` — an append-only directory that never forgets. **Stop re-deriving the board from the plans directory and "is it done?" stops being a question**: the board is the set of open work, and finished work is simply not in it. ADR-013 already defines the board that way; nothing implements it that way.
 
-This is not a migration to GitHub. Storage stays local in git-refs, which already
-pushes and fetches `refs/aet/*` and therefore already travels between machines.
-GitHub Issues stays a **projection** plus a human-owned intent label — ADR-032's
-fence that no forge is a source of truth remains intact. And a **shadow posture**
-makes AET usable in repositories that must carry no trace of it.
+This is not a migration to GitHub. Storage stays local in git-refs, which already pushes and fetches `refs/aet/*` and therefore already travels between machines. GitHub Issues stays a **projection** plus a human-owned intent label — ADR-032's fence that no forge is a source of truth remains intact. And a **shadow posture**makes AET usable in repositories that must carry no trace of it.
 
 ## Goals
 
 - No commit whose only content is a task-state change.
 - Settled-ness deleted as a question, not relocated to a better store.
 - One task store, so backend-specific defects stop being possible.
-- A backlog visible on GitHub and a sprint composable by hand, without the forge
-  becoming the source of truth.
+- A backlog visible on GitHub and a sprint composable by hand, without the forge becoming the source of truth.
 - AET usable on a repository that must contain no AET artifact at all.
 - One PR per PRD.
 - Plan on one machine, run on another, with nothing but the repo and its refs.
 
 ## Non-Goals
 
-- **Multi-user.** Deferred. The board contract keeps a `claim` operation as a
-  local no-op so it remains reachable without a redesign, but nothing coordinates
-  across users.
-- **GitHub as a task store.** git-refs already travels; a forge store would buy
-  only multi-user, which is deferred. ADR-032's source-of-truth fence stands. Its
-  decision 2 does need a narrow amendment, though — see R-18.
-- **A ledger reader or ledger transport.** `.agents/ledger.jsonl` has five writers
-  and zero readers. It stays a local, unread provenance log. Its *four* false
-  documentation claims are corrected (R-18); wiring it is a separate decision.
-- **The 2026-08-11 "settled tasks disappeared" incident.** Its recorded mechanism
-  is impossible and it has no reproduction — `aet-bug-report`. Deleting the
-  settled-ness derivation removes most of its blast radius.
-- **Offline operation.** Retracted as a constraint: `aet run` spawns an agent
-  against a remote model API and has never worked offline.
-- **Verdict portability across machines.** `~/.aet/reports` is machine-local by
-  ADR-055 decision 4, and verdicts are read only by the pre-push hook and the
-  integration gate — both on the machine that did the work.
-- **Untracking the 264 legacy files in `docs/plans/archive/`.** A visible
-  264-file diff and the operator's call. They become inert.
+- **Multi-user.** Deferred, and the board contract carries **no** `claim` operation — an unused hook is cost without benefit, and adding it when multi-user arrives is cheaper than carrying it unused. Nothing coordinates across users.
+- **GitHub as a task store.** git-refs already travels; a forge store would buy only multi-user, which is deferred. ADR-032's source-of-truth fence stands. Its decision 2 does need a narrow amendment, though — see R-18.
+- **A ledger reader or ledger transport.** `.agents/ledger.jsonl` has five writers and zero readers. It stays a local, unread provenance log. Its *four* false documentation claims are corrected (R-18); wiring it is a separate decision.
+- **The 2026-08-11 "settled tasks disappeared" incident.** Its recorded mechanism is impossible and it has no reproduction — `aet-bug-report`. Deleting the settled-ness derivation removes most of its blast radius.
+- **Offline operation.** Retracted as a constraint: `aet run` spawns an agent against a remote model API and has never worked offline.
+- **Verdict portability across machines.** `~/.aet/reports` is machine-local by ADR-055 decision 4, and verdicts are read only by the pre-push hook and the integration gate — both on the machine that did the work.
+- **Untracking the 264 legacy files in** `docs/plans/archive/`**.** A visible 264-file diff and the operator's call. They become inert.
 - **Metrics and retro rework**, beyond keeping their archive input working.
 
 ## Requirements
 
 ### Phase 1 — Stop the bleeding (no dependencies; ships alone)
 
-- **R-1**: Every file the toolkit writes under `.agents/` is registered in exactly
-  one hygiene declaration, and a test fails when a writer is added without
-  registering its file.
-- **R-2**: "Do not track this" and "tolerate this dirty" are separate
-  declarations with separate consumers, so a tracked-but-tool-written file such as
-  `.agents/learnings.jsonl` can be tolerated without being gitignored.
+- **R-1**: Every file the toolkit writes under `.agents/` is registered in exactly one hygiene declaration, and a test fails when a writer is added without registering its file.
+- **R-2**: "Do not track this" and "tolerate this dirty" are separate declarations with separate consumers, so a tracked-but-tool-written file such as `.agents/learnings.jsonl` can be tolerated without being gitignored.
 - **R-3**: A hygiene halt names the paths that caused it.
 
 ### Phase 2 — Plans stop being documents
 
-- **R-4**: No AET command produces a commit whose content is a plan-state change,
-  and the 53 live plan files still tracked in git are untracked so
-  `.gitignore:24`'s declaration actually holds.
-- **R-5**: A settled plan is archived to a machine-local location outside the
-  scanned plans directory, and `aet metrics` still reads settled-task metadata
-  from it.
-- **R-6**: Plan-consuming tooling — `aet plan validate`, `plans lint`, the R-trace
-  coverage lint, ADR-046 delivered-size measurement, and `gate review` — operates
-  on live plans only, and does not degrade as settled work accumulates.
-- **R-19**: The task record carries the task's spec — its task list and its gate
-  keys (`security_review`, `docs_sync`, `pipeline`, `size`) — rather than a path to
-  a file. The working plan in a worktree is rendered from the record. A task
-  planned on one machine is therefore executable on another with no artifact
-  outside `refs/aet/*`, and `_copy_deferred_files`' main-checkout overlay is
-  removed rather than guarded.
+- **R-4**: No AET command produces a commit whose content is a plan-state change, and the 53 live plan files still tracked in git are untracked so `.gitignore:24`'s declaration actually holds.
+- **R-5**: A settled plan is archived to a machine-local location outside the scanned plans directory (`~/.aet/<slug>/plans/archive/`), and `aet metrics` reads settled-task metadata from **that location only** — no dual-read of the legacy `docs/plans/archive/`. Migration performs a one-time copy of the 264 legacy files so historical metrics survive without a second read path.
+- **R-6**: Plan-consuming tooling — `aet plan validate`, `plans lint`, the R-trace coverage lint, and ADR-046 delivered-size measurement — operates on live plans only, and does not degrade as settled work accumulates. `aet gate review` is **kept as the shadow-mode board**, and is therefore re-pointed at the board itself rather than at a directory glob: after R-19 a shadow project has task records but need not have any plan file to scan.
+- **R-19**: The task record carries the task's spec — its task list and its gate keys (`security_review`, `docs_sync`, `pipeline`, `size`) — rather than a path to a file. The working plan in a worktree is rendered from the record. A task planned on one machine is therefore executable on another with no artifact outside `refs/aet/*`, and `_copy_deferred_files`' main-checkout overlay is removed rather than guarded.
 
 ### Phase 3 — The board is open work
 
-- **R-7**: The board is enumerated as the set of open work. No command re-derives
-  it by scanning the plans directory.
-- **R-8**: `init-queue`, `_is_settled_from_authority`, and work-history-as-authority
-  are deleted. `.agents/work-history.jsonl` remains a measurement log only.
-- **R-9**: `ready` is computed from `blocked_by` plus what has left the board.
-  `blocked_by` is declared intent and may be hand-edited; readiness may never be
-  asserted.
-- **R-10**: A dependent becomes ready when its blocker leaves the board, without
-  consulting a settled-history store.
+- **R-7**: The board is enumerated as the set of open work. No command re-derives it by scanning the plans directory.
+- **R-8**: `init-queue`, `_is_settled_from_authority`, and work-history-as-authority are deleted. `.agents/work-history.jsonl` remains a measurement log only.
+- **R-9**: `ready` is computed from `blocked_by` plus what has left the board. `blocked_by` is declared intent and may be hand-edited; readiness may never be asserted.
+- **R-10**: A dependent becomes ready when its blocker leaves the board, without consulting a settled-history store.
 
 ### Phase 4 — One store
 
-- **R-11**: git-refs is the only task store. The json backend and the
-  `task_backend` selection axis are removed, and the documentation that presents
-  json as the non-git-context option is corrected.
-- **R-12**: The provenance ledger is written through one exported derivation. The
-  four current derivations — which resolve differently by launch mode, backend and
-  working directory — collapse to one.
+- **R-11**: git-refs is the only task store. The json backend and the `task_backend` selection axis are removed, and the documentation that presents json as the non-git-context option is corrected.
+- **R-12**: The provenance ledger is written through one exported derivation. The four current derivations — which resolve differently by launch mode, backend and working directory — collapse to one.
 
 ### Phase 5 — GitHub as intent, not as truth
 
-- **R-13**: `aet:sprint` is human-owned intent. AET reads the label, validates
-  each candidate against the dependency graph, and admits it or refuses with the
-  blocking reason named.
-- **R-14**: A projection or intent-read failure retries with backoff and then
-  halts. It never fails open — "could not reach GitHub" must never read as
-  "nothing is blocking".
+- **R-13**: `aet:sprint` is human-owned intent. AET reads the label, validates each candidate against the dependency graph, and admits it or refuses with the blocking reason named.
+- **R-14**: A projection or intent-read failure retries with backoff and then halts. It never fails open — "could not reach GitHub" must never read as "nothing is blocking".
 
 ### Phase 6 — Shadow posture
 
-- **R-15**: Shadow posture is a first-class, permanent mode: configuration lives
-  only at user scope, no projection runs, and no AET artifact appears in the
-  working tree.
-- **R-16**: In shadow posture `refs/aet/*` is never pushed, including at closure,
-  and ADR-055's mandatory-closure-push carries an explicit exemption rather than
-  being silently bypassed.
+- **R-15**: Shadow posture is a first-class, permanent mode: configuration lives only at user scope, no projection runs, and no AET artifact appears in the working tree. It is **inferred** from the absence of project-scope config, and every run announces the inference and its consequence — that `refs/aet/*` will not be pushed — naming the command that opts out.
+- **R-16**: In shadow posture `refs/aet/*` is never pushed, including at closure, and ADR-055's mandatory-closure-push carries an explicit exemption rather than being silently bypassed.
 
 ### Phase 7 — One PR per PRD
 
-- **R-17**: The integration branch is derived from the PRD a task belongs to,
-  rather than from a single static config value, so concurrent PRDs each carry
-  their own branch and PR.
+- **R-17**: The integration branch is derived from the PRD a task belongs to, rather than from a single static config value, so concurrent PRDs each carry their own branch and PR.
 
 ### Cross-cutting — configuration honesty
 
-- **R-20**: A configuration value that cannot take effect is an error, not a
-  silent no-op. Resolution rejects unknown and misspelled keys, refuses
-  combinations that contradict each other, names the layer each effective value
-  came from (ADR-048), and states the legal alternatives. A removed key — such as
-  `task_backend` after R-11 — fails with a migration message rather than being
-  ignored.
+- **R-20**: A configuration value that cannot take effect is an error, not a silent no-op. Resolution rejects unknown and misspelled keys, refuses combinations that contradict each other, names the layer each effective value came from (ADR-048), and states the legal alternatives. A removed key — such as `task_backend` after R-11 — fails with a migration message rather than being ignored. An *inferred* value that changes durability behaviour — shadow posture under R-15 — is announced, never assumed silently.
 
 ### Documentation truth
 
-- **R-18**: Documentation and ADRs describe the shipped model. The **five** sites
-  asserting ledger refs transport are corrected — `CONVENTIONS.md:388`,
-  `WORKFLOW-github.md:23`, `git_refs_backend.py:13`, `cli/sync.py:82`, and
-  **CONTEXT.md's own glossary** — ADR-054's stale plan-`status` clause is retired,
-  and one ADR records the open-work board contract and the shadow posture, amending
-  ADR-011, ADR-013, ADR-045 and ADR-055.
-- **R-21**: ADR-032 decision 2 is amended. It currently states a projection "never
-  writes back into AET state and **is never read by AET commands**", which R-13
-  contradicts by design. The amendment narrows it: a forge is never read for
-  *state*, and reading human-declared *intent* is a distinct, permitted operation.
-  The source-of-truth fence is unchanged.
-- **R-22**: ADR-033 gains a third failure category. It classifies projection
-  *writes* as fail-open and storage as fail-closed; a forge *read that gates
-  admission* is neither, and R-14 makes it fail-closed. The ADR must name the
-  category rather than leaving R-14 looking like a violation of it.
+- **R-18**: Documentation and ADRs describe the shipped model. The **five** sites asserting ledger refs transport are corrected — `CONVENTIONS.md:388`, `WORKFLOW-github.md:23`, `git_refs_backend.py:13`, `cli/sync.py:82`, and **CONTEXT.md's own glossary** — ADR-054's stale plan-`status` clause is retired, and one ADR records the open-work board contract and the shadow posture, amending ADR-011, ADR-013, ADR-045 and ADR-055.
+- **R-21**: ADR-032 decision 2 is amended. It currently states a projection "never writes back into AET state and **is never read by AET commands**", which R-13 contradicts by design. The amendment narrows it: a forge is never read for *state*, and reading human-declared *intent* is a distinct, permitted operation. The source-of-truth fence is unchanged.
+- **R-22**: ADR-033 gains a third failure category. It classifies projection *writes* as fail-open and storage as fail-closed; a forge *read that gates admission* is neither, and R-14 makes it fail-closed. The ADR must name the category rather than leaving R-14 looking like a violation of it.
 
 ## User Stories
 
-- As a maintainer, I want a commit history containing code and intent, not card
-  movements (satisfies: R-4).
-- As a maintainer, I want "is it done?" to stop being a question the system has to
-  answer (satisfies: R-7, R-8).
-- As an operator, I want to compose a sprint by adding a label in the GitHub UI,
-  and be told when a choice is illegal rather than silently accepted
-  (satisfies: R-13, R-9).
-- As an operator on a client project, I want to run AET without a single AET
-  artifact reaching their repository (satisfies: R-15, R-16).
-- As an operator with two machines, I want to plan a PRD and its tasks on one and
-  run the queue on the other, with no artifact hand-carried between them
-  (satisfies: R-19, R-7 — git-refs already pushes and fetches). One machine runs
-  the queue at a time, so no concurrency protection is required.
+- As a maintainer, I want a commit history containing code and intent, not card movements (satisfies: R-4).
+- As a maintainer, I want "is it done?" to stop being a question the system has to answer (satisfies: R-7, R-8).
+- As an operator, I want to compose a sprint by adding a label in the GitHub UI, and be told when a choice is illegal rather than silently accepted (satisfies: R-13, R-9).
+- As an operator on a client project, I want to run AET without a single AET artifact reaching their repository (satisfies: R-15, R-16).
+- As an operator with two machines, I want to plan a PRD and its tasks on one and run the queue on the other, with no artifact hand-carried between them (satisfies: R-19, R-7 — git-refs already pushes and fetches). One machine runs the queue at a time, so no concurrency protection is required.
 - As a reviewer, I want one PR per PRD, not one per task (satisfies: R-17).
-- As an operator adopting AET in a new project, I want a repo that does not halt
-  on the toolkit's own writes (satisfies: R-1, R-2).
-- As an operator configuring AET, I want a typo or a contradictory combination to
-  fail with a named reason, rather than a setting that silently does nothing
-  (satisfies: R-20).
+- As an operator adopting AET in a new project, I want a repo that does not halt on the toolkit's own writes (satisfies: R-1, R-2).
+- As an operator configuring AET, I want a typo or a contradictory combination to fail with a named reason, rather than a setting that silently does nothing (satisfies: R-20).
 
 ## Acceptance Criteria
 
-- [ ] A test enumerates the toolkit's `.agents/` writers and fails on an
-      unregistered one (satisfies: R-1)
-- [ ] Appending a learning leaves the tree clean while the file stays tracked
-      (satisfies: R-2)
+- [ ] A test enumerates the toolkit's `.agents/` writers and fails on an unregistered one (satisfies: R-1)
+
+- [ ] Appending a learning leaves the tree clean while the file stays tracked (satisfies: R-2)
+
 - [ ] A dirty-tree halt prints the offending paths (satisfies: R-3)
-- [ ] A task run start-to-finish adds no commit matching `mark plan stage`, and
-      `git ls-files docs/plans | grep -v archive` is empty (satisfies: R-4)
-- [ ] `aet metrics` reports the same per-class figures before and after the
-      archive relocation (satisfies: R-5)
-- [ ] A task planned and added on machine A runs to completion on machine B after
-      a fetch, with no plan file present in A's working tree at any point, and with
-      gate skips and pipeline mode resolved identically on both (satisfies: R-19)
-- [ ] Plan tooling runtime and output are unchanged after 50 simulated closures
-      (satisfies: R-6)
-- [ ] No code path enumerates the board by globbing the plans directory
-      (satisfies: R-7)
-- [ ] `grep -rn "_is_settled_from_authority\|init_queue" src/` returns nothing
-      (satisfies: R-8)
-- [ ] Hand-adding a readiness-shaped label does not make a blocked task runnable
-      (satisfies: R-9)
-- [ ] A dependent becomes ready after its blocker closes, with the history log
-      absent (satisfies: R-10)
-- [ ] `grep -rn "work-queue.json\|task_backend" src/` returns nothing
-      (satisfies: R-11)
-- [ ] Every ledger writer resolves the same store from inside a worktree, under
-      `aet run` and `aet run-one` (satisfies: R-12)
-- [ ] `aet:sprint` on a task whose blocker is open is refused with the blocker
-      named (satisfies: R-13)
-- [ ] A simulated 403 or rate-limit during an intent read halts the run and
-      admits nothing (satisfies: R-14)
-- [ ] A full run in shadow posture leaves `git status` clean, no `refs/aet/*` on
-      the remote, and no project-scope config file (satisfies: R-15, R-16)
-- [ ] Two PRDs in flight produce two integration branches and two PRs, with no
-      per-task branch on `origin` (satisfies: R-17)
-- [ ] A misspelled config key fails with the legal keys named; a `task_backend`
-      key left behind after R-11 fails with a migration message; shadow posture
-      combined with a `projections` entry or a project-scope config file fails with
-      the contradiction stated; `aet setup verify` reports the layer each effective
-      value came from (satisfies: R-20)
-- [ ] No document claims refs transport for the ledger, plan `status` as a
-      liveness signal, or json as a supported backend (satisfies: R-18)
+
+- [ ] A task run start-to-finish adds no commit matching `mark plan stage`, and `git ls-files docs/plans | grep -v archive` is empty (satisfies: R-4)
+
+- [ ] `aet metrics` reports the same per-class figures before and after the archive relocation (satisfies: R-5)
+
+- [ ] A task planned and added on machine A runs to completion on machine B after a fetch, with no plan file present in A's working tree at any point, and with gate skips and pipeline mode resolved identically on both (satisfies: R-19)
+
+- [ ] Plan tooling runtime and output are unchanged after 50 simulated closures (satisfies: R-6)
+
+- [ ] No code path enumerates the board by globbing the plans directory (satisfies: R-7)
+
+- [ ] `grep -rn "_is_settled_from_authority\|init_queue" src/` returns nothing (satisfies: R-8)
+
+- [ ] Hand-adding a readiness-shaped label does not make a blocked task runnable (satisfies: R-9)
+
+- [ ] A dependent becomes ready after its blocker closes, with the history log absent (satisfies: R-10)
+
+- [ ] `grep -rn "work-queue.json\|task_backend" src/` returns nothing (satisfies: R-11)
+
+- [ ] Every ledger writer resolves the same store from inside a worktree, under `aet run` and `aet run-one` (satisfies: R-12)
+
+- [ ] `aet:sprint` on a task whose blocker is open is refused with the blocker named (satisfies: R-13)
+
+- [ ] A simulated 403 or rate-limit during an intent read halts the run and admits nothing (satisfies: R-14)
+
+- [ ] A full run in shadow posture leaves `git status` clean, no `refs/aet/*` on the remote, and no project-scope config file (satisfies: R-15, R-16)
+
+- [ ] Two PRDs in flight produce two integration branches and two PRs, with no per-task branch on `origin` (satisfies: R-17)
+
+- [ ] A misspelled config key fails with the legal keys named; a `task_backend`key left behind after R-11 fails with a migration message; shadow posture combined with a `projections` entry or a project-scope config file fails with the contradiction stated; `aet setup verify` reports the layer each effective value came from (satisfies: R-20)
+
+- [ ] No document claims refs transport for the ledger, plan `status` as a liveness signal, or json as a supported backend (satisfies: R-18)
 
 ## Technical Notes
 
-**Measured baseline.** 1,717 commits; 109 match `mark plan stage`, 20 match
-`Seed plan` — 7%, undercounted because `docs(...): mark <id> qa-complete` variants
-match neither pattern. `.gitignore:24` ignores `docs/plans/*.md`, but gitignore
-never untracks: **53 live plans were already tracked and still mutate and commit.**
-That is why the decision to make plans transient has had no effect, and it is R-4's
-missing half. 317 files are tracked under `docs/plans/`, 264 of them in `archive/`.
+**Measured baseline.** 1,717 commits; 109 match `mark plan stage`, 20 match `Seed plan` — 7%, undercounted because `docs(...): mark <id> qa-complete` variants match neither pattern. `.gitignore:24` ignores `docs/plans/*.md`, but gitignore never untracks: **53 live plans were already tracked and still mutate and commit**.That is why the decision to make plans transient has had no effect, and it is R-4's missing half. 317 files are tracked under `docs/plans/`, 264 of them in `archive/`.
 
-**The board already travels.** `git_refs_backend` implements `push()` and it is
-called on every state write and mandatorily at closure; `fetch()` runs
-automatically with refspec `+refs/aet/*:refs/aet/*` when a remote exists. Its own
-module docstring claims the backend "is local-only by default", which is false
-about the module it documents. Cross-machine parity therefore needs no new
-transport — only R-7's enumeration change and R-8's deletions.
+**The board already travels.** `git_refs_backend` implements `push()` and it is called on every state write and mandatorily at closure; `fetch()` runs automatically with refspec `+refs/aet/*:refs/aet/*` when a remote exists. Its own module docstring claims the backend "is local-only by default", which is false about the module it documents. Cross-machine parity therefore needs no new transport — only R-7's enumeration change and R-8's deletions.
 
-**Phase 7 is mostly built.** ADR-045's `integration_mode: single-pr` already opens
-one PR at the epic level, keeps per-task branches local and ephemeral (§4), moves
-merge verification up to the epic (§3), and serializes integration behind a lock
-with mandatory post-rebase re-validation (§5). It was rehearsed by
-`t2r-13-single-pr-rehearsal`. This repo has no `.agents/aet-config.json`, so it runs
-ADR-045's degenerate "Scenario A" — `pr-per-task` on trunk. R-17 is the delta, not
-the mode. ADR-045 §5's lock is documented as "local, single-operator" and stays
-adequate precisely because multi-user is a non-goal.
+**Phase 7 is mostly built.** ADR-045's `integration_mode: single-pr` already opens one PR at the epic level, keeps per-task branches local and ephemeral (§4), moves merge verification up to the epic (§3), and serializes integration behind a lock with mandatory post-rebase re-validation (§5). It was rehearsed by `t2r-13-single-pr-rehearsal`. This repo has no `.agents/aet-config.json`, so it runs ADR-045's degenerate "Scenario A" — `pr-per-task` on trunk. R-17 is the delta, not the mode. ADR-045 §5's lock is documented as "local, single-operator" and stays adequate precisely because multi-user is a non-goal.
 
-**The spec needs a transport, and it is not the forge.** Today the task record
-carries `plan_file` as a *path* (`plan_parser.py:266`), and the projection's
-`_task_body` writes a title plus a reference to that path, not the spec
-(`github_backend.py:429`). Meanwhile `stage_enabled()` and
-`gate.required_evidence()` read plan frontmatter *at run time*, so the plan file is
-load-bearing for pipeline routing and gate skips — not only for the agent's
-instructions. A plan authored on one machine therefore does not reach another by
-any route: gitignored in git, a path in refs, a reference in the issue. R-19 puts
-the spec in the record, which already travels, and rejects the issue body as the
-home because that would make the forge load-bearing for execution and would leave
-shadow projects with no equivalent.
+**The spec needs a transport, and it is not the forge.** Today the task record carries `plan_file` as a *path* (`plan_parser.py:266`), and the projection's `_task_body` writes a title plus a reference to that path, not the spec (`github_backend.py:429`). Meanwhile `stage_enabled()` and `gate.required_evidence()` read plan frontmatter *at run time*, so the plan file is load-bearing for pipeline routing and gate skips — not only for the agent's instructions. A plan authored on one machine therefore does not reach another by any route: gitignored in git, a path in refs, a reference in the issue. R-19 puts the spec in the record, which already travels, and rejects the issue body as the home because that would make the forge load-bearing for execution and would leave shadow projects with no equivalent.
 
-**Phase 2 must precede Phase 7.** The plan-overlay clobber
-(`_copy_deferred_files` overwriting an advanced worktree plan, measured downstream
-at ~$24 in re-run stages) exists only because the worktree copy diverges from the
-main copy — which happens only because the footer mutates. Ephemeral plans dissolve
-it. Under `single-pr` it gets *worse*, since worktrees rebase onto a moving tip and
-refresh more often.
+**Phase 2 must precede Phase 7.** The plan-overlay clobber (`_copy_deferred_files` overwriting an advanced worktree plan, measured downstream at \~$24 in re-run stages) exists only because the worktree copy diverges from the main copy — which happens only because the footer mutates. Ephemeral plans dissolve it. Under `single-pr` it gets *worse*, since worktrees rebase onto a moving tip and refresh more often.
 
-**`learnings.jsonl` is load-bearing.** It is read on every session start —
-`cli/context.py:192` `collect_learnings`, and `context_digest.py` injects the most
-recent entries as "durable insights". Whether to commit it is the operator's
-choice; the consequence of not committing is machine-local learnings and
-per-machine recurrence counting. R-2 keeps the tracked-and-tolerated case working.
+`learnings.jsonl` **is load-bearing.** It is read on every session start — `cli/context.py:192` `collect_learnings`, and `context_digest.py` injects the most recent entries as "durable insights". Whether to commit it is the operator's choice; the consequence of not committing is machine-local learnings and per-machine recurrence counting. R-2 keeps the tracked-and-tolerated case working.
 
-**The archive is read.** `metrics.py` threads `archive_dir` into
-`iter_settled_tasks`, so `aet metrics` and `aet retro` pull settled-task metadata
-from it. R-5 relocates it rather than deleting it, and leaving settled plans in the
-scanned directory is rejected: `plans_lint`, `plan validate`, the R-trace lint and
-`gate review` all glob `docs/plans/*.md` and would degrade as settled work
-accumulates.
+**The archive is read.** `metrics.py` threads `archive_dir` into `iter_settled_tasks`, so `aet metrics` and `aet retro` pull settled-task metadata from it. R-5 relocates it rather than deleting it, and leaving settled plans in the scanned directory is rejected: `plans_lint`, `plan validate`, the R-trace lint and `gate review` all glob `docs/plans/*.md` and would degrade as settled work accumulates.
 
-**CONTEXT.md's glossary has the two stores' roles inverted.** It states the
-provenance ledger "is the sole authority for settled-ness", that under `git-refs`
-it "lives in `refs/aet/*` and travels with the repository", and that
-`.agents/work-history.jsonl` is "write-only telemetry" to be avoided as the ledger.
-All three are false: the ledger has no production reader, is a working-tree file
-under both backends, and work-history is read by `_is_settled_from_authority`,
-`track_record` and `metrics` — it *is* the settled-ness input the glossary
-attributes to the ledger. This matters more than the other four sites because
-`aet-validate-scope` validates every future plan against this glossary, so a false
-domain model compounds. R-18 covers it.
+**CONTEXT.md's glossary has the two stores' roles inverted.** It states the provenance ledger "is the sole authority for settled-ness", that under `git-refs`it "lives in `refs/aet/*` and travels with the repository", and that `.agents/work-history.jsonl` is "write-only telemetry" to be avoided as the ledger. All three are false: the ledger has no production reader, is a working-tree file under both backends, and work-history is read by `_is_settled_from_authority`, `track_record` and `metrics` — it *is* the settled-ness input the glossary attributes to the ledger. This matters more than the other four sites because `aet-validate-scope` validates every future plan against this glossary, so a false domain model compounds. R-18 covers it.
 
-**Configuration is silent today, and there is prior art to build on.**
-`_validate_options` (`cli/configure_backend.py:169`) checks the *values* of the two
-options the `configure` command knows about, but nothing anywhere checks for
-unknown keys — there is no key schema, so a hand-written
-`.agents/aet-config.json` with `projection` instead of `projections`, or
-`integraton_mode`, is silently ignored and the operator believes it is configured.
-Two concrete contradictions already exist: `configure --task-backend`'s help says
-the default is git-refs while `factory.py:62` and `:122` default to json; and
-`aet setup verify` prints built-in defaults as though they were project
-configuration under a venv install, its provenance reading `default`/`trunk`
-instead of `config (project)`. The machinery to fix this is present —
-`resolve_config_with_source` and `resolve_integration_mode_with_provenance`
-already return provenance — so R-20 is about applying it consistently and failing
-closed on the cases it cannot resolve, not about building something new. The
-shadow posture makes this urgent rather than cosmetic: R-15 and R-16 turn
-configuration into the thing that decides whether refs reach someone else's
-remote.
+**Configuration is silent today, and there is prior art to build on.**`_validate_options` (`cli/configure_backend.py:169`) checks the *values* of the two options the `configure` command knows about, but nothing anywhere checks for unknown keys — there is no key schema, so a hand-written `.agents/aet-config.json` with `projection` instead of `projections`, or `integraton_mode`, is silently ignored and the operator believes it is configured. Two concrete contradictions already exist: `configure --task-backend`'s help says the default is git-refs while `factory.py:62` and `:122` default to json; and `aet setup verify` prints built-in defaults as though they were project configuration under a venv install, its provenance reading `default`/`trunk`instead of `config (project)`. The machinery to fix this is present — `resolve_config_with_source` and `resolve_integration_mode_with_provenance`already return provenance — so R-20 is about applying it consistently and failing closed on the cases it cannot resolve, not about building something new. The shadow posture makes this urgent rather than cosmetic: R-15 and R-16 turn configuration into the thing that decides whether refs reach someone else's remote.
 
-**Retracted premises, recorded so they are not re-argued.** Offline capability is
-not a design constraint. Machine-local verdicts are ADR-055 decision 4's decided
-design, not a gap. `git_refs_backend.py:13`'s "local-only by default" is false.
-An earlier draft of the audit claimed verdict events are always deleted with the
-worktree; that holds for `aet run-one` and not for `aet run`, because only the
-batch path sets `AET_REPO_ROOT`.
+**Retracted premises, recorded so they are not re-argued.** Offline capability is not a design constraint. Machine-local verdicts are ADR-055 decision 4's decided design, not a gap. `git_refs_backend.py:13`'s "local-only by default" is false. An earlier draft of the audit claimed verdict events are always deleted with the worktree; that holds for `aet run-one` and not for `aet run`, because only the batch path sets `AET_REPO_ROOT`.
 
 ## Agreed Vocabulary (lands with R-18)
 
-Settled at scope validation, recorded here rather than in CONTEXT.md because it
-describes the post-R-19 model and the glossary must state what the code does:
+Settled at scope validation, recorded here rather than in CONTEXT.md because it describes the post-R-19 model and the glossary must state what the code does:
 
-- **Task** — the board entry, carrying the spec. No longer "one atomic
-  `docs/plans/*.md` file"; after R-19 no plan file need exist on the machine that
-  runs it.
-- **Rendered Plan** — the ephemeral working copy produced in a worktree from the
-  Task record. Never committed, never the source of anything.
-- **Issue** — the GitHub projection of a Task, plus the carrier of the `aet:sprint`
-  intent label. `_Avoid_: issue` keeps its meaning ("do not call a Task an Issue")
-  while the projection gains a name.
-- **Board** — the set of open work. Distinct from **Plan Backlog** (approved, not
-  yet on the board) and from the deprecated "Work Queue / Sprint Board" wording.
+- **Task** — the board entry, carrying the spec. No longer "one atomic `docs/plans/*.md` file"; after R-19 no plan file need exist on the machine that runs it.
+- **Rendered Plan** — the ephemeral working copy produced in a worktree from the Task record. Never committed, never the source of anything.
+- **Issue** — the GitHub projection of a Task, plus the carrier of the `aet:sprint`intent label. `_Avoid_: issue` keeps its meaning ("do not call a Task an Issue") while the projection gains a name.
+- **Board** — the set of open work. Distinct from **Plan Backlog** (approved, not yet on the board) and from the deprecated "Work Queue / Sprint Board" wording.
 - **Shadow Posture** — the permanent local-only mode of R-15/R-16.
 
-CONTEXT.md was corrected at scope validation to describe today's reality — the
-ledger as unread provenance with no transport, the Execution Log as a read input,
-and a new **Settled-ness Authority** entry naming the three inputs that actually
-answer "is it done?". R-18 replaces that with the shipped model.
+CONTEXT.md was corrected at scope validation to describe today's reality — the ledger as unread provenance with no transport, the Execution Log as a read input, and a new **Settled-ness Authority** entry naming the three inputs that actually answer "is it done?". R-18 replaces that with the shipped model.
 
-## Open Questions
+## Resolved at Scope Validation
 
-- **Where does a shadow project's per-task spec come from?** With no issue to
-  render from, the gitignored plan file is the only copy until it is archived to
-  `~/.aet`. Is machine-local-and-unbacked acceptable, or should shadow mode archive
-  eagerly at approval rather than at closure?
-- **Does `gate review` survive?** GitHub renders a board in projected mode; shadow
-  mode has no board UI. Keep it as the shadow-mode board, or delete it?
-- **Machine-local archive layout**, and whether `aet metrics` must read both the
-  legacy `docs/plans/archive/` and the new location during transition.
-- **Does the `claim` no-op belong in the board contract now**, or is adding it when
-  multi-user arrives cheaper than carrying it unused?
-- **Shadow posture detection** — inferred from the absence of project config, or an
-  explicit user-scope key? Inference is fewer moving parts but silently changes
-  push behaviour, which is exactly the class of surprise this PRD exists to remove.
+- **Shadow per-task spec is machine-local and unbacked** — accepted. Better than the question implied: R-19 puts the spec in the task record under `refs/aet/tasks/*`, which lives in `.git`, so it survives worktree destruction and is lost only with the machine. No eager archive at approval.
+- **`aet gate review` is kept** as the shadow-mode board. Not free — it must be re-pointed at the board rather than a plans glob (R-6).
+- **Archive: new location only.** No dual-read; a one-time copy at migration preserves historical metrics (R-5).
+- **No `claim` operation** until multi-user arrives.
+- **Shadow posture is inferred** from the absence of project-scope config, and announced on every run (R-15, R-20).
+
+### Live risk carried forward
+
+Inference cannot distinguish *deliberately shadow* from *not yet configured*. It fails toward not pushing, which is the right direction for client confidentiality, but it silently breaks the plan-on-A-run-on-B scenario (R-19) for any project that has simply not run `aet configure` yet — **including this repository, which has no `.agents/aet-config.json` today.** The announcement required by R-15 and R-20 is what converts that from silent breakage into one actionable message. If the announcement proves insufficient in practice, the fallback is an explicit user-scope posture key; this note records that inference was chosen with the trade understood.
 
 ---
 
 *Stage: scope-validated*
-*Next step: plans are `plan-approved`; run `aet sprint add`*
+
+*Next step: run aet sprint add — plans are plan-approved*
