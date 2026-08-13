@@ -44,7 +44,7 @@ This means:
 | `.agents/work-history.jsonl` | Optional execution log for transitions and timing       | No (gitignored) |
 | `.agents/ledger.jsonl`       | Content-addressed provenance ledger (settled-ness)      | No (gitignored) |
 
-The ledger is an append-only, content-addressed event store. Do not edit it by hand: each event id is a SHA256 over its canonical fields, so any manual change makes the event unrecognizable to the system and can silently drop settled tasks on the next load.
+The ledger is an append-only, content-addressed event store. Do not edit it by hand: each event id is a SHA256 over its canonical fields, so any manual change leaves the id disagreeing with the body. The next load verifies every line and refuses the whole file, so every command that records provenance fails until the ledger is restored — and there is no rebuild path for it.
 
 ### Mutation guard
 
@@ -54,7 +54,7 @@ Use `--force` only to deliberately override a lease you know is stale, or to mak
 
 Queue writes are also tamper-evident: a hand-edited `work-queue.json` fails closed on read for mutating commands. Run `aet state audit` to inspect the unverified queue against git ground truth, and `aet state heal --apply` to reconcile and restamp the envelope. Read-only commands like `status` warn and continue.
 
-The ledger (`.agents/ledger.jsonl`) is also system-managed. It is append-only and content-addressed; the only supported way to repair it is to avoid hand-editing and let `aet ship close`, `aet state transition`, and `aet gate submit` write events through the `Ledger` class. If the ledger appears wrong, run `aet state audit` first.
+The ledger (`.agents/ledger.jsonl`) is also system-managed. It is append-only and content-addressed; the only supported way to keep it valid is to avoid hand-editing and let `aet ship close`, `aet state transition`, and `aet gate submit` write events through the `Ledger` class. If the ledger appears wrong, run `aet state audit` first — it reports queue-vs-git drift, which is the question a wrong-looking ledger usually stands in for.
 
 The `git-refs` backend is `schema_version`-stamped (ADR-055) and treats the live refs as ground truth. A previous chained `content_hash` over the task-ref set has been removed because a chain over a set is non-commutative and made independent writers conflict by construction. The tamper-evident `content_hash` protection therefore applies to the JSON backend only; the same `audit` / `heal --apply` recovery applies there.
 

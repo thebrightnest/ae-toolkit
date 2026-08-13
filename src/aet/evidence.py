@@ -144,6 +144,34 @@ def resolve_verdict_path(
     )
 
 
+# Per-kind builder flags for `aet gate submit`. Builder mode constructs the
+# payload in code, so a writer supplies a verdict and its judgment inputs and
+# never restates the schema. Keeping the invocation here means prompts and
+# docs derive it instead of each carrying its own copy to drift (the defect
+# behind the omitted-tree_hash and hand-rolled-payload failures).
+BUILDER_FLAGS: dict[str, str] = {
+    "qa": "--from-pytest <report.json> --summary <one-line>",
+    "review": "--summary <one-line>",
+    "cso": "--summary <one-line>",
+    "sync-docs": "--summary <one-line> --divergence <item-or-file>",
+}
+
+# What the qa builder reads when no pytest-json-report file is available.
+QA_REPORT_MINIMAL_KEYS = ("test_command", "tests_total", "tests_passed", "tests_failed")
+
+
+def submit_command(kind: str, verdict: str = "<pass|fail>") -> str:
+    """Return the sanctioned ``aet gate submit`` invocation for ``kind``.
+
+    Builder mode (no ``--evidence``) is the documented path: it needs
+    ``AET_TASK_ID``, which every orchestrated session already has, and it
+    stamps the schema-owned fields itself.
+    """
+    if kind not in SCHEMAS:
+        raise VerdictValidationError(f"Unknown verdict kind: {kind!r}")
+    return f"aet gate submit --stage {kind} --verdict {verdict} {BUILDER_FLAGS[kind]}"
+
+
 def validate_verdict(record: dict[str, Any], kind: str) -> None:
     """Validate a verdict record against the schema for ``kind``.
 

@@ -400,6 +400,23 @@ class TestGroupSessionEnvVars(unittest.TestCase):
         self.assertNotIn("AET_EVIDENCE_PATH", env)
 
 
+class TestBuilderInvocation(unittest.TestCase):
+    """`aet gate submit` builder mode is single-sourced, not restated per caller."""
+
+    def test_every_schema_kind_has_builder_flags(self):
+        self.assertEqual(set(evidence.BUILDER_FLAGS), set(evidence.SCHEMAS))
+
+    def test_submit_command_names_the_stage_and_builder_flags(self):
+        command = evidence.submit_command("qa", "pass")
+        self.assertIn("aet gate submit --stage qa --verdict pass", command)
+        self.assertIn("--from-pytest", command)
+        self.assertNotIn("--evidence", command)
+
+    def test_submit_command_rejects_unknown_kinds(self):
+        with self.assertRaises(evidence.VerdictValidationError):
+            evidence.submit_command("not-a-kind")
+
+
 class TestGateMessageIncludesPath(unittest.TestCase):
     """The missing-verdict gate message names the path it read."""
 

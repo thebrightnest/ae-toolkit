@@ -26,6 +26,8 @@ _PATH_TARGETS: list[tuple[str, str]] = [
     ("src/aet/projections/", "tests/projections"),
     ("src/aet/failure.py", "tests/failure"),
     ("src/aet/gate.py", "tests/gate"),
+    ("src/aet/evidence.py", "tests/gate"),
+    ("src/aet/ledger.py", "tests/ledger"),
     ("src/aet/metrics.py", "tests/metrics"),
     ("src/aet/queue.py", "tests/queue"),
     ("src/aet/telemetry.py", "tests/telemetry"),

@@ -467,6 +467,30 @@ def _handoff_clause(repo_root: str, run_id: str | None) -> str:
     return "\n\n" + block
 
 
+def _evidence_clause(kind: str, env_var: str) -> str:
+    """Name the required verdict, its builder command, and its output path.
+
+    The command comes from :func:`evidence.submit_command` so the prompt cannot
+    drift from the CLI, and it is builder mode rather than
+    ``--evidence <payload-file>``: an agent that hand-writes the JSON has to
+    reproduce schema fields it cannot see, which is how payloads ended up
+    missing required keys.
+    """
+    clause = (
+        f"\n\nThis stage requires a {kind!r} verdict. Submit it with: "
+        f"`{evidence.submit_command(kind, 'pass')}`. The required output path "
+        f"is in `${env_var}`. The stage is not complete until the verdict is "
+        f"written."
+    )
+    if kind == "qa":
+        keys = ", ".join(evidence.QA_REPORT_MINIMAL_KEYS)
+        clause += (
+            f" For `--from-pytest`, a pytest-json-report file works, or write a "
+            f"scratch JSON object with just: {keys}."
+        )
+    return clause
+
+
 def build_prompt(
     skills: list[str],
     plan_file: str,
@@ -479,13 +503,7 @@ def build_prompt(
     skills_str = " → ".join(skills)
     evidence_clause = ""
     if verdict_kind is not None:
-        evidence_clause = (
-            f"\n\nThis stage requires a {verdict_kind!r} verdict. Submit it with: "
-            f"`aet gate submit --stage {verdict_kind} --verdict pass "
-            f"--evidence <payload-file>`. The required output path is in "
-            f"`$AET_EVIDENCE_PATH`. The stage is not complete until the verdict "
-            f"is written."
-        )
+        evidence_clause = _evidence_clause(verdict_kind, "AET_EVIDENCE_PATH")
     return (
         f"Run {skills_str} on {plan_file}\n"
         f"Current stage: {current_stage}. Target stage: {next_stage}.\n"
@@ -813,20 +831,14 @@ def _emit_test_run_from_verdict(
     )
 
 
-def _require_passing_verdict(
-    task_id: str,
-    kind: str,
-    repo_root: str,
-    plan_file: str,
-    stage: str,
-    logger: telemetry.RunLogger,
-) -> bool:
-    """Fail-closed evidence gate for a checking stage.
+def _verdict_state(
+    task_id: str, kind: str, repo_root: str
+) -> tuple[str, dict | None, str]:
+    """Classify a checking stage's verdict as pass / missing / invalid / fail.
 
-    Returns ``True`` only when a schema-valid verdict with ``verdict: "pass"``
-    exists. A missing, malformed, or failing verdict returns ``False`` so the
-    caller takes the same failure path as a non-zero session exit. On a passing
-    ``qa`` verdict a derived ``test_run`` telemetry record is emitted.
+    ``missing`` is the only recoverable state: the stage work exists and is
+    committed, and the sole absent artifact is a file written outside the tree.
+    ``invalid`` and ``fail`` are judgments the gate must not paper over.
     """
     try:
         record = _load_checking_verdict(task_id, kind, repo_root)
@@ -836,23 +848,164 @@ def _require_passing_verdict(
             kind=kind,
             project_slug=telemetry.derive_project_slug(repo_root),
         )
-        print(
-            f"   ❌ Gate fail-closed: missing {kind} verdict for {task_id} "
-            f"(looked at {path})"
-        )
-        return False
+        return "missing", None, f"missing {kind} verdict (looked at {path})"
     except (evidence.VerdictValidationError, evidence.VerdictValueError) as exc:
-        print(f"   ❌ Gate fail-closed: invalid {kind} verdict for {task_id}: {exc}")
-        return False
-
+        return "invalid", None, f"invalid {kind} verdict: {exc}"
     if record.get("verdict") != "pass":
-        print(
-            f"   ❌ Gate fail-closed: {kind} verdict is "
-            f"{record.get('verdict')!r} for {task_id}"
+        return "fail", record, f"{kind} verdict is {record.get('verdict')!r}"
+    return "pass", record, ""
+
+
+def _run_verdict_recovery(
+    adapter,
+    repo_root: str,
+    plan_file: str,
+    worktree_dir: str,
+    task_id: str,
+    kind: str,
+    stage: str,
+    logger: telemetry.RunLogger,
+    stall_timeout: float | None,
+    isolation: str,
+    base_branch: str,
+) -> None:
+    """Spawn one narrow session whose only job is to write the missing verdict.
+
+    A missing verdict file is often not a failed stage: the work is committed
+    and the gate is refusing over an artifact that costs one command to
+    produce. Discarding the whole stage and re-running it from scratch pays for
+    the entire session again to recover a file. This asks once, for that file
+    only, with no license to touch the tree.
+
+    The prompt deliberately does **not** assert that the stage's work was
+    completed. A group session can end having skipped a later stage entirely,
+    so "verdict missing" and "stage never ran" are indistinguishable from here.
+    Asserting completion would put a false premise in front of the agent and
+    invite a fabricated pass; asking it to distinguish the two turns the
+    ambiguity into a reported signal instead.
+
+    The session is telemetry-visible as another attempt at the same stage, so
+    recovery cost stays attributable and a stage that needs it every run is
+    legible as a defect rather than hidden in a retry.
+    """
+    prompt = (
+        f"The {stage} stage session for {task_id} has ended without writing "
+        f"the required {kind!r} stage verdict, which the orchestrator gate is "
+        f"fail-closed on.\n\n"
+        f"Write that verdict now, and nothing else. Submit it with: "
+        f"`{evidence.submit_command(kind)}`. The required output path is in "
+        f"`$AET_EVIDENCE_PATH`.\n\n"
+        f"First establish what actually happened, from the branch's commits and "
+        f"the working tree — do not assume the stage completed. Then:\n"
+        f"- If its work is complete, submit the verdict that work earned; if it "
+        f"found blocking problems, that is `--verdict fail`.\n"
+        f"- If the stage was not performed at all, submit `--verdict fail` with "
+        f"a summary saying so. Do not pass a stage that did not run.\n\n"
+        f"Do not modify, re-run, or commit anything in the repository; the "
+        f"verdict file is written outside the working tree."
+    )
+    if kind == "qa":
+        keys = ", ".join(evidence.QA_REPORT_MINIMAL_KEYS)
+        prompt += (
+            f"\n\nFor `--from-pytest`, use the test results already produced by "
+            f"this stage: a pytest-json-report file, or a scratch JSON object "
+            f"with just {keys}. Do not re-run the suite to obtain them unless "
+            f"no record of the run survives."
         )
+
+    cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
+    env = os.environ.copy()
+    env["AET_EXECUTION_MODE"] = "unattended"
+    env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    env["AET_TASK_ID"] = task_id
+    if logger.run_id is not None:
+        env["AET_RUN_ID"] = logger.run_id
+    env["AET_EVIDENCE_PATH"] = str(
+        evidence.evidence_path(
+            task_id=task_id,
+            kind=kind,
+            project_slug=telemetry.derive_project_slug(repo_root),
+        )
+    )
+
+    print(f"   ↻ Verdict recovery: asking for the {kind} verdict only")
+    start_time = telemetry.iso_now()
+    exit_code, usage, session_ref, output = _spawn_session_with_tail(
+        adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
+    )
+    end_time = telemetry.iso_now()
+    _emit_stage_session(
+        logger,
+        task_id,
+        plan_file,
+        adapter.name,
+        isolation,
+        stage,
+        None,
+        worktree_dir,
+        start_time,
+        end_time,
+        exit_code,
+        usage=usage,
+        session_ref=session_ref,
+        base_branch=base_branch,
+        output=output,
+        verdict_recorded=False,
+    )
+
+
+def _require_passing_verdict(
+    task_id: str,
+    kind: str,
+    repo_root: str,
+    plan_file: str,
+    stage: str,
+    logger: telemetry.RunLogger,
+    *,
+    adapter=None,
+    worktree_dir: str | None = None,
+    stall_timeout: float | None = None,
+    isolation: str = "worktree",
+    base_branch: str = "origin/main",
+) -> bool:
+    """Fail-closed evidence gate for a checking stage.
+
+    Returns ``True`` only when a schema-valid verdict with ``verdict: "pass"``
+    exists. A malformed or failing verdict returns ``False`` so the caller takes
+    the same failure path as a non-zero session exit. On a passing ``qa``
+    verdict a derived ``test_run`` telemetry record is emitted.
+
+    When *adapter* and *worktree_dir* are supplied and the verdict is merely
+    **missing**, one recovery session is spawned to write it before the gate
+    decides. The gate itself never softens: recovery re-reads the file and a
+    still-missing verdict fails exactly as before.
+    """
+    state, record, detail = _verdict_state(task_id, kind, repo_root)
+
+    if state == "missing" and adapter is not None and worktree_dir is not None:
+        print(f"   ⚠️  {detail}; attempting one recovery session")
+        _run_verdict_recovery(
+            adapter,
+            repo_root,
+            plan_file,
+            worktree_dir,
+            task_id,
+            kind,
+            stage,
+            logger,
+            stall_timeout,
+            isolation,
+            base_branch,
+        )
+        state, record, detail = _verdict_state(task_id, kind, repo_root)
+        if state == "pass":
+            print(f"   ✅ {kind} verdict recovered")
+
+    if state != "pass":
+        print(f"   ❌ Gate fail-closed: {detail} for {task_id}")
         return False
 
-    if kind == "qa":
+    if kind == "qa" and record is not None:
         _emit_test_run_from_verdict(logger, record, task_id, plan_file, stage)
     return True
 
@@ -1105,18 +1258,14 @@ def build_stage_group_prompt(
         skills_str = " → ".join(stage.skills)
         evidence_clause = ""
         if stage.evidence is not None:
-            env_var = evidence.evidence_path_env_var(stage.evidence)
-            evidence_clause = (
-                f"\n\nThis stage requires a {stage.evidence!r} verdict. Submit it "
-                f"with: `aet gate submit --stage {stage.evidence} --verdict pass "
-                f"--evidence <payload-file>`. The required output path is in "
-                f"`${env_var}`. The stage is not complete until the verdict is "
-                f"written."
+            evidence_clause = _evidence_clause(
+                stage.evidence, evidence.evidence_path_env_var(stage.evidence)
             )
         blocks.append(
             f"Run {skills_str} on {plan_file}\n"
             f"Current stage: {stage.name}. Target stage: {next_stage}.\n"
-            f"Execute only this stage. Do not proceed to subsequent stages.\n"
+            f"Finish this stage completely, then continue to the next stage "
+            f"block in this prompt. Do not go past the last block.\n"
             f"Commit your work before exiting.{evidence_clause}"
         )
     return "\n\n".join(blocks)
@@ -1463,7 +1612,17 @@ def process_task(
                         continue
                     target = workflow.next_stage(stage.name) or stage.name
                     if not _require_passing_verdict(
-                        task_id, kind, repo_root, plan_file, target, logger
+                        task_id,
+                        kind,
+                        repo_root,
+                        plan_file,
+                        target,
+                        logger,
+                        adapter=adapter,
+                        worktree_dir=worktree_dir,
+                        stall_timeout=stall_timeout,
+                        isolation=task_isolation,
+                        base_branch=base_branch,
                     ):
                         return False
 
@@ -1569,7 +1728,17 @@ def process_task(
 
             # Fail-closed evidence gate for checking stages (qa/review/cso/sync-docs).
             if kind is not None and not _require_passing_verdict(
-                task_id, kind, repo_root, plan_file, next_stage_name, logger
+                task_id,
+                kind,
+                repo_root,
+                plan_file,
+                next_stage_name,
+                logger,
+                adapter=adapter,
+                worktree_dir=worktree_dir,
+                stall_timeout=stall_timeout,
+                isolation=task_isolation,
+                base_branch=base_branch,
             ):
                 return False
 

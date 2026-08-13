@@ -69,11 +69,15 @@ Staff-level diff review with multiple lenses.
 
 Submit the stage verdict through the sanctioned writer — `aet gate submit` is the only writer of stage verdicts (G1). Do not hand-edit plan footers or queue state.
 
+Use builder mode, which constructs the payload in code:
+
 ```bash
-aet gate submit --stage review --verdict <pass|fail> --evidence <payload-file>
+aet gate submit --stage review --verdict <pass|fail> --summary "<one line>"
 ```
 
-Write `<payload-file>` to a scratch path outside the tracked tree. The payload follows the `review` schema expected by `aet gate submit`; consult the command help or reference docs for the current fields.
+Builder mode constructs the payload in code, stamping every schema field itself (including the `findings` list the mechanical lenses append to). It needs `AET_TASK_ID`, which orchestrated sessions already have.
+
+Hand-authoring the full payload and passing `--evidence <payload-file>` still works, but you would be reproducing schema fields you cannot see — the cause of past rejected verdicts. Prefer builder mode; `docs/CLI.md` carries the generated option reference.
 
 After submitting the verdict, if `AET_RUN_ID` is set, append the review handoff
 entry so later stages inherit the verdict and evidence path:

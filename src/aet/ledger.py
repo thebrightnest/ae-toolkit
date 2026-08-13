@@ -11,6 +11,22 @@ Events without an external ``ref`` must carry a caller-supplied
 it never mints an ``occurred_at`` from wall-clock time.  The reserved source
 ``ingest-backfill`` is rejected so readers can safely filter reconstructed
 events.
+
+**Append-only is literal, and corruption is loud.**  Writes append one line to
+the existing file; no code path rewrites it.  Loads verify every line against
+its own content address and raise :class:`LedgerCorruptionError` on a
+malformed line, an absent or non-string id, an id that does not match the
+event body, or two events sharing an id with different bodies.  A store whose
+ids no longer attest its contents has lost the only property that makes it a
+provenance record, so it refuses to answer rather than answering from a
+silently reduced subset.  Read failures raise too — ADR-033 §3 keeps storage
+fail-closed, and a load that reported an unreadable file as an empty one led
+the writer to persist that emptiness.  :func:`verify` enumerates every problem
+at once for repair tooling.
+
+The address covers the identity tuple only, never ``payload``: widening it
+would change every existing id and break the idempotence that makes duplicate
+writes no-ops (ADR-055).
 """
 
 from __future__ import annotations
@@ -18,7 +34,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,6 +44,22 @@ ALLOWED_KINDS = frozenset({"cut", "stage", "verdict", "land"})
 ALLOWED_REF_KINDS = frozenset({"git-sha", "pr", "plan-hash", "evidence-path"})
 RESERVED_SOURCE = "ingest-backfill"
 SCHEMA_VERSION = 1
+
+# Appended to every corruption report: the ledger cannot be re-derived from
+# other state, so the remedy is always restore-or-rebuild, never hand-repair.
+_REPAIR_HINT = (
+    "The ledger is append-only and content-addressed: an edited line's id no "
+    "longer attests its body, and the original cannot be re-derived. There is "
+    "no rebuild path — the file is gitignored, and no other store holds these "
+    "events. Restore it from a backup, or remove it and accept the loss of "
+    "provenance for events already recorded. (`aet state audit` diagnoses "
+    "queue-vs-git drift, which is a different question; it does not rebuild "
+    "the ledger.) Never hand-edit it."
+)
+
+
+class LedgerCorruptionError(RuntimeError):
+    """Raised when the ledger on disk does not match its content addresses."""
 
 
 def _canonical_json(value: Any) -> bytes:
@@ -44,57 +75,138 @@ def _event_id(source: str, task: str, kind: str, ref_or_occurred: str | None) ->
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _expected_id(event: dict[str, Any]) -> str:
+    """Recompute the content address of a persisted event.
+
+    Mirrors the writer's key exactly: ``ref`` wins when present, otherwise
+    ``occurred_at``.  Fields absent from the body stringify to ``"None"``, the
+    same rendering the writer would have produced, so a missing field surfaces
+    as a mismatch rather than a coincidental match.
+    """
+    ref = event.get("ref")
+    key = ref if ref is not None else event.get("occurred_at")
+    return _event_id(event.get("source"), event.get("task"), event.get("kind"), key)
+
+
+def _scan(path: Path) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Read ``path`` and return ``(events_by_id, problems)``.
+
+    Every line is verified against its own content address.  Offending lines
+    are reported in ``problems`` and excluded from the returned index; the
+    caller decides whether to raise.  An absent file is an empty ledger.  I/O
+    errors propagate — an unreadable ledger is never reported as an empty one,
+    because a caller that believed it would write a new file over live history.
+    """
+    events: dict[str, dict[str, Any]] = {}
+    problems: list[str] = []
+    if not path.exists():
+        return events, problems
+
+    with open(path, "r", encoding="utf-8") as f:
+        for lineno, raw in enumerate(f, start=1):
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError as exc:
+                problems.append(f"line {lineno}: not valid JSON ({exc})")
+                continue
+            if not isinstance(event, dict):
+                problems.append(f"line {lineno}: event is not a JSON object")
+                continue
+            event_id = event.get("id")
+            if not isinstance(event_id, str) or not event_id:
+                problems.append(f"line {lineno}: missing or non-string 'id'")
+                continue
+            expected = _expected_id(event)
+            if event_id != expected:
+                problems.append(
+                    f"line {lineno}: id does not match event body "
+                    f"(stored {event_id[:12]}…, computed {expected[:12]}… from "
+                    f"source={event.get('source')!r} task={event.get('task')!r} "
+                    f"kind={event.get('kind')!r})"
+                )
+                continue
+            previous = events.get(event_id)
+            if previous is not None and previous != event:
+                problems.append(
+                    f"line {lineno}: duplicate id {event_id[:12]}… with a "
+                    "different body than its earlier occurrence"
+                )
+                continue
+            events[event_id] = event
+
+    return events, problems
+
+
+def verify(path: str | Path | None = None) -> list[str]:
+    """Return every integrity problem in the ledger at ``path`` (empty when clean).
+
+    The diagnostic counterpart to loading: it enumerates all problems instead
+    of raising on the first, so a repair tool can show the whole picture.
+    """
+    target = Path(path) if path else Path(".agents/ledger.jsonl")
+    _, problems = _scan(target)
+    return problems
+
+
 class Ledger:
     """Append-only, idempotent content-addressed event store."""
 
     def __init__(self, path: str | Path | None = None) -> None:
-        """Initialize the ledger at ``path`` (default: ``.agents/ledger.jsonl``)."""
+        """Initialize the ledger at ``path`` (default: ``.agents/ledger.jsonl``).
+
+        Raises:
+            LedgerCorruptionError: When the existing file fails verification.
+                Construction is where corruption surfaces, so no caller can
+                hold a Ledger whose index is quietly incomplete.
+        """
         self.path = Path(path) if path else Path(".agents/ledger.jsonl")
         self._lock = FileLock(str(self.path) + ".lock")
         self._events: dict[str, dict[str, Any]] = {}
         self._load()
 
     def _load(self) -> None:
-        """Read existing events and index them by id."""
-        self._events = {}
-        if not self.path.exists():
-            return
-        try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        event = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    event_id = event.get("id")
-                    if isinstance(event_id, str):
-                        self._events[event_id] = event
-        except OSError:
-            return
+        """Index existing events by id, refusing a ledger that fails verification.
 
-    def _write_all(self, events: list[dict[str, Any]]) -> None:
-        """Atomically rewrite the ledger file with the given events."""
+        Raises:
+            LedgerCorruptionError: When any line is malformed or its id does
+                not attest its body.  Loading a verified-good subset would let
+                a damaged store keep answering queries with silently missing
+                history, and the next write would then persist that reduction.
+            OSError: When the file exists but cannot be read.
+        """
+        events, problems = _scan(self.path)
+        if problems:
+            detail = "\n".join(f"  - {problem}" for problem in problems)
+            raise LedgerCorruptionError(
+                f"{self.path}: {len(problems)} integrity problem(s)\n{detail}\n"
+                f"{_REPAIR_HINT}"
+            )
+        self._events = events
+
+    def _append_event(self, event: dict[str, Any]) -> None:
+        """Append one event line to the ledger, creating the file if needed.
+
+        A durable append, not a rewrite: existing lines are never re-serialized,
+        so a write cannot narrow the file to whatever the last load happened to
+        parse.  A file left without a trailing newline gets one first, so a
+        partial previous write cannot fuse two events into an unparseable line.
+        """
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(self.path.parent), prefix=".ledger-tmp-"
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                for event in events:
-                    f.write(_canonical_json(event).decode("utf-8"))
-                    f.write("\n")
-                    f.flush()
-                    os.fsync(f.fileno())
-            os.replace(tmp_path, self.path)
-        except Exception:
-            try:
-                os.unlink(tmp_path)
-            except FileNotFoundError:
-                pass
-            raise
+        needs_newline = False
+        if self.path.exists() and self.path.stat().st_size > 0:
+            with open(self.path, "rb") as f:
+                f.seek(-1, os.SEEK_END)
+                needs_newline = f.read(1) != b"\n"
+        with open(self.path, "a", encoding="utf-8") as f:
+            if needs_newline:
+                f.write("\n")
+            f.write(_canonical_json(event).decode("utf-8"))
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
 
     def write_event(
         self,
@@ -130,6 +242,9 @@ class Ledger:
             ValueError: When ``source`` is reserved, ``kind`` is unknown,
                 ``ref`` is present without ``ref_kind``, ``ref_kind`` is
                 unknown, or ``ref`` is absent and ``occurred_at`` is missing.
+            LedgerCorruptionError: When the ledger on disk fails verification.
+                No event is appended to a store that cannot vouch for what it
+                already holds.
         """
         if source == RESERVED_SOURCE:
             raise ValueError(f"reserved source rejected: {RESERVED_SOURCE}")
@@ -169,9 +284,7 @@ class Ledger:
             if payload is not None:
                 event["payload"] = payload
 
-            events = list(self._events.values())
-            events.append(event)
-            self._write_all(events)
+            self._append_event(event)
             self._events[event_id] = event
             return event
 
