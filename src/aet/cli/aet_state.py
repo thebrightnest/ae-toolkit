@@ -1222,6 +1222,11 @@ def cmd_transition(args):
             print(str(e), file=sys.stderr)
             return 1
 
+    # Replicate the transition to the forge remote; otherwise a later
+    # fetch-on-read command silently reverts the local ref (see
+    # docs/bugs/2026-08-14-aet-state-transition-does-not-push-refs.md).
+    backend.push()
+
     print(f"Transitioned {args.task_id}: {args.from_stage} -> {args.to_stage}")
     return 0
 

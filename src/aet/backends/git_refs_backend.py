@@ -9,8 +9,10 @@ as the JSON backend does — this backend is storage-only; state legality stays 
 
 Ref updates are atomic under git's own ref locks. A multi-task ``save`` writes
 per-task refs and skips tasks whose blob is unchanged versus what was loaded, so
-concurrent writers touching *different* tasks never clobber each other. Nothing
-here pushes ``refs/aet/*``: the backend is local-only by default.
+concurrent writers touching *different* tasks never clobber each other.
+Replication to the forge remote is explicit: mutating ``aet-state`` commands
+push ``refs/aet/*`` (forced, best-effort except at terminal closure) and read
+commands fetch it back.
 
 The envelope carries a ``schema_version`` field (ADR-055).  A previous chained
 ``content_hash`` over the task-ref set has been removed: a chain over a set is
@@ -33,12 +35,14 @@ TASKS_REF_PREFIX = "refs/aet/tasks/"
 ENVELOPE_REF = "refs/aet/meta/queue"
 ENVELOPE_SCHEMA_VERSION = 1
 
-# Refspec used to fetch and push the backend's private namespace. The leading
-# '+' on fetch allows remote refs to overwrite local ones in the namespace,
-# which is safe because the namespace is backend-owned and tasks are identified
-# by their ref names, not by a linear history.
+# Refspecs used to fetch and push the backend's private namespace. The leading
+# '+' allows refs to be overwritten in both directions, which is required
+# because refs in this namespace point to blobs: git rejects any update to a
+# remote ref that points at a non-commit object without force. Overwriting is
+# safe because the namespace is backend-owned and tasks are identified by
+# their ref names, not by a linear history.
 _AET_FETCH_REFSPEC = "+refs/aet/*:refs/aet/*"
-_AET_PUSH_REFSPEC = "refs/aet/*"
+_AET_PUSH_REFSPEC = "+refs/aet/*"
 
 
 def _has_remote(repo_root: str) -> bool:

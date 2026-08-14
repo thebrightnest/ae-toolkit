@@ -163,6 +163,34 @@ class TestBackendAwareTransition(unittest.TestCase):
         self.assertIsNotNone(saved)
         self.assertEqual(saved[0]["state"], "ready")
 
+    def test_transition_pushes_backend_after_save(self):
+        """A successful transition replicates to the remote via backend.push.
+
+        Regression for docs/bugs/2026-08-14-aet-state-transition-does-not-push-refs.md:
+        without the push, a later force fetch silently reverts the local ref.
+        """
+        backend = FakeBackend([{"id": "t1", "state": "planned"}])
+
+        args = aet_state.argparse.Namespace(
+            command="transition",
+            task_id="t1",
+            from_stage="planned",
+            to_stage="ready",
+            queue="/fake/work-queue.json",
+            dry_run=False,
+            reason=None,
+        )
+
+        with patch.object(aet_state, "create_backend", return_value=backend):
+            rc = aet_state.cmd_transition(args)
+
+        self.assertEqual(rc, 0)
+        names = [c[0] for c in backend.calls]
+        self.assertIn("push", names)
+        self.assertGreater(names.index("push"), names.index("save"))
+        push_call = next(c for c in backend.calls if c[0] == "push")
+        self.assertFalse(push_call[1]["mandatory"])
+
     def test_transition_notifies_backend_hook(self):
         """A non-terminal transition calls backend.on_transition with evidence."""
         backend = FakeBackend([{"id": "t1", "state": "planned"}])
@@ -205,7 +233,9 @@ class TestBackendAwareTransition(unittest.TestCase):
             rc = aet_state.cmd_transition(args)
 
         self.assertEqual(rc, 0)
-        self.assertFalse(any(c[0] in ("save", "on_transition", "close_task") for c in backend.calls))
+        self.assertFalse(
+            any(c[0] in ("save", "push", "on_transition", "close_task") for c in backend.calls)
+        )
 
     def test_terminal_transition_calls_backend_close_task(self):
         """A terminal transition seals the task and asks the backend to close it."""
