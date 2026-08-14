@@ -66,6 +66,27 @@ def transcript_path_for(
     return home / "projects" / cwd_slug(str(Path(cwd).resolve())) / f"{session_id}.jsonl"
 
 
+def _record_role(record: dict[str, Any], message: Any) -> str | None:
+    """Return ``"assistant"``/``"user"`` for a transcript record.
+
+    Claude Code puts the role at ``message.role`` and mirrors it in the
+    top-level ``type`` field; it emits no top-level ``role``. Reading only
+    ``record["role"]`` — as this did until the fix — matched nothing on a real
+    transcript, so no tool call was ever paired and the reader always returned
+    an empty list. ``record["role"]`` is still accepted last so the older
+    hand-written fixture keeps resolving.
+    """
+    if isinstance(message, dict):
+        role = message.get("role")
+        if isinstance(role, str):
+            return role
+    for key in ("type", "role"):
+        value = record.get(key)
+        if isinstance(value, str):
+            return value
+    return None
+
+
 def extract_test_invocations(
     session_id: str, worktree_dir: str, home: Path | None = None
 ) -> list[dict[str, Any]]:
@@ -101,8 +122,8 @@ def extract_test_invocations(
             if not isinstance(record, dict):
                 continue
             timestamp = record.get("timestamp")
-            role = record.get("role")
             message = record.get("message")
+            role = _record_role(record, message)
             if not isinstance(message, dict):
                 continue
             content = message.get("content")

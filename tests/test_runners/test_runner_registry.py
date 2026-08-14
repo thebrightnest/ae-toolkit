@@ -129,3 +129,54 @@ class TestSingleRegistryProof(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPipedAndCompoundCommands(unittest.TestCase):
+    """A runner sits at no fixed position in a compound command.
+
+    Splitting on the pipe and then taking the *last* segment resolved ``tail -5``
+    for every piped invocation — which is how an agent trims output, so no piped
+    test run was ever detected. Every segment is now a candidate and the first
+    one that resolves wins.
+    """
+
+    COMPOUND = [
+        ("pytest -q 2>&1 | tail -5", "pytest"),
+        ("make validate 2>&1 | tail -30", "make"),
+        (".venv/bin/python3 -m pytest tests/x -q 2>&1 | tail -6", "python -m pytest"),
+        ("pytest -q | head -20 | grep FAIL", "pytest"),
+        # Setup that is not a recognised setup head still yields the runner.
+        ("mkdir -p /tmp/x && pytest tests/ -q", "pytest"),
+        ("pytest || true", "pytest"),
+        # Regressions: sequencing still resolves.
+        ("cd /x && pytest -q", "pytest"),
+        ("source .venv/bin/activate && pytest -q", "pytest"),
+    ]
+
+    NON_TEST = [
+        "git add -A && git commit -m x",
+        "ls -la | wc -l",
+        "echo pytest",
+    ]
+
+    def test_runner_is_found_in_a_compound_command(self):
+        for command, expected in self.COMPOUND:
+            with self.subTest(command=command):
+                resolved = test_runners.resolve_test_command(command)
+                self.assertIsNotNone(resolved, f"no runner resolved for {command!r}")
+                self.assertEqual(resolved[0], expected)
+
+    def test_non_test_commands_still_resolve_to_nothing(self):
+        for command in self.NON_TEST:
+            with self.subTest(command=command):
+                self.assertIsNone(test_runners.resolve_test_command(command))
+
+    def test_redirection_target_does_not_narrow_the_scope(self):
+        """``> /tmp/out.log`` is not a test path; it must not read as ``impact``."""
+        self.assertEqual(
+            test_runners.resolve_test_command("pytest -q > /tmp/out.log"),
+            ("pytest", ["-q"]),
+        )
+        self.assertEqual(
+            telemetry.classify_test_scope("pytest -q > /tmp/out.log"), "full-suite"
+        )

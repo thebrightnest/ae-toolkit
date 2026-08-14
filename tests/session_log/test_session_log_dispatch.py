@@ -497,3 +497,46 @@ class TestCwdSlugMatchesClaudeCode:
         """Claude Code's project directories never contain other characters."""
         slug = session_log_claude.cwd_slug("/Users/p.rocha/Work/a_b.c/.worktrees/d")
         assert re.fullmatch(r"[A-Za-z0-9-]+", slug)
+
+
+class TestClaudeReaderAgainstRealShape:
+    """Read a transcript in the shape Claude Code actually writes.
+
+    The long-standing fixture (``transcript.jsonl``) carries a top-level
+    ``role`` and no ``type``. A real transcript is the opposite: ``type`` at the
+    top level, the role under ``message.role``, and no top-level ``role`` at all.
+    The reader matched only the invented shape, so it returned an empty list for
+    every real session while its tests passed. This fixture is derived from an
+    actual transcript, with the command and result text replaced.
+    """
+
+    FIXTURE = _fixture_path("claude") / "transcript_real_shape.jsonl"
+
+    def _transcript(self, tmp_path, cwd: str) -> Path:
+        home = tmp_path / ".claude"
+        d = home / "projects" / session_log_claude.cwd_slug(cwd)
+        d.mkdir(parents=True)
+        (d / "sess-1.jsonl").write_text(self.FIXTURE.read_text(), encoding="utf-8")
+        return home
+
+    def test_recovers_a_piped_invocation_from_a_real_shaped_record(self, tmp_path):
+        cwd = "/Users/p.rocha/Work/proj/.worktrees/task-1"
+        home = self._transcript(tmp_path, cwd)
+
+        found = session_log_claude.extract_test_invocations("sess-1", cwd, home=home)
+
+        assert len(found) == 1, "a real-shaped transcript must yield its invocation"
+        inv = found[0]
+        assert "pytest" in inv["command"]
+        assert inv["exit_code"] == 0
+        assert inv["duration_seconds"] is not None
+
+    def test_dispatch_reaches_the_same_result(self, tmp_path):
+        cwd = "/Users/p.rocha/Work/proj/.worktrees/task-1"
+        home = self._transcript(tmp_path, cwd)
+
+        found = session_log.extract_test_invocations(
+            "claude", "sess-1", worktree_dir=cwd, home=home
+        )
+
+        assert len(found) == 1
