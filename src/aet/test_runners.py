@@ -22,6 +22,8 @@ import shlex
 
 _SEPARATOR_RE = re.compile(r"&&|;|\|")
 _ENV_ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+# Redirection operators, bare (``>``) or fused with a target (``2>&1``).
+_REDIRECT_RE = re.compile(r"^\d*[<>]")
 
 # Setup segments that may lead a compound command without being the command.
 _SETUP_HEADS = {"cd", "source", "."}
@@ -51,32 +53,66 @@ def resolve_test_command(command: str) -> tuple[str, list[str]] | None:
     ``"python -m pytest"``, ``"make"``, ``"npm test"``, …); ``args`` are the
     tokens that follow the runner — the scope classification input. ``make``
     yields no path arguments: make targets are never paths.
+
+    Every segment of a compound command is a candidate and the first one that
+    resolves wins. The runner sits at no fixed position: with sequencing
+    (``cd x && pytest``) it is last, with a pipe (``pytest -q | tail -5``) it is
+    first, and with setup (``mkdir -p /tmp/x && pytest``) it is neither. Taking
+    the last segment — as this did until the fix — resolved ``tail -5`` for every
+    piped invocation, which is how an agent trims output, so no piped test run
+    was ever detected.
     """
-    tokens = _normalized_tokens(command)
-    if not tokens:
-        return None
-    return _resolve_tokens(tokens)
+    for tokens in _candidate_token_lists(command):
+        hit = _resolve_tokens(tokens)
+        if hit is not None:
+            return hit
+    return None
 
 
-def _normalized_tokens(command: str) -> list[str] | None:
-    """Normalise a raw command to candidate runner tokens, or None."""
-    segments = [seg.strip() for seg in _SEPARATOR_RE.split(command)]
-    segments = [seg for seg in segments if seg]
-    # Drop leading setup segments (`cd …`, `source …`, `. …`); the command of
-    # interest is the last remaining segment.
-    while segments and segments[0].split(None, 1)[0] in _SETUP_HEADS:
-        segments.pop(0)
-    if not segments:
-        return None
-    segment = segments[-1]
-    try:
-        tokens = shlex.split(segment)
-    except ValueError:
-        tokens = segment.split()
-    # Strip leading VAR=value assignments.
-    while tokens and _ENV_ASSIGN_RE.match(tokens[0]):
-        tokens.pop(0)
-    return _strip_path_prefix(tokens)
+def _candidate_token_lists(command: str) -> list[list[str]]:
+    """Token lists for each segment of a compound command, in written order."""
+    candidates: list[list[str]] = []
+    for segment in _SEPARATOR_RE.split(command):
+        segment = segment.strip()
+        if not segment:
+            continue
+        # Setup segments (`cd …`, `source …`, `. …`) are never the command.
+        if segment.split(None, 1)[0] in _SETUP_HEADS:
+            continue
+        try:
+            tokens = shlex.split(segment)
+        except ValueError:
+            tokens = segment.split()
+        # Strip leading VAR=value assignments.
+        while tokens and _ENV_ASSIGN_RE.match(tokens[0]):
+            tokens.pop(0)
+        tokens = _strip_redirections(tokens)
+        stripped = _strip_path_prefix(tokens)
+        if stripped:
+            candidates.append(stripped)
+    return candidates
+
+
+def _strip_redirections(tokens: list[str]) -> list[str]:
+    """Drop redirection operators and their targets from a segment.
+
+    ``pytest -q > /tmp/out.log`` would otherwise carry ``/tmp/out.log`` into the
+    scope classifier, which reads a path-shaped argument as a narrowed run and
+    would report a full suite as ``impact``.
+    """
+    cleaned: list[str] = []
+    skip_next = False
+    for token in tokens:
+        if skip_next:
+            skip_next = False
+            continue
+        if _REDIRECT_RE.match(token):
+            # A bare operator takes the following token as its target;
+            # a fused form (``2>&1``, ``>out.log``) carries its own.
+            skip_next = token in {">", ">>", "<", "2>", "&>"}
+            continue
+        cleaned.append(token)
+    return cleaned
 
 
 def _strip_path_prefix(tokens: list[str]) -> list[str] | None:
