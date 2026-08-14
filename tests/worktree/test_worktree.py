@@ -602,7 +602,37 @@ class TestCheckBaseHygiene(unittest.TestCase):
             ok, msg = worktree.check_base_hygiene(repo_root)
 
             self.assertFalse(ok)
-            self.assertEqual(msg, "Working tree is dirty")
+            self.assertEqual(msg, "Working tree is dirty: .agents/notes.txt")
+
+    def test_dirty_message_names_every_offending_path(self):
+        """An unattended run cannot ask; the halt must carry its own diagnosis."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            for name in ("one.txt", "two.txt", "three.txt"):
+                Path(repo_root, name).write_text("x", encoding="utf-8")
+
+            ok, msg = worktree.check_base_hygiene(repo_root)
+
+            self.assertFalse(ok)
+            self.assertIn("one.txt", msg)
+            self.assertIn("two.txt", msg)
+            self.assertIn("three.txt", msg)
+            self.assertNotIn("more", msg)
+
+    def test_dirty_message_truncates_a_long_path_list(self):
+        """Ten paths are enough to diagnose; the rest are counted, not printed."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo(repo_root)
+            for index in range(13):
+                Path(repo_root, f"stray{index:02d}.txt").write_text("x", encoding="utf-8")
+
+            ok, msg = worktree.check_base_hygiene(repo_root)
+
+            self.assertFalse(ok)
+            self.assertIn("stray00.txt", msg)
+            self.assertIn("stray09.txt", msg)
+            self.assertNotIn("stray10.txt", msg)
+            self.assertIn("(+3 more)", msg)
 
     def test_untracked_plan_is_allowed(self):
         """An untracked docs/plans file is deferred; hygiene ignores it."""
@@ -650,7 +680,7 @@ class TestCheckBaseHygiene(unittest.TestCase):
             ok, msg = worktree.check_base_hygiene(repo_root, "main", "main")
 
             self.assertFalse(ok)
-            self.assertEqual(msg, "Working tree is dirty")
+            self.assertEqual(msg, "Working tree is dirty: dirty.txt")
 
     def test_ahead_with_only_plan_commits_passes(self):
         """Local main may be ahead of origin if every diverging path is a plan."""

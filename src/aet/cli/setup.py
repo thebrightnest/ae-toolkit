@@ -44,9 +44,12 @@ def _repo_root() -> Path:
 def write_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
     """Idempotently write AET ignore entries to ``repo_root/.gitignore``.
 
-    Reads the shared ``AET_IGNORED_PATHS`` constant so the hygiene gate and
-    setup command always agree. Existing lines are preserved; duplicate
-    entries are never appended.
+    Reads ``AET_IGNORED_PATHS``, the declaration of paths the toolkit writes
+    that must never be tracked. The hygiene gate forgives those and more: a
+    path the toolkit appends to but that is meant to be committed belongs in
+    ``AET_TOLERATED_DIRTY_PATHS``, and writing it here would silently stop it
+    from ever being committed. Existing lines are preserved; duplicate entries
+    are never appended.
     """
     gitignore = Path(repo_root) / ".gitignore"
     existing_lines: set[str] = set()

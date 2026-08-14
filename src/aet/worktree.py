@@ -532,14 +532,30 @@ def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dic
     return results
 
 
+# Paths the toolkit writes that must never be tracked. This is the "do not
+# track this" declaration: it feeds the `.gitignore` writer that `aet setup`
+# runs, and the hygiene gate forgives it as a consequence of that. Registering a
+# path here is a statement that the file is machine-local.
 AET_IGNORED_PATHS = {
     ".agents/work-queue.json",
     ".agents/work-queue.json.lock",
     ".agents/work-queue.lease",
     ".agents/work-history.jsonl",
     ".agents/integration.lock",
+    ".agents/ledger.jsonl",
+    ".agents/ledger.jsonl.lock",
+    ".agents/learnings.jsonl.lock",
     ".agents/runs/",
     ".worktrees/",
+}
+
+
+# Paths the toolkit writes that are meant to be tracked and committed, but whose
+# mid-run mutation must not halt the next unattended run. This is the "tolerate
+# this dirty" declaration, and it feeds the hygiene gate only: writing one of
+# these to the `.gitignore` would silently stop it from ever being committed.
+AET_TOLERATED_DIRTY_PATHS = {
+    ".agents/learnings.jsonl",
 }
 
 
@@ -568,21 +584,45 @@ def _is_deferred_path(path: str) -> bool:
 is_deferred_path = _is_deferred_path
 
 
-def _is_ignored_path(path: str) -> bool:
-    """Return True when ``path`` matches an AET ignored path or directory.
+def _matches_declaration(path: str, declaration: set[str]) -> bool:
+    """Return True when ``path`` matches an entry in a path declaration.
 
-    Directory entries in ``AET_IGNORED_PATHS`` end with ``/`` and match both
-    the directory itself and any nested path.
+    Directory entries end with ``/`` and match both the directory itself and
+    any nested path; every other entry matches exactly.
     """
-    for ignored in AET_IGNORED_PATHS:
-        if ignored.endswith("/"):
-            prefix = ignored
-            dir_only = ignored.rstrip("/")
-            if path == dir_only or path.startswith(prefix):
+    for entry in declaration:
+        if entry.endswith("/"):
+            if path == entry.rstrip("/") or path.startswith(entry):
                 return True
-        elif path == ignored:
+        elif path == entry:
             return True
     return False
+
+
+def _is_ignored_path(path: str) -> bool:
+    """Return True when ``path`` is declared as never-tracked."""
+    return _matches_declaration(path, AET_IGNORED_PATHS)
+
+
+def _is_tolerated_dirty_path(path: str) -> bool:
+    """Return True when ``path`` is tracked but tolerated dirty."""
+    return _matches_declaration(path, AET_TOLERATED_DIRTY_PATHS)
+
+
+# Public alias used by consumers that should not reach into the private name.
+is_tolerated_dirty_path = _is_tolerated_dirty_path
+
+
+DIRTY_PATHS_IN_MESSAGE = 10
+
+
+def _format_paths(paths: list[str], limit: int = DIRTY_PATHS_IN_MESSAGE) -> str:
+    """Render up to ``limit`` paths, counting the remainder as ``(+N more)``."""
+    listed = ", ".join(paths[:limit])
+    remainder = len(paths) - limit
+    if remainder > 0:
+        return f"{listed} (+{remainder} more)"
+    return listed
 
 
 def check_base_hygiene(
@@ -590,12 +630,19 @@ def check_base_hygiene(
 ) -> tuple[bool, str]:
     """Check if the integration branch is clean and synced with origin.
 
-    AET-generated paths are excluded from the dirty check because the
-    orchestrator mutates them as part of normal operation and they must be
-    gitignored in projects using the toolkit. Plan files under ``docs/plans/``
-    are also excluded: their mid-sprint lifecycle status is local-only until
-    a terminal transition commits them (ADR-054). The ahead-of-origin check
-    still halts when any diverging path is outside the deferred set.
+    Never-tracked paths (``AET_IGNORED_PATHS``) are excluded from the dirty
+    check because the orchestrator mutates them as part of normal operation and
+    they must be gitignored in projects using the toolkit. Tracked paths the
+    toolkit appends to (``AET_TOLERATED_DIRTY_PATHS``) are excluded too: they are
+    meant to be committed, so ignoring them is not an option, but an append must
+    not halt the next run. Plan files under ``docs/plans/`` are also excluded:
+    their mid-sprint lifecycle status is local-only until a terminal transition
+    commits them (ADR-054). The ahead-of-origin check still halts when any
+    diverging path is outside the deferred set.
+
+    A dirty verdict names the offending paths. An unattended run cannot ask, so
+    a bare refusal would cost the operator a hand-run ``git status`` plus a
+    cross-check against three declarations.
     """
     # Check working tree, ignoring AET-generated paths and deferred plan
     # paths. Use --untracked-files=all so untracked paths are listed
@@ -605,7 +652,7 @@ def check_base_hygiene(
         capture_output=True,
         text=True,
     )
-    dirty_lines = []
+    dirty_paths = []
     for line in result.stdout.splitlines():
         stripped = line.strip()
         if not stripped:
@@ -614,10 +661,14 @@ def check_base_hygiene(
         if len(parts) < 2:
             continue
         path = parts[1]
-        if not _is_ignored_path(path) and not _is_deferred_path(path):
-            dirty_lines.append(line)
-    if dirty_lines:
-        return False, "Working tree is dirty"
+        if (
+            not _is_ignored_path(path)
+            and not _is_tolerated_dirty_path(path)
+            and not _is_deferred_path(path)
+        ):
+            dirty_paths.append(path)
+    if dirty_paths:
+        return False, f"Working tree is dirty: {_format_paths(dirty_paths)}"
 
     # No remote tracking branch means there is nothing to be ahead of or
     # behind; projects without an origin must not be falsely halted.
