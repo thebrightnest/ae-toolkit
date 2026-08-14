@@ -31,6 +31,16 @@ class IntegrationModeError(ValueError):
     """Raised when ``integration_mode`` has an unrecognized value."""
 
 
+class QueueOutsideRepositoryError(RuntimeError):
+    """Raised when ``git-refs`` storage is selected for a queue outside a repo.
+
+    ``git-refs`` keeps state in ``refs/aet/*`` inside the repository that holds
+    the queue. When the queue path is not inside a git work tree there is no
+    such repository, so the selection is refused by name rather than surfacing
+    as a traceback from the backend's own discovery.
+    """
+
+
 class LegacyConfigError(ValueError):
     """Raised when only the legacy in-tree config file exists.
 
@@ -42,6 +52,31 @@ class LegacyConfigError(ValueError):
 
 # Legal values for the ``integration_mode`` project setting.
 INTEGRATION_MODES = frozenset({"pr-per-task", "single-pr"})
+
+
+def _queue_repo_root(queue_file: str) -> str | None:
+    """Return the git work-tree root containing ``queue_file``, or ``None``.
+
+    Discovery starts at the queue file's own location rather than the process
+    cwd, so the store and the configuration that selects it are anchored to one
+    repository. The queue file's directory need not exist yet, so discovery
+    walks up to the nearest existing ancestor first — which is also what keeps a
+    subdirectory invocation resolving the repository root.
+
+    The walk tests for a ``.git`` entry rather than shelling out to ``git
+    rev-parse``: config resolution runs on every command, including the
+    status/next read path, which must invoke no git subprocess
+    (``tests/orchestrator/test_read_path_no_git.py``). A ``.git`` *file* rather
+    than a directory is a linked worktree, whose work-tree root is where that
+    file lives — the same answer ``--show-toplevel`` gives.
+    """
+    directory = Path(queue_file).resolve().parent
+    while not directory.is_dir() and directory != directory.parent:
+        directory = directory.parent
+    for candidate in [directory, *directory.parents]:
+        if (candidate / ".git").exists():
+            return str(candidate)
+    return None
 
 
 def create_backend(
@@ -58,12 +93,27 @@ def create_backend(
     ``github`` or ``both`` are rejected with :class:`UnknownBackendError` and
     must be configured on the orthogonal ``projections`` axis.
     """
-    config = resolve_config(config_path or DEFAULT_CONFIG_PATH)
+    queue_root = _queue_repo_root(queue_file)
+    # Anchor configuration to the repository that holds the queue, not to the
+    # process cwd. Both must agree: selecting a backend from repository A and
+    # rooting its store in repository B is how a project config in one tree
+    # silently governed operations on a queue in another.
+    config = resolve_config(
+        config_path or DEFAULT_CONFIG_PATH,
+        repo_root=queue_root or str(Path(queue_file).resolve().parent),
+    )
     backend_type = config.get("task_backend", "json")
 
     if backend_type == "json":
         return JsonBackend(queue_file=queue_file, history_file=history_file)
     if backend_type == "git-refs":
+        if queue_root is None:
+            raise QueueOutsideRepositoryError(
+                "task_backend 'git-refs' stores state in refs/aet/* inside the "
+                f"repository holding the queue, but {queue_file} is not inside a "
+                "git repository. Point --queue-file at a path inside the "
+                "repository, or select the 'json' backend for this location."
+            )
         return GitRefsBackend(queue_file=queue_file, history_file=history_file)
 
     raise UnknownBackendError(

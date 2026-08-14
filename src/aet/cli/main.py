@@ -56,6 +56,7 @@ from aet.cli import (
 )
 # isort: on
 from aet import telemetry
+from aet.backends.factory import QueueOutsideRepositoryError
 from aet.ledger import LedgerCorruptionError
 from aet.plan_parser import resolve_plan_arg
 
@@ -426,6 +427,11 @@ def main() -> int:
         if isinstance(exc.code, int):
             return exc.code
         return 0
+    except QueueOutsideRepositoryError as exc:
+        # A named refusal, not a traceback: the operator chose a backend that
+        # cannot store anything at the path they pointed it at.
+        typer.echo(f"⛔ {exc}", err=True)
+        return 1
     except LedgerCorruptionError as exc:
         # The message carries the offending lines and the repair path. A
         # traceback is technically loud but buries both, and this is the one
