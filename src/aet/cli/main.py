@@ -67,7 +67,7 @@ app = typer.Typer(
 )
 
 # Noun-scoped command groups.
-app.add_typer(aet_state.app, name="state", help="Queue mutations, stage transitions, and footer updates.")
+app.add_typer(aet_state.app, name="state", help="Queue mutations and stage transitions.")
 app.add_typer(backlog.app, name="backlog", help="Backlog curation commands.")
 app.add_typer(desk.app, name="desk", help="Review cockpit for awaiting_merge tasks.")
 app.add_typer(docs.app, name="docs", help="Documentation linting and syncing.")

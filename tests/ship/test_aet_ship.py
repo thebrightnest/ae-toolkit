@@ -17,8 +17,6 @@ _spec = importlib.util.spec_from_loader(
 ship = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ship)
 
-from aet import queue as aet_queue_module  # noqa: E402
-
 
 class MockResult:
     def __init__(self, returncode, stdout="", stderr=""):
@@ -81,8 +79,6 @@ class TestShipClosure(unittest.TestCase):
         self.addCleanup(os.chdir, self.cwd)
 
     def _success_responses(self):
-        plan_abs = os.path.realpath(str(self.plan_path))
-        plan_rel = os.path.relpath(plan_abs, os.path.realpath(str(self.queue_path.parent)))
         return {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
@@ -91,18 +87,11 @@ class TestShipClosure(unittest.TestCase):
                 "",
                 "",
             ),
-            ("git", "add", "-f", plan_rel): (0, "", ""),
-            ("git", "diff", "--cached", "--quiet"): (1, "", ""),
-            ("git", "commit", "-m", "chore(t1): mark plan stage merged"): (
-                0,
-                "",
-                "",
-            ),
-            ("git", "push"): (0, "", ""),
         }
 
-    def test_ship_records_merge_updates_plan_and_removes_task(self):
-        """aet ship close closes a task by updating the plan and sealing the queue entry."""
+    def test_ship_records_merge_seals_task_without_touching_plan(self):
+        """aet ship close seals the queue entry without rewriting the plan (R-4)."""
+        original_content = self.plan_path.read_text(encoding="utf-8")
         with patch.object(
             sys,
             "argv",
@@ -120,18 +109,11 @@ class TestShipClosure(unittest.TestCase):
                 "run",
                 side_effect=mock,
             ):
-                with patch.object(
-                    aet_queue_module.subprocess,
-                    "run",
-                    side_effect=mock,
-                ):
-                    rc = ship.main()
+                rc = ship.main()
 
         self.assertEqual(rc, 0)
 
-        content = self.plan_path.read_text(encoding="utf-8")
-        self.assertNotIn("status:", content)
-        self.assertIn("*Stage: merged*", content)
+        self.assertEqual(self.plan_path.read_text(encoding="utf-8"), original_content)
 
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))
         self.assertEqual(live["tasks"], [])
@@ -166,12 +148,7 @@ class TestShipClosure(unittest.TestCase):
                 "run",
                 side_effect=mock,
             ):
-                with patch.object(
-                    aet_queue_module.subprocess,
-                    "run",
-                    side_effect=mock,
-                ):
-                    rc = ship.main()
+                rc = ship.main()
 
         self.assertEqual(rc, 0)
         self.assertEqual(self.plan_path.read_text(encoding="utf-8"), original_content)
@@ -200,12 +177,7 @@ class TestShipClosure(unittest.TestCase):
                 "run",
                 side_effect=mock,
             ):
-                with patch.object(
-                    aet_queue_module.subprocess,
-                    "run",
-                    side_effect=mock,
-                ):
-                    rc = ship.main()
+                rc = ship.main()
 
         self.assertEqual(rc, 0)
         live = json.loads(self.queue_path.read_text(encoding="utf-8"))
@@ -229,12 +201,7 @@ class TestShipClosure(unittest.TestCase):
                 "run",
                 side_effect=mock,
             ):
-                with patch.object(
-                    aet_queue_module.subprocess,
-                    "run",
-                    side_effect=mock,
-                ):
-                    rc = ship.main()
+                rc = ship.main()
 
         self.assertEqual(rc, 0)
         content = self.plan_path.read_text(encoding="utf-8")
@@ -261,12 +228,7 @@ class TestShipClosure(unittest.TestCase):
                 "run",
                 side_effect=mock,
             ):
-                with patch.object(
-                    aet_queue_module.subprocess,
-                    "run",
-                    side_effect=mock,
-                ):
-                    rc = ship.main()
+                rc = ship.main()
 
         self.assertEqual(rc, 0)
         content = self.plan_path.read_text(encoding="utf-8")
@@ -293,12 +255,7 @@ class TestShipClosure(unittest.TestCase):
                 "run",
                 side_effect=mock,
             ):
-                with patch.object(
-                    aet_queue_module.subprocess,
-                    "run",
-                    side_effect=mock,
-                ):
-                    rc = ship.main()
+                rc = ship.main()
 
         self.assertEqual(rc, 0)
         content = self.plan_path.read_text(encoding="utf-8")
@@ -387,18 +344,6 @@ class TestShipClosure(unittest.TestCase):
         self.queue_path.write_text(json.dumps(queue), encoding="utf-8")
 
         responses = self._success_responses()
-        stem_abs = os.path.realpath(str(stem_plan))
-        stem_rel = os.path.relpath(stem_abs, os.path.realpath(str(self.queue_path.parent)))
-        responses[("git", "add", "-f", stem_rel)] = (0, "", "")
-        responses[("git", "commit", "-m", "chore(fallback-stem): mark plan stage merged")] = (
-            0,
-            "",
-            "",
-        )
-        t1_abs = os.path.realpath(str(self.plan_path))
-        t1_rel = os.path.relpath(t1_abs, os.path.realpath(str(self.queue_path.parent)))
-        responses.pop(("git", "add", "-f", t1_rel), None)
-        responses.pop(("git", "commit", "-m", "chore(t1): mark plan stage merged"), None)
 
         with patch.object(
             sys,
@@ -416,12 +361,7 @@ class TestShipClosure(unittest.TestCase):
                 "run",
                 side_effect=mock,
             ):
-                with patch.object(
-                    aet_queue_module.subprocess,
-                    "run",
-                    side_effect=mock,
-                ):
-                    rc = ship.main()
+                rc = ship.main()
 
         self.assertEqual(rc, 0)
         content = stem_plan.read_text(encoding="utf-8")

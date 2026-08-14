@@ -13,8 +13,8 @@ from aet import worktree
 
 
 class TestCopyUntrackedFiles(unittest.TestCase):
-    def test_copies_untracked_plan_prd_and_adr_into_worktree(self):
-        """Untracked docs referenced by a plan are copied to the worktree."""
+    def test_copies_untracked_prd_and_adr_into_worktree(self):
+        """Untracked referenced docs (not plans) are copied to the worktree."""
         with tempfile.TemporaryDirectory() as repo_root:
             worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
 
@@ -31,7 +31,6 @@ class TestCopyUntrackedFiles(unittest.TestCase):
 
             # Create tracked directories so pathspecs match.
             for subdir in [
-                "docs/plans",
                 "docs/prds",
                 "docs/adr",
                 "docs/audits",
@@ -40,9 +39,9 @@ class TestCopyUntrackedFiles(unittest.TestCase):
             ]:
                 Path(repo_root, subdir).mkdir(parents=True, exist_ok=True)
 
-            # Create untracked files.
+            # Create untracked files. Plans are rendered from the task record,
+            # not mirrored (R-19).
             untracked_files = [
-                "docs/plans/x-demo.md",
                 "docs/prds/x-demo-prd.md",
                 "docs/adr/099-x-demo.md",
                 "docs/audits/x-demo-audit.md",
@@ -58,6 +57,11 @@ class TestCopyUntrackedFiles(unittest.TestCase):
                 dest = Path(worktree_dir, rel_path)
                 self.assertTrue(dest.exists(), f"Expected {rel_path} to be copied")
                 self.assertEqual(dest.read_text(encoding="utf-8"), "content")
+
+            # Plans are no longer mirrored by copy_untracked_files.
+            self.assertFalse(
+                Path(worktree_dir, "docs", "plans", "x-demo.md").exists()
+            )
 
 
 class TestPrepareWorktreeDependencies(unittest.TestCase):
@@ -779,64 +783,58 @@ def _init_repo_with_origin(repo_root: str) -> None:
     )
 
 
-class TestOverlayDeferredPlans(unittest.TestCase):
-    def test_overlays_untracked_plan(self):
-        """Deferred docs/plans/ files are copied regardless of git state."""
+class TestRenderTaskPlan(unittest.TestCase):
+    def test_renders_plan_from_spec(self):
+        """A task record with a spec renders its plan into the worktree."""
         with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
-            Path(repo_root, "docs", "plans").mkdir(parents=True, exist_ok=True)
-            Path(repo_root, "docs", "plans", "x.md").write_text(
-                "plan", encoding="utf-8"
-            )
             worktree_dir = os.path.join(repo_root, ".worktrees", "x")
+            task = {
+                "id": "x",
+                "spec": {
+                    "frontmatter": {"id": "x", "size": "S", "pipeline": "standard"},
+                    "title": "Plan X",
+                    "body": "## Task List\n\n- [ ] one\n",
+                    "tasks": ["- [ ] one"],
+                },
+            }
+            rendered = worktree.render_task_plan(repo_root, worktree_dir, task)
+            self.assertTrue(rendered)
+            plan = Path(worktree_dir, "docs", "plans", "x.md")
+            self.assertTrue(plan.exists())
+            text = plan.read_text(encoding="utf-8")
+            self.assertIn("id: x", text)
+            self.assertIn("# Plan X", text)
+            self.assertIn("- [ ] one", text)
 
-            worktree.copy_untracked_files(repo_root, worktree_dir)
-
-            copied = Path(worktree_dir, "docs", "plans", "x.md")
-            self.assertTrue(copied.exists())
-            self.assertEqual(copied.read_text(encoding="utf-8"), "plan")
-
-    def test_overlays_modified_tracked_plan(self):
-        """A tracked but modified plan is overlayed with the working-tree version."""
+    def test_legacy_fallback_copies_plan_file(self):
+        """A task without a spec falls back to copying the referenced plan file."""
         with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
+            worktree_dir = os.path.join(repo_root, ".worktrees", "x")
             plan = Path(repo_root, "docs", "plans", "x.md")
             plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("base", encoding="utf-8")
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
-            plan.write_text("modified", encoding="utf-8")
-            worktree_dir = os.path.join(repo_root, ".worktrees", "x")
-
-            worktree.copy_untracked_files(repo_root, worktree_dir)
-
+            plan.write_text("legacy plan", encoding="utf-8")
+            task = {"id": "x", "plan_file": "docs/plans/x.md"}
+            rendered = worktree.render_task_plan(repo_root, worktree_dir, task)
+            self.assertTrue(rendered)
             self.assertEqual(
                 Path(worktree_dir, "docs", "plans", "x.md").read_text(
                     encoding="utf-8"
                 ),
-                "modified",
+                "legacy plan",
             )
 
-    def test_overlays_plan_absent_from_base(self):
-        """A plan not present in the base is still copied into the worktree."""
+    def test_noop_when_no_spec_or_plan_file(self):
+        """render_task_plan returns False when there is nothing to render."""
         with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
-            plan = Path(repo_root, "docs", "plans", "x.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("new", encoding="utf-8")
             worktree_dir = os.path.join(repo_root, ".worktrees", "x")
+            rendered = worktree.render_task_plan(
+                repo_root, worktree_dir, {"id": "x"}
+            )
+            self.assertFalse(rendered)
+            self.assertFalse(Path(worktree_dir, "docs", "plans", "x.md").exists())
 
-            worktree.copy_untracked_files(repo_root, worktree_dir)
 
-            self.assertTrue(Path(worktree_dir, "docs", "plans", "x.md").exists())
-
+class TestCopyUntrackedDocs(unittest.TestCase):
     def test_does_not_overlay_prd_by_content(self):
         """Non-deferred directories keep the untracked-only mirror behavior."""
         with tempfile.TemporaryDirectory() as repo_root:
@@ -870,198 +868,6 @@ class TestOverlayDeferredPlans(unittest.TestCase):
                 ),
                 "base",
             )
-
-
-class TestSeedTaskPlan(unittest.TestCase):
-    def test_seeds_plan_with_explicit_path_and_decoys(self):
-        """The seed commit contains exactly the task plan, ignoring decoys."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
-            worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
-
-            plan = Path(repo_root, "docs", "plans", "task-001.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("plan", encoding="utf-8")
-            Path(repo_root, "docs", "plans", "decoy-plan.md").write_text(
-                "decoy plan", encoding="utf-8"
-            )
-            Path(repo_root, "docs", "prds").mkdir(parents=True, exist_ok=True)
-            Path(repo_root, "docs", "prds", "decoy-prd.md").write_text(
-                "decoy prd", encoding="utf-8"
-            )
-
-            worktree.copy_untracked_files(repo_root, worktree_dir)
-            seeded = worktree.seed_task_plan(
-                repo_root, worktree_dir, str(plan), "task-001", "main"
-            )
-            self.assertTrue(seeded)
-
-            # The commit contains exactly one file.
-            files = subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    worktree_dir,
-                    "diff-tree",
-                    "--no-commit-id",
-                    "--name-only",
-                    "-r",
-                    "HEAD",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip().split("\n")
-            self.assertEqual(files, ["docs/plans/task-001.md"])
-
-            # Decoys remain untracked in the worktree.
-            status = subprocess.run(
-                ["git", "-C", worktree_dir, "status", "--short", "--untracked-files=all"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            self.assertIn("docs/plans/decoy-plan.md", status)
-            self.assertIn("docs/prds/decoy-prd.md", status)
-
-    def test_seeds_gitignored_plan(self):
-        """A live plan ignored by .gitignore (ADR-054) is still force-staged."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
-            Path(repo_root, ".gitignore").write_text(
-                "docs/plans/*.md\n", encoding="utf-8"
-            )
-            subprocess.run(["git", "-C", repo_root, "add", ".gitignore"], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "ignore live plans"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
-            worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
-
-            plan = Path(repo_root, "docs", "plans", "task-001.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("plan", encoding="utf-8")
-
-            worktree.copy_untracked_files(repo_root, worktree_dir)
-            seeded = worktree.seed_task_plan(
-                repo_root, worktree_dir, str(plan), "task-001", "main"
-            )
-            self.assertTrue(seeded)
-
-            tracked = subprocess.run(
-                ["git", "-C", worktree_dir, "ls-files", "docs/plans/task-001.md"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            self.assertEqual(tracked, "docs/plans/task-001.md")
-
-    def test_skips_when_base_carries_plan(self):
-        """Seeding is skipped when the integration base already has the plan path."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
-            plan = Path(repo_root, "docs", "plans", "task-001.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("plan", encoding="utf-8")
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
-            worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
-
-            seeded = worktree.seed_task_plan(
-                repo_root, worktree_dir, str(plan), "task-001", "main"
-            )
-            self.assertFalse(seeded)
-            ahead = subprocess.run(
-                ["git", "-C", worktree_dir, "rev-list", "--count", "origin/main..HEAD"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            self.assertEqual(ahead, "0")
-
-    def test_skip_avoids_duplicate_plan_on_unpushed_integration_commit(self):
-        """A plan on an unpushed local integration commit does not cause add/add conflicts."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
-            plan = Path(repo_root, "docs", "plans", "task-001.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("plan", encoding="utf-8")
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan to main"],
-                check=True,
-            )
-            # Simulate an unpushed local commit: origin/main stays behind.
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD^"],
-                check=True,
-            )
-            worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
-            worktree.copy_untracked_files(repo_root, worktree_dir)
-
-            seeded = worktree.seed_task_plan(
-                repo_root, worktree_dir, str(plan), "task-001", "main"
-            )
-            self.assertFalse(seeded)
-
-            Path(worktree_dir, "src").mkdir(parents=True, exist_ok=True)
-            Path(worktree_dir, "src", "code.py").write_text("code", encoding="utf-8")
-            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", worktree_dir, "commit", "-q", "-m", "implement"],
-                check=True,
-            )
-
-            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
-            merge = subprocess.run(
-                ["git", "-C", repo_root, "merge", "task-001"],
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(merge.returncode, 0, merge.stderr)
-            self.assertEqual(plan.read_text(encoding="utf-8"), "plan")
-
-    def test_skips_when_worktree_already_carries_unchanged_plan(self):
-        """Resuming a run does not fail when the plan was already seeded."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
-            worktree_dir = worktree.create_worktree(
-                repo_root, "task-001", "origin/main"
-            )
-            plan = Path(repo_root, "docs", "plans", "task-001.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("plan", encoding="utf-8")
-
-            worktree.copy_untracked_files(repo_root, worktree_dir)
-            first = worktree.seed_task_plan(
-                repo_root, worktree_dir, str(plan), "task-001", "main"
-            )
-            self.assertTrue(first)
-
-            # A second call with the same plan content finds nothing to commit.
-            second = worktree.seed_task_plan(
-                repo_root, worktree_dir, str(plan), "task-001", "main"
-            )
-            self.assertFalse(second)
-
-            ahead = subprocess.run(
-                ["git", "-C", worktree_dir, "rev-list", "--count", "origin/main..HEAD"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            self.assertEqual(ahead, "1")
 
 
 class TestRemoveWorktreeClassification(unittest.TestCase):

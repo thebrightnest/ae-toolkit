@@ -94,14 +94,19 @@ class TestConfigureTaskBackend(unittest.TestCase):
     def test_factory_no_config_fallback_remains_json(self):
         # Guards the rejected factory-level flip: aet-setup writes git-refs by
         # default, but the no-config factory fallback must stay JsonBackend.
+        # The temp project basename can collide with a real ~/.aet/{slug}/
+        # config, so HOME must be isolated to guarantee the fallback path.
+        from unittest.mock import patch
+
         from aet.backends.factory import create_backend
         from aet.backends.json_backend import JsonBackend
 
-        backend = create_backend(
-            config_path=str(self.project / "missing.json"),
-            queue_file=str(self.project / "work-queue.json"),
-            history_file=str(self.project / "work-history.jsonl"),
-        )
+        with patch.dict("os.environ", {"HOME": str(self.home)}):
+            backend = create_backend(
+                config_path=str(self.project / "missing.json"),
+                queue_file=str(self.project / "work-queue.json"),
+                history_file=str(self.project / "work-history.jsonl"),
+            )
         self.assertIsInstance(backend, JsonBackend)
 
     def test_github_backend_is_rejected(self):

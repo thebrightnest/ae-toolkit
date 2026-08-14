@@ -117,9 +117,10 @@ class TestShipCloseTransaction(unittest.TestCase):
         self.addCleanup(os.chdir, self.cwd)
         os.chdir(self.repo)
 
-    def test_close_success_leaves_footer_queue_ledger_consistent(self):
-        """aet ship close writes footer, queue, and ledger in one transaction."""
+    def test_close_success_seals_queue_and_ledger_without_touching_plan(self):
+        """aet ship close seals queue and ledger; the plan file is left alone (R-4)."""
         plan_path = _write_plan(self.repo, "t1", r_ids=["R-5", "R-8"])
+        original_content = plan_path.read_text(encoding="utf-8")
         queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
         history_file = str(self.repo / ".agents" / "work-history.jsonl")
 
@@ -144,20 +145,17 @@ class TestShipCloseTransaction(unittest.TestCase):
             rc = ship.cmd_ship(args)
         self.assertEqual(rc, 0)
 
-        # Footer matches terminal state and the plan is archived.
-        archive_path = plan_path.parent / "archive" / plan_path.name
-        self.assertFalse(plan_path.exists())
-        self.assertTrue(archive_path.exists())
-        content = archive_path.read_text(encoding="utf-8")
-        self.assertIn("*Stage: merged*", content)
-        self.assertNotIn("status:", content)
+        # The plan file is untouched: no footer rewrite, no archive move (R-4).
+        self.assertTrue(plan_path.exists())
+        self.assertEqual(plan_path.read_text(encoding="utf-8"), original_content)
+        self.assertFalse((plan_path.parent / "archive" / plan_path.name).exists())
 
         # Live queue no longer contains the task.
         backend = GitRefsBackend(queue_file=queue_file, history_file=history_file)
         data = backend.load()
         self.assertEqual(data["queue"], [])
 
-        # Ledger contains a land event with the R-8 digest and archive path.
+        # Ledger contains a land event with the R-8 digest and no archive path.
         ledger_path = self.repo / ".agents" / "ledger.jsonl"
         events = [
             json.loads(line)
@@ -174,10 +172,14 @@ class TestShipCloseTransaction(unittest.TestCase):
         self.assertIn("R-8", land["payload"]["prd_r_ids"])
         self.assertTrue(land["payload"]["merge_ref"])
         self.assertTrue(land["payload"]["plan_hash"])
-        self.assertEqual(land["payload"]["archived_to"], "docs/plans/archive/t1.md")
+        self.assertNotIn("archived_to", land["payload"])
 
-    def test_close_refuses_missing_plan_fail_closed(self):
-        """A plan file missing from checkout and merged branch refuses closure."""
+        # No plan-state commit is created anywhere in the lifecycle (R-4).
+        log = _git(self.repo, "log", "--format=%s", "--all").stdout
+        self.assertNotIn("mark plan stage", log)
+
+    def test_close_succeeds_when_plan_file_missing(self):
+        """Closure resolves from the record; a missing plan file is not fatal (R-19)."""
         plan_path = self.repo / "docs" / "plans" / "t1.md"
         queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
 
@@ -199,7 +201,16 @@ class TestShipCloseTransaction(unittest.TestCase):
             dry_run=False,
         )
         rc = ship.cmd_ship(args)
-        self.assertNotEqual(rc, 0)
+        self.assertEqual(rc, 0)
+
+        # The merge is recorded and the queue sealed even without the plan file.
+        backend = GitRefsBackend(
+            queue_file=queue_file,
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        )
+        self.assertEqual(backend.load()["queue"], [])
+        log = _git(self.repo, "log", "--format=%s", "--all").stdout
+        self.assertNotIn("mark plan stage", log)
 
     def test_close_leaves_no_partial_refs_on_save_failure(self):
         """A failure during the atomic ref transaction writes no partial refs."""

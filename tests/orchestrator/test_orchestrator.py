@@ -21,7 +21,7 @@ from unittest.mock import patch
 import pytest
 
 # Ensure the aet-work lib is on the path before importing telemetry.
-from aet import evidence, session_log_claude, telemetry
+from aet import evidence, plan_parser, session_log_claude, telemetry
 from aet.cli_adapter import CLIAdapter, resolve_cli_adapter
 from aet.workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
 
@@ -588,47 +588,6 @@ class TestProcessTaskPlanPresence(unittest.TestCase):
                 orchestrator.process_task(
                     task, repo_root, _FAKE_ADAPTER, "standard"
                 )
-
-
-class TestSeedFailureSignature(unittest.TestCase):
-    def test_seed_failure_records_environment_signature(self):
-        """A seed_task_plan failure records a signature so triage gets context."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
-            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
-            Path(plan_file).write_text(
-                "---\nid: demo\n---\n\n# Demo\n\n_Stage: plan-approved_\n",
-                encoding="utf-8",
-            )
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
-
-            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
-            with patch.object(
-                orchestrator,
-                "seed_task_plan",
-                side_effect=RuntimeError("Could not stage docs/plans/demo.md"),
-            ):
-                result = orchestrator.process_task(
-                    task, repo_root, _FAKE_ADAPTER, "standard"
-                )
-
-            self.assertFalse(result)
-            signatures = task.get("failure_signatures", [])
-            self.assertEqual(len(signatures), 1)
-            entry = signatures[-1]
-            self.assertEqual(entry["class"], "environment")
-            self.assertEqual(entry["stage"], "seed")
-            self.assertIn("Could not stage", entry["tail_preview"])
-            self.assertTrue(entry["signature"])
 
 
 def _write_queue(repo_root: str, tasks: list[dict]) -> str:
@@ -3334,6 +3293,7 @@ class TestUsageCapture(unittest.TestCase):
                 "2026-07-12T00:00:00Z",
                 "2026-07-12T00:01:00Z",
                 0,
+                plan_data={"size": "M", "pipeline": "standard", "security_review": "required"},
             )
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
         self.assertEqual(
@@ -4252,6 +4212,104 @@ class TestHandoffInjection(unittest.TestCase):
                 workflow,
             )
             self.assertEqual(captured["cmd"][-1], prompt_with_empty_clause)
+
+
+class TestTwoMachineSpecTransport(unittest.TestCase):
+    """R-19: the record carries the spec; a clone without the plan file runs."""
+
+    def test_task_runs_on_clone_that_never_had_plan_file(self):
+        with tempfile.TemporaryDirectory() as machine_a:
+            _init_git_repo(machine_a)
+            plan_file = os.path.join(machine_a, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\n"
+                "id: demo\n"
+                "size: S\n"
+                "pipeline: standard\n"
+                "security_review: skipped\n"
+                "docs_sync: skipped\n"
+                "---\n\n"
+                "# Demo\n\n"
+                "## Task List\n\n"
+                "1. Do the thing (traces: R-19)\n\n"
+                "---\n\n"
+                "*Stage: plan-approved*\n",
+                encoding="utf-8",
+            )
+            task = plan_parser.new_task_from_plan(Path(plan_file))
+
+            # The record is the transport: round-trip it through JSON the way
+            # the git-refs store would, then delete the plan file — the clone
+            # never receives it.
+            carried = json.loads(json.dumps(task))
+            os.remove(plan_file)
+
+            with tempfile.TemporaryDirectory() as machine_b:
+                subprocess.run(
+                    ["git", "clone", "-q", machine_a, machine_b], check=True
+                )
+                subprocess.run(
+                    ["git", "-C", machine_b, "config", "user.email", "test@example.com"],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "-C", machine_b, "config", "user.name", "Test User"],
+                    check=True,
+                )
+                self.assertFalse(
+                    os.path.exists(os.path.join(machine_b, "docs", "plans", "demo.md"))
+                )
+
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    with tempfile.TemporaryDirectory() as reports_dir:
+                        env = _gate_env(reports_dir, archive_dir)
+                        with patch.dict(os.environ, env, clear=False):
+                            logger = telemetry.RunLogger(machine_b, run_id="r1")
+                            _write_passing(
+                                reports_dir, "qa", "review", "cso", "sync-docs"
+                            )
+                            stdout = io.StringIO()
+                            with contextlib.redirect_stdout(stdout):
+                                with patch.object(
+                                    orchestrator,
+                                    "run_stage",
+                                    return_value=(0, None, None, ""),
+                                ):
+                                    with patch.object(
+                                        orchestrator,
+                                        "verify_branch_has_commits",
+                                        return_value=(True, ""),
+                                    ):
+                                        with patch.object(
+                                            orchestrator,
+                                            "verify_stage_advancement",
+                                            return_value=(True, ""),
+                                        ):
+                                            result = orchestrator.process_task(
+                                                carried,
+                                                machine_b,
+                                                _FAKE_ADAPTER,
+                                                "standard",
+                                                logger=logger,
+                                            )
+
+                self.assertTrue(result)
+                out = stdout.getvalue()
+                # The working plan is rendered from the record into the worktree.
+                self.assertIn("Rendered plan for demo", out)
+                # Gate skips resolve from the record, not from a file on disk.
+                self.assertIn("security_review=skipped, source: frontmatter", out)
+                self.assertIn("docs_sync=skipped, source: frontmatter", out)
+                # R-4: the lifecycle creates no plan-state commits.
+                log = subprocess.run(
+                    ["git", "-C", machine_b, "log", "--format=%s", "--all"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+                self.assertNotIn("mark plan stage", log)
+                self.assertNotIn("Seed plan", log)
 
 
 if __name__ == "__main__":

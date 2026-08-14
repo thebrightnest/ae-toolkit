@@ -6,6 +6,8 @@ import json
 import os
 import shutil
 import subprocess
+from pathlib import Path
+from typing import Any
 
 
 def _run_git(args: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -208,67 +210,6 @@ def remove_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
         return False
 
 
-def seed_task_plan(
-    repo_root: str,
-    worktree_dir: str,
-    plan_file: str,
-    task_id: str,
-    integration_branch: str = "main",
-) -> bool:
-    """Create a standalone commit adding only the task's plan file.
-
-    The commit is skipped when the integration base already carries the plan
-    path, which prevents an add/add conflict when the plan lives on an
-    unpushed local commit (R-5).
-
-    Returns ``True`` when a seed commit was created, ``False`` when skipped.
-    """
-    if not os.path.exists(plan_file):
-        return False
-    rel_path = os.path.relpath(plan_file, repo_root)
-    present = (
-        subprocess.run(
-            ["git", "-C", repo_root, "cat-file", "-e", f"{integration_branch}:{rel_path}"],
-            capture_output=True,
-        ).returncode
-        == 0
-    )
-    if present:
-        return False
-
-    # Live plans may be gitignored transient working copies (ADR-054), so
-    # force-add to stage them for the seed commit.
-    add = subprocess.run(
-        ["git", "-C", worktree_dir, "add", "-f", "--", rel_path],
-        capture_output=True,
-        text=True,
-    )
-    if add.returncode != 0:
-        raise RuntimeError(
-            f"Could not stage {rel_path} for {task_id}: {add.stderr.strip()}"
-        )
-
-    # Skip when the worktree branch already carries the same plan content
-    # (e.g. a resumed run on an existing worktree).
-    staged = subprocess.run(
-        ["git", "-C", worktree_dir, "diff", "--cached", "--quiet"],
-        capture_output=True,
-    )
-    if staged.returncode == 0:
-        return False
-
-    commit = subprocess.run(
-        ["git", "-C", worktree_dir, "commit", "-m", f"[{task_id}] Seed plan"],
-        capture_output=True,
-        text=True,
-    )
-    if commit.returncode != 0:
-        raise RuntimeError(
-            f"Could not seed plan for {task_id}: {commit.stderr.strip()}"
-        )
-    return True
-
-
 def run_git_plain(args: list[str], **kwargs) -> tuple[int, str, str]:
     """Run a git command and return (returncode, stdout, stderr)."""
     result = subprocess.run(["git", *args], capture_output=True, text=True, **kwargs)
@@ -350,33 +291,40 @@ def _copy_file(src: str, dest: str) -> None:
     shutil.copy2(src, dest)
 
 
-def _copy_deferred_files(repo_root: str, worktree_dir: str) -> None:
-    """Overlay the deferred ``docs/plans/`` tree into the worktree by content.
+def render_task_plan(repo_root: str, worktree_dir: str, task: dict[str, Any]) -> bool:
+    """Render the task's working plan into the worktree.
 
-    The deferred set's durability is deferred to the PR (ADR-054), so the
-    working-tree version is copied regardless of git state — untracked,
-    modified, or absent from the base all resolve the same way.
+    When the task record carries a portable spec (R-19), the plan is written
+    from the record to ``docs/plans/<task-id>.md`` inside the worktree.  Legacy
+    records without a spec fall back to copying the plan file referenced by
+    ``plan_file``.
     """
-    plans_dir = os.path.join(repo_root, "docs", "plans")
-    if not os.path.isdir(plans_dir):
-        return
-    for root, _dirs, files in os.walk(plans_dir):
-        for name in files:
-            src = os.path.join(root, name)
-            rel = os.path.relpath(src, repo_root)
-            dest = os.path.join(worktree_dir, rel)
-            _copy_file(src, dest)
+    from aet import plan_parser  # local import avoids cycle with queue
+
+    task_id = task.get("id")
+    if not task_id:
+        return False
+    canonical = os.path.join(worktree_dir, "docs", "plans", f"{task_id}.md")
+    if plan_parser.render_plan(Path(canonical), task):
+        return True
+    plan_file = task.get("plan_file")
+    if plan_file:
+        src = plan_file if os.path.isabs(plan_file) else os.path.join(repo_root, plan_file)
+        if os.path.exists(src):
+            os.makedirs(os.path.dirname(canonical), exist_ok=True)
+            shutil.copy2(src, canonical)
+            return True
+    return False
 
 
 def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
-    """Copy plan/PRD and referenced docs into the worktree.
+    """Mirror untracked referenced docs into the worktree.
 
-    ``docs/plans/`` is overlayed by content, not git state, so the agent's
-    local working-tree copy is always the operative plan. The other referenced
-    doc directories remain an untracked-only mirror so we do not silently
-    overwrite tracked PRDs or ADRs with working-tree drafts.
+    Plans are rendered from the task record by :func:`render_task_plan`, so
+    ``docs/plans/`` is no longer mirrored here.  The referenced doc
+    directories remain an untracked-only copy so we do not silently overwrite
+    tracked PRDs or ADRs with working-tree drafts.
     """
-    _copy_deferred_files(repo_root, worktree_dir)
     result = subprocess.run(
         [
             "git",
@@ -385,7 +333,6 @@ def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
             "ls-files",
             "--others",
             "--exclude-standard",
-            "docs/plans/",
             "docs/prds/",
             "docs/adr/",
             "docs/audits/",

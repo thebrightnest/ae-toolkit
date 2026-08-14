@@ -184,8 +184,20 @@ What remains is discoverability, not correctness. Two requirements cover it: R-1
 
 This repository has no `.agents/aet-config.json`, so it is local by this rule — correct today, and one `aet configure` away from the plan-on-A-run-on-B scenario in R-19.
 
+## Divergence Summary
+
+*Recorded: 2026-08-14 — Branch: owb-01-spec-travels-in-task-record*
+
+### Deferred
+
+- **Merge branch to main and verify integration**: planned as the final task in `docs/plans/owb-01-spec-travels-in-task-record.md`, but it is owned by the `aet-ship` stage and will be completed when that stage runs.
+
+### Changed
+
+- **Untracked live-plan count**: the branch removed 66 tracked `docs/plans/*.md` files, not the 53 counted at planning time, because more live plans had accumulated in the interim. The implementation untracked every tracked live plan so `.gitignore:24` now holds.
+
 ---
 
-*Stage: scope-validated*
+*Stage: synced*
 
-*Next step: run aet sprint add — plans are plan-approved*
+*Next step: run `aet-ship`*

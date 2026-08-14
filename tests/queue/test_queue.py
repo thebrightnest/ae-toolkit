@@ -1,13 +1,11 @@
 """Tests for queue module."""
 
 import json
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from aet.queue import (
-    commit_and_push_plan_change,
     get_next_unblocked,
     has_pending_tasks,
     read_history,
@@ -206,126 +204,6 @@ class TestQueue(unittest.TestCase):
             t2 = next(t for t in live if t["id"] == "t2")
             self.assertEqual(t2["state"], "blocked")
             self.assertEqual(t2["pending_blockers"], 1)
-
-
-class TestCommitAndPushPlanChangeTerminality(unittest.TestCase):
-    def _init_repo(self, repo_root: str) -> None:
-        subprocess.run(["git", "init", "-q", repo_root], check=True)
-        subprocess.run(
-            ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
-            check=True,
-        )
-        subprocess.run(
-            ["git", "-C", repo_root, "config", "user.name", "Test User"],
-            check=True,
-        )
-        Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
-        subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-        subprocess.run(
-            ["git", "-C", repo_root, "commit", "-q", "-m", "init"],
-            check=True,
-        )
-
-    def _make_plan(self, repo_root: str, rel_path: str) -> Path:
-        plan = Path(repo_root) / rel_path
-        plan.parent.mkdir(parents=True, exist_ok=True)
-        plan.write_text("---\nid: test\n---\n\n# Test\n", encoding="utf-8")
-        return plan
-
-    def _commit_count(self, repo_root: str) -> int:
-        result = subprocess.run(
-            ["git", "-C", repo_root, "rev-list", "--count", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return int(result.stdout.strip())
-
-    def test_non_terminal_deferred_plan_writes_footer_without_commit(self):
-        """A non-terminal footer update on a docs/plans path writes locally but does not commit."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            plan = self._make_plan(repo_root, "docs/plans/test.md")
-            initial_commits = self._commit_count(repo_root)
-
-            rc = commit_and_push_plan_change(plan, footer_stage="plan-approved")
-
-            self.assertEqual(rc, 0)
-            self.assertIn("*Stage: plan-approved*", plan.read_text(encoding="utf-8"))
-            self.assertEqual(self._commit_count(repo_root), initial_commits)
-
-    def test_terminal_deferred_plan_commits(self):
-        """A terminal footer update on a docs/plans path still commits and pushes."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            plan = self._make_plan(repo_root, "docs/plans/test.md")
-            initial_commits = self._commit_count(repo_root)
-
-            rc = commit_and_push_plan_change(plan, footer_stage="merged")
-
-            self.assertEqual(rc, 0)
-            self.assertIn("*Stage: merged*", plan.read_text(encoding="utf-8"))
-            self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
-
-    def test_non_terminal_non_deferred_path_commits(self):
-        """A non-terminal footer update on a non-deferred path commits as before."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            plan = self._make_plan(repo_root, "docs/prds/test-prd.md")
-            initial_commits = self._commit_count(repo_root)
-
-            rc = commit_and_push_plan_change(plan, footer_stage="plan-approved")
-
-            self.assertEqual(rc, 0)
-            self.assertIn("*Stage: plan-approved*", plan.read_text(encoding="utf-8"))
-            self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
-
-    def test_terminal_deferred_plan_archives_when_destination_provided(self):
-        """A terminal closure moves the plan into archive/ in the same commit."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            plan = self._make_plan(repo_root, "docs/plans/test.md")
-            archive = Path(repo_root) / "docs" / "plans" / "archive" / "test.md"
-            initial_commits = self._commit_count(repo_root)
-
-            rc = commit_and_push_plan_change(
-                plan,
-                footer_stage="merged",
-                archive_to=archive,
-            )
-
-            self.assertEqual(rc, 0)
-            self.assertFalse(plan.exists())
-            self.assertTrue(archive.exists())
-            self.assertIn("*Stage: merged*", archive.read_text(encoding="utf-8"))
-            self.assertEqual(self._commit_count(repo_root), initial_commits + 1)
-            log = subprocess.run(
-                ["git", "-C", repo_root, "log", "-1", "--name-status", "--pretty=format:"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            self.assertIn("docs/plans/archive/test.md", log.stdout)
-
-    def test_failed_archive_move_aborts_commit(self):
-        """A failed archive move leaves the repository unchanged (fail-closed)."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            plan = self._make_plan(repo_root, "docs/plans/test.md")
-            # Point archive_to at a path inside a non-directory file so git mv fails.
-            archive = Path(repo_root) / "docs" / "plans" / "archive"
-            archive.write_text("not a directory", encoding="utf-8")
-            initial_commits = self._commit_count(repo_root)
-
-            rc = commit_and_push_plan_change(
-                plan,
-                footer_stage="merged",
-                archive_to=archive / "test.md",
-            )
-
-            self.assertNotEqual(rc, 0)
-            self.assertTrue(plan.exists())
-            self.assertEqual(self._commit_count(repo_root), initial_commits)
 
 
 if __name__ == "__main__":
