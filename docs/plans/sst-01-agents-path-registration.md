@@ -87,5 +87,5 @@ Revert the commit. Both declarations are pure data read at call time; no state i
 
 ---
 
-_Stage: implemented_
-_Next step: run `aet-qa`_
+_Stage: qa-complete_
+_Next step: run `aet-review`_
