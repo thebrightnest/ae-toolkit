@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -452,3 +453,47 @@ class TestReaderHardening:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestCwdSlugMatchesClaudeCode:
+    """Pin the slug against real Claude Code directory names.
+
+    Every other test in this file computes its expected path by calling
+    ``cwd_slug`` itself, so all of them passed while the function replaced only
+    ``/`` and left ``.`` and ``_`` intact. A tautology cannot catch a wrong rule.
+    The literals below are copied from observed ``~/.claude/projects`` directory
+    names, so this test fails if the rule drifts from Claude Code's.
+    """
+
+    CASES = [
+        # (cwd, observed project directory name)
+        ("/Users/alice/proj", "-Users-alice-proj"),
+        ("/private/tmp", "-private-tmp"),
+        # A dot in the username: the case that broke this for a real operator.
+        ("/Users/p.rocha/Work/ae-toolkit", "-Users-p-rocha-Work-ae-toolkit"),
+        # An AET worktree — always under a dot directory, so this is every
+        # orchestrated session. The separator and the dot each yield a dash.
+        (
+            "/Users/p.rocha/Work/ae-toolkit/.worktrees/sst-01-agents-path-registration",
+            "-Users-p-rocha-Work-ae-toolkit--worktrees-sst-01-agents-path-registration",
+        ),
+        # Underscores are replaced too.
+        ("/Users/p.rocha/Work/ki_mcp", "-Users-p-rocha-Work-ki-mcp"),
+        # Case is preserved and existing dashes are kept.
+        (
+            "/Users/p.rocha/Work/mb-intent-agent/.claude-worktrees/feat/PMC-105-austria-market",
+            "-Users-p-rocha-Work-mb-intent-agent--claude-worktrees-feat-PMC-105-austria-market",
+        ),
+    ]
+
+    @pytest.mark.parametrize("cwd,expected", CASES)
+    def test_slug_matches_observed_directory_names(self, cwd, expected):
+        assert session_log_claude.cwd_slug(cwd) == expected
+
+    def test_trailing_separator_is_normalised(self):
+        assert session_log_claude.cwd_slug("/tmp/") == session_log_claude.cwd_slug("/tmp")
+
+    def test_slug_contains_only_dashes_and_alphanumerics(self):
+        """Claude Code's project directories never contain other characters."""
+        slug = session_log_claude.cwd_slug("/Users/p.rocha/Work/a_b.c/.worktrees/d")
+        assert re.fullmatch(r"[A-Za-z0-9-]+", slug)

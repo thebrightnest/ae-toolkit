@@ -16,6 +16,7 @@ crashes, never estimates.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,15 +24,31 @@ from typing import Any
 from aet.test_runners import resolve_test_command
 from aet.usage import _MAX_WIRE_LINE_CHARS
 
+# Every character outside ``[A-Za-z0-9-]`` becomes ``-`` in a Claude Code project
+# slug. Derived from the observed corpus, not guessed: ``/`` (``/Users/x`` →
+# ``-Users-x``), ``.`` (``p.rocha`` → ``p-rocha``, and ``.worktrees`` → ``-worktrees``,
+# so a path separator followed by a dot yields ``--worktrees``), and ``_``
+# (``ki_mcp`` → ``ki-mcp``). Case is preserved and consecutive dashes are **not**
+# collapsed.
+_SLUG_UNSAFE = re.compile(r"[^A-Za-z0-9-]")
+
 
 def cwd_slug(cwd: str) -> str:
     """Return the slug Claude Code uses for ``cwd`` in its projects directory.
 
-    Verified layout: ``/Users/alice/proj`` → ``-Users-alice-proj`` and
-    ``/private/tmp`` → ``-private-tmp``. Trailing separators are stripped before
-    slugging so ``/tmp/`` and ``/tmp`` share one directory.
+    Verified against real project directories: ``/Users/alice/proj`` →
+    ``-Users-alice-proj``, ``/private/tmp`` → ``-private-tmp``, and
+    ``/Users/p.rocha/Work/ae-toolkit/.worktrees/t`` →
+    ``-Users-p-rocha-Work-ae-toolkit--worktrees-t``. Trailing separators are
+    stripped before slugging so ``/tmp/`` and ``/tmp`` share one directory.
+
+    Replacing only ``/`` — as this did until the fix — silently missed every
+    orchestrated session, because an AET worktree always lives under
+    ``.worktrees/``, and every user whose name contains a dot. A missed slug
+    yields a path that does not exist, which reads as "no test invocations"
+    rather than as an error.
     """
-    return cwd.rstrip("/").replace("/", "-")
+    return _SLUG_UNSAFE.sub("-", cwd.rstrip("/"))
 
 
 def transcript_path_for(
