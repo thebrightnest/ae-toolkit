@@ -8,8 +8,12 @@ file path (especially ``~/.aet`` content) is ever pushed.
 
 from __future__ import annotations
 
+import argparse
+import importlib.machinery
+import importlib.util
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -18,6 +22,13 @@ from aet.backends.git_refs_backend import (
     GitRefsBackend,
 )
 from aet.backends.json_backend import JsonBackend
+
+_AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
+_spec = importlib.util.spec_from_loader(
+    "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
+)
+aet_state = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(aet_state)
 
 pytestmark = pytest.mark.xdist_group("cwd")
 
@@ -93,9 +104,13 @@ def test_push_is_best_effort_with_no_remote(repo: Path) -> None:
     assert backend.push() is True
 
 
-def test_push_returns_false_on_rejected_update(repo: Path) -> None:
-    # Simulate a non-fast-forward rejection by pre-creating a divergent ref on
-    # a bare origin and trying to push over it.
+def test_push_force_updates_existing_remote_refs(repo: Path) -> None:
+    """Pushing over an existing remote blob ref succeeds (last writer wins).
+
+    Refs in ``refs/aet/*`` point to blobs, so git rejects non-forced updates to
+    refs that already exist on the remote. The push refspec is forced, so a
+    divergent remote envelope is overwritten rather than rejected.
+    """
     origin = repo.parent / "origin"
     origin.mkdir(parents=True, exist_ok=True)
     _git(origin, "init", "--bare", "-q")
@@ -122,7 +137,18 @@ def test_push_returns_false_on_rejected_update(repo: Path) -> None:
     # Push only the envelope ref to create divergence on refs/aet/meta/queue.
     _git(other, "push", "origin", ENVELOPE_REF)
 
-    # Pushing the whole namespace now fails because the envelope diverged.
+    # The forced push overwrites the divergent remote refs.
+    assert backend.push() is True
+    backend.fetch()
+    loaded = backend.load()
+    assert "local-task" in _by_id(loaded["queue"])
+
+
+def test_push_returns_false_when_remote_unreachable(repo: Path) -> None:
+    """A best-effort push returns False when the remote cannot be reached."""
+    _git(repo, "remote", "add", "origin", str(repo.parent / "missing-origin"))
+    backend = _backend(repo)
+    backend.save([_task("local-task")])
     assert backend.push() is False
 
 
@@ -161,7 +187,7 @@ def test_push_refspec_never_includes_local_paths(repo: Path, monkeypatch) -> Non
     push_calls = [c for c in captured if len(c) >= 2 and c[0] == "push" and c[1] == "origin"]
     assert len(push_calls) == 1
     refspec = push_calls[0][2]
-    assert refspec == "refs/aet/*"
+    assert refspec == "+refs/aet/*"
     assert "~/.aet" not in refspec
     assert not any("~/.aet" in arg for call in captured for arg in call)
 
@@ -239,3 +265,78 @@ def test_fetch_force_updates_local_refs_from_remote(repo: Path) -> None:
     backend.fetch()
     loaded = backend.load()
     assert "second" in _by_id(loaded["queue"])
+
+
+def _clone_backend(origin: Path, clone: Path) -> GitRefsBackend:
+    _git(clone.parent, "clone", "-q", str(origin), str(clone))
+    (clone / ".agents").mkdir(parents=True, exist_ok=True)
+    _git(clone, "config", "user.email", "test@example.com")
+    _git(clone, "config", "user.name", "Test User")
+    return GitRefsBackend(
+        queue_file=str(clone / ".agents" / "work-queue.json"),
+        history_file=str(clone / ".agents" / "work-history.jsonl"),
+    )
+
+
+def test_aet_state_transition_pushes_refs_to_remote(repo: Path) -> None:
+    """Regression: ``aet-state transition`` replicates the new state to origin.
+
+    Bug: docs/bugs/2026-08-14-aet-state-transition-does-not-push-refs.md —
+    the command saved locally but never pushed, so other machines (and later
+    fetch-on-read commands) kept seeing the stale remote state.
+    """
+    origin = repo.parent / "origin"
+    origin.mkdir(parents=True, exist_ok=True)
+    _git(origin, "init", "--bare", "-q")
+    _git(repo, "remote", "add", "origin", str(origin))
+
+    backend = _backend(repo)
+    backend.save([_task("t1")])
+    assert backend.push() is True
+
+    args = argparse.Namespace(
+        command="transition",
+        task_id="t1",
+        from_stage="ready",
+        to_stage="in_progress",
+        queue=str(repo / ".agents" / "work-queue.json"),
+        dry_run=False,
+        reason=None,
+        force=False,
+    )
+    with patch.object(aet_state, "create_backend", return_value=backend):
+        rc = aet_state.cmd_transition(args)
+    assert rc == 0
+
+    # A fresh clone must observe the transition without any local writes.
+    clone_backend = _clone_backend(origin, repo.parent / "clone")
+    clone_backend.fetch()
+    loaded = clone_backend.load()
+    assert _by_id(loaded["queue"])["t1"]["state"] == "in_progress"
+
+
+def test_fetch_reverts_unpushed_local_transition(repo: Path) -> None:
+    """Characterize the hazard the fix removes: force fetch clobbers local writes.
+
+    A local save that is never pushed is silently reverted by the next
+    ``fetch()`` because the refspec is ``+refs/aet/*:refs/aet/*``. This is why
+    every mutating command must push.
+    """
+    origin = repo.parent / "origin"
+    origin.mkdir(parents=True, exist_ok=True)
+    _git(origin, "init", "--bare", "-q")
+    _git(repo, "remote", "add", "origin", str(origin))
+
+    backend = _backend(repo)
+    backend.save([_task("t1")])
+    assert backend.push() is True
+
+    # Local transition saved but deliberately not pushed.
+    task = _task("t1", state="in_progress")
+    backend.save([task])
+    assert _by_id(backend.load()["queue"])["t1"]["state"] == "in_progress"
+
+    # A fetch-on-read command (e.g. `aet status`) reverts the local ref.
+    backend.fetch()
+    loaded = backend.load()
+    assert _by_id(loaded["queue"])["t1"]["state"] == "ready"
