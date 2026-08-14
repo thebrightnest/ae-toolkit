@@ -72,13 +72,13 @@ R-23 are covered by the `owb-*` plan set (11 plans after guardrail review).
 
 ## Validation Steps
 
-- [ ] `aet learnings append` followed by `check_base_hygiene` reports a clean tree
-- [ ] `.agents/learnings.jsonl` is still tracked after the change
-- [ ] A deliberately unregistered writer makes the new test fail
-- [ ] A dirty tree with three stray files names all three in the halt message
-- [ ] Lint passes
-- [ ] Tests pass
-- [ ] R-trace coverage: every in-scope R-id is covered by a task above
+- [x] `aet learnings append` followed by `check_base_hygiene` reports a clean tree
+- [x] `.agents/learnings.jsonl` is still tracked after the change
+- [x] A deliberately unregistered writer makes the new test fail
+- [x] A dirty tree with three stray files names all three in the halt message
+- [x] Lint passes
+- [x] Tests pass
+- [x] R-trace coverage: every in-scope R-id is covered by a task above
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
 
 ## Rollback Plan
@@ -87,5 +87,5 @@ Revert the commit. Both declarations are pure data read at call time; no state i
 
 ---
 
-_Stage: plan-approved_
-_Next step: run `aet sprint add docs/plans/sst-01-agents-path-registration.md`_
+_Stage: implemented_
+_Next step: run `aet-qa`_
