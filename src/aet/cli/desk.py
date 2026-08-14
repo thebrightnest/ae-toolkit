@@ -30,8 +30,8 @@ from aet import (  # noqa: E402
 from aet.backends.factory import create_backend  # noqa: E402
 from aet.queue import current_state  # noqa: E402
 
-# Load aet-state as a module so desk actions can reuse queue mutations and
-# plan-footer updates rather than re-implementing closure logic.
+# Load aet-state as a module so desk actions can reuse queue mutations
+# rather than re-implementing closure logic.
 _AET_STATE_PY = _SCRIPT_DIR / "aet_state.py"
 _aet_state_spec = importlib.util.spec_from_loader(
     "aet_state_desk",

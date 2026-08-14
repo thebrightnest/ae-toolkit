@@ -161,6 +161,7 @@ class TestAbandonSuccess:
             ],
         )
         history_file = _write_history(tmp_path)
+        plan_before = plan.read_text(encoding="utf-8")
         rc, _out, _err = _run_desk_action(
             "abandon", "t1", "--reason", "no longer needed",
             queue_file=queue_file, history_file=history_file,
@@ -184,9 +185,10 @@ class TestAbandonSuccess:
         assert transition_entry is not None
         assert transition_entry["evidence"]["reason"] == "no longer needed"
 
-        # Plan file should reflect the terminal state.
+        # Terminal closure no longer touches the plan file: the stage lives on
+        # the task record, so the footer write path produces no commit (R-4).
         assert "status:" not in plan.read_text(encoding="utf-8")
-        assert "_Stage: abandoned_" in plan.read_text(encoding="utf-8")
+        assert plan.read_text(encoding="utf-8") == plan_before
 
 
 def _merge_subprocess_runner(cwd: str | None):
@@ -221,16 +223,12 @@ def _merge_subprocess_runner(cwd: str | None):
         if sub == "merge-base":
             # Success means the tip is an ancestor of origin/main.
             return _Result(0, "", "")
-        if sub == "add":
+        if sub == "diff" and "--numstat" in cmd:
+            # plan_size digest of the merged diff; no files changed.
             return _Result(0, "", "")
-        if sub == "diff":
-            # 1 means there are staged changes to commit.
-            return _Result(1, "", "")
-        if sub == "commit":
-            return _Result(0, "", "")
-        if sub == "push":
-            return _Result(0, "", "")
-        # Fail closed on any unexpected external call so the test surfaces drift.
+        # Fail closed on any unexpected external call so the test surfaces
+        # drift — including any reappearance of the removed plan footer
+        # add/commit/push path (R-4).
         raise AssertionError(f"Unexpected subprocess call in desk merge test: {cmd}")
 
     return _run
@@ -252,6 +250,7 @@ class TestMergeSuccess:
             ],
         )
         history_file = _write_history(tmp_path)
+        plan_before = plan.read_text(encoding="utf-8")
         monkeypatch.setattr(
             desk.subprocess,
             "run",
@@ -272,10 +271,11 @@ class TestMergeSuccess:
         assert settled["state"] == "merged"
         assert settled.get("merge_commit") == "abc123def456"
 
-        # Plan file should reflect the terminal state.
+        # Terminal closure no longer touches the plan file: the stage lives on
+        # the task record, so the footer write path produces no commit (R-4).
         plan_text = plan.read_text(encoding="utf-8")
         assert "status:" not in plan_text
-        assert "_Stage: merged_" in plan_text
+        assert plan_text == plan_before
 
     def test_no_second_closure_writer(self, tmp_path, monkeypatch):
         plan = _write_plan(tmp_path, "t1")

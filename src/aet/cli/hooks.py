@@ -27,7 +27,7 @@ from typing import Optional
 
 import typer
 
-from aet import gate, plan_parser  # noqa: E402
+from aet import gate  # noqa: E402
 
 # Marker embedded in every shim this tool generates. ``install`` rewrites a
 # hook only when this marker is present; a hook without it is left untouched.
@@ -171,9 +171,9 @@ def cmd_check(args: argparse.Namespace) -> int:
         if branch is None:
             continue
         plan = gate.plan_for_branch(repo_root, branch)
-        if plan is None:
+        if plan is None and not gate._task_routing_from_ref(repo_root, branch):
             continue  # non-task branch — no gate imposed
-        plan_fm = plan_parser.parse_frontmatter(plan)
+        plan_fm = gate.routing_data_for_branch(repo_root, branch)
         _ok, task_failures = gate.check_task_evidence(branch, plan_fm, repo_root)
         failures.extend(task_failures)
 

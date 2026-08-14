@@ -236,6 +236,161 @@ def most_recent_plan(plans_dir: Path) -> Path | None:
     return plans[0] if plans else None
 
 
+# Frontmatter keys that travel with the task record so the plan file is not
+# required at run time (R-19).  Any key not in this set stays in the rendered
+# plan body and is not duplicated in the record.
+_CARRIED_FM_KEYS = (
+    "id",
+    "size",
+    "pipeline",
+    "security_review",
+    "docs_sync",
+    "workflow",
+    "blocked_by",
+    "work_class",
+)
+
+
+def _extract_body_and_title(path: Path) -> tuple[str | None, str]:
+    """Return ``(body, title)`` from a plan file, or ``(None, stem)`` on error.
+
+    The body is everything between the closing frontmatter fence and the final
+    stage/footer separator (if any).  The title is taken from the first H1.
+    """
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return None, path.stem
+
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            content = parts[2]
+
+    title = path.stem
+    title_match = re.search(r"^#\s+(.+)$", content, re.M)
+    if title_match:
+        title = title_match.group(1).strip()
+
+    # Drop the footer separator and any stage footer that follows it.
+    body = re.split(r"\n---\s*\n", content, maxsplit=1)[0]
+    # Also drop the title line itself from the body; render re-adds it.
+    body = re.sub(r"^#\s+.+\n?", "", body, count=1, flags=re.M)
+    return body.strip(), title
+
+
+def _extract_task_items(body: str) -> list[str]:
+    """Return the task list items from a plan body.
+
+    Matches a ``## Task List`` section and returns every list item line until
+    the next ``## `` heading.  Returns an empty list when no task list section
+    exists.
+    """
+    match = re.search(
+        r"(?m)^##\s+Task List\s*\n(.*?)(?=\n##\s+|\Z)", body, re.DOTALL
+    )
+    if not match:
+        return []
+    items: list[str] = []
+    for line in match.group(1).splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("- ", "* ", "1. ", "2. ", "3. ", "4. ", "5. ", "6. ", "7. ", "8. ", "9. ", "0. ")):
+            items.append(stripped)
+    return items
+
+
+def extract_plan_spec(path: Path, data: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Build the portable spec for a task record from a plan file.
+
+    The spec carries the frontmatter keys required for routing, the plan title,
+    the task list, and the rest of the body so the working plan can be rendered
+    in a worktree that never had the original file (R-19).
+
+    Returns ``None`` when the file cannot be read.
+    """
+    if not path.exists():
+        return None
+    try:
+        path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    if data is None:
+        data = parse_frontmatter(path)
+
+    body, title = _extract_body_and_title(path)
+    if body is None:
+        return None
+
+    frontmatter = {k: data[k] for k in _CARRIED_FM_KEYS if k in data}
+    spec: dict[str, Any] = {
+        "frontmatter": frontmatter,
+        "title": title,
+        "body": body,
+        "tasks": _extract_task_items(body),
+    }
+    return spec
+
+
+def render_plan(path: Path, task: dict[str, Any]) -> bool:
+    """Write a working plan file in ``path`` from the task's spec.
+
+    Returns ``True`` when a spec was present and the file was written.  The
+    caller is responsible for ensuring the parent directory exists.
+    """
+    spec = task.get("spec")
+    if not isinstance(spec, dict):
+        return False
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frontmatter = spec.get("frontmatter", {})
+    lines = ["---"]
+    for key, value in frontmatter.items():
+        if isinstance(value, list):
+            lines.append(f"{key}:")
+            for item in value:
+                lines.append(f"  - {item}")
+        else:
+            lines.append(f"{key}: {value}")
+    lines.extend(["---", "", f"# {spec.get('title', task.get('id', path.stem))}"])
+
+    body = spec.get("body", "").strip()
+    if body:
+        lines.extend(["", body])
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return True
+
+
+def task_routing_data(task: dict[str, Any], repo_root: str | Path | None = None) -> dict[str, Any]:
+    """Return the frontmatter used for routing from a task record.
+
+    Prefers the portable spec; falls back to parsing the plan file on disk for
+    records created before R-19.
+    """
+    spec = task.get("spec")
+    if isinstance(spec, dict):
+        return spec.get("frontmatter", {})
+
+    plan_file = task.get("plan_file")
+    if plan_file:
+        path = Path(plan_file)
+        if not path.is_absolute() and repo_root is not None:
+            path = Path(repo_root) / path
+        if path.exists():
+            return parse_frontmatter(path)
+    return {}
+
+
+def task_plan_path(task: dict[str, Any], repo_root: str | Path | None = None) -> Path | None:
+    """Return the canonical plan path for a task, or None when no id is set."""
+    task_id = task.get("id")
+    if not task_id:
+        return None
+    root = Path(repo_root) if repo_root else Path.cwd()
+    return root / "docs" / "plans" / f"{task_id}.md"
+
+
 def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[str, Any]:
     """Create a fresh queue task dict from a plan file using the frontmatter contract.
 
@@ -274,6 +429,7 @@ def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[
         "worktree": None,
         "branch": None,
         "work_class": work_class,
+        "spec": extract_plan_spec(path, data),
     }
     append_history(task, None, state, "sync")
     return task

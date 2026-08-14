@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import collections
 import os
-import re
 import signal
 import subprocess
 import sys
@@ -100,8 +99,8 @@ from aet.worktree import (  # noqa: E402
     prepare_worktree_dependencies,
     push_branch,
     remove_worktree,
+    render_task_plan,
     run_git_plain,
-    seed_task_plan,
 )
 
 # Global shutdown flag
@@ -244,42 +243,20 @@ def _redirect_output(log_file: str | None) -> None:
 
 
 
-def read_plan_pipeline(plan_file: str) -> str | None:
-    """Return the pipeline mode declared in plan frontmatter, if any.
-
-    Only the simple ``pipeline: minimal|standard|full`` form is supported.
-    Returns ``None`` when the field is absent so the caller can fall back to
-    the CLI default.
-    """
-    try:
-        text = Path(plan_file).read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-    if not text.startswith("---"):
-        return None
-
-    end = text.find("\n---", 3)
-    if end == -1:
-        return None
-
-    frontmatter = text[3:end]
-    match = re.search(r"^pipeline:\s*(\S+)", frontmatter, re.MULTILINE)
-    if not match:
-        return None
-
-    value = match.group(1).strip().strip("\"'")
-    if value in ("minimal", "standard", "full"):
+def read_plan_pipeline(plan_data: dict[str, Any]) -> str | None:
+    """Return the pipeline mode from parsed frontmatter, if valid."""
+    value = plan_data.get("pipeline")
+    if isinstance(value, str) and value in ("minimal", "standard", "full"):
         return value
     return None
 
 
-def effective_isolation(plan_file: str, cli_isolation: str) -> str:
+def effective_isolation(plan_data: dict[str, Any], cli_isolation: str) -> str:
     """Return the isolation level for a task.
 
     Plan frontmatter takes precedence; the CLI flag is the fallback.
     """
-    plan_isolation = read_plan_pipeline(plan_file)
+    plan_isolation = read_plan_pipeline(plan_data)
     return plan_isolation if plan_isolation else cli_isolation
 
 
@@ -550,23 +527,19 @@ def _session_diff_stats(
     return files_modified, commits_created
 
 
-def _plan_snapshot(plan_file: str) -> dict[str, Any] | None:
-    """Return a shallow snapshot of plan frontmatter fields used for routing.
+def _plan_snapshot(plan_data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a shallow snapshot of frontmatter fields used for routing.
 
     Captures ``size``, ``pipeline``, ``security_review``, ``docs_sync``, and
-    ``aet_version`` when present. Returns ``None`` when the plan file cannot be
-    read or has no frontmatter.
+    ``aet_version`` when present. Returns ``None`` when no routing keys are
+    available.
     """
-    try:
-        data = plan_parser.parse_frontmatter(Path(plan_file))
-    except OSError:
-        return None
-    if not data:
+    if not plan_data:
         return None
     snapshot: dict[str, Any] = {}
     for key in ("size", "pipeline", "security_review", "docs_sync", "aet_version"):
-        if key in data:
-            snapshot[key] = data[key]
+        if key in plan_data:
+            snapshot[key] = plan_data[key]
     return snapshot if snapshot else None
 
 
@@ -618,6 +591,7 @@ def _emit_stage_session(
     session_ref: str | None = None,
     base_branch: str = "origin/main",
     output: str = "",
+    plan_data: dict[str, Any] | None = None,
     verdict_recorded: bool = False,
 ) -> None:
     """Emit one stage telemetry record for a completed agent session.
@@ -663,7 +637,7 @@ def _emit_stage_session(
             stages=stages,
             actual_stages=actual_stages,
             failure_class=failure_class,
-            plan_snapshot=_plan_snapshot(plan_file),
+            plan_snapshot=_plan_snapshot(plan_data or {}),
             attempt=_next_attempt(logger, task_id, stage),
             token_count=usage.get("total_tokens") if usage else None,
             cost_estimate=usage.get("cost_usd") if usage else None,
@@ -1417,9 +1391,9 @@ def process_task(
     if logger is None:
         logger = telemetry.RunLogger(repo_root)
     task_id = task["id"]
-    plan_file = task.get("plan_file", "")
-    if not os.path.isabs(plan_file):
-        plan_file = os.path.join(repo_root, plan_file)
+    plan_data = plan_parser.task_routing_data(task, repo_root)
+    canonical_rel = f"docs/plans/{task_id}.md"
+    plan_file = os.path.join(repo_root, canonical_rel)
 
     print(f"▶️  Task: {task.get('title', task_id)} ({task_id})")
     print(f"   Plan: {plan_file}")
@@ -1429,27 +1403,12 @@ def process_task(
         worktree_dir = create_worktree(repo_root, task_id, base_branch=base_branch)
     copy_untracked_files(repo_root, worktree_dir)
 
-    # Seed the task branch with a standalone plan commit when the integration
-    # base does not already carry the plan path (R-5).
-    integration_ref = (
-        base_branch.split("/", 1)[1] if "/" in base_branch else base_branch
-    )
-    try:
-        seeded = seed_task_plan(
-            repo_root, worktree_dir, plan_file, task_id, integration_ref
-        )
-        if seeded:
-            print(f"   🌱 Seeded plan commit for {task_id}")
-    except RuntimeError as exc:
-        print(f"   ❌ {exc}")
-        _record_failure_on_task(
-            backend,
-            task,
-            failure_lib.FailureClass.ENVIRONMENT,
-            "seed",
-            str(exc),
-        )
-        return False
+    # Render the working plan from the task record into the worktree (R-19).
+    # The plan file is ephemeral: it is never committed and never overlays the
+    # main-checkout copy, which removes the _copy_deferred_files clobber defect.
+    rendered = render_task_plan(repo_root, worktree_dir, task)
+    if rendered:
+        print(f"   📝 Rendered plan for {task_id}")
 
     # Warm up configured worktree dependencies.
     warmup_results = prepare_worktree_dependencies(repo_root, worktree_dir)
@@ -1480,17 +1439,18 @@ def process_task(
         )
 
     # Use the worktree copy of the plan file for stages and verification.
-    plan_file = os.path.join(worktree_dir, os.path.relpath(plan_file, repo_root))
+    plan_file = os.path.join(worktree_dir, canonical_rel)
 
     # Fail loudly if the plan is missing in the worktree. A missing plan means
-    # the resolved base branch never contained it; this is a misconfiguration,
-    # not a flaky task, so it halts rather than requeues (R-6).
+    # the task record has no spec and no legacy plan_file path; this is a
+    # misconfiguration, not a flaky task, so it halts rather than requeues (R-6).
     if not os.path.exists(plan_file):
         raise MissingPlanError(base_branch, plan_file)
 
-    # Gate routing resolves against the plan frontmatter — parse it once per
-    # task so every stage decision below is a pure data lookup.
-    plan_fm = plan_parser.parse_frontmatter(Path(plan_file))
+    # Gate routing resolves against the task record (R-19).  The rendered plan
+    # file is parsed only as a backward-compatible fallback for legacy records
+    # that were created before the spec field existed.
+    plan_fm = plan_data or plan_parser.parse_frontmatter(Path(plan_file))
 
     # The workflow file is the engine's source of truth for stage sequencing.
     # A missing or invalid file fails the run loudly at task start — there is
@@ -1516,7 +1476,7 @@ def process_task(
             return False
 
     # Allow the plan frontmatter to override the CLI isolation default.
-    task_isolation = effective_isolation(plan_file, isolation)
+    task_isolation = effective_isolation(plan_fm, isolation)
     if task_isolation != isolation:
         print(f"   📋 Plan isolation: {task_isolation}")
 
@@ -1591,6 +1551,7 @@ def process_task(
                     base_branch=base_branch,
                     output=output,
                     verdict_recorded=False,
+                    plan_data=plan_fm,
                 )
                 agent_invoked = True
                 if exit_code != 0:
@@ -1713,6 +1674,7 @@ def process_task(
                 base_branch=base_branch,
                 output=output,
                 verdict_recorded=kind is not None,
+                plan_data=plan_fm,
             )
             agent_invoked = True
 
@@ -1782,6 +1744,7 @@ def process_task(
                 worktree_dir=worktree_dir,
                 backend=backend,
                 plan_file=plan_file,
+                plan_data=plan_fm,
             )
         except IntegrationFailureError as exc:
             print(f"   ❌ Integration failure for {task_id}: {exc}")
@@ -1881,6 +1844,7 @@ def _integrate_single_pr_task(
     worktree_dir: str,
     backend=None,
     plan_file: str | None = None,
+    plan_data: dict[str, Any] | None = None,
 ) -> bool:
     """Serialize, rebase, re-validate, squash-merge, push, and clean up.
 
@@ -1938,10 +1902,10 @@ def _integrate_single_pr_task(
                 )
 
             # Verify required gate evidence before the squash-merge lands (R-22).
-            # Use the plan file from the task when available; fall back to the
-            # task-id convention so the gate matches the pre-push hook.
+            # Prefer the routing data already resolved from the task record;
+            # fall back to parsing the rendered plan file for legacy records.
             _plan_path = Path(plan_file) if plan_file else Path(worktree_dir) / "docs" / "plans" / f"{task_id}.md"
-            _plan_fm = plan_parser.parse_frontmatter(_plan_path)
+            _plan_fm = plan_data or plan_parser.parse_frontmatter(_plan_path)
             _evidence_ok, _evidence_failures = gate.check_task_evidence(
                 task_id, _plan_fm, repo_root
             )

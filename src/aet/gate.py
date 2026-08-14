@@ -7,11 +7,53 @@ path derivation for the pre-push hook and the single-pr integration gate.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
 from aet import evidence, plan_parser, telemetry
 from aet.workflow import load_workflow
+
+
+def _task_routing_from_ref(repo_root: str | Path, task_id: str) -> dict[str, Any] | None:
+    """Read a task record from git-refs and return its routing frontmatter.
+
+    Returns ``None`` when the ref does not exist or cannot be parsed.  This
+    lets the pre-push gate resolve required evidence from the task record when
+    no plan file is present (R-19).
+    """
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "cat-file", "-p", f"refs/aet/tasks/{task_id}"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        task = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(task, dict):
+        return None
+    spec = task.get("spec")
+    if isinstance(spec, dict):
+        return spec.get("frontmatter", {})
+    return None
+
+
+def routing_data_for_branch(repo_root: str | Path, branch: str) -> dict[str, Any]:
+    """Return routing frontmatter for a task branch, preferring the record.
+
+    Falls back to parsing the plan file at the task-id convention when the
+    record is unavailable.
+    """
+    routing = _task_routing_from_ref(repo_root, branch)
+    if routing:
+        return routing
+    plan = plan_for_branch(repo_root, branch)
+    if plan:
+        return plan_parser.parse_frontmatter(plan)
+    return {}
 
 
 def required_evidence(repo_root: str | Path, plan_fm: dict[str, Any]) -> list[tuple[str, str]]:

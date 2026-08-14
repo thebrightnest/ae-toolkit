@@ -1,10 +1,13 @@
-"""Regression guard: pr-per-task git command sequence is unchanged.
+"""Regression guard: pr-per-task git command sequence matches the baseline.
 
 This test asserts that, with ``integration_mode == 'pr-per-task'`` and
 ``integration_branch == trunk_branch``, the orchestrator issues exactly the
-same git commands as before the integration_mode work was introduced.
-The assertion is a command-sequence check, not a code-read check, satisfying
-R-14's regression guard.
+expected git command sequence.  The assertion is a command-sequence check,
+not a code-read check, satisfying R-14's regression guard.
+
+Baseline updated by owb-01 (R-19): the working plan is rendered from the
+task record instead of seeded with a standalone commit, and ``docs/plans/``
+is no longer overlaid by ``copy_untracked_files``.
 """
 
 from __future__ import annotations
@@ -215,15 +218,14 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
                     "ls-files",
                     "--others",
                     "--exclude-standard",
-                    "docs/plans/",
                     "docs/prds/",
                     "docs/adr/",
                     "docs/audits/",
                     "docs/retros/",
                     "docs/product-briefs/",
                 ],
-                # Seed skip check: the base already carries the plan path.
-                ["git", "-C", "<repo>", "cat-file", "-e", "main:docs/plans/demo-plan.md"],
+                # No seed check: the plan is rendered from the task record
+                # (R-19), so no cat-file probe and no seed commit.
                 # Telemetry diff stats emitted after each stage/session group.
                 ["git", "-C", "<worktree>", "diff", "--name-only", "origin/main...HEAD"],
                 ["git", "-C", "<worktree>", "rev-list", "--count", "origin/main..HEAD"],

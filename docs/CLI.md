@@ -30,7 +30,7 @@ Run the orchestrator for a single plan.
 
 ## `aet state`
 
-Queue mutations, stage transitions, and footer updates.
+Queue mutations and stage transitions.
 
 ### Subcommands
 
@@ -119,7 +119,7 @@ Resolve and record the merge commit for a task.
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of origin/<target-branch>.
 - `--target-branch` *str* — Branch to verify the merge against. Defaults to the configured integration branch.
-- `--plan` *str* — Path to the plan markdown file. If omitted, uses the task's plan_file.
+- `--plan` *str* — Deprecated and ignored: plan footer writes were removed (R-4/R-19).
 - `--dry-run` *boolean* — Show changes without applying them. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 

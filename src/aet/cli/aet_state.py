@@ -1,7 +1,8 @@
-"""aet-state — Owns queue mutations, stage transitions, and footer updates.
+"""aet-state — Owns queue mutations and stage transitions.
 
 Standard-library Python only. Derives status from ground truth (git, filesystem),
-validates transition legality, and updates footers + queue JSON atomically.
+validates transition legality, and updates the queue atomically. The stage
+lives on the task record; plan files are never written (R-4/R-19).
 """
 
 from __future__ import annotations
@@ -106,58 +107,6 @@ def is_ancestor_of_target(branch, target_branch, cwd=None):
         "merge-base", "--is-ancestor", branch, f"origin/{target_branch}", cwd=cwd
     )
     return rc == 0
-
-
-def _resolve_plan_for_closure(plan_path, merge_commit, branch, cwd):
-    """Return a usable local path to ``plan_path``, resolving from git if needed.
-
-    ``plan_path`` may be absolute or relative to the repository root. If it
-    already exists in the checkout, it is returned unchanged. Plans that have
-    been archived are also resolved from ``docs/plans/archive/`` before falling
-    back to extraction from ``merge_commit`` (or ``branch``). Returns ``None``
-    when the plan cannot be found locally or in the merged branch.
-    """
-    repo_root = cwd
-    rc, out, _ = run_git("rev-parse", "--show-toplevel", cwd=cwd)
-    if rc == 0:
-        repo_root = out.strip()
-    repo_root_real = os.path.realpath(repo_root)
-
-    if os.path.isabs(plan_path):
-        path = Path(plan_path)
-    else:
-        path = Path(repo_root_real) / plan_path
-
-    if path.exists():
-        return str(path)
-
-    plan_abs = os.path.realpath(str(path))
-    plan_rel = os.path.relpath(plan_abs, repo_root_real)
-
-    # Archived plans live in docs/plans/archive/; prefer that location when the
-    # original live path no longer exists.
-    archive_path = None
-    archive_rel = None
-    if plan_rel.startswith("docs/plans/") and not plan_rel.startswith(
-        "docs/plans/archive/"
-    ):
-        archive_rel = f"docs/plans/archive/{Path(plan_rel).name}"
-        archive_path = Path(repo_root_real) / archive_rel
-        if archive_path.exists():
-            return str(archive_path)
-
-    for ref in (merge_commit, branch):
-        if not ref:
-            continue
-        for rel in ((archive_rel,) if archive_rel else ()) + (plan_rel,):
-            rc, out, _ = run_git("show", f"{ref}:{rel}", cwd=repo_root)
-            if rc == 0:
-                target = archive_path if rel == archive_rel else path
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(out, encoding="utf-8")
-                return str(target)
-
-    return None
 
 
 def resolve_merge_commit(
@@ -308,8 +257,12 @@ def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main", i
       3. ready    — plan exists, no branch, and all blockers are terminal
                    (including the case of no blockers).
       4. blocked  — plan exists, no branch, and some blocker is not terminal.
-      5. drift    — plan file is missing.
+      5. drift    — plan file is missing and the record carries no spec.
       6. planned  — plan exists, no branch, no blockers.
+
+    "Plan exists" means the file is on disk or the record carries a portable
+    spec (R-19): the spec renders the working file on demand, so its absence
+    on this machine is not drift.
 
     ``integration_branch`` defaults to ``trunk_branch`` so ``pr-per-task`` behavior
     is unchanged; ``single-pr`` callers pass the epic integration branch.
@@ -322,8 +275,12 @@ def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main", i
 
     derived = {"derived_status": "unknown"}
 
-    # Plan file exists?
+    # Plan file exists?  A record carrying a portable spec (R-19) counts as
+    # having its plan: the spec renders the working file on demand, so the
+    # file's absence on this machine is not drift.
     if plan_file and Path(plan_file).exists():
+        derived["plan_exists"] = True
+    elif isinstance(task.get("spec"), dict):
         derived["plan_exists"] = True
     else:
         derived["plan_exists"] = False
@@ -457,7 +414,6 @@ def _apply_transition(
     trunk_branch="main",
     repair=False,
     integration_branch=None,
-    explicit_plan=None,
 ):
     """Apply a validated state transition and propagate the forward frontier.
 
@@ -466,8 +422,9 @@ def _apply_transition(
     persists the queue through the configured backend, and seals terminal tasks
     to the settled history log.
 
-    Terminal transitions also update the plan footer so the breadcrumb is
-    maintained by code, not by skill prose (slc-04).  The caller must already
+    Terminal transitions record the stage on the task record and in the ledger;
+    they no longer touch plan files — footer commits and archive moves were
+    removed with R-4/R-19 (relocation is owb-03's job).  The caller must already
     hold the queue lock; the queue-ref write is atomic via the backend.
 
     When ``repair`` is true, lifecycle legality is bypassed so that heal and
@@ -547,48 +504,14 @@ def _apply_transition(
         backend.seal(task["id"], history_file)
         backend.close_task(task["id"], evidence)
 
-        # Update the plan footer as a code-maintained breadcrumb.  This is part
-        # of the terminal closure transaction: queue state, ledger land event,
-        # and footer are written by the same code path.  A missing plan file is
-        # fail-closed: terminal state is not recorded without the breadcrumb.
-        plan_path = explicit_plan or task.get("plan_file")
-        resolved_path = None
-        archive_to = None
-        if plan_path and cwd is not None:
-            resolved_path = _resolve_plan_for_closure(
-                plan_path,
-                task.get("merge_commit"),
-                task.get("branch"),
-                cwd,
-            )
-            if resolved_path:
-                repo_root_real = os.path.realpath(
-                    run_git("rev-parse", "--show-toplevel", cwd=cwd)[1].strip()
-                    or cwd
-                )
-                resolved_real = os.path.realpath(resolved_path)
-                resolved_rel = os.path.relpath(resolved_real, repo_root_real)
-                if resolved_rel.startswith("docs/plans/") and not resolved_rel.startswith(
-                    "docs/plans/archive/"
-                ):
-                    archive_to = (
-                        Path(repo_root_real)
-                        / "docs"
-                        / "plans"
-                        / "archive"
-                        / Path(resolved_real).name
-                    )
-
         # Record the terminal closure event in the content-addressed ledger.
+        # Plan footer updates and archive moves are no longer part of closure:
+        # the stage lives on the task record, and relocation is owb-03's job
+        # (R-4, R-19).
         ledger_path = Path(backend.queue_file).resolve().parent / "ledger.jsonl"
         ledger = Ledger(ledger_path)
         merge_ref = task.get("merge_commit")
-        land_payload = _land_digest(
-            task,
-            archived_to=os.path.relpath(archive_to, repo_root_real)
-            if archive_to
-            else None,
-        )
+        land_payload = _land_digest(task, archived_to=None)
         if merge_ref:
             ledger.write_event(
                 source="aet-state",
@@ -608,25 +531,6 @@ def _apply_transition(
                 kind="land",
                 occurred_at=occurred_at,
                 payload=land_payload,
-            )
-
-        if resolved_path:
-            rc = queue_lib.commit_and_push_plan_change(
-                resolved_path,
-                footer_stage=to_state,
-                task_id=task["id"],
-                cwd=cwd,
-                archive_to=archive_to,
-            )
-            if rc != 0:
-                raise RuntimeError(
-                    f"{to_state} recorded in queue and ledger, but plan "
-                    f"footer update failed for {task['id']}. Re-run closure "
-                    "to retry the footer push."
-                )
-        elif plan_path and cwd is not None:
-            raise RuntimeError(
-                f"Plan file not found for closure: {plan_path}"
             )
 
 
@@ -672,8 +576,8 @@ def _set_stage(task, stage, by="orch"):
 def cmd_set_stage(args):
     """Set the pipeline stage sub-state for a task in the queue.
 
-    Updates the plan footer atomically with the queue write and clears any
-    stale ``failure_reason`` left over from reactivation. A ``stage`` event is
+    Writes the stage to the task record and clears any stale
+    ``failure_reason`` left over from reactivation. A ``stage`` event is
     emitted to the content-addressed ledger after the queue is persisted.
     """
     backend = make_backend(args.queue)
@@ -682,8 +586,6 @@ def cmd_set_stage(args):
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1
 
-    plan_file = None
-    previous_stage = None
     with queue_lib.queue_lock(args.queue):
         data = backend.load()
         queue = data["queue"]
@@ -713,13 +615,6 @@ def cmd_set_stage(args):
             return 1
 
         previous_stage = task["history"][-1]["from"] if task.get("history") else None
-        plan_file = task.get("plan_file")
-        if plan_file:
-            plan_path = Path(plan_file)
-            if not plan_path.is_absolute():
-                plan_path = Path(args.queue).resolve().parent.parent / plan_path
-            if plan_path.exists():
-                queue_lib.update_plan_footer(plan_path, args.stage)
 
         # Stale failure_reason from a previous failure/abandonment must not
         # survive reactivation (migration-aet-state.md:55).
@@ -1244,8 +1139,8 @@ def cmd_record_merge(args):
         return 1
 
     # Load task. If a previous record-merge already transitioned the task to
-    # merged but failed to push the plan footer update, retry only the plan
-    # closure push.
+    # merged, the durable outcome is already recorded; plan files are no longer
+    # committed or pushed by this command (R-4, R-19).
     with queue_lib.queue_lock(args.queue):
         data = backend.load()
         queue = data["queue"]
@@ -1263,42 +1158,8 @@ def cmd_record_merge(args):
             return 1
 
     if sealed_task:
-        explicit_plan = getattr(args, "plan", None)
-        plan_path = explicit_plan or sealed_task.get("plan_file")
-        if plan_path:
-            resolved_path = _resolve_plan_for_closure(
-                plan_path,
-                sealed_task.get("merge_commit"),
-                sealed_task.get("branch"),
-                cwd,
-            )
-            if resolved_path:
-                rc = queue_lib.commit_and_push_plan_change(
-                    resolved_path, footer_stage="merged", task_id=args.task_id, cwd=cwd,
-                )
-                if rc != 0:
-                    print(
-                        f"Merge recorded locally, but plan closure could not be pushed "
-                        f"for {args.task_id}. Re-run record-merge to retry.",
-                        file=sys.stderr,
-                    )
-                    return rc
-            elif explicit_plan:
-                print(
-                    f"Merge recorded, but explicit plan file not found: {explicit_plan}",
-                    file=sys.stderr,
-                )
-                return 1
-            else:
-                print(
-                    f"Merge recorded for {args.task_id}, but plan closure failed: "
-                    f"could not find {plan_path} in the checkout or on the merged "
-                    f"branch. The merge record itself is intact; re-run record-merge "
-                    f"after restoring the plan file, or pass --plan with an existing "
-                    f"plan path.",
-                    file=sys.stderr,
-                )
-                return 1
+        # Plan footer updates and archival are no longer part of the closure
+        # transaction (R-4, R-19); the merge record itself is the durable outcome.
         print(
             f"Recorded merge for {args.task_id}: "
             f"{sealed_task.get('merge_commit')} ({sealed_task.get('merge_strategy')})"
@@ -1340,7 +1201,6 @@ def cmd_record_merge(args):
         )
         return 1
 
-    explicit_plan = getattr(args, "plan", None)
     with queue_lib.queue_lock(args.queue):
         # Re-load in case another process changed the queue while we talked to git.
         data = backend.load()
@@ -1387,7 +1247,6 @@ def cmd_record_merge(args):
                 by="record-merge", evidence=evidence, cwd=cwd,
                 trunk_branch=trunk_branch,
                 integration_branch=integration_branch,
-                explicit_plan=explicit_plan,
             )
         except RuntimeError as e:
             task["merge_commit"] = previous_merge_commit
@@ -1575,7 +1434,7 @@ def record_merge(
     plan: Optional[str] = typer.Option(
         None,
         "--plan",
-        help="Path to the plan markdown file. If omitted, uses the task's plan_file.",
+        help="Deprecated and ignored: plan footer writes were removed (R-4/R-19).",
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show changes without applying them."
