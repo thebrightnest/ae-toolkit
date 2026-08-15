@@ -88,6 +88,49 @@ class TestExtractPlanSpec(unittest.TestCase):
             self.assertEqual(task["spec"]["tasks"], ["- [ ] one"])
 
 
+class TestExtractPlanSpecFromText(unittest.TestCase):
+    """The spec can be built from plan text that never touches the filesystem.
+
+    The backfill migration reads deleted plans out of a git blob, so extraction
+    must not require a path on disk.
+    """
+
+    def test_builds_spec_from_text(self):
+        spec = plan_parser.extract_plan_spec_from_text(
+            "---\n"
+            "id: owb-09\n"
+            "size: L\n"
+            "pipeline: full\n"
+            "security_review: skipped\n"
+            "docs_sync: required\n"
+            "---\n\n"
+            "# Plan: Recovered From a Blob\n\n"
+            "## Context\n\n"
+            "Deleted by b95538dd.\n\n"
+            "## Task List\n\n"
+            "1. Recover the spec (traces: R-19)\n\n"
+            "---\n\n"
+            "*Stage: plan-approved*\n",
+            "owb-09",
+        )
+        assert spec is not None
+        self.assertEqual(spec["frontmatter"]["id"], "owb-09")
+        self.assertEqual(spec["frontmatter"]["size"], "L")
+        self.assertEqual(spec["frontmatter"]["security_review"], "skipped")
+        self.assertEqual(spec["frontmatter"]["docs_sync"], "required")
+        self.assertEqual(spec["title"], "Plan: Recovered From a Blob")
+        self.assertEqual(spec["tasks"], ["1. Recover the spec (traces: R-19)"])
+        self.assertIn("## Context", spec["body"])
+        self.assertNotIn("Stage:", spec["body"])
+
+    def test_falls_back_to_stem_when_no_title(self):
+        spec = plan_parser.extract_plan_spec_from_text(
+            "---\nid: owb-09\n---\n\nno heading here\n", "owb-09"
+        )
+        assert spec is not None
+        self.assertEqual(spec["title"], "owb-09")
+
+
 class TestRenderPlan(unittest.TestCase):
     def test_renders_plan_from_spec(self):
         with tempfile.TemporaryDirectory() as tmp:

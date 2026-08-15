@@ -21,7 +21,16 @@ _REPO_ROOT = Path(__file__).parents[2]
 # expect after the Typer consolidation.
 _MODULES = {
     "aet.cli.aet_state": {
-        "commands": ["audit", "heal", "validate", "reset", "transition", "set-stage", "record-merge"]
+        "commands": [
+            "audit",
+            "heal",
+            "validate",
+            "reset",
+            "transition",
+            "set-stage",
+            "record-merge",
+            "backfill-specs",
+        ]
     },
     "aet.cli.backlog": {"commands": ["add"]},
     "aet.cli.configure_backend": {"callback": True},

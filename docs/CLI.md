@@ -35,6 +35,7 @@ Queue mutations and stage transitions.
 ### Subcommands
 
 - `audit`: Reconcile stored state against git without mutating.
+- `backfill-specs`: Backfill the portable plan spec into records that predate R-19.
 - `heal`: Reconcile stored state against git and apply safe fixes.
 - `record-merge`: Resolve and record the merge commit for a task.
 - `reset`: Recompute a task from git and blockers, reset to ready/blocked, clear stale runtime fields.
@@ -80,6 +81,17 @@ Recompute a task from git and blockers, reset to ready/blocked, clear stale runt
 - `task_id` *str* — Task ID. (required)
 - `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
 - `--apply` *boolean* — Apply the reset; otherwise dry-run. (default: `False`)
+- `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
+
+## `aet state backfill-specs`
+
+Backfill the portable plan spec into records that predate R-19.
+
+### Options
+
+- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `--rev` *str* — Git revision that still carries the plan files. (default: `b95538dd~1`)
+- `--apply` *boolean* — Write the recovered specs; otherwise dry-run. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
 ## `aet state transition`

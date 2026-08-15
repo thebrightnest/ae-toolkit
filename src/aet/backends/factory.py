@@ -54,7 +54,7 @@ class LegacyConfigError(ValueError):
 INTEGRATION_MODES = frozenset({"pr-per-task", "single-pr"})
 
 
-def _queue_repo_root(queue_file: str) -> str | None:
+def queue_repo_root(queue_file: str) -> str | None:
     """Return the git work-tree root containing ``queue_file``, or ``None``.
 
     Discovery starts at the queue file's own location rather than the process
@@ -93,7 +93,7 @@ def create_backend(
     ``github`` or ``both`` are rejected with :class:`UnknownBackendError` and
     must be configured on the orthogonal ``projections`` axis.
     """
-    queue_root = _queue_repo_root(queue_file)
+    queue_root = queue_repo_root(queue_file)
     # Anchor configuration to the repository that holds the queue, not to the
     # process cwd. Both must agree: selecting a backend from repository A and
     # rooting its store in repository B is how a project config in one tree

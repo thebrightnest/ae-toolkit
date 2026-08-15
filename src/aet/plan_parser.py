@@ -15,18 +15,25 @@ from aet.queue import append_history  # noqa: E402
 _SCALAR_SPECIAL_RE = re.compile(r"[:>#`|%@!&*{}[\],]")
 
 
-def _frontmatter_body(path: Path) -> str | None:
-    """Return the raw text between the leading ``---`` fences, or None.
+def _frontmatter_body_from_text(content: str) -> str | None:
+    """Return the raw text between the leading ``---`` fences of *content*, or None.
 
-    Returns None when the file has no frontmatter or the fence is unclosed.
+    Returns None when the text has no frontmatter or the fence is unclosed.
     """
-    content = path.read_text(errors="ignore")
     if not content.startswith("---"):
         return None
     parts = content.split("---", 2)
     if len(parts) < 3:
         return None
     return parts[1]
+
+
+def _frontmatter_body(path: Path) -> str | None:
+    """Return the raw text between the leading ``---`` fences, or None.
+
+    Returns None when the file has no frontmatter or the fence is unclosed.
+    """
+    return _frontmatter_body_from_text(path.read_text(errors="ignore"))
 
 
 def _yaml_scalar_needs_quoting(value: str) -> bool:
@@ -99,16 +106,16 @@ def _normalize_frontmatter_body(body: str) -> str:
     return "\n".join(lines)
 
 
-def parse_frontmatter(path: Path) -> dict[str, Any]:
-    """Parse the YAML frontmatter of a plan file using PyYAML.
+def parse_frontmatter_text(content: str) -> dict[str, Any]:
+    """Parse the YAML frontmatter of plan *content* using PyYAML.
 
-    Returns an empty dict when the file has no frontmatter, the fence is
+    Returns an empty dict when the text has no frontmatter, the fence is
     unclosed, the YAML is malformed, or the top-level value is not a mapping.
 
     The ``blocked_by`` key is defaulted to an empty list when absent so the
     rest of the intake contract can rely on its presence.
     """
-    body = _frontmatter_body(path)
+    body = _frontmatter_body_from_text(content)
     if body is None:
         return {}
 
@@ -128,6 +135,11 @@ def parse_frontmatter(path: Path) -> dict[str, Any]:
         data["blocked_by"] = []
 
     return data
+
+
+def parse_frontmatter(path: Path) -> dict[str, Any]:
+    """Parse the YAML frontmatter of a plan file using PyYAML."""
+    return parse_frontmatter_text(path.read_text(errors="ignore"))
 
 
 def title_from_plan(path: Path) -> str:
@@ -251,23 +263,19 @@ _CARRIED_FM_KEYS = (
 )
 
 
-def _extract_body_and_title(path: Path) -> tuple[str | None, str]:
-    """Return ``(body, title)`` from a plan file, or ``(None, stem)`` on error.
+def _extract_body_and_title_from_text(content: str, stem: str) -> tuple[str, str]:
+    """Return ``(body, title)`` from plan *content*.
 
     The body is everything between the closing frontmatter fence and the final
-    stage/footer separator (if any).  The title is taken from the first H1.
+    stage/footer separator (if any).  The title is taken from the first H1, and
+    falls back to *stem* when the plan has no heading.
     """
-    try:
-        content = path.read_text(encoding="utf-8")
-    except OSError:
-        return None, path.stem
-
     if content.startswith("---"):
         parts = content.split("---", 2)
         if len(parts) >= 3:
             content = parts[2]
 
-    title = path.stem
+    title = stem
     title_match = re.search(r"^#\s+(.+)$", content, re.M)
     if title_match:
         title = title_match.group(1).strip()
@@ -277,6 +285,15 @@ def _extract_body_and_title(path: Path) -> tuple[str | None, str]:
     # Also drop the title line itself from the body; render re-adds it.
     body = re.sub(r"^#\s+.+\n?", "", body, count=1, flags=re.M)
     return body.strip(), title
+
+
+def _extract_body_and_title(path: Path) -> tuple[str | None, str]:
+    """Return ``(body, title)`` from a plan file, or ``(None, stem)`` on error."""
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return None, path.stem
+    return _extract_body_and_title_from_text(content, path.stem)
 
 
 def _extract_task_items(body: str) -> list[str]:
@@ -299,28 +316,22 @@ def _extract_task_items(body: str) -> list[str]:
     return items
 
 
-def extract_plan_spec(path: Path, data: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    """Build the portable spec for a task record from a plan file.
+def extract_plan_spec_from_text(
+    content: str, stem: str, data: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Build the portable spec for a task record from plan *content*.
 
     The spec carries the frontmatter keys required for routing, the plan title,
     the task list, and the rest of the body so the working plan can be rendered
     in a worktree that never had the original file (R-19).
 
-    Returns ``None`` when the file cannot be read.
+    This is the text-level entry point: the backfill migration recovers plans
+    from git blobs, which never touch the filesystem.
     """
-    if not path.exists():
-        return None
-    try:
-        path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-
     if data is None:
-        data = parse_frontmatter(path)
+        data = parse_frontmatter_text(content)
 
-    body, title = _extract_body_and_title(path)
-    if body is None:
-        return None
+    body, title = _extract_body_and_title_from_text(content, stem)
 
     frontmatter = {k: data[k] for k in _CARRIED_FM_KEYS if k in data}
     spec: dict[str, Any] = {
@@ -330,6 +341,21 @@ def extract_plan_spec(path: Path, data: dict[str, Any] | None = None) -> dict[st
         "tasks": _extract_task_items(body),
     }
     return spec
+
+
+def extract_plan_spec(path: Path, data: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """Build the portable spec for a task record from a plan file.
+
+    Returns ``None`` when the file cannot be read.
+    """
+    if not path.exists():
+        return None
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    return extract_plan_spec_from_text(content, path.stem, data)
 
 
 def render_plan(path: Path, task: dict[str, Any]) -> bool:
