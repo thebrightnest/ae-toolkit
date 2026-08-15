@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from aet.queue import acquire_lease
+
 _AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
 _state_spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
@@ -141,6 +143,45 @@ class TestBackfillSpecsCommand:
         assert rc == 0
         assert "nothing to backfill" in capsys.readouterr().out
         assert _queue(repo) == before
+
+    def test_apply_refused_while_another_run_holds_the_lease(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ):
+        """The migration mutates the board, so it obeys the run lease.
+
+        A batch that is mid-flight owns the queue; backfilling underneath it
+        would write over state the running orchestrator is about to save.
+        """
+        monkeypatch.delenv("AET_RUN_ID", raising=False)
+        queue_path = repo / ".agents" / "work-queue.json"
+        acquire_lease(str(queue_path), "foreign-run")
+
+        rc = aet_state.main(
+            ["backfill-specs", ".agents/work-queue.json", "--rev", "HEAD~1", "--apply"]
+        )
+
+        assert rc == 1
+        assert "foreign-run" in capsys.readouterr().err
+        assert all("spec" not in task for task in _queue(repo))
+
+    def test_force_overrides_a_held_lease(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.delenv("AET_RUN_ID", raising=False)
+        queue_path = repo / ".agents" / "work-queue.json"
+        acquire_lease(str(queue_path), "foreign-run")
+
+        rc = aet_state.main([
+            "backfill-specs",
+            ".agents/work-queue.json",
+            "--rev",
+            "HEAD~1",
+            "--apply",
+            "--force",
+        ])
+
+        assert rc == 0
+        assert all(isinstance(task["spec"], dict) for task in _queue(repo))
 
     def test_unrecoverable_record_is_named_and_the_rest_still_land(
         self, repo: Path, capsys
