@@ -402,3 +402,50 @@ def test_seal_deletes_task_ref_on_remote(repo: Path) -> None:
         check=True,
     )
     assert result.stdout.strip() == ""
+
+
+def test_sealed_task_does_not_return_after_a_fetch(repo: Path) -> None:
+    """The end-to-end property: a sealed task stays off the board.
+
+    The sibling tests assert the remote ref is gone after the push. This asserts
+    what the operator actually experiences, which is one step further: because
+    ``fetch`` uses ``+refs/aet/*``, a remote ref that outlived the seal was
+    copied back over the deleted local one and the merged task reappeared as
+    live work. Asserting the remote alone would still pass if the push deleted
+    the ref and something later restored it.
+    """
+    origin = repo.parent / "origin-fetch"
+    origin.mkdir(parents=True, exist_ok=True)
+    _git(origin, "init", "--bare", "-q")
+    _git(repo, "remote", "add", "origin", str(origin))
+
+    backend = _backend(repo)
+    backend.save([_task("stays-sealed"), _task("stays-live")])
+    assert backend.push() is True
+
+    backend.seal("stays-sealed", history_file=str(repo / ".agents" / "work-history.jsonl"))
+    assert backend.push() is True
+
+    backend.fetch()
+    live = {t["id"] for t in backend.load()["queue"]}
+    assert live == {"stays-live"}, "a fetch resurrected the sealed task"
+
+
+def test_seal_without_a_prior_push_does_not_fail_the_push(repo: Path) -> None:
+    """A deletion the remote never saw must not turn closure into an error.
+
+    ``aet ship close`` pushes mandatorily, so a delete refspec naming a ref that
+    was never pushed — a task added and sealed inside one run, or any seal made
+    while offline — would surface as a failed terminal closure rather than a
+    clean one.
+    """
+    origin = repo.parent / "origin-unpushed"
+    origin.mkdir(parents=True, exist_ok=True)
+    _git(origin, "init", "--bare", "-q")
+    _git(repo, "remote", "add", "origin", str(origin))
+
+    backend = _backend(repo)
+    backend.save([_task("never-pushed")])
+    backend.seal("never-pushed", history_file=str(repo / ".agents" / "work-history.jsonl"))
+
+    assert backend.push(mandatory=True) is True
