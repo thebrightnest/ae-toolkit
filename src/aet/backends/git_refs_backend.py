@@ -370,6 +370,7 @@ class GitRefsBackend(TaskBackend):
         ref = TASKS_REF_PREFIX + task_id
         self._git("update-ref", "-d", ref).check_returncode()
         self._loaded_shas.pop(task_id, None)
+        self._deleted_refs.add(ref)
 
         # Persist the envelope with the current schema version.
         self._envelope["schema_version"] = ENVELOPE_SCHEMA_VERSION

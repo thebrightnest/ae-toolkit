@@ -371,3 +371,34 @@ def test_push_deletes_sealed_task_refs_on_remote(repo: Path) -> None:
         check=True,
     )
     assert result.stdout.strip() == ""
+
+
+def test_seal_deletes_task_ref_on_remote(repo: Path) -> None:
+    """The seal() path also propagates ref deletions to origin.
+
+    ``backend.seal()`` deletes the local task ref directly (not via save()), so
+    the previous fix's _deleted_refs tracking in save() does not cover it. The
+    seal path must register the ref for deletion explicitly, otherwise a
+    terminal closure leaves the task ref alive on origin just like the original
+    bug.
+    """
+    origin = repo.parent / "origin"
+    origin.mkdir(parents=True, exist_ok=True)
+    _git(origin, "init", "--bare", "-q")
+    _git(repo, "remote", "add", "origin", str(origin))
+
+    backend = _backend(repo)
+    backend.save([_task("sealed")])
+    assert backend.push() is True
+
+    # Terminal closure through seal(), not save(), must delete the remote ref.
+    backend.seal("sealed", history_file=str(repo / ".agents" / "work-history.jsonl"))
+    assert backend.push() is True
+
+    result = subprocess.run(
+        ["git", "-C", str(repo), "ls-remote", "origin", "refs/aet/tasks/sealed"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == ""
