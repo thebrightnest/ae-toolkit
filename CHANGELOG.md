@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.9.0] — 2026-08-15
+
+### Added
+
+- **Plan spec travels in the task record** — `new_task_from_plan` embeds a portable spec (routing frontmatter, title, body, task list) so a plan authored on one machine reaches another through the queue. The orchestrator renders the working plan into the worktree at task start (owb-01).
+- **Register every file AET writes under `.agents/`** — `AET_IGNORED_PATHS` and `AET_TOLERATED_DIRTY_PATHS` now explicitly declare which toolkit-written paths are never-tracked vs. tolerated-dirty, halting adoption projects where an unregistered path breaks base hygiene (sst-01).
+- **Recover missing stage verdicts** — the orchestrator now runs one narrow recovery session when a verdict file is missing, instead of discarding and re-running the entire stage. Invalid and fail verdicts are never retried (orchestrator).
+
+### Changed
+
+- **git-refs is the tracked task backend** — `.agents/aet-config.json` selects `git-refs` by default so the board lives in `refs/aet/*` and travels with the repository instead of a gitignored `work-queue.json` (ADR-055 decision 4).
+- **Config and store anchored to the same repository** — backend creation and config resolution now derive the repository root from the queue file path once, preventing a project config in one tree from governing a store in another.
+
+### Fixed
+
+- **git-refs state replication** — `aet-state transition` now pushes task refs to origin, and both `save()` and `seal()` push explicit deletion refspecs for pruned task refs so sealed tasks do not resurrect as live work on other clones.
+- **Claude transcript reader** — fixed slug generation for `.worktrees/` and dotted usernames, piped test commands, and the real record shape so session logs produce test-run records.
+- **Ledger integrity** — the ledger now verifies content addresses on load and appends events instead of rewriting the file, preventing malformed lines or transient read failures from silently truncating the store.
+- **Orchestrator group prompt** — removed the contradiction between the group preamble (run all stages) and per-stage blocks (run only this stage), which had caused group sessions to stop after stage one.
+- **Verdict submission documentation** — `aet gate submit` builder mode is now single-sourced and documented in `aet-qa`, `aet-review`, `aet-cso`, and `aet-verify` skills, replacing hand-authored `--evidence` JSON.
+
+### Documentation
+
+- Added bug reports for git-refs stale refs and config/store anchoring defects.
+- Added PRDs and plans for the open-work-board and plan-floor-guardrail programmes.
+- Updated `CONTEXT.md` glossary to describe the actual roles of the provenance ledger, execution log, and work queue.
+
+---
+
 ## [1.8.0] — 2026-08-12
 
 ### Added

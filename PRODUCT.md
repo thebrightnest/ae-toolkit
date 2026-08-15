@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.8.0
+## Current Version: 1.9.0
 
-Last updated: 2026-08-12
+Last updated: 2026-08-15
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, detached-only run invocation with bounded completion reports, adapter-resolved supervision defaults, night-shift runtime resilience, configurable branch models including single-PR integration mode, local-only plans that defer durability to the PR, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, and mechanical terminal closure that archives plans automatically.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, detached-only run invocation with bounded completion reports, adapter-resolved supervision defaults, night-shift runtime resilience, configurable branch models including single-PR integration mode, local-only plans that defer durability to the PR, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, mechanical terminal closure that archives plans automatically, portable plan specs carried in the task record, and recovery of missing stage verdicts without re-running the whole stage.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -74,12 +74,21 @@ Carry context and lessons across runs.
 | `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates. |
 | Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, run history, test-run provenance badges, and session-log traceability. |
 | GitHub Issues         | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                                                  |
-| git-refs backend      | `aet-work` task backend that stores queue state in git refs instead of local JSON files; now the default written backend.              |
+| git-refs backend      | `aet-work` task backend that stores queue state in tracked git refs instead of local JSON files; now the default written backend and travels with the repository.              |
 | Git                   | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required.                             |
 
 ---
 
 ## What's New
+
+### What's New in v1.9.0
+
+- **Plans travel with the task record** — start a task on one machine and the full plan spec reaches the worktree on another, without committing live plan files.
+- **git-refs backend is tracked** — queue state lives in `refs/aet/*` by default and moves with the repository, so multi-machine handoffs no longer depend on a gitignored local file.
+- **Sealed tasks stay sealed across clones** — terminal closure now pushes ref deletions to origin, preventing completed tasks from reappearing as live work.
+- **Missing verdict recovery** — if a stage finishes but its verdict file is lost, the orchestrator runs a narrow recovery session instead of replaying the entire stage.
+- **Cleaner Claude telemetry** — session logs from Claude Code now produce accurate test-run records, including piped commands and real transcript shapes.
+- **Safer ledger** — the provenance ledger verifies every line on load and appends instead of rewriting, so a bad line cannot truncate the store.
 
 ### What's New in v1.8.0
 
