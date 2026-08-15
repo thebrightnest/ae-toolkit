@@ -114,6 +114,17 @@ class TestBackfillSpecsCommand:
         assert "dry-run" in out
         assert all("spec" not in task for task in _queue(repo))
 
+    def test_an_unresolvable_revision_is_called_out(self, repo: Path, capsys):
+        """The operator must be told the source is missing, not that the plans are."""
+        rc = aet_state.main(
+            ["backfill-specs", ".agents/work-queue.json", "--rev", "deadbeef~1"]
+        )
+
+        assert rc == 0
+        captured = capsys.readouterr()
+        assert "does not resolve in this clone" in captured.err
+        assert "nothing to backfill" not in captured.out
+
     def test_apply_writes_the_spec_into_every_record(self, repo: Path):
         rc = aet_state.main(
             ["backfill-specs", ".agents/work-queue.json", "--rev", "HEAD~1", "--apply"]

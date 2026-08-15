@@ -8,7 +8,10 @@ not a detail to mock away.
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -171,6 +174,78 @@ class TestBackfillSpecs:
         assert frontmatter["docs_sync"] == "skipped"
         assert frontmatter["pipeline"] == "minimal"
         assert frontmatter["size"] == "S"
+
+
+class TestSourceRevision:
+    """The source revision is an input that can be wrong or simply absent."""
+
+    def test_an_unresolvable_revision_is_named_rather_than_blamed_on_each_record(
+        self, repo: Path
+    ):
+        """A bad --rev must not read as a corpus where every plan is missing.
+
+        A typo, or a shallow clone that does not reach the revision, makes
+        every lookup miss. Reported per record it is indistinguishable from a
+        genuinely unrecoverable plan, and the migration exits having silently
+        done nothing.
+        """
+        queue = [_task("owb-03")]
+
+        result = spec_backfill.backfill_specs(
+            queue, rev="deadbeef~1", repo_root=repo
+        )
+
+        assert result.rev_available is False
+        assert result.filled == []
+        assert "not in this clone" in result.skipped[0][1]
+
+    def test_a_resolvable_revision_reports_itself_as_available(self, repo: Path):
+        result = spec_backfill.backfill_specs([_task("owb-03")], rev="HEAD~1", repo_root=repo)
+
+        assert result.rev_available is True
+
+    def test_a_plan_with_non_ascii_text_recovers_under_a_c_locale(self, repo: Path):
+        """Plans carry em-dashes and status glyphs; CI containers carry no locale.
+
+        Decoding the git blob by the process locale raises UnicodeDecodeError
+        under LC_ALL=C and takes the whole migration down — every record, not
+        just the one being read.
+        """
+        plans = repo / "docs" / "plans"
+        (plans / "owb-20.md").write_text(
+            _plan("owb-20", title="Émoji ⚠️ — dashes"), encoding="utf-8"
+        )
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "add owb-20")
+        (plans / "owb-20.md").unlink()
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "delete owb-20")
+
+        script = (
+            "import json, sys\n"
+            "from aet import spec_backfill\n"
+            "queue = [{'id': 'owb-20', 'plan_file': 'docs/plans/owb-20.md'}]\n"
+            f"r = spec_backfill.backfill_specs(queue, rev='HEAD~1', repo_root={str(repo)!r})\n"
+            "print(json.dumps({'filled': r.filled, 'title': queue[0]['spec']['title']}))\n"
+        )
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env={
+                **os.environ,
+                "LC_ALL": "C",
+                "LANG": "C",
+                "PYTHONUTF8": "0",
+                "PYTHONCOERCECLOCALE": "0",
+            },
+        )
+
+        assert proc.returncode == 0, proc.stderr
+        payload = json.loads(proc.stdout.strip().splitlines()[-1])
+        assert payload["filled"] == ["owb-20"]
+        assert "Émoji" in payload["title"]
 
 
 class TestRecordsMissingSpec:

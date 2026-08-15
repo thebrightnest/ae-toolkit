@@ -31,12 +31,19 @@ def plan_text_at_rev(rev: str, rel_path: str, repo_root: str | Path) -> str | No
 
     A missing blob is an ordinary outcome — a plan added after *rev* is not in
     it — so it returns None rather than raising.
+
+    Decoding is pinned to UTF-8 rather than left to the process locale: plans
+    carry em-dashes and status glyphs, and under a C/POSIX locale (a bare CI
+    container, cron) locale decoding raises and takes the whole migration down
+    with it. ``errors="replace"`` mirrors the tolerance of the on-disk path.
     """
     try:
         result = subprocess.run(
             ["git", "-C", str(repo_root), "show", f"{rev}:{rel_path}"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
     except OSError:
@@ -44,6 +51,24 @@ def plan_text_at_rev(rev: str, rel_path: str, repo_root: str | Path) -> str | No
     if result.returncode != 0:
         return None
     return result.stdout
+
+
+def rev_is_available(rev: str, repo_root: str | Path) -> bool:
+    """Return True when *rev* resolves to a commit in this clone.
+
+    A revision absent from the clone (a typo, or a shallow fetch that does not
+    reach it) makes every lookup miss, which is otherwise indistinguishable
+    from each individual plan being absent from a revision that does exist.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--verify", "-q", f"{rev}^{{commit}}"],
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
 
 
 def _carries_spec(task: dict[str, Any]) -> bool:
@@ -69,12 +94,15 @@ class BackfillResult:
     """What the migration did, per task id.
 
     ``skipped`` carries a reason per task so a record whose plan is nowhere is
-    reported rather than silently passed over.
+    reported rather than silently passed over.  ``rev_available`` records
+    whether the source revision resolved at all, so a bad ``--rev`` is not
+    reported as a corpus in which every plan happens to be missing.
     """
 
     filled: list[str] = field(default_factory=list)
     already: list[str] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)
+    rev_available: bool = True
 
 
 def backfill_specs(
@@ -86,9 +114,15 @@ def backfill_specs(
     from the working tree — a plan added after *rev* exists only on disk.  A
     record whose plan is in neither place is reported as skipped and the
     migration continues.
+
+    An unresolvable *rev* is not fatal — the working tree may still hold every
+    plan — but it is recorded, so the caller can say why the revision produced
+    nothing instead of blaming each record in turn.
     """
     result = BackfillResult()
     root = Path(repo_root)
+    result.rev_available = rev_is_available(rev, root)
+    source = rev if result.rev_available else f"{rev} (not in this clone)"
 
     for task in queue:
         task_id = task.get("id") or "<unknown>"
@@ -106,7 +140,9 @@ def backfill_specs(
                 text = on_disk.read_text(encoding="utf-8", errors="ignore")
 
         if text is None:
-            result.skipped.append((task_id, f"no plan at {rev} or on disk: {rel_path}"))
+            result.skipped.append(
+                (task_id, f"no plan at {source} or on disk: {rel_path}")
+            )
             continue
 
         task["spec"] = plan_parser.extract_plan_spec_from_text(text, Path(rel_path).stem)

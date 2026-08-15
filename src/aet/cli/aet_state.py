@@ -1124,6 +1124,12 @@ def cmd_backfill_specs(args):
 def _report_backfill(result, rev, applied):
     """Print what the backfill did, naming every task it could not recover."""
     prefix = "" if applied else "[dry-run] Would backfill: "
+    if not result.rev_available:
+        print(
+            f"⚠️  Revision {rev} does not resolve in this clone; only plans "
+            "still on disk can be recovered.",
+            file=sys.stderr,
+        )
     if result.filled:
         if applied:
             print(f"Backfilled {len(result.filled)} record(s) from {rev}:")
@@ -1131,8 +1137,16 @@ def _report_backfill(result, rev, applied):
                 print(f"  ✓ {task_id}")
         else:
             print(prefix + ", ".join(result.filled))
+    elif not result.skipped:
+        print(
+            "Spec backfill: nothing to backfill "
+            f"({len(result.already)} already carry a spec)."
+        )
     else:
-        print(f"Spec backfill: nothing to backfill ({len(result.already)} already carry a spec).")
+        print(
+            f"Spec backfill: recovered nothing "
+            f"({len(result.already)} already carry a spec)."
+        )
 
     for task_id, reason in result.skipped:
         print(f"⚠️  Skipped {task_id}: {reason}", file=sys.stderr)
