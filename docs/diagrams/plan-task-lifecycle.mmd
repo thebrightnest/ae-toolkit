@@ -1,0 +1,66 @@
+---
+title: AET Plan-Task Lifecycle (v1.9.0)
+---
+flowchart LR
+    subgraph Authoring [Authoring]
+        A1[Human/Agent writes plan]
+        A2[docs/plans/&lt;id&gt;.md]
+    end
+
+    A1 --> A2
+
+    subgraph Intake [Intake]
+        I1[aet sprint add]
+        I2[Extract portable spec]
+        I3[Create task record]
+    end
+
+    A2 --> I1
+    I1 --> I2
+    I2 --> I3
+
+    subgraph Queue [Live Queue]
+        Q1[refs/aet/tasks/&lt;id&gt;]
+        Q2[Plan file becomes gitignored working copy]
+    end
+
+    I3 --> Q1
+    A2 -.->|transient copy| Q2
+
+    subgraph Run [Run Start]
+        R1[aet run-one]
+        R2[Render plan into worktree]
+        R3[.worktrees/&lt;id&gt;/docs/plans/&lt;id&gt;.md]
+    end
+
+    Q1 --> R1
+    R1 --> R2
+    R2 --> R3
+
+    subgraph Work [Implementation]
+        W1[Agent reads/writes plan]
+        W2[Commits implementation]
+    end
+
+    R3 --> W1
+    W1 --> W2
+
+    subgraph Close [Terminal Closure]
+        C1[aet ship close]
+        C2[Seal task record]
+        C3[Archive plan to docs/plans/archive/]
+        C4[Append to work-history.jsonl]
+    end
+
+    W2 --> C1
+    C1 --> C2
+    C1 --> C3
+    C1 --> C4
+    C2 --> Q1
+
+    style Authoring fill:#e1f5e1
+    style Intake fill:#fff4e1
+    style Queue fill:#e1f0ff
+    style Run fill:#f0e1ff
+    style Work fill:#ffe1e1
+    style Close fill:#e1e1e1
