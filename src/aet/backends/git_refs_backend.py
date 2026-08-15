@@ -90,6 +90,10 @@ class GitRefsBackend(TaskBackend):
         # writers safe.
         self._loaded_shas: dict[str, str] = {}
         self._envelope: dict[str, Any] = {}
+        # Task refs deleted by ``save()`` since the last successful ``push()``.
+        # These must be pushed as deletions explicitly; a wildcard push only
+        # updates refs that still exist locally.
+        self._deleted_refs: set[str] = set()
 
     @staticmethod
     def _discover_repo_root(queue_dir: Path) -> str:
@@ -229,6 +233,7 @@ class GitRefsBackend(TaskBackend):
                 current_sha = self._ref_sha(ref)
                 if current_sha is not None:
                     updates.append(("delete", ref, None, current_sha))
+                    self._deleted_refs.add(ref)
 
         # Persist the envelope with the current schema version.
         self._envelope["schema_version"] = ENVELOPE_SCHEMA_VERSION
@@ -302,16 +307,35 @@ class GitRefsBackend(TaskBackend):
             return True
 
         result = self._git("push", "origin", _AET_PUSH_REFSPEC)
-        if result.returncode == 0:
-            return True
+        if result.returncode != 0:
+            if mandatory:
+                stderr = result.stderr.decode("utf-8", errors="replace").strip()
+                raise self.RefsPushError(
+                    f"Mandatory push of refs/aet/* failed: {stderr}\n"
+                    "Local closure is intact. Re-run `aet ship close` to retry the push."
+                )
+            return False
 
-        if mandatory:
-            stderr = result.stderr.decode("utf-8", errors="replace").strip()
-            raise self.RefsPushError(
-                f"Mandatory push of refs/aet/* failed: {stderr}\n"
-                "Local closure is intact. Re-run `aet ship close` to retry the push."
+        # Push explicit deletions for refs pruned since the last push. A
+        # wildcard push only updates refs that still exist locally, so sealed
+        # task refs would otherwise remain on the remote indefinitely.
+        if self._deleted_refs:
+            delete_refspecs = [f":{ref}" for ref in sorted(self._deleted_refs)]
+            del_result = self._git(
+                "push", "origin", _AET_PUSH_REFSPEC, *delete_refspecs
             )
-        return False
+            if del_result.returncode == 0:
+                self._deleted_refs.clear()
+            elif mandatory:
+                stderr = del_result.stderr.decode("utf-8", errors="replace").strip()
+                raise self.RefsPushError(
+                    f"Mandatory push of deleted refs/aet/* failed: {stderr}\n"
+                    "Local closure is intact. Re-run `aet ship close` to retry the push."
+                )
+            else:
+                return False
+
+        return True
 
     def sync_task(self, task: dict[str, Any], is_new: bool) -> None:
         """No-op: the git-refs backend has no external task mirror."""

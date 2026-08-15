@@ -340,3 +340,34 @@ def test_fetch_reverts_unpushed_local_transition(repo: Path) -> None:
     backend.fetch()
     loaded = backend.load()
     assert _by_id(loaded["queue"])["t1"]["state"] == "ready"
+
+
+def test_push_deletes_sealed_task_refs_on_remote(repo: Path) -> None:
+    """A sealed task's ref is removed from origin, not just locally.
+
+    Bug: ``backend.seal()`` deletes the local ref, but ``push()`` only sent
+    ``refs/aet/*`` for refs that still exist locally. Sealed task refs stayed
+    alive on origin forever, so ``aet status`` on other machines kept showing
+    completed tasks as in_progress/awaiting_merge.
+    """
+    origin = repo.parent / "origin"
+    origin.mkdir(parents=True, exist_ok=True)
+    _git(origin, "init", "--bare", "-q")
+    _git(repo, "remote", "add", "origin", str(origin))
+
+    backend = _backend(repo)
+    backend.save([_task("sealed")])
+    assert backend.push() is True
+
+    # Simulate terminal closure: the task ref is pruned from the live queue.
+    backend.save([])
+    assert backend.push() is True
+
+    # Origin must no longer advertise the sealed task ref.
+    result = subprocess.run(
+        ["git", "-C", str(repo), "ls-remote", "origin", "refs/aet/tasks/sealed"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == ""
