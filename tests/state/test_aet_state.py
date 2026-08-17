@@ -977,18 +977,20 @@ class TestSetStage(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            args = aet_state.argparse.Namespace(
-                command="set-stage",
-                task_id="t1",
-                stage="implemented",
-                queue=str(queue_path),
-                dry_run=False,
-            )
+            ledger_path = queue_path.with_name("ledger.jsonl")
 
-            rc = aet_state.cmd_set_stage(args)
+            with patch.dict("os.environ", {"AET_LEDGER_PATH": str(ledger_path)}):
+                args = aet_state.argparse.Namespace(
+                    command="set-stage",
+                    task_id="t1",
+                    stage="implemented",
+                    queue=str(queue_path),
+                    dry_run=False,
+                )
+
+                rc = aet_state.cmd_set_stage(args)
 
             self.assertEqual(rc, 0)
-            ledger_path = queue_path.with_name("ledger.jsonl")
             self.assertTrue(ledger_path.exists(), "ledger file was not created")
             events = [
                 json.loads(line)
@@ -1490,18 +1492,20 @@ class TestApplyTransitionClosure(unittest.TestCase):
             queue = backend.load()["queue"]
             task = queue[0]
             history_file = str(Path(repo_root) / "work-history.jsonl")
+            ledger_path = Path(repo_root) / ".agents" / "ledger.jsonl"
 
-            aet_state._apply_transition(
-                backend, queue, task, "in_progress", "abandoned",
-                by="test", cwd=repo_root, history_file=history_file,
-            )
+            with patch.dict("os.environ", {"AET_LEDGER_PATH": str(ledger_path)}):
+                aet_state._apply_transition(
+                    backend, queue, task, "in_progress", "abandoned",
+                    by="test", cwd=repo_root, history_file=history_file,
+                )
 
             in_repo_archive = Path(repo_root) / "docs" / "plans" / "archive" / "t1.md"
             self.assertTrue(plan.exists())
             self.assertEqual(plan.read_text(encoding="utf-8"), original_content)
             self.assertFalse(in_repo_archive.exists())
 
-            ledger_path = Path(repo_root) / "ledger.jsonl"
+            ledger_path = Path(repo_root) / ".agents" / "ledger.jsonl"
             event = json.loads(ledger_path.read_text(encoding="utf-8").strip().split("\n")[0])
             self.assertEqual(event["kind"], "land")
             archived_to = event["payload"].get("archived_to")
@@ -1523,21 +1527,23 @@ class TestApplyTransitionClosure(unittest.TestCase):
             task["branch"] = "feat-001"
             task["merge_commit"] = "abc1234"
             history_file = str(Path(repo_root) / "work-history.jsonl")
+            ledger_path = Path(repo_root) / ".agents" / "ledger.jsonl"
 
-            with patch.object(
-                aet_state, "is_ancestor_of_target", return_value=True
-            ):
-                aet_state._apply_transition(
-                    backend, queue, task, "awaiting_merge", "merged",
-                    by="test", cwd=repo_root, history_file=history_file,
-                )
+            with patch.dict("os.environ", {"AET_LEDGER_PATH": str(ledger_path)}):
+                with patch.object(
+                    aet_state, "is_ancestor_of_target", return_value=True
+                ):
+                    aet_state._apply_transition(
+                        backend, queue, task, "awaiting_merge", "merged",
+                        by="test", cwd=repo_root, history_file=history_file,
+                    )
 
             in_repo_archive = Path(repo_root) / "docs" / "plans" / "archive" / "t1.md"
             self.assertTrue(plan.exists())
             self.assertEqual(plan.read_text(encoding="utf-8"), original_content)
             self.assertFalse(in_repo_archive.exists())
 
-            ledger_path = Path(repo_root) / "ledger.jsonl"
+            ledger_path = Path(repo_root) / ".agents" / "ledger.jsonl"
             event = json.loads(ledger_path.read_text(encoding="utf-8").strip().split("\n")[0])
             self.assertEqual(event["kind"], "land")
             archived_to = event["payload"].get("archived_to")
