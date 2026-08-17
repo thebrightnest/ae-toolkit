@@ -27,6 +27,7 @@ from aet.backends.factory import (  # noqa: E402, I001
     queue_repo_root,
     resolve_config,
 )
+from aet.backends.git_refs_backend import GitRefsBackend  # noqa: E402
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 
@@ -1369,6 +1370,77 @@ def cmd_record_merge(args):
     return 0
 
 
+def cmd_reconcile(args):
+    """Report and optionally remove local refs stranded by the pre-tombstone scheme.
+
+    Compares local ``refs/aet/tasks/*`` against ``origin`` using ``ls-remote``
+    (no fetch, no prune). A local task ref with a remote tombstone but no local
+    tombstone is stranded — sealed elsewhere and still visible on this clone.
+    A local task with no origin counterpart and no remote tombstone is a
+    genuinely unpushed local task and is never offered for removal.
+
+    This command only mutates the local clone. It deliberately does not push
+    deletions to origin: cleaning origin from a stale clone is how tasks have
+    been resurrected in the past (R-6, ADR-055).
+    """
+    backend = make_backend(args.queue)
+    if not isinstance(backend, GitRefsBackend):
+        print(
+            "reconcile is only supported for the git-refs backend.",
+            file=sys.stderr,
+        )
+        return 1
+
+    candidates = backend.reconcile_candidates()
+    stranded = candidates["stranded"]
+    unpushed = candidates["unpushed"]
+
+    if not stranded and not unpushed:
+        print("No stranded refs found.")
+        return 0
+
+    if not args.apply:
+        if stranded:
+            print("Stranded refs that would be removed:")
+            for task_id in sorted(stranded):
+                print(
+                    f"  {task_id}: sealed elsewhere (remote tombstone exists)"
+                )
+        if unpushed:
+            print("Unpushed local tasks that would be kept:")
+            for task_id in sorted(unpushed):
+                print(
+                    f"  {task_id}: no origin counterpart and no remote tombstone"
+                )
+        return 0
+
+    if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
+        return 1
+
+    removed: list[str] = []
+    with queue_lib.queue_lock(args.queue):
+        # Re-evaluate under the lock; remote state may have changed.
+        candidates = backend.reconcile_candidates()
+        for task_id in sorted(candidates["stranded"]):
+            if backend.delete_task_ref(task_id):
+                removed.append(task_id)
+
+    if removed:
+        print(f"Removed {len(removed)} stranded ref(s):")
+        for task_id in removed:
+            print(f"  {task_id}")
+    else:
+        print("No stranded refs found.")
+
+    kept = candidates.get("unpushed", set())
+    if kept:
+        print("Kept unpushed local task(s):")
+        for task_id in sorted(kept):
+            print(f"  {task_id}")
+
+    return 0
+
+
 app = typer.Typer()
 
 
@@ -1591,6 +1663,30 @@ def record_merge(
     )
     try:
         rc = cmd_record_merge(args)
+    except _INTEGRITY_ERRORS as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        raise typer.Exit(1)
+    raise typer.Exit(rc)
+
+
+@app.command("reconcile")
+def reconcile(
+    queue: Optional[str] = typer.Argument(
+        ".agents/work-queue.json", help="Path to queue JSON."
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Remove stranded refs; otherwise dry-run."
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Report/remove local refs stranded by the old model. Local-only; never touches origin."""
+    args = argparse.Namespace(queue=queue, apply=apply, force=force)
+    try:
+        rc = cmd_reconcile(args)
     except _INTEGRITY_ERRORS as exc:
         print(f"⛔ {exc}", file=sys.stderr)
         raise typer.Exit(1)

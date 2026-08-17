@@ -37,6 +37,7 @@ Queue mutations and stage transitions.
 - `audit`: Reconcile stored state against git without mutating.
 - `backfill-specs`: Backfill the portable plan spec into records that predate R-19.
 - `heal`: Reconcile stored state against git and apply safe fixes.
+- `reconcile`: Report/remove local refs stranded by the old model. Local-only; never touches origin.
 - `record-merge`: Resolve and record the merge commit for a task.
 - `reset`: Recompute a task from git and blockers, reset to ready/blocked, clear stale runtime fields.
 - `set-stage`: Set the pipeline stage sub-state for an in-progress task.
@@ -133,6 +134,16 @@ Resolve and record the merge commit for a task.
 - `--target-branch` *str* — Branch to verify the merge against. Defaults to the configured integration branch.
 - `--plan` *str* — Deprecated and ignored: plan footer writes were removed (R-4/R-19).
 - `--dry-run` *boolean* — Show changes without applying them. (default: `False`)
+- `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
+
+## `aet state reconcile`
+
+Report/remove local refs stranded by the old model. Local-only; never touches origin.
+
+### Options
+
+- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `--apply` *boolean* — Remove stranded refs; otherwise dry-run. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
 ## `aet backlog`
