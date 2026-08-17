@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from aet import queue, telemetry
 
 
@@ -31,6 +29,7 @@ def test_archive_plan_file_copies_to_plans_archive(monkeypatch, tmp_path):
     archive = tmp_path / "plans-archive"
     monkeypatch.setenv("AET_PLANS_ARCHIVE_DIR", str(archive))
     src = tmp_path / "docs" / "plans" / "relocated.md"
+    src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text("---\nid: relocated\n---\n", encoding="utf-8")
 
     dest = queue.archive_plan_file(src)

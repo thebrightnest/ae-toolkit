@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -590,3 +591,29 @@ def seal_terminal(queue_file: str, history_file: str, task_id: str) -> dict[str,
         append_history_record(history_file, task)
         write_queue(queue_file, live)
     return task
+
+
+def archive_plan_file(
+    plan_file: str | Path,
+    project_slug: str | None = None,
+    repo_root: str | Path | None = None,
+) -> Path | None:
+    """Copy a settled plan file to the machine-local plans archive.
+
+    Returns the archive path when the source exists and was copied, or ``None``
+    when the source is missing. The archive directory is created on demand.
+    The source plan is left untouched in the repository.
+    """
+    from aet import telemetry  # local import avoids a cycle with telemetry
+
+    src = Path(plan_file)
+    if not src.is_absolute() and repo_root is not None:
+        src = Path(repo_root) / src
+    if not src.exists():
+        return None
+
+    dest_dir = telemetry.plans_archive_dir(project_slug)
+    dest = dest_dir / src.name
+    os.makedirs(dest_dir, exist_ok=True)
+    shutil.copy2(src, dest)
+    return dest

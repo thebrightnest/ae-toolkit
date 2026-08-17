@@ -424,6 +424,7 @@ class TestPlanArchiveResolution:
         history = tmp_path / "history.jsonl"
         repo_plan = tmp_path / "docs" / "plans" / "legacy.md"
         archived_plan = plans_archive / "legacy.md"
+        archived_plan.parent.mkdir(parents=True, exist_ok=True)
         archived_plan.write_text(
             "---\nid: legacy\nsize: M\n---\n", encoding="utf-8"
         )

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aet import plan_parser, plan_size, track_record
+from aet import plan_parser, plan_size, telemetry, track_record
 
 
 def _task_settled_at(task: dict[str, Any]) -> str | None:
@@ -23,6 +23,35 @@ def _task_settled_at(task: dict[str, Any]) -> str | None:
 def _parse_date(date_str: str) -> datetime:
     """Parse a ``YYYY-MM-DD`` string as midnight UTC."""
     return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+
+def _resolve_plan_path(
+    plan_file: str | Path,
+    repo_root: str | Path | None = None,
+    plans_archive_dir: str | Path | None = None,
+) -> Path:
+    """Resolve a settled task's plan file from the machine-local archive.
+
+    R-5 requires ``aet metrics`` to read settled-task metadata from the
+    relocated plans archive only. The archive is therefore checked first; the
+    repository path is used only as a fallback when the archive copy is absent
+    (e.g. pre-migration records or tests that have not populated the archive).
+    """
+    path = Path(plan_file)
+    archive_root = Path(plans_archive_dir) if plans_archive_dir else telemetry.plans_archive_dir()
+    archive_path = archive_root / path.name
+    if archive_path.exists():
+        return archive_path
+
+    if path.is_absolute():
+        if path.exists():
+            return path
+        return path
+    if repo_root is not None:
+        repo_path = Path(repo_root) / path
+        if repo_path.exists():
+            return repo_path
+    return path
 
 
 def iter_settled_tasks(
@@ -110,6 +139,7 @@ def _add_task_to_bucket(
     archive_dir: str | Path | None,
     project_slug: str | None,
     reports_dir: str | Path | None,
+    plans_archive_dir: str | Path | None,
 ) -> None:
     """Incorporate one task's contribution into an aggregate bucket."""
     bucket["settled"] += 1
@@ -128,6 +158,7 @@ def _add_task_to_bucket(
         archive_dir=archive_dir,
         project_slug=project_slug,
         reports_dir=reports_dir,
+        plans_archive_dir=plans_archive_dir,
     ):
         bucket["first_pass"] += 1
 
@@ -173,6 +204,7 @@ def aggregate(
     ``history_file``; tasks without a work_class land in ``unclassified``.
     """
     tasks = iter_settled_tasks(history_file, since=since)
+    plans_archive = telemetry.plans_archive_dir(project_slug)
     overall = _empty_bucket()
     classes: dict[str, dict[str, Any]] = {}
 
@@ -185,6 +217,7 @@ def aggregate(
             archive_dir=archive_dir,
             project_slug=project_slug,
             reports_dir=reports_dir,
+            plans_archive_dir=plans_archive,
         )
         _add_task_to_bucket(
             overall,
@@ -192,6 +225,7 @@ def aggregate(
             archive_dir=archive_dir,
             project_slug=project_slug,
             reports_dir=reports_dir,
+            plans_archive_dir=plans_archive,
         )
 
     _finalize_bucket(overall)
@@ -291,13 +325,18 @@ def aggregate_delivered_size(
     }
 
 
-def _declared_size_for_task(task: dict[str, Any], repo_root: str | Path) -> str | None:
+def _declared_size_for_task(
+    task: dict[str, Any],
+    repo_root: str | Path,
+    plans_archive_dir: str | Path | None = None,
+) -> str | None:
     """Read the declared size from a task's plan file, if present."""
     plan_file = task.get("plan_file")
     if not plan_file:
         return None
     try:
-        plan_data = plan_parser.parse_frontmatter(Path(repo_root) / plan_file)
+        plan_path = _resolve_plan_path(plan_file, repo_root, plans_archive_dir)
+        plan_data = plan_parser.parse_frontmatter(plan_path)
     except OSError:
         return None
     size = plan_data.get("size")
@@ -329,6 +368,7 @@ def backfill_delivered_size(
     does not re-attempt it.
     """
     repo_root = Path(repo_root)
+    plans_archive = telemetry.plans_archive_dir()
     tasks = track_record.read_history_tasks(history_file)
     measured = 0
     skipped = 0
@@ -347,13 +387,13 @@ def backfill_delivered_size(
                 "total": None,
                 "status": "failed",
                 "reason": reason,
-                "declared_size": _declared_size_for_task(task, repo_root),
+                "declared_size": _declared_size_for_task(task, repo_root, plans_archive),
             }
             reasons[reason] = reasons.get(reason, 0) + 1
             continue
 
         size_info = plan_size.delivered_size(repo_root, merge_commit)
-        declared_size = _declared_size_for_task(task, repo_root)
+        declared_size = _declared_size_for_task(task, repo_root, plans_archive)
         task["delivered_size"] = {**size_info, "declared_size": declared_size}
         if size_info["status"] == "ok":
             measured += 1

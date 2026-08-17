@@ -160,6 +160,20 @@ def archive_dir() -> Path:
     return Path(env).expanduser() if env else DEFAULT_ARCHIVE_DIR
 
 
+def plans_archive_dir(project_slug: str | None = None) -> Path:
+    """Return the settled-plan archive directory, respecting ``AET_PLANS_ARCHIVE_DIR``.
+
+    Default layout is ``~/.aet/<slug>/plans/archive/`` (ADR-055 decision 4).
+    The environment variable, when set, overrides the full path so tests and
+    operators can relocate the archive without changing project identity.
+    """
+    env = os.environ.get("AET_PLANS_ARCHIVE_DIR")
+    if env:
+        return Path(env).expanduser()
+    slug = project_slug if project_slug else derive_project_slug()
+    return Path.home() / ".aet" / slug / "plans" / "archive"
+
+
 def _sanitize(value: Any, repo_root: Path) -> Any:
     """Recursively replace absolute repo and home paths with placeholders."""
     home = str(Path.home())
