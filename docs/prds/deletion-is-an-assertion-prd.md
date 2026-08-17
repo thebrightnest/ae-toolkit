@@ -160,3 +160,20 @@ absence.
   this incident for hours.
 - **Does the reconcile command (R-6) also clean the remote**, or only the clone
   it runs on? Cleaning the remote from a stale clone is how `sst-01` came back.
+
+## Divergence Summary
+
+_Recorded: 2026-08-17 — Branch: dia-01-tombstones-replace-absence_
+
+### Changed from plan
+
+- **Files modified**: The tombstone logic fit entirely within `src/aet/backends/git_refs_backend.py` and `tests/backends/test_git_refs_sync.py`; the planned edits to `src/aet/backends/base.py` and `tests/backends/test_git_refs_parity.py` were not needed.
+
+### Deferred
+
+- **Merge to main and integration verification**: Remains for the `aet-ship` stage; no merge has been performed yet.
+
+---
+
+*Stage: synced*
+*Next step: run `aet-ship`*
