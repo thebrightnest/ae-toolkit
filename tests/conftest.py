@@ -46,6 +46,16 @@ def _isolate_telemetry_archive(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_plans_archive(monkeypatch, tmp_path):
+    """Point the settled-plan archive at a per-test tmp dir.
+
+    Keeps closure and migration tests from writing into the real
+    ``~/.aet/<slug>/plans/archive/``.
+    """
+    monkeypatch.setenv("AET_PLANS_ARCHIVE_DIR", str(tmp_path / "plans-archive"))
+
+
+@pytest.fixture(autouse=True)
 def _isolate_aet_bin_dir(monkeypatch, tmp_path):
     """Point ``AET_BIN_DIR`` at a per-test tmp dir.
 

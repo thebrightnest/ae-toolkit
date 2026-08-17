@@ -510,13 +510,25 @@ def _apply_transition(
         backend.close_task(task["id"], evidence)
 
         # Record the terminal closure event in the content-addressed ledger.
-        # Plan footer updates and archive moves are no longer part of closure:
-        # the stage lives on the task record, and relocation is owb-03's job
-        # (R-4, R-19).
+        # Plan footer writes are gone (R-4/R-19), but R-5 archives the settled
+        # plan outside the repository so historical metrics keep a readable
+        # plan file without dual-reading the in-repo legacy archive.
+        from aet import telemetry  # local import avoids cycle with telemetry
+
         ledger_path = resolve_ledger_path()
         ledger = Ledger(ledger_path)
         merge_ref = task.get("merge_commit")
-        land_payload = _land_digest(task, archived_to=None)
+        archived_to = None
+        plan_file = task.get("plan_file")
+        if plan_file:
+            archived_to = queue_lib.archive_plan_file(
+                plan_file,
+                telemetry.derive_project_slug(cwd),
+                repo_root=cwd,
+            )
+        land_payload = _land_digest(
+            task, archived_to=str(archived_to) if archived_to else None
+        )
         if merge_ref:
             ledger.write_event(
                 source="aet-state",
@@ -549,8 +561,14 @@ def _land_digest(
     if archived_to is not None:
         digest["archived_to"] = archived_to
     plan_file = task.get("plan_file")
-    if plan_file:
+    # Prefer the archived copy: after R-5 the repo plan may be removed or
+    # absent on the machine that runs the closure.
+    path: Path | None = None
+    if archived_to is not None:
+        path = Path(archived_to)
+    elif plan_file is not None:
         path = Path(plan_file)
+    if path is not None:
         try:
             content = path.read_bytes()
             digest["plan_hash"] = hashlib.sha256(content).hexdigest()

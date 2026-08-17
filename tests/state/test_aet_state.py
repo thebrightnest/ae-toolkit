@@ -976,6 +976,7 @@ class TestSetStage(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+
             ledger_path = queue_path.with_name("ledger.jsonl")
 
             with patch.dict("os.environ", {"AET_LEDGER_PATH": str(ledger_path)}):
@@ -1481,8 +1482,8 @@ class TestApplyTransitionClosure(unittest.TestCase):
         )
         return aet_state.make_backend(str(queue_path))
 
-    def test_abandoned_closure_leaves_plan_in_place(self):
-        """An abandoned transition no longer moves or rewrites the plan (R-4)."""
+    def test_abandoned_closure_archives_plan_outside_repo(self):
+        """An abandoned transition archives the plan to ~/.aet/<slug>/plans/archive/ (R-5)."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo(repo_root)
             plan = self._commit_plan(repo_root, "docs/plans/t1.md")
@@ -1499,17 +1500,22 @@ class TestApplyTransitionClosure(unittest.TestCase):
                     by="test", cwd=repo_root, history_file=history_file,
                 )
 
-            archive = Path(repo_root) / "docs" / "plans" / "archive" / "t1.md"
+            in_repo_archive = Path(repo_root) / "docs" / "plans" / "archive" / "t1.md"
             self.assertTrue(plan.exists())
             self.assertEqual(plan.read_text(encoding="utf-8"), original_content)
-            self.assertFalse(archive.exists())
+            self.assertFalse(in_repo_archive.exists())
 
-            events = json.loads(ledger_path.read_text(encoding="utf-8").strip().split("\n")[0])
-            self.assertEqual(events["kind"], "land")
-            self.assertNotIn("archived_to", events["payload"])
+            ledger_path = Path(repo_root) / ".agents" / "ledger.jsonl"
+            event = json.loads(ledger_path.read_text(encoding="utf-8").strip().split("\n")[0])
+            self.assertEqual(event["kind"], "land")
+            archived_to = event["payload"].get("archived_to")
+            self.assertIsNotNone(archived_to)
+            self.assertFalse(Path(archived_to).is_relative_to(Path(repo_root)))
+            self.assertTrue(Path(archived_to).exists())
+            self.assertEqual(Path(archived_to).name, "t1.md")
 
-    def test_merged_closure_leaves_plan_in_place(self):
-        """A merged transition no longer archives or rewrites the plan (R-4)."""
+    def test_merged_closure_archives_plan_outside_repo(self):
+        """A merged transition archives the plan to ~/.aet/<slug>/plans/archive/ (R-5)."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo(repo_root)
             plan = self._commit_plan(repo_root, "docs/plans/t1.md")
@@ -1532,14 +1538,19 @@ class TestApplyTransitionClosure(unittest.TestCase):
                         by="test", cwd=repo_root, history_file=history_file,
                     )
 
-            archive = Path(repo_root) / "docs" / "plans" / "archive" / "t1.md"
+            in_repo_archive = Path(repo_root) / "docs" / "plans" / "archive" / "t1.md"
             self.assertTrue(plan.exists())
             self.assertEqual(plan.read_text(encoding="utf-8"), original_content)
-            self.assertFalse(archive.exists())
+            self.assertFalse(in_repo_archive.exists())
 
-            events = json.loads(ledger_path.read_text(encoding="utf-8").strip().split("\n")[0])
-            self.assertEqual(events["kind"], "land")
-            self.assertNotIn("archived_to", events["payload"])
+            ledger_path = Path(repo_root) / ".agents" / "ledger.jsonl"
+            event = json.loads(ledger_path.read_text(encoding="utf-8").strip().split("\n")[0])
+            self.assertEqual(event["kind"], "land")
+            archived_to = event["payload"].get("archived_to")
+            self.assertIsNotNone(archived_to)
+            self.assertFalse(Path(archived_to).is_relative_to(Path(repo_root)))
+            self.assertTrue(Path(archived_to).exists())
+            self.assertEqual(Path(archived_to).name, "t1.md")
 
 
 if __name__ == "__main__":

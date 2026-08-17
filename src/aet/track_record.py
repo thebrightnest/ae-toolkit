@@ -151,10 +151,33 @@ def rework_count(
     return _repeated_stage_count(records) + _failed_reentry_count(history)
 
 
+def _resolve_plan_path(
+    plan_file: str | Path,
+    plans_archive_dir: str | Path | None = None,
+) -> Path:
+    """Resolve a task's plan file, preferring the settled-plan archive.
+
+    R-5 archives settled plans outside the repository; consumers that need the
+    plan file for routing must read the archive copy first and only fall back
+    to the repository path when the archive copy is absent.
+    """
+    path = Path(plan_file)
+    archive_root = Path(plans_archive_dir) if plans_archive_dir else telemetry.plans_archive_dir()
+    archive_path = archive_root / path.name
+    if archive_path.exists():
+        return archive_path
+
+    if path.exists():
+        return path
+
+    return path
+
+
 def _required_verdicts_pass(
     task: dict[str, Any],
     project_slug: str | None,
     reports_dir: str | Path | None,
+    plans_archive_dir: str | Path | None = None,
 ) -> bool:
     """Return True when every required verdict file exists and is 'pass'.
 
@@ -170,7 +193,9 @@ def _required_verdicts_pass(
     plan_file = task.get("plan_file")
     if plan_file:
         try:
-            plan_data = plan_parser.parse_frontmatter(Path(plan_file))
+            plan_data = plan_parser.parse_frontmatter(
+                _resolve_plan_path(plan_file, plans_archive_dir)
+            )
             required_kinds = plan_parser.required_verdict_kinds(plan_data)
         except OSError:
             required_kinds = list(REQUIRED_VERDICT_KINDS)
@@ -206,6 +231,7 @@ def is_clean_merge(
     history_file: str | Path | None = None,
     reports_dir: str | Path | None = None,
     project_slug: str | None = None,
+    plans_archive_dir: str | Path | None = None,
 ) -> bool:
     """Return True when ``task`` is a clean merge per the PRD definition.
 
@@ -221,7 +247,10 @@ def is_clean_merge(
         return False
 
     if not _required_verdicts_pass(
-        task=task, project_slug=project_slug, reports_dir=reports_dir
+        task=task,
+        project_slug=project_slug,
+        reports_dir=reports_dir,
+        plans_archive_dir=plans_archive_dir,
     ):
         return False
 
@@ -250,6 +279,7 @@ def count_clean_merges(
     history_file: str | Path | None = None,
     reports_dir: str | Path | None = None,
     project_slug: str | None = None,
+    plans_archive_dir: str | Path | None = None,
 ) -> int:
     """Return the number of clean merges for ``work_class``."""
     tasks = read_history_tasks(history_file) if history_file else []
@@ -263,6 +293,7 @@ def count_clean_merges(
             history_file=None,
             reports_dir=reports_dir,
             project_slug=project_slug,
+            plans_archive_dir=plans_archive_dir,
         ):
             count += 1
     return count
@@ -300,6 +331,7 @@ def class_eligibility(
     history_file: str | Path | None = None,
     reports_dir: str | Path | None = None,
     project_slug: str | None = None,
+    plans_archive_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Return eligibility metadata for a work class."""
     policy = policy if policy is not None else load_policy()
@@ -309,6 +341,7 @@ def class_eligibility(
         history_file=history_file,
         reports_dir=reports_dir,
         project_slug=project_slug,
+        plans_archive_dir=plans_archive_dir,
     )
     enabled = bool(policy.get("enabled_classes", {}).get(work_class))
     threshold = policy.get("thresholds", {}).get(work_class)
@@ -332,6 +365,7 @@ def is_eligible_for_auto_merge(
     history_file: str | Path | None = None,
     reports_dir: str | Path | None = None,
     project_slug: str | None = None,
+    plans_archive_dir: str | Path | None = None,
 ) -> bool:
     """Return True when ``task`` may be auto-merged without human review.
 
@@ -352,6 +386,7 @@ def is_eligible_for_auto_merge(
         history_file=history_file,
         reports_dir=reports_dir,
         project_slug=project_slug,
+        plans_archive_dir=plans_archive_dir,
     )
     return meta["enabled"] and meta["threshold_met"]
 
@@ -436,6 +471,7 @@ def format_eligibility_report(
     history_file: str | Path | None = None,
     reports_dir: str | Path | None = None,
     project_slug: str | None = None,
+    plans_archive_dir: str | Path | None = None,
 ) -> list[str]:
     """Return human-readable eligibility lines for every known work class."""
     policy = policy if policy is not None else load_policy()
@@ -448,6 +484,7 @@ def format_eligibility_report(
             history_file=history_file,
             reports_dir=reports_dir,
             project_slug=project_slug,
+            plans_archive_dir=plans_archive_dir,
         )
         enabled = "yes" if meta["enabled"] else "no"
         threshold = meta["threshold"] if meta["threshold"] is not None else "-"
