@@ -10,7 +10,8 @@ supersedes: [34, 54]
 Accepted (2026-08-09). Voids ADR-034 (Settled-ness Is Derived from Versioned
 Plan Data). Supersedes ADR-054's revision of ADR-034 decision 3 and revises
 ADR-054's durability model for queue and ledger state. Revisits ADR-011's
-rejection of event sourcing. Implements the `single-ledger-closure` PRD
+rejection of event sourcing. Amended by ADR-059 (Absence Is Not a Fact) for
+task deletion semantics. Implements the `single-ledger-closure` PRD
 (`docs/prds/single-ledger-closure-prd.md`).
 
 ## Context

@@ -94,13 +94,13 @@ The project-local configuration layer that overrides the team config for one rep
 
 ## Multi-Machine Operator Posture
 
-Queue state travels with the repository via `refs/aet/*` on origin — `refs/aet/tasks/<id>` per task plus the `refs/aet/meta/queue` envelope. The **Provenance Ledger** and the **Execution Log** do **not** travel: both are gitignored working-tree files with no transport. A fresh clone must fetch the queue explicitly:
+Queue state travels with the repository via `refs/aet/*` on origin — `refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, plus the `refs/aet/meta/queue` envelope. A task leaves the board by assertion (the tombstone), not by absence; `load()` treats a tombstoned task as no longer live and reaps the local task ref as housekeeping (ADR-059). The **Provenance Ledger** and the **Execution Log** do **not** travel: both are gitignored working-tree files with no transport. A fresh clone must fetch the queue explicitly:
 
 ```bash
 git fetch origin 'refs/aet/*:refs/aet/*'
 ```
 
-`~/.aet` stays machine-local: it holds config, telemetry, and reports, and is never pushed. Offline work is safe; mutation pushes are best-effort everywhere except closure, where a failed push fails the closure loudly (ADR-055).
+`~/.aet` stays machine-local: it holds config, telemetry, and reports, and is never pushed. Offline work is safe; mutation pushes are best-effort everywhere except closure, where a failed push fails the closure loudly (ADR-055). `git fetch --prune` is unsafe for `refs/aet/*`: a local-only task is indistinguishable from a deleted-upstream task, so pruning destroys work that has not yet pushed (ADR-059).
 
 ## Forward-Only State Model (ADR-011, revised by ADR-013)
 
