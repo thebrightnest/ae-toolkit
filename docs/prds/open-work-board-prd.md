@@ -220,6 +220,24 @@ All five planned tasks landed. The divergences are in where the code went and in
 
 - **Merge verification** (`git merge-base --is-ancestor HEAD origin/main`) — owned by the `aet-ship` stage and completed when that stage runs.
 
+## Divergence Summary — owb-08-single-source-ledger-path
+
+*Recorded: 2026-08-17 — Branch: owb-08-single-source-ledger-path*
+
+All four planned tasks landed. The divergences are in test scope and line-number references.
+
+### Changed from plan
+
+- **Task 2 — line-number references**: the plan named `sprint.py:149`, `aet_state.py:584`, `aet_state.py:735`, `gate.py:369`, and `ship.py:860`. The actual edits shifted because of intervening import changes; the five writers converted are the same five sites, now at `sprint.py:145`, `aet_state.py:513/631`, `gate.py:364`, and `ship.py:857`.
+
+### Added (unplanned)
+
+- **`tests/gate/test_gate_submit.py` and `tests/state/test_aet_state.py` updated to set `AET_LEDGER_PATH`**: the new resolver no longer computes the ledger from `$AET_REPO_ROOT`, so existing gate and state tests that asserted on the ledger file needed an explicit `AET_LEDGER_PATH` override to keep their fixture isolation.
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
 ---
 
 *Stage: synced*
