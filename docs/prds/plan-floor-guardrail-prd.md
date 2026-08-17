@@ -38,11 +38,11 @@ The floor's cost unit is also obsolete. It weighs "branch, worktree, and review 
 
 ## Acceptance Criteria
 
-- [ ] The floor section states signals with thresholds and a two-of-N trigger (satisfies: R-1)
-- [ ] The floor's cost unit is stage sessions, citing ADR-045 §4 (satisfies: R-2)
-- [ ] The template's Floor Check no longer requires all boxes false to merge (satisfies: R-3)
-- [ ] The lint flags the three consolidated splits from the `owb-*` set, and does not flag `owb-03`, `owb-08` or `owb-13` (satisfies: R-4)
-- [ ] The diff threshold is recorded with the measurement it came from (satisfies: R-5)
+- [x] The floor section states signals with thresholds and a two-of-N trigger (satisfies: R-1)
+- [x] The floor's cost unit is stage sessions, citing ADR-045 §4 (satisfies: R-2)
+- [x] The template's Floor Check no longer requires all boxes false to merge (satisfies: R-3)
+- [x] The lint flags the three consolidated splits from the `owb-*` set, and does not flag `owb-03`, `owb-08` or `owb-13` (satisfies: R-4)
+- [x] The diff threshold is recorded with the measurement it came from (satisfies: R-5)
 
 ## Technical Notes
 
@@ -59,6 +59,6 @@ ADR-046 is the model for R-5: measure, publish the correlation, and set or retir
 
 ---
 
-*Stage: scope-validated*
+*Stage: synced*
 
-*Next step: plans are plan-approved; run aet sprint add*
+*Next step: run `aet-ship`*
