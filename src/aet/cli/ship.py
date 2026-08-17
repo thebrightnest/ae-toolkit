@@ -44,7 +44,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_parser  # noqa: E402
 from aet.backends.factory import resolve_config  # noqa: E402
 from aet.branch_ref import resolve_trunk_branch  # noqa: E402
-from aet.ledger import Ledger  # noqa: E402
+from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 
 # Load aet-state as a module so we can reuse its merge-resolution and
 # queue-mutation logic rather than duplicating it.
@@ -857,7 +857,7 @@ def cmd_open(args: argparse.Namespace) -> int:
             "and update the base before merging."
         )
         if pr_url:
-            Ledger().write_event(
+            Ledger(resolve_ledger_path()).write_event(
                 source="aet-ship",
                 task=plan_id,
                 kind="cut",

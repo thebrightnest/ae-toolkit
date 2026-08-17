@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -140,13 +141,56 @@ def _scan(path: Path) -> tuple[dict[str, dict[str, Any]], list[str]]:
     return events, problems
 
 
+def _resolve_ledger_repo_root() -> Path:
+    """Resolve the repo root from git or cwd, ignoring ``$AET_REPO_ROOT``.
+
+    The ledger is local to the checkout the command runs in.  ``AET_REPO_ROOT``
+    is reserved for the orchestrator's batch-launch context and points at the
+    primary worktree; using it here would make worktree writers publish to the
+    main ledger instead of their own (the split-brain this resolver fixes).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip()).resolve()
+    except FileNotFoundError:
+        pass
+    return Path.cwd().resolve()
+
+
+def resolve_ledger_path(path: str | Path | None = None) -> Path:
+    """Resolve the canonical ledger path with env override.
+
+    1. ``path`` argument if supplied.
+    2. ``$AET_LEDGER_PATH`` — explicit override for single-store sessions.
+    3. Default: ``<repo-root>/.agents/ledger.jsonl`` via git discovery.
+
+    Writers and readers must share this single derivation; hand-computing the
+    ledger location from the queue file or working directory is out of contract
+    (ADR-023 analogue for the provenance ledger).
+    """
+    if path is not None:
+        return Path(path).expanduser()
+
+    env_path = os.environ.get("AET_LEDGER_PATH")
+    if env_path:
+        return Path(env_path).expanduser()
+
+    return _resolve_ledger_repo_root() / ".agents" / "ledger.jsonl"
+
+
 def verify(path: str | Path | None = None) -> list[str]:
     """Return every integrity problem in the ledger at ``path`` (empty when clean).
 
     The diagnostic counterpart to loading: it enumerates all problems instead
     of raising on the first, so a repair tool can show the whole picture.
     """
-    target = Path(path) if path else Path(".agents/ledger.jsonl")
+    target = resolve_ledger_path(path)
     _, problems = _scan(target)
     return problems
 
@@ -155,14 +199,14 @@ class Ledger:
     """Append-only, idempotent content-addressed event store."""
 
     def __init__(self, path: str | Path | None = None) -> None:
-        """Initialize the ledger at ``path`` (default: ``.agents/ledger.jsonl``).
+        """Initialize the ledger at ``path`` (default: resolved repo ledger).
 
         Raises:
             LedgerCorruptionError: When the existing file fails verification.
                 Construction is where corruption surfaces, so no caller can
                 hold a Ledger whose index is quietly incomplete.
         """
-        self.path = Path(path) if path else Path(".agents/ledger.jsonl")
+        self.path = resolve_ledger_path(path)
         self._lock = FileLock(str(self.path) + ".lock")
         self._events: dict[str, dict[str, Any]] = {}
         self._load()

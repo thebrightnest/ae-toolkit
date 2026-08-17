@@ -150,7 +150,7 @@ is the shipped default**, unprotected by the hygiene gate.
 *Fix applied (venv):* added `.agents/ledger.jsonl` and its `.lock` to
 `AET_IGNORED_PATHS`. Justified by ADR-055 decisions 1–3 — the store is append-only,
 content-addressed and commutative, so a pending append is never a reason to refuse to
-start. Verified against this repo's exact case (` M .agents/ledger.jsonl` now passes).
+start. Verified against this repo's exact case (`M .agents/ledger.jsonl` now passes).
 
 *Still open in this repo:* `.agents/learnings.jsonl` is the same class — tracked,
 tooling-written, not allow-listed — so it will halt future runs until committed.

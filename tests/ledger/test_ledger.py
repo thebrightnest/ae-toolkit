@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from aet.ledger import Ledger, LedgerCorruptionError, verify
+from aet.ledger import Ledger, LedgerCorruptionError, resolve_ledger_path, verify
 
 
 def _ledger(tmp_path: Path) -> Ledger:
@@ -342,3 +343,46 @@ def test_verify_is_empty_for_a_clean_ledger(tmp_path: Path) -> None:
 
 def test_verify_is_empty_for_a_missing_ledger(tmp_path: Path) -> None:
     assert verify(tmp_path / "absent.jsonl") == []
+
+
+# --- Path resolution: one canonical ledger location per repo ---
+
+
+def test_resolve_ledger_path_defaults_to_repo_root(monkeypatch, tmp_path: Path) -> None:
+    """With no env overrides, the ledger resolves to repo-root/.agents/ledger.jsonl."""
+    monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
+    monkeypatch.delenv("AET_REPO_ROOT", raising=False)
+
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    repo_root = Path(result.stdout.strip())
+
+    assert resolve_ledger_path() == repo_root / ".agents" / "ledger.jsonl"
+
+
+def test_resolve_ledger_path_ignores_aet_repo_root(monkeypatch, tmp_path: Path) -> None:
+    """AET_REPO_ROOT must not redirect the ledger to another checkout."""
+    monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
+    monkeypatch.setenv("AET_REPO_ROOT", str(tmp_path))
+
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    repo_root = Path(result.stdout.strip())
+
+    assert resolve_ledger_path() == repo_root / ".agents" / "ledger.jsonl"
+
+
+def test_resolve_ledger_path_respects_aet_ledger_path(monkeypatch, tmp_path: Path) -> None:
+    """AET_LEDGER_PATH wins over repo-root derivation."""
+    custom = tmp_path / "custom-ledger.jsonl"
+    monkeypatch.setenv("AET_LEDGER_PATH", str(custom))
+
+    assert resolve_ledger_path() == custom
