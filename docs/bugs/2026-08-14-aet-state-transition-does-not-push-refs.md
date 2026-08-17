@@ -126,3 +126,23 @@ namespace (ADR-055).
 - `src/aet/backends/git_refs_backend.py:40` — force fetch spec
 - `src/aet/cli/orchestrator.py:2876` — batch path calls `aet-state transition`
 - `src/aet/cli/orchestrator.py:3066` — run-one path calls `aet-state transition`
+
+## Resolution
+
+The immediate fix (`cmd_transition` calls `backend.push()` with a forced refspec)
+landed in the commits above. The deeper cause — encoding "not live" as the
+absence of a ref — is a modelling error, not a delivery bug, and produced the
+sequence of fixes this report belongs to.
+
+ADR-059 (`docs/adr/059-absence-is-not-a-fact.md`) records the principle:
+**absence is not a fact; a task leaves the board by assertion.** Sealing now
+writes a per-task tombstone at `refs/aet/sealed/<id>`; `load()` treats the
+assertion as ground truth and reaps the local task ref as housekeeping. The
+landed `_deleted_refs` push is demoted from a correctness mechanism to
+housekeeping: it still bounds remote ref growth, but clones converge by reading
+tombstones, not by receiving deletions.
+
+`git fetch --prune` was considered and rejected: a local-only task and a
+deleted-upstream task are indistinguishable to git, so pruning destroys
+offline-created work. The reproduction is preserved in ADR-059 so the option is
+not re-litigated.
