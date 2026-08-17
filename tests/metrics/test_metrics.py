@@ -29,10 +29,10 @@ def _write_telemetry(
             f.write(json.dumps(record) + "\n")
 
 
-def _write_verdicts(reports: Path, project_slug: str, task_id: str) -> None:
+def _write_verdicts(reports: Path, project_slug: str, task_id: str, kinds: tuple[str, ...] | None = None) -> None:
     task_dir = reports / project_slug / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
-    for kind in ("qa", "review", "cso", "sync-docs"):
+    for kind in kinds or ("qa", "review", "cso", "sync-docs"):
         (task_dir / f"{kind}.json").write_text(json.dumps({"verdict": "pass"}), encoding="utf-8")
 
 
@@ -357,3 +357,102 @@ class TestAggregate:
 
         assert set(result["classes"].keys()) == {"normal", "weird"}
         assert result["classes"]["weird"]["merged"] == 1
+
+
+class TestPlanArchiveResolution:
+    """Settled plans live outside the repo; metrics must still find them."""
+
+    def test_aggregate_resolves_archived_plan_for_verdict_kinds(
+        self, tmp_path, monkeypatch
+    ):
+        """When the repo plan is gone, metrics reads required verdict kinds from the archive."""
+        archive = tmp_path / "telemetry"
+        reports = tmp_path / "reports"
+        project = "test/project"
+        history = tmp_path / "history.jsonl"
+        plans_archive = tmp_path / "plans-archive"
+        monkeypatch.setenv("AET_PLANS_ARCHIVE_DIR", str(plans_archive))
+
+        repo_plan = tmp_path / "docs" / "plans" / "archived-task.md"
+        archived_plan = plans_archive / "archived-task.md"
+        archived_plan.parent.mkdir(parents=True, exist_ok=True)
+        archived_plan.write_text(
+            "---\n"
+            "id: archived-task\n"
+            "security_review: skipped\n"
+            "security_review_reason: legacy\n"
+            "---\n",
+            encoding="utf-8",
+        )
+
+        _write_verdicts(reports, project, "archived-task", ("qa", "review", "sync-docs"))
+        _write_telemetry(
+            archive,
+            project,
+            "archived-task",
+            [{"type": "stage", "stage": "implement", "token_count": 10, "cost_estimate": 0.1}],
+        )
+        _write_history(
+            history,
+            [
+                {
+                    "id": "archived-task",
+                    "state": "merged",
+                    "work_class": "normal",
+                    "settled_at": "2026-07-15T00:00:00Z",
+                    "plan_file": str(repo_plan),
+                }
+            ],
+        )
+
+        result = metrics.aggregate(
+            str(history),
+            archive_dir=str(archive),
+            project_slug=project,
+            reports_dir=str(reports),
+        )
+
+        assert result["overall"]["merged"] == 1
+        assert result["overall"]["first_pass"] == 1
+
+    def test_backfill_delivered_size_uses_archived_plan_declared_size(
+        self, tmp_path, monkeypatch
+    ):
+        """When the repo plan is gone, backfill reads declared size from the archive."""
+        plans_archive = tmp_path / "plans-archive"
+        monkeypatch.setenv("AET_PLANS_ARCHIVE_DIR", str(plans_archive))
+        history = tmp_path / "history.jsonl"
+        repo_plan = tmp_path / "docs" / "plans" / "legacy.md"
+        archived_plan = plans_archive / "legacy.md"
+        archived_plan.write_text(
+            "---\nid: legacy\nsize: M\n---\n", encoding="utf-8"
+        )
+
+        _write_history(
+            history,
+            [
+                {
+                    "id": "legacy",
+                    "state": "merged",
+                    "merge_commit": "abc1234",
+                    "settled_at": "2026-07-15T00:00:00Z",
+                    "plan_file": str(repo_plan),
+                }
+            ],
+        )
+
+        monkeypatch.setattr(
+            metrics.plan_size,
+            "delivered_size",
+            lambda _root, _commit: {
+                "status": "ok",
+                "headline": 10,
+                "total": 12,
+            },
+        )
+
+        result = metrics.backfill_delivered_size(history, repo_root=tmp_path)
+
+        assert result["measured"] == 1
+        tasks = metrics.track_record.read_history_tasks(history)
+        assert tasks[0]["delivered_size"]["declared_size"] == "M"
