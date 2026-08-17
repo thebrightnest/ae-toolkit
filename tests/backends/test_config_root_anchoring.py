@@ -18,8 +18,8 @@ import pytest
 
 from aet.backends.factory import (
     QueueOutsideRepositoryError,
-    _queue_repo_root,
     create_backend,
+    queue_repo_root,
 )
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.backends.json_backend import JsonBackend
@@ -99,7 +99,7 @@ def test_root_discovery_invokes_no_git_subprocess(tmp_path, monkeypatch):
         return real_run(cmd, *args, **kwargs)
 
     monkeypatch.setattr(subprocess, "run", recording_run)
-    assert _queue_repo_root(str(queue)) == str(repo)
+    assert queue_repo_root(str(queue)) == str(repo)
     assert not [c for c in calls if c and c[0] == "git"], (
         f"root discovery shelled out to git: {calls}"
     )
@@ -110,11 +110,11 @@ def test_root_discovery_walks_up_from_a_missing_directory(tmp_path):
     repo = _repo(tmp_path / "repo")
     queue = repo / "not" / "created" / "yet" / "q.json"
 
-    assert _queue_repo_root(str(queue)) == str(repo)
+    assert queue_repo_root(str(queue)) == str(repo)
 
 
 def test_root_discovery_returns_none_outside_a_repository(tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
 
-    assert _queue_repo_root(str(outside / "q.json")) is None
+    assert queue_repo_root(str(outside / "q.json")) is None

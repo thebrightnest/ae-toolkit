@@ -196,6 +196,30 @@ This repository has no `.agents/aet-config.json`, so it is local by this rule �
 
 - **Untracked live-plan count**: the branch removed 66 tracked `docs/plans/*.md` files, not the 53 counted at planning time, because more live plans had accumulated in the interim. The implementation untracked every tracked live plan so `.gitignore:24` now holds.
 
+## Divergence Summary — owb-15-backfill-task-record-specs
+
+*Recorded: 2026-08-15 — Branch: owb-15-backfill-task-record-specs*
+
+All five planned tasks landed. The divergences are in where the code went and in what the migration had to tolerate.
+
+### Changed from plan
+
+- **Task 1 — where the migration lives**: the plan named `src/aet/backends/git_refs_backend.py` as a file to modify. It was not touched. Recovery reads plan blobs directly with `git show <rev>:<path>` and writes through the existing `backend.save()` / `backend.push()`, so the backend needed no change; the migration is a new module, `src/aet/spec_backfill.py`, with `aet state backfill-specs` as its entry point in `src/aet/cli/aet_state.py`. `src/aet/backends/factory.py` was modified instead — `_queue_repo_root` became public as `queue_repo_root` — so the migration anchors the repository root exactly as the backend does rather than deriving it a second way (the fault recorded in the 2026-08-14 config-anchoring learning).
+- **Task 1 — `plan_parser.py` change is a split, not new parsing**: the migration reads git blobs that never touch the filesystem, so `parse_frontmatter`, `_extract_body_and_title` and `extract_plan_spec` each gained a text-level counterpart (`*_from_text`) and the path-based functions became thin wrappers over them. Extraction behaviour is unchanged and existing callers are untouched.
+
+### Added (unplanned)
+
+- **`--rev` with a resolvability check**: the source revision is an option defaulting to `b95538dd~1`, and `rev_is_available` verifies it resolves in this clone. Without the check, a typo or a shallow fetch is indistinguishable from a revision in which every plan happens to be absent, and the migration would blame each record in turn.
+- **UTF-8 pinned on blob decoding**: `git show` output is decoded as UTF-8 with `errors="replace"` rather than by the process locale. Plans carry em-dashes and status glyphs; under a C/POSIX locale (bare container, cron) locale decoding raises and takes the whole migration down.
+- **Working-tree fallback**: a record whose plan is absent from `--rev` is resolved from the working tree before being skipped, because a plan authored after that revision exists only on disk.
+- **Dry-run by default**: the command previews without `--apply`, matching the `aet state reset` convention. The plan assumed a single write path.
+- **Run-lease refusal and `--force`**: the write path goes through `queue_lib.lease_guard` and the queue lock, and re-loads under the lock, so the migration cannot mutate the board under a live run. Covered by `tests/state/test_spec_backfill_cli.py`.
+- **`docs/CLI.md` regenerated** for the new subcommand, and `tests/cli/test_build_parsers.py` extended so the command roster stays asserted.
+
+### Deferred
+
+- **Merge verification** (`git merge-base --is-ancestor HEAD origin/main`) — owned by the `aet-ship` stage and completed when that stage runs.
+
 ---
 
 *Stage: synced*

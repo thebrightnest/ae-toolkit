@@ -75,6 +75,7 @@ Do **not** write an ADR for:
 - [054 — Plan Documents Are Outside the Durability Gate](054-plan-documents-are-outside-the-durability-gate.md)
 - [056 — ADR Relations Are Declared in ADR Frontmatter](056-adr-relations-as-frontmatter.md)
 - [057 — Boundary-Contract Lens Rides the Review Verdict in Code](057-boundary-contract-lens-in-code.md)
+- [058 — A Migration Populates Its Target Before It Removes Its Source](058-migration-populates-before-it-removes.md)
 
 ## Format
 

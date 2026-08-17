@@ -21,7 +21,12 @@ from typing import Any, Optional
 import typer
 
 from aet import queue as queue_lib  # noqa: E402
-from aet.backends.factory import create_backend, resolve_config  # noqa: E402, I001
+from aet import spec_backfill  # noqa: E402
+from aet.backends.factory import (  # noqa: E402, I001
+    create_backend,
+    queue_repo_root,
+    resolve_config,
+)
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
 from aet.ledger import Ledger  # noqa: E402
 
@@ -1072,6 +1077,87 @@ def cmd_reset(args):
     return 0
 
 
+def cmd_backfill_specs(args):
+    """Backfill the portable plan spec into records that predate R-19.
+
+    Records created before R-19 carry only ``plan_file``, and the plan files
+    were deleted in the commit that introduced the spec. This recovers each
+    record's plan from ``--rev`` in git — reproducible in any clone — and
+    writes it through the backend so the board keeps a single writer.
+
+    A record whose plan is in neither the revision nor the working tree is
+    named and skipped; the migration completes for every record it can fill.
+    """
+    backend = make_backend(args.queue)
+    backend.fetch()
+    data = backend.load(verify=False)
+    queue = data["queue"]
+
+    repo_root = queue_repo_root(args.queue) or os.path.dirname(
+        os.path.abspath(args.queue)
+    )
+
+    if not args.apply:
+        preview = json.loads(json.dumps(queue))
+        result = spec_backfill.backfill_specs(
+            preview, rev=args.rev, repo_root=repo_root
+        )
+        _report_backfill(result, args.rev, applied=False)
+        return 0
+
+    if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
+        return 1
+
+    with queue_lib.queue_lock(args.queue):
+        # Re-load under the lock in case another process changed the queue.
+        data = backend.load(verify=False)
+        queue = data["queue"]
+        result = spec_backfill.backfill_specs(queue, rev=args.rev, repo_root=repo_root)
+        if result.filled:
+            backend.save(queue)
+            backend.push()
+
+    _report_backfill(result, args.rev, applied=True)
+    return 0
+
+
+def _report_backfill(result, rev, applied):
+    """Print what the backfill did, naming every task it could not recover."""
+    prefix = "" if applied else "[dry-run] Would backfill: "
+    if not result.rev_available:
+        print(
+            f"⚠️  Revision {rev} does not resolve in this clone; only plans "
+            "still on disk can be recovered.",
+            file=sys.stderr,
+        )
+    if result.filled:
+        if applied:
+            print(f"Backfilled {len(result.filled)} record(s) from {rev}:")
+            for task_id in result.filled:
+                print(f"  ✓ {task_id}")
+        else:
+            print(prefix + ", ".join(result.filled))
+    elif not result.skipped:
+        print(
+            "Spec backfill: nothing to backfill "
+            f"({len(result.already)} already carry a spec)."
+        )
+    else:
+        print(
+            f"Spec backfill: recovered nothing "
+            f"({len(result.already)} already carry a spec)."
+        )
+
+    for task_id, reason in result.skipped:
+        print(f"⚠️  Skipped {task_id}: {reason}", file=sys.stderr)
+    if result.skipped:
+        print(
+            f"⚠️  {len(result.skipped)} record(s) have no recoverable plan; "
+            "they still carry no spec.",
+            file=sys.stderr,
+        )
+
+
 def cmd_transition(args):
     backend = make_backend(args.queue)
     backend.fetch()
@@ -1340,6 +1426,35 @@ def reset(
     )
     try:
         rc = cmd_reset(args)
+    except _INTEGRITY_ERRORS as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        raise typer.Exit(1)
+    raise typer.Exit(rc)
+
+
+@app.command("backfill-specs")
+def backfill_specs(
+    queue: Optional[str] = typer.Argument(
+        ".agents/work-queue.json", help="Path to queue JSON."
+    ),
+    rev: str = typer.Option(
+        spec_backfill.DEFAULT_SOURCE_REV,
+        "--rev",
+        help="Git revision that still carries the plan files.",
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Write the recovered specs; otherwise dry-run."
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Backfill the portable plan spec into records that predate R-19."""
+    args = argparse.Namespace(queue=queue, rev=rev, apply=apply, force=force)
+    try:
+        rc = cmd_backfill_specs(args)
     except _INTEGRITY_ERRORS as exc:
         print(f"⛔ {exc}", file=sys.stderr)
         raise typer.Exit(1)
