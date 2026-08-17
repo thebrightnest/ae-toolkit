@@ -28,7 +28,7 @@ from aet.backends.factory import (  # noqa: E402, I001
     resolve_config,
 )
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
-from aet.ledger import Ledger  # noqa: E402
+from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 
 _INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
 
@@ -513,7 +513,7 @@ def _apply_transition(
         # Plan footer updates and archive moves are no longer part of closure:
         # the stage lives on the task record, and relocation is owb-03's job
         # (R-4, R-19).
-        ledger_path = Path(backend.queue_file).resolve().parent / "ledger.jsonl"
+        ledger_path = resolve_ledger_path()
         ledger = Ledger(ledger_path)
         merge_ref = task.get("merge_commit")
         land_payload = _land_digest(task, archived_to=None)
@@ -631,7 +631,7 @@ def cmd_set_stage(args):
 
     print(f"Set stage for {args.task_id}: {args.stage}")
 
-    ledger_path = Path(backend.queue_file).resolve().parent / "ledger.jsonl"
+    ledger_path = resolve_ledger_path()
     ledger = Ledger(ledger_path)
     occurred_at = datetime.now(timezone.utc).isoformat()
     ledger.write_event(

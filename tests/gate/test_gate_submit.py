@@ -399,6 +399,7 @@ class TestGateSubmitBuilder(unittest.TestCase):
                 "AET_EVIDENCE_PATH": str(dest),
                 "AET_TASK_ID": "twe-03",
                 "AET_REPO_ROOT": str(tmp),
+                "AET_LEDGER_PATH": str(agents_dir / "ledger.jsonl"),
             }
             with patch.dict(os.environ, env, clear=True):
                 rc, _out, err = self._run(
@@ -491,6 +492,8 @@ class TestBoundaryLens(unittest.TestCase):
     def test_review_pass_accepted_when_agreement_test_exists_in_builder_mode(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
+            agents_dir = tmp / ".agents"
+            agents_dir.mkdir()
             dest = tmp / "review.json"
             clear = self._clear_result()
             identity_clear = IdentityResult(
@@ -506,7 +509,12 @@ class TestBoundaryLens(unittest.TestCase):
                 gate.identity, "check", return_value=identity_clear
             ), patch.dict(
                 os.environ,
-                {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-08", "AET_REPO_ROOT": str(tmp)},
+                {
+                    "AET_EVIDENCE_PATH": str(dest),
+                    "AET_TASK_ID": "t2r-08",
+                    "AET_REPO_ROOT": str(tmp),
+                    "AET_LEDGER_PATH": str(agents_dir / "ledger.jsonl"),
+                },
                 clear=True,
             ):
                 rc, _out, err = self._run(
@@ -618,7 +626,12 @@ class TestBoundaryLens(unittest.TestCase):
                 gate.identity, "check", return_value=identity_clear
             ), patch.dict(
                 os.environ,
-                {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-08", "AET_REPO_ROOT": str(tmp)},
+                {
+                    "AET_EVIDENCE_PATH": str(dest),
+                    "AET_TASK_ID": "t2r-08",
+                    "AET_REPO_ROOT": str(tmp),
+                    "AET_LEDGER_PATH": str(agents_dir / "ledger.jsonl"),
+                },
                 clear=True,
             ):
                 rc, _out, err = self._run(
@@ -804,7 +817,12 @@ class TestIdentityLens(unittest.TestCase):
                 )
             ), patch.object(gate.identity, "check", return_value=clear), patch.dict(
                 os.environ,
-                {"AET_EVIDENCE_PATH": str(dest), "AET_TASK_ID": "t2r-09", "AET_REPO_ROOT": str(tmp)},
+                {
+                    "AET_EVIDENCE_PATH": str(dest),
+                    "AET_TASK_ID": "t2r-09",
+                    "AET_REPO_ROOT": str(tmp),
+                    "AET_LEDGER_PATH": str(agents_dir / "ledger.jsonl"),
+                },
                 clear=True,
             ):
                 rc, _out, err = self._run(

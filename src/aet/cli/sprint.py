@@ -19,7 +19,7 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend, resolve_config  # noqa: E402
-from aet.ledger import Ledger  # noqa: E402
+from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 from aet.plan_parser import (  # noqa: E402
     new_task_from_plan,
     resolve_plan_arg,
@@ -145,7 +145,7 @@ def _add(args: argparse.Namespace) -> int:
     backend.push()
 
     # Record the intake event in the content-addressed ledger.
-    ledger_path = Path(args.queue_file).resolve().parent / "ledger.jsonl"
+    ledger_path = resolve_ledger_path()
     ledger = Ledger(ledger_path)
     plan_hash = hashlib.sha256(plan_file.read_bytes()).hexdigest()
     ledger.write_event(

@@ -30,7 +30,7 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import boundary, change_scope, evidence, identity, telemetry  # noqa: E402
 from aet.backends.factory import create_backend  # noqa: E402
-from aet.ledger import Ledger  # noqa: E402
+from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 from aet.plan_parser import stage_from_plan, title_from_plan  # noqa: E402
 from aet.workflow import Workflow, WorkflowError, load_workflow  # noqa: E402
 
@@ -364,8 +364,7 @@ def _submit(args: argparse.Namespace) -> int:
 
     # Record the verdict event in the content-addressed ledger.
     try:
-        repo_root = telemetry.resolve_repo_root()
-        ledger_path = repo_root / ".agents" / "ledger.jsonl"
+        ledger_path = resolve_ledger_path()
         ledger = Ledger(ledger_path)
         ledger_payload: dict[str, Any] = {"stage": stage, "verdict": record["verdict"]}
         if boundary_lens_payload is not None:
