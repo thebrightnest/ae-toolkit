@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import importlib.machinery
 import importlib.util
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -19,6 +20,7 @@ import pytest
 
 from aet.backends.git_refs_backend import (
     ENVELOPE_REF,
+    SEALED_REF_PREFIX,
     GitRefsBackend,
 )
 from aet.backends.json_backend import JsonBackend
@@ -449,3 +451,174 @@ def test_seal_without_a_prior_push_does_not_fail_the_push(repo: Path) -> None:
     backend.seal("never-pushed", history_file=str(repo / ".agents" / "work-history.jsonl"))
 
     assert backend.push(mandatory=True) is True
+
+
+def test_seal_writes_tombstone_ref(repo: Path) -> None:
+    """Sealing a task writes a per-task tombstone ref in the same transaction."""
+    backend = _backend(repo)
+    backend.save([_task("sealed")])
+
+    backend.seal("sealed", history_file=str(repo / ".agents" / "work-history.jsonl"))
+
+    tombstone_ref = SEALED_REF_PREFIX + "sealed"
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--verify", "-q", tombstone_ref],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, "tombstone ref was not created"
+    task_ref = "refs/aet/tasks/sealed"
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--verify", "-q", task_ref],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0, "task ref should have been removed by seal"
+
+
+def test_load_reaps_tombstoned_task(repo: Path) -> None:
+    """A task with a tombstone is not live, and its local task ref is reaped."""
+    backend = _backend(repo)
+    backend.save([_task("live"), _task("sealed")])
+
+    # Simulate a tombstone arriving from another clone (or a prior seal).
+    tombstone_ref = SEALED_REF_PREFIX + "sealed"
+    tombstone_sha = subprocess.run(
+        ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
+        input=json.dumps(_task("sealed"), sort_keys=True),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "update-ref", tombstone_ref, tombstone_sha],
+        check=True,
+    )
+
+    loaded = backend.load()
+    live_ids = {t["id"] for t in loaded["queue"]}
+    assert live_ids == {"live"}, "tombstoned task should not appear in live queue"
+
+    task_ref = "refs/aet/tasks/sealed"
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--verify", "-q", task_ref],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0, "local task ref should have been reaped by load"
+
+
+def test_fetch_does_not_prune_unpushed_local_task(repo: Path) -> None:
+    """A local-only task survives fetch; fetch never prunes the board."""
+    origin = repo.parent / "origin-no-prune"
+    origin.mkdir(parents=True, exist_ok=True)
+    _git(origin, "init", "--bare", "-q")
+    _git(repo, "remote", "add", "origin", str(origin))
+
+    backend = _backend(repo)
+    backend.save([_task("pushed")])
+    assert backend.push() is True
+
+    backend.save([_task("pushed"), _task("local-only")])
+    # Deliberately do not push the second task.
+
+    backend.fetch()
+    loaded = backend.load()
+    live_ids = {t["id"] for t in loaded["queue"]}
+    assert "local-only" in live_ids, "fetch pruned a task the remote never saw"
+
+
+def test_fetch_with_no_remote_leaves_local_board_unchanged(repo: Path) -> None:
+    """With pushing disabled (no remote), a fetch is a no-op and the board survives."""
+    backend = _backend(repo)
+    backend.save([_task("offline")])
+
+    backend.fetch()
+    loaded = backend.load()
+    live_ids = {t["id"] for t in loaded["queue"]}
+    assert live_ids == {"offline"}
+
+
+def test_unknown_tombstone_loads_cleanly(repo: Path) -> None:
+    """A tombstone for a task this clone has never seen must not error."""
+    backend = _backend(repo)
+    backend.save([_task("known")])
+
+    tombstone_ref = SEALED_REF_PREFIX + "unknown"
+    tombstone_sha = subprocess.run(
+        ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
+        input=json.dumps({"id": "unknown", "state": "sealed"}, sort_keys=True),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "update-ref", tombstone_ref, tombstone_sha],
+        check=True,
+    )
+
+    loaded = backend.load()
+    live_ids = {t["id"] for t in loaded["queue"]}
+    assert live_ids == {"known"}, "unknown tombstone should not affect live queue"
+
+
+def test_two_clones_seal_different_tasks_converge(repo: Path) -> None:
+    """Two offline seals of different tasks merge without conflict after push."""
+    origin = repo.parent / "origin-converge"
+    origin.mkdir(parents=True, exist_ok=True)
+    _git(origin, "init", "--bare", "-q")
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "origin", "HEAD:main")
+
+    clone1 = repo.parent / "converge-clone1"
+    clone2 = repo.parent / "converge-clone2"
+    _git(clone1.parent, "clone", "-q", str(origin), str(clone1))
+    _git(clone2.parent, "clone", "-q", str(origin), str(clone2))
+
+    for c in (clone1, clone2):
+        _git(c, "config", "user.email", "test@example.com")
+        _git(c, "config", "user.name", "Test User")
+        (c / ".agents").mkdir(parents=True, exist_ok=True)
+
+    b1 = GitRefsBackend(
+        queue_file=str(clone1 / ".agents" / "work-queue.json"),
+        history_file=str(clone1 / ".agents" / "work-history.jsonl"),
+    )
+    b2 = GitRefsBackend(
+        queue_file=str(clone2 / ".agents" / "work-queue.json"),
+        history_file=str(clone2 / ".agents" / "work-history.jsonl"),
+    )
+
+    # Both clones start with the same two live tasks.
+    b1.save([_task("task-a"), _task("task-b")])
+    assert b1.push() is True
+    b2.fetch()
+    assert {t["id"] for t in b2.load()["queue"]} == {"task-a", "task-b"}
+
+    # Each clone seals a different task while offline.
+    b1.seal("task-a", history_file=str(clone1 / ".agents" / "work-history.jsonl"))
+    b2.seal("task-b", history_file=str(clone2 / ".agents" / "work-history.jsonl"))
+
+    # Both pushes propagate; the tombstones and deletions are commutative.
+    assert b1.push() is True
+    assert b2.push() is True
+
+    b1.fetch()
+    b2.fetch()
+    live1 = {t["id"] for t in b1.load()["queue"]}
+    live2 = {t["id"] for t in b2.load()["queue"]}
+    assert live1 == set(), "clone1 should see both tasks sealed"
+    assert live2 == set(), "clone2 should see both tasks sealed"
+
+    # Neither sealed task resurrected on either clone.
+    for c in (clone1, clone2):
+        result = subprocess.run(
+            ["git", "-C", str(c), "for-each-ref", "--format=%(refname)", "refs/aet/tasks/"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.stdout.strip() == "", "a sealed task ref was still present"

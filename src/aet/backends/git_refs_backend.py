@@ -32,6 +32,7 @@ from aet.backends.base import TaskBackend
 from aet.queue import read_history
 
 TASKS_REF_PREFIX = "refs/aet/tasks/"
+SEALED_REF_PREFIX = "refs/aet/sealed/"
 ENVELOPE_REF = "refs/aet/meta/queue"
 ENVELOPE_SCHEMA_VERSION = 1
 
@@ -151,6 +152,13 @@ class GitRefsBackend(TaskBackend):
         result.check_returncode()
         return [line for line in result.stdout.decode().splitlines() if line]
 
+    def _list_sealed_refs(self) -> list[str]:
+        result = self._git(
+            "for-each-ref", "--format=%(refname)", SEALED_REF_PREFIX
+        )
+        result.check_returncode()
+        return [line for line in result.stdout.decode().splitlines() if line]
+
     def _history_path(self) -> str:
         path = Path(self.history_file)
         if path.is_absolute():
@@ -178,14 +186,29 @@ class GitRefsBackend(TaskBackend):
         ``verify`` is retained for interface compatibility but is ignored: the
         git-refs backend no longer enforces a chained content hash (ADR-055).
         The live refs are read as ground truth.
+
+        Any task ref that has a corresponding ``refs/aet/sealed/<id>`` tombstone
+        is treated as no longer live. The local task ref is reaped as
+        housekeeping so a clone converges by reading, without requiring the
+        deletion to have been delivered.
         """
         queue: list[dict[str, Any]] = []
         loaded_shas: dict[str, str] = {}
+        sealed_ids = {
+            ref[len(SEALED_REF_PREFIX) :]
+            for ref in self._list_sealed_refs()
+        }
         for ref in self._list_task_refs():
             sha = self._ref_sha(ref)
             if sha is None:
                 continue
             task_id = ref[len(TASKS_REF_PREFIX) :]
+            if task_id in sealed_ids:
+                # Tombstone wins: reap the stale local task ref as housekeeping.
+                # Failures are ignored because this is a read-path cleanup.
+                self._git("update-ref", "-d", ref)
+                self._loaded_shas.pop(task_id, None)
+                continue
             try:
                 task = json.loads(self._read_blob(sha))
             except (json.JSONDecodeError, subprocess.CalledProcessError):
@@ -351,6 +374,12 @@ class GitRefsBackend(TaskBackend):
         promoted here; ``aet-state`` advances the forward frontier before
         sealing.
 
+        A per-task tombstone ref ``refs/aet/sealed/<id>`` is written in the
+        same atomic transaction as the task ref deletion so the two cannot
+        diverge. The tombstone replicates by fetch/push and lets other clones
+        converge by reading, without depending on the deletion being delivered
+        (ADR-055).
+
         Like the default file-based ``seal``, this does not re-acquire the queue
         lock: ``aet-state`` already holds it, and a nested lock from the
         re-imported ``queue`` module would self-deadlock (see ``base.py``).
@@ -367,10 +396,23 @@ class GitRefsBackend(TaskBackend):
                 f"Task {task_id} not found in live queue {self.queue_file}"
             )
 
-        ref = TASKS_REF_PREFIX + task_id
-        self._git("update-ref", "-d", ref).check_returncode()
+        task_ref = TASKS_REF_PREFIX + task_id
+        sealed_ref = SEALED_REF_PREFIX + task_id
+        tombstone_sha = self._write_blob(_canonical_json(task))
+        current_task_sha = self._ref_sha(task_ref) or _NULL_OID
+        current_sealed_sha = self._ref_sha(sealed_ref) or _NULL_OID
+
+        stdin = (
+            f"delete {task_ref} {current_task_sha}\n"
+            f"update {sealed_ref} {tombstone_sha} {current_sealed_sha}\n"
+        ).encode("utf-8")
+        result = self._git("update-ref", "--stdin", input=stdin)
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(f"atomic seal update failed: {stderr}")
+
         self._loaded_shas.pop(task_id, None)
-        self._deleted_refs.add(ref)
+        self._deleted_refs.add(task_ref)
 
         # Persist the envelope with the current schema version.
         self._envelope["schema_version"] = ENVELOPE_SCHEMA_VERSION
