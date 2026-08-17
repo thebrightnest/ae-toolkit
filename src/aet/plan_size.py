@@ -20,6 +20,14 @@ PLANNING_ARTIFACT_PATHS: tuple[str, ...] = (
     "reports/",
 )
 
+# Calibrated floor diff threshold in headline lines. Measured on this repo's
+# settled S tasks via ``delivered_size``, the smallest non-zero delivered
+# headline diff was 45 lines (median 262, range 0-465). The threshold is
+# rounded to the nearest 10 from that observed minimum; plans expected to
+# deliver at or below this level should be scrutinized as floor candidates.
+# See ``docs/CONVENTIONS.md`` "Task Size Guardrails" for the full model.
+FLOOR_DIFF_THRESHOLD = 50
+
 
 def _run_git(
     *args: str, cwd: str | Path | None = None

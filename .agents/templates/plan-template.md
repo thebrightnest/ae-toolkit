@@ -76,13 +76,14 @@ If a task exceeds two or more of the skill-level checks (> 600 expected diff lin
 
 ### Floor Check
 
-Before finalizing this plan, confirm it should not be merged with a sibling plan:
+Before finalizing this plan, confirm it should not be merged with a sibling plan. A plan is a floor candidate when **two or more** of the following signals are true. One checked box is a prompt to justify the shape in writing; two or more means merge unless you can explain why not.
 
-- [ ] This stands alone as an independently shippable, reviewable behaviour change.
-- [ ] The expected diff materially exceeds branch/PR/review overhead.
-- [ ] The work cannot share a branch/PR with related tasks.
+- [ ] Expected diff is below the calibrated floor threshold (≤ 50 headline lines; see `docs/CONVENTIONS.md`).
+- [ ] The change is limited to one subsystem and maintains no architectural invariant.
+- [ ] `Files to Modify` substantially overlaps a sibling this plan is linearly ordered against (`blocked_by` that sibling, or blocked by it transitively).
+- [ ] This is docs-only and its sole consumer is a single sibling.
 
-If all boxes are unchecked, merge this work into a sibling plan instead. This check is advisory — it prompts a written justification, it does not block at scope validation.
+If two or more boxes are checked, merge this work into a sibling plan instead. This check is advisory — it prompts a written justification, it does not block at scope validation.
 
 ## Rejected Alternatives
 
