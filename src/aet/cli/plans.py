@@ -54,10 +54,20 @@ def cmd_lint(args: argparse.Namespace) -> int:
         return 0
 
     violations = plans_lint.lint_corpus(plans_dir)
+    warnings = plans_lint.lint_floor(plans_dir)
+
+    if warnings:
+        for plan, message in warnings:
+            print(f"{plan.name}: {message}")
+
     if violations:
         for plan, message in violations:
             print(f"{plan.name}: {message}", file=sys.stderr)
         return 1
+
+    if warnings:
+        print(f"✓ all {len(plan_files)} plans passed lint with {len(warnings)} floor warning(s)")
+        return 0
 
     print(f"✓ all {len(plan_files)} plans passed lint")
     return 0

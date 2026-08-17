@@ -338,7 +338,21 @@ When a task exceeds two or more signals from the model:
 
 ### Floor Test
 
-The opposite mistake is also possible: splitting a coherent feature into plans that are each too small to justify their own branch, worktree, and review overhead. Before creating a new plan, confirm in writing that it stands alone as an independently shippable, reviewable behaviour change and that its diff materially exceeds the branch/PR/review overhead. If it does not, merge it with a sibling plan instead. This check is advisory — it prompts a written justification, it does not block at scope validation.
+The opposite mistake is also possible: splitting a coherent feature into plans that are each too small to justify their own per-task pipeline. A plan/task is a candidate for merging with a sibling when **two or more** of the following signals are true. One tripped signal is a prompt to justify the shape in writing, not an order to merge.
+
+1. **Expected diff below the calibrated floor threshold** (skill-level guidance):
+   - Task: expected diff ≤ 50 headline lines.
+   - _Basis:_ measured across 7 settled `S` tasks in this repo via `plan_size.delivered_size`, the smallest non-zero delivered headline diff was 45 lines (median 262, range 0–465). The threshold is rounded to the nearest 10 from that observed minimum, not guessed as half the `S` ceiling. See ADR-046 for the measurement model.
+2. **Subsystem coherence** (skill-level guidance):
+   - Touches files in exactly one implementation subsystem and maintains no architectural invariant.
+3. **Files to Modify overlap with a linearly-ordered sibling** (reported by `aet plans lint`):
+   - More than 50% of the smaller plan's `Files to Modify` set overlaps with a sibling it is linearly ordered against (`blocked_by` that sibling, or blocked by it transitively).
+4. **Docs-only with a single sibling as its sole consumer** (reported by `aet plans lint`):
+   - Every file in `Files to Modify` is under `docs/`, and exactly one sibling lists this plan in its `blocked_by`.
+
+The cost unit is **per-task stage sessions**, not branch/PR/review overhead. Under ADR-045 §4, per-task branches are ephemeral and local in `single-pr` mode, and there is one PR per epic. What remains is the per-task stage pipeline — each task runs its own worktree seed plus `tdd`/`implement`/`qa`/`review`/`cso`/`sync-docs` sessions with verdicts — and telemetry already records `token_count` and `cost_estimate` for each stage.
+
+When two or more signals are true, merge the work into a sibling plan instead and record the rationale. This check is advisory — it prompts a written justification, it does not block at scope validation.
 
 ## Recorded-Forward Work Queue State
 
