@@ -30,6 +30,7 @@ _MODULES = {
             "set-stage",
             "record-merge",
             "backfill-specs",
+            "reconcile",
         ]
     },
     "aet.cli.backlog": {"commands": ["add"]},

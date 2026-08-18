@@ -69,6 +69,12 @@ writers generate an irreconcilable conflict by construction.
    engine feature. State failing to travel between machines is a
    correctness bug and in scope; two machines racing for one plan is a
    scheduling decision the operator makes, and stays out.
+7. **Reconciling a clone stranded by the old model is local-only.**
+   The `aet state reconcile` command compares local `refs/aet/tasks/*`
+   against origin with `ls-remote` (no fetch, no prune), lists refs that
+   are stranded because a remote tombstone exists, and removes them only
+   when asked. It never pushes deletions to origin: cleaning origin from a
+   stale clone is how tasks have been resurrected in the past (R-6).
 
 This revisits ADR-011's rejection of event sourcing as "heavier than
 needed." That was true when the alternative was one `state` field; it is no

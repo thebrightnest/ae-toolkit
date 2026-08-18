@@ -360,6 +360,85 @@ class GitRefsBackend(TaskBackend):
 
         return True
 
+    def _list_remote_refs(self) -> dict[str, str] | None:
+        """Return ``refname -> sha`` for ``refs/aet/*`` advertised by origin.
+
+        Returns ``None`` when the repository has no remote configured (there is
+        nothing to reconcile against). A transient ``ls-remote`` failure returns
+        an empty dict so the command stays safe to run offline.
+        """
+        if not _has_remote(self.repo_root):
+            return None
+        result = self._git("ls-remote", "origin", "refs/aet/*")
+        if result.returncode != 0:
+            return {}
+        refs: dict[str, str] = {}
+        for line in result.stdout.decode("utf-8", errors="replace").splitlines():
+            parts = line.strip().split("\t")
+            if len(parts) == 2:
+                refs[parts[1]] = parts[0]
+        return refs
+
+    def reconcile_candidates(self) -> dict[str, set[str]]:
+        """Classify local task refs against origin without fetching.
+
+        Returns ``{"stranded": set(), "unpushed": set()}`` where:
+
+        * ``stranded`` — local task ref exists, no local tombstone, and a remote
+          tombstone exists (the task was sealed elsewhere).
+        * ``unpushed`` — local task ref exists, no local tombstone, and origin
+          has neither a task ref nor a tombstone (a genuinely local task).
+
+        Local refs that already have a local tombstone are ignored: ``load()``
+        will reap them on the next read.
+        """
+        local_tasks = {
+            ref[len(TASKS_REF_PREFIX) :]
+            for ref in self._list_task_refs()
+        }
+        local_sealed = {
+            ref[len(SEALED_REF_PREFIX) :]
+            for ref in self._list_sealed_refs()
+        }
+        remote = self._list_remote_refs()
+        if remote is None:
+            return {"stranded": set(), "unpushed": set()}
+
+        remote_tasks = {
+            ref[len(TASKS_REF_PREFIX) :]
+            for ref in remote
+            if ref.startswith(TASKS_REF_PREFIX)
+        }
+        remote_sealed = {
+            ref[len(SEALED_REF_PREFIX) :]
+            for ref in remote
+            if ref.startswith(SEALED_REF_PREFIX)
+        }
+
+        candidates: dict[str, set[str]] = {"stranded": set(), "unpushed": set()}
+        for task_id in local_tasks:
+            if task_id in local_sealed:
+                continue
+            if task_id in remote_sealed:
+                candidates["stranded"].add(task_id)
+            elif task_id not in remote_tasks:
+                candidates["unpushed"].add(task_id)
+        return candidates
+
+    def delete_task_ref(self, task_id: str) -> bool:
+        """Delete a single local ``refs/aet/tasks/<task_id>`` ref.
+
+        Returns ``True`` when the ref existed and was deleted, ``False`` when it
+        was already absent. This is a local housekeeping operation; it does not
+        touch origin.
+        """
+        ref = TASKS_REF_PREFIX + task_id
+        if self._ref_sha(ref) is None:
+            return False
+        self._git("update-ref", "-d", ref).check_returncode()
+        self._loaded_shas.pop(task_id, None)
+        return True
+
     def sync_task(self, task: dict[str, Any], is_new: bool) -> None:
         """No-op: the git-refs backend has no external task mirror."""
         return
