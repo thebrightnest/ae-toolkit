@@ -163,7 +163,7 @@ absence.
 
 ## Divergence Summary
 
-_Recorded: 2026-08-17 — Branch: dia-01-tombstones-replace-absence_
+*Recorded: 2026-08-17 — Branch: dia-01-tombstones-replace-absence*
 
 ### Changed from plan
 
