@@ -107,3 +107,31 @@ def _isolate_aet_repo_root(monkeypatch):
     developer's in-tree config.
     """
     monkeypatch.delenv("AET_REPO_ROOT", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_remote(monkeypatch):
+    """Never let a test reach the real repository's remote.
+
+    Tests that run backend code under ``patch.dict(os.environ, ..., clear=True)``
+    resolve this checkout — the queue path is relative, so it anchors on the
+    process cwd — and then stall for minutes on ``git fetch origin`` with
+    ``HOME``/``SSH_AUTH_SOCK`` wiped. Worse, the fetch refspec is forced, so on a
+    machine whose git auth survives a cleared env it would overwrite the
+    developer's own ``refs/aet/*`` from origin.
+
+    Patching the module attribute is what survives ``clear=True``; an env var
+    would not. The guard is scoped to this checkout so that tests which
+    legitimately exercise fetch/push against a tmpdir fixture remote are
+    unaffected.
+    """
+    from aet.backends import git_refs_backend
+
+    real = git_refs_backend._has_remote
+
+    def guarded(repo_root):
+        if Path(repo_root).resolve() == _REPO_ROOT.resolve():
+            return False
+        return real(repo_root)
+
+    monkeypatch.setattr(git_refs_backend, "_has_remote", guarded)
