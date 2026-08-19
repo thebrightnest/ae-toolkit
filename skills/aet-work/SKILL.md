@@ -22,7 +22,7 @@ banner it emits. Do not ask the user for this context manually.
 
 ## Prerequisites
 
-This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet init-queue`, `aet queue sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. Run `aet setup link` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet queue sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. Run `aet setup link` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 ## Mental Model: Plan Files Are the Source of Truth
 
@@ -237,14 +237,6 @@ aet queue sync
 ```
 
 Use `add` for explicit curation; use `aet queue sync` after queue edits or when resolving blocker DAGs.
-
-### `init-queue`
-
-Rebuild the queue file from existing plans, preserving terminal metadata. Useful when the queue file is lost.
-
-```bash
-aet init-queue
-```
 
 ### `state heal`
 

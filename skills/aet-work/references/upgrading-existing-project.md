@@ -75,13 +75,13 @@ aet state heal --apply .agents/work-queue.json
 
 This appends terminal tasks to `.agents/work-history.jsonl` and removes them from the live queue. The command prints what it sealed.
 
-### 5. Rebuild the live queue from plans
+### 5. Reconcile the open-work board
 
 ```bash
-aet init-queue
+aet queue sync
 ```
 
-This re-ingests every `docs/plans/*.md` using the new frontmatter contract and normalizes legacy task states.
+This drops terminal records and rebuilds the blocker DAG. Re-add any approved plans that should be on the board with `aet sprint add`.
 
 ### 6. Record merges for already-merged branches
 

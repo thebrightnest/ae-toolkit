@@ -1,47 +1,31 @@
-"""aet queue sync — Reconcile the existing work queue against docs/plans/*.md.
+"""aet queue sync — Reconcile the existing work queue.
 
-Loads the existing queue and settled history log, drops settled entries,
-validates the frontmatter contract and atomicity, recomputes the dependency
-DAG, reports missing-plan drift, and updates wrapper metadata. Intake is
-curated: sync **never adds new plans** (that is `aet sprint add`), and it does
-**not** derive status or promote tasks.
+Loads the existing queue, drops terminal records (the board is open work),
+recomputes the dependency DAG, and persists the result. Intake is curated:
+sync **never adds new plans** (that is `aet sprint add`) and it does **not**
+scan the plans directory or derive status from it.
 """
 
 from __future__ import annotations
 
 import argparse
-import os
-import subprocess
 import sys
 from datetime import datetime
-from pathlib import Path
 
 import typer
 
-_SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend  # noqa: E402
-from aet.cli.init_queue import _is_settled_from_authority  # noqa: E402
 from aet.queue import QueueIntegrityError, build_blocks, current_state, lease_guard  # noqa: E402
 
 
 def _sync(args: argparse.Namespace) -> int:
     queue_file = args.queue_file
-    history_file = args.history_file
-    plans_dir = Path(args.plans_dir)
-
     backend = create_backend(
         config_path=args.config,
         queue_file=queue_file,
-        history_file=history_file,
+        history_file=args.history_file,
     )
     backend.fetch()
-
-    # Ensure the append-only history log exists so commands recreate missing
-    # files on demand without waiting for a terminal record to be appended.
-    os.makedirs(os.path.dirname(history_file) or ".", exist_ok=True)
-    if not os.path.exists(history_file):
-        open(history_file, "a", encoding="utf-8").close()
 
     try:
         data = backend.load()
@@ -51,78 +35,18 @@ def _sync(args: argparse.Namespace) -> int:
         print(f"⛔ {exc}", file=sys.stderr)
         return 1
     queue = data["queue"]
-    history = data["history"]
-    history_by_id = {t.get("id"): t for t in history if t.get("id")}
 
-    plan_files = sorted(plans_dir.glob("*.md"))
-    plan_file_set = {str(pf) for pf in plan_files}
-
-    repo_root = Path(
-        subprocess.run(
-            ["git", "-C", str(plans_dir), "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-        or str(plans_dir.parent.parent)
-    )
-
-    # Curated intake: only plans already in the queue are reconciled. New plans
-    # must be explicitly added via ``aet-work add``; sync never auto-adds them.
+    # The board is the set of open work. Anything already terminal does not
+    # belong in the live queue.
     final_queue: list[dict] = []
-    preserved = 0
-    skipped_settled = 0
+    skipped_terminal = 0
     for task in queue:
-        # A task already recorded as terminal is settled regardless of plan
-        # file state; it should not remain in the live queue.
         if current_state(task) in {"merged", "abandoned"}:
-            skipped_settled += 1
+            skipped_terminal += 1
             continue
-
-        pf = task.get("plan_file")
-        # Settled-ness is derived from the ledger and git ancestry, not from
-        # plan frontmatter. A missing plan file cannot be classified as settled;
-        # it is reported as drift below.
-        pf_path = Path(pf) if pf else None
-        if pf_path and pf_path.is_file():
-            if _is_settled_from_authority(pf_path, history_by_id, repo_root=repo_root):
-                skipped_settled += 1
-                continue
         final_queue.append(task)
-        if pf:
-            preserved += 1
 
     build_blocks(final_queue)
-
-    # Validate existing queue entries before any reconciliation or save.
-    plan_files_to_validate = []
-    for task in final_queue:
-        pf = task.get("plan_file")
-        if pf:
-            plan_path = Path(pf)
-            if plan_path.is_file():
-                plan_files_to_validate.append(plan_path)
-
-    findings = plan_validate.validate(plan_files_to_validate, repo_root=repo_root)
-    plan_texts = {
-        pf: pf.read_text(errors="ignore") for pf in plan_files_to_validate
-    }
-    findings = plan_validate.apply_acks(findings, plan_texts)
-    unacked = [f for f in findings if not f.acked]
-    if unacked:
-        for finding in unacked:
-            print(
-                f"❌ {finding.plan.name}: {finding.check_id}: {finding.message}",
-                file=sys.stderr,
-            )
-        return 1
-
-    # Report plan drift without mutating stored state.
-    drifted = 0
-    for task in final_queue:
-        pf = task.get("plan_file")
-        if pf and pf not in plan_file_set:
-            drifted += 1
-            print(f"⚠️ Drift: {task.get('id')} -> {pf}")
 
     for task in final_queue:
         backend.sync_task(task, is_new=False)
@@ -134,9 +58,8 @@ def _sync(args: argparse.Namespace) -> int:
     backend.save(final_queue, wrapper={"queue_updated_at": datetime.now().isoformat()})
 
     print(
-        f"\n✅ Sync complete: 0 new tasks added, {preserved} existing tasks preserved, "
-        f"{skipped_settled} skipped (already settled), "
-        f"{drifted} drifted tasks reported."
+        f"\n✅ Sync complete: 0 new tasks added, {len(final_queue)} existing tasks preserved, "
+        f"{skipped_terminal} skipped (already settled)."
     )
     backend.close()
     return 0
@@ -154,7 +77,7 @@ def sync(
         ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"
     ),
     plans_dir: str = typer.Option(
-        "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
+        "docs/plans", "--plans-dir", help="Deprecated and ignored: sync no longer scans the plans directory."
     ),
     config: str = typer.Option(
         ".agents/aet-config.json", "--config", help="Path to AET backend configuration"
@@ -165,7 +88,7 @@ def sync(
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     ),
 ) -> None:
-    """Reconcile queued tasks against docs/plans/*.md (never adds new plans)."""
+    """Reconcile the existing work queue (never scans docs/plans)."""
     args = argparse.Namespace(
         queue_file=queue_file,
         history_file=history_file,

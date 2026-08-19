@@ -386,17 +386,17 @@ Work queue sync and related operations.
 
 ### Subcommands
 
-- `sync`: Reconcile queued tasks against docs/plans/*.md (never adds new plans).
+- `sync`: Reconcile the existing work queue (never scans docs/plans).
 
 ## `aet queue sync`
 
-Reconcile queued tasks against docs/plans/*.md (never adds new plans).
+Reconcile the existing work queue (never scans docs/plans).
 
 ### Options
 
 - `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
-- `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
+- `--plans-dir` *str* — Deprecated and ignored: sync no longer scans the plans directory. (default: `docs/plans`)
 - `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
@@ -658,19 +658,6 @@ Detect the harness and generate the matching merge guard.
 ## `aet harness-guard check`
 
 Report which merge guard is installed for the detected harness.
-
-## `aet init-queue`
-
-Rebuild the work queue from docs/plans.
-
-### Options
-
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
-- `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
-- `--plans-dir` *path* — Directory containing atomic plan markdown files (default: `docs/plans`)
-- `--prds-dir` *path* — Directory containing PRD markdown files (default: `docs/prds`)
-- `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
-- `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
 ## `aet metrics`
 

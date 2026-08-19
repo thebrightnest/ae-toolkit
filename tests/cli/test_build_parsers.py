@@ -40,7 +40,6 @@ _MODULES = {
     "aet.cli.gate": {"commands": ["submit", "review"]},
     "aet.cli.harness_guard": {"commands": ["install", "check"]},
     "aet.cli.hooks": {"commands": ["install", "check"]},
-    "aet.cli.init_queue": {"callback": True},
     "aet.cli.metrics": {"callback": True},
     "aet.cli.mine_learnings": {"callback": True},
     "aet.cli.next": {"callback": True},

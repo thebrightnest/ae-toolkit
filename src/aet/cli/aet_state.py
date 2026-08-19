@@ -330,8 +330,9 @@ def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main", i
             all_terminal = all(blocker_status_fn(b) in terminal for b in blockers)
             status = "ready" if all_terminal else "blocked"
         elif blockers and not blocker_status_fn:
-            # Blockers exist but we cannot resolve them; fall back to planned.
-            status = "planned"
+            # Blockers exist but we cannot resolve them; refuse an external
+            # assertion of readiness and treat the task as blocked.
+            status = "blocked"
         else:
             # No blockers means the task is actionable.
             status = "ready"
@@ -667,33 +668,31 @@ def cmd_set_stage(args):
 def _derive_all_states(queue, cwd, history=None, trunk_branch="main", integration_branch=None):
     """Return (task_by_id, derived) for every task in the queue.
 
-    Settled history records seed ``derived`` so a dependent whose blocker
-    already reached a terminal state and was archived out of the live queue
-    derives ``ready`` instead of staying ``blocked`` forever. The settled log
-    is terminal by construction (only ``seal_terminal`` writes to it).
+    A task is on the board if and only if it is in ``queue``. A blocker that is
+    no longer on the board has left the open-work set and is treated as
+    terminal, so a dependent whose blocker already settled derives ``ready``
+    instead of staying ``blocked`` forever. The settled history log is not an
+    authority (R-8); it is kept only as a measurement input for metrics and
+    retrospectives.
     """
     tasks = queue
     task_by_id = {t["id"]: t for t in tasks if t.get("id")}
     derived = {}
 
-    for settled in history or []:
-        sid = settled.get("id")
-        if sid and sid not in task_by_id:
-            state = settled.get("state")
-            derived[sid] = {
-                "derived_status": state if state in queue_lib.TERMINAL_STATES else "merged"
-            }
-
     def blocker_status(task_id):
-        if task_id not in derived and task_id in task_by_id:
-            derived[task_id] = derive_status(
-                task_by_id[task_id],
-                blocker_status,
-                cwd=cwd,
-                trunk_branch=trunk_branch,
-                integration_branch=integration_branch,
-            )
-        status = derived.get(task_id, {}).get("derived_status", "unknown")
+        if task_id in task_by_id:
+            if task_id not in derived:
+                derived[task_id] = derive_status(
+                    task_by_id[task_id],
+                    blocker_status,
+                    cwd=cwd,
+                    trunk_branch=trunk_branch,
+                    integration_branch=integration_branch,
+                )
+            status = derived[task_id]["derived_status"]
+        else:
+            # Not on the board: the blocker has left the open-work set.
+            status = "merged"
         return status.split(" (warning")[0]
 
     for task in tasks:
@@ -807,14 +806,13 @@ def cmd_heal(args):
         integration_branch=integration_branch,
     )
 
-    # A blocker counts as pending only while it is not terminal in the live
-    # queue and not settled in history.
+    # A blocker counts as pending only while it is on the board and not
+    # terminal. A blocker that has left the board is settled by definition.
     terminal_ids = {
         t["id"]
         for t in queue
         if t.get("id") and queue_lib.current_state(t) in queue_lib.TERMINAL_STATES
     }
-    terminal_ids.update(h["id"] for h in data["history"] if h.get("id"))
 
     changes: list[dict] = []
     for task in queue:
@@ -863,7 +861,11 @@ def cmd_heal(args):
             }
 
         computed_pb = len(
-            [b for b in task.get("blocked_by", []) if b not in terminal_ids]
+            [
+                b
+                for b in task.get("blocked_by", [])
+                if b in task_by_id and b not in terminal_ids
+            ]
         )
         if computed_pb != queue_lib.pending_blockers(task):
             if change is None:

@@ -34,7 +34,6 @@ from aet.cli import (
     handoff,
     harness_guard,
     hooks,
-    init_queue,
     learnings,
     metrics,
     mine_learnings,
@@ -87,7 +86,6 @@ app.add_typer(sprint.app, name="sprint", help="Sprint queue management.")
 app.add_typer(configure_backend.app, name="configure")
 app.add_typer(context.app, name="context")
 app.add_typer(harness_guard.app, name="harness-guard")
-app.add_typer(init_queue.app, name="init-queue")
 app.add_typer(metrics.app, name="metrics")
 app.add_typer(mine_learnings.app, name="mine-learnings")
 app.add_typer(next_module.app, name="next")

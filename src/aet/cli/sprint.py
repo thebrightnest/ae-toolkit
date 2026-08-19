@@ -133,7 +133,7 @@ def _add(args: argparse.Namespace) -> int:
             print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
         return 1
 
-    task = new_task_from_plan(plan_file, settled_ids=settled_ids)
+    task = new_task_from_plan(plan_file, live_tasks=queue)
     queue.append(task)
     build_blocks(queue)
 
