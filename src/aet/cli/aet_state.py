@@ -665,7 +665,7 @@ def cmd_set_stage(args):
     return 0
 
 
-def _derive_all_states(queue, cwd, history=None, trunk_branch="main", integration_branch=None):
+def _derive_all_states(queue, cwd, trunk_branch="main", integration_branch=None):
     """Return (task_by_id, derived) for every task in the queue.
 
     A task is on the board if and only if it is in ``queue``. A blocker that is
@@ -741,7 +741,6 @@ def cmd_audit(args):
     task_by_id, derived = _derive_all_states(
         queue,
         cwd,
-        history=data["history"],
         trunk_branch=trunk_branch,
         integration_branch=integration_branch,
     )
@@ -801,7 +800,6 @@ def cmd_heal(args):
     task_by_id, derived = _derive_all_states(
         queue,
         cwd,
-        history=data["history"],
         trunk_branch=trunk_branch,
         integration_branch=integration_branch,
     )
@@ -1036,7 +1034,7 @@ def cmd_reset(args):
         return 1
 
     _, derived = _derive_all_states(
-        queue, cwd, history=data["history"], trunk_branch=trunk_branch
+        queue, cwd, trunk_branch=trunk_branch
     )
     derived_state = derived[args.task_id]["derived_status"].split(" (warning")[0]
     stored_state = queue_lib.current_state(task)
@@ -1059,7 +1057,7 @@ def cmd_reset(args):
 
         stored_state = queue_lib.current_state(task)
         _, derived = _derive_all_states(
-            queue, cwd, history=data["history"], trunk_branch=trunk_branch
+            queue, cwd, trunk_branch=trunk_branch
         )
         derived_state = derived[args.task_id]["derived_status"].split(" (warning")[0]
 
