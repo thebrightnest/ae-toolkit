@@ -16,7 +16,7 @@ A human or agent writes the plan as a normal markdown file with YAML frontmatter
 
 ---
 
-### 2. Intake — `aet sprint add` / `init-queue`
+### 2. Intake — `aet sprint add`
 
 When the plan is accepted into the sprint, AET creates a **task record** from the file.
 
