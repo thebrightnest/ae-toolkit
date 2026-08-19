@@ -16,7 +16,7 @@ from typing import Optional
 
 import typer
 
-from aet import plans_lint
+from aet import plan_parser, plans_lint
 
 
 def _repo_root_from(path: Path) -> Path:
@@ -48,9 +48,15 @@ def cmd_lint(args: argparse.Namespace) -> int:
         repo_root = _repo_root_from(Path.cwd())
         plans_dir = repo_root / "docs" / "plans"
 
-    plan_files = sorted(plans_dir.glob("*.md")) if plans_dir.exists() else []
+    plan_files = (
+        sorted(
+            p for p in plans_dir.glob("*.md") if not plan_parser.is_settled_plan(p)
+        )
+        if plans_dir.exists()
+        else []
+    )
     if not plan_files:
-        print("✓ no plans to lint")
+        print("✓ no live plans to lint")
         return 0
 
     violations = plans_lint.lint_corpus(plans_dir)

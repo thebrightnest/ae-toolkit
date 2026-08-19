@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from aet.queue import (
+    append_history_record,
     get_next_unblocked,
     has_pending_tasks,
     read_history,
@@ -204,6 +205,56 @@ class TestQueue(unittest.TestCase):
             t2 = next(t for t in live if t["id"] == "t2")
             self.assertEqual(t2["state"], "blocked")
             self.assertEqual(t2["pending_blockers"], 1)
+
+
+class TestAppendHistoryRecord(unittest.TestCase):
+    """Delivered-size measurement reads the declared size from the task record."""
+
+    def test_declared_size_comes_from_spec_frontmatter(self):
+        """After R-19 the spec carries the size; no plan file is required."""
+        with tempfile.TemporaryDirectory() as tmp:
+            history_file = Path(tmp) / "work-history.jsonl"
+            task = {
+                "id": "t1",
+                "state": "merged",
+                "spec": {
+                    "frontmatter": {"size": "M"},
+                    "title": "Task one",
+                    "body": "",
+                    "tasks": [],
+                },
+            }
+
+            append_history_record(str(history_file), task)
+
+            lines = history_file.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines), 1)
+            settled = json.loads(lines[0])
+            self.assertEqual(settled["delivered_size"]["declared_size"], "M")
+
+    def test_legacy_plan_file_fallback(self):
+        """Pre-R-19 records without a spec still fall back to the plan file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            plans_dir = repo_root / "docs" / "plans"
+            plans_dir.mkdir(parents=True)
+            plan_file = plans_dir / "t1.md"
+            plan_file.write_text(
+                "---\nid: t1\nsize: S\n---\n\n# Task one\n",
+                encoding="utf-8",
+            )
+            history_file = Path(tmp) / "work-history.jsonl"
+            task = {
+                "id": "t1",
+                "state": "merged",
+                "plan_file": str(plan_file),
+            }
+
+            append_history_record(str(history_file), task)
+
+            lines = history_file.read_text(encoding="utf-8").strip().splitlines()
+            settled = json.loads(lines[0])
+            self.assertEqual(settled["delivered_size"]["declared_size"], "S")
 
 
 if __name__ == "__main__":

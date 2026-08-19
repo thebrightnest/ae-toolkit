@@ -157,7 +157,9 @@ def lint_floor(plans_dir: Path) -> list[tuple[Path, str]]:
     if not plans_dir.exists():
         return warnings
 
-    plan_files = sorted(plans_dir.glob("*.md"))
+    plan_files = sorted(
+        p for p in plans_dir.glob("*.md") if not plan_parser.is_settled_plan(p)
+    )
     if not plan_files:
         return warnings
 
@@ -219,17 +221,22 @@ def lint_floor(plans_dir: Path) -> list[tuple[Path, str]]:
 
 
 def lint_corpus(plans_dir: Path) -> list[tuple[Path, str]]:
-    """Return violations for the plan corpus under ``plans_dir``.
+    """Return violations for the live plan corpus under ``plans_dir``.
+
+    Settled plans (terminal ``status`` frontmatter or terminal footer stage)
+    are ignored so the linter does not degrade as finished work accumulates.
 
     Each violation is a ``(plan_path, message)`` tuple naming the offending
-    file and why it failed. An empty list means no plan in the corpus carries
-    a live ``status`` frontmatter field.
+    file and why it failed. An empty list means no live plan in the corpus
+    carries a live ``status`` frontmatter field.
     """
     violations: list[tuple[Path, str]] = []
     if not plans_dir.exists():
         return violations
 
     for plan in sorted(plans_dir.glob("*.md")):
+        if plan_parser.is_settled_plan(plan):
+            continue
         data = plan_parser.parse_frontmatter(plan)
         status = data.get("status")
         if status is not None and status not in _TERMINAL_STATUSES:

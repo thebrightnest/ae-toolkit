@@ -968,6 +968,33 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             self.assertIn("reason", delivered)
             self.assertIsNotNone(delivered["reason"])
 
+    def test_attach_delivered_size_reads_declared_size_from_spec(self):
+        """The declared size is read from the rendered spec, not the plan file."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            Path(repo_root, "src").mkdir(parents=True, exist_ok=True)
+            Path(repo_root, "src", "demo.py").write_text("a\nb\nc\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add code"],
+                check=True,
+            )
+
+            task = {
+                "id": "demo",
+                "title": "Demo",
+                "merge_commit": "HEAD",
+                "spec": {
+                    "frontmatter": {"id": "demo", "size": "L"},
+                    "body": "# Demo\n",
+                },
+            }
+
+            mutated = orchestrator._attach_delivered_size(task, repo_root)
+            self.assertTrue(mutated)
+            self.assertEqual(task["delivered_size"]["declared_size"], "L")
+            self.assertEqual(task["delivered_size"]["status"], "ok")
+
 
 class _SpyBackend:
     """Wrapper around a real backend that records save calls."""

@@ -16,7 +16,7 @@ from typing import Optional
 import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import plan_validate  # noqa: E402
+from aet import plan_parser, plan_validate  # noqa: E402
 
 
 def _repo_root_from(path: Path) -> Path:
@@ -50,15 +50,18 @@ def cmd_validate(args: argparse.Namespace) -> int:
         plans_dir = repo_root / "docs" / "plans"
         plan_paths = sorted(plans_dir.glob("*.md")) if plans_dir.exists() else []
 
-    if not plan_paths:
-        return _fail("no plan files found")
+    live_paths = [p for p in plan_paths if not plan_parser.is_settled_plan(p)]
 
-    missing = [p for p in plan_paths if not p.exists()]
+    if not live_paths:
+        print("✓ no live plans to validate")
+        return 0
+
+    missing = [p for p in live_paths if not p.exists()]
     if missing:
         return _fail(f"plan file not found: {missing[0]}")
 
-    findings = plan_validate.validate(plan_paths, repo_root=repo_root)
-    plan_texts = {p: p.read_text(errors="ignore") for p in plan_paths}
+    findings = plan_validate.validate(live_paths, repo_root=repo_root)
+    plan_texts = {p: p.read_text(errors="ignore") for p in live_paths}
     findings = plan_validate.apply_acks(findings, plan_texts)
 
     unacked = [f for f in findings if not f.acked]
