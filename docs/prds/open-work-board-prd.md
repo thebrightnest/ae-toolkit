@@ -258,6 +258,31 @@ All four implementation tasks landed; the merge verification remains owned by `a
 
 - **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
 
+## Divergence Summary — owb-05-board-is-open-work
+
+*Recorded: 2026-08-19 — Branch: owb-05-board-is-open-work*
+
+All eight implementation tasks landed; merge verification remains owned by `aet-ship`.
+
+### Changed from plan
+
+- **Files to Modify was wrong in both directions**: `src/aet/queue.py` was listed but untouched — no settled-ness filter lived there; the derivation lived in `aet_state.py` (`_derive_all_states`), `init_queue.py`, and `plan_parser.py`. Conversely `src/aet/plan_parser.py` (`new_task_from_plan` now takes `live_tasks` instead of `settled_ids`), `src/aet/cli/main.py` (init-queue unregistered), and `src/aet/cli/sprint.py` were modified though not listed.
+- **Task 6 — the refusal mechanism is a fallback flip**: readiness refusal landed in `derive_status` (`aet_state.py`), where blockers that cannot be resolved now derive `blocked` instead of the previous `planned` fallback, so no external assertion can promote a task.
+- **Task 4 — history demoted by removal, not demotion-in-place**: `_derive_all_states` lost its `history` parameter entirely and `blocker_status` treats a blocker absent from the board as `merged`. `.agents/work-history.jsonl` survives only as the metrics/retro measurement log.
+- **Tasks 2 and 3 landed as one deletion**: `init-queue` and `_is_settled_from_authority` were removed together by deleting the whole `src/aet/cli/init_queue.py` module (395 lines), rather than as two separable edits.
+- **Task 8 — equivalence proof shape**: equivalence is demonstrated by targeted tests (`tests/state/test_board_membership.py`, `tests/queue/test_sync.py`, and the no-deadlock-on-merged-blocker test in `tests/workflow/test_aet_work_add_review.py`), not by a corpus-wide before/after harness comparing the live set task by task.
+
+### Added (unplanned)
+
+- **`next.py derive_queue` accepts portable specs**: a task whose record carries an R-19 `spec` stays pickable even when its plan file is absent — integration with owb-01 that the plan did not call out.
+
+- **Review-flagged documentation sweep**: `docs/CLI.md` regenerated, plus `docs/CONVENTIONS.md`, `docs/PIPELINE.md`, `docs/diagrams/plan-task-lifecycle.md`, `skills/aet-work/SKILL.md` and three of its reference files updated to drop stale init-queue references (commits `10f2caeb`, `9e27e2aa`).
+- **Test churn beyond the listed directories**: deleted `tests/plan/test_intake_gate.py`, `tests/orchestrator/test_status_liveness_contract.py`, `tests/state/test_versioned_membership.py` and parts of `tests/state/test_state_reset.py`; added `tests/queue/test_sync.py` and `tests/state/test_board_membership.py` for the equivalence proof (task 8).
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
 ---
 
 *Stage: synced*
