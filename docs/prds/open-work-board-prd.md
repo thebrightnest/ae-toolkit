@@ -128,7 +128,7 @@ This is not a migration to GitHub. Storage stays local in git-refs, which alread
 
 - [ ] A full run in shadow posture leaves `git status` clean, no `refs/aet/*` on the remote, and no project-scope config file (satisfies: R-15, R-16)
 
-- [ ] Two PRDs in flight produce two integration branches and two PRs, with no per-task branch on `origin` (satisfies: R-17)
+- [x] Two PRDs in flight produce two integration branches and two PRs, with no per-task branch on `origin` (satisfies: R-17)
 
 - [ ] A misspelled config key fails with the legal keys named; a `task_backend`key left behind after R-11 fails with a migration message; shadow posture combined with a `projections` entry or a project-scope config file fails with the contradiction stated; `aet setup verify` reports the layer each effective value came from (satisfies: R-20)
 
@@ -299,6 +299,25 @@ All four implementation tasks landed; merge verification remains owned by `aet-s
 
 - **`docs/CLI.md` regenerated** to reflect the removal of `aet configure --task-backend`.
 - **Test updates outside `tests/backends/`**: tests in `tests/cli/`, `tests/state/`, `tests/orchestrator/`, `tests/projections/`, `tests/queue/`, `tests/metrics/`, `tests/migration/`, `tests/ship/`, `tests/plan/`, and `tests/worktree/` were updated to use git-refs fixtures or to remove json-backend assumptions.
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
+## Divergence Summary — owb-13-prd-integration-branch
+
+*Recorded: 2026-08-19 — Branch: owb-13-prd-integration-branch*
+
+All three implementation tasks landed; merge verification remains owned by `aet-ship`.
+
+### Changed from plan
+
+- **Task 1 — where the derivation lives**: the plan named `src/aet/backends/factory.py` as a file to modify. It was not touched. The derivation logic is a new module-level contract in `src/aet/branch_ref.py` (`derive_integration_branch_from_prd`, `_task_prd_path`, `resolve_integration_branch_for_task`), consumed by `src/aet/cli/orchestrator.py`, `src/aet/cli/aet_state.py`, and `src/aet/cli/ship.py`. This keeps branch-name resolution in one place rather than splitting it across backend and CLI code.
+- **Additional files touched**: `src/aet/cli/aet_state.py` was updated so that audit, heal, validate, reset, transition, and record-merge all resolve the integration branch per-task; `src/aet/plan_parser.py` gained `prd_path_from_text` and `prd_path_for_plan` to extract the PRD reference from a plan body; and `src/aet/plan_validate.py` now reuses that parser.
+
+### Added (unplanned)
+
+- **Tests outside `tests/orchestrator/`**: coverage for `ship verify` resolving a PRD-derived branch lives in `tests/cli/test_ship_verify.py`, and coverage for `aet state` transition/record-merge lives in `tests/state/test_aet_state.py`.
 
 ### Deferred
 
