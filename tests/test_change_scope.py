@@ -295,3 +295,63 @@ class TestResolvedTargetsMarker:
         monkeypatch.setattr(change_scope, "changed_paths", lambda: ["src/aet/queue.py"])
         change_scope.main([])
         assert capsys.readouterr().out == "tests/queue\n"
+
+
+# Modules with no entry in ``_PATH_TARGETS``. Touching any of them runs the
+# whole suite, which is safe but slow. The set exists so that *new* unmapped
+# modules fail the guard below instead of silently joining this list — the
+# absence of such a check is why the list grew to fifteen unnoticed.
+#
+# Removing an entry is a deliberate decision per module: the mapped target must
+# actually cover that module, because a too-narrow mapping silently under-tests
+# it on every scoped run. ``__init__.py`` and ``cli_adapter.py`` are expected to
+# stay here; both are imported broadly enough that the full suite is the honest
+# target.
+_UNMAPPED_MODULES = {
+    "src/aet/__init__.py",
+    "src/aet/breaker.py",
+    "src/aet/cli_adapter.py",
+    "src/aet/context_digest.py",
+    "src/aet/docs_lint.py",
+    "src/aet/handoff.py",
+    "src/aet/harness_guard.py",
+    "src/aet/project_id.py",
+    "src/aet/risk.py",
+    "src/aet/session_log.py",
+    "src/aet/session_log_claude.py",
+    "src/aet/spec_backfill.py",
+    "src/aet/test_runners.py",
+    "src/aet/track_record.py",
+    "src/aet/triage.py",
+}
+
+
+def _unmapped_source_files() -> set[str]:
+    """Every ``src/aet`` module with no ``_PATH_TARGETS`` prefix match."""
+    prefixes = [prefix for prefix, _target in change_scope._PATH_TARGETS]
+    unmapped = set()
+    for path in (REPO_ROOT / "src" / "aet").rglob("*.py"):
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if not any(rel.startswith(prefix) for prefix in prefixes):
+            unmapped.add(rel)
+    return unmapped
+
+
+class TestPathTargetsDrift:
+    """``_PATH_TARGETS`` is hand-maintained; nothing else notices it drifting."""
+
+    def test_new_modules_declare_a_test_target(self):
+        new = _unmapped_source_files() - _UNMAPPED_MODULES
+        assert not new, (
+            f"These modules have no _PATH_TARGETS mapping: {sorted(new)}. "
+            "Add a mapping to src/aet/change_scope.py so `make validate` runs "
+            "their tests on a scoped run, or add them to _UNMAPPED_MODULES "
+            "with a reason if the full suite really is the right target."
+        )
+
+    def test_unmapped_list_has_no_stale_entries(self):
+        stale = _UNMAPPED_MODULES - _unmapped_source_files()
+        assert not stale, (
+            f"These modules are mapped now but still listed as unmapped: "
+            f"{sorted(stale)}. Remove them from _UNMAPPED_MODULES."
+        )
