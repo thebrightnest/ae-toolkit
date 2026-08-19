@@ -366,12 +366,15 @@ def validate(
     repo_root: Path | None = None,
     extra_known_ids: set[str] | None = None,
 ) -> list[Finding]:
-    """Run the full check suite over the requested plan files.
+    """Run the full check suite over the requested live plan files.
 
-    ``plans`` is the set the user asked to validate. Structural checks still
-    parse every plan in the directory (when a directory context is available)
-    so that blocker references and duplicate-id detection remain accurate,
-    but only report errors for files in ``plans``.
+    Settled plans (terminal ``status`` frontmatter or terminal footer stage)
+    are ignored so validation does not degrade as finished work accumulates.
+
+    ``plans`` is the set the user asked to validate, filtered to live work.
+    Structural checks still parse every live plan in the directory (when a
+    directory context is available) so that blocker references and duplicate-id
+    detection remain accurate, but only report errors for files in ``plans``.
 
     ``extra_known_ids`` allows callers to include settled history ids as valid
     blocker references.
@@ -379,26 +382,31 @@ def validate(
     if repo_root is None and plans:
         repo_root = _repo_root_for(plans[0])
 
-    limit_to = set(plans)
+    live_plans = [p for p in plans if not plan_parser.is_settled_plan(p)]
+    limit_to = set(live_plans)
     findings: list[Finding] = []
 
-    # Structural checks parse every plan in the directory so that blocker
+    # Structural checks parse every live plan in the directory so that blocker
     # references and duplicate-id detection remain accurate.
     if repo_root is not None:
         plans_dir = repo_root / "docs" / "plans"
-        all_plans = sorted(plans_dir.glob("*.md")) if plans_dir.exists() else plans
+        all_plans = (
+            sorted(p for p in plans_dir.glob("*.md") if not plan_parser.is_settled_plan(p))
+            if plans_dir.exists()
+            else live_plans
+        )
     else:
-        all_plans = plans
+        all_plans = live_plans
     findings.extend(
         structural_findings(all_plans, limit_to=limit_to, extra_known_ids=extra_known_ids)
     )
 
     # R-trace coverage is a whole-plan-set property: one PRD decomposes into
-    # many atomic plans, so a requirement is covered when any sibling traces
-    # it. Build the union from the full plan set, then report per plan.
+    # many atomic plans, so a requirement is covered when any live sibling
+    # traces it. Build the union from the live plan set, then report per plan.
     coverage = _prd_coverage(all_plans, repo_root)
 
-    for plan in plans:
+    for plan in live_plans:
         findings.extend(rtrace_findings(plan, repo_root=repo_root, coverage=coverage))
         findings.extend(acceptance_findings(plan))
         if repo_root:

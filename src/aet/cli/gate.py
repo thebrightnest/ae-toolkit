@@ -7,11 +7,13 @@ the destination through the canonical ``resolve_verdict_path`` precedence
 failure path prints a named error to stderr and exits 1 — never a silent
 or partial write.
 
-``gate review`` prints a human-readable backlog review by scanning
-``docs/plans/*.md`` and grouping plans into columns from the loaded
-workflow (entry → approved, terminal skill-less → queued, everything
-else → in-progress), with legacy footer fallbacks when no workflow is
-available.
+``gate review`` prints a human-readable backlog review of the board — the
+set of open work held by the active task backend. It groups tasks into
+columns from the loaded workflow (entry → approved, terminal skill-less →
+queued, everything else → in-progress), with legacy footer fallbacks for
+tasks that still carry a plan-file stage. A ``--plans-dir`` escape hatch
+preserves the old directory-glob renderer for callers that pass it
+explicitly.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from aet import boundary, change_scope, evidence, identity, telemetry  # noqa: E
 from aet.backends.factory import create_backend  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 from aet.plan_parser import stage_from_plan, title_from_plan  # noqa: E402
+from aet.queue import current_state  # noqa: E402
 from aet.workflow import Workflow, WorkflowError, load_workflow  # noqa: E402
 
 # Footer values that are not workflow stage names (queue states and
@@ -97,6 +100,88 @@ def category_for_stage(stage: str | None, workflow: Workflow | None = None) -> s
     return LEGACY_BUCKETS.get(stage, "in-progress")
 
 
+# Map canonical task states to the review-board columns. These are the live
+# queue states; terminal states are closed and omitted from the board.
+STATE_TO_CATEGORY: dict[str, str] = {
+    "planned": "approved",
+    "blocked": "approved",
+    "ready": "queued",
+    "in_progress": "in-progress",
+    "awaiting_merge": "awaiting-merge",
+    "merged": "closed",
+    "abandoned": "closed",
+    "failed": "in-progress",
+    "quarantined": "in-progress",
+}
+
+
+def category_for_state(state: str | None) -> str:
+    """Return the review category for a task's canonical state."""
+    if not state:
+        return "approved"
+    return STATE_TO_CATEGORY.get(state, "in-progress")
+
+
+def _task_title(task: dict[str, Any]) -> str:
+    """Return a display title for a task record.
+
+    Prefers the task's own ``title``, then a title from the rendered spec,
+    then the task id.
+    """
+    if task.get("title"):
+        return str(task["title"])
+    spec = task.get("spec")
+    if isinstance(spec, dict) and spec.get("title"):
+        return str(spec["title"])
+    return str(task.get("id", ""))
+
+
+def _render_categories(categories: dict[str, list[tuple[str, str]]]) -> None:
+    """Print the canonical board columns."""
+    for category in categories:
+        print(f"\n{category.replace('-', ' ').title()} ({len(categories[category])}):")
+        if categories[category]:
+            for task_id, title in categories[category]:
+                print(f"  - {task_id}: {title}")
+        else:
+            print("  None.")
+
+
+def run_board_review(queue: list[dict[str, Any]]) -> int:
+    """Print a human-readable backlog review from a live task queue."""
+    workflow = None
+    try:
+        workflow = load_workflow(Path.cwd())
+    except WorkflowError:
+        pass
+
+    categories: dict[str, list[tuple[str, str]]] = {
+        "approved": [],
+        "queued": [],
+        "in-progress": [],
+        "awaiting-merge": [],
+        "closed": [],
+    }
+
+    for task in queue:
+        task_id = str(task.get("id", ""))
+        if not task_id:
+            continue
+        stage = task.get("stage")
+        if stage is not None:
+            category = category_for_stage(str(stage), workflow)
+        else:
+            category = category_for_state(current_state(task))
+        categories[category].append((task_id, _task_title(task)))
+
+    # Sort each column for stable output.
+    for category in categories:
+        categories[category].sort(key=lambda item: item[0])
+
+    _render_categories(categories)
+    return 0
+
+
 def run_review(plans_dir: Path) -> int:
     """Print a human-readable backlog review grouped by pipeline stage."""
     if not plans_dir.is_dir():
@@ -127,14 +212,7 @@ def run_review(plans_dir: Path) -> int:
         category = category_for_stage(stage, workflow)
         categories[category].append((pf.stem, title_from_plan(pf)))
 
-    for category in categories:
-        print(f"\n{category.replace('-', ' ').title()} ({len(categories[category])}):")
-        if categories[category]:
-            for task_id, title in categories[category]:
-                print(f"  - {task_id}: {title}")
-        else:
-            print("  None.")
-
+    _render_categories(categories)
     return 0
 
 
@@ -439,12 +517,33 @@ def submit(
 
 @app.command("review")
 def review(
-    plans_dir: str = typer.Option(
-        "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
+    plans_dir: str | None = typer.Option(
+        None, "--plans-dir", help="Directory containing atomic plan markdown files (legacy mode)"
     ),
 ) -> None:
-    """Print a human-readable backlog review grouped by pipeline stage."""
-    rc = run_review(Path(plans_dir))
+    """Print a human-readable backlog review grouped by pipeline stage.
+
+    By default the board is read from the active task backend so it works even
+    when no plan files are present. Pass ``--plans-dir`` to render from plan
+    files instead.
+    """
+    if plans_dir is not None:
+        rc = run_review(Path(plans_dir))
+    else:
+        backend = create_backend(
+            config_path=".agents/aet-config.json",
+            queue_file=".agents/work-queue.json",
+            history_file=".agents/work-history.jsonl",
+        )
+        backend.fetch()
+        try:
+            data = backend.load()
+        except Exception as exc:
+            backend.close()
+            rc = _fail(f"cannot load board: {exc}")
+        else:
+            backend.close()
+            rc = run_board_review(data.get("queue", []))
     raise typer.Exit(rc)
 
 

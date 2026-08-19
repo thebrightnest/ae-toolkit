@@ -547,16 +547,11 @@ def append_history_record(history_file: str, task: dict[str, Any]) -> None:
     from aet import plan_parser  # local import avoids a cycle with plan_parser
 
     repo_root = Path(history_file).parent.parent
-    plan_file = task.get("plan_file")
-    declared_size: str | None = None
-    if plan_file:
-        try:
-            plan_path = Path(plan_file)
-            if not plan_path.is_absolute():
-                plan_path = repo_root / plan_path
-            declared_size = plan_parser.parse_frontmatter(plan_path).get("size")
-        except Exception:  # noqa: BLE001
-            declared_size = None
+    # After R-19 the rendered spec travels with the task record, so the declared
+    # size is read from the record itself. Pre-R-19 records fall back to the
+    # plan file on disk.
+    routing_data = plan_parser.task_routing_data(task, repo_root=repo_root)
+    declared_size: str | None = routing_data.get("size")
 
     size_info = plan_size.delivered_size(repo_root, task.get("merge_commit"))
     record["delivered_size"] = {**size_info, "declared_size": declared_size}

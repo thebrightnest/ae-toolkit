@@ -186,6 +186,28 @@ def stage_from_plan(path: Path) -> str | None:
     return None
 
 
+# Plan lifecycle terminal states. Plans that carry these in their footer or
+# frontmatter ``status`` are settled and must be ignored by live-work tooling.
+_TERMINAL_PLAN_STAGES = {"merged", "abandoned"}
+
+
+def is_settled_plan(path: Path) -> bool:
+    """Return True when a plan file represents a settled task.
+
+    Settled-ness is read from the durable signals that survive after a plan
+    file has been left in the scanned directory: a terminal ``status``
+    frontmatter value or a terminal footer stage (``merged``/``abandoned``).
+    """
+    data = parse_frontmatter(path)
+    status = data.get("status")
+    if isinstance(status, str) and status in _TERMINAL_PLAN_STAGES:
+        return True
+    stage = stage_from_plan(path)
+    if stage in _TERMINAL_PLAN_STAGES:
+        return True
+    return False
+
+
 def references_other_plans(path: Path) -> bool:
     """Return True if the plan links to other plan files."""
     content = path.read_text(errors="ignore")
