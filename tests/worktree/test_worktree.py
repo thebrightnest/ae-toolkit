@@ -397,6 +397,71 @@ class TestCreateWorktree(unittest.TestCase):
             self.assertTrue(os.path.isdir(os.path.join(repo_root, ".worktrees", "task-001")))
 
 
+    def test_conflicting_refresh_halts_instead_of_crashing(self):
+        """Regression: an existing worktree holding work halts cleanly on conflict."""
+        with tempfile.TemporaryDirectory() as tmp:
+            remote = os.path.join(tmp, "remote.git")
+            repo_root = os.path.join(tmp, "repo")
+            subprocess.run(["git", "init", "-q", "--bare", remote], check=True)
+            subprocess.run(["git", "clone", "-q", remote, repo_root], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "config", "user.name", "Test User"],
+                check=True,
+            )
+            Path(repo_root, "shared.txt").write_text("old", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "old base"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "push", "-q", "origin", "HEAD:main"], check=True
+            )
+            subprocess.run(["git", "-C", repo_root, "branch", "-q", "-M", "main"], check=True)
+
+            worktree_dir = worktree.create_worktree(repo_root, "task-001")
+
+            # The task branch commits a conflicting change.
+            Path(worktree_dir, "shared.txt").write_text("task", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", worktree_dir, "commit", "-q", "-m", "task commit"],
+                check=True,
+            )
+            task_sha = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "task-001"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            # The base advances with a conflicting change.
+            Path(repo_root, "shared.txt").write_text("main", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "main advance"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "push", "-q", "origin", "main"], check=True
+            )
+
+            with self.assertRaises(worktree.WorktreeBlockedError):
+                worktree.create_worktree(repo_root, "task-001")
+
+            # The worktree and its commits survive the halt.
+            self.assertTrue(os.path.isdir(worktree_dir))
+            still = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "task-001"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(still, task_sha)
+
+
 class TestNonMainBase(unittest.TestCase):
     def _init_repo(self, repo_root: str) -> None:
         subprocess.run(["git", "init", "-q", repo_root], check=True)

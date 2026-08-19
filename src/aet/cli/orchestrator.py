@@ -92,6 +92,7 @@ from aet.verifier import (  # noqa: E402
 )
 from aet.workflow import Workflow, WorkflowError, WorkflowStage, load_workflow  # noqa: E402
 from aet.worktree import (  # noqa: E402
+    WorktreeBlockedError,
     check_base_hygiene,
     copy_untracked_files,
     create_worktree,
@@ -2862,7 +2863,16 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # Re-read queue after transition and record branch/worktree so the
                 # stored state reflects in_progress and does not spawn the same task
                 # again on the next loop iteration.
-                worktree_dir = create_worktree(repo_root, task_id, base_branch=base_branch)
+                try:
+                    worktree_dir = create_worktree(
+                        repo_root, task_id, base_branch=base_branch
+                    )
+                except WorktreeBlockedError as exc:
+                    print(f"   {exc}")
+                    _mark_failed(backend, queue_file, task_id, "in_progress")
+                    failures += 1
+                    stop_spawn = True
+                    break
                 env = os.environ.copy()
                 env["AET_TASK_ID"] = task_id
                 env["AET_PLAN_FILE"] = task.get("plan_file", "")
@@ -3176,7 +3186,28 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         if queued_task and not spawned_by_batch:
             queued_task_id = queued_task.get("id", task_id)
             # Ensure the worktree/branch exist before recording them.
-            worktree_dir = create_worktree(repo_root, queued_task_id, base_branch=base_branch)
+            try:
+                worktree_dir = create_worktree(
+                    repo_root, queued_task_id, base_branch=base_branch
+                )
+            except WorktreeBlockedError as exc:
+                print(f"   {exc}")
+                logger.write_last_run(
+                    telemetry.run_summary_record(
+                        run_id=logger.run_id,
+                        start_time=start_time,
+                        end_time=telemetry.iso_now(),
+                        tasks_spawned=0,
+                        tasks_succeeded=0,
+                        tasks_failed=1,
+                        outcome="failure",
+                        exit_code=4,
+                        task_ids=[queued_task_id],
+                        final_stage=None,
+                    )
+                )
+                print(f"   📁 Telemetry: {logger.run_dir}")
+                return 4
             worktree_rel = os.path.relpath(worktree_dir, repo_root)
             _record_run_one_in_queue(backend, queue_file, queued_task_id, worktree_rel, queued_task_id)
             task_id = queued_task_id
@@ -3233,6 +3264,10 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             print(f"   {exc}")
             success = False
             exit_code = 2
+        except WorktreeBlockedError as exc:
+            print(f"   {exc}")
+            success = False
+            exit_code = 4
         except IntegrationFailureError as exc:
             print(f"   {exc}")
             success = False

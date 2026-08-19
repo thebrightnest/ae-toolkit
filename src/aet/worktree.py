@@ -10,6 +10,24 @@ from pathlib import Path
 from typing import Any
 
 
+class WorktreeBlockedError(Exception):
+    """Raised when an existing worktree cannot be refreshed or safely rebuilt.
+
+    Signals a clean halt: the task branch conflicts with the base and the
+    worktree still holds work that ``remove_worktree`` refuses to discard.
+    """
+
+    def __init__(self, task_id: str, worktree_dir: str, base: str) -> None:
+        self.task_id = task_id
+        self.worktree_dir = worktree_dir
+        self.base = base
+        super().__init__(
+            f"⛔ Worktree for `{task_id}` conflicts with `{base}` and holds "
+            f"unmerged work at `{worktree_dir}`. Rebase or remove it manually, "
+            f"then re-run."
+        )
+
+
 def _run_git(args: list[str], **kwargs) -> subprocess.CompletedProcess:
     """Run a git command and return the completed process."""
     return subprocess.run(["git", *args], **kwargs)
@@ -91,8 +109,12 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
                 )
                 if rebase.returncode != 0:
                     _run_git(["-C", worktree_dir, "rebase", "--abort"], capture_output=True)
-                    # Fall through to recreate the worktree from the current base.
-                    remove_worktree(repo_root, task_id, base_branch=base)
+                    # Fall through to recreate the worktree from the current
+                    # base. remove_worktree refuses when the branch still holds
+                    # non-deferred work; recreating over a surviving directory
+                    # would either crash or discard that work, so halt instead.
+                    if not remove_worktree(repo_root, task_id, base_branch=base):
+                        raise WorktreeBlockedError(task_id, worktree_dir, base)
                 else:
                     return worktree_dir
             else:
