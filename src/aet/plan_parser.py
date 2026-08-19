@@ -14,6 +14,9 @@ from aet.queue import append_history  # noqa: E402
 # containing these must be quoted before PyYAML can parse them as strings.
 _SCALAR_SPECIAL_RE = re.compile(r"[:>#`|%@!&*{}[\],]")
 
+# PRD reference pattern used by plan validation and by R-17 branch derivation.
+_PRD_REF_RE = re.compile(r"\b(docs/prds/[\w./\-]+\.md)\b")
+
 
 def _frontmatter_body_from_text(content: str) -> str | None:
     """Return the raw text between the leading ``---`` fences of *content*, or None.
@@ -268,6 +271,40 @@ def most_recent_plan(plans_dir: Path) -> Path | None:
         return None
     plans = sorted(plans_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
     return plans[0] if plans else None
+
+
+def prd_path_from_text(text: str, repo_root: str | Path | None = None) -> Path | None:
+    """Return the PRD file referenced in *text*, or None.
+
+    The reference is matched by ``docs/prds/<name>.md``.  When *repo_root* is
+    supplied the returned path is absolute; otherwise it is relative to the
+    current working directory.
+    """
+    match = _PRD_REF_RE.search(text)
+    if not match:
+        return None
+    path = Path(match.group(1))
+    if repo_root is not None:
+        if not path.is_absolute():
+            path = Path(repo_root) / path
+    return path
+
+
+def prd_path_for_plan(plan_path: Path, repo_root: str | Path | None = None) -> Path | None:
+    """Return the PRD file referenced from a plan file's context, or None.
+
+    Returns ``None`` when the plan file is missing so callers that already
+    have a portable task spec (R-19) are not blocked by the absence of the
+    rendered plan file.
+    """
+    path = Path(plan_path)
+    if repo_root is not None and not path.is_absolute():
+        path = Path(repo_root) / path
+    try:
+        text = path.read_text(errors="ignore")
+    except FileNotFoundError:
+        return None
+    return prd_path_from_text(text, repo_root=repo_root)
 
 
 # Frontmatter keys that travel with the task record so the plan file is not

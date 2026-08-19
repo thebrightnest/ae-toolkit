@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -207,6 +208,127 @@ class TestShipVerify(unittest.TestCase):
         rc, out, err = self._run_verify(
             ["ship", "verify", str(self.plan_path), "--squash-fallback"]
         )
+
+        self.assertEqual(rc, 0)
+        self.assertIn(sha, out)
+
+
+class TestShipVerifySinglePr(unittest.TestCase):
+    """R-17: ship verify resolves the target branch from the task's PRD."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.repo = Path(self.tmpdir.name) / "repo"
+        self.repo.mkdir(parents=True, exist_ok=True)
+        self.cwd = os.getcwd()
+        self.addCleanup(os.chdir, self.cwd)
+        os.chdir(self.repo)
+
+        self._git("init", "-q")
+        self._git("config", "user.email", "test@example.com")
+        self._git("config", "user.name", "Test User")
+        (self.repo / "base.txt").write_text("base\n", encoding="utf-8")
+        (self.repo / ".gitignore").write_text(
+            ".agents/\ndocs/plans/\n", encoding="utf-8"
+        )
+        self._git("add", ".")
+        self._git("commit", "-q", "-m", "initial")
+
+        config = self.repo / ".agents" / "aet-config.json"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(
+            json.dumps({"trunk_branch": "main", "integration_mode": "single-pr"}),
+            encoding="utf-8",
+        )
+        self._git("remote", "add", "origin", str(self.repo))
+        self._git("push", "-u", "origin", "main", check=False)
+
+        self.plan_path = self._write_plan("t1")
+        self.queue_path = self._write_queue("t1", "t1", self.plan_path)
+
+    def _git(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", "-C", str(self.repo), *args],
+            capture_output=True,
+            text=True,
+            check=check,
+        )
+
+    def _write_plan(self, task_id: str) -> Path:
+        prd = self.repo / "docs" / "prds" / "alpha-prd.md"
+        prd.parent.mkdir(parents=True, exist_ok=True)
+        prd.write_text("# Alpha\n\nRequirement: R-17\n", encoding="utf-8")
+        plan_path = self.repo / "docs" / "plans" / f"{task_id}.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text(
+            f"---\n"
+            f"id: {task_id}\n"
+            f"size: M\n"
+            f"---\n\n"
+            f"# Plan {task_id}\n\n"
+            f"- PRD: `docs/prds/alpha-prd.md`\n\n"
+            f"---\n\n"
+            f"*Stage: awaiting_merge*\n",
+            encoding="utf-8",
+        )
+        self._git("add", ".")
+        self._git("commit", "-q", "-m", "add plan")
+        self._git("push", "origin", "main", check=False)
+        return plan_path
+
+    def _write_queue(self, task_id: str, branch: str, plan_path: Path) -> Path:
+        queue_path = self.repo / ".agents" / "aet-queue"
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
+        GitRefsBackend(
+            queue_file=str(queue_path),
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        ).save(
+            [
+                {
+                    "id": task_id,
+                    "state": "awaiting_merge",
+                    "stage": "qa-complete",
+                    "branch": branch,
+                    "plan_file": str(plan_path),
+                }
+            ]
+        )
+        return queue_path
+
+    def _branch(self, name: str, filename: str, content: str) -> None:
+        self._git("checkout", "-q", "-b", name)
+        (self.repo / filename).write_text(content, encoding="utf-8")
+        self._git("add", filename)
+        self._git("commit", "-q", "-m", f"feat({name})")
+
+    def _squash_merge_to_alpha(self, branch: str, message: str) -> str:
+        self._git("checkout", "-q", "alpha-prd")
+        self._git("merge", "--squash", branch)
+        self._git("add", ".")
+        self._git("commit", "-q", "-m", message)
+        self._git("push", "origin", "alpha-prd", check=False)
+        return self._git("rev-parse", "HEAD").stdout.strip()
+
+    def _run_verify(self, argv: list[str]) -> tuple[int, str, str]:
+        with patch.object(ship.aet_state, "run_gh", return_value=(1, "", "")):
+            with patch.object(sys, "argv", argv):
+                stdout_capture = StringIO()
+                stderr_capture = StringIO()
+                with patch.object(sys, "stdout", stdout_capture):
+                    with patch.object(sys, "stderr", stderr_capture):
+                        rc = ship.main()
+                return rc, stdout_capture.getvalue(), stderr_capture.getvalue()
+
+    def test_verify_resolves_prd_derived_target_branch(self):
+        """ship verify checks origin/<prd-stem> when no --target-branch is given."""
+        self._git("checkout", "-q", "-b", "alpha-prd")
+        self._git("push", "-u", "origin", "alpha-prd", check=False)
+        self._git("checkout", "-q", "main")
+        self._branch("t1", "feat.txt", "feature\n")
+        sha = self._squash_merge_to_alpha("t1", "feat: implement")
+
+        rc, out, err = self._run_verify(["ship", "verify", "t1", "--squash-fallback"])
 
         self.assertEqual(rc, 0)
         self.assertIn(sha, out)

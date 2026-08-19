@@ -73,6 +73,63 @@ def _subprocess_mock(responses):
     return mock_run
 
 
+def _git(repo: str | Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=check,
+    )
+
+
+def _init_single_pr_repo(tmpdir: str) -> Path:
+    """Create a repo with a bare origin remote and a ``main`` branch."""
+    repo = Path(tmpdir) / "repo"
+    repo.mkdir()
+    origin = Path(tmpdir) / "origin"
+    origin.mkdir()
+    subprocess.run(["git", "init", "--bare", "-q", str(origin)], check=True)
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    (repo / "README.md").write_text("# test", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "initial")
+    _git(repo, "branch", "-M", "main")
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "-u", "origin", "main")
+    return repo
+
+
+def _write_single_pr_artifacts(repo: Path) -> None:
+    """Write PRD, plan, and single-pr config, then push to origin."""
+    prd = repo / "docs" / "prds" / "alpha-prd.md"
+    prd.parent.mkdir(parents=True, exist_ok=True)
+    prd.write_text("# Alpha\n\nRequirement: R-17\n", encoding="utf-8")
+    plan = repo / "docs" / "plans" / "t1.md"
+    plan.parent.mkdir(parents=True, exist_ok=True)
+    plan.write_text(
+        "---\n"
+        "id: t1\n"
+        "---\n\n"
+        "# T1\n\n"
+        "## Context\n\n"
+        "- PRD: `docs/prds/alpha-prd.md`\n\n"
+        "## Task List\n\n"
+        "- [ ] work\n\n",
+        encoding="utf-8",
+    )
+    config = repo / ".agents" / "aet-config.json"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(
+        json.dumps({"trunk_branch": "main", "integration_mode": "single-pr"}),
+        encoding="utf-8",
+    )
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "add plan and config")
+    _git(repo, "push", "-q", "origin", "main")
+
+
 class TestAuditCommand(unittest.TestCase):
     def test_derive_subcommand_removed(self):
         """The old `derive` subcommand is no longer registered."""
@@ -1663,6 +1720,103 @@ class TestResolveTaskRecord(unittest.TestCase):
 
             self.assertIsNone(task)
             self.assertIsNone(sealed)
+
+
+class TestPrdDerivedIntegrationBranchState(unittest.TestCase):
+    """R-17: state commands resolve the integration branch from the task's PRD."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.repo = _init_single_pr_repo(self.tmpdir.name)
+        _write_single_pr_artifacts(self.repo)
+        self.archive_dir = Path(self.tmpdir.name) / "archive"
+        self.archive_dir.mkdir()
+        self.env_patch = patch.dict(
+            "os.environ", {"AET_PLANS_ARCHIVE_DIR": str(self.archive_dir)}
+        )
+        self.env_patch.start()
+        self.addCleanup(self.env_patch.stop)
+
+    def _write_queue(self, task: dict) -> str:
+        queue_path, _history_path = seed_git_queue(self.repo, [task])
+        return str(queue_path)
+
+    def _create_task_branch_and_merge_to_alpha(self) -> str:
+        """Create alpha-prd integration branch, merge t1 into it, return merge SHA."""
+        _git(self.repo, "checkout", "-q", "-b", "alpha-prd")
+        _git(self.repo, "push", "-q", "-u", "origin", "alpha-prd")
+        _git(self.repo, "checkout", "-q", "main")
+        _git(self.repo, "checkout", "-q", "-b", "t1")
+        (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-q", "-m", "feat(t1): work")
+        _git(self.repo, "checkout", "-q", "alpha-prd")
+        _git(self.repo, "merge", "--squash", "t1")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-q", "-m", "Integrate t1")
+        merge_commit = _git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        _git(self.repo, "push", "-q", "origin", "alpha-prd")
+        _git(self.repo, "checkout", "-q", "main")
+        _git(self.repo, "branch", "-q", "-D", "t1")
+        return merge_commit
+
+    def test_record_merge_uses_prd_derived_integration_branch(self):
+        """record-merge verifies the merge commit against origin/<prd-stem>."""
+        merge_commit = self._create_task_branch_and_merge_to_alpha()
+        queue_path = self._write_queue(
+            {
+                "id": "t1",
+                "state": "awaiting_merge",
+                "plan_file": "docs/plans/t1.md",
+                "merge_commit": merge_commit,
+            }
+        )
+
+        args = aet_state.argparse.Namespace(
+            command="record-merge",
+            task_id="t1",
+            queue=queue_path,
+            dry_run=False,
+            plan=None,
+            branch=None,
+            merge_commit=None,
+            target_branch=None,
+        )
+        rc = aet_state.cmd_record_merge(args)
+        self.assertEqual(rc, 0)
+
+        self.assertEqual(load_git_queue(queue_path), [])
+
+        settled = load_git_history(queue_path)[0]
+        self.assertEqual(settled["state"], "merged")
+        self.assertEqual(settled["merge_commit"], merge_commit)
+
+    def test_transition_to_merged_uses_prd_derived_integration_branch(self):
+        """Manual awaiting_merge -> merged uses the PRD-derived branch for ancestry."""
+        merge_commit = self._create_task_branch_and_merge_to_alpha()
+        queue_path = self._write_queue(
+            {
+                "id": "t1",
+                "state": "awaiting_merge",
+                "plan_file": "docs/plans/t1.md",
+                "merge_commit": merge_commit,
+            }
+        )
+
+        args = aet_state.argparse.Namespace(
+            command="transition",
+            task_id="t1",
+            from_stage="awaiting_merge",
+            to_stage="merged",
+            queue=queue_path,
+            dry_run=False,
+            reason=None,
+        )
+        rc = aet_state.cmd_transition(args)
+        self.assertEqual(rc, 0)
+
+        self.assertEqual(load_git_queue(queue_path), [])
 
 
 if __name__ == "__main__":

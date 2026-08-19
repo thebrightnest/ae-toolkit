@@ -28,9 +28,14 @@ from aet.backends.factory import (  # noqa: E402, I001
     create_backend,
     queue_repo_root,
     resolve_config,
+    resolve_integration_mode,
 )
 from aet.backends.git_refs_backend import GitRefsBackend  # noqa: E402
-from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch  # noqa: E402
+from aet.branch_ref import (  # noqa: E402
+    resolve_integration_branch,
+    resolve_integration_branch_for_task,
+    resolve_trunk_branch,
+)
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 
 _INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
@@ -58,6 +63,24 @@ def _resolve_integration(queue_path):
     cwd = os.path.dirname(queue_path) if queue_path else "."
     config = resolve_config(os.path.join(cwd, "aet-config.json"))
     return resolve_integration_branch(cwd, config).ref
+
+
+def _resolve_integration_for_task(queue_path, task, cli_base=None):
+    """Resolve the per-task integration branch, including PRD-derived branches.
+
+    In ``single-pr`` mode the branch is derived from the task's PRD when no
+    static override is supplied (R-17).  In ``pr-per-task`` mode the configured
+    integration branch (or trunk) is used.
+    """
+    repo_root = queue_repo_root(queue_path)
+    if repo_root is None:
+        repo_root = os.path.dirname(queue_path) if queue_path else "."
+    config_path = os.path.join(repo_root, ".agents", "aet-config.json")
+    config = resolve_config(config_path, repo_root=repo_root)
+    integration_mode = resolve_integration_mode(config_path, repo_root=repo_root)
+    return resolve_integration_branch_for_task(
+        repo_root, config, task, integration_mode, cli_base=cli_base
+    )
 
 
 def find_task(queue, task_id):
@@ -783,7 +806,15 @@ def cmd_set_stage(args):
     return 0
 
 
-def _derive_all_states(queue, cwd, trunk_branch="main", integration_branch=None):
+def _derive_all_states(
+    queue,
+    cwd,
+    trunk_branch="main",
+    integration_branch=None,
+    repo_root=None,
+    config=None,
+    integration_mode=None,
+):
     """Return (task_by_id, derived) for every task in the queue.
 
     A task is on the board if and only if it is in ``queue``. A blocker that is
@@ -792,20 +823,38 @@ def _derive_all_states(queue, cwd, trunk_branch="main", integration_branch=None)
     instead of staying ``blocked`` forever. The settled history log is not an
     authority (R-8); it is kept only as a measurement input for metrics and
     retrospectives.
+
+    When ``repo_root``, ``config`` and ``integration_mode`` are supplied, the
+    integration branch is resolved per task. This lets ``single-pr`` tasks use
+    their PRD-derived integration branch while ``pr-per-task`` tasks keep the
+    static one (R-17).
     """
     tasks = queue
     task_by_id = {t["id"]: t for t in tasks if t.get("id")}
     derived = {}
 
+    def _task_target(task):
+        """Return the integration branch this task's status is derived against.
+
+        Falls back to the static branch when the caller supplied no repository
+        context, which is what keeps the many direct callers unchanged.
+        """
+        if repo_root is not None and config is not None and integration_mode is not None:
+            return resolve_integration_branch_for_task(
+                repo_root, config, task, integration_mode
+            ).ref
+        return integration_branch
+
     def blocker_status(task_id):
         if task_id in task_by_id:
             if task_id not in derived:
+                blocker = task_by_id[task_id]
                 derived[task_id] = derive_status(
-                    task_by_id[task_id],
+                    blocker,
                     blocker_status,
                     cwd=cwd,
                     trunk_branch=trunk_branch,
-                    integration_branch=integration_branch,
+                    integration_branch=_task_target(blocker),
                 )
             status = derived[task_id]["derived_status"]
         else:
@@ -821,7 +870,7 @@ def _derive_all_states(queue, cwd, trunk_branch="main", integration_branch=None)
                 blocker_status,
                 cwd=cwd,
                 trunk_branch=trunk_branch,
-                integration_branch=integration_branch,
+                integration_branch=_task_target(task),
             )
 
     return task_by_id, derived
@@ -855,12 +904,17 @@ def cmd_audit(args):
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
     trunk_branch = _resolve_trunk(args.queue)
-    integration_branch = _resolve_integration(args.queue)
+    repo_root = queue_repo_root(args.queue) or cwd
+    config_path = os.path.join(repo_root, ".agents", "aet-config.json")
+    config = resolve_config(config_path, repo_root=repo_root)
+    integration_mode = resolve_integration_mode(config_path, repo_root=repo_root)
     task_by_id, derived = _derive_all_states(
         queue,
         cwd,
         trunk_branch=trunk_branch,
-        integration_branch=integration_branch,
+        repo_root=repo_root,
+        config=config,
+        integration_mode=integration_mode,
     )
 
     results = {}
@@ -914,12 +968,17 @@ def cmd_heal(args):
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
     trunk_branch = _resolve_trunk(args.queue)
-    integration_branch = _resolve_integration(args.queue)
+    repo_root = queue_repo_root(args.queue) or cwd
+    config_path = os.path.join(repo_root, ".agents", "aet-config.json")
+    config = resolve_config(config_path, repo_root=repo_root)
+    integration_mode = resolve_integration_mode(config_path, repo_root=repo_root)
     task_by_id, derived = _derive_all_states(
         queue,
         cwd,
         trunk_branch=trunk_branch,
-        integration_branch=integration_branch,
+        repo_root=repo_root,
+        config=config,
+        integration_mode=integration_mode,
     )
 
     # A blocker counts as pending only while it is on the board and not
@@ -1110,7 +1169,7 @@ def cmd_validate(args):
         return 1
     cwd = os.path.dirname(args.queue) if args.queue else "."
     trunk_branch = _resolve_trunk(args.queue)
-    integration_branch = _resolve_integration(args.queue)
+    integration_branch = _resolve_integration_for_task(args.queue, task).ref
     ok, msg = validate_transition(
         task,
         args.from_stage,
@@ -1147,6 +1206,10 @@ def cmd_reset(args):
     queue = data["queue"]
     cwd = os.path.dirname(args.queue) if args.queue else "."
     trunk_branch = _resolve_trunk(args.queue)
+    repo_root = queue_repo_root(args.queue) or cwd
+    config_path = os.path.join(repo_root, ".agents", "aet-config.json")
+    config = resolve_config(config_path, repo_root=repo_root)
+    integration_mode = resolve_integration_mode(config_path, repo_root=repo_root)
 
     task = find_task(queue, args.task_id)
     if not task:
@@ -1154,7 +1217,12 @@ def cmd_reset(args):
         return 1
 
     _, derived = _derive_all_states(
-        queue, cwd, trunk_branch=trunk_branch
+        queue,
+        cwd,
+        trunk_branch=trunk_branch,
+        repo_root=repo_root,
+        config=config,
+        integration_mode=integration_mode,
     )
     derived_state = derived[args.task_id]["derived_status"].split(" (warning")[0]
     stored_state = queue_lib.current_state(task)
@@ -1177,7 +1245,12 @@ def cmd_reset(args):
 
         stored_state = queue_lib.current_state(task)
         _, derived = _derive_all_states(
-            queue, cwd, trunk_branch=trunk_branch
+            queue,
+            cwd,
+            trunk_branch=trunk_branch,
+            repo_root=repo_root,
+            config=config,
+            integration_mode=integration_mode,
         )
         derived_state = derived[args.task_id]["derived_status"].split(" (warning")[0]
 
@@ -1361,7 +1434,6 @@ def cmd_transition(args):
     backend.fetch()
     cwd = os.path.dirname(args.queue) if args.queue else "."
     trunk_branch = _resolve_trunk(args.queue)
-    integration_branch = _resolve_integration(args.queue)
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return queue_lib.LEASE_HELD_EXIT_CODE
@@ -1373,6 +1445,8 @@ def cmd_transition(args):
         if not task:
             print(f"Task not found: {args.task_id}", file=sys.stderr)
             return 1
+
+        integration_branch = _resolve_integration_for_task(args.queue, task).ref
 
         if args.dry_run:
             ok, msg = validate_transition(
@@ -1416,7 +1490,6 @@ def cmd_record_merge(args):
     backend.fetch()
     cwd = os.path.dirname(args.queue) if args.queue else "."
     trunk_branch = _resolve_trunk(args.queue)
-    integration_branch = getattr(args, "target_branch", None) or _resolve_integration(args.queue)
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return queue_lib.LEASE_HELD_EXIT_CODE
@@ -1431,6 +1504,13 @@ def cmd_record_merge(args):
         if not task and not sealed_task:
             print(f"Task not found: {args.task_id}", file=sys.stderr)
             return 1
+
+        if task:
+            integration_branch = _resolve_integration_for_task(
+                args.queue, task, cli_base=getattr(args, "target_branch", None)
+            ).ref
+        else:
+            integration_branch = getattr(args, "target_branch", None) or _resolve_integration(args.queue)
 
     if sealed_task:
         # Plan footer updates and archival are no longer part of the closure
@@ -1452,14 +1532,22 @@ def cmd_record_merge(args):
         return 1
 
     if cli_merge_commit:
-        if not is_ancestor_of_target(cli_merge_commit, integration_branch, cwd=cwd):
+        candidate_merge_commit = cli_merge_commit
+    elif task.get("merge_commit"):
+        candidate_merge_commit = task["merge_commit"]
+    else:
+        candidate_merge_commit = None
+
+    if candidate_merge_commit:
+        if not is_ancestor_of_target(candidate_merge_commit, integration_branch, cwd=cwd):
             print(
-                f"Merge verification failed: {cli_merge_commit} is not an ancestor of origin/{integration_branch}.",
+                f"Merge verification failed: {candidate_merge_commit} is not an ancestor "
+                f"of origin/{integration_branch}.",
                 file=sys.stderr,
             )
             return 1
-        merge_commit = cli_merge_commit
-        merge_strategy = "manual"
+        merge_commit = candidate_merge_commit
+        merge_strategy = task.get("merge_strategy") or "manual"
     else:
         branch = branch or task.get("branch")
         if not branch:

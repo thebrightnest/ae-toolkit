@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import NamedTuple
+from pathlib import Path
+from typing import Any, NamedTuple
 
 
 class BranchRef(NamedTuple):
@@ -77,6 +78,20 @@ def _ref_exists(repo_root, ref: str) -> bool:
     )
 
 
+def derive_integration_branch_from_prd(prd_path: str | Path | None) -> str | None:
+    """Return an integration branch name derived from a PRD path.
+
+    The branch name is the PRD file's stem.  Returns ``None`` when no PRD path
+    is supplied or the path has no stem.
+    """
+    if not prd_path:
+        return None
+    path = Path(prd_path)
+    if not path.stem:
+        return None
+    return path.stem
+
+
 def resolve_integration_branch(repo_root, config, cli_base=None) -> BranchRef:
     """Resolve the integration (worktree base) branch ref.
 
@@ -89,6 +104,72 @@ def resolve_integration_branch(repo_root, config, cli_base=None) -> BranchRef:
     env_base = os.environ.get("AET_WORK_BASE_BRANCH")
     if env_base:
         return BranchRef(env_base, "env")
+
+    config_value = config.get("integration_branch")
+    if config_value:
+        return BranchRef(config_value, "config")
+
+    trunk = resolve_trunk_branch(repo_root, config)
+    return BranchRef(trunk.ref, "trunk")
+
+
+def _task_prd_path(task: dict[str, Any], repo_root: str | Path) -> Path | None:
+    """Return the PRD path for a task, preferring its spec and falling back to the plan file."""
+    spec = task.get("spec")
+    if isinstance(spec, dict):
+        frontmatter = spec.get("frontmatter", {})
+        source_prd = frontmatter.get("source_prd")
+        if source_prd:
+            path = Path(source_prd)
+            if not path.is_absolute():
+                path = Path(repo_root) / path
+            return path
+        body = spec.get("body")
+        if body:
+            from aet import plan_parser
+
+            path = plan_parser.prd_path_from_text(body, repo_root=repo_root)
+            if path is not None:
+                return path
+
+    plan_file = task.get("plan_file")
+    if plan_file:
+        from aet import plan_parser
+
+        path = plan_parser.prd_path_for_plan(Path(plan_file), repo_root=repo_root)
+        if path is not None:
+            return path
+
+    return None
+
+
+def resolve_integration_branch_for_task(
+    repo_root: str | Path,
+    config: dict[str, Any],
+    task: dict[str, Any],
+    integration_mode: str,
+    cli_base: str | None = None,
+) -> BranchRef:
+    """Resolve the integration branch for a specific task.
+
+    Explicit overrides (CLI, env) always win.  In ``single-pr`` mode the branch
+    is derived from the task's PRD when no static override is supplied, so
+    concurrent PRDs each carry their own integration branch (R-17).  In
+    ``pr-per-task`` mode the configured integration branch (or trunk) is used,
+    preserving ADR-045 Scenario A as the degenerate case.
+    """
+    if cli_base:
+        return BranchRef(cli_base, "cli")
+
+    env_base = os.environ.get("AET_WORK_BASE_BRANCH")
+    if env_base:
+        return BranchRef(env_base, "env")
+
+    if integration_mode == "single-pr":
+        prd_path = _task_prd_path(task, repo_root)
+        derived = derive_integration_branch_from_prd(prd_path)
+        if derived:
+            return BranchRef(derived, "prd")
 
     config_value = config.get("integration_branch")
     if config_value:

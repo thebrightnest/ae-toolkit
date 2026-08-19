@@ -231,6 +231,17 @@ def _resolve_task_branch(task_id: str, queue: str) -> Optional[str]:
     return task.get("branch") if task else None
 
 
+def _resolve_task_record(task_id: str, queue: str) -> Optional[dict]:
+    """Return the queued task record for *task_id*, or None."""
+    try:
+        backend = aet_state.make_backend(queue)
+        backend.fetch()
+        data = backend.load()
+        return aet_state.find_task(data["queue"], task_id)
+    except Exception:
+        return None
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     """Verify that a branch has merged without mutating queue or ledger state.
 
@@ -256,7 +267,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     target_branch = getattr(args, "target_branch", None)
     trunk_branch = aet_state._resolve_trunk(queue)
-    integration_branch = target_branch or aet_state._resolve_integration(queue)
+    if target_branch:
+        integration_branch = target_branch
+    else:
+        task = _resolve_task_record(task_id, queue)
+        if task is not None:
+            integration_branch = aet_state._resolve_integration_for_task(queue, task).ref
+        else:
+            integration_branch = aet_state._resolve_integration(queue)
 
     merge_commit, merge_strategy, match_kind = aet_state.resolve_merge_commit(
         branch,

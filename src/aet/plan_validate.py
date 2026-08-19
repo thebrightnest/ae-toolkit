@@ -150,19 +150,14 @@ def structural_findings(
 # (b) R-trace coverage
 # ---------------------------------------------------------------------------
 
-_PRD_REF_RE = re.compile(r"\b(docs/prds/[\w./\-]+\.md)\b")
 _RID_RE = re.compile(r"\bR-\d+\b")
 _TASK_TRACE_RE = re.compile(r"\(\s*traces:\s*([^)]+)\)")
 
 
 def _prd_path_for_plan(plan: Path, repo_root: Path | None = None) -> Path | None:
     """Resolve the PRD file referenced from a plan's context."""
-    text = plan.read_text(errors="ignore")
-    match = _PRD_REF_RE.search(text)
-    if not match:
-        return None
     root = repo_root if repo_root is not None else _repo_root_for(plan)
-    return root / match.group(1)
+    return plan_parser.prd_path_for_plan(plan, repo_root=root)
 
 
 def _requirements_rids(prd: Path) -> set[str]:

@@ -73,6 +73,7 @@ from aet.backends.factory import (  # noqa: E402
 from aet.branch_ref import (  # noqa: E402
     resolve_base_ref,
     resolve_integration_branch,
+    resolve_integration_branch_for_task,
     resolve_trunk_branch,
 )
 from aet.cli_adapter import resolve_cli_adapter  # noqa: E402
@@ -1666,6 +1667,7 @@ def process_task(
         logger = telemetry.RunLogger(repo_root)
     task_id = task["id"]
     plan_data = plan_parser.task_routing_data(task, repo_root)
+    config = resolve_config(DEFAULT_CONFIG_PATH, repo_root=repo_root)
     canonical_rel = f"docs/plans/{task_id}.md"
     plan_file = os.path.join(repo_root, canonical_rel)
 
@@ -2027,12 +2029,14 @@ def process_task(
     # and mark the task merged. This is the "done means integrated" semantics
     # of ADR-045 decision 3.
     if integration_mode == "single-pr":
-        integration_branch = base_branch.split("/", 1)[1] if "/" in base_branch else base_branch
+        task_integration = resolve_integration_branch_for_task(
+            repo_root, config, task, integration_mode
+        )
         try:
             _integrate_single_pr_task(
                 repo_root=repo_root,
                 task_id=task_id,
-                integration_branch=integration_branch,
+                integration_branch=task_integration.ref,
                 worktree_dir=worktree_dir,
                 backend=backend,
                 plan_file=plan_file,
