@@ -221,8 +221,8 @@ Detect plan files that exist on disk but are not represented in the active work 
 4. Identify any plan files whose path is not found in the queue's `plan_file` set **and** not found in the settled history's `plan_file` set
 5. Compare the most recent modification time of any `docs/plans/*.md` against the `queue_updated_at` field (or the queue file's mtime as fallback)
 6. Report findings:
-   - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Run aet init-queue to sync.`
-   - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last init-queue). Run aet init-queue to sync.`
+   - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Admit them with aet sprint add.`
+   - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last queue update). Run aet queue sync to reconcile the board.`
    - If none: print `✅ No plan drift detected. All plans are tracked in the queue.`
 
 Plan-drift detection checks only the active queue. Settled tasks are ignored; their plan files may still exist on disk but are no longer tracked as active work.
