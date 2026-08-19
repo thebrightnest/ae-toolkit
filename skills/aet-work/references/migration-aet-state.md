@@ -32,10 +32,12 @@ To force a full repair:
 # 1. Audit stored state against git ground truth
 aet state audit .agents/work-queue.json
 
-# 2. Re-init the queue (preserves completed tasks, normalizes new ones)
-aet init-queue
+# 2. Sync the open-work board (rebuilds blocker DAG, drops terminal records)
+aet queue sync
 
-# 3. Check for remaining discrepancies
+# 3. Re-add any approved plans that should be on the board with `aet sprint add`
+
+# 4. Check for remaining discrepancies
 aet status
 ```
 

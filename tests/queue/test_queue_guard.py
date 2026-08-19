@@ -417,12 +417,3 @@ def test_add_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
     _assert_clean_refusal(rc, capsys.readouterr().err)
 
 
-def test_init_queue_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
-    init_queue = _load_bin("init_queue")
-    qf = _tampered_queue(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["init-queue", "--queue-file", str(qf)])
-
-    rc = init_queue.main()
-
-    _assert_clean_refusal(rc, capsys.readouterr().err)

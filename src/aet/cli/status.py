@@ -30,13 +30,17 @@ def _display_category(task: dict) -> str:
 
 def _declared_size(task: dict) -> str:
     """Return the plan's declared S/M/L size, or '—' when unavailable."""
-    plan_file = task.get("plan_file")
-    if not plan_file:
-        return "—"
-    try:
-        data = parse_frontmatter(Path(plan_file))
-    except OSError:
-        return "—"
+    spec = task.get("spec")
+    if isinstance(spec, dict):
+        data = spec.get("frontmatter", {})
+    else:
+        plan_file = task.get("plan_file")
+        if not plan_file:
+            return "—"
+        try:
+            data = parse_frontmatter(Path(plan_file))
+        except OSError:
+            return "—"
     size = data.get("size")
     return size if size in {"S", "M", "L"} else "—"
 

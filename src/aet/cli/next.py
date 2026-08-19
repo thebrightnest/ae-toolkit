@@ -23,19 +23,19 @@ from aet.queue import (  # noqa: E402
 
 
 def derive_queue(queue: list[dict]) -> list[dict]:
-    """Return only tasks whose plan file still exists.
+    """Return only tasks that are executable on this machine.
 
     Queue membership is the explicit sprint-add record. A task whose plan file
-    has disappeared is retained in the stored queue (drift is reported by
-    ``aet queue status`` / ``aet queue sync``) but is not pickable.
+    has disappeared but whose record carries a portable spec (R-19) is still
+    pickable because the spec renders the working file on demand.
     """
     derived: list[dict] = []
     for task in queue:
-        pf = task.get("plan_file")
-        if not pf:
+        if isinstance(task.get("spec"), dict):
             derived.append(task)
             continue
-        if Path(pf).is_file():
+        pf = task.get("plan_file")
+        if pf and Path(pf).is_file():
             derived.append(task)
     return derived
 

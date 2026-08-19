@@ -33,7 +33,6 @@ _NOUN_GROUPS = [
 _TOP_LEVEL_COMMANDS = [
     "configure",
     "harness-guard",
-    "init-queue",
     "metrics",
     "mine-learnings",
     "next",

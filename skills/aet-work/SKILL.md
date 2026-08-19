@@ -22,7 +22,7 @@ banner it emits. Do not ask the user for this context manually.
 
 ## Prerequisites
 
-This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet init-queue`, `aet queue sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. Run `aet setup link` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
+This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet queue sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. Run `aet setup link` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
 ## Mental Model: Plan Files Are the Source of Truth
 
@@ -48,7 +48,7 @@ The ledger is an append-only, content-addressed event store. Do not edit it by h
 
 ### Mutation guard
 
-While a batch or `run-one` is live, the orchestrator writes a run lease to `.agents/work-queue.lease` (gitignored). Mutating commands — `add`, `aet queue sync`, `init-queue`, and the `aet state` writers — refuse to run while another run holds a live lease, naming the owning run id. A lease whose process has exited is reclaimed as stale automatically.
+While a batch or `run-one` is live, the orchestrator writes a run lease to `.agents/work-queue.lease` (gitignored). Mutating commands — `add`, `aet queue sync`, and the `aet state` writers — refuse to run while another run holds a live lease, naming the owning run id. A lease whose process has exited is reclaimed as stale automatically.
 
 Use `--force` only to deliberately override a lease you know is stale, or to make an urgent manual edit during a batch. It prints a loud warning and can corrupt a live run, so prefer re-running after the batch finishes.
 
@@ -237,14 +237,6 @@ aet queue sync
 ```
 
 Use `add` for explicit curation; use `aet queue sync` after queue edits or when resolving blocker DAGs.
-
-### `init-queue`
-
-Rebuild the queue file from existing plans, preserving terminal metadata. Useful when the queue file is lost.
-
-```bash
-aet init-queue
-```
 
 ### `state heal`
 

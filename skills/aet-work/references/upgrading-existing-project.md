@@ -17,9 +17,9 @@ This guide brings the project onto the FODS state model (`state`, `history[]`, l
 New AET scripts should **ignore old formats safely**:
 
 - Old human-readable plan sections (`## Dependencies`, `## Blocked by`) are not parsed as machine truth.
-- Old storage files (`.agents/work-archive.json`, `scripts/.aet-work-orchestrator.log`) are not read by `sync`, `init-queue`, or the orchestrator.
+- Old storage files (`.agents/work-archive.json`, `scripts/.aet-work-orchestrator.log`) are not read by `sync` or the orchestrator.
 - Legacy statuses (`done`, `merge_verified`) are normalized to canonical terminal states during intake.
-- Already-settled plans are skipped by `sync`; `init-queue` should skip them too (see known issue below).
+- Already-settled records are dropped from the board by `sync` (see known issue below).
 
 The boundary is the **validated frontmatter contract**. Anything outside that contract is either human prose or legacy data and must not affect scheduling.
 
@@ -75,13 +75,13 @@ aet state heal --apply .agents/work-queue.json
 
 This appends terminal tasks to `.agents/work-history.jsonl` and removes them from the live queue. The command prints what it sealed.
 
-### 5. Rebuild the live queue from plans
+### 5. Reconcile the open-work board
 
 ```bash
-aet init-queue
+aet queue sync
 ```
 
-This re-ingests every `docs/plans/*.md` using the new frontmatter contract and normalizes legacy task states.
+This drops terminal records and rebuilds the blocker DAG. Re-add any approved plans that should be on the board with `aet sprint add`.
 
 ### 6. Record merges for already-merged branches
 

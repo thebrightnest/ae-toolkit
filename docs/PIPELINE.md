@@ -103,11 +103,10 @@ Workflow state is **recorded at transition time and trusted on read**.
 
 ## Sprint Membership
 
-The live queue is an **ephemeral cache** rebuilt from the ledger and plan footer stages (ADR-013, ADR-055).
+The live queue **is the board**: it holds exactly the set of open work (ADR-013, ADR-055). Nothing re-derives membership by scanning `docs/plans/`.
 
-- `init-queue` scans `docs/plans/*.md` and includes plans whose footer stage is `plan-approved` (and not already settled).
-- Plans in earlier planning stages remain on the board but are excluded from the sprint.
-- `sync` reconciles the live task set against current plans and their blockers.
+- Plans are admitted explicitly via `aet sprint add` (or `aet backlog add`); intake is curated.
+- `sync` reconciles the existing queue: it drops terminal records and rebuilds the blocker DAG, never scans the plans directory.
 - `next` selects from the derived queue, so two clones produce the same sprint after fetching `refs/aet/*`.
 
 The queue `state` axis (`ready`, `blocked`, `in_progress`, …) remains the runtime scheduling signal; `ready`/`blocked` are still computed solely from `blocked_by` (R-12), never from labels or human edits.

@@ -16,14 +16,6 @@ _state_spec = importlib.util.spec_from_loader(
 aet_state = importlib.util.module_from_spec(_state_spec)
 _state_spec.loader.exec_module(aet_state)
 
-_INIT_QUEUE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "init_queue.py"
-_init_spec = importlib.util.spec_from_loader(
-    "init_queue", importlib.machinery.SourceFileLoader("init_queue", str(_INIT_QUEUE_PY))
-)
-init_queue = importlib.util.module_from_spec(_init_spec)
-_init_spec.loader.exec_module(init_queue)
-
-
 class MockResult:
     def __init__(self, returncode, stdout="", stderr=""):
         self.returncode = returncode
@@ -213,56 +205,6 @@ class TestStateReset(unittest.TestCase):
                 after = json.load(f)
             self.assertEqual(after["tasks"][0]["state"], "in_progress")
             self.assertEqual(after["tasks"][0]["branch"], "feat-t1")
-
-    def test_reset_round_trips_through_init_queue_unchanged(self):
-        """After reset, init-queue reproduces the same state and no runtime fields."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            plan_path = _make_plan(tmpdir, "t1")
-            queue_path = _make_queue(
-                tmpdir,
-                {
-                    "id": "t1",
-                    "state": "in_progress",
-                    "plan_file": plan_path,
-                    "branch": "feat-t1",
-                    "worktree": "/nonexistent/worktree",
-                },
-            )
-
-            responses = {
-                ("show-ref", "--verify", "--quiet", "refs/heads/feat-t1"): (1, "", ""),
-            }
-
-            reset_args = aet_state.argparse.Namespace(
-                command="reset",
-                task_id="t1",
-                queue=str(queue_path),
-                apply=True,
-                force=False,
-            )
-            with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
-                rc = aet_state.cmd_reset(reset_args)
-            self.assertEqual(rc, 0)
-
-            # Run init-queue over the same plans directory.
-            history_file = str(queue_path.with_name("work-history.jsonl"))
-            rc = init_queue._run(
-                queue_file=str(queue_path),
-                history_file=history_file,
-                plans_dir=Path(tmpdir) / "docs" / "plans",
-                prds_dir=Path(tmpdir) / "docs" / "prds",
-                config=str(Path(tmpdir) / ".agents" / "aet-config.json"),
-                force=False,
-            )
-            self.assertEqual(rc, 0)
-
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            task = after["tasks"][0]
-            self.assertEqual(task["state"], "ready")
-            self.assertIsNone(task.get("branch"))
-            self.assertIsNone(task.get("worktree"))
-
 
 if __name__ == "__main__":
     unittest.main()

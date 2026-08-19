@@ -352,9 +352,10 @@ class TestOwbCalibrationCorpus(unittest.TestCase):
             plan_id="owb-05-board-is-open-work",
             blocked_by=["owb-01-spec-travels-in-task-record"],
             files=[
-                "src/aet/cli/init_queue.py",
                 "src/aet/cli/sync.py",
                 "src/aet/cli/aet_state.py",
+                "src/aet/cli/next.py",
+                "src/aet/cli/status.py",
                 "src/aet/queue.py",
                 "tests/queue/",
                 "tests/state/",

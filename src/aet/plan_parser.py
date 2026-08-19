@@ -439,13 +439,13 @@ def task_plan_path(task: dict[str, Any], repo_root: str | Path | None = None) ->
     return root / "docs" / "plans" / f"{task_id}.md"
 
 
-def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[str, Any]:
+def new_task_from_plan(path: Path, live_tasks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Create a fresh queue task dict from a plan file using the frontmatter contract.
 
-    ``settled_ids`` carries task ids already terminal in the settled history
-    log. A blocker that merged before this task was added already fired its
-    decrement event and will not fire again, so it must not count toward
-    ``pending_blockers`` — otherwise the task deadlocks on arrival.
+    ``live_tasks`` is the current open-work board. A blocker that has already
+    left the board is terminal, so it must not count toward ``pending_blockers``
+    — otherwise the task deadlocks on arrival. Blockers that are still on the
+    board are pending until they become terminal.
     """
     data = parse_frontmatter(path)
     blocked_by = data.get("blocked_by", [])
@@ -453,8 +453,13 @@ def new_task_from_plan(path: Path, settled_ids: set[str] | None = None) -> dict[
         blocked_by = []
     blocked_by = [b for b in blocked_by if isinstance(b, str)]
 
-    settled = settled_ids or set()
-    pending = [b for b in blocked_by if b not in settled]
+    live_by_id = {t["id"]: t for t in (live_tasks or []) if t.get("id")}
+    terminal = {"merged", "abandoned"}
+    pending = [
+        b
+        for b in blocked_by
+        if b in live_by_id and live_by_id[b].get("state") not in terminal
+    ]
 
     state = "ready" if not pending else "blocked"
     work_class = data.get("work_class")
