@@ -238,6 +238,26 @@ All four planned tasks landed. The divergences are in test scope and line-number
 
 - **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
 
+## Divergence Summary — owb-04-plan-tooling-and-board-review
+
+*Recorded: 2026-08-19 — Branch: owb-04-plan-tooling-and-board-review*
+
+All four implementation tasks landed; the merge verification remains owned by `aet-ship`.
+
+### Changed from plan
+
+- **Task 3 — where the spec size is resolved**: the plan named `src/aet/plan_size.py` as a file to modify. That module was not touched. Instead, `src/aet/plan_parser.py` gained `task_routing_data` to extract frontmatter from the portable task spec, and the two consumers (`src/aet/cli/orchestrator.py` and `src/aet/queue.py`) now read the declared size from the record. The `plan_size.delivered_size` contract is unchanged.
+- **Task 2 — additional files touched**: `src/aet/cli/plan.py` and `src/aet/cli/plans.py` were updated to filter settled plans before invoking the validators/linter, and `src/aet/plan_parser.py` was extended with `is_settled_plan`. These were not listed in the plan but are necessary plumbing for the live-work-only behavior.
+
+### Added (unplanned)
+
+- **`docs/CLI.md` regenerated** to reflect the new `gate review --plans-dir` escape-hatch wording.
+- **Tests outside the listed directories**: coverage for delivered-size-from-spec lives in `tests/orchestrator/test_orchestrator.py` and `tests/queue/test_queue.py`, not in `tests/plan/` or `tests/gate/`.
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
 ---
 
 *Stage: synced*
