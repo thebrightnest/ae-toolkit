@@ -261,9 +261,13 @@ from the supplied options. In that mode ``AET_TASK_ID`` must be set.
 
 Print a human-readable backlog review grouped by pipeline stage.
 
+By default the board is read from the active task backend so it works even
+when no plan files are present. Pass ``--plans-dir`` to render from plan
+files instead.
+
 ### Options
 
-- `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
+- `--plans-dir` *str* — Directory containing atomic plan markdown files (legacy mode)
 
 ## `aet handoff`
 

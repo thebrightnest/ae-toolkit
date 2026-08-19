@@ -2355,22 +2355,18 @@ def _attach_delivered_size(task: dict, repo_root: str) -> bool:
     field is left for ``append_history_record`` to populate at terminal seal
     time.
 
+    After R-19 the declared size travels in the task record's rendered spec;
+    pre-R-19 records still carrying ``plan_file`` fall back to the plan file on
+    disk.
+
     Returns ``True`` when the task record was mutated.
     """
     merge_commit = task.get("merge_commit")
     if not merge_commit:
         return False
     size_info = plan_size.delivered_size(repo_root, merge_commit)
-    plan_path = task.get("plan_file")
-    declared_size: str | None = None
-    if plan_path:
-        try:
-            plan_path_obj = Path(plan_path)
-            if not plan_path_obj.is_absolute():
-                plan_path_obj = Path(repo_root) / plan_path_obj
-            declared_size = plan_parser.parse_frontmatter(plan_path_obj).get("size")
-        except Exception:  # noqa: BLE001
-            declared_size = None
+    routing_data = plan_parser.task_routing_data(task, repo_root=repo_root)
+    declared_size = routing_data.get("size")
     task["delivered_size"] = {**size_info, "declared_size": declared_size}
     return True
 
