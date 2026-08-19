@@ -2887,6 +2887,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                             qt["branch"] = task_id
                             break
                     backend.save(queue)
+                backend.push()
 
                 # Build the orchestrator command for single-task mode.
                 # Stall timeout is resolved from the selected CLI adapter inside
@@ -3059,6 +3060,7 @@ def _record_run_one_in_queue(
                     qt["branch"] = branch
                     break
             backend.save(queue)
+        backend.push()
         print(f"   📝 Recorded {task_id} as in-progress (branch={branch}, worktree={worktree})")
         return True
     except Exception as exc:  # pragma: no cover - defensive logging

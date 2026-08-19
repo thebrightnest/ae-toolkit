@@ -940,6 +940,7 @@ def cmd_heal(args):
                 # Counter-only reconciliation: no transition, just persist.
                 if "pending_blockers" in change:
                     backend.save(queue)
+                    backend.push()
                 applied += 1
                 continue
 
@@ -970,6 +971,7 @@ def cmd_heal(args):
                     trunk_branch=trunk_branch,
                     repair=change.get("repair", False),
                 )
+                backend.push()
                 applied += 1
             except RuntimeError as e:
                 print(f"  Could not heal {task_id}: {e}", file=sys.stderr)
@@ -1066,6 +1068,7 @@ def cmd_reset(args):
                 cleared = _clear_stale_runtime_fields(task, cwd=cwd)
                 if cleared:
                     backend.save(queue)
+                    backend.push()
                 print(f"Reset {args.task_id}: already {stored_state}")
                 return 0
             print(
@@ -1079,6 +1082,7 @@ def cmd_reset(args):
             cleared = _clear_stale_runtime_fields(task, cwd=cwd)
             if cleared:
                 backend.save(queue)
+                backend.push()
             print(f"Reset {args.task_id}: {stored_state} (runtime fields cleared)")
             return 0
 
@@ -1088,6 +1092,7 @@ def cmd_reset(args):
                 by="reset", evidence={"reason": "reset to derived state"}, cwd=cwd,
                 trunk_branch=trunk_branch, repair=True,
             )
+            backend.push()
         except RuntimeError as e:
             print(str(e), file=sys.stderr)
             return 1
