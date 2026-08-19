@@ -232,6 +232,130 @@ def remove_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
         return False
 
 
+def _untracked_paths(worktree_dir: str) -> list[str]:
+    """Return repo-relative paths of untracked files in the worktree."""
+    result = subprocess.run(
+        ["git", "-C", worktree_dir, "status", "--porcelain", "--untracked-files=all"],
+        capture_output=True,
+        text=True,
+    )
+    paths: list[str] = []
+    if result.returncode != 0:
+        return paths
+    for line in result.stdout.splitlines():
+        if line.startswith("??"):
+            path = line[3:].strip()
+            if path:
+                paths.append(path)
+    return paths
+
+
+def _remove_deferred_untracked(worktree_dir: str) -> tuple[bool, list[str]]:
+    """Remove untracked files that live in deferred durability paths.
+
+    These are AET-generated artifacts (rendered plan docs) and are safe to
+    discard because their source of truth is the task record / queue state.
+    """
+    errors: list[str] = []
+    for path in _untracked_paths(worktree_dir):
+        if not _is_deferred_path(path):
+            continue
+        full = os.path.join(worktree_dir, path)
+        try:
+            if os.path.isdir(full) and not os.path.islink(full):
+                shutil.rmtree(full)
+            else:
+                os.remove(full)
+        except OSError as exc:
+            errors.append(f"{path}: {exc}")
+    return (not errors), errors
+
+
+def _worktree_obstructions(worktree_dir: str, base_branch: str) -> list[str]:
+    """Return non-deferred paths that should block worktree removal.
+
+    Includes tracked changes relative to the integration base and untracked
+    files that are neither deferred nor declared AET-generated ignored paths.
+    """
+    obstructions: set[str] = set()
+
+    diff = subprocess.run(
+        ["git", "-C", worktree_dir, "diff", "--name-only", f"{base_branch}..HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if diff.returncode == 0:
+        for path in diff.stdout.splitlines():
+            path = path.strip()
+            if path and not _is_deferred_path(path):
+                obstructions.add(path)
+
+    status = subprocess.run(
+        ["git", "-C", worktree_dir, "status", "--porcelain", "--untracked-files=all"],
+        capture_output=True,
+        text=True,
+    )
+    if status.returncode == 0:
+        for line in status.stdout.splitlines():
+            if not line:
+                continue
+            code = line[:2]
+            path = line[3:].strip()
+            if not path:
+                continue
+            if code == "??":
+                if not _is_deferred_path(path) and not _is_ignored_path(path):
+                    obstructions.add(path)
+            elif code.strip():
+                # Tracked modification (index or working tree).
+                if not _is_deferred_path(path):
+                    obstructions.add(path)
+
+    return sorted(obstructions)
+
+
+def teardown_worktree(
+    repo_root: str, task_id: str, base_branch: str = "origin/main"
+) -> dict[str, Any]:
+    """Tear down a task worktree, cleaning AET artifacts but refusing real work.
+
+    Returns a dict with keys ``removed`` (bool), ``reason`` (str), and
+    ``obstructions`` (list[str]). The removal is reported, not printed: callers
+    decide whether the failure is fatal and how to surface it in the run result.
+    """
+    worktree_dir = os.path.join(repo_root, ".worktrees", task_id)
+    result: dict[str, Any] = {"removed": False, "reason": "", "obstructions": []}
+    if not os.path.isdir(worktree_dir):
+        result["removed"] = True
+        return result
+
+    ok, errors = _remove_deferred_untracked(worktree_dir)
+    if not ok:
+        result["reason"] = "could not clean deferred files"
+        result["obstructions"] = errors
+        return result
+
+    obstructions = _worktree_obstructions(worktree_dir, base_branch)
+    if obstructions:
+        result["reason"] = "worktree has non-deferred changes"
+        result["obstructions"] = obstructions
+        return result
+
+    try:
+        subprocess.run(
+            ["git", "-C", repo_root, "worktree", "remove", worktree_dir],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        result["removed"] = True
+    except subprocess.CalledProcessError as exc:
+        result["reason"] = exc.stderr.strip() or "git worktree remove failed"
+        result["obstructions"] = _worktree_obstructions(worktree_dir, base_branch)
+
+    return result
+
+
 def run_git_plain(args: list[str], **kwargs) -> tuple[int, str, str]:
     """Run a git command and return (returncode, stdout, stderr)."""
     result = subprocess.run(["git", *args], capture_output=True, text=True, **kwargs)
