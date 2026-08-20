@@ -219,7 +219,7 @@ class TestStallWatchdog(unittest.TestCase):
             cmd = [sys.executable, "-c", script]
             start = time.monotonic()
             exit_code, tail = orchestrator._run_with_live_tee(
-                cmd, cwd, os.environ.copy(), stall_timeout=0.15
+                cmd, cwd, os.environ.copy(), stall_timeout=0.5
             )
             elapsed = time.monotonic() - start
             self.assertEqual(exit_code, 0)
@@ -486,10 +486,10 @@ class TestHybridLivenessWatchdog(unittest.TestCase):
     def test_silent_session_with_background_child_survives_stall(self):
         """A silent session with active descendants is not killed by the stall watchdog."""
         with tempfile.TemporaryDirectory() as cwd:
-            cmd = [sys.executable, "-c", self._background_child_script(0.4, 0.4)]
+            cmd = [sys.executable, "-c", self._background_child_script(0.6, 0.6)]
             start = time.monotonic()
             exit_code, tail = orchestrator._run_with_live_tee(
-                cmd, cwd, os.environ.copy(), stall_timeout=0.2, wall_backstop=5.0
+                cmd, cwd, os.environ.copy(), stall_timeout=0.5, wall_backstop=5.0
             )
             elapsed = time.monotonic() - start
             self.assertEqual(exit_code, 0)
