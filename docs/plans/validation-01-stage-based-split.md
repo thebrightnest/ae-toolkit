@@ -25,13 +25,13 @@ Agents currently run the full test suite during `aet-implement`, causing long se
 
 ## Task List
 
-1. Implement `select_targeted_tests(changed_files)` helper with path-based floor (same directory or matching name) — M (traces: R-4)
-2. Update `aet-implement` skill to run targeted tests only and record which tests were run — M (traces: R-4)
-3. Update `aet-qa` skill to explicitly state it runs the full suite unconditionally with no caching — S (traces: R-5)
-4. Remove "Run validations … in the foreground and wait for them to finish — never background validations or end your turn while one is still running" from orchestrator prompts — S (traces: R-7)
-5. Update orchestrator stage transition to pass targeted-test results from implement to QA for gap analysis — M (traces: R-8)
-6. Add regression tests for test selection, stage validation ownership, and prompt content — M (traces: R-4, R-5, R-7, R-8)
-7. Update `docs/PIPELINE.md` and `skills/aet-implement/SKILL.md`, `skills/aet-qa/SKILL.md` — S
+1. ✓ Implement `select_targeted_tests(changed_files)` helper with path-based floor (same directory or matching name) — M (traces: R-4)
+2. ✓ Update `aet-implement` skill to run targeted tests only and record which tests were run — M (traces: R-4)
+3. ✓ Update `aet-qa` skill to explicitly state it runs the full suite unconditionally with no caching — S (traces: R-5)
+4. ✓ Remove "Run validations … in the foreground and wait for them to finish — never background validations or end your turn while one is still running" from orchestrator prompts — S (traces: R-7)
+5. ✓ Update orchestrator stage transition to pass targeted-test results from implement to QA for gap analysis — M (traces: R-8)
+6. ✓ Add regression tests for test selection, stage validation ownership, and prompt content — M (traces: R-4, R-5, R-7, R-8)
+7. ✓ Update `docs/PIPELINE.md` and `skills/aet-implement/SKILL.md`, `skills/aet-qa/SKILL.md` — S
 
 **Size definitions:**
 
@@ -90,5 +90,5 @@ Only change this after considering task risk. Auth, data-model, API, and depende
 
 ---
 
-_Stage: qa-complete_
-_Next step: run `aet-review`_
+_Stage: synced_
+_Next step: run `aet-ship`_
