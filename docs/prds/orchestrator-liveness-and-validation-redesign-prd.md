@@ -66,21 +66,42 @@ Redesign the orchestrator's session supervision and validation workflow to elimi
 
 ## Divergence Summary
 
+### validation-01-stage-based-split
+
 _Recorded: 2026-08-20 — Branch: validation-01-stage-based-split_
 
-### Changed from plan
+#### Changed from plan
 
 - None. All tasks in `docs/plans/validation-01-stage-based-split.md` were implemented as described.
 
-### Added (unplanned)
+#### Added (unplanned)
 
 - `scripts/validate-skills.sh`: Updated the link checker to strip inline code before matching links. Required because the revised `skills/aet-qa/SKILL.md` contains backtick-wrapped phrases that the previous regex misidentified as markdown links.
 - `.agents/doc-rules.yaml`: Updated `must_contain` assertions to match the new `aet-qa` skill contract (full suite unconditionally, no caching, gap analysis). Required to keep skill-structure validation green after the skill text changed.
 
-### Deferred
+#### Deferred
 
 - PRD requirements **R-1**, **R-2**, and **R-3** (hybrid process-tree + run-log liveness detection with a hard wall-clock backstop) were intentionally scoped out of this implementation plan and remain unimplemented.
 - PRD requirement **R-6** (single-run file-hash validation cache) was intentionally scoped out of this implementation plan and remains unimplemented.
+
+### validation-03-gap-analysis
+
+_Recorded: 2026-08-20 — Branch: validation-03-gap-analysis_
+
+#### Changed from plan
+
+- None. All tasks in `docs/plans/validation-03-gap-analysis.md` were implemented as described.
+
+#### Added (unplanned)
+
+- `src/aet/validation.py`: Introduced gap-analysis helpers (`extract_test_targets`, `covers_test`, `gap_analysis`) to compare QA failed test nodeids against the implement stage's targeted test commands. Required to keep the comparison logic testable and reusable across the orchestrator and tests.
+- `src/aet/cli/gate.py`: Extended `_parse_pytest_report` to extract `failed_tests` nodeids from pytest JSON reports. Required so QA verdicts can carry the precise failed test list consumed by gap analysis.
+- `tests/telemetry/test_telemetry.py`, `tests/test_validation.py`, `tests/gate/test_gate_submit.py`: Added regression coverage for the new telemetry `targeted_tests` field, gap-analysis helpers, and failed-test extraction. Complements the orchestrator regression tests listed in task 4.
+- `src/aet/cli/orchestrator.py`: `_record_stage` now checks for a git-refs task ref before writing the queue and skips queue writes for untracked tasks. Prevents queue-update errors when tasks are not yet persisted in the git-refs backend; surfaced while exercising the new stage telemetry paths.
+
+#### Deferred
+
+- None. This plan scoped to PRD requirement **R-8** only.
 
 _Stage: synced_
 _Next step: run `aet-ship`_
