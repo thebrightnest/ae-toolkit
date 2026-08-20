@@ -484,6 +484,104 @@ def _record_targeted_tests_handoff(repo_root: str, run_id: str, stage: str) -> N
         pass
 
 
+def _stage_targeted_tests(
+    repo_root: str,
+    run_id: str | None,
+    exit_code: int,
+    should_record: bool = False,
+) -> list[str] | None:
+    """Read implement-targeted test commands when a stage session succeeded.
+
+    Returns ``None`` when the session failed, no run id is available, or the
+    stage did not involve ``aet-implement``. This keeps targeted tests attached
+    only to the stage that produced them (R-8).
+    """
+    if not should_record or run_id is None or exit_code != 0:
+        return None
+    return validation.read_targeted_tests(_targeted_tests_path(repo_root, run_id))
+
+
+def _implement_targeted_commands(
+    logger: telemetry.RunLogger,
+    task_id: str,
+    repo_root: str | None = None,
+) -> list[str]:
+    """Return the targeted test commands recorded during the implement stage.
+
+    Searches this run's telemetry for the stage record whose span includes
+    ``implemented``. Falls back to the run-scoped ``implement-targeted-tests.json``
+    file when no telemetry record exists yet (e.g., a group session failed before
+    the stage record was emitted). Returns an empty list when neither source has
+    data.
+    """
+    for record in telemetry.read_jsonl(logger.task_log_path(task_id)):
+        if record.get("type") != "stage":
+            continue
+        actual_stages = record.get("actual_stages") or [record.get("stage")]
+        if "implemented" in actual_stages:
+            return record.get("targeted_tests") or []
+    if repo_root is not None and logger.run_id is not None:
+        return validation.read_targeted_tests(
+            _targeted_tests_path(repo_root, logger.run_id)
+        )
+    return []
+
+
+def _attach_gap_analysis_to_task(
+    task: dict,
+    backend,
+    task_id: str | None,
+    repo_root: str,
+    logger: telemetry.RunLogger | None = None,
+) -> None:
+    """Best-effort: attach a QA gap analysis to the task's failure record.
+
+    Reads the QA verdict for failed tests, compares them against the implement
+    stage's targeted test set, and stores the result on the most recent failure
+    signature entry (or appends a new entry if none exists).
+    """
+    if not task_id:
+        return
+    if logger is None:
+        run_id = os.environ.get("AET_RUN_ID")
+        logger = telemetry.RunLogger(repo_root, run_id=run_id)
+    try:
+        record = _load_checking_verdict(task_id, "qa", repo_root)
+    except Exception:  # noqa: BLE001
+        return
+    failed_tests = record.get("failed_tests", [])
+    if not failed_tests:
+        return
+    implement_commands = _implement_targeted_commands(logger, task_id, repo_root)
+    analysis = validation.gap_analysis(failed_tests, implement_commands)
+    if not analysis.get("missed_tests"):
+        return
+    sigs = task.setdefault("failure_signatures", [])
+    if sigs:
+        sigs[-1]["gap_analysis"] = analysis
+    else:
+        sigs.append(
+            {
+                "signature": failure_lib.signature(stage="qa", tail=str(analysis)),
+                "class": failure_lib.FailureClass.DESIGN.value,
+                "stage": "qa",
+                "tail_preview": f"QA gap analysis: {analysis}",
+                "gap_analysis": analysis,
+                "at": telemetry.iso_now(),
+            }
+        )
+    if backend is not None:
+        try:
+            queue = backend.load()["queue"]
+            for qt in queue:
+                if qt.get("id") == task.get("id"):
+                    qt["failure_signatures"] = task.get("failure_signatures", [])
+                    break
+            backend.save(queue)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _evidence_clause(kind: str, env_var: str) -> str:
     """Name the required verdict, its builder command, and its output path.
 
@@ -631,6 +729,7 @@ def _emit_stage_session(
     output: str = "",
     plan_data: dict[str, Any] | None = None,
     verdict_recorded: bool = False,
+    targeted_tests: list[str] | None = None,
 ) -> None:
     """Emit one stage telemetry record for a completed agent session.
 
@@ -681,6 +780,7 @@ def _emit_stage_session(
             cost_estimate=usage.get("cost_usd") if usage else None,
             output_excerpt=(_bounded_output_excerpt(output) if exit_code != 0 else None),
             session_identifier=session_ref,
+            targeted_tests=targeted_tests,
         ),
         task_id=task_id,
     )
@@ -979,6 +1079,8 @@ def _require_passing_verdict(
     stall_timeout: float | None = None,
     isolation: str = "worktree",
     base_branch: str = "origin/main",
+    task: dict | None = None,
+    backend=None,
 ) -> bool:
     """Fail-closed evidence gate for a checking stage.
 
@@ -991,6 +1093,10 @@ def _require_passing_verdict(
     **missing**, one recovery session is spawned to write it before the gate
     decides. The gate itself never softens: recovery re-reads the file and a
     still-missing verdict fails exactly as before.
+
+    When a ``qa`` verdict fails and *task* / *backend* are supplied, the task's
+    failure record is enriched with a gap analysis comparing failed tests
+    against the implement stage's targeted test set (R-8).
     """
     state, record, detail = _verdict_state(task_id, kind, repo_root)
 
@@ -1015,6 +1121,10 @@ def _require_passing_verdict(
 
     if state != "pass":
         print(f"   ❌ Gate fail-closed: {detail} for {task_id}")
+        if kind == "qa" and task is not None:
+            _attach_gap_analysis_to_task(
+                task, backend, task_id, repo_root, logger
+            )
         return False
 
     if kind == "qa" and record is not None:
@@ -1245,6 +1355,8 @@ def run_stage(
             current_stage,
             output,
         )
+        if verdict_kind == "qa":
+            _attach_gap_analysis_to_task(task, backend, task_id, repo_root)
     return exit_code, usage, session_ref, output
 
 
@@ -1581,6 +1693,12 @@ def process_task(
                     stall_timeout=stall_timeout,
                 )
                 end_time = telemetry.iso_now()
+                targeted_tests = _stage_targeted_tests(
+                    repo_root,
+                    logger.run_id,
+                    exit_code,
+                    should_record=any("aet-implement" in s.skills for s in runnable),
+                )
                 _emit_stage_session(
                     logger,
                     task_id,
@@ -1599,6 +1717,7 @@ def process_task(
                     output=output,
                     verdict_recorded=False,
                     plan_data=plan_fm,
+                    targeted_tests=targeted_tests,
                 )
                 agent_invoked = True
                 if exit_code != 0:
@@ -1631,6 +1750,8 @@ def process_task(
                         stall_timeout=stall_timeout,
                         isolation=task_isolation,
                         base_branch=base_branch,
+                        task=task,
+                        backend=backend,
                     ):
                         return False
 
@@ -1704,6 +1825,12 @@ def process_task(
                 stall_timeout=stall_timeout,
             )
             end_time = telemetry.iso_now()
+            targeted_tests = _stage_targeted_tests(
+                repo_root,
+                logger.run_id,
+                exit_code,
+                should_record="aet-implement" in target_stage.skills,
+            )
             _emit_stage_session(
                 logger,
                 task_id,
@@ -1722,6 +1849,7 @@ def process_task(
                 output=output,
                 verdict_recorded=kind is not None,
                 plan_data=plan_fm,
+                targeted_tests=targeted_tests,
             )
             agent_invoked = True
 
@@ -1748,6 +1876,8 @@ def process_task(
                 stall_timeout=stall_timeout,
                 isolation=task_isolation,
                 base_branch=base_branch,
+                task=task,
+                backend=backend,
             ):
                 return False
 

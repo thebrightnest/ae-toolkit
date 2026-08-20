@@ -154,6 +154,35 @@ class TestStageRecord(unittest.TestCase):
         )
         self.assertIsNone(record["session_identifier"])
 
+    def test_stage_record_carries_targeted_tests(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+            targeted_tests=["pytest tests/test_foo.py"],
+        )
+        self.assertEqual(record["targeted_tests"], ["pytest tests/test_foo.py"])
+
+    def test_stage_record_targeted_tests_defaults_to_empty_list(self):
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+        )
+        self.assertEqual(record["targeted_tests"], [])
+
 
 class TestRunSummaryRecord(unittest.TestCase):
     def _summary(self, **kwargs):

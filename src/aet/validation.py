@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
+
+from aet import test_runners
 
 # Files that, when changed, can affect any test outcome. The safe fallback is
 # the full suite.
@@ -139,3 +142,76 @@ def write_targeted_tests(
         encoding="utf-8",
     )
     return p
+
+
+# --- Gap analysis helpers --------------------------------------------------
+#
+# When QA fails on tests that implement did not run, the orchestrator records
+# a gap analysis: which tests were missed and why they fell outside the
+# path-based targeted-test floor.
+
+
+def extract_test_targets(commands: list[str]) -> set[str]:
+    """Extract path-based test targets from pytest commands.
+
+    Returns normalized file/directory targets (e.g. ``tests/test_foo.py`` or
+    ``tests/cli``). A bare ``pytest`` invocation or a target that names the
+    whole suite is represented as ``tests/``. Non-pytest commands are ignored.
+    """
+    targets: set[str] = set()
+    for command in commands:
+        resolved = test_runners.resolve_test_command(command)
+        if resolved is None:
+            continue
+        runner, args = resolved
+        if runner not in ("pytest", "python -m pytest"):
+            continue
+        positional = [a for a in args if not a.startswith("-")]
+        if not positional:
+            targets.add("tests/")
+            continue
+        for arg in positional:
+            normalized = arg.rstrip("/")
+            if normalized in (".", "test", "tests", "./..."):
+                targets.add("tests/")
+            elif normalized.endswith(".py") or "/" in normalized:
+                # Nodeids like ``tests/test_foo.py::test_x`` are reduced to the
+                # file path so coverage compares at file granularity.
+                targets.add(normalized.split("::")[0])
+    return targets
+
+
+def covers_test(targets: set[str], test_nodeid: str) -> bool:
+    """Return True when ``test_nodeid`` is covered by any path-based target.
+
+    A target ending in ``.py`` covers that file and any nodeid inside it. A
+    directory target covers nodeids under that directory. The sentinel
+    ``tests/`` covers every test under ``tests/``.
+    """
+    for target in targets:
+        if target == "tests/" and test_nodeid.startswith("tests/"):
+            return True
+        if target.endswith(".py"):
+            if test_nodeid == target or test_nodeid.startswith(target + "::"):
+                return True
+        else:
+            if test_nodeid == target or test_nodeid.startswith(target + "/"):
+                return True
+    return False
+
+
+def gap_analysis(
+    failed_tests: list[str], implement_commands: list[str]
+) -> dict[str, Any]:
+    """Compare QA failures against the implement test set.
+
+    Returns a dict with ``missed_tests`` (the subset of ``failed_tests`` not
+    covered by the implement commands) and ``reason`` (a human-readable
+    explanation when tests were missed, empty otherwise).
+    """
+    targets = extract_test_targets(implement_commands)
+    missed = [t for t in failed_tests if not covers_test(targets, t)]
+    return {
+        "missed_tests": missed,
+        "reason": "not in implement targeted tests" if missed else "",
+    }

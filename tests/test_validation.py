@@ -115,3 +115,90 @@ class TestReadTargetedTests:
             json.dumps(["pytest tests/test_foo.py"]), encoding="utf-8"
         )
         assert validation.read_targeted_tests(str(path)) == ["pytest tests/test_foo.py"]
+
+
+class TestExtractTestTargets:
+    def test_bare_pytest_runs_full_suite(self):
+        assert validation.extract_test_targets(["pytest"]) == {"tests/"}
+
+    def test_python_m_pytest_runs_full_suite(self):
+        assert validation.extract_test_targets(["python -m pytest"]) == {"tests/"}
+
+    def test_pytest_with_file_target(self):
+        assert validation.extract_test_targets(["pytest tests/test_foo.py"]) == {
+            "tests/test_foo.py"
+        }
+
+    def test_pytest_with_directory_target(self):
+        assert validation.extract_test_targets(["pytest tests/cli/"]) == {
+            "tests/cli"
+        }
+
+    def test_pytest_with_nodeid_target(self):
+        assert validation.extract_test_targets(
+            ["pytest tests/test_foo.py::test_x"]
+        ) == {"tests/test_foo.py"}
+
+    def test_ignores_non_pytest_commands(self):
+        assert validation.extract_test_targets(["npm test"]) == set()
+
+    def test_drops_flags(self):
+        assert validation.extract_test_targets(
+            ["pytest -q -k slow tests/test_bar.py"]
+        ) == {"tests/test_bar.py"}
+
+    def test_multiple_commands_merge_targets(self):
+        assert validation.extract_test_targets(
+            ["pytest tests/test_foo.py", "pytest tests/cli/test_bar.py"]
+        ) == {"tests/test_foo.py", "tests/cli/test_bar.py"}
+
+
+class TestCoversTest:
+    def test_file_target_covers_nodeid_in_file(self):
+        assert validation.covers_test(
+            {"tests/test_foo.py"}, "tests/test_foo.py::test_x"
+        )
+
+    def test_file_target_covers_file_itself(self):
+        assert validation.covers_test({"tests/test_foo.py"}, "tests/test_foo.py")
+
+    def test_file_target_does_not_cover_other_file(self):
+        assert not validation.covers_test(
+            {"tests/test_foo.py"}, "tests/test_bar.py::test_x"
+        )
+
+    def test_directory_target_covers_children(self):
+        assert validation.covers_test(
+            {"tests/cli"}, "tests/cli/test_bar.py::test_x"
+        )
+
+    def test_full_suite_target_covers_all(self):
+        assert validation.covers_test({"tests/"}, "tests/anything.py::test_x")
+
+    def test_uncovered_when_targets_empty(self):
+        assert not validation.covers_test(set(), "tests/test_foo.py::test_x")
+
+
+class TestGapAnalysis:
+    def test_no_missed_tests_when_all_covered(self):
+        assert validation.gap_analysis(
+            ["tests/test_foo.py::test_a"],
+            ["pytest tests/test_foo.py"],
+        ) == {"missed_tests": [], "reason": ""}
+
+    def test_reports_missed_tests(self):
+        result = validation.gap_analysis(
+            [
+                "tests/test_foo.py::test_a",
+                "tests/test_bar.py::test_b",
+            ],
+            ["pytest tests/test_foo.py"],
+        )
+        assert result["missed_tests"] == ["tests/test_bar.py::test_b"]
+        assert result["reason"] == "not in implement targeted tests"
+
+    def test_full_suite_command_covers_every_failure(self):
+        assert validation.gap_analysis(
+            ["tests/test_foo.py::test_a", "tests/test_bar.py::test_b"],
+            ["pytest tests/"],
+        ) == {"missed_tests": [], "reason": ""}

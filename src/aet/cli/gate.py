@@ -217,11 +217,11 @@ def run_review(plans_dir: Path) -> int:
 
 
 def _parse_pytest_report(path: Path) -> dict[str, Any]:
-    """Extract test counts and command from a pytest JSON report.
+    """Extract test counts, failed test names, and command from a pytest JSON report.
 
-    Supports the ``pytest-json-report`` shape (``summary.*``) and a minimal
-    flat schema used by the builder (``tests_total/passed/failed`` and
-    ``test_command``).
+    Supports the ``pytest-json-report`` shape (``summary.*`` and
+    ``tests[].nodeid/outcome``) and a minimal flat schema used by the builder
+    (``tests_total/passed/failed`` and ``test_command``).
     """
     raw = path.read_text(encoding="utf-8")
     data = json.loads(raw)
@@ -238,11 +238,23 @@ def _parse_pytest_report(path: Path) -> dict[str, Any]:
     if not command:
         command = data.get("command", "pytest")
 
+    failed_tests: list[str] = []
+    tests = data.get("tests")
+    if isinstance(tests, list):
+        for test in tests:
+            if (
+                isinstance(test, dict)
+                and test.get("outcome") == "failed"
+                and isinstance(test.get("nodeid"), str)
+            ):
+                failed_tests.append(test["nodeid"])
+
     return {
         "tests_total": int(total or 0),
         "tests_passed": int(passed or 0),
         "tests_failed": int(failed or 0),
         "test_command": str(command),
+        "failed_tests": failed_tests,
     }
 
 

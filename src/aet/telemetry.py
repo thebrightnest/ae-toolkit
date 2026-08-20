@@ -275,6 +275,7 @@ def stage_record(
     attempt: int = 1,
     output_excerpt: str | None = None,
     session_identifier: str | None = None,
+    targeted_tests: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build a per-stage telemetry record.
 
@@ -331,6 +332,7 @@ def stage_record(
         "cost_estimate": cost_estimate,
         "output_excerpt": output_excerpt,
         "session_identifier": session_identifier,
+        "targeted_tests": targeted_tests or [],
     }
 
 

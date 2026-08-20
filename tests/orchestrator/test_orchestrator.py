@@ -4449,5 +4449,298 @@ class TestTargetedTestsHandoff(unittest.TestCase):
             self.assertIsNone(handoff.read_note(repo, "run-test"))
 
 
+class TestGapAnalysisRecording(unittest.TestCase):
+    """QA failure gap analysis: missed tests and why implement did not run them."""
+
+    def _make_env(self, archive_dir: str, reports_dir: str) -> dict[str, str]:
+        """Return env overlay routing telemetry and evidence to temp dirs."""
+        env = os.environ.copy()
+        env["AET_REPORTS_DIR"] = reports_dir
+        env["AET_PROJECT_ID"] = "demo/project"
+        env["AET_TELEMETRY_ARCHIVE_DIR"] = archive_dir
+        env["AET_RUN_ID"] = "run-test"
+        return env
+
+    def _write_failing_qa_verdict(
+        self, reports_dir: str, failed_tests: list[str], task_id: str = "demo"
+    ) -> None:
+        evidence.write_verdict(
+            task_id=task_id,
+            kind="qa",
+            record={
+                "task_id": task_id,
+                "stage": "qa-complete",
+                "skill": "aet-qa",
+                "verdict": "fail",
+                "summary": "tests failed",
+                "generated_at": "2026-01-01T00:00:00Z",
+                "tree_hash": "t0",
+                "test_command": "pytest",
+                "tests_total": len(failed_tests) + 1,
+                "tests_passed": 1,
+                "tests_failed": len(failed_tests),
+                "failed_tests": failed_tests,
+            },
+            project_slug="demo/project",
+            reports_root=reports_dir,
+        )
+
+    def _record_implement_stage(
+        self, logger: telemetry.RunLogger, targeted_tests: list[str], task_id: str = "demo"
+    ) -> None:
+        logger.append_record(
+            telemetry.stage_record(
+                run_id=logger.run_id,
+                task_id=task_id,
+                plan_file="docs/plans/demo.md",
+                stage="implemented",
+                agent_cli="test",
+                isolation_level="standard",
+                start_time="2026-01-01T00:00:00Z",
+                end_time="2026-01-01T00:00:01Z",
+                exit_code=0,
+                actual_stages=["plan-approved", "implemented"],
+                targeted_tests=targeted_tests,
+            ),
+            task_id=task_id,
+        )
+
+    def test_require_passing_verdict_records_gap_analysis_on_qa_fail(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+
+            with tempfile.TemporaryDirectory() as archive_dir:
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = self._make_env(archive_dir, reports_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="run-test")
+                        self._record_implement_stage(
+                            logger, ["pytest tests/test_foo.py"]
+                        )
+                        self._write_failing_qa_verdict(
+                            reports_dir, ["tests/test_bar.py::test_x"]
+                        )
+
+                        task = {"id": "demo", "title": "Demo"}
+                        result = orchestrator._require_passing_verdict(
+                            "demo",
+                            "qa",
+                            repo_root,
+                            plan_file,
+                            "qa-complete",
+                            logger,
+                            task=task,
+                            backend=None,
+                        )
+
+                        self.assertFalse(result)
+                        self.assertEqual(len(task["failure_signatures"]), 1)
+                        gap = task["failure_signatures"][0]["gap_analysis"]
+                        self.assertEqual(
+                            gap["missed_tests"],
+                            ["tests/test_bar.py::test_x"],
+                        )
+                        self.assertEqual(
+                            gap["reason"], "not in implement targeted tests"
+                        )
+
+    def test_require_passing_verdict_no_gap_analysis_when_all_covered(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+
+            with tempfile.TemporaryDirectory() as archive_dir:
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = self._make_env(archive_dir, reports_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="run-test")
+                        self._record_implement_stage(
+                            logger, ["pytest tests/test_foo.py"]
+                        )
+                        self._write_failing_qa_verdict(
+                            reports_dir, ["tests/test_foo.py::test_a"]
+                        )
+
+                        task = {"id": "demo", "title": "Demo"}
+                        result = orchestrator._require_passing_verdict(
+                            "demo",
+                            "qa",
+                            repo_root,
+                            plan_file,
+                            "qa-complete",
+                            logger,
+                            task=task,
+                            backend=None,
+                        )
+
+                        self.assertFalse(result)
+                        self.assertNotIn(
+                            "gap_analysis", task.get("failure_signatures", [{}])[0]
+                        )
+
+    def test_run_stage_attaches_gap_analysis_when_qa_exits_nonzero(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n\n# Demo\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+
+            with tempfile.TemporaryDirectory() as archive_dir:
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = self._make_env(archive_dir, reports_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="run-test")
+                        self._record_implement_stage(
+                            logger, ["pytest tests/test_foo.py"]
+                        )
+                        self._write_failing_qa_verdict(
+                            reports_dir, ["tests/test_bar.py::test_x"]
+                        )
+
+                        def fake_spawn(adapter, cmd, worktree_dir, env, **kwargs):
+                            return 1, None, None, ""
+
+                        task = {"id": "demo", "title": "Demo"}
+                        with patch.object(
+                            orchestrator,
+                            "_spawn_session_with_tail",
+                            side_effect=fake_spawn,
+                        ):
+                            orchestrator.run_stage(
+                                _FAKE_ADAPTER,
+                                repo_root,
+                                plan_file,
+                                repo_root,
+                                ["aet-qa"],
+                                "qa-complete",
+                                "reviewed",
+                                task_id="demo",
+                                run_id="run-test",
+                                verdict_kind="qa",
+                                task=task,
+                            )
+
+                        gap = task["failure_signatures"][0].get("gap_analysis")
+                        self.assertIsNotNone(gap)
+                        self.assertEqual(
+                            gap["missed_tests"],
+                            ["tests/test_bar.py::test_x"],
+                        )
+
+    def test_process_task_records_targeted_tests_in_stage_telemetry(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\n"
+                "id: demo\n"
+                "pipeline: full\n"
+                "security_review: skipped\n"
+                "docs_sync: skipped\n"
+                "---\n\n# Demo\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+
+            with tempfile.TemporaryDirectory() as archive_dir:
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="r1")
+                        task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        _write_passing(reports_dir, "qa", "review")
+
+                        from aet import validation as validation_mod
+
+                        targeted_path = validation_mod.targeted_tests_path(
+                            repo_root, "r1"
+                        )
+                        validation_mod.write_targeted_tests(
+                            targeted_path, ["pytest tests/test_foo.py"]
+                        )
+
+                        with patch.object(
+                            orchestrator, "run_stage", return_value=(0, None, None, "")
+                        ):
+                            with patch.object(
+                                orchestrator,
+                                "verify_branch_has_commits",
+                                return_value=(True, ""),
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_stage_advancement",
+                                    return_value=(True, ""),
+                                ):
+                                    with patch.object(
+                                        orchestrator, "_record_stage", return_value=True
+                                    ):
+                                        result = orchestrator.process_task(
+                                            task,
+                                            repo_root,
+                                            _FAKE_ADAPTER,
+                                            "full",
+                                            logger=logger,
+                                        )
+
+                        self.assertTrue(result)
+                    records = [
+                        r
+                        for r in telemetry.read_jsonl(logger.task_log_path("demo"))
+                        if r.get("type") == "stage"
+                    ]
+                    implement_record = next(
+                        (r for r in records if r.get("stage") == "implemented"), None
+                    )
+                    self.assertIsNotNone(implement_record)
+                    self.assertEqual(
+                        implement_record["targeted_tests"],
+                        ["pytest tests/test_foo.py"],
+                    )
+                    qa_record = next(
+                        (r for r in records if r.get("stage") == "qa-complete"), None
+                    )
+                    self.assertIsNotNone(qa_record)
+                    self.assertEqual(qa_record["targeted_tests"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
