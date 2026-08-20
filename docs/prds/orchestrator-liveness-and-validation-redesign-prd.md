@@ -66,20 +66,22 @@ Redesign the orchestrator's session supervision and validation workflow to elimi
 
 ## Divergence Summary
 
-_Recorded: 2026-08-20 — Branch: validation-02-single-run-caching (cumulative since validation-01-stage-based-split)_
+### validation-01-stage-based-split
 
-### Changed from plan
+_Recorded: 2026-08-20 — Branch: validation-01-stage-based-split_
+
+#### Changed from plan
 
 - None for `docs/plans/validation-01-stage-based-split.md`.
 - `docs/plans/validation-02-single-run-caching.md` Task 2: cache integration was implemented through `skills/aet-implement/SKILL.md` instruction updates plus helper functions in `src/aet/validation.py`, rather than through `src/aet/validation.py` alone.
 
-### Added (unplanned)
+#### Added (unplanned)
 
 - `scripts/validate-skills.sh`: Updated the link checker to strip inline code before matching links. Required because the revised `skills/aet-qa/SKILL.md` contains backtick-wrapped phrases that the previous regex misidentified as markdown links. (validation-01)
 - `.agents/doc-rules.yaml`: Updated `must_contain` assertions to match the new `aet-qa` skill contract (full suite unconditionally, no caching, gap analysis). Required to keep skill-structure validation green after the skill text changed. (validation-01)
 - `skills/aet-implement/SKILL.md`: Added single-run validation cache instructions so `aet-implement` agents use the new `aet.validation.cached_result` / `aet.validation.record_result` helpers. Required because the cache is consumed through skill behavior, not only through library code. (validation-02)
 
-### Deferred
+#### Deferred
 
 - PRD requirements **R-1**, **R-2**, and **R-3** (hybrid process-tree + run-log liveness detection with a hard wall-clock backstop) remain unimplemented.
 
@@ -98,6 +100,25 @@ _Recorded: 2026-08-20 — Branch: liveness-01-hybrid-supervision_
 ### Deferred
 
 - PRD requirements **R-4** through **R-8** remain out of scope for this plan and are not addressed here.
+
+### validation-03-gap-analysis
+
+_Recorded: 2026-08-20 — Branch: validation-03-gap-analysis_
+
+#### Changed from plan
+
+- None. All tasks in `docs/plans/validation-03-gap-analysis.md` were implemented as described.
+
+#### Added (unplanned)
+
+- `src/aet/validation.py`: Introduced gap-analysis helpers (`extract_test_targets`, `covers_test`, `gap_analysis`) to compare QA failed test nodeids against the implement stage's targeted test commands. Required to keep the comparison logic testable and reusable across the orchestrator and tests.
+- `src/aet/cli/gate.py`: Extended `_parse_pytest_report` to extract `failed_tests` nodeids from pytest JSON reports. Required so QA verdicts can carry the precise failed test list consumed by gap analysis.
+- `tests/telemetry/test_telemetry.py`, `tests/test_validation.py`, `tests/gate/test_gate_submit.py`: Added regression coverage for the new telemetry `targeted_tests` field, gap-analysis helpers, and failed-test extraction. Complements the orchestrator regression tests listed in task 4.
+- `src/aet/cli/orchestrator.py`: `_record_stage` now checks for a git-refs task ref before writing the queue and skips queue writes for untracked tasks. Prevents queue-update errors when tasks are not yet persisted in the git-refs backend; surfaced while exercising the new stage telemetry paths.
+
+#### Deferred
+
+- None. This plan scoped to PRD requirement **R-8** only.
 
 _Stage: synced_
 _Next step: run `aet-ship`_

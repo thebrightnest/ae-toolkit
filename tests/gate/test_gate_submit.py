@@ -328,6 +328,54 @@ class TestGateSubmitBuilder(unittest.TestCase):
             self.assertEqual(written["tests_failed"], 0)
             self.assertIn("test_command", written)
 
+    def test_submit_qa_payload_includes_failed_test_nodeids(self):
+        """--from-pytest extracts the list of failed test nodeids for gap analysis."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "qa.json"
+            report = tmp / "pytest-report.json"
+            report.write_text(
+                json.dumps(
+                    {
+                        "summary": {"total": 3, "passed": 1, "failed": 2},
+                        "tests": [
+                            {"nodeid": "tests/test_foo.py::test_pass", "outcome": "passed"},
+                            {"nodeid": "tests/test_foo.py::test_fail", "outcome": "failed"},
+                            {"nodeid": "tests/test_bar.py::test_fail", "outcome": "failed"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                "AET_EVIDENCE_PATH": str(dest),
+                "AET_TASK_ID": "twe-01",
+                "AET_REPO_ROOT": str(tmp),
+            }
+            with patch.dict(os.environ, env, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "fail",
+                        "--from-pytest",
+                        str(report),
+                        "--summary",
+                        "Two tests failed",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(
+                written["failed_tests"],
+                [
+                    "tests/test_foo.py::test_fail",
+                    "tests/test_bar.py::test_fail",
+                ],
+            )
+
     def test_submit_builds_sync_docs_payload_from_divergence(self):
         """--divergence populates the sync-docs verdict record."""
         with tempfile.TemporaryDirectory() as tmpdir:

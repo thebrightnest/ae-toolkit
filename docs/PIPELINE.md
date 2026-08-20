@@ -42,7 +42,8 @@ Validation ownership is split by stage so the pipeline stays fast without sacrif
 
 - **`aet-implement` runs targeted tests only.** It uses a path-based floor (same-directory and matching-name test files) and records the commands it ran.
 - **`aet-qa` runs the full test suite unconditionally.** No impact scoping, no cached reuse from implement, no skipping previously green tests.
-- **Targeted-test results travel via the run handoff note.** QA compares them against any failing tests to produce gap analysis: a missed test is flagged with the reason it fell outside the implement floor.
+- **Targeted-test results travel via the run handoff note and the implement stage telemetry record.** QA compares them against any failing tests to produce gap analysis: a missed test is flagged with the reason it fell outside the implement floor.
+- **Gap analysis is recorded on the task's failure record.** When a QA verdict reports `failed_tests`, the orchestrator computes which of those tests were not covered by the implement-stage targeted test commands and stores the list of missed tests plus the reason ("not in implement targeted tests") on the most recent failure signature entry.
 
 This split removes redundant full-suite runs during implementation while keeping QA as the sole, unconditional gate on the complete validation surface.
 
@@ -53,6 +54,24 @@ Within one orchestration run, `aet-implement` may skip a targeted validation com
 - The cache lives in the run-scoped metadata directory (`.agents/runs/<run-id>/validation-cache.json`), not in the worktree.
 - A fresh `aet run` uses a new `run-id`, so cache entries never persist across runs.
 - `aet-qa` is intentionally unaffected: it always runs the full suite unconditionally.
+
+### Gap Analysis Format
+
+When QA fails on a test that implementation should have caught, the failure record carries a `gap_analysis` object on the most recent failure signature entry:
+
+```json
+{
+  "gap_analysis": {
+    "missed_tests": ["tests/test_bar.py::test_x"],
+    "reason": "not in implement targeted tests"
+  }
+}
+```
+
+- `missed_tests` — list of failing test nodeids that were absent from the implement stage's targeted test set.
+- `reason` — human-readable explanation; currently `"not in implement targeted tests"` when any tests were missed, empty otherwise.
+
+The implement stage records its targeted test commands in the stage telemetry record (`targeted_tests`) and in the run handoff note. QA compares the failed tests from the `qa` verdict against that set and stores the result so operators can tell whether the agent's test selection was incomplete or the change had unexpected side effects.
 
 ## Symmetric Routing Guards
 

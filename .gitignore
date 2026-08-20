@@ -15,6 +15,7 @@ __pycache__
 .agents/ledger.jsonl*
 .agents/learnings.jsonl.lock
 .agents/integration.lock
+.agents/aet-queue.lock
 .agents/runs/
 aet-work.log
 aet-work-*.log
