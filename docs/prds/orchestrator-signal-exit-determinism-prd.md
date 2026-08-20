@@ -112,3 +112,31 @@ either (a) records the `TIMEOUT` signature itself, or (b) finalises the task
 as timed-out without requiring the child to have written a signature first.
 Relying on `proc.wait() == -9` at the parent is insufficient because the
 parent's `-9` does not imply the child recorded a `TIMEOUT` signature.
+
+## Divergence Summary
+
+*Recorded: 2026-08-20 — Branch: osd-01-isolate-signal-exit-divergence*
+
+### Changed from plan
+
+- Temporary instrumentation: the per-session trace was captured with a
+  throwaway `AET_EXIT_TRACE_PATH` probe and then reverted, rather than kept
+  as a longer-lived diagnostic. The PRD still includes the captured records.
+- Rehearsal capture: instead of repeatedly running the real rehearsal until
+  both outcomes appeared, the evidence was reproduced deterministically with
+  regression tests in `tests/orchestrator/test_signal_exit_divergence.py`.
+
+### Added (unplanned)
+
+- `tests/orchestrator/test_signal_exit_divergence.py`: regression suite that
+  exercises the internal-stall path, an external `SIGKILL`, and the batch
+  parent's finalisation behaviour with and without a pre-existing `TIMEOUT`
+  signature.
+
+### Deferred
+
+- Merge branch to main and verify integration: left for `aet-ship`; the branch
+  is still ahead of `origin/main`.
+
+*Stage: synced*
+*Next step: run `aet-ship`*
