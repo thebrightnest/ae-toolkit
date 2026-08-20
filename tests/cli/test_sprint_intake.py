@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from aet.backends.git_refs_backend import GitRefsBackend
 from aet.cli import sprint as sprint_cmd
 
 
@@ -87,8 +88,14 @@ def _write_config(root: Path, projections: list[dict] | None = None) -> Path:
 def _write_queue(root: Path, tasks: list[dict]) -> Path:
     queue_file = root / ".agents" / "work-queue.json"
     queue_file.parent.mkdir(parents=True, exist_ok=True)
-    queue_file.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
+    backend = GitRefsBackend(queue_file=str(queue_file))
+    backend.save(tasks)
     return queue_file
+
+
+def _load_queue(queue_file: Path) -> list[dict]:
+    backend = GitRefsBackend(queue_file=str(queue_file))
+    return backend.load()["queue"]
 
 
 def _completed(stdout: str = "", returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess:
@@ -189,8 +196,8 @@ class TestSprintIntakeAdmitsUnblockedCandidate(unittest.TestCase):
                     rc = sprint_cmd.main()
 
             self.assertEqual(rc, 0)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            ids = [t["id"] for t in data.get("tasks", [])]
+            queue = _load_queue(queue_file)
+            ids = [t["id"] for t in queue]
             self.assertIn("feat-001", ids)
 
 
@@ -254,8 +261,8 @@ class TestSprintIntakeRefusesBlockedCandidate(unittest.TestCase):
                             rc = sprint_cmd.main()
 
             self.assertEqual(rc, 0)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            ids = {t["id"] for t in data.get("tasks", [])}
+            queue = _load_queue(queue_file)
+            ids = {t["id"] for t in queue}
             self.assertNotIn("feat-002", ids)
             output = stdout.getvalue() + stderr.getvalue()
             self.assertIn("blocked by blocker-001", output)
@@ -313,8 +320,8 @@ class TestSprintIntakeHaltsOnForgeFailure(unittest.TestCase):
                     rc = sprint_cmd.main()
 
             self.assertEqual(rc, 1)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            ids = [t["id"] for t in data.get("tasks", [])]
+            queue = _load_queue(queue_file)
+            ids = [t["id"] for t in queue]
             self.assertEqual(ids, [])
             self.assertGreaterEqual(len(attempts), 1)
 
@@ -376,8 +383,8 @@ class TestSprintIntakeSkipsKnownTasks(unittest.TestCase):
                             rc = sprint_cmd.main()
 
             self.assertEqual(rc, 0)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            self.assertEqual(len(data.get("tasks", [])), 1)
+            queue = _load_queue(queue_file)
+            self.assertEqual(len(queue), 1)
             output = stdout.getvalue() + stderr.getvalue()
             self.assertIn("already in queue", output)
 
@@ -430,8 +437,8 @@ class TestSprintIntakeSkipsKnownTasks(unittest.TestCase):
                             rc = sprint_cmd.main()
 
             self.assertEqual(rc, 0)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            self.assertEqual(data.get("tasks", []), [])
+            queue = _load_queue(queue_file)
+            self.assertEqual(queue, [])
             output = stdout.getvalue() + stderr.getvalue()
             self.assertIn("already settled", output)
 
@@ -508,8 +515,8 @@ class TestSprintIntakeEnumeratesOnce(unittest.TestCase):
             self.assertEqual(rc, 0)
             issue_list_calls = [c for c in list_calls if "list" in c]
             self.assertEqual(len(issue_list_calls), 1)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            ids = {t["id"] for t in data.get("tasks", [])}
+            queue = _load_queue(queue_file)
+            ids = {t["id"] for t in queue}
             self.assertEqual(ids, {"feat-006", "feat-007"})
 
 
