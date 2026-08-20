@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -1101,57 +1102,102 @@ def cmd_reset(args):
     return 0
 
 
+def _resolve_history_path(history_file: str, repo_root: str) -> str:
+    """Resolve a possibly-relative history file path against the repo root."""
+    if os.path.isabs(history_file):
+        return history_file
+    return os.path.join(repo_root, history_file)
+
+
+def _write_history_file(history_file: str, records: list[dict[str, Any]]) -> None:
+    """Atomically rewrite the append-only JSONL history log.
+
+    The rewrite changes only the ``spec`` key on existing records; it must not
+    add, remove, or reorder them.  A temp-file + rename keeps the update atomic.
+    """
+    history_dir = os.path.dirname(history_file)
+    os.makedirs(history_dir, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=history_dir, prefix=".history-tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            for record in records:
+                f.write(json.dumps(record) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, history_file)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except FileNotFoundError:
+            pass
+        raise
+
+
 def cmd_backfill_specs(args):
     """Backfill the portable plan spec into records that predate R-19.
 
     Records created before R-19 carry only ``plan_file``, and the plan files
     were deleted in the commit that introduced the spec. This recovers each
-    record's plan from ``--rev`` in git — reproducible in any clone — and
-    writes it through the backend so the board keeps a single writer.
+    record's plan from ``--rev`` in git — reproducible in any clone — from the
+    working tree, or from ``docs/plans/archive/`` for plans removed before R-19.
 
-    A record whose plan is in neither the revision nor the working tree is
-    named and skipped; the migration completes for every record it can fill.
+    By default the live queue is backfilled.  Pass ``--history-file`` to
+    backfill the settled history log instead; the rewrite is atomic and touches
+    only the ``spec`` key on existing records.
     """
-    backend = make_backend(args.queue)
-    backend.fetch()
-    data = backend.load(verify=False)
-    queue = data["queue"]
-
     repo_root = queue_repo_root(args.queue) or os.path.dirname(
         os.path.abspath(args.queue)
     )
+    history_file = getattr(args, "history_file", None)
+
+    if history_file:
+        history_path = _resolve_history_path(history_file, repo_root)
+        records = queue_lib.read_history(history_path)
+    else:
+        backend = make_backend(args.queue)
+        backend.fetch()
+        data = backend.load(verify=False)
+        records = data["queue"]
 
     if not args.apply:
-        preview = json.loads(json.dumps(queue))
+        preview = json.loads(json.dumps(records))
         result = spec_backfill.backfill_specs(
             preview, rev=args.rev, repo_root=repo_root
         )
-        _report_backfill(result, args.rev, applied=False)
+        _report_backfill(result, args.rev, applied=False, records=preview)
         return 0
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return 1
 
     with queue_lib.queue_lock(args.queue):
-        # Re-load under the lock in case another process changed the queue.
-        data = backend.load(verify=False)
-        queue = data["queue"]
-        result = spec_backfill.backfill_specs(queue, rev=args.rev, repo_root=repo_root)
+        # Re-load under the lock in case another process changed the file.
+        if history_file:
+            records = queue_lib.read_history(history_path)
+        else:
+            data = backend.load(verify=False)
+            records = data["queue"]
+        result = spec_backfill.backfill_specs(
+            records, rev=args.rev, repo_root=repo_root
+        )
         if result.filled:
-            backend.save(queue)
-            backend.push()
+            if history_file:
+                _write_history_file(history_path, records)
+            else:
+                backend.save(records)
+                backend.push()
 
-    _report_backfill(result, args.rev, applied=True)
+    _report_backfill(result, args.rev, applied=True, records=records)
     return 0
 
 
-def _report_backfill(result, rev, applied):
+def _report_backfill(result, rev, applied, records=None):
     """Print what the backfill did, naming every task it could not recover."""
     prefix = "" if applied else "[dry-run] Would backfill: "
     if not result.rev_available:
         print(
             f"⚠️  Revision {rev} does not resolve in this clone; only plans "
-            "still on disk can be recovered.",
+            "still on disk or in the archive can be recovered.",
             file=sys.stderr,
         )
     if result.filled:
@@ -1170,6 +1216,17 @@ def _report_backfill(result, rev, applied):
         print(
             f"Spec backfill: recovered nothing "
             f"({len(result.already)} already carry a spec)."
+        )
+
+    if records is not None:
+        carrying_size = sum(
+            1
+            for r in records
+            if isinstance(r.get("spec"), dict)
+            and r["spec"].get("frontmatter", {}).get("size") is not None
+        )
+        print(
+            f"Records carrying spec.frontmatter.size: {carrying_size}/{len(records)}"
         )
 
     for task_id, reason in result.skipped:
@@ -1545,9 +1602,16 @@ def backfill_specs(
         "--force",
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     ),
+    history_file: Optional[str] = typer.Option(
+        None,
+        "--history-file",
+        help="Backfill settled history JSONL instead of the live queue.",
+    ),
 ) -> None:
     """Backfill the portable plan spec into records that predate R-19."""
-    args = argparse.Namespace(queue=queue, rev=rev, apply=apply, force=force)
+    args = argparse.Namespace(
+        queue=queue, rev=rev, apply=apply, force=force, history_file=history_file
+    )
     try:
         rc = cmd_backfill_specs(args)
     except _INTEGRITY_ERRORS as exc:
