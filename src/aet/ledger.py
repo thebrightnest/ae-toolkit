@@ -63,6 +63,10 @@ class LedgerCorruptionError(RuntimeError):
     """Raised when the ledger on disk does not match its content addresses."""
 
 
+class LedgerRootError(RuntimeError):
+    """Raised when repo-root discovery yields something that is not a directory."""
+
+
 def _canonical_json(value: Any) -> bytes:
     """Serialize ``value`` to stable UTF-8 JSON bytes for content addressing."""
     return json.dumps(
@@ -148,6 +152,14 @@ def _resolve_ledger_repo_root() -> Path:
     is reserved for the orchestrator's batch-launch context and points at the
     primary worktree; using it here would make worktree writers publish to the
     main ledger instead of their own (the split-brain this resolver fixes).
+
+    A successful ``rev-parse`` that names a path which is not an existing
+    directory raises :class:`LedgerRootError` rather than resolving it.  The
+    old code trusted that output blindly, so a stubbed ``git`` could hand back
+    a commit sha and the writer would silently mint ``<sha>/.agents/`` under
+    the cwd.  Falling back to cwd here would be just as wrong: it would put a
+    real ledger somewhere nobody reads.  Only a missing ``git`` binary
+    (:class:`FileNotFoundError`) falls back to the cwd.
     """
     try:
         result = subprocess.run(
@@ -157,7 +169,25 @@ def _resolve_ledger_repo_root() -> Path:
             check=False,
         )
         if result.returncode == 0:
-            return Path(result.stdout.strip()).resolve()
+            toplevel = result.stdout.strip()
+            if not toplevel:
+                raise LedgerRootError(
+                    "git rev-parse --show-toplevel succeeded but printed nothing. "
+                    "Refusing to resolve the ledger root, because an empty path "
+                    "resolves to the current directory and would scatter ledgers "
+                    "wherever a command happened to run."
+                )
+            root = Path(toplevel).resolve()
+            if not root.is_dir():
+                raise LedgerRootError(
+                    f"git rev-parse --show-toplevel returned {toplevel!r}, which is "
+                    "not an existing directory. Refusing to resolve the ledger root: "
+                    "writing there would create the path as a side effect and split "
+                    "provenance across a phantom repo. This normally means git was "
+                    "stubbed or shadowed by something answering rev-parse for a "
+                    "different query."
+                )
+            return root
     except FileNotFoundError:
         pass
     return Path.cwd().resolve()

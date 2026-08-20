@@ -9,7 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from aet.ledger import Ledger, LedgerCorruptionError, resolve_ledger_path, verify
+from aet import ledger as ledger_module
+from aet.ledger import (
+    Ledger,
+    LedgerCorruptionError,
+    LedgerRootError,
+    resolve_ledger_path,
+    verify,
+)
 
 
 def _ledger(tmp_path: Path) -> Ledger:
@@ -386,3 +393,56 @@ def test_resolve_ledger_path_respects_aet_ledger_path(monkeypatch, tmp_path: Pat
     monkeypatch.setenv("AET_LEDGER_PATH", str(custom))
 
     assert resolve_ledger_path() == custom
+
+
+def _stub_rev_parse(monkeypatch, stdout: str) -> None:
+    """Make every subprocess.run in aet.ledger answer rev-parse with ``stdout``."""
+
+    class _Result:
+        returncode = 0
+
+        def __init__(self, out: str) -> None:
+            self.stdout = out
+            self.stderr = ""
+
+    monkeypatch.setattr(ledger_module.subprocess, "run", lambda *a, **k: _Result(stdout))
+
+
+def test_resolve_ledger_path_rejects_nonexistent_root(monkeypatch, tmp_path: Path) -> None:
+    """A rev-parse answer that is not a real directory fails loudly, not silently.
+
+    Regression: a stubbed git returned a commit sha here, and the writer created
+    ``<sha>/.agents/ledger.jsonl`` under the cwd as a side effect.
+    """
+    monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
+    monkeypatch.chdir(tmp_path)
+    _stub_rev_parse(monkeypatch, "abc123def456\n")
+
+    with pytest.raises(LedgerRootError, match="not an existing directory"):
+        resolve_ledger_path()
+
+    assert not (tmp_path / "abc123def456").exists()
+
+
+def test_resolve_ledger_path_rejects_empty_root(monkeypatch, tmp_path: Path) -> None:
+    """Empty rev-parse output must not silently resolve to the cwd."""
+    monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
+    monkeypatch.chdir(tmp_path)
+    _stub_rev_parse(monkeypatch, "\n")
+
+    with pytest.raises(LedgerRootError, match="printed nothing"):
+        resolve_ledger_path()
+
+
+def test_resolve_ledger_path_falls_back_to_cwd_without_git(monkeypatch, tmp_path: Path) -> None:
+    """A missing git binary still falls back to the cwd; only bad output raises."""
+    monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    def _no_git(*_args, **_kwargs):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(ledger_module.subprocess, "run", _no_git)
+
+    expected = Path(tmp_path).resolve() / ".agents" / "ledger.jsonl"
+    assert resolve_ledger_path() == expected
