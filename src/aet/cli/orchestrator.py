@@ -621,7 +621,7 @@ def _emit_stage_session(
             stage=stage,
             verdict_recorded=verdict_recorded,
             shutdown=_shutdown_requested,
-            killed_by_timeout=exit_code == -9,
+            killed_by_timeout=exit_code < 0,
         ).value
     logger.append_record(
         telemetry.stage_record(
@@ -1198,7 +1198,7 @@ def run_stage(
                 stage=current_stage,
                 verdict_recorded=verdict_kind is not None,
                 shutdown=_shutdown_requested,
-                killed_by_timeout=exit_code == -9,
+                killed_by_timeout=exit_code < 0,
             ),
             current_stage,
             output,
@@ -1317,7 +1317,7 @@ def run_stage_group(
                 stage=stages[0].name,
                 verdict_recorded=False,
                 shutdown=_shutdown_requested,
-                killed_by_timeout=exit_code == -9,
+                killed_by_timeout=exit_code < 0,
             ),
             stages[0].name,
             output,
@@ -2501,12 +2501,26 @@ def _finalize_task(
         _mark_failed(backend, queue_file, task_id, from_state)
         return {"successes": 0, "failures": 1, "stop_spawn": False}
 
-    # Stall/task-timeout failures are terminal: leave the task failed rather
-    # than requeue it. The child process records the TIMEOUT class on the
-    # task's failure_signatures ledger; read that back after the reload above.
+    # Signal-killed sessions are terminal timeouts. The child process may have
+    # recorded a TIMEOUT signature itself (stall watchdog), or the parent may
+    # have killed it before it could. Make the exit signal authoritative so a
+    # signal-killed session is never requeued just because the signature is
+    # missing (osd-02).
     last_entry = (task.get("failure_signatures") or [])[-1:] if task else []
     entry = last_entry[0] if last_entry else {}
-    if entry.get("class") == failure_lib.FailureClass.TIMEOUT.value:
+    is_timeout = (
+        entry.get("class") == failure_lib.FailureClass.TIMEOUT.value or ret < 0
+    )
+    if is_timeout:
+        if ret < 0 and entry.get("class") != failure_lib.FailureClass.TIMEOUT.value:
+            # Append the authoritative timeout signature the child could not.
+            _record_failure_on_task(
+                backend,
+                task,
+                failure_lib.FailureClass.TIMEOUT,
+                stage=task.get("stage") or from_state,
+                tail=f"killed by signal {-ret}",
+            )
         print(f"   ⏱️  {task_id} killed by timeout; leaving failed")
         _mark_failed(backend, queue_file, task_id, from_state)
         return {"successes": 0, "failures": 1, "stop_spawn": False}
