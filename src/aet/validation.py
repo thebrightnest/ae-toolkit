@@ -4,12 +4,18 @@
 the tests it must run, and records the actual commands it executed so
 ``aet-qa`` can perform gap analysis if the full suite later fails on a test
 that implementation should have caught.
+
+Single-run file-hash caching is provided through :class:`aet.validation_cache.ValidationCache`
+and the convenience functions below so ``aet-implement`` can skip re-running a
+targeted validation when tracked files have not changed.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+
+from aet.validation_cache import ValidationCache
 
 # Files that, when changed, can affect any test outcome. The safe fallback is
 # the full suite.
@@ -139,3 +145,49 @@ def write_targeted_tests(
         encoding="utf-8",
     )
     return p
+
+
+def validation_cache_path(repo_root: str | Path, run_id: str) -> Path:
+    """Return the run-scoped file where implement stores validation cache entries."""
+    return Path(repo_root) / ".agents" / "runs" / run_id / "validation-cache.json"
+
+
+def get_validation_cache(repo_root: str | Path, run_id: str) -> ValidationCache:
+    """Return a :class:`ValidationCache` for ``run_id`` under ``repo_root``."""
+    return ValidationCache.for_run(repo_root, run_id)
+
+
+def cached_result(
+    command: str,
+    repo_root: str | Path,
+    run_id: str,
+    file_hash: str | None = None,
+) -> dict[str, object] | None:
+    """Return the cached result for ``command`` in ``run_id``, or ``None``.
+
+    If ``file_hash`` is omitted, the current repository hash snapshot is
+    computed automatically so the lookup matches the entry written by
+    :func:`record_result` for the same file state.
+    """
+    cache = get_validation_cache(repo_root, run_id)
+    if file_hash is None:
+        file_hash = cache.compute_hash()
+    return cache.get(command, file_hash)
+
+
+def record_result(
+    command: str,
+    result: dict[str, object],
+    repo_root: str | Path,
+    run_id: str,
+    file_hash: str | None = None,
+) -> None:
+    """Store ``result`` for ``command`` in the run-scoped validation cache.
+
+    If ``file_hash`` is omitted, the current repository hash snapshot is
+    computed automatically.
+    """
+    cache = get_validation_cache(repo_root, run_id)
+    if file_hash is None:
+        file_hash = cache.compute_hash()
+    cache.set(command, file_hash, result)

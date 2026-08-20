@@ -121,6 +121,7 @@ Worktree mode puts each implementation on its own branch using standard git comm
 - Type checking must pass
 - Unit tests must pass
 - Integration tests must pass (if applicable)
+- **Single-run validation cache.** If `AET_RUN_ID` is set, use `aet.validation.cached_result(command, repo_root, run_id)` before each targeted validation command. When a cached result exists for the current file-hash snapshot, skip re-running that command and treat the cached outcome as this stage's result. If you run the command, store the result with `aet.validation.record_result(command, {"returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr}, repo_root, run_id)` so later stages in the same run can skip it. Do not use the cache for full-suite runs.
 - **Targeted tests only.** Use `aet.validation.select_targeted_tests(changed_files)` (Python) or the project's equivalent path-based floor to determine the minimum tests to run. The floor is same-directory and matching-name test files; add agent-driven tests when the diff justifies it, but never run the full suite in this stage.
 - **Record what you ran.** After the final targeted test run, write the list of test commands to `$AET_TARGETED_TESTS_PATH` as a JSON array (e.g., `["pytest tests/test_foo.py", "pytest tests/cli/test_bar.py"]`). The orchestrator passes this to QA for gap analysis.
 - Manual verification steps must be checked
