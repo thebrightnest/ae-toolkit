@@ -94,6 +94,7 @@ Backfill the portable plan spec into records that predate R-19.
 - `--rev` *str* — Git revision that still carries the plan files. (default: `b95538dd~1`)
 - `--apply` *boolean* — Write the recovered specs; otherwise dry-run. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
+- `--history-file` *str* — Backfill settled history JSONL instead of the live queue.
 
 ## `aet state transition`
 
