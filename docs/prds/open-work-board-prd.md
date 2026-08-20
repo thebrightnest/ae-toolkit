@@ -327,6 +327,28 @@ All four implementation tasks landed; merge verification remains owned by `aet-s
 
 ---
 
+## Divergence Summary — owb-11-shadow-posture
+
+*Recorded: 2026-08-20 — Branch: owb-11-shadow-posture*
+
+All five implementation tasks landed; merge verification remains owned by `aet-ship`.
+
+### Changed from plan
+
+- **Files to Modify omitted prior work**: `src/aet/cli/configure_backend.py` was listed but was not touched. The `--scope team|shadow` vocabulary and the `--guided` setup flow were already in place from earlier branches, so posture inference is built on the existing `resolve_config_with_source` rather than on new config machinery.
+- **Additional files touched**: `src/aet/backends/base.py` (posture constants), `src/aet/cli/aet_state.py` (closure push exemption handling), `src/aet/cli/backlog.py`, `src/aet/cli/orchestrator.py`, `src/aet/cli/reconcile.py`, and `src/aet/cli/sprint.py` (posture plumbing) were modified though not listed.
+
+### Added (unplanned)
+
+- **Test adjustments for the new default**: existing tests in `tests/state/test_aet_state.py`, `tests/state/test_desk_actions.py`, and `tests/state/test_quarantined_state.py` now create a project-scope config so they continue to exercise the shared-posture history-write and push paths after shadow became the default. `tests/cli/test_sprint_intake.py` was updated to seed the queue through `GitRefsBackend` after the json backend removal left the old JSON-file fixture empty.
+- **Learning entry** for the `test_sprint_intake.py` fixture fix in `.agents/learnings.jsonl`.
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
+---
+
 *Stage: synced*
 
 *Next step: run `aet-ship`*
