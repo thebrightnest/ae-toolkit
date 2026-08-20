@@ -141,7 +141,14 @@ class TestShipCloseTransaction(unittest.TestCase):
             target_branch=None,
             dry_run=False,
         )
-        with patch.dict(os.environ, {"AET_BACKEND": "git-refs"}):
+        # This test asserts on the ledger write itself, so it pins the ledger to
+        # its own fixture repo rather than inheriting conftest's _isolate_ledger
+        # tmp dir — the override path that fixture documents.
+        env = {
+            "AET_BACKEND": "git-refs",
+            "AET_LEDGER_PATH": str(self.repo / ".agents" / "ledger.jsonl"),
+        }
+        with patch.dict(os.environ, env):
             rc = ship.cmd_ship(args)
         self.assertEqual(rc, 0)
 

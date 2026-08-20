@@ -109,7 +109,10 @@ stronger check.
 - [x] Reproduction steps no longer trigger the bug (delta 0, was +98 and +1)
 - [x] `tests/state`, `tests/gate`, `tests/ledger` pass with no new failures
 - [x] The 5 resolver tests broken by leg 1's module patch are fixed by the marker
-- [ ] Whole-suite run confirming delta 0 — in progress at time of writing
+- [x] Whole-suite run: 1519 passed, 216 subtests, `LEDGER_DELTA=0`
+- [x] `tests/cli/test_ship_close.py` regression caused by the fixture is
+      fixed — it asserts on the ledger write, so it pins `AET_LEDGER_PATH`
+      to its own fixture repo via the documented override path
 
 ## Outstanding
 
@@ -134,4 +137,9 @@ is a deliberate decision to take separately, now that new writes have stopped.
 - **Measure again after fixing.** The first fix stopped 98 of 99 writes and
   looked complete. Only re-measuring the whole suite surfaced the spawned child,
   which no amount of in-process patching could have reached.
+- **A broad autouse fixture breaks whatever legitimately asserts on the thing it
+  redirects.** This one broke two sets of tests — the resolver's own, and
+  `test_ship_close`'s ledger assertion — and both surfaced only in a full run.
+  Budget for that when isolating a global resolver, and give the fixture a
+  documented override path from the start.
 - **Reference:** `tests/conftest.py`; `src/aet/ledger.py` `resolve_ledger_path`.
