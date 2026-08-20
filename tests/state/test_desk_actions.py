@@ -219,6 +219,11 @@ def _merge_subprocess_runner(cwd: str | None):
         if sub == "symbolic-ref":
             return _Result(0, "refs/remotes/origin/main\n", "")
         if sub == "rev-parse":
+            # Ledger root discovery shares the patched subprocess module, so
+            # --show-toplevel must answer with a real path; anything else
+            # would be resolved as a directory relative to the cwd.
+            if "--show-toplevel" in cmd:
+                return _Result(0, f"{cwd}\n", "")
             return _Result(0, "abc123def456\n", "")
         if sub == "merge-base":
             # Success means the tip is an ancestor of origin/main.
