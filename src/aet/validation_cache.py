@@ -32,6 +32,10 @@ _LOCKFILE_NAMES: frozenset[str] = frozenset(
 # Directories whose contents are hashed for cache invalidation.
 _TRACKED_DIRS: tuple[str, ...] = ("src", "tests")
 
+# Build artifacts that should not affect the file-hash snapshot.
+_IGNORED_DIR_NAMES: frozenset[str] = frozenset({"__pycache__"})
+_IGNORED_FILE_SUFFIXES: tuple[str, ...] = (".pyc",)
+
 
 def _hash_file(path: Path) -> str:
     """Return the SHA-256 hex digest of ``path``'s contents."""
@@ -73,6 +77,8 @@ class ValidationCache:
 
         The digest is deterministic: files are walked in sorted order and the
         final hash combines relative paths with their individual content hashes.
+        Bytecode artifacts (``__pycache__`` and ``.pyc`` files) are ignored so
+        test runs do not spuriously invalidate the cache.
         """
         pieces: list[str] = []
 
@@ -82,6 +88,11 @@ class ValidationCache:
                 continue
             for path in sorted(dir_path.rglob("*")):
                 if not path.is_file():
+                    continue
+                rel_parts = path.relative_to(self.repo_root).parts
+                if any(part in _IGNORED_DIR_NAMES for part in rel_parts):
+                    continue
+                if path.suffix in _IGNORED_FILE_SUFFIXES:
                     continue
                 rel = path.relative_to(self.repo_root).as_posix()
                 pieces.append(f"{rel}:{_hash_file(path)}")

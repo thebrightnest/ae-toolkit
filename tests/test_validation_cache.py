@@ -92,6 +92,22 @@ class TestValidationCacheHash:
         after = cache.compute_hash()
         assert before == after
 
+    def test_hash_ignores_pycache_artifacts(self, tmp_path: Path):
+        (tmp_path / "src" / "aet").mkdir(parents=True)
+        (tmp_path / "src" / "aet" / "foo.py").write_text("x")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_foo.py").write_text("y")
+        (tmp_path / "pyproject.toml").write_text("z")
+
+        cache = validation_cache.ValidationCache(tmp_path)
+        before = cache.compute_hash()
+        pycache = tmp_path / "src" / "aet" / "__pycache__"
+        pycache.mkdir(parents=True)
+        (pycache / "foo.cpython-312.pyc").write_bytes(b" bytecode")
+        (tmp_path / "tests" / "bar.pyc").write_bytes(b"more bytecode")
+        after = cache.compute_hash()
+        assert before == after
+
 
 class TestValidationCacheStorage:
     """Cache entries are stored run-scoped and keyed by command + file hash."""
