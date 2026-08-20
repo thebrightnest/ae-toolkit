@@ -93,5 +93,5 @@ Revert the commit. The register is prose; removing it changes no behaviour.
 
 ---
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: synced*
+*Next step: run `aet-ship`*
