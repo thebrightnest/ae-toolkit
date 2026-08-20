@@ -169,5 +169,5 @@ child's stall watchdog and the parent's wall-clock backstop.
 - Merge branch to main and verify integration: left for `aet-ship`; the branch
   is still ahead of `origin/main`.
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: synced*
+*Next step: run `aet-ship`*
