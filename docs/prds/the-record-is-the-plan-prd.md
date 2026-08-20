@@ -290,5 +290,5 @@ This register satisfies R-1 and informs the sibling plans' scope.
 
 ---
 
-_Stage: scope-validated_
-_Next step: run `aet-work`_
+*Stage: synced*
+*Next step: run `aet-ship`*
