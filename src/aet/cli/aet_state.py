@@ -22,6 +22,7 @@ import typer
 
 from aet import queue as queue_lib  # noqa: E402
 from aet import spec_backfill  # noqa: E402
+from aet.backends.base import SHADOW_POSTURE  # noqa: E402
 from aet.backends.factory import (  # noqa: E402, I001
     create_backend,
     queue_repo_root,
@@ -1369,6 +1370,12 @@ def cmd_record_merge(args):
         backend.push(mandatory=True)
     except backend.RefsPushError as exc:
         print(f"⛔ {exc}", file=sys.stderr)
+        # Shadow posture explicitly exempts the mandatory closure push
+        # (ADR-055 decision 8). The local record is intact; only remote
+        # replication is skipped, so the closure itself succeeds.
+        if backend.posture == SHADOW_POSTURE:
+            print(f"Recorded merge for {args.task_id}: {merge_commit} ({merge_strategy})")
+            return 0
         return 1
 
     print(f"Recorded merge for {args.task_id}: {merge_commit} ({merge_strategy})")

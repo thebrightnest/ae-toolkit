@@ -5,6 +5,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+# Posture identifiers. A project is "shadow" when no project-scope config exists;
+# it is "shared" when an in-tree .agents/aet-config.json is present. Shadow is
+# the safe default: refs/aet/* are never pushed and no AET artifact reaches the
+# working tree.
+SHADOW_POSTURE = "shadow"
+SHARED_POSTURE = "shared"
+
 
 class TaskBackend(ABC):
     """Pluggable backend interface for loading, saving, and mutating the work queue.

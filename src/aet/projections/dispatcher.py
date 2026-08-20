@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+from aet.backends.base import SHADOW_POSTURE, SHARED_POSTURE
 from aet.projections.base import Projection
 
 
@@ -76,12 +77,20 @@ class ProjectionDispatcher:
                 )
 
 
-def resolve_projections(config: dict[str, Any]) -> ProjectionDispatcher:
+def resolve_projections(
+    config: dict[str, Any], posture: str = SHARED_POSTURE
+) -> ProjectionDispatcher:
     """Build a dispatcher from the resolved AET config.
 
     The caller is responsible for external-first resolution; this function
     accepts the resolved config dict and reads the ``projections`` key.
+
+    In shadow posture the dispatcher is empty: no projection runs and no AET
+    artifact reaches the working tree.
     """
+    if posture == SHADOW_POSTURE:
+        return ProjectionDispatcher([])
+
     projections: list[Projection] = []
     for entry in config.get("projections", []):
         ptype = entry.get("type")

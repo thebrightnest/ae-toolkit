@@ -2,6 +2,7 @@
 
 import importlib.machinery
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -84,6 +85,12 @@ class TestQuarantinedStateApplication(unittest.TestCase):
         tmpdir = tempfile.mkdtemp()
         repo_root = Path(tmpdir)
         init_git_repo(repo_root)
+        # Quarantined-state tests that reach a terminal transition exercise the
+        # shared-posture seal path (history file). A project-scope config makes
+        # posture shared.
+        config_path = repo_root / ".agents" / "aet-config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps({}), encoding="utf-8")
         queue_path, _history_path = seed_git_queue(repo_root, tasks)
         return str(queue_path)
 
@@ -158,6 +165,10 @@ class TestQuarantinedStateApplication(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
             init_git_repo(repo_root)
+            # Terminal transition exercises the shared-posture seal path.
+            config_path = repo_root / ".agents" / "aet-config.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps({}), encoding="utf-8")
             queue_path, history_file = seed_git_queue(
                 repo_root,
                 [

@@ -147,6 +147,12 @@ class TestRecordMerge(unittest.TestCase):
         self.repo_root = Path(self.tmpdir.name)
         init_git_repo(self.repo_root)
         add_bare_origin(self.repo_root)
+        # Record-merge tests exercise the shared-posture closure path (mandatory
+        # push). A project-scope config makes posture shared so the push is not
+        # exempt under ADR-055.
+        config_path = self.repo_root / ".agents" / "aet-config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps({}), encoding="utf-8")
         self.queue_file_path, _history_path = seed_git_queue(
             self.repo_root,
             [{"id": "t1", "state": "awaiting_merge", "branch": "feat-001"}],
@@ -1158,6 +1164,10 @@ class TestStateTransition(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)
             init_git_repo(repo_root)
+            # This test exercises the shared-posture seal path (history file).
+            config_path = repo_root / ".agents" / "aet-config.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps({}), encoding="utf-8")
             queue_path, history_file = seed_git_queue(
                 repo_root,
                 [
@@ -1207,6 +1217,10 @@ class TestStateTransition(unittest.TestCase):
             repo_root = Path(tmpdir)
             init_git_repo(repo_root)
             add_bare_origin(repo_root)
+            # This test exercises the shared-posture record-merge closure path.
+            config_path = repo_root / ".agents" / "aet-config.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps({}), encoding="utf-8")
             queue_path, history_file = seed_git_queue(
                 repo_root,
                 [
@@ -1267,6 +1281,10 @@ class TestStateTransition(unittest.TestCase):
             repo_root = Path(tmpdir)
             init_git_repo(repo_root)
             add_bare_origin(repo_root)
+            # This test exercises the shared-posture record-merge closure path.
+            config_path = repo_root / ".agents" / "aet-config.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps({}), encoding="utf-8")
             queue_path, _history_path = seed_git_queue(
                 repo_root,
                 [

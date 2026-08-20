@@ -15,7 +15,7 @@ from typing import Any
 import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet.backends.factory import resolve_config  # noqa: E402
+from aet.backends.factory import resolve_config, resolve_posture  # noqa: E402
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
 
 
@@ -68,7 +68,8 @@ def _run(
     json_output: bool,
 ) -> int:
     config_data = resolve_config(config)
-    dispatcher = resolve_projections(config_data)
+    posture = resolve_posture(config)
+    dispatcher = resolve_projections(config_data, posture=posture)
 
     if not dispatcher.projections:
         print(

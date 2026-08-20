@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aet.backends.base import SHADOW_POSTURE, SHARED_POSTURE
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.project_id import derive_config_slug, resolve_repo_root
 
@@ -96,6 +97,10 @@ def create_backend(
     ``AET_WORK_CONFIG`` env → ``~/.aet/{slug}/config.json`` → in-tree
     ``.agents/aet-config.json`` → built-in defaults. A surviving
     ``task_backend`` key fails closed with a migration message.
+
+    The backend's ``posture`` attribute is ``shared`` when project-scope config
+    exists and ``shadow`` otherwise. Shadow posture suppresses all pushes and
+    projections and keeps AET artifacts out of the working tree.
     """
     queue_root = queue_repo_root(queue_file)
     # Anchor configuration to the repository that holds the queue, not to the
@@ -104,7 +109,7 @@ def create_backend(
     # silently governed operations on a queue in another.
     # Resolve config to fail fast on removed keys; git-refs is the only store,
     # so the resolved dict is no longer consulted.
-    resolve_config(
+    config, source = resolve_config_with_source(
         config_path or DEFAULT_CONFIG_PATH,
         repo_root=queue_root or str(Path(queue_file).resolve().parent),
     )
@@ -113,7 +118,23 @@ def create_backend(
             "git-refs stores state in refs/aet/* inside the repository holding "
             f"the queue, but {queue_file} is not inside a git repository."
         )
-    return GitRefsBackend(queue_file=queue_file, history_file=history_file)
+    posture = SHARED_POSTURE if source == "project" else SHADOW_POSTURE
+    return GitRefsBackend(
+        queue_file=queue_file, history_file=history_file, posture=posture
+    )
+
+
+def resolve_posture(
+    config_path: str, repo_root: str | Path | None = None
+) -> str:
+    """Infer project posture from the config source.
+
+    Returns ``shared`` when an in-tree project-scope config is the effective
+    source, and ``shadow`` for any other source (env, user, or default). A
+    project nobody configured is therefore local by default.
+    """
+    _, source = resolve_config_with_source(config_path, repo_root=repo_root)
+    return SHARED_POSTURE if source == "project" else SHADOW_POSTURE
 
 
 def resolve_config_with_source(

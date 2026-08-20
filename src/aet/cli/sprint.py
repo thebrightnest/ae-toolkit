@@ -18,7 +18,10 @@ import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
-from aet.backends.factory import create_backend, resolve_config  # noqa: E402
+from aet.backends.factory import (  # noqa: E402
+    create_backend,
+    resolve_config,
+)
 from aet.backends.github_backend import BackendError, GitHubBackend  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 from aet.plan_parser import (  # noqa: E402
@@ -64,7 +67,9 @@ def _add(args: argparse.Namespace) -> int:
         history_file=args.history_file,
     )
     backend.fetch()
-    projections = resolve_projections(resolve_config(args.config))
+    projections = resolve_projections(
+        resolve_config(args.config), posture=backend.posture
+    )
 
     try:
         data = backend.load()
@@ -176,7 +181,9 @@ def _intake(args: argparse.Namespace) -> int:
         history_file=args.history_file,
     )
     backend.fetch()
-    projections = resolve_projections(resolve_config(args.config))
+    projections = resolve_projections(
+        resolve_config(args.config), posture=backend.posture
+    )
 
     try:
         data = backend.load()

@@ -75,6 +75,14 @@ writers generate an irreconcilable conflict by construction.
    are stranded because a remote tombstone exists, and removes them only
    when asked. It never pushes deletions to origin: cleaning origin from a
    stale clone is how tasks have been resurrected in the past (R-6).
+8. **Shadow posture exempts the mandatory closure push.** A repository with
+   no project-scope AET config is in shadow posture: configuration lives at
+   user scope, no projection runs, and no AET artifact appears in the
+   working tree. Because the operator has not opted into cross-device
+   sharing, `refs/aet/*` are never pushed. The mandatory closure push in
+   decision 4 is therefore explicitly exempt rather than silently bypassed;
+   the exemption is surfaced as a named error so the operator knows why
+   closure did not replicate.
 
 This revisits ADR-011's rejection of event sourcing as "heavier than
 needed." That was true when the alternative was one `state` field; it is no
@@ -92,6 +100,9 @@ does not make.
   breadcrumb defenses are deleted with the redundancy they policed.
 - **Harder:** Closure now requires a successful refs push; offline closure
   fails loudly. Mitigated by push being best-effort everywhere else.
+- **Easier:** Shadow posture makes AET usable on repositories that must carry
+  no AET artifact, with the inference and its consequence announced on every
+  run so the default is never silent.
 - **Harder:** The skills corpus and CONTEXT.md describe the old contract
   until slc-06 lands; the PRD's R-10 same-change requirement bounds the
   skew window to one plan.

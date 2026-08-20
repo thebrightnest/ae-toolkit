@@ -107,9 +107,10 @@ def _add(args: argparse.Namespace) -> int:
         )
 
     # The projection is fail-open: a missing ``gh`` or network problem warns
-    # but does not block the local record (R-4).
+    # but does not block the local record (R-4). In shadow posture projections
+    # are suppressed entirely.
     config = resolve_config(args.config)
-    projections = resolve_projections(config)
+    projections = resolve_projections(config, posture=backend.posture)
     task = _task_from_plan(plan_file)
     projections.on_add(task, is_new=True)
     backend.close()

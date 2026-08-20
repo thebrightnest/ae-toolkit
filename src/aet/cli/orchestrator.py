@@ -63,9 +63,11 @@ from aet import failure as failure_lib  # noqa: E402
 from aet import usage as usage_lib  # noqa: E402
 from aet.backends.factory import (  # noqa: E402
     DEFAULT_CONFIG_PATH,
+    SHADOW_POSTURE,
     create_backend,
     resolve_config,
     resolve_integration_mode,
+    resolve_posture,
 )
 from aet.branch_ref import (  # noqa: E402
     resolve_base_ref,
@@ -3518,6 +3520,16 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             release_lease(queue_file, logger.run_id)
 
 
+def _announce_posture(posture: str) -> None:
+    """Print posture notice once per run when in shadow mode."""
+    if posture == SHADOW_POSTURE:
+        print(
+            "[posture] Shadow posture: no project-scope config found. "
+            "refs/aet/* will not be pushed. "
+            "Run `aet configure --scope team` to share this project across devices."
+        )
+
+
 def main(argv: list[str] | None = None):
     args = parse_args(argv)
     adapter = resolve_cli_adapter(args.cli_bin)
@@ -3530,6 +3542,13 @@ def main(argv: list[str] | None = None):
 
     repo_root = args.repo_root
     run_id = args.run_id
+
+    # Infer posture from the presence/absence of project-scope config and
+    # announce it once per run. Shadow is the safe default: refs/aet/* are not
+    # pushed and no projections run.
+    posture = resolve_posture(DEFAULT_CONFIG_PATH, repo_root=repo_root)
+    _announce_posture(posture)
+
     if run_id:
         _redirect_output(args.log_file)
         _write_run_metadata(repo_root, run_id)
