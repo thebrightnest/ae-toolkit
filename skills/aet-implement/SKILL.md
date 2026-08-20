@@ -121,8 +121,8 @@ Worktree mode puts each implementation on its own branch using standard git comm
 - Type checking must pass
 - Unit tests must pass
 - Integration tests must pass (if applicable)
-- **Focused test runs while iterating:** when the project has a large test suite, run only the tests that cover files you are touching (`pytest path/to/test.py`, `vitest run path/to/test.ts`, etc.). Use the diff or the plan's task list to pick the relevant subset.
-- **Full suite before final commit:** run the complete test suite at least once before committing, unless the plan explicitly says otherwise.
+- **Targeted tests only.** Use `aet.validation.select_targeted_tests(changed_files)` (Python) or the project's equivalent path-based floor to determine the minimum tests to run. The floor is same-directory and matching-name test files; add agent-driven tests when the diff justifies it, but never run the full suite in this stage.
+- **Record what you ran.** After the final targeted test run, write the list of test commands to `$AET_TARGETED_TESTS_PATH` as a JSON array (e.g., `["pytest tests/test_foo.py", "pytest tests/cli/test_bar.py"]`). The orchestrator passes this to QA for gap analysis.
 - Manual verification steps must be checked
 - **Visual / CSS verification** — if the plan includes renderer/UI work, verify that all custom `className` values have corresponding CSS definitions before declaring implementation complete
 
@@ -148,7 +148,9 @@ After `implement` completes and all validation passes:
      --evidence-path "<evidence path if any>"
    ```
 
-   Include all four fields when they are non-empty. Do not hand-edit
+   Include all four fields when they are non-empty. Also include the targeted
+   tests you ran as `--validation-command` entries; QA uses them for gap
+   analysis if the full suite later fails on a missed test. Do not hand-edit
    `.agents/runs/<run-id>/handoff.json`; use `aet handoff append`.
 
 2. The plan.md footer will read:

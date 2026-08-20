@@ -64,5 +64,23 @@ Redesign the orchestrator's session supervision and validation workflow to elimi
 - Should the validation cache be stored in the worktree or in the run telemetry directory?
 - Should the agent be required to output its test-selection rationale as structured data (JSON) or is free text in the output sufficient for gap analysis?
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+## Divergence Summary
+
+_Recorded: 2026-08-20 — Branch: validation-01-stage-based-split_
+
+### Changed from plan
+
+- None. All tasks in `docs/plans/validation-01-stage-based-split.md` were implemented as described.
+
+### Added (unplanned)
+
+- `scripts/validate-skills.sh`: Updated the link checker to strip inline code before matching links. Required because the revised `skills/aet-qa/SKILL.md` contains backtick-wrapped phrases that the previous regex misidentified as markdown links.
+- `.agents/doc-rules.yaml`: Updated `must_contain` assertions to match the new `aet-qa` skill contract (full suite unconditionally, no caching, gap analysis). Required to keep skill-structure validation green after the skill text changed.
+
+### Deferred
+
+- PRD requirements **R-1**, **R-2**, and **R-3** (hybrid process-tree + run-log liveness detection with a hard wall-clock backstop) were intentionally scoped out of this implementation plan and remain unimplemented.
+- PRD requirement **R-6** (single-run file-hash validation cache) was intentionally scoped out of this implementation plan and remains unimplemented.
+
+_Stage: synced_
+_Next step: run `aet-ship`_

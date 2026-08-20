@@ -4,28 +4,18 @@ rules:
   # tests/skills/test_aet_qa.py
   - type: must_contain
     target: skills/aet-qa/SKILL.md
-    value: "Default to impact-scoped tests"
-    reason: "SKILL.md should default to impact-scoped tests"
+    value: "Run the full test suite unconditionally"
+    reason: "SKILL.md must state that QA owns the full suite unconditionally"
 
   - type: must_contain
     target: skills/aet-qa/SKILL.md
-    value: "git diff --name-only <pr-base>..HEAD"
-    reason: "SKILL.md should identify changed files with git diff"
+    value: "do not reuse a cached result from `aet-implement`"
+    reason: "SKILL.md must forbid reusing implement validation results"
 
   - type: must_contain
     target: skills/aet-qa/SKILL.md
-    value: "Full-suite fallback"
-    reason: "SKILL.md should define a full-suite fallback"
-
-  - type: must_contain
-    target: skills/aet-qa/SKILL.md
-    value:
-      - "test harness"
-      - "config"
-      - "shared fixtures"
-      - "dependency lockfiles"
-      - "files imported by many tests"
-    reason: "Full-suite fallback should mention the required conditions"
+    value: "Gap analysis"
+    reason: "SKILL.md must include gap analysis against implement targeted tests"
 
   - type: must_contain
     target: skills/aet-qa/SKILL.md

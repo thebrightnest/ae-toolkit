@@ -54,6 +54,7 @@ from aet import (  # noqa: E402
     telemetry,
     track_record,
     triage,
+    validation,
 )
 from aet import failure as failure_lib  # noqa: E402
 from aet import usage as usage_lib  # noqa: E402
@@ -446,6 +447,33 @@ def _handoff_clause(repo_root: str, run_id: str | None) -> str:
     return "\n\n" + block
 
 
+def _targeted_tests_path(repo_root: str, run_id: str) -> Path:
+    """Run-scoped file where ``aet-implement`` records its targeted tests."""
+    return validation.targeted_tests_path(repo_root, run_id)
+
+
+def _record_targeted_tests_handoff(repo_root: str, run_id: str, stage: str) -> None:
+    """If implement wrote targeted-test commands, append them to the handoff.
+
+    This passes the implement floor to QA so a later full-suite failure can be
+    analyzed for gaps (R-8). The file is best-effort: a missing or malformed
+    file is silently ignored.
+    """
+    path = _targeted_tests_path(repo_root, run_id)
+    commands = validation.read_targeted_tests(path)
+    if not commands:
+        return
+    try:
+        handoff.append_entry(
+            repo_root,
+            run_id,
+            stage=stage,
+            validation_commands=commands,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _evidence_clause(kind: str, env_var: str) -> str:
     """Name the required verdict, its builder command, and its output path.
 
@@ -486,10 +514,8 @@ def build_prompt(
     return (
         f"Run {skills_str} on {plan_file}\n"
         f"Current stage: {current_stage}. Target stage: {next_stage}.\n"
-        f"Execute only this stage. Do not proceed to subsequent stages.\n"
-        f"Run validations (tests, lint, format checks) in the foreground and "
-        f"wait for them to finish — never background validations or end your "
-        f"turn while one is still running.{freshness_clause}{handoff_clause}{evidence_clause}\n"
+        f"Execute only this stage. Do not proceed to subsequent stages."
+        f"{freshness_clause}{handoff_clause}{evidence_clause}\n"
         f"Commit your work before exiting."
     )
 
@@ -1183,11 +1209,17 @@ def run_stage(
                 project_slug=telemetry.derive_project_slug(repo_root),
             )
         )
+    if run_id is not None:
+        env["AET_TARGETED_TESTS_PATH"] = str(_targeted_tests_path(repo_root, run_id))
 
     print(f"   Invoking: {' '.join(cmd)}")
     exit_code, usage, session_ref, output = _spawn_session_with_tail(
         adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
     )
+    if exit_code == 0 and run_id is not None:
+        # The tests were run while advancing toward next_stage; label the
+        # handoff entry with the stage that produced them.
+        _record_targeted_tests_handoff(repo_root, run_id, next_stage)
     if exit_code != 0 and task is not None:
         _record_failure_on_task(
             backend,
@@ -1223,10 +1255,7 @@ def build_stage_group_prompt(
     preamble = (
         "Execute the following consecutive pipeline stages in order. "
         "Complete each stage (including its commit) before starting the next. "
-        "Do not proceed past the final stage listed. "
-        "Run validations (tests, lint, format checks) in the foreground and "
-        "wait for them to finish — never background validations or end your "
-        "turn while one is still running." + freshness_clause + handoff_clause
+        "Do not proceed past the final stage listed." + freshness_clause + handoff_clause
     )
     blocks = [preamble]
     for stage in stages:
@@ -1302,11 +1331,17 @@ def run_stage_group(
                     project_slug=project_slug,
                 )
             )
+    if run_id is not None:
+        env["AET_TARGETED_TESTS_PATH"] = str(_targeted_tests_path(repo_root, run_id))
 
     print(f"   Invoking group: {' '.join(cmd)}")
     exit_code, usage, session_ref, output = _spawn_session_with_tail(
         adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
     )
+    if exit_code == 0 and run_id is not None:
+        # Use the last stage name as the recorder stage; the file is written by
+        # the implement portion of the group session.
+        _record_targeted_tests_handoff(repo_root, run_id, stages[-1].name)
     if exit_code != 0 and task is not None:
         _record_failure_on_task(
             backend,
