@@ -86,15 +86,6 @@ from aet.queue import (  # noqa: E402
 from aet.queue import (  # noqa: E402
     has_pending_tasks as queue_has_pending_tasks,
 )
-
-
-def _task_in_queue(backend, task_id: str) -> bool:
-    """Return True when ``task_id`` is present in the backend's live queue."""
-    try:
-        queue = backend.load()["queue"]
-    except Exception:
-        return False
-    return any(t.get("id") == task_id for t in queue)
 from aet.verifier import (  # noqa: E402
     read_plan_stage,
     verify_branch_has_commits,
@@ -114,6 +105,16 @@ from aet.worktree import (  # noqa: E402
     run_git_plain,
     teardown_worktree,
 )
+
+
+def _task_in_queue(backend, task_id: str) -> bool:
+    """Return True when ``task_id`` is present in the backend's live queue."""
+    try:
+        queue = backend.load()["queue"]
+    except Exception:
+        return False
+    return any(t.get("id") == task_id for t in queue)
+
 
 # Global shutdown flag
 _shutdown_requested = False
