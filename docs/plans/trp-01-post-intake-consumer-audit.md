@@ -28,17 +28,17 @@ complete.
 
 ## Task List
 
-1. Enumerate every read of `plan_file`, `plans_dir`, `docs/plans`, and
+1. [x] Enumerate every read of `plan_file`, `plans_dir`, `docs/plans`, and
    `resolve_plan_arg` across `src/`, and classify each as authoring-phase
    (correct) or post-intake (stale) — S (traces: R-1)
-2. For each post-intake consumer, name its replacement spec field
+2. [x] For each post-intake consumer, name its replacement spec field
    (`spec.frontmatter`, `spec.tasks`, `spec.title`, `spec.body`) or record that
    no field carries the data — S (traces: R-1)
-3. Extend the sweep beyond the package: `panel/`, `reports/`, `scripts/`, and
+3. [x] Extend the sweep beyond the package: `panel/`, `reports/`, `scripts/`, and
    any consumer of `docs/plans/archive/` — S (traces: R-1)
-4. Record the register in the PRD's Technical Notes, and state explicitly
+4. [x] Record the register in the PRD's Technical Notes, and state explicitly
    whether the sibling plans' scope is complete or must grow — S (traces: R-1)
-5. Merge branch to main and verify integration — S
+5. [ ] Merge branch to main and verify integration — S (deferred to `aet-ship` after `synced`; pipeline session ends at `qa-complete`)
 
 ## Floor Check
 
@@ -76,12 +76,12 @@ every consumer with file, line and replacement field.
 
 ## Validation Steps
 
-- [ ] Lint passes
-- [ ] R-trace coverage: R-1 covered by tasks 1-4
-- [ ] The register names every consumer with its file, line, and replacement field
-- [ ] The sweep covers the repository, not only `src/aet/`
-- [ ] A written statement of whether sibling scope is complete
-- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main`
+- [x] Lint passes (`make lint`, `aet plans lint`, `aet docs lint`)
+- [x] R-trace coverage: R-1 covered by tasks 1-4
+- [x] The register names every consumer with its file, line, and replacement field
+- [x] The sweep covers the repository, not only `src/aet/`
+- [x] A written statement of whether sibling scope is complete
+- [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` — deferred to `aet-ship` after `synced`
 
 ## Rollback Plan
 
@@ -93,5 +93,5 @@ Revert the commit. The register is prose; removing it changes no behaviour.
 
 ---
 
-*Stage: tdd-complete*
-*Next step: run `aet-implement`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
