@@ -195,6 +195,79 @@ but R-1's audit should record it.
 `None`. Both read as "no data" rather than "broken". R-9 makes the replacement
 fail closed, consistent with ADR-033 §3.
 
+## Post-Intake Consumer Register (R-1 Audit)
+
+The audit covered `src/aet/`, `src/aet/panel/`, `reports/`, `scripts/`, `skills/`,
+and `docs/plans/archive/`. The three consumers known at planning time are the
+floor of this register, not its ceiling.
+
+### Stale post-intake consumers
+
+| File | Line(s) | Consumer | Replacement field | Notes |
+| --- | --- | --- | --- | --- |
+| `src/aet/cli/ship.py` | 103, 329, 506, 541, 581, 675, 799, 833, 886, 1113, 1122 | `ship` family | `spec.frontmatter.*`, `spec.title`, `spec.body`, `spec.tasks` | Five entry points; `resolve_plan_arg` and `_task_id_from_plan` |
+| `src/aet/queue.py` | 591–614 | `archive_plan_file` | retired with R-7 | R-5 plan archive; fails open with `None` |
+| `src/aet/metrics.py` | 28–52, 328–345 | `_declared_size_for_task` | `spec.frontmatter.size` | Returns `None` on `OSError`; 0 of 368 settled records recovered |
+| `src/aet/track_record.py` | 154–174, 193–203 | `_resolve_plan_path`, `_required_verdicts_pass` | `spec.frontmatter` | Required verdict kinds read from plan file |
+| `src/aet/cli/status.py` | 31–45 | `_declared_size` | `spec.frontmatter.size` | Already prefers spec; file fallback is stale |
+| `src/aet/cli/desk.py` | 117–124, 463–468 | `_plan_path`, `_run_risk_view` | `spec.frontmatter` | Risk view reads plan for routing gates |
+| `src/aet/cli/aet_state.py` | 524–530, 565–580 | closure archive, `_land_digest` | `spec.body` (R-ids), spec serialization (hash) | `archived_to` write and plan-hash/R-id read |
+| `src/aet/cli/orchestrator.py` | 1489–1500, 1951–1954 | `process_task`, integration evidence | `spec.frontmatter` | Fallback parse of rendered worktree plan |
+| `src/aet/plan_parser.py` | 423–429 | `task_routing_data` fallback | `spec.frontmatter` | Shared helper used by post-intake consumers |
+| `src/aet/worktree.py` | 456–462 | `render_task_plan` fallback | `spec` | Already renders from spec; copy fallback is stale |
+| `src/aet/cli/next.py` | 37–39 | `derive_queue` fallback | `spec` presence | Spec should be required; file-existence fallback is stale |
+
+### Authoring-phase consumers (correct)
+
+These read `docs/plans/<id>.md` before intake and remain correct after R-19:
+
+- `src/aet/plan_parser.py:145` `title_from_plan`, `:160` `build_ticket_map`,
+  `:173` `stage_from_plan`, `:194` `is_settled_plan`, `:211`
+  `references_other_plans`, `:265` `most_recent_plan`, `:442`
+  `new_task_from_plan`, `:640` `resolve_plan_arg`
+- `src/aet/plans_lint.py:150` `lint_floor`, `:223` `lint_corpus`
+- `src/aet/plan_validate.py` corpus validation
+- `src/aet/cli/context.py:213` `_plan_files` etc. (operator context inspection)
+- `src/aet/cli/sprint.py:37` `resolve_plan`, `_add`, `_intake` (intake)
+- `src/aet/cli/backlog.py:29` `resolve_plan`, `_add` (backlog intake)
+- `src/aet/cli/plan.py:44` `cmd_validate`
+- `src/aet/cli/orchestrator.py:3146` `run_single` (run-one intake handoff)
+
+### `docs/plans/archive/` consumers
+
+The archive is still referenced outside the package and must be retired under
+R-7:
+
+- `docs/CONVENTIONS.md:217`
+- `docs/releases/v1.8.0.md:58`
+- `docs/diagrams/plan-task-lifecycle.*`
+- `docs/adr/061-the-record-is-the-plan-after-intake.md:77–78`
+- `docs/prds/structural-review-tier-2-prd.md:38,171,175,177`
+- `docs/prds/open-work-board-prd.md:31,45`
+- `docs/prds/the-record-is-the-plan-prd.md` (this PRD)
+- `scripts/validate-skills.sh:195–197`
+- `scripts/archive/migrate-plan-archive.py`
+- `src/aet/plans_lint.py:4` docstring
+- `src/aet/telemetry.py:163–175` `plans_archive_dir`
+
+### Sibling-scope statement
+
+The sibling implementation scope is **not complete**. In addition to the three
+known consumers, the audit found post-intake reads in `desk`, `status`,
+`track_record`, `aet-state` land digest, and fallback paths in `orchestrator`,
+`plan_parser`, `worktree`, and `next`. The sibling plans must grow to cover at
+least:
+
+- `desk` risk view
+- `status` declared-size fallback
+- `track_record` required-verdict routing
+- `aet-state` closure land digest
+- removal of fallback paths in `orchestrator/process_task`,
+  `plan_parser/task_routing_data`, `worktree/render_task_plan`, and
+  `next/derive_queue`
+
+This register satisfies R-1 and informs the sibling plans' scope.
+
 ## Decisions Taken at Scope Validation
 
 - **The decision is recorded as ADR-061** (`the-record-is-the-plan-after-intake`),
