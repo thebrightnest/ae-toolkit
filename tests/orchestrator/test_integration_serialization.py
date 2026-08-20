@@ -472,7 +472,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
             )
             _add_commit_to_worktree(worktree_a, "task-a.txt", "task-a work")
 
-            queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
             backend = orchestrator._make_backend(queue_file)
             backend.save([{"id": "task-a", "state": "in_progress", "plan_file": plan_a}])
 
@@ -545,7 +545,7 @@ class TestBatchIntegrationSerialization(unittest.TestCase):
             )
             _create_integration_branch(repo_root, "epic-01")
 
-            queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
             backend = orchestrator._make_backend(queue_file)
             backend.save(
                 [

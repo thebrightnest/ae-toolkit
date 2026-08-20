@@ -5,13 +5,20 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import io
-import json
 import sys
 from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+from tests.state._helpers import (
+    add_bare_origin,
+    init_git_repo,
+    load_git_history,
+    load_git_queue,
+    seed_git_queue,
+)
 
 REPO_ROOT = Path(__file__).parents[2]
 _DESK_PY = REPO_ROOT / "src" / "aet" / "cli" / "desk.py"
@@ -47,9 +54,14 @@ def _write_plan(tmp_path: Path, plan_id: str, status: str = "approved") -> Path:
 
 
 def _write_queue(tmp_path: Path, tasks: list[dict]) -> str:
-    path = tmp_path / "queue.json"
-    path.write_text(json.dumps(tasks), encoding="utf-8")
-    return str(path)
+    init_git_repo(tmp_path)
+    queue_path, history_path = seed_git_queue(
+        tmp_path,
+        tasks,
+        queue_rel="queue.json",
+        history_rel="work-history.jsonl",
+    )
+    return str(queue_path)
 
 
 def _write_history(tmp_path: Path) -> str:
@@ -168,12 +180,9 @@ class TestAbandonSuccess:
         )
         assert rc == 0
 
-        queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))
-        assert [t["id"] for t in queue] == []
+        assert [t["id"] for t in load_git_queue(queue_file)] == []
 
-        history_lines = Path(history_file).read_text(encoding="utf-8").strip().splitlines()
-        assert len(history_lines) == 1
-        settled = json.loads(history_lines[0])
+        settled = load_git_history(queue_file)[0]
         assert settled["id"] == "t1"
         assert settled["state"] == "abandoned"
 
@@ -193,6 +202,7 @@ class TestAbandonSuccess:
 
 def _merge_subprocess_runner(cwd: str | None):
     """Return a mock subprocess.run side_effect for a successful desk merge."""
+    real_run = __import__("subprocess").run
 
     def _git_subcommand(cmd):
         """Return the git subcommand, skipping an optional -C <path> prefix."""
@@ -210,10 +220,17 @@ def _merge_subprocess_runner(cwd: str | None):
                 self.stdout = stdout
                 self.stderr = stderr
 
+        # Backend git calls use ``-C <repo-root>``; always delegate those to
+        # the real subprocess so the git-refs store can operate.
+        if "-C" in cmd:
+            return real_run(cmd, **kwargs)
+
         sub = _git_subcommand(cmd)
 
         if cmd[0] == "gh" and cmd[1:3] == ["pr", "merge"]:
             return _Result(0, "https://github.com/org/repo/pull/1\n", "")
+        if cmd[0] == "gh" and cmd[1:3] == ["pr", "view"]:
+            return _Result(0, '{"mergeCommit":{"oid":"abc123def456"}}\n', "")
         if sub == "fetch":
             return _Result(0, "", "")
         if sub == "symbolic-ref":
@@ -255,6 +272,7 @@ class TestMergeSuccess:
             ],
         )
         history_file = _write_history(tmp_path)
+        add_bare_origin(tmp_path)
         plan_before = plan.read_text(encoding="utf-8")
         monkeypatch.setattr(
             desk.subprocess,
@@ -266,12 +284,9 @@ class TestMergeSuccess:
         )
         assert rc == 0
 
-        queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))
-        assert [t["id"] for t in queue] == []
+        assert [t["id"] for t in load_git_queue(queue_file)] == []
 
-        history_lines = Path(history_file).read_text(encoding="utf-8").strip().splitlines()
-        assert len(history_lines) == 1
-        settled = json.loads(history_lines[0])
+        settled = load_git_history(queue_file)[0]
         assert settled["id"] == "t1"
         assert settled["state"] == "merged"
         assert settled.get("merge_commit") == "abc123def456"
@@ -297,6 +312,7 @@ class TestMergeSuccess:
             ],
         )
         history_file = _write_history(tmp_path)
+        add_bare_origin(tmp_path)
         monkeypatch.setattr(
             desk.subprocess,
             "run",
@@ -304,8 +320,7 @@ class TestMergeSuccess:
         )
         _run_desk_action("merge", "t1", queue_file=queue_file, history_file=history_file)
 
-        history_lines = Path(history_file).read_text(encoding="utf-8").strip().splitlines()
-        settled = json.loads(history_lines[0])
+        settled = load_git_history(queue_file)[0]
         transition_entry = next(
             (e for e in settled.get("history", []) if e.get("to") == "merged"),
             None,

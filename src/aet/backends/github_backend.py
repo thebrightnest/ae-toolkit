@@ -1,8 +1,8 @@
 """GitHub Issues projection for the aet-work queue.
 
-This is a one-way mirror, not a storage backend. The local JSON queue (or the
-configured :class:`backends.base.TaskBackend`) remains the source of truth;
-this projection creates and labels GitHub issues to reflect task state.
+This is a one-way mirror, not a storage backend. The git-refs task backend
+remains the source of truth; this projection creates and labels GitHub issues
+to reflect task state.
 """
 
 from __future__ import annotations
@@ -57,12 +57,12 @@ class GitHubBackend(Projection):
 
     This class implements :class:`projections.base.Projection`. It no longer
     implements :class:`backends.base.TaskBackend`; storage is handled by the
-    configured task backend (``json`` or ``git-refs``).
+    git-refs task backend.
     """
 
     def __init__(
         self,
-        queue_file: str = ".agents/work-queue.json",
+        queue_file: str = ".agents/aet-queue",
         history_file: str = ".agents/work-history.jsonl",
         repo: str = "",
         label_prefix: str = DEFAULT_LABEL_PREFIX,

@@ -95,3 +95,15 @@ def _isolate_ledger(request, monkeypatch, tmp_path):
     (root / ".agents").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("AET_LEDGER_PATH", str(root / ".agents" / "ledger.jsonl"))
     monkeypatch.setattr(ledger, "_resolve_ledger_repo_root", lambda: root)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_aet_repo_root(monkeypatch):
+    """Remove ``AET_REPO_ROOT`` from the inherited environment.
+
+    The orchestrator that launches the test suite sets ``AET_REPO_ROOT`` to
+    the real project checkout.  Tests must resolve their own repository roots
+    (or set the variable explicitly) so they do not accidentally read the
+    developer's in-tree config.
+    """
+    monkeypatch.delenv("AET_REPO_ROOT", raising=False)

@@ -301,7 +301,7 @@ def _build_payload(
 def _submit(args: argparse.Namespace) -> int:
     backend = create_backend(
         config_path=".agents/aet-config.json",
-        queue_file=".agents/work-queue.json",
+        queue_file=".agents/aet-queue",
         history_file=".agents/work-history.jsonl",
     )
     backend.fetch()
@@ -532,7 +532,7 @@ def review(
     else:
         backend = create_backend(
             config_path=".agents/aet-config.json",
-            queue_file=".agents/work-queue.json",
+            queue_file=".agents/aet-queue",
             history_file=".agents/work-history.jsonl",
         )
         backend.fetch()

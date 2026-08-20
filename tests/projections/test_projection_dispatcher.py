@@ -11,7 +11,6 @@ from pathlib import Path
 from unittest import mock
 
 from aet.backends.factory import resolve_config
-from aet.backends.json_backend import JsonBackend
 from aet.projections.base import Projection
 from aet.projections.dispatcher import ProjectionDispatcher, resolve_projections
 
@@ -75,6 +74,20 @@ class NoOpProjection(Projection):
         self.calls.append(("reconcile", apply))
 
 
+class _FakeBackend:
+    """In-memory backend for storage-separation tests."""
+
+    def __init__(self):
+        self.queue = []
+        self.history = []
+
+    def save(self, queue, wrapper=None):
+        self.queue = list(queue)
+
+    def load(self, verify=True):
+        return {"queue": list(self.queue), "history": list(self.history)}
+
+
 class TestProjectionDispatcher(unittest.TestCase):
     def test_dispatcher_swallows_projection_error_and_warns(self):
         dispatcher = ProjectionDispatcher([FailingProjection()])
@@ -120,16 +133,8 @@ class TestProjectionDispatcher(unittest.TestCase):
 class TestProjectionStorageSeparation(unittest.TestCase):
     """Fail-open must not leak into storage writes (R-4, R-5)."""
 
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.queue_file = str(Path(self.tmp.name) / "work-queue.json")
-        self.history_file = str(Path(self.tmp.name) / "work-history.jsonl")
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
     def test_storage_write_proceeds_when_projection_raises(self):
-        backend = JsonBackend(self.queue_file, self.history_file)
+        backend = _FakeBackend()
         dispatcher = ProjectionDispatcher([FailingProjection()])
         queue = [{"id": "t1", "state": "ready"}]
 
@@ -137,19 +142,18 @@ class TestProjectionStorageSeparation(unittest.TestCase):
             backend.save(queue)
             dispatcher.on_add({"id": "t1"}, is_new=True)
 
-        with open(self.queue_file, "r", encoding="utf-8") as f:
-            self.assertEqual(json.load(f), queue)
+        self.assertEqual(backend.load()["queue"], queue)
         self.assertIn("warning:", stderr.getvalue())
 
     def test_storage_failure_still_raises(self):
-        backend = JsonBackend(self.queue_file, self.history_file)
+        backend = _FakeBackend()
         dispatcher = ProjectionDispatcher([NoOpProjection()])
 
-        # Create the queue file first, then replace it with a directory so the
-        # JSON write fails.
-        Path(self.queue_file).write_text("[]", encoding="utf-8")
-        os.remove(self.queue_file)
-        Path(self.queue_file).mkdir()
+        # Replace the in-memory backend's save with one that raises.
+        def bad_save(queue, wrapper=None):
+            raise OSError("storage failed")
+
+        backend.save = bad_save
 
         with self.assertRaises(OSError):
             backend.save([{"id": "t1"}])
@@ -160,13 +164,12 @@ class TestProjectionStorageSeparation(unittest.TestCase):
 
 class TestResolveProjections(unittest.TestCase):
     def test_empty_projections_returns_empty_dispatcher(self):
-        dispatcher = resolve_projections({"task_backend": "json"})
+        dispatcher = resolve_projections({})
         self.assertEqual(dispatcher.projections, [])
 
     def test_github_projection_resolved_from_config(self):
         dispatcher = resolve_projections(
             {
-                "task_backend": "git-refs",
                 "projections": [
                     {"type": "github", "repo": "owner/repo", "label_prefix": "aet"}
                 ],
@@ -182,7 +185,6 @@ class TestResolveProjections(unittest.TestCase):
     def test_github_projection_repo_fallback_to_top_level_config(self):
         dispatcher = resolve_projections(
             {
-                "task_backend": "git-refs",
                 "github": {"repo": "legacy/repo", "label_prefix": "legacy"},
                 "projections": [{"type": "github"}],
             }
@@ -195,7 +197,6 @@ class TestResolveProjections(unittest.TestCase):
     def test_unknown_projection_type_is_ignored(self):
         dispatcher = resolve_projections(
             {
-                "task_backend": "git-refs",
                 "projections": [{"type": "azure_devops"}],
             }
         )
@@ -233,14 +234,12 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
     def test_projections_resolved_external_first(self):
         self._write_in_tree(
             {
-                "task_backend": "json",
                 "projections": [{"type": "github", "repo": "in/tree"}],
             }
         )
         self._write_external(
             "myproject/main",
             {
-                "task_backend": "git-refs",
                 "projections": [{"type": "github", "repo": "external/repo"}],
             },
         )
@@ -248,7 +247,7 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
         with mock.patch.dict(
             os.environ,
             {"HOME": str(self.home), "AET_PROJECT_ID": "myproject/main"},
-            clear=False,
+            clear=True,
         ):
             config = resolve_config(str(self.project / ".agents" / "aet-config.json"))
 
@@ -261,7 +260,6 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
         env_config.write_text(
             json.dumps(
                 {
-                    "task_backend": "json",
                     "projections": [{"type": "github", "repo": "env/repo"}],
                 }
             ),
@@ -271,13 +269,11 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
         self._write_external(
             "myproject/main",
             {
-                "task_backend": "git-refs",
                 "projections": [{"type": "github", "repo": "external/repo"}],
             },
         )
         self._write_in_tree(
             {
-                "task_backend": "git-refs",
                 "projections": [{"type": "github", "repo": "in/tree"}],
             }
         )
@@ -289,7 +285,7 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
                 "AET_PROJECT_ID": "myproject/main",
                 "AET_WORK_CONFIG": str(env_config),
             },
-            clear=False,
+            clear=True,
         ):
             config = resolve_config(str(self.project / ".agents" / "aet-config.json"))
 

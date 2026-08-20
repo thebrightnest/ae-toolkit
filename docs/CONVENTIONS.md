@@ -70,7 +70,7 @@ Rules:
 
 ## AET Configuration
 
-`aet-work` reads its backend and integration config through an external-first
+`aet-work` reads its integration config through an external-first
 precedence chain so that AET can run without committing any AET _config_ to a
 shared repo. ADR-048 records the two-layer model and the rename from the legacy
 `.agents/aet-work.json` file.
@@ -82,7 +82,7 @@ Config is resolved in this order; the first source that exists wins:
 1. `AET_WORK_CONFIG` environment variable (path to a JSON config file)
 2. `~/.aet/{config-slug}/config.json` (shadow / personal layer)
 3. In-tree `.agents/aet-config.json` (team layer)
-4. Built-in defaults (`{"task_backend": "git-refs"}`)
+4. Built-in defaults (`{"trunk_branch": null, "integration_branch": null, "integration_mode": "pr-per-task"}`)
 
 `{config-slug}` is the main-worktree identity derived by `derive_config_slug()`;
 it drops the worktree label so one personal config serves every linked worktree
@@ -140,7 +140,7 @@ the file is tracked) and refuses to overwrite an existing new file.
 ### Branch / Integration Model
 
 Three settings control how AET maps tasks to branches and merges. Config values
-are resolved external-first, just like `task_backend`.
+are resolved external-first.
 
 | Setting              | Meaning                                                                 |
 | -------------------- | ----------------------------------------------------------------------- |
@@ -189,7 +189,6 @@ through a single PR, while still using AET's queue and state machine locally.
 
    ```json
    {
-     "task_backend": "git-refs",
      "integration_mode": "single-pr",
      "integration_branch": "docs-roadmap"
    }
@@ -361,7 +360,7 @@ Workflow state is recorded at transition time and trusted on read.
 - `aet state transition` is the only writer of `tasks[].state`.
 - `aet status`, `aet next`, and the orchestrator read stored `state` directly and make zero git calls on the read path.
 - `aet state audit` reconciles stored state against git ground truth on demand; it never runs during normal operation.
-- The default `git-refs` backend stores queue state in `refs/aet/*` and pushes/fetches from origin; `.agents/work-queue.json` is the `json` backend for non-git contexts.
+- The `git-refs` backend stores queue state in `refs/aet/*` and pushes/fetches from origin; there is no non-git task store.
 
 ### Legal Transitions
 
@@ -382,7 +381,7 @@ Terminal states are `merged` and `abandoned`. Only terminal states satisfy block
 
 ### Live / Settled Partition
 
-`.agents/work-queue.json` holds only non-terminal tasks. When a task reaches a terminal state, the writer appends its final record and history to `.agents/work-history.jsonl` and removes it from the live file atomically. Settled history is retained for auditability but is never loaded for scheduling.
+The `git-refs` backend stores only non-terminal tasks in `refs/aet/tasks/*`. When a task reaches a terminal state, the writer appends its final record and history to `.agents/work-history.jsonl` and drops the per-task ref atomically. Settled history is retained for auditability but is never loaded for scheduling.
 
 ## Base Hygiene
 

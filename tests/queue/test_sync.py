@@ -129,7 +129,7 @@ class TestSync(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.plans_dir = self.root / "plans"
         self.prds_dir = self.root / "prds"
-        self.queue_file = self.root / "work-queue.json"
+        self.queue_file = self.root / "aet-queue"
         self.history_file = self.root / "work-history.jsonl"
         self.plans_dir.mkdir()
         self.prds_dir.mkdir()

@@ -7,11 +7,11 @@ from typing import Any
 
 
 class TaskBackend(ABC):
-    """Pluggable backend for loading, saving, and mutating the work queue.
+    """Pluggable backend interface for loading, saving, and mutating the work queue.
 
-    Implementations may target local JSON files, GitHub issues, or a composite
-    of multiple stores. Callers should use the public methods here rather than
-    importing queue helpers directly.
+    The only storage implementation is :class:`GitRefsBackend`, which keeps
+    state in ``refs/aet/*`` inside the repository. Callers should use the
+    public methods here rather than importing queue helpers directly.
     """
 
     @abstractmethod
@@ -21,11 +21,9 @@ class TaskBackend(ABC):
         Returns a dict with at least ``queue`` (list of task dicts) and
         ``history`` (list of settled task dicts).
 
-        ``verify`` controls the tamper-evident envelope check where the backend
-        supports one.  The JSON backend verifies a ``content_hash`` stamp; the
-        git-refs backend ignores the flag because its envelope carries a
-        ``schema_version`` and the live refs are treated as ground truth
-        (ADR-055).
+        ``verify`` is retained for interface compatibility but is ignored by
+        the git-refs backend: its envelope carries a ``schema_version`` and the
+        live refs are treated as ground truth (ADR-055).
         """
 
     @abstractmethod
@@ -35,7 +33,8 @@ class TaskBackend(ABC):
         """Persist ``queue`` to the backend store.
 
         ``wrapper`` contains optional envelope metadata (e.g. ``source_prd``,
-        ``queue_updated_at``) that JSON-backed stores may merge into the file.
+        ``queue_updated_at``) that the git-refs backend merges into the
+        ``refs/aet/meta/queue`` envelope.
         """
 
     @abstractmethod
@@ -47,9 +46,8 @@ class TaskBackend(ABC):
         """Notify the backend that a task was synced.
 
         ``is_new`` is ``True`` when the task was just appended to the queue
-        and ``False`` when it already existed. GitHub-backed implementations
-        can create or update issues here; JSON-backed implementations can
-        leave this as a no-op.
+        and ``False`` when it already existed. The git-refs backend has no
+        external mirror and leaves this as a no-op.
         """
 
     def on_transition(
@@ -79,9 +77,8 @@ class TaskBackend(ABC):
     def fetch(self) -> None:
         """Pull remote state into the backend store.
 
-        For git-native backends this fetches the relevant ref namespace from
-        ``origin``; for file-backed backends it is a no-op. The default
-        implementation does nothing.
+        The git-refs backend fetches the ``refs/aet/*`` namespace from
+        ``origin``. The default implementation does nothing.
         """
         return
 
@@ -89,8 +86,7 @@ class TaskBackend(ABC):
         """Push backend state to the forge remote.
 
         ``mandatory`` is ``True`` for terminal closure boundaries where the push
-        is part of the durability guarantee. Backends that do not support remote
-        synchronization return ``True``.
+        is part of the durability guarantee.
 
         Returns ``True`` when the push succeeded or when there is nothing to push
         (no remote), and ``False`` on a best-effort failure. When ``mandatory``
@@ -102,15 +98,9 @@ class TaskBackend(ABC):
     def seal(self, task_id: str, history_file: str) -> dict[str, Any]:
         """Move a terminal task from the live queue to the settled history log.
 
-        The default implementation targets the local JSON files (``queue_file``
-        and ``history_file``) and mirrors ``queue.seal_terminal``: it removes
-        the task from the live queue and appends the full record (including its
-        transition history) to ``history_file`` as one JSONL line.
-
-        Backends that store live tasks elsewhere (for example git refs) override
-        this to drop their per-task record before appending to the shared
-        history JSONL, so ``aet-state`` can route sealing through the backend
-        interface instead of assuming a file-backed queue.
+        The git-refs backend overrides this to drop the per-task ref and write
+        a tombstone under ``refs/aet/sealed/<id>`` before appending the record
+        to the shared history JSONL.
 
         The caller (``aet-state``) already holds the queue lock, so this method
         does not re-acquire it: the queue module is loaded twice in-process
@@ -118,15 +108,4 @@ class TaskBackend(ABC):
         and a second independent ``flock`` file descriptor to the same lock file
         would self-deadlock under POSIX ``flock`` semantics.
         """
-        from aet.queue import append_history_record, read_queue, write_queue
-
-        queue = read_queue(self.queue_file)
-        task = next((t for t in queue if t.get("id") == task_id), None)
-        if task is None:
-            raise ValueError(
-                f"Task {task_id} not found in live queue {self.queue_file}"
-            )
-        live = [t for t in queue if t.get("id") != task_id]
-        append_history_record(history_file, task)
-        write_queue(self.queue_file, live)
-        return task
+        raise NotImplementedError("seal must be implemented by the storage backend")

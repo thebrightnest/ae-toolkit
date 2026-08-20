@@ -22,7 +22,7 @@ class FakeBackend:
     """In-memory backend that records every call made by aet-state."""
 
     def __init__(self, queue, history=None):
-        self.queue_file = "/fake/work-queue.json"
+        self.queue_file = "/fake/aet-queue"
         self.history_file = "/fake/work-history.jsonl"
         self._queue = list(queue)
         self._history = list(history or [])
@@ -149,7 +149,7 @@ class TestBackendAwareTransition(unittest.TestCase):
             task_id="t1",
             from_stage="planned",
             to_stage="ready",
-            queue="/fake/work-queue.json",
+            queue="/fake/aet-queue",
             dry_run=False,
             reason=None,
         )
@@ -176,7 +176,7 @@ class TestBackendAwareTransition(unittest.TestCase):
             task_id="t1",
             from_stage="planned",
             to_stage="ready",
-            queue="/fake/work-queue.json",
+            queue="/fake/aet-queue",
             dry_run=False,
             reason=None,
         )
@@ -200,7 +200,7 @@ class TestBackendAwareTransition(unittest.TestCase):
             task_id="t1",
             from_stage="planned",
             to_stage="ready",
-            queue="/fake/work-queue.json",
+            queue="/fake/aet-queue",
             dry_run=False,
             reason=None,
         )
@@ -224,7 +224,7 @@ class TestBackendAwareTransition(unittest.TestCase):
             task_id="t1",
             from_stage="planned",
             to_stage="ready",
-            queue="/fake/work-queue.json",
+            queue="/fake/aet-queue",
             dry_run=True,
             reason=None,
         )
@@ -240,7 +240,7 @@ class TestBackendAwareTransition(unittest.TestCase):
     def test_terminal_transition_calls_backend_close_task(self):
         """A terminal transition seals the task and asks the backend to close it."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
+            queue_path = Path(tmpdir) / "aet-queue"
             queue_path.write_text(
                 json.dumps(
                     {
@@ -306,7 +306,7 @@ class TestBackendAwareRecordMerge(unittest.TestCase):
     def test_record_merge_calls_backend_close_task(self):
         """record-merge seals the task and asks the backend to close it."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
+            queue_path = Path(tmpdir) / "aet-queue"
             queue_path.write_text(
                 json.dumps(
                     {
@@ -370,7 +370,7 @@ class TestBackendAwareValidate(unittest.TestCase):
             task_id="t1",
             from_stage="planned",
             to_stage="ready",
-            queue="/fake/work-queue.json",
+            queue="/fake/aet-queue",
         )
 
         with patch.object(aet_state, "create_backend", return_value=backend):
@@ -383,16 +383,26 @@ class TestBackendAwareValidate(unittest.TestCase):
 class TestBackendDefaultHooks(unittest.TestCase):
     def test_default_transition_hooks_are_safe(self):
         """The base backend provides no-op on_transition and close_task hooks."""
-        from aet.backends.json_backend import JsonBackend
+        from aet.backends.base import TaskBackend
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            queue_file = str(Path(tmpdir) / "work-queue.json")
-            history_file = str(Path(tmpdir) / "work-history.jsonl")
-            backend = JsonBackend(queue_file, history_file)
+        class MinimalBackend(TaskBackend):
+            def load(self, verify=True):
+                return {"queue": [], "history": []}
 
-            # These should not raise and should not mutate the queue.
-            backend.on_transition("t1", "planned", "ready")
-            backend.close_task("t1")
+            def save(self, queue, wrapper=None):
+                return
+
+            def close(self):
+                return
+
+            def sync_task(self, task, is_new):
+                return
+
+        backend = MinimalBackend()
+
+        # These should not raise and should not mutate the queue.
+        backend.on_transition("t1", "planned", "ready")
+        backend.close_task("t1")
 
 
 if __name__ == "__main__":

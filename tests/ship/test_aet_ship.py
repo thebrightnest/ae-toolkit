@@ -47,7 +47,7 @@ class TestShipClosure(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
 
         base = Path(self.tmpdir.name)
-        self.queue_path = base / ".agents" / "work-queue.json"
+        self.queue_path = base / ".agents" / "aet-queue"
         self.queue_path.parent.mkdir(parents=True)
         self.history_file = self.queue_path.with_name("work-history.jsonl")
 
@@ -158,7 +158,7 @@ class TestShipClosure(unittest.TestCase):
         self.assertFalse(self.history_file.exists())
 
     def test_ship_defaults_queue_path(self):
-        """aet ship close defaults the queue path to .agents/work-queue.json in cwd."""
+        """aet ship close defaults the queue path to .agents/aet-queue in cwd."""
         os.chdir(self.tmpdir.name)
 
         with patch.object(

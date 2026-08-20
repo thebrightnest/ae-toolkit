@@ -1451,7 +1451,7 @@ app = typer.Typer()
 
 @app.command("audit")
 def audit(
-    queue: Optional[str] = typer.Argument(".agents/work-queue.json", help="Path to queue JSON."),
+    queue: Optional[str] = typer.Argument(".agents/aet-queue", help="Path to queue anchor."),
 ) -> None:
     """Reconcile stored state against git without mutating."""
     args = argparse.Namespace(queue=queue)
@@ -1462,7 +1462,7 @@ def audit(
 @app.command("heal")
 def heal(
     queue: Optional[str] = typer.Argument(
-        ".agents/work-queue.json", help="Path to queue JSON."
+        ".agents/aet-queue", help="Path to queue anchor."
     ),
     apply: bool = typer.Option(
         False, "--apply", help="Apply proposed changes; otherwise dry-run."
@@ -1488,7 +1488,7 @@ def validate(
     task_id: str = typer.Argument(..., help="Task ID."),
     from_stage: str = typer.Argument(..., help="Current stage."),
     to_stage: str = typer.Argument(..., help="Target stage."),
-    queue: Optional[str] = typer.Argument(".agents/work-queue.json", help="Path to queue JSON."),
+    queue: Optional[str] = typer.Argument(".agents/aet-queue", help="Path to queue anchor."),
 ) -> None:
     """Check if a transition is legal."""
     args = argparse.Namespace(task_id=task_id, from_stage=from_stage, to_stage=to_stage, queue=queue)
@@ -1504,7 +1504,7 @@ def validate(
 def reset(
     task_id: str = typer.Argument(..., help="Task ID."),
     queue: Optional[str] = typer.Argument(
-        ".agents/work-queue.json", help="Path to queue JSON."
+        ".agents/aet-queue", help="Path to queue anchor."
     ),
     apply: bool = typer.Option(
         False, "--apply", help="Apply the reset; otherwise dry-run."
@@ -1530,7 +1530,7 @@ def reset(
 @app.command("backfill-specs")
 def backfill_specs(
     queue: Optional[str] = typer.Argument(
-        ".agents/work-queue.json", help="Path to queue JSON."
+        ".agents/aet-queue", help="Path to queue anchor."
     ),
     rev: str = typer.Option(
         spec_backfill.DEFAULT_SOURCE_REV,
@@ -1562,7 +1562,7 @@ def transition(
     from_stage: str = typer.Argument(..., help="Current stage."),
     to_stage: str = typer.Argument(..., help="Target stage."),
     queue: Optional[str] = typer.Argument(
-        ".agents/work-queue.json", help="Path to queue JSON."
+        ".agents/aet-queue", help="Path to queue anchor."
     ),
     reason: Optional[str] = typer.Option(
         None, "--reason", help="Reason for transition (used as history evidence)."
@@ -1599,7 +1599,7 @@ def set_stage(
     task_id: str = typer.Argument(..., help="Task ID."),
     stage: str = typer.Argument(..., help="Pipeline stage to record."),
     queue: Optional[str] = typer.Argument(
-        ".agents/work-queue.json", help="Path to queue JSON."
+        ".agents/aet-queue", help="Path to queue anchor."
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show changes without applying them."
@@ -1624,7 +1624,7 @@ def set_stage(
 def record_merge(
     task_id: str = typer.Argument(..., help="Task ID."),
     queue: Optional[str] = typer.Argument(
-        ".agents/work-queue.json", help="Path to queue JSON."
+        ".agents/aet-queue", help="Path to queue anchor."
     ),
     branch: Optional[str] = typer.Option(
         None,
@@ -1677,7 +1677,7 @@ def record_merge(
 @app.command("reconcile")
 def reconcile(
     queue: Optional[str] = typer.Argument(
-        ".agents/work-queue.json", help="Path to queue JSON."
+        ".agents/aet-queue", help="Path to queue anchor."
     ),
     apply: bool = typer.Option(
         False, "--apply", help="Remove stranded refs; otherwise dry-run."

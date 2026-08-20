@@ -2,25 +2,21 @@
 """aet configure — Configure the AET project config.
 
 Usage:
-  aet configure [--task-backend json|git-refs] [--trunk-branch B]
+  aet configure [--trunk-branch B]
                 [--integration-mode pr-per-task|single-pr]
                 [--integration-branch B] [--scope project|user]
                 [--non-interactive] [--help]
   aet configure --guided [--scope team|shadow] [--integration-mode pr-per-task|single-pr]
   aet configure --migrate
 
-In interactive mode (default), the script prompts for the task backend (empty
-input accepts the default, git-refs). In non-interactive mode, a missing
---task-backend selects the default (git-refs).
-
 The ``--guided`` flow is the setup-time entry point: it asks exactly two
 questions — scope (team/shadow) and integration mode (pr-per-task/single-pr) —
-and writes a git-refs-backed config via the single cfg-02 writer. Existing
-config is detected and shown before overwriting. ``AET_EXECUTION_MODE=unattended``
-or explicit ``--scope``/``--integration-mode`` flags skip all prompts.
+and writes the config via the single cfg-02 writer. Existing config is detected
+and shown before overwriting. ``AET_EXECUTION_MODE=unattended`` or explicit
+``--scope``/``--integration-mode`` flags skip all prompts.
 
-GitHub Issues is no longer a task_backend value; it is configured on the
-orthogonal "projections" axis in .agents/aet-config.json (see aet-setup docs).
+GitHub Issues is configured on the orthogonal "projections" axis in
+.agents/aet-config.json (see aet-setup docs).
 
 Config resolution order remains external-first:
 AET_WORK_CONFIG env → ~/.aet/{slug}/config.json → .agents/aet-config.json → defaults.
@@ -50,10 +46,8 @@ import typer
 from aet.backends.factory import INTEGRATION_MODES, resolve_config_with_source
 from aet.project_id import derive_config_slug
 
-DEFAULT_BACKEND = "git-refs"
 NEW_CONFIG_NAME = "aet-config.json"
 LEGACY_CONFIG_NAME = "aet-work.json"
-KNOWN_BACKENDS = frozenset({"json", "git-refs"})
 
 # Guided-flow scope vocabulary.  "team" writes config into the repo;
 # "shadow" writes it to an external user-scoped directory so nothing is
@@ -80,6 +74,9 @@ def _write_json_config(existing_json: str | None, updates: dict) -> str:
     config: dict = {}
     if existing_json:
         config = json.loads(existing_json)
+    # Drop the removed task_backend key when rewriting config through the
+    # supported writer; this is the in-place migration path.
+    config.pop("task_backend", None)
     config.update(updates)
     return json.dumps(config, indent=2)
 
@@ -109,7 +106,8 @@ def _migrate_config(project_root: Path) -> int:
     """Rename legacy .agents/aet-work.json to .agents/aet-config.json.
 
     Uses ``git mv`` when the legacy file is tracked; otherwise a plain rename.
-    Refuses to overwrite an existing new file.
+    Refuses to overwrite an existing new file. The rename also strips the
+    removed ``task_backend`` key.
     """
     agents_dir = project_root / ".agents"
     legacy = agents_dir / LEGACY_CONFIG_NAME
@@ -140,6 +138,13 @@ def _migrate_config(project_root: Path) -> int:
     else:
         legacy.rename(new_file)
 
+    # Strip the removed key from the migrated file.
+    raw = new_file.read_text(encoding="utf-8")
+    config = json.loads(raw)
+    if "task_backend" in config:
+        config.pop("task_backend")
+        new_file.write_text(json.dumps(config, indent=2), encoding="utf-8")
+
     _log(f"Migrated {legacy} -> {new_file}")
     return 0
 
@@ -167,16 +172,9 @@ def _resolve_scope(project_root: Path, scope: str | None) -> str:
 
 
 def _validate_options(
-    task_backend: str | None,
     integration_mode: str | None,
 ) -> str | None:
     """Reject values the resolver would reject, naming legal values."""
-    if task_backend is not None and task_backend not in KNOWN_BACKENDS:
-        return (
-            f"Invalid task_backend '{task_backend}'. "
-            f"Choose one of: {', '.join(sorted(KNOWN_BACKENDS))}. "
-            "GitHub Issues is configured on the 'projections' axis, not as a task_backend."
-        )
     if integration_mode is not None and integration_mode not in INTEGRATION_MODES:
         return (
             f"Invalid integration_mode '{integration_mode}'. "
@@ -186,17 +184,12 @@ def _validate_options(
 
 
 def _build_updates(
-    task_backend: str | None,
     trunk_branch: str | None,
     integration_mode: str | None,
     integration_branch: str | None,
-    existing: dict,
 ) -> dict:
     """Build the merge-style config updates for the keys explicitly provided."""
     updates: dict = {}
-
-    if task_backend is not None:
-        updates["task_backend"] = task_backend
 
     if trunk_branch is not None:
         updates["trunk_branch"] = trunk_branch
@@ -206,16 +199,6 @@ def _build_updates(
 
     if integration_branch is not None:
         updates["integration_branch"] = integration_branch
-
-    # Preserve a switch warning when the backend changes.
-    existing_backend = existing.get("task_backend", "")
-    if task_backend is not None and existing_backend and existing_backend != task_backend:
-        switch_warning = (
-            f"Switching from '{existing_backend}' to '{task_backend}' is forward-only: "
-            "active tasks and settled history are not migrated."
-        )
-        _log(f"WARNING: {switch_warning}")
-        updates["switch_warning"] = switch_warning
 
     return updates
 
@@ -336,7 +319,6 @@ def _run_guided(
             return 0
 
     updates = {
-        "task_backend": DEFAULT_BACKEND,
         "integration_mode": integration_mode,
     }
     existing_json = target.read_text(encoding="utf-8") if target.exists() else None
@@ -345,13 +327,11 @@ def _run_guided(
     scope_label = "team" if scope == "project" else "shadow"
     provenance = "committed in repo" if scope == "project" else "external user config"
     _log(f"Wrote config ({scope_label}, {provenance}): {target}")
-    _log(f"  task_backend: {DEFAULT_BACKEND}")
     _log(f"  integration_mode: {integration_mode}")
     return 0
 
 
 def _run(
-    task_backend: str | None,
     trunk_branch: str | None,
     integration_mode: str | None,
     integration_branch: str | None,
@@ -368,37 +348,20 @@ def _run(
     if guided:
         return _run_guided(scope, integration_mode)
 
-    if task_backend is None:
-        if non_interactive:
-            task_backend = DEFAULT_BACKEND
-        else:
-            try:
-                choice = input("Choose task backend (json or git-refs) [git-refs]: ")
-            except (EOFError, KeyboardInterrupt):
-                choice = ""
-            task_backend = choice.strip() or DEFAULT_BACKEND
-
-    validation_error = _validate_options(task_backend, integration_mode)
+    validation_error = _validate_options(integration_mode)
     if validation_error is not None:
         print(f"Error: {validation_error}", file=sys.stderr)
         return 1
 
     resolved_scope = _resolve_scope(project_root, scope)
     target = _target_path(project_root, resolved_scope)
-    existing = _read_existing_config(target)
     updates = _build_updates(
-        task_backend, trunk_branch, integration_mode, integration_branch, existing
+        trunk_branch, integration_mode, integration_branch
     )
 
     if not updates:
         _log("No config changes requested.")
         return 0
-
-    if task_backend == "json":
-        _log(
-            "NOTE: json is the documented opt-out, appropriate for non-git or "
-            "unconfigured contexts; git-refs is the default backend written by aet-setup."
-        )
 
     existing_json = target.read_text(encoding="utf-8") if target.exists() else None
     target.write_text(_write_json_config(existing_json, updates), encoding="utf-8")
@@ -420,11 +383,6 @@ app = typer.Typer(invoke_without_command=True)
 
 @app.callback()
 def configure(
-    task_backend: str | None = typer.Option(
-        None,
-        "--task-backend",
-        help="Choose the task backend (default: git-refs).",
-    ),
     trunk_branch: str | None = typer.Option(
         None,
         "--trunk-branch",
@@ -463,7 +421,6 @@ def configure(
 ) -> None:
     """Configure the AET project config."""
     rc = _run(
-        task_backend,
         trunk_branch,
         integration_mode,
         integration_branch,

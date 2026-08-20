@@ -130,7 +130,7 @@ class TestRecordStage(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             agents_dir = Path(repo_root) / ".agents"
             agents_dir.mkdir()
-            queue_file = agents_dir / "work-queue.json"
+            queue_file = agents_dir / "aet-queue"
             queue = [{"id": "t1", "state": "in_progress", "title": "One"}]
             queue_file.write_text(json.dumps(queue), encoding="utf-8")
 
@@ -157,7 +157,7 @@ class TestRecordStage(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             agents_dir = Path(repo_root) / ".agents"
             agents_dir.mkdir()
-            queue_file = agents_dir / "work-queue.json"
+            queue_file = agents_dir / "aet-queue"
             queue = [{"id": "t1", "state": "ready", "title": "One"}]
             queue_file.write_text(json.dumps(queue), encoding="utf-8")
 

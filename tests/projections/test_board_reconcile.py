@@ -68,7 +68,7 @@ class TestBoardReconcile(unittest.TestCase):
         self.tmp_path = Path(self.tmp.name)
         self.plans_dir = self.tmp_path / "docs" / "plans"
         self.plans_dir.mkdir(parents=True)
-        self.queue_file = str(self.tmp_path / "work-queue.json")
+        self.queue_file = str(self.tmp_path / "aet-queue")
         self.history_file = str(self.tmp_path / "work-history.jsonl")
         self.backend = GitHubBackend(
             repo="owner/repo",

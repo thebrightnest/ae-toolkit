@@ -74,8 +74,13 @@ def _write_plan(repo: Path, task_id: str, *, r_ids: list[str] | None = None) -> 
 
 
 def _write_queue(repo: Path, tasks: list[dict]) -> str:
-    queue_path = repo / ".agents" / "work-queue.json"
-    queue_path.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
+    queue_path = repo / ".agents" / "aet-queue"
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    backend = GitRefsBackend(
+        queue_file=str(queue_path),
+        history_file=str(repo / ".agents" / "work-history.jsonl"),
+    )
+    backend.save(tasks)
     return str(queue_path)
 
 
@@ -254,11 +259,13 @@ class TestShipCloseTransaction(unittest.TestCase):
             rc = ship.cmd_ship(args)
         self.assertNotEqual(rc, 0)
 
-        # No refs should have been written.
+        # The save never completed, so no sealed ref was written and the live
+        # task ref (written by the test setup) is still intact.
         refs = _git(
             self.repo, "for-each-ref", "--format=%(refname)", "refs/aet/"
         ).stdout.strip()
-        self.assertEqual(refs, "")
+        self.assertNotIn("refs/aet/sealed/", refs)
+        self.assertIn("refs/aet/tasks/t1", refs)
 
     def _branch_exists(self, branch: str) -> bool:
         return (

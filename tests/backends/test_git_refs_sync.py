@@ -23,7 +23,6 @@ from aet.backends.git_refs_backend import (
     SEALED_REF_PREFIX,
     GitRefsBackend,
 )
-from aet.backends.json_backend import JsonBackend
 
 _AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
 _spec = importlib.util.spec_from_loader(
@@ -75,12 +74,12 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _backend(repo: Path | None = None) -> GitRefsBackend:
     kwargs: dict = {
-        "queue_file": ".agents/work-queue.json",
+        "queue_file": ".agents/aet-queue",
         "history_file": ".agents/work-history.jsonl",
     }
     if repo is not None:
         kwargs = {
-            "queue_file": str(repo / ".agents" / "work-queue.json"),
+            "queue_file": str(repo / ".agents" / "aet-queue"),
             "history_file": str(repo / ".agents" / "work-history.jsonl"),
         }
     return GitRefsBackend(**kwargs)
@@ -128,7 +127,7 @@ def test_push_force_updates_existing_remote_refs(repo: Path) -> None:
     _git(other, "config", "user.email", "test@example.com")
     _git(other, "config", "user.name", "Test User")
     other_backend = GitRefsBackend(
-        queue_file=str(other / ".agents" / "work-queue.json"),
+        queue_file=str(other / ".agents" / "aet-queue"),
         history_file=str(other / ".agents" / "work-history.jsonl"),
     )
     # Use a wrapper so the envelope content differs from the local one.
@@ -213,14 +212,14 @@ def test_two_clones_append_offline_then_fetch_union(repo: Path) -> None:
         (c / ".agents").mkdir(parents=True, exist_ok=True)
 
     b1 = GitRefsBackend(
-        queue_file=str(clone1 / ".agents" / "work-queue.json"),
+        queue_file=str(clone1 / ".agents" / "aet-queue"),
         history_file=str(clone1 / ".agents" / "work-history.jsonl"),
     )
     b1.save([_task("clone1-task")])
     assert b1.push() is True
 
     b2 = GitRefsBackend(
-        queue_file=str(clone2 / ".agents" / "work-queue.json"),
+        queue_file=str(clone2 / ".agents" / "aet-queue"),
         history_file=str(clone2 / ".agents" / "work-history.jsonl"),
     )
     b2.save([_task("clone2-task")])
@@ -231,13 +230,6 @@ def test_two_clones_append_offline_then_fetch_union(repo: Path) -> None:
     loaded = b1.load()
     ids = set(_by_id(loaded["queue"]).keys())
     assert ids == {"clone1-task", "clone2-task"}
-
-
-def test_json_backend_fetch_and_push_are_no_ops() -> None:
-    backend = JsonBackend()
-    assert backend.fetch() is None
-    assert backend.push() is True
-    assert backend.push(mandatory=True) is True
 
 
 def test_fetch_force_updates_local_refs_from_remote(repo: Path) -> None:
@@ -257,7 +249,7 @@ def test_fetch_force_updates_local_refs_from_remote(repo: Path) -> None:
     _git(clone, "config", "user.email", "test@example.com")
     _git(clone, "config", "user.name", "Test User")
     clone_backend = GitRefsBackend(
-        queue_file=str(clone / ".agents" / "work-queue.json"),
+        queue_file=str(clone / ".agents" / "aet-queue"),
         history_file=str(clone / ".agents" / "work-history.jsonl"),
     )
     clone_backend.save([_task("second")])
@@ -275,7 +267,7 @@ def _clone_backend(origin: Path, clone: Path) -> GitRefsBackend:
     _git(clone, "config", "user.email", "test@example.com")
     _git(clone, "config", "user.name", "Test User")
     return GitRefsBackend(
-        queue_file=str(clone / ".agents" / "work-queue.json"),
+        queue_file=str(clone / ".agents" / "aet-queue"),
         history_file=str(clone / ".agents" / "work-history.jsonl"),
     )
 
@@ -301,7 +293,7 @@ def test_aet_state_transition_pushes_refs_to_remote(repo: Path) -> None:
         task_id="t1",
         from_stage="ready",
         to_stage="in_progress",
-        queue=str(repo / ".agents" / "work-queue.json"),
+        queue=str(repo / ".agents" / "aet-queue"),
         dry_run=False,
         reason=None,
         force=False,
@@ -584,11 +576,11 @@ def test_two_clones_seal_different_tasks_converge(repo: Path) -> None:
         (c / ".agents").mkdir(parents=True, exist_ok=True)
 
     b1 = GitRefsBackend(
-        queue_file=str(clone1 / ".agents" / "work-queue.json"),
+        queue_file=str(clone1 / ".agents" / "aet-queue"),
         history_file=str(clone1 / ".agents" / "work-history.jsonl"),
     )
     b2 = GitRefsBackend(
-        queue_file=str(clone2 / ".agents" / "work-queue.json"),
+        queue_file=str(clone2 / ".agents" / "aet-queue"),
         history_file=str(clone2 / ".agents" / "work-history.jsonl"),
     )
 

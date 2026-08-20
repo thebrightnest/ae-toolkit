@@ -124,7 +124,7 @@ class TestQueueRebuild(unittest.TestCase):
                 "# Bad\n",
                 frontmatter="---\nid: bad\nblocked_by:\n  - missing-plan\nsize: M\n---",
             )
-            queue_file = root / "work-queue.json"
+            queue_file = root / "aet-queue"
             history_file = root / "work-history.jsonl"
 
             ok, report = migration.rebuild_queue(
@@ -167,7 +167,7 @@ class TestQueueRebuild(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            queue_file = root / "work-queue.json"
+            queue_file = root / "aet-queue"
             history_file = root / "work-history.jsonl"
 
             ok, report = migration.rebuild_queue(

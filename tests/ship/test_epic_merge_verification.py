@@ -37,7 +37,7 @@ class TestEpicMergeVerification(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
         base = Path(self.tmpdir.name)
 
-        self.queue_path = base / ".agents" / "work-queue.json"
+        self.queue_path = base / ".agents" / "aet-queue"
         self.queue_path.parent.mkdir(parents=True)
         self.history_file = self.queue_path.with_name("work-history.jsonl")
 

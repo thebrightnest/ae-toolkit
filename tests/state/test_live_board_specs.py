@@ -21,7 +21,7 @@ from aet.cli.aet_state import make_backend
 pytestmark = pytest.mark.xdist_group("cwd")
 
 REPO_ROOT = Path(__file__).parents[2]
-QUEUE_PATH = REPO_ROOT / ".agents" / "work-queue.json"
+QUEUE_PATH = REPO_ROOT / ".agents" / "aet-queue"
 
 
 def _live_queue() -> list[dict]:

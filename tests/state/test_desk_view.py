@@ -14,6 +14,12 @@ from unittest.mock import patch
 
 import pytest
 
+from aet import (
+    project_id,
+    telemetry,
+)
+from tests.state._helpers import init_git_repo, seed_git_queue
+
 REPO_ROOT = Path(__file__).parents[2]
 _DESK_PY = REPO_ROOT / "src" / "aet" / "cli" / "desk.py"
 
@@ -22,11 +28,6 @@ _desk_spec = importlib.util.spec_from_loader(
 )
 desk = importlib.util.module_from_spec(_desk_spec)
 _desk_spec.loader.exec_module(desk)
-
-from aet import (  # noqa: E402
-    project_id,
-    telemetry,
-)
 
 
 def _plan_path(tmp_path: Path, plan_id: str) -> Path:
@@ -61,9 +62,14 @@ def _write_plan(
 
 
 def _write_queue(tmp_path: Path, tasks: list[dict]) -> str:
-    path = tmp_path / "queue.json"
-    path.write_text(json.dumps(tasks), encoding="utf-8")
-    return str(path)
+    init_git_repo(tmp_path)
+    queue_path, history_path = seed_git_queue(
+        tmp_path,
+        tasks,
+        queue_rel="queue.json",
+        history_rel="history.jsonl",
+    )
+    return str(queue_path)
 
 
 def _write_history(tmp_path: Path) -> str:

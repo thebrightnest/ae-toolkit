@@ -93,7 +93,7 @@ def _clear_run_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys):
     """A foreign live lease makes `aet sprint add` refuse before writing."""
     _clear_run_env(monkeypatch)
-    qf = tmp_path / ".agents" / "work-queue.json"
+    qf = tmp_path / ".agents" / "aet-queue"
     hf = tmp_path / ".agents" / "work-history.jsonl"
     qf.parent.mkdir(parents=True, exist_ok=True)
     hf.touch()
@@ -120,7 +120,7 @@ def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys)
 
 def test_child_with_matching_run_id_allowed(tmp_path, monkeypatch):
     """A caller whose AET_RUN_ID matches the live lease may mutate."""
-    qf = tmp_path / ".agents" / "work-queue.json"
+    qf = tmp_path / ".agents" / "aet-queue"
     qf.parent.mkdir(parents=True, exist_ok=True)
 
     acquire_lease(str(qf), "run-X")
@@ -133,7 +133,7 @@ def test_child_with_matching_run_id_allowed(tmp_path, monkeypatch):
 def test_stale_lease_dead_pid_reclaimed_with_warning(tmp_path, monkeypatch, capsys):
     """A lease whose PID is dead is reclaimed with a warning."""
     _clear_run_env(monkeypatch)
-    qf = tmp_path / ".agents" / "work-queue.json"
+    qf = tmp_path / ".agents" / "aet-queue"
     qf.parent.mkdir(parents=True, exist_ok=True)
     lp = lease_path(str(qf))
     Path(lp).write_text(
@@ -151,7 +151,7 @@ def test_stale_lease_dead_pid_reclaimed_with_warning(tmp_path, monkeypatch, caps
 def test_force_overrides_lease_with_warning(tmp_path, monkeypatch, capsys):
     """--force lets a mutation proceed despite a foreign live lease."""
     _clear_run_env(monkeypatch)
-    qf = tmp_path / ".agents" / "work-queue.json"
+    qf = tmp_path / ".agents" / "aet-queue"
     hf = tmp_path / ".agents" / "work-history.jsonl"
     qf.parent.mkdir(parents=True, exist_ok=True)
     hf.touch()
@@ -178,7 +178,7 @@ def test_force_overrides_lease_with_warning(tmp_path, monkeypatch, capsys):
 
 def test_lease_released_on_batch_crash(tmp_path):
     """The finally path releases a held lease even when the run crashes."""
-    qf = tmp_path / ".agents" / "work-queue.json"
+    qf = tmp_path / ".agents" / "aet-queue"
     qf.parent.mkdir(parents=True, exist_ok=True)
     lp = lease_path(str(qf))
 
@@ -201,7 +201,7 @@ def test_lease_released_on_batch_crash(tmp_path):
 
 def test_read_fails_closed_on_content_hash_mismatch(tmp_path):
     """Hand-editing a stamped queue makes read_queue raise QueueIntegrityError."""
-    qf = tmp_path / "work-queue.json"
+    qf = tmp_path / "aet-queue"
     write_queue(str(qf), [{"id": "t1", "state": "ready"}], wrapper={"source_prd": "x"})
 
     data = json.loads(qf.read_text(encoding="utf-8"))
@@ -214,7 +214,7 @@ def test_read_fails_closed_on_content_hash_mismatch(tmp_path):
 
 def test_revision_increments_monotonically(tmp_path):
     """Each wrapper write bumps revision by exactly one."""
-    qf = tmp_path / "work-queue.json"
+    qf = tmp_path / "aet-queue"
     write_queue(str(qf), [{"id": "t1", "state": "ready"}], wrapper={"source_prd": "x"})
     assert json.loads(qf.read_text(encoding="utf-8"))["revision"] == 1
 
@@ -225,7 +225,7 @@ def test_revision_increments_monotonically(tmp_path):
 
 def test_legacy_queue_without_stamp_accepted_then_stamped(tmp_path):
     """A legacy wrapper without revision/hash is read, then stamped on write."""
-    qf = tmp_path / "work-queue.json"
+    qf = tmp_path / "aet-queue"
     legacy = {"source_prd": "x", "tasks": [{"id": "t1", "state": "ready"}]}
     qf.write_text(json.dumps(legacy), encoding="utf-8")
 
@@ -280,7 +280,7 @@ def _write_plan_file(tmp_path: Path, task_id: str) -> str:
 def test_audit_runs_on_tampered_queue_and_warns(tmp_path, capsys):
     """The remedy named in the error message must survive the mismatch itself."""
     aet_state = _load_bin("aet_state")
-    qf = tmp_path / "work-queue.json"
+    qf = tmp_path / "aet-queue"
     plan = _write_plan_file(tmp_path, "t1")
     _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
 
@@ -298,7 +298,7 @@ def test_audit_runs_on_tampered_queue_and_warns(tmp_path, capsys):
 def test_heal_dry_run_tolerates_tamper_without_restamping(tmp_path, capsys):
     """Dry-run heal reports the stale envelope but must not mutate the queue."""
     aet_state = _load_bin("aet_state")
-    qf = tmp_path / "work-queue.json"
+    qf = tmp_path / "aet-queue"
     plan = _write_plan_file(tmp_path, "t1")
     _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
 
@@ -320,7 +320,7 @@ def test_heal_dry_run_tolerates_tamper_without_restamping(tmp_path, capsys):
 def test_heal_apply_restamps_envelope_with_no_state_changes(tmp_path, capsys):
     """The reported scenario: states match git, only the envelope is stale."""
     aet_state = _load_bin("aet_state")
-    qf = tmp_path / "work-queue.json"
+    qf = tmp_path / "aet-queue"
     plan = _write_plan_file(tmp_path, "t1")
     revision = _stamp_and_tamper(
         qf, {"id": "t1", "state": "ready", "plan_file": plan}
@@ -346,7 +346,7 @@ def test_heal_apply_restamps_envelope_with_no_state_changes(tmp_path, capsys):
 def test_heal_apply_restamps_and_applies_state_fix(tmp_path, capsys):
     """A tampered queue with a real discrepancy heals and verifies afterwards."""
     aet_state = _load_bin("aet_state")
-    qf = tmp_path / "work-queue.json"
+    qf = tmp_path / "aet-queue"
     plan = _write_plan_file(tmp_path, "t1")
     _stamp_and_tamper(qf, {"id": "t1", "state": "planned", "plan_file": plan})
 
@@ -371,7 +371,7 @@ def test_heal_apply_restamps_and_applies_state_fix(tmp_path, capsys):
 
 def _tampered_queue(tmp_path: Path) -> Path:
     """Write a stamped queue and hand-edit it so the envelope is stale."""
-    qf = tmp_path / "work-queue.json"
+    qf = tmp_path / "aet-queue"
     plan = _write_plan_file(tmp_path, "t1")
     _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
     return qf

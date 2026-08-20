@@ -54,7 +54,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _backend() -> GitRefsBackend:
     return GitRefsBackend(
-        queue_file=".agents/work-queue.json",
+        queue_file=".agents/aet-queue",
         history_file=".agents/work-history.jsonl",
     )
 
@@ -148,7 +148,7 @@ def test_refs_visible_from_second_worktree(repo: Path) -> None:
     (wt2 / ".agents").mkdir(parents=True, exist_ok=True)
 
     wt2_backend = GitRefsBackend(
-        queue_file=str(wt2 / ".agents" / "work-queue.json"),
+        queue_file=str(wt2 / ".agents" / "aet-queue"),
         history_file=str(wt2 / ".agents" / "work-history.jsonl"),
     )
     wt2_backend.save([_task("frh-13-git-refs-backend-core", title="from-wt2")])
@@ -168,7 +168,7 @@ def _concurrent_worker(repo_root: str, task_id: str, marker: str) -> None:
     from aet.backends.git_refs_backend import GitRefsBackend as _Backend  # noqa: E402
 
     backend = _Backend(
-        queue_file=str(Path(repo_root) / ".agents" / "work-queue.json"),
+        queue_file=str(Path(repo_root) / ".agents" / "aet-queue"),
         history_file=str(Path(repo_root) / ".agents" / "work-history.jsonl"),
     )
     data = backend.load()
@@ -257,6 +257,6 @@ def test_clear_error_outside_git_repo(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="not inside a git repository|not a git"):
         GitRefsBackend(
-            queue_file=str(not_a_repo / ".agents" / "work-queue.json"),
+            queue_file=str(not_a_repo / ".agents" / "aet-queue"),
             history_file=str(not_a_repo / ".agents" / "work-history.jsonl"),
         )

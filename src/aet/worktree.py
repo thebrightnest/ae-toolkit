@@ -630,8 +630,8 @@ def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dic
 # runs, and the hygiene gate forgives it as a consequence of that. Registering a
 # path here is a statement that the file is machine-local.
 AET_IGNORED_PATHS = {
-    ".agents/work-queue.json",
-    ".agents/work-queue.json.lock",
+    ".agents/aet-queue",
+    ".agents/aet-queue.lock",
     ".agents/work-queue.lease",
     ".agents/work-history.jsonl",
     ".agents/integration.lock",

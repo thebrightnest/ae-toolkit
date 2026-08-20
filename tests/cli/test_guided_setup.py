@@ -89,7 +89,7 @@ class TestGuidedSetup(unittest.TestCase):
         agents.mkdir()
         existing = agents / NEW_CONFIG_NAME
         existing.write_text(
-            json.dumps({"task_backend": "git-refs", "integration_mode": "single-pr"}),
+            json.dumps({"integration_mode": "single-pr"}),
             encoding="utf-8",
         )
 

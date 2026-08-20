@@ -2,11 +2,12 @@
 
 import importlib.machinery
 import importlib.util
-import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from tests.state._helpers import init_git_repo, load_git_queue, seed_git_queue
 
 _AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
 _spec = importlib.util.spec_from_loader(
@@ -31,12 +32,19 @@ _orchestrator_spec.loader.exec_module(orchestrator)
 
 
 def _git_mock(responses):
-    """Return a mock subprocess.run that answers git commands."""
+    """Return a mock subprocess.run that answers git commands.
+
+    Unknown git commands are delegated to the real subprocess so the
+    git-refs backend can operate on the temporary repository.
+    """
+    real_run = __import__("subprocess").run
 
     def mock_run(cmd, **kwargs):
         args = tuple(cmd[1:])
-        rc, out, err = responses.get(args, (1, "", ""))
-        return type("MockResult", (), {"returncode": rc, "stdout": out, "stderr": err})()
+        if args in responses:
+            rc, out, err = responses[args]
+            return type("MockResult", (), {"returncode": rc, "stdout": out, "stderr": err})()
+        return real_run(cmd, **kwargs)
 
     return mock_run
 
@@ -73,14 +81,14 @@ class TestQuarantinedStateApplication(unittest.TestCase):
     """Integration tests for applying quarantined transitions via aet-state."""
 
     def _write_queue(self, tasks):
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        json.dump({"tasks": tasks}, f)
-        f.close()
-        return f.name
+        tmpdir = tempfile.mkdtemp()
+        repo_root = Path(tmpdir)
+        init_git_repo(repo_root)
+        queue_path, _history_path = seed_git_queue(repo_root, tasks)
+        return str(queue_path)
 
     def _load_task(self, queue_path):
-        with open(queue_path, "r", encoding="utf-8") as f:
-            return json.load(f)["tasks"][0]
+        return load_git_queue(queue_path)[0]
 
     def test_in_progress_to_quarantined(self):
         """A task can transition from in_progress to quarantined."""
@@ -148,10 +156,11 @@ class TestQuarantinedStateApplication(unittest.TestCase):
     def test_quarantined_to_abandoned_is_terminal(self):
         """quarantined -> abandoned seals the task and promotes dependents."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
-            history_file = queue_path.with_name("work-history.jsonl")
-            queue = {
-                "tasks": [
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, history_file = seed_git_queue(
+                repo_root,
+                [
                     {
                         "id": "blocker",
                         "state": "quarantined",
@@ -163,9 +172,8 @@ class TestQuarantinedStateApplication(unittest.TestCase):
                         "blocked_by": ["blocker"],
                         "pending_blockers": 1,
                     },
-                ]
-            }
-            queue_path.write_text(json.dumps(queue), encoding="utf-8")
+                ],
+            )
 
             args = aet_state.argparse.Namespace(
                 command="transition",
@@ -180,14 +188,11 @@ class TestQuarantinedStateApplication(unittest.TestCase):
             rc = aet_state.cmd_transition(args)
             self.assertEqual(rc, 0)
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            by_id = {t["id"]: t for t in after["tasks"]}
+            by_id = {t["id"]: t for t in load_git_queue(queue_path)}
             self.assertNotIn("blocker", by_id)
             self.assertEqual(by_id["dependent"]["state"], "ready")
 
-            with open(history_file, "r", encoding="utf-8") as f:
-                settled = json.loads(f.readline())
+            settled = aet_state.make_backend(str(queue_path)).load()["history"][0]
             self.assertEqual(settled["id"], "blocker")
             self.assertEqual(settled["state"], "abandoned")
 
@@ -222,9 +227,7 @@ class TestQuarantinedStateApplication(unittest.TestCase):
         rc = aet_state.cmd_transition(args)
         self.assertEqual(rc, 0)
 
-        with open(queue_path, "r", encoding="utf-8") as f:
-            after = json.load(f)
-        by_id = {t["id"]: t for t in after["tasks"]}
+        by_id = {t["id"]: t for t in load_git_queue(queue_path)}
         self.assertEqual(by_id["blocker"]["state"], "ready")
         self.assertEqual(by_id["dependent"]["state"], "blocked")
         self.assertEqual(by_id["dependent"]["pending_blockers"], 1)
@@ -234,15 +237,16 @@ class TestQuarantinedHeal(unittest.TestCase):
     """Heal must never auto-derive a quarantined task away."""
 
     def _write_queue(self, tmpdir, tasks):
-        plans_dir = Path(tmpdir) / "plans"
+        repo_root = Path(tmpdir)
+        init_git_repo(repo_root)
+        plans_dir = repo_root / "plans"
         plans_dir.mkdir(parents=True)
         for task in tasks:
             plan = plans_dir / f"{task['id']}.md"
             plan.write_text("# Plan\n", encoding="utf-8")
             task.setdefault("plan_file", str(plan))
             task.setdefault("branch", None)
-        queue_path = Path(tmpdir) / "work-queue.json"
-        queue_path.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
+        queue_path, _history_path = seed_git_queue(repo_root, tasks)
         return queue_path
 
     def _run_heal(self, queue_path, apply):
@@ -265,9 +269,7 @@ class TestQuarantinedHeal(unittest.TestCase):
 
             self.assertEqual(self._run_heal(queue_path, apply=True), 0)
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            self.assertEqual(after["tasks"][0]["state"], "quarantined")
+            self.assertEqual(load_git_queue(queue_path)[0]["state"], "quarantined")
 
 
 class TestQuarantinedNotActionable(unittest.TestCase):

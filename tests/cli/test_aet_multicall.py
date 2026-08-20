@@ -8,14 +8,14 @@ behaviour and output.
 from __future__ import annotations
 
 import importlib
-import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from tests.cli._helpers import git, make_history, make_plan, run_typer, write_json_file
+from aet.backends.factory import create_backend
+from tests.cli._helpers import git, make_plan, run_typer
 
 # Module objects (not the functions re-exported by ``aet.cli``).
 aet = importlib.import_module("aet.cli.main")
@@ -51,8 +51,9 @@ class TestNestedCommandGroupRouting(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plans_dir = self._make_git_repo_with_plan(tmp_path)
-            queue_file = write_json_file([])
-            history_file = make_history([])
+            queue_file = str(tmp_path / ".agents" / "aet-queue")
+            history_file = str(tmp_path / ".agents" / "work-history.jsonl")
+            Path(history_file).parent.mkdir(parents=True, exist_ok=True)
 
             with patch.object(sprint, "resolve_projections", return_value=MagicMock()):
                 with patch.object(sprint, "resolve_config", return_value={}):
@@ -75,8 +76,8 @@ class TestNestedCommandGroupRouting(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output + result.stderr)
             self.assertIn("queued without publishing", result.output)
 
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            backend = create_backend(queue_file=queue_file, history_file=history_file)
+            queue = backend.load()["queue"]
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-001")
             self.assertEqual(queue[0]["state"], "ready")
@@ -122,9 +123,14 @@ class TestNestedCommandGroupRouting(unittest.TestCase):
         """``aet state audit <queue>`` runs the audit through the main app."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            queue_file = tmp_path / ".agents" / "work-queue.json"
+            queue_file = tmp_path / ".agents" / "aet-queue"
             queue_file.parent.mkdir(parents=True)
             queue_file.write_text("[]", encoding="utf-8")
+            git(["init", "-q"], tmp_path)
+            git(["config", "user.email", "test@example.com"], tmp_path)
+            git(["config", "user.name", "Test"], tmp_path)
+            git(["add", "-A"], tmp_path)
+            git(["commit", "-q", "-m", "initial"], tmp_path)
 
             result = run_typer(
                 aet.app,

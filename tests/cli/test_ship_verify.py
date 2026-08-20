@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
-import json
 import os
 import subprocess
 import sys
@@ -13,6 +12,8 @@ import unittest
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+
+from aet.backends.git_refs_backend import GitRefsBackend
 
 _SHIP_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "ship.py"
 _spec = importlib.util.spec_from_loader(
@@ -48,23 +49,22 @@ def _init_repo(path: Path) -> Path:
 
 
 def _write_queue(repo: Path, task_id: str, branch: str, plan_path: Path) -> Path:
-    queue_path = repo / ".agents" / "work-queue.json"
+    queue_path = repo / ".agents" / "aet-queue"
     queue_path.parent.mkdir(parents=True, exist_ok=True)
-    queue_path.write_text(
-        json.dumps(
+    backend = GitRefsBackend(
+        queue_file=str(queue_path),
+        history_file=str(repo / ".agents" / "work-history.jsonl"),
+    )
+    backend.save(
+        [
             {
-                "tasks": [
-                    {
-                        "id": task_id,
-                        "state": "awaiting_merge",
-                        "stage": "qa-complete",
-                        "branch": branch,
-                        "plan_file": str(plan_path),
-                    }
-                ]
+                "id": task_id,
+                "state": "awaiting_merge",
+                "stage": "qa-complete",
+                "branch": branch,
+                "plan_file": str(plan_path),
             }
-        ),
-        encoding="utf-8",
+        ]
     )
     return queue_path
 
@@ -182,16 +182,20 @@ class TestShipVerify(unittest.TestCase):
         self._branch("t1", "feat.txt", "feature\n")
         self._squash_merge("t1", "feat: implement")
 
-        original_queue = json.loads(self.queue_path.read_text(encoding="utf-8"))
+        original_queue = GitRefsBackend(
+            queue_file=str(self.queue_path),
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        ).load()["queue"]
         original_plan = self.plan_path.read_text(encoding="utf-8")
         ledger_path = self.repo / ".agents" / "ledger.jsonl"
 
         self._run_verify(["ship", "verify", "t1", "--squash-fallback"])
 
-        self.assertEqual(
-            json.loads(self.queue_path.read_text(encoding="utf-8")),
-            original_queue,
-        )
+        final_queue = GitRefsBackend(
+            queue_file=str(self.queue_path),
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        ).load()["queue"]
+        self.assertEqual(final_queue, original_queue)
         self.assertEqual(self.plan_path.read_text(encoding="utf-8"), original_plan)
         self.assertFalse(ledger_path.exists())
 

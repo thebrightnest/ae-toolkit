@@ -61,11 +61,9 @@ class TestConfigureWriter(unittest.TestCase):
         return json.loads(path.read_text(encoding="utf-8"))
 
     def test_writes_each_key_to_project_scope(self):
-        """All four config keys can be written to the in-tree project config."""
+        """All config keys can be written to the in-tree project config."""
         rc = self._run(
             [
-                "--task-backend",
-                "git-refs",
                 "--trunk-branch",
                 "main",
                 "--integration-mode",
@@ -79,7 +77,7 @@ class TestConfigureWriter(unittest.TestCase):
         self.assertEqual(rc, 0)
         config = self._read_project_config()
         self.assertIsNotNone(config)
-        self.assertEqual(config["task_backend"], "git-refs")
+        self.assertNotIn("task_backend", config)
         self.assertEqual(config["trunk_branch"], "main")
         self.assertEqual(config["integration_mode"], "single-pr")
         self.assertEqual(config["integration_branch"], "release")
@@ -89,8 +87,8 @@ class TestConfigureWriter(unittest.TestCase):
         """--scope user writes under ~/.aet/{slug}/config.json."""
         rc = self._run(
             [
-                "--task-backend",
-                "json",
+                "--integration-mode",
+                "single-pr",
                 "--scope",
                 "user",
             ]
@@ -98,7 +96,8 @@ class TestConfigureWriter(unittest.TestCase):
         self.assertEqual(rc, 0)
         config = self._read_user_config()
         self.assertIsNotNone(config)
-        self.assertEqual(config["task_backend"], "json")
+        self.assertEqual(config["integration_mode"], "single-pr")
+        self.assertNotIn("task_backend", config)
         self.assertIsNone(self._read_project_config())
 
     def test_merge_style_preserves_unspecified_keys(self):
@@ -109,7 +108,6 @@ class TestConfigureWriter(unittest.TestCase):
         existing.write_text(
             json.dumps(
                 {
-                    "task_backend": "json",
                     "trunk_branch": "legacy-trunk",
                     "integration_mode": "pr-per-task",
                     "integration_branch": "legacy-integration",
@@ -120,18 +118,46 @@ class TestConfigureWriter(unittest.TestCase):
 
         rc = self._run(
             [
-                "--task-backend",
-                "git-refs",
+                "--trunk-branch",
+                "main",
                 "--scope",
                 "project",
             ]
         )
         self.assertEqual(rc, 0)
         config = self._read_project_config()
-        self.assertEqual(config["task_backend"], "git-refs")
-        self.assertEqual(config["trunk_branch"], "legacy-trunk")
+        self.assertEqual(config["trunk_branch"], "main")
         self.assertEqual(config["integration_mode"], "pr-per-task")
         self.assertEqual(config["integration_branch"], "legacy-integration")
+        self.assertNotIn("task_backend", config)
+
+    def test_merge_style_strips_removed_task_backend_key(self):
+        """A surviving task_backend key is stripped when config is rewritten."""
+        agents = self.project / ".agents"
+        agents.mkdir()
+        existing = agents / NEW_CONFIG_NAME
+        existing.write_text(
+            json.dumps(
+                {
+                    "task_backend": "git-refs",
+                    "integration_mode": "pr-per-task",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        rc = self._run(
+            [
+                "--trunk-branch",
+                "main",
+                "--scope",
+                "project",
+            ]
+        )
+        self.assertEqual(rc, 0)
+        config = self._read_project_config()
+        self.assertNotIn("task_backend", config)
+        self.assertEqual(config["integration_mode"], "pr-per-task")
 
     def test_invalid_integration_mode_rejected_naming_legal_values(self):
         """An invalid integration_mode is rejected and names the legal values."""
@@ -150,15 +176,16 @@ class TestConfigureWriter(unittest.TestCase):
         """With no in-tree config, the default scope is user."""
         rc = self._run(
             [
-                "--task-backend",
-                "git-refs",
+                "--integration-mode",
+                "single-pr",
             ]
         )
         self.assertEqual(rc, 0)
         self.assertIsNone(self._read_project_config())
         config = self._read_user_config()
         self.assertIsNotNone(config)
-        self.assertEqual(config["task_backend"], "git-refs")
+        self.assertEqual(config["integration_mode"], "single-pr")
+        self.assertNotIn("task_backend", config)
 
     def test_old_command_name_is_gone(self):
         """The retired `configure-backend` alias is no longer registered."""

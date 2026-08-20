@@ -152,7 +152,7 @@ class TestQueue(unittest.TestCase):
     def test_terminal_seal_removes_from_live_and_appends_jsonl(self):
         """Sealing a task moves it from the live queue to the settled history log."""
         with tempfile.TemporaryDirectory() as tmp:
-            queue_file = Path(tmp) / "work-queue.json"
+            queue_file = Path(tmp) / "aet-queue"
             history_file = Path(tmp) / "work-history.jsonl"
             task = {"id": "t1", "state": "merged", "title": "Task one"}
             write_queue(queue_file, [task])
@@ -171,7 +171,7 @@ class TestQueue(unittest.TestCase):
     def test_no_id_in_both_live_and_settled(self):
         """The same task id must never exist in both live and settled stores."""
         with tempfile.TemporaryDirectory() as tmp:
-            queue_file = Path(tmp) / "work-queue.json"
+            queue_file = Path(tmp) / "aet-queue"
             history_file = Path(tmp) / "work-history.jsonl"
             write_queue(queue_file, [
                 {"id": "t1", "state": "merged"},
@@ -192,7 +192,7 @@ class TestQueue(unittest.TestCase):
     def test_dependents_promoted_before_seal(self):
         """seal_terminal must not re-walk or mutate dependent blockers."""
         with tempfile.TemporaryDirectory() as tmp:
-            queue_file = Path(tmp) / "work-queue.json"
+            queue_file = Path(tmp) / "aet-queue"
             history_file = Path(tmp) / "work-history.jsonl"
             write_queue(queue_file, [
                 {"id": "t1", "state": "merged"},

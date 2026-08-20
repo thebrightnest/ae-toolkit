@@ -178,7 +178,7 @@ def _write_fake_claude(repo_root: str) -> Path:
 
 def _write_queue(repo_root: str, tasks: list[dict]) -> str:
     """Write a wrapper-format queue file and return its path."""
-    queue_file = Path(repo_root) / ".agents" / "work-queue.json"
+    queue_file = Path(repo_root) / ".agents" / "aet-queue"
     queue_file.parent.mkdir(parents=True, exist_ok=True)
     queue_file.write_text(
         json.dumps(

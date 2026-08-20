@@ -367,7 +367,7 @@ class TestIntegrationDetachedSpawn(_IsolatedBinDir):
             tmp_path = Path(tmp)
             agents_dir = tmp_path / ".agents"
             agents_dir.mkdir(parents=True)
-            queue_file = agents_dir / "work-queue.json"
+            queue_file = agents_dir / "aet-queue"
             history_file = agents_dir / "work-history.jsonl"
             queue_file.write_text('{"queue_updated_at": "2026-01-01T00:00:00Z", "tasks": []}', encoding="utf-8")
             history_file.write_text("", encoding="utf-8")

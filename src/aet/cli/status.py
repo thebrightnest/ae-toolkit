@@ -154,7 +154,7 @@ def _run(
             file=sys.stderr,
         )
         # Recover through the backend abstraction, not the JSON reader: the
-        # git-refs backend keeps no work-queue.json, so read_queue would
+        # git-refs backend keeps no aet-queue, so read_queue would
         # return an empty list and hide the very tasks status must surface.
         queue = backend.load(verify=False)["queue"]
     runs_dir = Path.cwd() / ".agents" / "runs"
@@ -258,9 +258,9 @@ app = typer.Typer(invoke_without_command=True)
 @app.callback()
 def status(
     queue_file: str = typer.Option(
-        ".agents/work-queue.json",
+        ".agents/aet-queue",
         "--queue-file",
-        help="Path to work-queue.json",
+        help="Path to queue anchor",
     ),
     history_file: str = typer.Option(
         ".agents/work-history.jsonl",

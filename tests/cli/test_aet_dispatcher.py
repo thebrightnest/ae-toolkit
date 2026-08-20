@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from tests.cli._helpers import run_typer
+from tests.cli._helpers import git, run_typer
 
 # Import the module object (not the ``main`` function exposed by ``aet.cli``).
 aet = importlib.import_module("aet.cli.main")
@@ -64,7 +64,8 @@ class TestAetGroupRouting(unittest.TestCase):
     def test_configure_routes_to_command(self):
         result = run_typer(aet.app, ["configure", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("task-backend", result.output.lower())
+        self.assertIn("integration-mode", result.output.lower())
+        self.assertNotIn("task-backend", result.output.lower())
 
     def test_gate_routes_to_gate_group(self):
         result = run_typer(aet.app, ["gate", "--help"])
@@ -251,8 +252,12 @@ class TestAetIntegration(unittest.TestCase):
     def test_status_via_real_subprocess(self):
         """``aet status`` runs the real status handler against a temp queue."""
         with tempfile.TemporaryDirectory() as tmp:
-            queue_file = Path(tmp) / "queue.json"
-            history_file = Path(tmp) / "history.jsonl"
+            git(["init"], tmp)
+            git(["config", "user.email", "test@example.com"], tmp)
+            git(["config", "user.name", "Test"], tmp)
+            queue_file = Path(tmp) / ".agents" / "aet-queue"
+            queue_file.parent.mkdir()
+            history_file = Path(tmp) / ".agents" / "work-history.jsonl"
             plans_dir = Path(tmp) / "plans"
             plans_dir.mkdir()
             env = {**os.environ}

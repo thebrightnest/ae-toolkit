@@ -89,7 +89,6 @@ def _make_config(project_dir: Path) -> Path:
     config_path.write_text(
         json.dumps(
             {
-                "task_backend": "json",
                 "projections": [
                     {"type": "github", "repo": "owner/repo", "label_prefix": "aet"}
                 ],
@@ -246,7 +245,7 @@ class TestBacklogAdd(unittest.TestCase):
             _git(["commit", "-m", "initial"], tmp)
 
             config_path = _make_config(tmp_path)
-            queue_file = tmp_path / ".agents" / "work-queue.json"
+            queue_file = tmp_path / ".agents" / "aet-queue"
             queue_file.parent.mkdir(parents=True, exist_ok=True)
             queue_file.write_text(
                 json.dumps(
