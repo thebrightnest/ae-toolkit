@@ -66,21 +66,22 @@ Redesign the orchestrator's session supervision and validation workflow to elimi
 
 ## Divergence Summary
 
-_Recorded: 2026-08-20 — Branch: validation-01-stage-based-split_
+_Recorded: 2026-08-20 — Branch: validation-02-single-run-caching (cumulative since validation-01-stage-based-split)_
 
 ### Changed from plan
 
-- None. All tasks in `docs/plans/validation-01-stage-based-split.md` were implemented as described.
+- None for `docs/plans/validation-01-stage-based-split.md`.
+- `docs/plans/validation-02-single-run-caching.md` Task 2: cache integration was implemented through `skills/aet-implement/SKILL.md` instruction updates plus helper functions in `src/aet/validation.py`, rather than through `src/aet/validation.py` alone.
 
 ### Added (unplanned)
 
-- `scripts/validate-skills.sh`: Updated the link checker to strip inline code before matching links. Required because the revised `skills/aet-qa/SKILL.md` contains backtick-wrapped phrases that the previous regex misidentified as markdown links.
-- `.agents/doc-rules.yaml`: Updated `must_contain` assertions to match the new `aet-qa` skill contract (full suite unconditionally, no caching, gap analysis). Required to keep skill-structure validation green after the skill text changed.
+- `scripts/validate-skills.sh`: Updated the link checker to strip inline code before matching links. Required because the revised `skills/aet-qa/SKILL.md` contains backtick-wrapped phrases that the previous regex misidentified as markdown links. (validation-01)
+- `.agents/doc-rules.yaml`: Updated `must_contain` assertions to match the new `aet-qa` skill contract (full suite unconditionally, no caching, gap analysis). Required to keep skill-structure validation green after the skill text changed. (validation-01)
+- `skills/aet-implement/SKILL.md`: Added single-run validation cache instructions so `aet-implement` agents use the new `aet.validation.cached_result` / `aet.validation.record_result` helpers. Required because the cache is consumed through skill behavior, not only through library code. (validation-02)
 
 ### Deferred
 
-- PRD requirements **R-1**, **R-2**, and **R-3** (hybrid process-tree + run-log liveness detection with a hard wall-clock backstop) were intentionally scoped out of this implementation plan and remain unimplemented.
-- PRD requirement **R-6** (single-run file-hash validation cache) was intentionally scoped out of this implementation plan and remains unimplemented.
+- PRD requirements **R-1**, **R-2**, and **R-3** (hybrid process-tree + run-log liveness detection with a hard wall-clock backstop) remain unimplemented.
 
 _Stage: synced_
 _Next step: run `aet-ship`_
