@@ -23,8 +23,9 @@ Run metadata lives under ``.agents/runs/<run-id>/``:
 * ``started`` — ISO timestamp
 
 The per-task ``--task-timeout`` wall-clock backstop remains overridable; the
-stdout-silence stall interval is resolved from the active ``CLIAdapter``
-(ADR-053). Only the launch presentation layer changed.
+stall interval is resolved from the active ``CLIAdapter`` and enforced by
+hybrid liveness (process-tree activity + run-log/file writes) rather than
+stdout silence (ADR-053, superseded in part by the liveness redesign).
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -48,6 +50,7 @@ from aet import (  # noqa: E402
     evidence,
     gate,
     handoff,
+    liveness,
     plan_parser,
     plan_size,
     session_log,
@@ -1027,6 +1030,8 @@ def _run_with_live_tee(
     cwd: str,
     env: dict,
     stall_timeout: float,
+    wall_backstop: float | None = None,
+    watched_paths: list[str] | None = None,
 ) -> tuple[int, str]:
     """Spawn a session: echo its output live, keep a bounded tail buffer.
 
@@ -1036,9 +1041,13 @@ def _run_with_live_tee(
     last ~256 KB (usage blocks are emitted at exit). Returns
     ``(exit_code, tail_text)``.
 
-    A watchdog thread monitors stdout silence. If no line arrives for
+    A watchdog thread monitors hybrid liveness. The stall timer is reset by
+    either process-tree activity (active descendants) or writes to watched
+    run-log/telemetry files. If no liveness signal arrives for
     ``stall_timeout`` seconds, the process group is terminated and the result
     is classified as a timeout (nsr-01), the same class as a wall-clock kill.
+    An optional ``wall_backstop`` enforces a hard ceiling regardless of
+    liveness (R-3).
     """
     proc = subprocess.Popen(
         cmd,
@@ -1052,11 +1061,29 @@ def _run_with_live_tee(
     )
     chunks: collections.deque[str] = collections.deque()
     buffered = 0
-    last_output = time.monotonic()
-    last_output_lock = threading.Lock()
+
+    # The liveness log is a run-log file whose mtime advances with every
+    # emitted line, giving RunLogLiveness a signal even when stdout is the
+    # only observable output.
+    liveness_log = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".liveness.log", delete=False, encoding="utf-8"
+    )
+    liveness_log_path = liveness_log.name
+    all_watched_paths = list(watched_paths or [])
+    all_watched_paths.append(liveness_log_path)
+
+    # Poll quickly for short test timeouts, but never more often than 10 s in
+    # production to keep system-load noise low.
+    poll_interval = max(0.05, min(stall_timeout / 2, 10.0))
+    monitor = liveness.LivenessMonitor(
+        proc.pid, all_watched_paths, poll_interval=poll_interval
+    )
+    monitor.start()
+
     stop_watchdog = threading.Event()
     cause_lock = threading.Lock()
     cause: str | None = None
+    start_time = time.monotonic()
 
     def _watchdog() -> None:
         nonlocal cause
@@ -1069,9 +1096,13 @@ def _run_with_live_tee(
                     cause = "shutdown"
                 _terminate_process_group(proc, timeout=10)
                 return
-            with last_output_lock:
-                elapsed = time.monotonic() - last_output
-            if elapsed > stall_timeout:
+            now = time.monotonic()
+            if wall_backstop is not None and now - start_time > wall_backstop:
+                with cause_lock:
+                    cause = "wall"
+                _terminate_process_group(proc, timeout=10)
+                return
+            if now - monitor.last_sign_of_life > stall_timeout:
                 with cause_lock:
                     cause = "stall"
                 _terminate_process_group(proc, timeout=10)
@@ -1083,10 +1114,11 @@ def _run_with_live_tee(
     try:
         assert proc.stdout is not None
         for line in proc.stdout:
-            with last_output_lock:
-                last_output = time.monotonic()
             sys.stdout.write(line)
             sys.stdout.flush()
+            liveness_log.write(line)
+            liveness_log.flush()
+            monitor.mark_alive()
             chunks.append(line)
             buffered += len(line)
             while buffered > usage_lib.TAIL_SCAN_BYTES and chunks:
@@ -1094,10 +1126,17 @@ def _run_with_live_tee(
     finally:
         stop_watchdog.set()
         watchdog.join(timeout=5)
+        monitor.stop()
+        monitor.join(timeout=5)
+        liveness_log.close()
+        try:
+            os.unlink(liveness_log_path)
+        except OSError:
+            pass
 
     exit_code = proc.wait()
     with cause_lock:
-        if cause == "stall":
+        if cause in ("stall", "wall"):
             return -9, "".join(chunks)
     return exit_code, "".join(chunks)
 
@@ -1108,6 +1147,8 @@ def _spawn_session(
     worktree_dir: str,
     env: dict,
     stall_timeout: float | None = None,
+    wall_backstop: float | None = None,
+    watched_paths: list[str] | None = None,
 ) -> tuple[int, dict | None, str | None]:
     """Run one agent session, returning ``(exit_code, usage, session_ref)``.
 
@@ -1116,13 +1157,21 @@ def _spawn_session(
     ``session_ref`` is the adapter-resolved session identifier (``None`` for
     unresolvable sessions); it feeds adapter-dispatched test-run extraction.
 
-    ``stall_timeout`` defaults to the active adapter's configured value
-    (ADR-053).
+    ``stall_timeout`` and ``wall_backstop`` default to the active adapter's
+    configured values.
     """
     if stall_timeout is None:
         stall_timeout = adapter.stall_timeout
+    if wall_backstop is None:
+        wall_backstop = adapter.wall_backstop
     return _spawn_session_with_tail(
-        adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
+        adapter,
+        cmd,
+        worktree_dir,
+        env,
+        stall_timeout=stall_timeout,
+        wall_backstop=wall_backstop,
+        watched_paths=watched_paths,
     )[:3]
 
 
@@ -1132,6 +1181,8 @@ def _spawn_session_with_tail(
     worktree_dir: str,
     env: dict,
     stall_timeout: float | None = None,
+    wall_backstop: float | None = None,
+    watched_paths: list[str] | None = None,
 ) -> tuple[int, dict | None, str | None, str]:
     """Run one agent session, returning ``(exit_code, usage, session_ref, tail)``.
 
@@ -1144,13 +1195,20 @@ def _spawn_session_with_tail(
     branch on ``adapter.name``. Resolution is guarded: a throwing resolver is
     treated as an unresolvable session rather than aborting the run.
 
-    ``stall_timeout`` defaults to the active adapter's configured value
-    (ADR-053).
+    ``stall_timeout`` and ``wall_backstop`` default to the active adapter's
+    configured values.
     """
     if stall_timeout is None:
         stall_timeout = adapter.stall_timeout
+    if wall_backstop is None:
+        wall_backstop = adapter.wall_backstop
     exit_code, output = _run_with_live_tee(
-        cmd, worktree_dir, env, stall_timeout=stall_timeout
+        cmd,
+        worktree_dir,
+        env,
+        stall_timeout=stall_timeout,
+        wall_backstop=wall_backstop,
+        watched_paths=watched_paths,
     )
     usage = None
     if adapter.usage_mode is not None:
@@ -1222,9 +1280,19 @@ def run_stage(
     if run_id is not None:
         env["AET_TARGETED_TESTS_PATH"] = str(_targeted_tests_path(repo_root, run_id))
 
+    watched_paths: list[str] = []
+    if run_id is not None and task_id is not None:
+        session_logger = telemetry.RunLogger(repo_root, run_id=run_id)
+        watched_paths.append(str(session_logger.task_log_path(task_id)))
+
     print(f"   Invoking: {' '.join(cmd)}")
     exit_code, usage, session_ref, output = _spawn_session_with_tail(
-        adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
+        adapter,
+        cmd,
+        worktree_dir,
+        env,
+        stall_timeout=stall_timeout,
+        watched_paths=watched_paths,
     )
     if exit_code == 0 and run_id is not None:
         # The tests were run while advancing toward next_stage; label the
@@ -1344,9 +1412,19 @@ def run_stage_group(
     if run_id is not None:
         env["AET_TARGETED_TESTS_PATH"] = str(_targeted_tests_path(repo_root, run_id))
 
+    watched_paths: list[str] = []
+    if run_id is not None and task_id is not None:
+        session_logger = telemetry.RunLogger(repo_root, run_id=run_id)
+        watched_paths.append(str(session_logger.task_log_path(task_id)))
+
     print(f"   Invoking group: {' '.join(cmd)}")
     exit_code, usage, session_ref, output = _spawn_session_with_tail(
-        adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
+        adapter,
+        cmd,
+        worktree_dir,
+        env,
+        stall_timeout=stall_timeout,
+        watched_paths=watched_paths,
     )
     if exit_code == 0 and run_id is not None:
         # Use the last stage name as the recorder stage; the file is written by

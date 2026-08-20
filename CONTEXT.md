@@ -154,11 +154,11 @@ _Avoid_: reading "follow" as tailing or streaming. A follower waits and summariz
 The fixed-shape completion output of a **Follower**: one line per stage with status, duration, and exit code, plus a capped excerpt of the failing stage on failure. Its length does not scale with the volume of run output — that is the whole point. Full output stays on disk in `output.log`.
 
 **Stall Timeout**:
-The silence interval after which the watchdog kills a session that has produced no output. The resulting failure class is `timeout`, and the same class applies to any session killed by a signal (negative exit code) whether from the stall watchdog, the wall-clock backstop, or another signal. A per-adapter value on `CLIAdapter`, not a command flag and not a config key. (ADR-053, ADR-060)
-_Avoid_: treating it as a duration limit — a session that keeps emitting is never killed, however long it runs.
+The liveness interval after which the watchdog kills a session that has shown no sign of life. Liveness is hybrid: process-tree activity (active descendants) or run-log/file writes reset the timer. The resulting failure class is `timeout`, and the same class applies to any session killed by a signal (negative exit code) whether from the stall watchdog, the wall-clock backstop, or another signal. A uniform value on every supported `CLIAdapter` (7200 s), not a command flag and not a config key; it is a backstop for true death, not a proxy for per-CLI output cadence. (ADR-053 superseded in part by the liveness redesign, ADR-060)
+_Avoid_: treating it as a duration limit — a session with active descendants or growing log files is never killed, however long it runs; treating it as a per-adapter tuning knob.
 
 **Wall Backstop**:
-The coarse wall-clock ceiling (`--task-timeout`), set well above the **Stall Timeout** so that silence detection remains the primary control. Retained from ADR-031 item 2.
+The coarse wall-clock ceiling (`--task-timeout`), retained as a last-resort ceiling even when hybrid liveness reports activity. Defaults to 7200 s and remains overridable.
 
 **History**:
 Append-only log of transition entries and closure events written to the optional, gitignored `.agents/work-history.jsonl`. It is used for reporting, not for scheduling or closure determination.

@@ -77,11 +77,11 @@ class TestCLIAdapter(unittest.TestCase):
         adapter = resolve_cli_adapter("kimi")
         self.assertEqual(adapter.usage_mode, "wire-file")
 
-    def test_kimi_supervision_defaults_exceed_suite_silence(self):
-        """kimi's stall timeout and wall backstop are adapter data (ADR-053)."""
+    def test_kimi_supervision_defaults_are_uniform_backstop(self):
+        """kimi uses the same uniform supervision defaults as every adapter."""
         adapter = resolve_cli_adapter("kimi")
-        self.assertGreater(adapter.stall_timeout, 300)
-        self.assertGreater(adapter.wall_backstop, adapter.stall_timeout)
+        self.assertEqual(adapter.stall_timeout, 7200.0)
+        self.assertEqual(adapter.wall_backstop, 7200.0)
 
     def test_claude_stall_timeout_covers_a_whole_silent_session(self):
         """An adapter that emits nothing until exit has no sub-session silence

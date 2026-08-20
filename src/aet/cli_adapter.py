@@ -31,9 +31,12 @@ class CLIAdapter:
     ``None`` when the CLI emits no usage data.
 
     ``stall_timeout`` and ``wall_backstop`` are supervision defaults for this
-    adapter: how long a headless session may stay silent before the watchdog
-    kills it, and the coarse wall-clock ceiling above that silence interval
-    (ADR-053). They are adapter data, not configuration.
+    adapter: how long a headless session may show no liveness signal before
+    the watchdog kills it, and the coarse wall-clock ceiling above that
+    interval. With hybrid liveness these values are uniform across adapters
+    because the stall timeout is a backstop for true death, not a proxy for
+    per-CLI output cadence (ADR-053, superseded in part by the liveness
+    redesign). They are adapter data, not configuration.
     """
 
     name: str
@@ -42,7 +45,7 @@ class CLIAdapter:
     workdir_flag: str | None
     headless_flag: str | None
     usage_mode: str | None = None
-    stall_timeout: float = 1800.0
+    stall_timeout: float = 7200.0
     wall_backstop: float = 7200.0
 
     def build_cmd(
@@ -98,9 +101,9 @@ ADAPTERS: dict[str, CLIAdapter] = {
         # Usage lives in ~/.kimi-code session wire files (verified 0.23.6),
         # read post-exit via the resume hint in captured stdout.
         usage_mode="wire-file",
-        # Full pytest suites can stay silent for several minutes; 1800 s is the
-        # observed safe margin above a QA-stage silence interval (ADR-053).
-        stall_timeout=1800.0,
+        # Hybrid liveness uses process-tree activity and run-log writes, so the
+        # stall timeout is the same uniform backstop for every adapter.
+        stall_timeout=7200.0,
         wall_backstop=7200.0,
     ),
     "claude": CLIAdapter(
@@ -110,18 +113,8 @@ ADAPTERS: dict[str, CLIAdapter] = {
         workdir_flag=None,
         headless_flag="--dangerously-skip-permissions",
         usage_mode="json-envelope",
-        # ``json-envelope`` adds ``--output-format json``, which emits a single
-        # envelope at exit and nothing before it. This adapter's observed silent
-        # interval is therefore the whole session, not a stage — so per ADR-053's
-        # own rule (exceed the observed silent interval) the stall timeout must
-        # equal the wall backstop. Below that it is not a stall detector at all
-        # but a shorter wall clock, and it killed healthy sessions at ~1800 s.
-        #
-        # The value cannot be lowered to restore real stall detection until the
-        # adapter emits incrementally (``--output-format stream-json``), and it
-        # must not be raised past ``wall_backstop``: ``run_single`` enforces no
-        # wall-clock timeout of its own (only ``run_batch`` does), so for
-        # ``aet run-one`` this is the sole ceiling on a session.
+        # Hybrid liveness uses process-tree activity and run-log writes, so the
+        # stall timeout is the same uniform backstop for every adapter.
         stall_timeout=7200.0,
         wall_backstop=7200.0,
     ),

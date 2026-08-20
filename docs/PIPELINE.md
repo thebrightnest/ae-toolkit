@@ -72,12 +72,16 @@ At standard isolation the session groups are `[plan-approved, implemented]` → 
 
 ## Session Liveness
 
-The orchestrator distinguishes a slow-but-alive session from a genuinely wedged one by watching stdout silence, not just the clock.
+The orchestrator distinguishes a slow-but-alive session from a genuinely wedged one using hybrid liveness, not just stdout silence.
 
-- **Stall timeout** is the primary liveness control. It is resolved from the active `CLIAdapter` (`stall_timeout`; default 1800 s for the supported adapters). A lightweight watchdog thread inside the single-plan session runner stamps `last_output` on every emitted line and terminates the process group when `now - last_output > stall_timeout`. The failure is classified `timeout` (nsr-01), the same class as a wall-clock kill.
-- **`--task-timeout`** is the coarse wall-clock backstop. It defaults to the adapter's `wall_backstop` (7200 s for the supported adapters) and remains overridable. It is retained for the pathological cases a silence watchdog cannot see: a process that holds the pipe open but emits nothing readable, or one that streams forever.
+- **Hybrid liveness** combines two signals:
+  - **Process-tree activity**: the session's main process has active descendants (background tasks, subagents, long validations).
+  - **Run-log/file writes**: watched log or telemetry files are still growing.
+  Either signal resets the stall timer. A lightweight watchdog thread inside the single-plan session runner polls both signals and terminates the process group when `now - last_sign_of_life > stall_timeout`.
+- **Stall timeout** is resolved from the active `CLIAdapter` (`stall_timeout`; default 7200 s for all supported adapters). With hybrid liveness the value is uniform across adapters because it is a backstop for true death, not a proxy for per-CLI output cadence.
+- **`--task-timeout`** is the coarse wall-clock backstop. It defaults to the adapter's `wall_backstop` (7200 s) and remains overridable. It is retained for the pathological cases liveness cannot see: a process whose descendants are alive but the session itself is still stuck, or one that streams forever.
 
-A session that keeps emitting progress lines is left running. A session that emits nothing is killed by the stall watchdog first; the wall-clock backstop catches the pathological cases the silence watchdog cannot.
+A session with active descendants or growing log files is left running. A session with neither signal is killed by the stall watchdog; the wall-clock backstop catches the pathological cases liveness cannot.
 
 ## Failure Handling
 
