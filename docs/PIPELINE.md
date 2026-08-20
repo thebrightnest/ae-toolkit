@@ -36,6 +36,16 @@ Every plan declares its orchestration mode in frontmatter (`pipeline: standard`)
 
 Plan authors must record the `pipeline` value explicitly; the orchestrator does not auto-switch. See [ADR-047](./adr/047-pipeline-mode-by-plan-size.md) for the telemetry evidence and decision record.
 
+## Stage-Based Validation Split
+
+Validation ownership is split by stage so the pipeline stays fast without sacrificing coverage:
+
+- **`aet-implement` runs targeted tests only.** It uses a path-based floor (same-directory and matching-name test files) and records the commands it ran.
+- **`aet-qa` runs the full test suite unconditionally.** No impact scoping, no cached reuse from implement, no skipping previously green tests.
+- **Targeted-test results travel via the run handoff note.** QA compares them against any failing tests to produce gap analysis: a missed test is flagged with the reason it fell outside the implement floor.
+
+This split removes redundant full-suite runs during implementation while keeping QA as the sole, unconditional gate on the complete validation surface.
+
 ## Symmetric Routing Guards
 
 Entry-point skills enforce symmetric guards to prevent misrouted work:

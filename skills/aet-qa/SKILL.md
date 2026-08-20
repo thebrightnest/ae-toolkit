@@ -36,13 +36,7 @@ Run tiered automated validation.
    - **Standard** — + medium priority flows: error handling, edge cases, data validation
    - **Exhaustive** — + all states/cosmetic: responsive layouts, loading states, empty states
 3. Run automated test suite:
-   - **Default to impact-scoped tests.** Use `git diff --name-only <pr-base>..HEAD` to identify changed files, map them to test files via project conventions or heuristics, and run only the tests that cover them. For Python use `pytest path/to/test.py`; for JS/TS use `vitest run path/to/test.ts` or `jest path/to/test.ts`.
-   - **Full-suite fallback.** Run the complete test suite only when the diff touches any of the following. Otherwise, the impact-scoped test run is sufficient.
-     - test harness
-     - config
-     - shared fixtures
-     - dependency lockfiles
-     - files imported by many tests
+   - **Run the full test suite unconditionally.** `aet-qa` owns the complete validation surface; do not scope tests by impact, do not skip previously-passing tests, and do not reuse a cached result from `aet-implement`.
    - Unit tests
    - Integration tests
    - Type checking
@@ -67,25 +61,34 @@ Run tiered automated validation.
    - Fix the bug in source
    - Generate a regression test that would have caught it
    - Commit the fix and test atomically
-8. **Stage-failure triage:** If any validation stage fails, gather the following evidence before retrying or escalating to a human. Append the triage block to the QA report; do not write it to the repository.
+8. **Gap analysis.** If a test fails, compare the failing test path against the targeted tests recorded in the run handoff note (look for `[stage: implemented]` → `validation commands`). If the failing test was not run during `aet-implement`, record:
+   - the missed test path
+   - why it was outside the path-based floor (e.g., different directory, no matching name, shared fixture)
+   Include this in the QA report and, if you append a handoff entry, in `--decision`.
+9. **Stage-failure triage:** If any validation stage fails, gather the following evidence before retrying or escalating to a human. Append the triage block to the QA report; do not write it to the repository.
    - Failing command and full output
    - Files touched by the current diff
    - Last successful stage
    - Relevant environment variables (`AET_*`)
    - Whether the failure reproduces outside the orchestrator (run the same command manually in the worktree)
-9. Produce a QA report:
-   - Determine the task ID from the active plan filename or branch name
-   - Write the report to `/tmp/aet-reports/{task-id}/qa-report.md`
-   - Include:
-     - pass/fail status per tier
-     - bugs found and fixed
-     - regression tests added
-     - screenshot diffs (if browser mode used)
-     - coverage delta
-     - **Coverage section:** list files checked, their coverage %, and which (if any) failed the 0% gate
-     - **Triage section:** stage-failure evidence, if any stage failed
-   - Do NOT write `.qa-report.md` to the repository root
-10. **Submit the stage verdict** per the writer contract below. It comes last
+10. Produce a QA report:
+
+    - Determine the task ID from the active plan filename or branch name
+    - Write the report to `/tmp/aet-reports/{task-id}/qa-report.md`
+    - Include:
+
+      - pass/fail status per tier
+      - bugs found and fixed
+      - regression tests added
+      - screenshot diffs (if browser mode used)
+      - coverage delta
+      - **Gap-analysis section:** targeted tests run by `aet-implement`, failing tests that were missed, and why the floor did not catch them
+      - **Coverage section:** list files checked, their coverage %, and which (if any) failed the 0% gate
+      - **Triage section:** stage-failure evidence, if any stage failed
+
+    - Do NOT write `.qa-report.md` to the repository root
+
+11. **Submit the stage verdict** per the writer contract below. It comes last
     because it reports the test counts from step 3 — there is nothing to submit
     before the suite has run. The stage is not complete until it is written.
 

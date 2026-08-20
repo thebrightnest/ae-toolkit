@@ -2997,18 +2997,18 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
 
 
 class TestStagePromptValidationDiscipline(unittest.TestCase):
-    """One-shot stage sessions must run validations foreground (session report:
-    a stage agent backgrounding its own validations ended its turn with zero
-    commits, producing a false completion)."""
+    """R-7: the orchestrator must not instruct agents to run validations in the
+    foreground or forbid background validations. The skills own validation
+    timing; the prompt only bounds stage scope."""
 
-    def test_single_stage_prompt_requires_foreground_validations(self):
+    def test_single_stage_prompt_omits_foreground_validation_instruction(self):
         prompt = orchestrator.build_prompt(
             ["aet-implement"], "docs/plans/x.md", "plan-approved", "implemented"
         )
-        self.assertIn("foreground", prompt)
-        self.assertIn("never background validations", prompt)
+        self.assertNotIn("foreground", prompt)
+        self.assertNotIn("never background validations", prompt)
 
-    def test_stage_group_prompt_requires_foreground_validations(self):
+    def test_stage_group_prompt_omits_foreground_validation_instruction(self):
         stages = [
             WorkflowStage(
                 name="plan-approved",
@@ -3034,8 +3034,8 @@ class TestStagePromptValidationDiscipline(unittest.TestCase):
         prompt = orchestrator.build_stage_group_prompt(
             "docs/plans/x.md", stages, workflow
         )
-        self.assertIn("foreground", prompt)
-        self.assertIn("never background validations", prompt)
+        self.assertNotIn("foreground", prompt)
+        self.assertNotIn("never background validations", prompt)
 
     def test_single_stage_prompt_contains_no_state_mutation_duty(self):
         """The agent must not be asked to mutate plan footer, status, or queue."""
@@ -4337,6 +4337,116 @@ class TestTwoMachineSpecTransport(unittest.TestCase):
                 ).stdout
                 self.assertNotIn("mark plan stage", log)
                 self.assertNotIn("Seed plan", log)
+
+
+class TestPromptValidationInstruction(unittest.TestCase):
+    """R-7: orchestrator prompts must not forbid background validations."""
+
+    def test_build_prompt_omits_foreground_validation_instruction(self):
+        prompt = orchestrator.build_prompt(
+            ["aet-tdd", "aet-implement"],
+            "docs/plans/demo.md",
+            "plan-approved",
+            "implemented",
+        )
+        self.assertNotIn("never background validations", prompt)
+        self.assertNotIn("in the foreground", prompt)
+        self.assertNotIn("wait for them to finish", prompt)
+
+    def test_build_stage_group_prompt_omits_foreground_validation_instruction(self):
+        stages = [
+            WorkflowStage(
+                name="plan-approved",
+                skills=["aet-tdd", "aet-implement"],
+                evidence=None,
+                gate_key=None,
+            ),
+        ]
+        workflow = Workflow(
+            version=1,
+            name="test",
+            done_state="done",
+            stages=stages,
+            stage_map={s.name: s for s in stages},
+            execution_policy=ExecutionPolicy(session_groups=[["plan-approved"]]),
+            routing=Routing(
+                default={"harness": "test", "model": None}, by_stage={}
+            ),
+        )
+        prompt = orchestrator.build_stage_group_prompt(
+            "docs/plans/demo.md", stages, workflow
+        )
+        self.assertNotIn("never background validations", prompt)
+        self.assertNotIn("in the foreground", prompt)
+        self.assertNotIn("wait for them to finish", prompt)
+
+
+class TestTargetedTestsHandoff(unittest.TestCase):
+    """Implement records targeted tests; orchestrator passes them to QA."""
+
+    def _capture_run_stage(self, repo: str, run_id: str = "run-test") -> dict:
+        captured: dict = {}
+
+        def fake_spawn(adapter, cmd, worktree_dir, env, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = env
+            return 0, None, None, ""
+
+        with patch.object(
+            orchestrator, "_spawn_session_with_tail", side_effect=fake_spawn
+        ):
+            orchestrator.run_stage(
+                _FAKE_ADAPTER,
+                repo,
+                str(Path(repo) / "docs" / "plans" / "demo.md"),
+                repo,
+                ["aet-implement"],
+                "plan-approved",
+                "implemented",
+                task_id="demo",
+                run_id=run_id,
+            )
+        return captured
+
+    def test_run_stage_sets_targeted_tests_path_env(self):
+        with tempfile.TemporaryDirectory() as repo:
+            _init_git_repo(repo)
+            captured = self._capture_run_stage(repo)
+            path = captured["env"].get("AET_TARGETED_TESTS_PATH")
+            self.assertIsNotNone(path)
+            self.assertIn("run-test", path)
+            self.assertTrue(path.endswith("implement-targeted-tests.json"))
+
+    def test_run_stage_appends_targeted_tests_to_handoff(self):
+        with tempfile.TemporaryDirectory() as repo:
+            _init_git_repo(repo)
+            from aet import validation as validation_mod
+
+            path = validation_mod.targeted_tests_path(repo, "run-test")
+            validation_mod.write_targeted_tests(
+                path, ["pytest tests/test_foo.py"]
+            )
+
+            self._capture_run_stage(repo)
+
+            from aet import handoff
+
+            note = handoff.read_note(repo, "run-test")
+            self.assertIsNotNone(note)
+            entry = note["entries"][0]
+            self.assertEqual(entry["stage"], "implemented")
+            self.assertEqual(
+                entry["validation_commands"], ["pytest tests/test_foo.py"]
+            )
+
+    def test_run_stage_skips_handoff_when_no_targeted_tests_file(self):
+        with tempfile.TemporaryDirectory() as repo:
+            _init_git_repo(repo)
+            self._capture_run_stage(repo)
+
+            from aet import handoff
+
+            self.assertIsNone(handoff.read_note(repo, "run-test"))
 
 
 if __name__ == "__main__":

@@ -182,6 +182,7 @@ import sys
 
 repo_root = sys.argv[1]
 link_re = re.compile(r"\[([^]]*)\]\(([^)]+)\)")
+inline_code_re = re.compile(r"`[^`]+`")
 
 broken = False
 for dirpath, dirnames, filenames in os.walk("."):
@@ -210,7 +211,9 @@ for dirpath, dirnames, filenames in os.walk("."):
                 continue
             if not in_fence:
                 kept.append(line)
-        for match in link_re.finditer("\n".join(kept)):
+        text = "\n".join(kept)
+        text = inline_code_re.sub("", text)
+        for match in link_re.finditer(text):
             if "http" in match.group(0):
                 continue
             # Strip anchor
