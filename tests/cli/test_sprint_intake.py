@@ -77,7 +77,7 @@ def _git_init(root: Path) -> None:
 def _write_config(root: Path, projections: list[dict] | None = None) -> Path:
     path = root / ".agents" / "aet-config.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    config: dict = {"task_backend": "json"}
+    config: dict = {}
     if projections is not None:
         config["projections"] = projections
     path.write_text(json.dumps(config), encoding="utf-8")
