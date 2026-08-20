@@ -154,7 +154,7 @@ _Avoid_: reading "follow" as tailing or streaming. A follower waits and summariz
 The fixed-shape completion output of a **Follower**: one line per stage with status, duration, and exit code, plus a capped excerpt of the failing stage on failure. Its length does not scale with the volume of run output — that is the whole point. Full output stays on disk in `output.log`.
 
 **Stall Timeout**:
-The silence interval after which the watchdog kills a session that has produced no output, classified `timeout`. A per-adapter value on `CLIAdapter`, not a command flag and not a config key. (ADR-053)
+The silence interval after which the watchdog kills a session that has produced no output. The resulting failure class is `timeout`, and the same class applies to any session killed by a signal (negative exit code) whether from the stall watchdog, the wall-clock backstop, or another signal. A per-adapter value on `CLIAdapter`, not a command flag and not a config key. (ADR-053, ADR-060)
 _Avoid_: treating it as a duration limit — a session that keeps emitting is never killed, however long it runs.
 
 **Wall Backstop**:

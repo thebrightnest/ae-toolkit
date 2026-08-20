@@ -9,11 +9,11 @@ status: approved
 
 In batch mode, a task that hits the wall-clock backstop is killed with SIGKILL
 and finalised with exit code `-9`. `failure.classify` returns `TIMEOUT` only
-when `killed_by_timeout` is set, and every call site derives that flag as
-`exit_code == -9`. `_run_with_live_tee` returns `proc.wait()`, which is negative
-for a signal-killed child, so the path *should* already be deterministic.
-Measured behaviour says otherwise: the rehearsal's stall task ends `failed` in
-about five runs of six and `ready` in the sixth.
+when `killed_by_timeout` is set, and every call site derives that flag from a
+negative exit code (any signal death). `_run_with_live_tee` returns
+`proc.wait()`, which is negative for a signal-killed child, so the path *should*
+already be deterministic. Measured behaviour says otherwise: the rehearsal's
+stall task ends `failed` in about five runs of six and `ready` in the sixth.
 
 ## Requirements
 
@@ -33,9 +33,9 @@ about five runs of six and `ready` in the sixth.
 2. **Tee threads reaching EOF before `proc.wait()`.** The reader thread could
    observe EOF, exit the `for line in proc.stdout` loop, and reach
    `proc.wait()` before the watchdog thread has set `cause="stall"`.
-3. **A second signature recorded from a different call site.** `run_stage` and
-   `run_stage_group` both call `_classify_failure` with
-   `killed_by_timeout=exit_code == -9`, but if one path used a different code
+3. **A second signature recorded from a different call site.** `run_stage`,
+   `run_stage_group`, and the telemetry path all call `_classify_failure` with
+   `killed_by_timeout=(exit_code < 0)`, but if one path used a different code
    or recorded the signature under a different stage name, the queue's last
    `failure_signatures` entry might not be `TIMEOUT`.
 
@@ -83,12 +83,16 @@ The regression suite captures both extremes deterministically:
 - `test_external_sigkill_before_stall_returns_same_exit_code`: a session killed
   by an external `SIGKILL` before the watchdog fires also returns `-9`, proving
   the same raw code can arise from two different causes.
-- `test_finalize_requeues_when_no_timeout_signature`: the batch parent
-  finalises a task with `ret=-9` but the queue has no `TIMEOUT` signature. The
-  task ends `ready` because the failure is treated as transient.
-- `test_finalize_leaves_failed_when_timeout_signature_present`: the same
-  parent-level `ret=-9` with a pre-existing `TIMEOUT` signature leaves the task
-  `failed`, proving the decisive variable is the signature, not the exit code.
+- `test_finalize_records_timeout_signature_when_child_could_not`: the batch
+  parent finalises a task with `ret=-9` but the queue has no `TIMEOUT`
+  signature. The parent appends a `TIMEOUT` signature and leaves the task
+  `failed`, making the signal exit authoritative.
+- `test_finalize_appends_only_one_timeout_signature`: the same parent-level
+  `ret=-9` with a pre-existing `TIMEOUT` signature leaves the task `failed`
+  without adding a second signature.
+- `test_finalize_treats_any_signal_death_as_timeout`: a parent-level `ret=-15`
+  (SIGTERM) with no signature is also classified as `timeout`, proving the
+  classification covers any signal death, not only SIGKILL.
 
 Temporary exit-path instrumentation (enabled via `AET_EXIT_TRACE_PATH`) captured
 records that show the same raw `-9` exit code arising from two different causes:
@@ -107,13 +111,14 @@ process exits.
 
 ## Implications
 
-A propagation fix (osd-02) must ensure that the parent-level wall-clock kill
-either (a) records the `TIMEOUT` signature itself, or (b) finalises the task
-as timed-out without requiring the child to have written a signature first.
-Relying on `proc.wait() == -9` at the parent is insufficient because the
-parent's `-9` does not imply the child recorded a `TIMEOUT` signature.
+The osd-02 propagation fix finalises a signal-killed session as `timeout`
+without requiring the child to have written a signature first. The batch parent
+now treats any negative return code as authoritative evidence of timeout: it
+appends a `TIMEOUT` signature when none is present and leaves the task `failed`,
+bypassing triage and the circuit breaker. This removes the race between the
+child's stall watchdog and the parent's wall-clock backstop.
 
-## Divergence Summary
+## osd-01 Divergence Summary
 
 *Recorded: 2026-08-20 — Branch: osd-01-isolate-signal-exit-divergence*
 
@@ -138,5 +143,31 @@ parent's `-9` does not imply the child recorded a `TIMEOUT` signature.
 - Merge branch to main and verify integration: left for `aet-ship`; the branch
   is still ahead of `origin/main`.
 
-*Stage: synced*
-*Next step: run `aet-ship`*
+## osd-02 Divergence Summary
+
+*Recorded: 2026-08-20 — Branch: osd-02-propagate-session-signal-exit*
+
+### Changed from plan
+
+- Classification boundary: `killed_by_timeout` now derives from `exit_code < 0`
+  at all three call sites, not `exit_code == -9`. The parent backstop already
+  records `ret=-9`, so the wider predicate also covers any other signal death.
+- Parent finalisation: `_finalize_task` now reads the signal exit directly and
+  appends a `TIMEOUT` signature when the child could not, instead of relying
+  solely on the last ledger entry.
+
+### Added (unplanned)
+
+- `docs/adr/060-signal-death-is-timeout.md`: records the decision that `timeout`
+  covers every signal death and that the parent is the signature backstop.
+- `TestSignalExitClassification` in `tests/orchestrator/test_stall_watchdog.py`:
+  regression coverage that `run_stage` records a `timeout` signature for a
+  session killed by an external SIGKILL.
+
+### Deferred
+
+- Merge branch to main and verify integration: left for `aet-ship`; the branch
+  is still ahead of `origin/main`.
+
+*Stage: implemented*
+*Next step: run `aet-qa`*

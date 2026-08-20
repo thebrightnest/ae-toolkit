@@ -240,11 +240,11 @@ class TestExternalKillBeforeStall(unittest.TestCase):
             self.assertEqual(result["exit_code"], -9)
 
 
-class TestFinalizeWithoutTimeoutSignature(unittest.TestCase):
-    """A parent-level -9 without a child-recorded TIMEOUT signature requeues."""
+class TestFinalizeSignalExitAuthoritative(unittest.TestCase):
+    """A signal-killed child is classified as timeout by the parent."""
 
-    def test_finalize_requeues_when_no_timeout_signature(self):
-        """The batch parent sees ret=-9 but no TIMEOUT entry and requeues."""
+    def test_finalize_records_timeout_signature_when_child_could_not(self):
+        """The batch parent sees ret=-9 with no TIMEOUT entry and appends one."""
         with tempfile.TemporaryDirectory() as repo_root:
             task_id = "osd-parent-wins"
             queue_file = _write_queue(
@@ -265,18 +265,18 @@ class TestFinalizeWithoutTimeoutSignature(unittest.TestCase):
                 on_failure="triage",
             )
 
-            self.assertEqual(deltas, {"successes": 0, "failures": 0, "stop_spawn": False})
+            self.assertEqual(deltas, {"successes": 0, "failures": 1, "stop_spawn": False})
             queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
-            self.assertEqual(queue[0]["state"], "ready")
+            self.assertEqual(queue[0]["state"], "failed")
             timeout_sigs = [
                 entry
                 for entry in queue[0].get("failure_signatures", [])
                 if entry.get("class") == "timeout"
             ]
-            self.assertEqual(timeout_sigs, [])
+            self.assertEqual(len(timeout_sigs), 1)
 
-    def test_finalize_leaves_failed_when_timeout_signature_present(self):
-        """A pre-existing TIMEOUT signature causes the parent to leave the task failed."""
+    def test_finalize_appends_only_one_timeout_signature(self):
+        """A signal-killed session ends with exactly one TIMEOUT signature."""
         with tempfile.TemporaryDirectory() as repo_root:
             task_id = "osd-parent-wins"
             queue_file = _write_queue(
@@ -287,7 +287,7 @@ class TestFinalizeWithoutTimeoutSignature(unittest.TestCase):
             )
             backend = orchestrator.create_backend(queue_file=queue_file)
 
-            deltas = orchestrator._finalize_task(
+            orchestrator._finalize_task(
                 backend,
                 queue_file,
                 task_id,
@@ -297,9 +297,45 @@ class TestFinalizeWithoutTimeoutSignature(unittest.TestCase):
                 on_failure="triage",
             )
 
+            queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
+            timeout_sigs = [
+                entry
+                for entry in queue[0].get("failure_signatures", [])
+                if entry.get("class") == "timeout"
+            ]
+            self.assertEqual(len(timeout_sigs), 1)
+
+    def test_finalize_treats_any_signal_death_as_timeout(self):
+        """Any negative return code (e.g. SIGTERM) is authoritative for timeout."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            task_id = "osd-parent-wins"
+            queue_file = _write_queue(
+                repo_root,
+                task_id,
+                state="in_progress",
+                failure_signatures=[],
+            )
+            backend = orchestrator.create_backend(queue_file=queue_file)
+
+            deltas = orchestrator._finalize_task(
+                backend,
+                queue_file,
+                task_id,
+                ret=-15,
+                repo_root=repo_root,
+                adapter=None,
+                on_failure="triage",
+            )
+
             self.assertEqual(deltas, {"successes": 0, "failures": 1, "stop_spawn": False})
             queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
             self.assertEqual(queue[0]["state"], "failed")
+            timeout_sigs = [
+                entry
+                for entry in queue[0].get("failure_signatures", [])
+                if entry.get("class") == "timeout"
+            ]
+            self.assertEqual(len(timeout_sigs), 1)
 
 
 if __name__ == "__main__":

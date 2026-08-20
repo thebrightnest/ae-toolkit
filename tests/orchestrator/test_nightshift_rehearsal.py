@@ -145,9 +145,10 @@ def _write_fake_claude(repo_root: str) -> Path:
         '    result_envelope()\n'
         '    sys.exit(1)\n'
         '\n'
-        '# Stall: emit usage, then self-SIGKILL so the orchestrator classifies\n'
-        '# the session as a timeout (exit -9) without waiting for the real stall\n'
-        '# watchdog. The stall watchdog is covered by test_stall_watchdog.py.\n'
+        '# Stall: emit usage, then self-SIGKILL to exercise the signal-exit\n'
+        '# timeout path. The orchestrator classifies any signal-killed session\n'
+        '# as timeout and records a TIMEOUT signature. The real stall watchdog\n'
+        '# is covered by test_stall_watchdog.py.\n'
         'if "stall" in prompt:\n'
         '    result_envelope()\n'
         '    os.kill(os.getpid(), signal.SIGKILL)\n'
@@ -208,10 +209,12 @@ def _commit_repo_state(repo_root: str) -> None:
 class TestNightShiftExitGateRehearsal(unittest.TestCase):
     """End-to-end rehearsal over a mixed unattended queue.
 
-    The stall fixture self-SIGKILLs to produce a timeout-classified exit (-9)
-    without waiting for the real stall watchdog; the watchdog itself is covered
-    by tests/orchestrator/test_stall_watchdog.py. Every test below only reads
-    the resulting queue state, so the batch runs once for the whole class.
+    The stall fixture self-SIGKILLs to exercise the signal-exit timeout path:
+    the child orchestrator sees a negative exit code, classifies the failure as
+    timeout, records a TIMEOUT signature, and the batch parent leaves the task
+    failed. The real stall watchdog is covered by
+    tests/orchestrator/test_stall_watchdog.py. Every test below only reads the
+    resulting queue state, so the batch runs once for the whole class.
     """
 
     queue_file: str

@@ -318,6 +318,91 @@ class TestDetachedOutputAndUsage(unittest.TestCase):
                 self.assertIsNotNone(session_dir)
 
 
+class TestSignalExitClassification(unittest.TestCase):
+    """Regression tests for osd-02: signal-killed sessions classify as timeout."""
+
+    def _write_self_sigkill_cli(self, repo_root: str) -> str:
+        """Create a fake agent CLI that emits usage then self-SIGKILLs."""
+        bin_dir = Path(repo_root) / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        fake_cli = bin_dir / "kimi"
+        fake_cli.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os\n"
+            "import signal\n"
+            "import sys\n"
+            'print(\'[{"type": "result", "usage": '
+            '{"input_tokens": 10, "output_tokens": 5}, '
+            '"total_cost_usd": 0.001}]\')\n'
+            "sys.stdout.flush()\n"
+            "os.kill(os.getpid(), signal.SIGKILL)\n",
+            encoding="utf-8",
+        )
+        fake_cli.chmod(0o755)
+        return str(fake_cli)
+
+    def _custom_adapter(self, fake_cli: str, stall_timeout: float) -> CLIAdapter:
+        """Return a CLIAdapter pointing at the fake CLI with a short stall timeout."""
+        return CLIAdapter(
+            name="test",
+            bin=fake_cli,
+            prompt_flag="-p",
+            workdir_flag=None,
+            headless_flag=None,
+            stall_timeout=stall_timeout,
+            wall_backstop=10.0,
+        )
+
+    def test_run_stage_records_timeout_signature_for_signal_death(self):
+        """A session killed by SIGKILL is classified and recorded as timeout."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            fake_cli = self._write_self_sigkill_cli(repo_root)
+            queue_file = _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "osd-signal",
+                        "title": "osd-signal",
+                        "plan_file": "docs/plans/osd-signal.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                ],
+            )
+            backend = orchestrator.create_backend(queue_file=queue_file)
+            task = {
+                "id": "osd-signal",
+                "plan_file": "docs/plans/osd-signal.md",
+                "state": "in_progress",
+            }
+            Path(repo_root, "docs", "plans", "osd-signal.md").parent.mkdir(
+                parents=True, exist_ok=True
+            )
+            Path(repo_root, "docs", "plans", "osd-signal.md").write_text(
+                "---\nid: osd-signal\n---\n\n# Demo\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
+            adapter = self._custom_adapter(fake_cli, stall_timeout=2.0)
+
+            exit_code, _usage, _session_dir, _output = orchestrator.run_stage(
+                adapter,
+                repo_root=repo_root,
+                plan_file="docs/plans/osd-signal.md",
+                worktree_dir=repo_root,
+                skills=["aet-tdd", "aet-implement"],
+                current_stage="plan-approved",
+                next_stage="implemented",
+                task_id="osd-signal",
+                task=task,
+                backend=backend,
+            )
+
+            self.assertLess(exit_code, 0)
+            self.assertTrue(task.get("failure_signatures"))
+            last = task["failure_signatures"][-1]
+            self.assertEqual(last.get("class"), "timeout")
+
+
 class TestBatchTimeoutBackstop(unittest.TestCase):
     """Integration tests for stall and wall-clock kills through run_batch."""
 
