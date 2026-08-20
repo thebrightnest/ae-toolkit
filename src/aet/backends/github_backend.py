@@ -8,7 +8,9 @@ this projection creates and labels GitHub issues to reflect task state.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+import time
 from typing import Any
 
 from aet.projections.base import Projection
@@ -228,6 +230,45 @@ class GitHubBackend(Projection):
             )
         return result
 
+    def _run_gh_with_retry(
+        self,
+        args: list[str],
+        max_retries: int = 3,
+        base_delay: float = 1.0,
+    ) -> subprocess.CompletedProcess:
+        """Run a ``gh`` subcommand, retrying transient forge failures.
+
+        Retries on status codes and messages that indicate a temporary auth,
+        rate-limit, or outage condition. Raises :class:`BackendError` after the
+        last attempt so the caller can halt rather than fail open.
+        """
+        delay = base_delay
+        last_exc: BackendError | None = None
+        for attempt in range(max_retries):
+            try:
+                return self._run_gh(args)
+            except BackendError as exc:
+                last_exc = exc
+                msg = str(exc).lower()
+                transient = any(
+                    token in msg
+                    for token in [
+                        "403",
+                        "401",
+                        "rate limit",
+                        "timeout",
+                        "connection",
+                        "502",
+                        "503",
+                        "504",
+                    ]
+                )
+                if not transient or attempt == max_retries - 1:
+                    raise
+                time.sleep(delay)
+                delay *= 2
+        raise last_exc or BackendError("unexpected exit from retry loop")
+
     def _list_labels(self) -> list[dict[str, Any]]:
         result = self._run_gh(
             ["label", "list", "--repo", self.repo, "--json", "name", "--limit", "1000"]
@@ -305,25 +346,29 @@ class GitHubBackend(Projection):
     def _reopen_issue(self, issue_number: int) -> None:
         self._run_gh(["issue", "reopen", str(issue_number), "--repo", self.repo])
 
-    def list_issues(self, state: str = "all") -> list[dict[str, Any]]:
+    def list_issues(
+        self, state: str = "all", label: str | None = None
+    ) -> list[dict[str, Any]]:
         """Return issues with their labels and bodies.
 
         The result is normalized so ``labels`` is a list of label names.
+        When ``label`` is provided, only issues with that label are returned.
         """
-        result = self._run_gh(
-            [
-                "issue",
-                "list",
-                "--repo",
-                self.repo,
-                "--state",
-                state,
-                "--json",
-                "number,labels,body,state",
-                "--limit",
-                "1000",
-            ]
-        )
+        cmd = [
+            "issue",
+            "list",
+            "--repo",
+            self.repo,
+            "--state",
+            state,
+            "--json",
+            "number,labels,body,state",
+            "--limit",
+            "1000",
+        ]
+        if label is not None:
+            cmd.extend(["--label", label])
+        result = self._run_gh(cmd)
         issues = json.loads(result.stdout or "[]")
         for issue in issues:
             issue["labels"] = [
@@ -332,6 +377,68 @@ class GitHubBackend(Projection):
                 if isinstance(label, dict)
             ]
         return issues
+
+    def _list_issues_retry(
+        self, state: str = "all", label: str | None = None
+    ) -> list[dict[str, Any]]:
+        """List issues with retry/backoff for transient forge failures.
+
+        This is the fail-closed read path used by sprint intake (R-14).
+        """
+        cmd = [
+            "issue",
+            "list",
+            "--repo",
+            self.repo,
+            "--state",
+            state,
+            "--json",
+            "number,labels,body,state",
+            "--limit",
+            "1000",
+        ]
+        if label is not None:
+            cmd.extend(["--label", label])
+        result = self._run_gh_with_retry(cmd)
+        issues = json.loads(result.stdout or "[]")
+        for issue in issues:
+            issue["labels"] = [
+                label["name"]
+                for label in issue.get("labels", [])
+                if isinstance(label, dict)
+            ]
+        return issues
+
+    def find_sprint_candidates(self) -> list[dict[str, Any]]:
+        """Return open issues carrying the ``aet:sprint`` intent label.
+
+        Each candidate maps to the task id embedded in the issue body via the
+        ``<!-- aet-id: ... -->`` marker. This is a forge *read* that gates
+        admission; failures are raised so the caller can halt (R-14).
+        """
+        self._ensure_labels_once()
+        label = f"{self.label_prefix}:sprint"
+        issues = self._list_issues_retry(state="open", label=label)
+        candidates = []
+        for issue in issues:
+            task_id = self._extract_task_id(issue.get("body", ""))
+            if task_id:
+                candidates.append(
+                    {
+                        "task_id": task_id,
+                        "issue_number": issue["number"],
+                        "body": issue.get("body", ""),
+                    }
+                )
+        return candidates
+
+    @staticmethod
+    def _extract_task_id(body: str) -> str | None:
+        """Return the ``aet-id`` marker value from an issue body, if present."""
+        match = re.search(r"<!--\s*aet-id:\s*([^>]+?)\s*-->", body)
+        if match:
+            return match.group(1).strip()
+        return None
 
     def _set_issue_labels(
         self, issue_number: int, state: str, current_labels: list[str] | None = None

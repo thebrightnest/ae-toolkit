@@ -1,3 +1,7 @@
+---
+subject: projection-axis
+---
+
 # GitHub Issues Is a Projection, Not a Backend
 
 ## Status
@@ -21,7 +25,7 @@ Treating GitHub Issues as a backend therefore described a capability that did no
 Projections are an axis **orthogonal to storage**. No configuration value may name a forge as a source of truth.
 
 1. **`task_backend` selects only storage.** Valid values name durable storage implementations (e.g., `json`, `git-refs`). Values such as `github` or `both` are removed.
-2. **A projection is a one-way mirror.** It receives state changes from the single state writer and updates an external surface (issue labels, issue state). It never writes back into AET state and is never read by AET commands.
+2. **A projection is a one-way mirror.** It receives state changes from the single state writer and updates an external surface (issue labels, issue state). It never writes back into AET state. A forge is never read for *state*; reading human-declared *intent* (for example, an `aet:sprint` label that gates sprint intake) is a distinct, permitted operation. The source-of-truth fence is unchanged.
 3. **Projection config lives under a separate `projections` key.** The config shape is a list so additional forge types can be added without touching storage configuration.
 4. **GitHub Issues is the first projection type.** It is optional, opt-in, and creates/updates issues keyed by plan id.
 5. **AET remains the only writer to GitHub Issues.** Issues are created and mutated only by the projection dispatcher; humans do not file, relabel, or close them by hand as part of the workflow.

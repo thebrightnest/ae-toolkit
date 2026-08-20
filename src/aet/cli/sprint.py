@@ -19,6 +19,7 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_validate  # noqa: E402
 from aet.backends.factory import create_backend, resolve_config  # noqa: E402
+from aet.backends.github_backend import BackendError, GitHubBackend  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 from aet.plan_parser import (  # noqa: E402
     new_task_from_plan,
@@ -166,6 +167,142 @@ def _add(args: argparse.Namespace) -> int:
     return 0
 
 
+def _intake(args: argparse.Namespace) -> int:
+    """Read ``aet:sprint`` issues from GitHub and admit valid candidates."""
+    plans_dir = Path(args.plans_dir)
+    backend = create_backend(
+        config_path=args.config,
+        queue_file=args.queue_file,
+        history_file=args.history_file,
+    )
+    backend.fetch()
+    projections = resolve_projections(resolve_config(args.config))
+
+    try:
+        data = backend.load()
+    except QueueIntegrityError as exc:
+        print(f"⛔ {exc}", file=sys.stderr)
+        backend.close()
+        return 1
+    queue = data["queue"]
+    history = data["history"]
+
+    github = next(
+        (p for p in projections.projections if isinstance(p, GitHubBackend)),
+        None,
+    )
+    if github is None:
+        print(
+            "⚠️  No GitHub projection configured; nothing to intake from the forge.",
+            file=sys.stderr,
+        )
+        backend.close()
+        return 0
+
+    try:
+        candidates = github.find_sprint_candidates()
+    except BackendError as exc:
+        print(f"⛔ Forge read failed; halting intake: {exc}", file=sys.stderr)
+        backend.close()
+        return 1
+
+    admitted: list[tuple[str, int]] = []
+    refused: list[tuple[str, int, str]] = []
+    skipped: list[tuple[str, int, str]] = []
+
+    settled_ids = {t.get("id") for t in history if t.get("id")}
+    live_ids = {t.get("id") for t in queue if t.get("id")}
+
+    for candidate in candidates:
+        task_id = candidate["task_id"]
+        issue_number = candidate["issue_number"]
+
+        if task_id in live_ids:
+            skipped.append((task_id, issue_number, "already in queue"))
+            continue
+        if task_id in settled_ids:
+            skipped.append((task_id, issue_number, "already settled"))
+            continue
+
+        plan_file = resolve_plan(task_id, plans_dir)
+        if plan_file is None or not plan_file.exists():
+            refused.append((task_id, issue_number, "plan file not found"))
+            continue
+
+        stage = stage_from_plan(plan_file)
+        if stage != "plan-approved":
+            refused.append(
+                (task_id, issue_number, f"plan stage is '{stage or 'unknown'}'")
+            )
+            continue
+
+        task = new_task_from_plan(plan_file, live_tasks=queue)
+        if task["state"] == "blocked":
+            blockers = [
+                b
+                for b in task.get("blocked_by", [])
+                if b in live_ids
+                and next(
+                    (
+                        t
+                        for t in queue
+                        if t.get("id") == b
+                        and t.get("state") in {"merged", "abandoned"}
+                    ),
+                    None,
+                )
+                is None
+            ]
+            reason = f"blocked by {', '.join(blockers)}" if blockers else "blocked"
+            refused.append((task_id, issue_number, reason))
+            continue
+
+        queue.append(task)
+        admitted.append((task_id, issue_number))
+
+    if admitted:
+        build_blocks(queue)
+
+        if not lease_guard(args.queue_file, force=args.force):
+            backend.close()
+            return 1
+
+        backend.save(queue)
+        backend.push()
+
+        ledger_path = resolve_ledger_path()
+        ledger = Ledger(ledger_path)
+        for task_id, issue_number in admitted:
+            task = next((t for t in queue if t.get("id") == task_id), None)
+            if task is None:
+                continue
+            plan_file = Path(task["plan_file"])
+            plan_hash = hashlib.sha256(plan_file.read_bytes()).hexdigest()
+            ledger.write_event(
+                source="sprint-intake",
+                task=task_id,
+                kind="cut",
+                ref=plan_hash,
+                ref_kind="plan-hash",
+            )
+            task["github_issue_number"] = issue_number
+            projections.on_add(task, is_new=False)
+
+    backend.close()
+
+    for task_id, issue_number in admitted:
+        print(f"✓ Admitted {task_id} (#{issue_number}) to the sprint.")
+    for task_id, issue_number, reason in refused:
+        print(f"⛔ Refused {task_id} (#{issue_number}): {reason}.", file=sys.stderr)
+    for task_id, issue_number, reason in skipped:
+        print(f"⚠️  Skipped {task_id} (#{issue_number}): {reason}.")
+
+    if not admitted and not refused and not skipped:
+        print("✓ No sprint candidates to intake.")
+
+    return 0
+
+
 app = typer.Typer()
 
 
@@ -200,6 +337,38 @@ def add(
         force=force,
     )
     rc = _add(args)
+    raise typer.Exit(rc)
+
+
+@app.command("intake")
+def intake(
+    queue_file: str = typer.Option(
+        ".agents/work-queue.json", "--queue-file", help="Path to work-queue.json"
+    ),
+    history_file: str = typer.Option(
+        ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"
+    ),
+    plans_dir: str = typer.Option(
+        "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
+    ),
+    config: str = typer.Option(
+        ".agents/aet-config.json", "--config", help="Path to AET backend configuration"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override a live run lease and mutate the queue anyway (with a warning).",
+    ),
+) -> None:
+    """Read aet:sprint issues from GitHub and admit valid candidates."""
+    args = argparse.Namespace(
+        queue_file=queue_file,
+        history_file=history_file,
+        plans_dir=plans_dir,
+        config=config,
+        force=force,
+    )
+    rc = _intake(args)
     raise typer.Exit(rc)
 
 

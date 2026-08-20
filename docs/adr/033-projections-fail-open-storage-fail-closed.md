@@ -1,3 +1,7 @@
+---
+subject: projection-failure-mode
+---
+
 # Projections Fail Open; Storage Fails Closed
 
 ## Status
@@ -19,8 +23,9 @@ Projection writes **fail open**; storage writes remain **fail closed**. This is 
 1. **The projection dispatcher fans out to configured projections after a successful state write.** It never runs before the state write, and it never participates in the state-write transaction.
 2. **A projection failure is caught, warned, and swallowed.** The command exits zero. The warning names the projection type, the operation, and the cause.
 3. **Storage failures remain fail-closed.** A git-refs write failure, JSON write failure, or any other storage failure still raises and fails the command. Fail-open does not leak into storage.
-4. **Drift is discoverable.** The `aet reconcile` command reports projection drift (missing issue, wrong label, hand-closed issue) and is dry-run by default.
-5. **The dispatcher enforces the boundary, not individual projection implementations.** Projection backends raise normally on failure; the dispatcher is responsible for catching and warning. This prevents any single projection from accidentally failing a command or, conversely, from silently ignoring its own errors.
+4. **A forge read that gates admission fails closed.** A read whose result decides whether work enters the system (for example, enumerating `aet:sprint` issues to choose sprint members) is neither a projection write nor a storage write. It retries with backoff and then halts, so a forge outage, auth failure, or rate limit never reads as "nothing is blocking."
+5. **Drift is discoverable.** The `aet reconcile` command reports projection drift (missing issue, wrong label, hand-closed issue) and is dry-run by default.
+6. **The dispatcher enforces the boundary, not individual projection implementations.** Projection backends raise normally on failure; the dispatcher is responsible for catching and warning. This prevents any single projection from accidentally failing a command or, conversely, from silently ignoring its own errors.
 
 ## Consequences
 

@@ -602,6 +602,7 @@ Sprint queue management.
 ### Subcommands
 
 - `add`: Promote an approved plan into the sprint.
+- `intake`: Read aet:sprint issues from GitHub and admit valid candidates.
 
 ## `aet sprint add`
 
@@ -610,6 +611,18 @@ Promote an approved plan into the sprint.
 ### Options
 
 - `target` *str* — Plan file path or task ID to promote (required)
+- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
+- `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
+- `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
+- `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
+
+## `aet sprint intake`
+
+Read aet:sprint issues from GitHub and admit valid candidates.
+
+### Options
+
 - `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 - `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
