@@ -30,6 +30,9 @@ aet = "aet.cli:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+markers = [
+    "real_ledger_resolution: opt out of the _isolate_ledger fixture; for tests that exercise resolve_ledger_path itself",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aet"]

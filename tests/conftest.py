@@ -65,3 +65,33 @@ def _isolate_aet_bin_dir(monkeypatch, tmp_path):
     inherited by subprocesses, so one autouse fixture covers both.
     """
     monkeypatch.setenv("AET_BIN_DIR", str(tmp_path / "aet-bin"))
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ledger(request, monkeypatch, tmp_path):
+    """Point the provenance ledger at a per-test tmp dir.
+
+    Closure paths (``aet state close``/``record-merge``, desk merge) write a
+    ``land`` event through ``resolve_ledger_path``. Without isolation those
+    writes land in the developer's real ``.agents/ledger.jsonl`` — the
+    append-only provenance store — and cannot be removed afterwards without
+    rewriting a file whose whole contract is that nothing rewrites it.
+
+    ``_resolve_ledger_repo_root`` is patched as well: several tests run code
+    in-process under ``patch.dict(os.environ, ..., clear=True)``, which wipes
+    the env var; without the module-level patch those calls fall back to git
+    discovery and find the real repository. Tests needing an explicit ledger
+    override ``AET_LEDGER_PATH`` themselves, and tests of the resolver itself
+    opt out with ``@pytest.mark.real_ledger_resolution``.
+    """
+    if request.node.get_closest_marker("real_ledger_resolution"):
+        # The resolver's own tests drive _resolve_ledger_repo_root directly and
+        # assert on the unset-env path; isolating them would test the fixture.
+        return
+
+    from aet import ledger
+
+    root = tmp_path / "ledger-root"
+    (root / ".agents").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("AET_LEDGER_PATH", str(root / ".agents" / "ledger.jsonl"))
+    monkeypatch.setattr(ledger, "_resolve_ledger_repo_root", lambda: root)

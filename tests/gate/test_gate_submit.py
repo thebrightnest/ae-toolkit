@@ -865,6 +865,12 @@ class TestGateDispatcherRouting(unittest.TestCase):
                 "AET_EVIDENCE_PATH": str(dest),
                 "AET_BIN_DIR": str(tmp / "aet-bin"),
                 "AET_TELEMETRY_ARCHIVE_DIR": str(tmp / "telemetry"),
+                # The env is built explicitly, so conftest's _isolate_ledger
+                # cannot reach this child: a monkeypatched module attribute does
+                # not cross a process boundary, and an env var not listed here is
+                # not inherited. Without this the child discovers the real
+                # repository and appends to its provenance ledger.
+                "AET_LEDGER_PATH": str(tmp / "ledger.jsonl"),
             }
             result = subprocess.run(
                 [

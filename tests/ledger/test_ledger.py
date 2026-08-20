@@ -355,6 +355,7 @@ def test_verify_is_empty_for_a_missing_ledger(tmp_path: Path) -> None:
 # --- Path resolution: one canonical ledger location per repo ---
 
 
+@pytest.mark.real_ledger_resolution
 def test_resolve_ledger_path_defaults_to_repo_root(monkeypatch, tmp_path: Path) -> None:
     """With no env overrides, the ledger resolves to repo-root/.agents/ledger.jsonl."""
     monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
@@ -371,6 +372,7 @@ def test_resolve_ledger_path_defaults_to_repo_root(monkeypatch, tmp_path: Path) 
     assert resolve_ledger_path() == repo_root / ".agents" / "ledger.jsonl"
 
 
+@pytest.mark.real_ledger_resolution
 def test_resolve_ledger_path_ignores_aet_repo_root(monkeypatch, tmp_path: Path) -> None:
     """AET_REPO_ROOT must not redirect the ledger to another checkout."""
     monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
@@ -387,6 +389,7 @@ def test_resolve_ledger_path_ignores_aet_repo_root(monkeypatch, tmp_path: Path) 
     assert resolve_ledger_path() == repo_root / ".agents" / "ledger.jsonl"
 
 
+@pytest.mark.real_ledger_resolution
 def test_resolve_ledger_path_respects_aet_ledger_path(monkeypatch, tmp_path: Path) -> None:
     """AET_LEDGER_PATH wins over repo-root derivation."""
     custom = tmp_path / "custom-ledger.jsonl"
@@ -408,6 +411,7 @@ def _stub_rev_parse(monkeypatch, stdout: str) -> None:
     monkeypatch.setattr(ledger_module.subprocess, "run", lambda *a, **k: _Result(stdout))
 
 
+@pytest.mark.real_ledger_resolution
 def test_resolve_ledger_path_rejects_nonexistent_root(monkeypatch, tmp_path: Path) -> None:
     """A rev-parse answer that is not a real directory fails loudly, not silently.
 
@@ -424,6 +428,7 @@ def test_resolve_ledger_path_rejects_nonexistent_root(monkeypatch, tmp_path: Pat
     assert not (tmp_path / "abc123def456").exists()
 
 
+@pytest.mark.real_ledger_resolution
 def test_resolve_ledger_path_rejects_empty_root(monkeypatch, tmp_path: Path) -> None:
     """Empty rev-parse output must not silently resolve to the cwd."""
     monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
@@ -434,6 +439,7 @@ def test_resolve_ledger_path_rejects_empty_root(monkeypatch, tmp_path: Path) -> 
         resolve_ledger_path()
 
 
+@pytest.mark.real_ledger_resolution
 def test_resolve_ledger_path_falls_back_to_cwd_without_git(monkeypatch, tmp_path: Path) -> None:
     """A missing git binary still falls back to the cwd; only bad output raises."""
     monkeypatch.delenv("AET_LEDGER_PATH", raising=False)
