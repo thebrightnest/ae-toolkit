@@ -285,6 +285,27 @@ All eight implementation tasks landed; merge verification remains owned by `aet-
 
 ---
 
+## Divergence Summary — owb-10-sprint-label-intake
+
+*Recorded: 2026-08-20 — Branch: owb-10-sprint-label-intake*
+
+### Changed from plan
+
+- **Task 5 — where single-enumeration lives**: the plan named `src/aet/projections/dispatcher.py` as a file to modify. That file was not touched. The one-enumeration-per-run guarantee is implemented in `src/aet/backends/github_backend.py` (`find_sprint_candidates` calls `_list_issues_retry` once), and the dispatcher remains uninvolved because the read path is not a projection write.
+- **Task 6 — retry location**: the retry/backoff logic also lives in `src/aet/backends/github_backend.py` (`_run_gh_with_retry`) rather than in the dispatcher.
+
+### Added (unplanned)
+
+- **`docs/CLI.md` regenerated** to document the new `aet sprint intake` subcommand.
+- **`tests/cli/test_sprint_intake.py` and `tests/cli/test_build_parsers.py` updates**: the plan listed `tests/queue/` generically; command-level coverage lives under `tests/cli/`, with parser roster assertions updated.
+- **`tests/queue/test_queue_guard.py` adjustment**: existing lease-guard tests now invoke `sprint.main(["add", ...])` to match the subcommand dispatch shape, keeping the guard tests passing.
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
+---
+
 *Stage: synced*
 
 *Next step: run `aet-ship`*

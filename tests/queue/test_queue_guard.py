@@ -104,6 +104,7 @@ def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys)
 
     sprint = _load_bin("sprint")
     rc = sprint.main([
+        "add",
         str(plan),
         "--queue-file", str(qf),
         "--history-file", str(hf),
@@ -160,6 +161,7 @@ def test_force_overrides_lease_with_warning(tmp_path, monkeypatch, capsys):
 
     sprint = _load_bin("sprint")
     rc = sprint.main([
+        "add",
         str(plan),
         "--queue-file", str(qf),
         "--history-file", str(hf),
@@ -412,8 +414,6 @@ def test_add_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
     plan = _write_plan(plans_dir, "t2")
     monkeypatch.chdir(tmp_path)
 
-    rc = sprint.main([plan.stem, "--queue-file", str(qf), "--plans-dir", str(plans_dir)])
+    rc = sprint.main(["add", plan.stem, "--queue-file", str(qf), "--plans-dir", str(plans_dir)])
 
     _assert_clean_refusal(rc, capsys.readouterr().err)
-
-
