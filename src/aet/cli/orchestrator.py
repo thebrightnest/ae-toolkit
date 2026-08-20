@@ -93,15 +93,16 @@ from aet.verifier import (  # noqa: E402
 from aet.workflow import Workflow, WorkflowError, WorkflowStage, load_workflow  # noqa: E402
 from aet.worktree import (  # noqa: E402
     WorktreeBlockedError,
+    _format_paths,
     check_base_hygiene,
     copy_untracked_files,
     create_worktree,
     delete_local_branch,
     prepare_worktree_dependencies,
     push_branch,
-    remove_worktree,
     render_task_plan,
     run_git_plain,
+    teardown_worktree,
 )
 
 # Global shutdown flag
@@ -2729,6 +2730,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     last_heartbeat = time.monotonic()
     summary_written = False
     leftover_report: dict[str, int] = {}
+    teardown_leftovers: list[str] = []
     task_timeout = getattr(args, "task_timeout", 3600)
     heartbeat_interval = getattr(args, "heartbeat_interval", 60)
 
@@ -2751,7 +2753,11 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 exit_code=exit_code,
                 task_ids=task_ids,
                 final_stage=None,
-                leftover=leftover_report or None,
+                leftover=(
+                    {**leftover_report, "teardown": len(teardown_leftovers)}
+                    if leftover_report or teardown_leftovers
+                    else None
+                ),
                 total_tokens=total_tokens,
                 total_cost_usd=total_cost_usd,
             )
@@ -2763,6 +2769,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         print(f"   Failed:    {failures}")
         if leftover_report:
             print(f"   Leftover:  {format_leftover_report(leftover_report)}")
+        if teardown_leftovers:
+            print(f"   Teardown failures: {', '.join(teardown_leftovers)}")
         print(f"   Telemetry: {logger.run_dir}")
 
     def _cleanup_task(task_id: str, ret: int) -> None:
@@ -2810,7 +2818,16 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     report = breaker.systemic_report(systemic_tally)
                     print(f"⛔ {report}")
                     stop_spawn = True
-        remove_worktree(repo_root, task_id, base_branch)
+        teardown = teardown_worktree(repo_root, task_id, base_branch)
+        if not teardown["removed"]:
+            obstruction_text = (
+                _format_paths(teardown.get("obstructions", []))
+                or teardown.get("reason", "unknown")
+            )
+            print(
+                f"   ⚠️  Worktree teardown failed for {task_id}: {obstruction_text}"
+            )
+            teardown_leftovers.append(task_id)
 
     try:
         acquire_lease(queue_file, logger.run_id)

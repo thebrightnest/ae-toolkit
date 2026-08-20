@@ -935,6 +935,57 @@ class TestCopyUntrackedDocs(unittest.TestCase):
             )
 
 
+class TestTeardownWorktree(unittest.TestCase):
+    """Teardown cleanup for AET-generated deferred files plus refusal on real work."""
+
+    def test_teardown_removes_worktree_with_deferred_untracked_plan(self):
+        """An untracked deferred plan file is cleaned so removal succeeds."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
+            plan = Path(worktree_dir, "docs", "plans", "task-001.md")
+            plan.parent.mkdir(parents=True, exist_ok=True)
+            plan.write_text("plan", encoding="utf-8")
+
+            result = worktree.teardown_worktree(repo_root, "task-001", "origin/main")
+
+            self.assertTrue(result["removed"], result)
+            self.assertFalse(os.path.isdir(worktree_dir))
+
+    def test_teardown_refuses_non_deferred_untracked_file(self):
+        """A non-deferred untracked file is real work and blocks teardown."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
+            Path(worktree_dir, "src").mkdir(parents=True, exist_ok=True)
+            Path(worktree_dir, "src", "code.py").write_text("code", encoding="utf-8")
+
+            result = worktree.teardown_worktree(repo_root, "task-001", "origin/main")
+
+            self.assertFalse(result["removed"])
+            self.assertTrue(os.path.isdir(worktree_dir))
+            self.assertIn("src/code.py", result["obstructions"])
+
+    def test_teardown_refuses_tracked_non_deferred_change(self):
+        """A committed non-deferred change is real work and blocks teardown."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
+            Path(worktree_dir, "src").mkdir(parents=True, exist_ok=True)
+            Path(worktree_dir, "src", "code.py").write_text("code", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", worktree_dir, "commit", "-q", "-m", "implement"],
+                check=True,
+            )
+
+            result = worktree.teardown_worktree(repo_root, "task-001", "origin/main")
+
+            self.assertFalse(result["removed"])
+            self.assertTrue(os.path.isdir(worktree_dir))
+            self.assertIn("src/code.py", result["obstructions"])
+
+
 class TestRemoveWorktreeClassification(unittest.TestCase):
     def test_removes_plan_only_worktree(self):
         """A worktree whose only commit touches a deferred path is removed."""

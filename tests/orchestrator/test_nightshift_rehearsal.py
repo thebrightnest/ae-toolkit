@@ -220,19 +220,19 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Run the one shift the whole class asserts against."""
-        _repo_root, queue_file, args, adapter = cls._setup_repo()
+        cls.repo_root, queue_file, args, adapter = cls._setup_repo()
         cls.queue_file = queue_file
         _rc, cls.run_out = cls._run_batch(args, adapter, timeout=300)
 
     @staticmethod
     def _run_batch(args, adapter, timeout: float = 300):
-        """Run run_batch in a thread; return (rc, stdout)."""
+        """Run run_batch in a thread; return (rc, combined stdout/stderr)."""
         result = {"rc": None, "out": ""}
         orchestrator._shutdown_requested = False
 
         def target():
             buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
                 result["rc"] = orchestrator.run_batch(args, adapter)
             result["out"] = buf.getvalue()
 
@@ -359,6 +359,26 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
             self.assertIsNotNone(cost, f"{task_id} missing cost on ledger")
             self.assertIn("tokens", cost)
             self.assertIn("usd", cost)
+
+    def test_no_fatal_teardown_output(self):
+        """A failing worktree teardown is captured, not emitted as a git fatal line."""
+        self.assertNotIn(
+            "fatal:",
+            self.run_out.lower(),
+            f"git fatal teardown line leaked to output:\n{self.run_out}",
+        )
+
+    def test_incident_worktrees_are_removed(self):
+        """Incident task worktrees are torn down instead of left on disk."""
+        for task_id in (
+            "nightshift-deterministic-failure",
+            "nightshift-stall",
+        ):
+            worktree_dir = Path(self.repo_root, ".worktrees", task_id)
+            self.assertFalse(
+                worktree_dir.exists(),
+                f"worktree for {task_id} was not removed: {worktree_dir}",
+            )
 
 
 if __name__ == "__main__":
