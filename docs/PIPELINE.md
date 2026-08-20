@@ -46,6 +46,14 @@ Validation ownership is split by stage so the pipeline stays fast without sacrif
 
 This split removes redundant full-suite runs during implementation while keeping QA as the sole, unconditional gate on the complete validation surface.
 
+### Single-Run Validation Cache
+
+Within one orchestration run, `aet-implement` may skip a targeted validation command when it has already run against the same file-hash snapshot. The cache is keyed by the validation command plus a SHA-256 hash of `src/`, `tests/`, `pyproject.toml`, and any lockfile (`uv.lock`, `poetry.lock`, `Pipfile.lock`, `requirements.lock`). If any tracked file changes, the next lookup misses and the command runs again.
+
+- The cache lives in the run-scoped metadata directory (`.agents/runs/<run-id>/validation-cache.json`), not in the worktree.
+- A fresh `aet run` uses a new `run-id`, so cache entries never persist across runs.
+- `aet-qa` is intentionally unaffected: it always runs the full suite unconditionally.
+
 ## Symmetric Routing Guards
 
 Entry-point skills enforce symmetric guards to prevent misrouted work:
