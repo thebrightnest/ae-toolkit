@@ -217,5 +217,5 @@ fail closed, consistent with ADR-033 §3.
 
 ---
 
-_Stage: scope-validated_
-_Next step: run `aet-work`_
+_Stage: synced_
+_Next step: run `aet-ship`_
