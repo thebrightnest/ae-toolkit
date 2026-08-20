@@ -292,29 +292,41 @@ def _record_stage(task: dict, stage: str, repo_root: str) -> bool:
     queue).
     """
     task_id = task.get("id")
-    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
-    if task_id:
-        aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
-        result = subprocess.run(
-            [
-                sys.executable,
-                aet_state_bin,
-                "set-stage",
-                task_id,
-                stage,
-                queue_file,
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            task["stage"] = stage
-            return True
-        print(f"   ⚠️  Could not set stage for {task_id}: {result.stderr.strip()}")
-        return False
+    if not task_id:
+        task["stage"] = stage
+        return True
 
-    task["stage"] = stage
-    return True
+    # git-refs backend: a tracked task has a ref under refs/aet/tasks/.
+    task_ref = f"refs/aet/tasks/{task_id}"
+    ref_check = subprocess.run(
+        ["git", "-C", repo_root, "rev-parse", "--verify", "-q", task_ref],
+        capture_output=True,
+        text=True,
+    )
+    if ref_check.returncode != 0:
+        # Task is not tracked in the queue; update in-memory only.
+        task["stage"] = stage
+        return True
+
+    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+    aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+    result = subprocess.run(
+        [
+            sys.executable,
+            aet_state_bin,
+            "set-stage",
+            task_id,
+            stage,
+            queue_file,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        task["stage"] = stage
+        return True
+    print(f"   ⚠️  Could not set stage for {task_id}: {result.stderr.strip()}")
+    return False
 
 
 def enforce_base_hygiene(
