@@ -1,0 +1,221 @@
+# PRD: The Record Is the Plan — Retire Post-Intake Plan-File Reads
+
+## Overview
+
+R-19 (`open-work-board-prd.md:47`) made the task record carry the plan's spec
+"rather than a path to a file", and the glossary settled it: "after R-19 no plan
+file need exist on the machine that runs it". The producer side was migrated —
+`render_task_plan` writes the worktree plan from the record, `derive_queue`
+accepts specs. Several **consumers were not**, and they still resolve
+`plan_file` as a filesystem path.
+
+Because a missing file is indistinguishable from "nothing to do" in every one of
+those consumers, all of them fail open and silently. The measured damage:
+
+| Consumer | Symptom | Evidence |
+| --- | --- | --- |
+| `aet ship` ×5 entry points | Refuses to run: `⛔ Plan not found … Pass the full plan path` | `docs/bugs/20260819-…` (open); `ship.py:329,541,799,886,1113` |
+| R-5 plan archive | `archived_to: null` on every post-R-19 `land` event | 56 land events; every success is pre-R-19 or a test fixture |
+| `aet metrics` declared size | `None` for **368 of 368** settled records | `metrics.py:338` → `except OSError: return None` |
+
+This PRD does not add a fallback. A fallback would preserve the two
+representations that caused the divergence. It completes the R-19 migration by
+making the record the only post-intake source, and deletes the file-reading
+paths.
+
+The lifecycle has one source of truth per phase and one explicit handoff:
+
+1. **Author** — `aet-plan` writes `docs/plans/<id>.md`. The file is the artifact.
+2. **Intake** — `aet sprint add` ingests it into the record's `spec`. **Handoff.**
+3. **Execute, ship, close, measure** — the record is the source. Nothing reads
+   the file.
+
+## Goals
+
+- Every post-intake consumer reads the spec from the task record; none resolves
+  `plan_file` as a path.
+- `aet ship <task-id>` works for a task whose plan file does not exist, and is
+  idempotent against a settled task.
+- Declared size is recoverable for settled records — currently 0 of 368.
+- `docs/plans/archive/` no longer exists, and no code or doc refers to it.
+- Exactly one accepted argument form for the ship family.
+
+## Non-Goals
+
+- Changing the authoring phase. `aet-plan` keeps writing `docs/plans/<id>.md`,
+  and `aet sprint add` keeps reading it. The handoff point is not moving.
+- Changing how worktree plans are rendered (`render_task_plan` is already correct).
+- Test-state isolation. Tests write `t1`/`demo`/`blocker` records with pytest
+  tmp paths into the real `.agents/ledger.jsonl`; that is a separate defect and
+  belongs in `aet-bug-report`.
+- Reconstructing specs for settled records whose plan exists in no reachable
+  revision. R-6 below reports them; it does not invent them.
+
+## Requirements
+
+- **R-1**: Every post-intake consumer of `plan_file`-as-a-path is enumerated in
+  writing, with its replacement spec field named. The audit is the deliverable;
+  the three known consumers are its floor, not its scope.
+- **R-2**: The ship family resolves a **task id** to a task record — live queue
+  first, then sealed history — and reads `spec.frontmatter`, `spec.tasks`,
+  `spec.title`, and `spec.body`. `plan_parser.resolve_plan_arg` is removed from
+  all five entry points.
+- **R-3**: `aet ship` accepts a task id only. The `.md` path form is removed;
+  board membership via `aet sprint add` is the single entry point.
+- **R-4**: A ship command naming a settled task reports the recorded merge
+  commit and exits 0, matching `aet state record-merge`'s existing idempotent
+  behaviour. This is a state precondition on one record, not a second
+  resolution path.
+- **R-5**: `aet metrics` reads declared size from `spec.frontmatter.size` on the
+  settled record. `_resolve_plan_path` and its archive/repo fallback are
+  removed.
+- **R-6**: Settled records are backfilled with their spec **before** anything is
+  deleted, per ADR-058. `spec_backfill.backfill_specs` already accepts a generic
+  record list; it is extended to `work-history.jsonl`. Records whose plan is
+  recoverable from no revision are reported by id, never silently skipped
+  (ADR-059).
+- **R-7**: The R-5 plan archive is retired: `queue.archive_plan_file`, the
+  `~/.aet/<slug>/plans/archive/` location, the `archived_to` land-event field,
+  and `docs/plans/archive/` (264 files) are removed. Removal happens only after
+  R-6 reports full coverage.
+- **R-8**: Skills are audited for the phase model. Every `docs/plans` reference
+  is classified authoring (correct) or post-intake (stale) and corrected —
+  19 files across 12 skills, including `aet-ship/SKILL.md:31`.
+- **R-9**: A consumer that cannot resolve a spec fails closed with the task id
+  named. No consumer treats an absent spec as an empty or default value.
+- **R-10**: `CONTEXT.md`'s glossary states the post-intake model. The **Task**,
+  **Plan File**, **Work Queue** and **Settled-ness Authority** entries are
+  corrected to match the code, discharging the obligation
+  `open-work-board-prd.md:161` recorded and did not fulfil.
+
+## User Stories
+
+- As an operator, I want `aet ship merge <task-id>` to work for any task on the
+  board, so that following the ephemeral-plan design does not break the tool
+  meant to ship it (satisfies: R-2, R-3)
+- As an operator re-running a command after a merge, I want to be told the task
+  already merged and at which commit, rather than seeing an error I cannot act
+  on (satisfies: R-4)
+- As an operator reading `aet metrics`, I want declared-vs-delivered size to
+  reflect all settled work, so ADR-046 calibration is not computed from zero
+  declared sizes (satisfies: R-5, R-6)
+- As a maintainer, I want one place that answers "where does a task's spec come
+  from", so the next consumer added does not re-derive the wrong answer
+  (satisfies: R-1, R-9)
+
+## Acceptance Criteria
+
+- [ ] `aet ship gate <task-id>` succeeds for a task whose record carries a spec
+      and whose `docs/plans/<id>.md` does not exist (satisfies: R-2)
+- [ ] `aet ship merge <settled-id>` prints the recorded merge commit and exits 0
+      (satisfies: R-4)
+- [ ] `grep -rn 'resolve_plan_arg' src/` returns no hits outside its removal
+      commit (satisfies: R-2, R-3)
+- [ ] `aet ship <path>.md` is rejected with a message naming `aet sprint add`
+      as the entry point (satisfies: R-3)
+- [ ] `aet metrics --json` reports a non-null declared size for settled records
+      carrying a spec; the count rises from 0 (satisfies: R-5)
+- [ ] `aet state backfill-specs --include-settled --apply` reports coverage for
+      `work-history.jsonl` and names every unrecoverable record (satisfies: R-6)
+- [ ] `docs/plans/archive/` is absent and `grep -rn 'plans/archive'` returns no
+      hits in `src/`, `skills/`, or `docs/` (satisfies: R-7)
+- [ ] The audit document lists every post-intake `plan_file` consumer with its
+      replacement field (satisfies: R-1)
+- [ ] No skill instructs an agent to read or pass a plan path after intake
+      (satisfies: R-8)
+- [ ] `CONTEXT.md` no longer defines a Task as a plan file or the Plan File as
+      the source of truth for intent, and the Settled-ness Authority entry names
+      code that exists (satisfies: R-10)
+
+## Technical Notes
+
+**The correct pattern already exists in the codebase.** `aet_state.py:1253-1275`
+(`cmd_record_merge`) loads the task by id from the queue, falls back to the
+sealed record in `work-history.jsonl`, and handles the settled case
+idempotently. Its comment cites R-4 and R-19 by name. R-2 and R-4 extract that
+lookup into one shared helper and point ship at it — this is not a new
+abstraction, it is deduplicating an existing correct one.
+
+**Every ship consumer wants a spec field, not a file.** Traced:
+`_work_class_from_plan` → `spec.frontmatter.work_class`; `_unchecked_tasks` and
+`_plan_task_count` → `spec.tasks`; `_extract_prd_link` → `spec.body`;
+`parse_frontmatter(...).get("id")` → `spec.frontmatter.id`; `title_from_plan` →
+`spec.title`. The sealed record carries exactly `body`, `frontmatter`, `tasks`,
+`title`. Nothing in ship passes the plan to a subprocess, so no render is needed.
+
+**Three pieces of accidental complexity delete themselves**, which is the signal
+this removes a layer rather than adding one:
+
+- `_task_id_from_plan` (`ship.py:103`) round-trips id → path → filename stem →
+  id, existing only because the id is discarded at the front door.
+- `_scope_audit` excludes the plan file from the changed-paths diff
+  (`ship.py:582`) — dead post-R-19, the plan is not in the diff.
+- `_build_pr_body` and `_generate_changelog_entry` emit `Plan: [name](path)`
+  links to a file R-19 says need not exist. Every PR body carries a dead link.
+
+**R-5 is half-landed, not merely broken.** `open-work-board-prd.md:45` requires
+"a one-time copy of the 264 legacy files so historical metrics survive without a
+second read path". That migration never ran: `~/.aet/` contains no `plans/`
+directory. Its acceptance criterion (line 107) is still unchecked. This is the
+exact hazard ADR-058 names — populate before removing — so R-6 strictly precedes
+R-7. The 264 files in `docs/plans/archive/` are today the only surviving source
+of declared size for 360 pre-R-19 records; only 8 of 368 settled records carry
+`spec.frontmatter.size`.
+
+**Why the archive is retired rather than repaired.** `metrics.py:339` reads
+exactly one thing from a settled plan: `parse_frontmatter(plan_path)`. The
+record's `spec.frontmatter` carries those fields structurally. A rendered
+archive would be a second serialization of data the record already holds — the
+redundancy this PRD exists to remove.
+
+**Scope is wider than the three known consumers.** Scope validation found
+**19 modules** under `src/` referencing `docs/plans`, including `orchestrator.py`,
+`next.py`, `status.py`, `desk.py`, `sync.py` and `reconcile.py`. Most are
+expected to be authoring-phase and therefore correct, but that cannot be claimed
+without R-1's audit. This is why the three known consumers are the audit's floor
+and not its scope.
+
+**Settled-ness was verified, not assumed.** `CONTEXT.md:43` describes
+`_is_settled_from_authority` in `src/aet/cli/init_queue.py` reading three inputs,
+one of them a plan-file footer that R-19 makes impossible. Neither the function,
+the module, nor the `aet init-queue` command exists. What actually answers "is it
+done?" is the sealed history log: `aet queue sync` reports "skipped (already
+settled)" from `work-history.jsonl`, and its `--plans-dir` option is documented
+"Deprecated and ignored: sync no longer scans the plans directory." The authority
+is already a task record, which is what R-4 and R-7 rest on. `CONTEXT.md` is the
+only thing still describing the old model — hence R-10.
+
+**`is_settled_plan` carries a dead branch.** `plan_parser.py:194` still reads
+`status` frontmatter, which ADR-055 removed from the contract and `plans lint`
+now rejects. Its callers are all phase-1 lint tools and are out of scope here,
+but R-1's audit should record it.
+
+**Failure mode.** These consumers fail open today: `archive_plan_file` returns
+`None` for a missing source, `_declared_size` catches `OSError` and returns
+`None`. Both read as "no data" rather than "broken". R-9 makes the replacement
+fail closed, consistent with ADR-033 §3.
+
+## Decisions Taken at Scope Validation
+
+- **The decision is recorded as ADR-061** (`the-record-is-the-plan-after-intake`),
+  amending ADR-055 and relating to ADR-058 and ADR-059. ADR-055's scope is
+  settled-ness, not read-path authority, so an amendment alone was insufficient.
+- **`archived_to` stays in historical `land` events.** Only new writes stop.
+  Rewriting the ledger to erase a fact that was true when written contradicts
+  ADR-059 and the store's append-only design.
+- **The glossary is corrected in this PRD** (R-10) rather than deferred, because
+  shipping code that contradicts `CONTEXT.md` is how this drift began.
+
+## Open Questions
+
+- Does `aet ship`'s removal of the `.md` form break any documented workflow that
+  ships a plan never added to the board? R-8's skill audit is the place this
+  would surface; if one exists, R-3 needs revisiting before implementation.
+- Does any consumer outside `src/aet/` (panel, reports, external tooling) read
+  `docs/plans/archive/`? R-1's audit must cover the repository, not just the
+  package.
+
+---
+
+_Stage: scope-validated_
+_Next step: run `aet-work`_
