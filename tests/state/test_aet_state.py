@@ -10,7 +10,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet.backends.git_refs_backend import GitRefsBackend
+from tests.state._helpers import (
+    add_bare_origin,
+    init_git_repo,
+    load_git_history,
+    load_git_queue,
+    seed_git_queue,
+)
+
 _AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
+
 _spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
 )
@@ -29,12 +39,17 @@ def _git_mock(responses):
     """Return a mock subprocess.run that answers git commands.
 
     responses maps tuple(git_args) -> (returncode, stdout, stderr).
+    Unknown git commands are delegated to the real subprocess so the
+    git-refs backend can operate on the temporary repository.
     """
+    real_run = subprocess.run
 
     def mock_run(cmd, **kwargs):
         args = tuple(cmd[1:])
-        rc, out, err = responses.get(args, (1, "", ""))
-        return MockResult(rc, out, err)
+        if args in responses:
+            rc, out, err = responses[args]
+            return MockResult(rc, out, err)
+        return real_run(cmd, **kwargs)
 
     return mock_run
 
@@ -43,12 +58,17 @@ def _subprocess_mock(responses):
     """Return a mock subprocess.run that answers git and gh commands.
 
     responses maps tuple(program, *args) -> (returncode, stdout, stderr).
+    Unknown commands are delegated to the real subprocess so the git-refs
+    backend can operate on the temporary repository.
     """
+    real_run = subprocess.run
 
     def mock_run(cmd, **kwargs):
         args = tuple(cmd)
-        rc, out, err = responses.get(args, (1, "", ""))
-        return MockResult(rc, out, err)
+        if args in responses:
+            rc, out, err = responses[args]
+            return MockResult(rc, out, err)
+        return real_run(cmd, **kwargs)
 
     return mock_run
 
@@ -66,80 +86,73 @@ class TestAuditCommand(unittest.TestCase):
 
     def test_audit_reports_no_discrepancies_when_states_match(self):
         """audit reports empty when stored state matches derived state."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
             plan_path = "docs/plans/t1.md"
-            queue = {
-                "tasks": [
-                    {"id": "t1", "state": "planned", "plan_file": plan_path, "branch": None}
-                ]
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [{"id": "t1", "state": "planned", "plan_file": plan_path, "branch": None}],
+            )
+
+            responses = {
+                ("show-ref", "--verify", "--quiet", "refs/heads/None"): (1, "", ""),
             }
-            json.dump(queue, f)
-            queue_path = f.name
 
-        responses = {
-            ("show-ref", "--verify", "--quiet", "refs/heads/None"): (1, "", ""),
-        }
+            args = aet_state.argparse.Namespace(
+                command="audit",
+                queue=str(queue_path),
+                dry_run=False,
+            )
 
-        args = aet_state.argparse.Namespace(
-            command="audit",
-            queue=queue_path,
-            dry_run=False,
-        )
+            with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
+                rc = aet_state.cmd_audit(args)
 
-        with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
-            rc = aet_state.cmd_audit(args)
-
-        self.assertEqual(rc, 0)
+            self.assertEqual(rc, 0)
 
     def test_audit_reports_discrepancy_without_mutating(self):
         """audit reports stored-vs-git discrepancies and never mutates the queue."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
             plan_path = "docs/plans/t1.md"
-            queue = {
-                "tasks": [
-                    {"id": "t1", "state": "ready", "plan_file": plan_path, "branch": "feat-001"}
-                ]
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [{"id": "t1", "state": "ready", "plan_file": plan_path, "branch": "feat-001"}],
+            )
+
+            responses = {
+                ("show-ref", "--verify", "--quiet", "refs/heads/feat-001"): (0, "", ""),
+                ("merge-base", "--is-ancestor", "feat-001", "origin/main"): (1, "", ""),
             }
-            json.dump(queue, f)
-            queue_path = f.name
 
-        responses = {
-            ("show-ref", "--verify", "--quiet", "refs/heads/feat-001"): (0, "", ""),
-            ("merge-base", "--is-ancestor", "feat-001", "origin/main"): (1, "", ""),
-        }
+            args = aet_state.argparse.Namespace(
+                command="audit",
+                queue=str(queue_path),
+                dry_run=False,
+            )
 
-        args = aet_state.argparse.Namespace(
-            command="audit",
-            queue=queue_path,
-            dry_run=False,
-        )
+            with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
+                rc = aet_state.cmd_audit(args)
 
-        with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
-            rc = aet_state.cmd_audit(args)
+            self.assertEqual(rc, 0)
 
-        self.assertEqual(rc, 0)
-
-        with open(queue_path, "r", encoding="utf-8") as f:
-            after = json.load(f)
-        self.assertEqual(after["tasks"][0]["state"], "ready")
+            task = load_git_queue(queue_path)[0]
+            self.assertEqual(task["state"], "ready")
 
 
 class TestRecordMerge(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
-        self.queue_file_path = Path(self.tmpdir.name) / "work-queue.json"
+        self.repo_root = Path(self.tmpdir.name)
+        init_git_repo(self.repo_root)
+        add_bare_origin(self.repo_root)
+        self.queue_file_path, _history_path = seed_git_queue(
+            self.repo_root,
+            [{"id": "t1", "state": "awaiting_merge", "branch": "feat-001"}],
+        )
         self.history_file = str(self.queue_file_path.with_name("work-history.jsonl"))
-        self.queue = {
-            "tasks": [
-                {
-                    "id": "t1",
-                    "state": "awaiting_merge",
-                    "branch": "feat-001",
-                }
-            ]
-        }
-        with open(self.queue_file_path, "w", encoding="utf-8") as f:
-            json.dump(self.queue, f)
+        self.queue = {"tasks": [{"id": "t1", "state": "awaiting_merge", "branch": "feat-001"}]}
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -148,6 +161,14 @@ class TestRecordMerge(unittest.TestCase):
         with open(self.history_file, "r", encoding="utf-8") as f:
             line = f.readline()
         return json.loads(line)
+
+    def _seed_queue(self, tasks):
+        backend = GitRefsBackend(
+            queue_file=str(self.queue_file_path),
+            history_file=self.history_file,
+        )
+        backend.load()
+        backend.save(tasks)
 
     def test_regular_merge(self):
         """A branch tip that is an ancestor of origin/main is recorded and sealed."""
@@ -174,9 +195,7 @@ class TestRecordMerge(unittest.TestCase):
         self.assertEqual(task["merge_strategy"], "regular")
         self.assertIn("merged_at", task)
 
-        with open(self.queue_file_path, "r", encoding="utf-8") as f:
-            live = json.load(f)
-        self.assertEqual(live["tasks"], [])
+        self.assertEqual(load_git_queue(self.queue_file_path), [])
 
     def test_squash_merge_via_gh(self):
         """A squash merge resolved via gh pr view is recorded and sealed."""
@@ -208,9 +227,7 @@ class TestRecordMerge(unittest.TestCase):
         self.assertEqual(task["merge_commit"], "squash_sha")
         self.assertEqual(task["merge_strategy"], "squash")
 
-        with open(str(self.queue_file_path), "r", encoding="utf-8") as f:
-            live = json.load(f)
-        self.assertEqual(live["tasks"], [])
+        self.assertEqual(load_git_queue(self.queue_file_path), [])
 
     def test_diff_fallback(self):
         """When gh fails, a matching diff on origin/main is used and the task is sealed."""
@@ -247,9 +264,7 @@ class TestRecordMerge(unittest.TestCase):
         self.assertEqual(task["merge_commit"], "squash_sha")
         self.assertEqual(task["merge_strategy"], "squash")
 
-        with open(str(self.queue_file_path), "r", encoding="utf-8") as f:
-            live = json.load(f)
-        self.assertEqual(live["tasks"], [])
+        self.assertEqual(load_git_queue(self.queue_file_path), [])
 
     def test_unresolved_leaves_queue_unchanged(self):
         """If no merge commit can be resolved, the command fails without mutating the queue."""
@@ -275,9 +290,7 @@ class TestRecordMerge(unittest.TestCase):
             rc = aet_state.cmd_record_merge(args)
 
         self.assertEqual(rc, 1)
-        with open(str(self.queue_file_path), "r", encoding="utf-8") as f:
-            live = json.load(f)
-        task = live["tasks"][0]
+        task = load_git_queue(self.queue_file_path)[0]
         self.assertEqual(task["state"], "awaiting_merge")
         self.assertNotIn("status", task)
         self.assertNotIn("merge_commit", task)
@@ -297,8 +310,7 @@ class TestRecordMerge(unittest.TestCase):
         )
         plan_path.write_text(original_content, encoding="utf-8")
         self.queue["tasks"][0]["plan_file"] = str(plan_path)
-        with open(self.queue_file_path, "w", encoding="utf-8") as f:
-            json.dump(self.queue, f)
+        self._seed_queue(self.queue["tasks"])
 
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
@@ -324,9 +336,7 @@ class TestRecordMerge(unittest.TestCase):
         self.assertEqual(plan_path.read_text(encoding="utf-8"), original_content)
 
         # Queue task should be sealed to history.
-        with open(self.queue_file_path, "r", encoding="utf-8") as f:
-            live = json.load(f)
-        self.assertEqual(live["tasks"], [])
+        self.assertEqual(load_git_queue(self.queue_file_path), [])
         task = self._load_task()
         self.assertEqual(task["state"], "merged")
 
@@ -345,8 +355,7 @@ class TestRecordMerge(unittest.TestCase):
             encoding="utf-8",
         )
         self.queue["tasks"][0]["plan_file"] = str(plan_path)
-        with open(self.queue_file_path, "w", encoding="utf-8") as f:
-            json.dump(self.queue, f)
+        self._seed_queue(self.queue["tasks"])
 
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
@@ -354,6 +363,8 @@ class TestRecordMerge(unittest.TestCase):
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
         }
         mutations = []
+
+        real_run = subprocess.run
 
         def tracking_mock(cmd, **kwargs):
             args_t = tuple(cmd)
@@ -364,8 +375,10 @@ class TestRecordMerge(unittest.TestCase):
                 ("git", "push"),
             }:
                 mutations.append(args_t)
-            rc, out, err = responses.get(args_t, (1, "", ""))
-            return MockResult(rc, out, err)
+            if args_t in responses:
+                rc, out, err = responses[args_t]
+                return MockResult(rc, out, err)
+            return real_run(cmd, **kwargs)
 
         args = aet_state.argparse.Namespace(
             command="record-merge",
@@ -399,8 +412,7 @@ class TestRecordMerge(unittest.TestCase):
         )
         # Move the task to history so only the sealed retry path is exercised.
         self.queue["tasks"] = []
-        with open(self.queue_file_path, "w", encoding="utf-8") as f:
-            json.dump(self.queue, f)
+        self._seed_queue(self.queue["tasks"])
         with open(self.history_file, "w", encoding="utf-8") as f:
             json.dump(
                 {
@@ -441,8 +453,7 @@ class TestRecordMerge(unittest.TestCase):
         )
         plan_path.write_text(original_content, encoding="utf-8")
         self.queue["tasks"][0]["plan_file"] = str(plan_path)
-        with open(self.queue_file_path, "w", encoding="utf-8") as f:
-            json.dump(self.queue, f)
+        self._seed_queue(self.queue["tasks"])
 
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
@@ -463,9 +474,7 @@ class TestRecordMerge(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(plan_path.read_text(encoding="utf-8"), original_content)
-        with open(self.queue_file_path, "r", encoding="utf-8") as f:
-            live = json.load(f)
-        self.assertEqual(len(live["tasks"]), 1)
+        self.assertEqual(len(load_git_queue(self.queue_file_path)), 1)
 
     def test_record_merge_plan_update_skipped_when_merge_unverified(self):
         """If merge verification fails, the plan file is not updated."""
@@ -482,8 +491,7 @@ class TestRecordMerge(unittest.TestCase):
         )
         plan_path.write_text(original_content, encoding="utf-8")
         self.queue["tasks"][0]["plan_file"] = str(plan_path)
-        with open(self.queue_file_path, "w", encoding="utf-8") as f:
-            json.dump(self.queue, f)
+        self._seed_queue(self.queue["tasks"])
 
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
@@ -517,8 +525,7 @@ class TestRecordMerge(unittest.TestCase):
         plan_path = plan_dir / "t1.md"
         # Plan file is referenced but never created.
         self.queue["tasks"][0]["plan_file"] = str(plan_path)
-        with open(self.queue_file_path, "w", encoding="utf-8") as f:
-            json.dump(self.queue, f)
+        self._seed_queue(self.queue["tasks"])
 
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
@@ -550,8 +557,7 @@ class TestRecordMerge(unittest.TestCase):
         plan_path = plan_dir / "t1.md"
         # Move the task to history so only the retry path is exercised.
         self.queue["tasks"] = []
-        with open(self.queue_file_path, "w", encoding="utf-8") as f:
-            json.dump(self.queue, f)
+        self._seed_queue(self.queue["tasks"])
         with open(self.history_file, "w", encoding="utf-8") as f:
             json.dump(
                 {
@@ -791,14 +797,14 @@ class TestSetStage(unittest.TestCase):
     """Tests for the set-stage in_progress sub-state command (fods-04)."""
 
     def _write_queue(self, tasks):
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        json.dump({"tasks": tasks}, f)
-        f.close()
-        return f.name
+        tmpdir = tempfile.mkdtemp()
+        repo_root = Path(tmpdir)
+        init_git_repo(repo_root)
+        queue_path, _history_path = seed_git_queue(repo_root, tasks)
+        return str(queue_path)
 
     def _load_task(self, queue_path):
-        with open(queue_path, "r", encoding="utf-8") as f:
-            return json.load(f)["tasks"][0]
+        return load_git_queue(queue_path)[0]
 
     def test_set_stage_appends_history_and_requires_in_progress(self):
         """set-stage writes stage + history only when state is in_progress."""
@@ -867,25 +873,22 @@ class TestSetStage(unittest.TestCase):
     def test_set_stage_leaves_plan_file_untouched(self):
         """set-stage records the stage on the task record only (R-4, R-19)."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            plan_path = Path(tmpdir) / "plans" / "t1.md"
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            plan_path = repo_root / "plans" / "t1.md"
             plan_path.parent.mkdir(parents=True)
             original_content = "# Plan\n\n*Stage: plan-approved*\n"
             plan_path.write_text(original_content, encoding="utf-8")
-            queue_path = Path(tmpdir) / "work-queue.json"
-            queue_path.write_text(
-                json.dumps(
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [
                     {
-                        "tasks": [
-                            {
-                                "id": "t1",
-                                "state": "in_progress",
-                                "stage": "plan-approved",
-                                "plan_file": str(plan_path),
-                            }
-                        ]
+                        "id": "t1",
+                        "state": "in_progress",
+                        "stage": "plan-approved",
+                        "plan_file": str(plan_path),
                     }
-                ),
-                encoding="utf-8",
+                ],
             )
 
             args = aet_state.argparse.Namespace(
@@ -906,23 +909,18 @@ class TestSetStage(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir) / "repo"
             repo_root.mkdir()
+            init_git_repo(repo_root)
             # The referenced plan does not exist; set-stage must not care.
-            queue_path = repo_root / ".agents" / "work-queue.json"
-            queue_path.parent.mkdir(parents=True)
-            queue_path.write_text(
-                json.dumps(
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [
                     {
-                        "tasks": [
-                            {
-                                "id": "t1",
-                                "state": "in_progress",
-                                "stage": "plan-approved",
-                                "plan_file": "docs/plans/t1.md",
-                            }
-                        ]
+                        "id": "t1",
+                        "state": "in_progress",
+                        "stage": "plan-approved",
+                        "plan_file": "docs/plans/t1.md",
                     }
-                ),
-                encoding="utf-8",
+                ],
             )
 
             args = aet_state.argparse.Namespace(
@@ -969,12 +967,11 @@ class TestSetStage(unittest.TestCase):
     def test_set_stage_emits_ledger_stage_event(self):
         """set-stage writes a stage event to the content-addressed ledger."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
-            queue_path.write_text(
-                json.dumps(
-                    {"tasks": [{"id": "t1", "state": "in_progress", "stage": "plan-approved"}]}
-                ),
-                encoding="utf-8",
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [{"id": "t1", "state": "in_progress", "stage": "plan-approved"}],
             )
 
             ledger_path = queue_path.with_name("ledger.jsonl")
@@ -1010,16 +1007,19 @@ class TestStateTransition(unittest.TestCase):
     def test_apply_transition_writes_no_status_key(self):
         """_apply_transition mutates state but never writes a legacy status key."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
-            history_file = queue_path.with_name("work-history.jsonl")
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, history_path = seed_git_queue(
+                repo_root, [{"id": "t1", "state": "planned"}]
+            )
             queue = [{"id": "t1", "state": "planned"}]
-            queue_path.write_text(json.dumps({"tasks": queue}), encoding="utf-8")
 
             backend = aet_state.make_backend(str(queue_path))
+            backend.load()
             task = queue[0]
             aet_state._apply_transition(
                 backend, queue, task, "planned", "ready",
-                by="test", history_file=str(history_file),
+                by="test", history_file=str(history_path),
             )
 
             self.assertEqual(task["state"], "ready")
@@ -1040,21 +1040,22 @@ class TestStateTransition(unittest.TestCase):
         import io
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            plan_path = Path(tmpdir) / "plans" / "t1.md"
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            plan_path = repo_root / "plans" / "t1.md"
             plan_path.parent.mkdir(parents=True)
             plan_path.write_text("# Plan\n")
-            queue_path = Path(tmpdir) / "work-queue.json"
-            queue = {
-                "tasks": [
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [
                     {
                         "id": "t1",
                         "state": "planned",
                         "plan_file": str(plan_path),
                         "branch": None,
                     }
-                ]
-            }
-            queue_path.write_text(json.dumps(queue), encoding="utf-8")
+                ],
+            )
 
             responses = {
                 ("show-ref", "--verify", "--quiet", "refs/heads/None"): (1, "", ""),
@@ -1097,67 +1098,69 @@ class TestStateTransition(unittest.TestCase):
 
     def test_illegal_transition_rejected_no_mutation(self):
         """An illegal transition is rejected and the queue file is not mutated."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            queue = {"tasks": [{"id": "t1", "state": "planned"}]}
-            json.dump(queue, f)
-            queue_path = f.name
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, _history_path = seed_git_queue(
+                repo_root, [{"id": "t1", "state": "planned"}]
+            )
 
-        args = aet_state.argparse.Namespace(
-            command="transition",
-            task_id="t1",
-            from_stage="planned",
-            to_stage="merged",
-            queue=queue_path,
-            dry_run=False,
-            reason=None,
-        )
+            args = aet_state.argparse.Namespace(
+                command="transition",
+                task_id="t1",
+                from_stage="planned",
+                to_stage="merged",
+                queue=str(queue_path),
+                dry_run=False,
+                reason=None,
+            )
 
-        rc = aet_state.cmd_transition(args)
-        self.assertEqual(rc, 1)
+            rc = aet_state.cmd_transition(args)
+            self.assertEqual(rc, 1)
 
-        with open(queue_path, "r", encoding="utf-8") as f:
-            after = json.load(f)
-        self.assertEqual(after["tasks"][0].get("state"), "planned")
-        self.assertNotIn("history", after["tasks"][0])
+            task = load_git_queue(queue_path)[0]
+            self.assertEqual(task.get("state"), "planned")
+            self.assertNotIn("history", task)
 
     def test_history_entry_shape(self):
         """A transition appends a history entry with the required shape."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            queue = {"tasks": [{"id": "t1", "state": "planned"}]}
-            json.dump(queue, f)
-            queue_path = f.name
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, _history_path = seed_git_queue(
+                repo_root, [{"id": "t1", "state": "planned"}]
+            )
 
-        args = aet_state.argparse.Namespace(
-            command="transition",
-            task_id="t1",
-            from_stage="planned",
-            to_stage="ready",
-            queue=queue_path,
-            dry_run=False,
-            reason=None,
-        )
+            args = aet_state.argparse.Namespace(
+                command="transition",
+                task_id="t1",
+                from_stage="planned",
+                to_stage="ready",
+                queue=str(queue_path),
+                dry_run=False,
+                reason=None,
+            )
 
-        rc = aet_state.cmd_transition(args)
-        self.assertEqual(rc, 0)
+            rc = aet_state.cmd_transition(args)
+            self.assertEqual(rc, 0)
 
-        with open(queue_path, "r", encoding="utf-8") as f:
-            after = json.load(f)
-        task = after["tasks"][0]
-        self.assertEqual(task["state"], "ready")
-        self.assertEqual(len(task["history"]), 1)
-        entry = task["history"][0]
-        self.assertEqual(entry["from"], "planned")
-        self.assertEqual(entry["to"], "ready")
-        self.assertEqual(entry["by"], "transition")
-        self.assertIn("at", entry)
+            task = load_git_queue(queue_path)[0]
+            self.assertEqual(task["state"], "ready")
+            self.assertEqual(len(task["history"]), 1)
+            entry = task["history"][0]
+            self.assertEqual(entry["from"], "planned")
+            self.assertEqual(entry["to"], "ready")
+            self.assertEqual(entry["by"], "transition")
+            self.assertIn("at", entry)
 
     def test_terminal_transition_promotes_dependent(self):
         """A terminal transition promotes dependents, then seals the terminal task."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
-            history_file = queue_path.with_name("work-history.jsonl")
-            queue = {
-                "tasks": [
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, history_file = seed_git_queue(
+                repo_root,
+                [
                     {
                         "id": "blocker",
                         "state": "awaiting_merge",
@@ -1169,10 +1172,8 @@ class TestStateTransition(unittest.TestCase):
                         "blocked_by": ["blocker"],
                         "pending_blockers": 1,
                     },
-                ]
-            }
-            with open(queue_path, "w", encoding="utf-8") as f:
-                json.dump(queue, f)
+                ],
+            )
 
             args = aet_state.argparse.Namespace(
                 command="transition",
@@ -1187,9 +1188,7 @@ class TestStateTransition(unittest.TestCase):
             rc = aet_state.cmd_transition(args)
             self.assertEqual(rc, 0)
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            by_id = {t["id"]: t for t in after["tasks"]}
+            by_id = {t["id"]: t for t in load_git_queue(queue_path)}
             self.assertNotIn("blocker", by_id)
             self.assertEqual(by_id["dependent"]["state"], "ready")
             self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
@@ -1198,18 +1197,19 @@ class TestStateTransition(unittest.TestCase):
             self.assertEqual(release_entries[0]["from"], "blocked")
             self.assertEqual(release_entries[0]["to"], "ready")
 
-            with open(history_file, "r", encoding="utf-8") as f:
-                settled = json.loads(f.readline())
+            settled = load_git_history(queue_path)[0]
             self.assertEqual(settled["id"], "blocker")
             self.assertEqual(settled["state"], "abandoned")
 
     def test_record_merge_drives_merged_and_promotes(self):
         """record-merge reaches merged, seals the task, and unblocks dependents."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
-            history_file = queue_path.with_name("work-history.jsonl")
-            queue = {
-                "tasks": [
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            add_bare_origin(repo_root)
+            queue_path, history_file = seed_git_queue(
+                repo_root,
+                [
                     {
                         "id": "blocker",
                         "state": "awaiting_merge",
@@ -1222,10 +1222,8 @@ class TestStateTransition(unittest.TestCase):
                         "blocked_by": ["blocker"],
                         "pending_blockers": 1,
                     },
-                ]
-            }
-            with open(queue_path, "w", encoding="utf-8") as f:
-                json.dump(queue, f)
+                ],
+            )
 
             responses = {
                 ("git", "fetch", "origin"): (0, "", ""),
@@ -1244,15 +1242,12 @@ class TestStateTransition(unittest.TestCase):
                 rc = aet_state.cmd_record_merge(args)
 
             self.assertEqual(rc, 0)
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            by_id = {t["id"]: t for t in after["tasks"]}
+            by_id = {t["id"]: t for t in load_git_queue(queue_path)}
             self.assertNotIn("blocker", by_id)
             self.assertEqual(by_id["dependent"]["state"], "ready")
             self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
 
-            with open(history_file, "r", encoding="utf-8") as f:
-                settled = json.loads(f.readline())
+            settled = load_git_history(queue_path)[0]
             self.assertEqual(settled["id"], "blocker")
             self.assertEqual(settled["state"], "merged")
             self.assertEqual(settled["merge_commit"], "abc1234")
@@ -1269,9 +1264,12 @@ class TestStateTransition(unittest.TestCase):
         release history entry.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
-            queue = {
-                "tasks": [
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            add_bare_origin(repo_root)
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [
                     {
                         "id": "blocker",
                         "state": "awaiting_merge",
@@ -1284,10 +1282,8 @@ class TestStateTransition(unittest.TestCase):
                         "blocked_by": ["blocker"],
                         "pending_blockers": 1,
                     },
-                ]
-            }
-            with open(queue_path, "w", encoding="utf-8") as f:
-                json.dump(queue, f)
+                ],
+            )
 
             responses = {
                 ("git", "fetch", "origin"): (0, "", ""),
@@ -1308,9 +1304,7 @@ class TestStateTransition(unittest.TestCase):
                 rc = aet_state.cmd_record_merge(args)
 
             self.assertEqual(rc, 0)
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            by_id = {t["id"]: t for t in after["tasks"]}
+            by_id = {t["id"]: t for t in load_git_queue(queue_path)}
             self.assertNotIn("blocker", by_id)
             self.assertEqual(by_id["dependent"]["state"], "ready")
             self.assertEqual(by_id["dependent"]["pending_blockers"], 0)
@@ -1327,6 +1321,7 @@ class TestHealHistoryAware(unittest.TestCase):
 
     def _write_queue_and_history(self, tmpdir, tasks, settled):
         tmp = Path(tmpdir)
+        init_git_repo(tmp)
         plans_dir = tmp / "plans"
         plans_dir.mkdir()
         for task in tasks:
@@ -1334,12 +1329,7 @@ class TestHealHistoryAware(unittest.TestCase):
             plan.write_text("# Plan\n", encoding="utf-8")
             task.setdefault("plan_file", str(plan))
             task.setdefault("branch", None)
-        queue_path = tmp / "work-queue.json"
-        queue_path.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
-        history_path = tmp / "work-history.jsonl"
-        with open(history_path, "w", encoding="utf-8") as f:
-            for record in settled:
-                f.write(json.dumps(record) + "\n")
+        queue_path, history_path = seed_git_queue(tmp, tasks, history=settled)
         return queue_path
 
     def _run_heal(self, queue_path, apply):
@@ -1374,9 +1364,7 @@ class TestHealHistoryAware(unittest.TestCase):
 
             self.assertEqual(self._run_heal(queue_path, apply=True), 0)
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            task = after["tasks"][0]
+            task = load_git_queue(queue_path)[0]
             self.assertEqual(task["state"], "ready")
             self.assertEqual(task["pending_blockers"], 0)
 
@@ -1399,9 +1387,7 @@ class TestHealHistoryAware(unittest.TestCase):
 
             self.assertEqual(self._run_heal(queue_path, apply=True), 0)
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            by_id = {t["id"]: t for t in after["tasks"]}
+            by_id = {t["id"]: t for t in load_git_queue(queue_path)}
             self.assertEqual(by_id["t4"]["state"], "blocked")
             self.assertEqual(by_id["t4"]["pending_blockers"], 1)
 
@@ -1429,9 +1415,7 @@ class TestHealHistoryAware(unittest.TestCase):
             self.assertIn("t2", output)
             self.assertIn("pending_blockers -> 0", output)
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            task = after["tasks"][0]
+            task = load_git_queue(queue_path)[0]
             self.assertEqual(task["state"], "blocked")
             self.assertEqual(task["pending_blockers"], 1)
 
@@ -1469,16 +1453,9 @@ class TestApplyTransitionClosure(unittest.TestCase):
         return plan
 
     def _make_backend(self, repo_root: str):
-        queue_path = Path(repo_root) / "work-queue.json"
-        queue_path.write_text(
-            json.dumps({
-                "tasks": [{
-                    "id": "t1",
-                    "state": "in_progress",
-                    "plan_file": "docs/plans/t1.md",
-                }]
-            }),
-            encoding="utf-8",
+        queue_path, _history_path = seed_git_queue(
+            Path(repo_root),
+            [{"id": "t1", "state": "in_progress", "plan_file": "docs/plans/t1.md"}],
         )
         return aet_state.make_backend(str(queue_path))
 

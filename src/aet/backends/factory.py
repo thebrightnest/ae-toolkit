@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from aet.backends.git_refs_backend import GitRefsBackend
-from aet.backends.json_backend import JsonBackend
 from aet.project_id import derive_config_slug, resolve_repo_root
 
 DEFAULT_CONFIG_PATH = ".agents/aet-config.json"
@@ -19,11 +18,11 @@ LEGACY_CONFIG_PATH = ".agents/aet-work.json"
 AET_WORK_CONFIG_ENV = "AET_WORK_CONFIG"
 
 
-class UnknownBackendError(ValueError):
-    """Raised when ``task_backend`` selects a value with no storage implementation.
+class LegacyTaskBackendError(ValueError):
+    """Raised when a config still carries the removed ``task_backend`` key.
 
-    ``github`` and ``both`` are no longer valid storage selections; use the
-    ``projections`` config axis instead.
+    git-refs is the only task store; the ``task_backend`` selection axis was
+    removed. Configs that still set it must drop the key.
     """
 
 
@@ -32,9 +31,9 @@ class IntegrationModeError(ValueError):
 
 
 class QueueOutsideRepositoryError(RuntimeError):
-    """Raised when ``git-refs`` storage is selected for a queue outside a repo.
+    """Raised when the queue path is not inside a git repository.
 
-    ``git-refs`` keeps state in ``refs/aet/*`` inside the repository that holds
+    git-refs keeps state in ``refs/aet/*`` inside the repository that holds
     the queue. When the queue path is not inside a git work tree there is no
     such repository, so the selection is refused by name rather than surfacing
     as a traceback from the backend's own discovery.
@@ -52,6 +51,13 @@ class LegacyConfigError(ValueError):
 
 # Legal values for the ``integration_mode`` project setting.
 INTEGRATION_MODES = frozenset({"pr-per-task", "single-pr"})
+
+# Removed-key migration message reused by config resolution and CLI.
+_TASK_BACKEND_REMOVED_MSG = (
+    "Migration: the 'task_backend' config key has been removed. "
+    "git-refs is the only task store. "
+    "Remove 'task_backend' from your AET config and re-run the command."
+)
 
 
 def queue_repo_root(queue_file: str) -> str | None:
@@ -81,46 +87,33 @@ def queue_repo_root(queue_file: str) -> str | None:
 
 def create_backend(
     config_path: str | None = None,
-    queue_file: str = ".agents/work-queue.json",
+    queue_file: str = ".agents/aet-queue",
     history_file: str = ".agents/work-history.jsonl",
-) -> JsonBackend | GitRefsBackend:
-    """Instantiate a task backend based on the resolved AET config.
+) -> GitRefsBackend:
+    """Instantiate the git-refs task backend.
 
     Configuration is resolved with external-first precedence:
     ``AET_WORK_CONFIG`` env → ``~/.aet/{slug}/config.json`` → in-tree
-    ``.agents/aet-config.json`` → built-in defaults. The ``task_backend`` key
-    selects the implementation: ``json`` or ``git-refs``. Forge values such as
-    ``github`` or ``both`` are rejected with :class:`UnknownBackendError` and
-    must be configured on the orthogonal ``projections`` axis.
+    ``.agents/aet-config.json`` → built-in defaults. A surviving
+    ``task_backend`` key fails closed with a migration message.
     """
     queue_root = queue_repo_root(queue_file)
     # Anchor configuration to the repository that holds the queue, not to the
     # process cwd. Both must agree: selecting a backend from repository A and
     # rooting its store in repository B is how a project config in one tree
     # silently governed operations on a queue in another.
-    config = resolve_config(
+    # Resolve config to fail fast on removed keys; git-refs is the only store,
+    # so the resolved dict is no longer consulted.
+    resolve_config(
         config_path or DEFAULT_CONFIG_PATH,
         repo_root=queue_root or str(Path(queue_file).resolve().parent),
     )
-    backend_type = config.get("task_backend", "json")
-
-    if backend_type == "json":
-        return JsonBackend(queue_file=queue_file, history_file=history_file)
-    if backend_type == "git-refs":
-        if queue_root is None:
-            raise QueueOutsideRepositoryError(
-                "task_backend 'git-refs' stores state in refs/aet/* inside the "
-                f"repository holding the queue, but {queue_file} is not inside a "
-                "git repository. Point --queue-file at a path inside the "
-                "repository, or select the 'json' backend for this location."
-            )
-        return GitRefsBackend(queue_file=queue_file, history_file=history_file)
-
-    raise UnknownBackendError(
-        f"Unknown task_backend: {backend_type!r}. "
-        "Choose 'json' or 'git-refs'. "
-        "For GitHub Issues mirroring, use the 'projections' config axis."
-    )
+    if queue_root is None:
+        raise QueueOutsideRepositoryError(
+            "git-refs stores state in refs/aet/* inside the repository holding "
+            f"the queue, but {queue_file} is not inside a git repository."
+        )
+    return GitRefsBackend(queue_file=queue_file, history_file=history_file)
 
 
 def resolve_config_with_source(
@@ -141,17 +134,26 @@ def resolve_config_with_source(
     ``.agents/aet-config.json`` does not, resolution fails closed with
     :class:`LegacyConfigError` naming ``aet configure --migrate`` as the
     remedy.
+
+    A surviving ``task_backend`` key fails closed with
+    :class:`LegacyTaskBackendError` naming the migration action.
     """
     env_override = os.environ.get(AET_WORK_CONFIG_ENV)
     if env_override:
         path = Path(env_override)
         if path.exists():
-            return _load_config(path), "env"
+            config = _load_config(path)
+            if "task_backend" in config:
+                raise LegacyTaskBackendError(_TASK_BACKEND_REMOVED_MSG)
+            return config, "env"
 
     slug = derive_config_slug(repo_root)
     external_path = Path.home() / ".aet" / slug / "config.json"
     if external_path.exists():
-        return _load_config(external_path), "user"
+        config = _load_config(external_path)
+        if "task_backend" in config:
+            raise LegacyTaskBackendError(_TASK_BACKEND_REMOVED_MSG)
+        return config, "user"
 
     root = resolve_repo_root(repo_root)
     path = Path(config_path)
@@ -159,7 +161,10 @@ def resolve_config_with_source(
         path = root / path
 
     if path.exists():
-        return _load_config(path), "project"
+        config = _load_config(path)
+        if "task_backend" in config:
+            raise LegacyTaskBackendError(_TASK_BACKEND_REMOVED_MSG)
+        return config, "project"
 
     legacy_path = root / LEGACY_CONFIG_PATH
     if legacy_path.exists():
@@ -169,7 +174,7 @@ def resolve_config_with_source(
             f"{DEFAULT_CONFIG_PATH}."
         )
 
-    defaults = {"task_backend": "json", "trunk_branch": None, "integration_branch": None}
+    defaults = {"trunk_branch": None, "integration_branch": None}
     return defaults, "default"
 
 
@@ -190,6 +195,9 @@ def resolve_config(
     ``.agents/aet-config.json`` does not, resolution fails closed with
     :class:`LegacyConfigError` naming ``aet configure --migrate`` as the
     remedy.
+
+    A surviving ``task_backend`` key fails closed with
+    :class:`LegacyTaskBackendError` naming the migration action.
     """
     return resolve_config_with_source(config_path, repo_root=repo_root)[0]
 

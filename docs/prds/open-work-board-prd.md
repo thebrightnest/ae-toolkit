@@ -283,6 +283,27 @@ All eight implementation tasks landed; merge verification remains owned by `aet-
 
 - **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
 
+## Divergence Summary — owb-07-git-refs-only-store
+
+*Recorded: 2026-08-20 — Branch: owb-07-git-refs-only-store*
+
+All four implementation tasks landed; merge verification remains owned by `aet-ship`.
+
+### Changed from plan
+
+- **Files to Modify was too narrow**: the plan listed six locations, but retiring the json backend and the `task_backend` axis touched 80 files. Call sites referencing `.agents/work-queue.json`, `JsonBackend`, `UnknownBackendError`, and backend-selection logic were scattered across `src/aet/backends/__init__.py`, `src/aet/backends/git_refs_backend.py`, `src/aet/backends/github_backend.py`, `src/aet/cli/aet_state.py`, `src/aet/cli/backlog.py`, `src/aet/cli/desk.py`, `src/aet/cli/gate.py`, `src/aet/cli/main.py`, `src/aet/cli/next.py`, `src/aet/cli/orchestrator.py`, `src/aet/cli/reconcile.py`, `src/aet/cli/report.py`, `src/aet/cli/ship.py`, `src/aet/cli/sprint.py`, `src/aet/cli/status.py`, `src/aet/cli/sync.py`, and `src/aet/worktree.py`.
+- **Default queue file changed**: `factory.create_backend` now defaults `queue_file` to `.agents/aet-queue` instead of `.agents/work-queue.json`, removing the last json-backend-shaped default path.
+- **Task 2 abstraction collapse**: `TaskBackend.seal` lost its default JSON-file implementation and now raises `NotImplementedError`; `GitRefsBackend` already provided its own override, so this is a documentation-of-reality change rather than new behavior.
+
+### Added (unplanned)
+
+- **`docs/CLI.md` regenerated** to reflect the removal of `aet configure --task-backend`.
+- **Test updates outside `tests/backends/`**: tests in `tests/cli/`, `tests/state/`, `tests/orchestrator/`, `tests/projections/`, `tests/queue/`, `tests/metrics/`, `tests/migration/`, `tests/ship/`, `tests/plan/`, and `tests/worktree/` were updated to use git-refs fixtures or to remove json-backend assumptions.
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
 ---
 
 ## Divergence Summary — owb-10-sprint-label-intake

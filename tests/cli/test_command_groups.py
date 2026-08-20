@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import importlib
-import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from tests.cli._helpers import git, make_history, make_plan, run_typer, write_json_file
+from aet.backends.factory import create_backend
+from tests.cli._helpers import git, make_plan, run_typer
 
 # Module objects (not the functions re-exported by ``aet.cli``).
 sprint = importlib.import_module("aet.cli.sprint")
@@ -19,6 +19,12 @@ aet = importlib.import_module("aet.cli.main")
 
 
 class TestSprintAdd(unittest.TestCase):
+    def _queue_paths(self, tmp_path: Path):
+        """Return queue and history paths inside a git-backed repo."""
+        queue_file = str(tmp_path / ".agents" / "aet-queue")
+        history_file = str(tmp_path / ".agents" / "work-history.jsonl")
+        return queue_file, history_file
+
     def test_sprint_add_promotes_without_committing(self):
         """sprint add sets status: queued and adds the task without committing."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -39,8 +45,7 @@ class TestSprintAdd(unittest.TestCase):
             git(["add", "-A"], tmp)
             git(["commit", "-m", "initial"], tmp)
 
-            queue_file = write_json_file([])
-            history_file = make_history([])
+            queue_file, history_file = self._queue_paths(tmp_path)
 
             mock_projections = MagicMock()
 
@@ -81,8 +86,9 @@ class TestSprintAdd(unittest.TestCase):
             self.assertEqual(log.stdout.strip(), "initial")
 
             # Task added to queue as ready.
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = create_backend(
+                queue_file=queue_file, history_file=history_file
+            ).load()["queue"]
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-001")
             self.assertEqual(queue[0]["state"], "ready")
@@ -115,8 +121,7 @@ class TestSprintAdd(unittest.TestCase):
             git(["add", "-A"], tmp)
             git(["commit", "-m", "initial"], tmp)
 
-            queue_file = write_json_file([])
-            history_file = make_history([])
+            queue_file, history_file = self._queue_paths(tmp_path)
 
             mock_projections = MagicMock()
 
@@ -159,8 +164,9 @@ class TestSprintAdd(unittest.TestCase):
                         0,
                     )
 
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = create_backend(
+                queue_file=queue_file, history_file=history_file
+            ).load()["queue"]
             tasks = {t["id"]: t for t in queue}
             self.assertEqual(tasks["feat-001"]["state"], "blocked")
             self.assertEqual(tasks["feat-001"]["pending_blockers"], 1)
@@ -168,10 +174,13 @@ class TestSprintAdd(unittest.TestCase):
     def test_sprint_add_unknown_id_fails_closed(self):
         """sprint add exits non-zero when the plan file or task ID is unknown."""
         with tempfile.TemporaryDirectory() as tmp:
-            plans_dir = Path(tmp) / "docs" / "plans"
+            tmp_path = Path(tmp)
+            git(["init"], tmp)
+            git(["config", "user.email", "test@example.com"], tmp)
+            git(["config", "user.name", "Test"], tmp)
+            plans_dir = tmp_path / "docs" / "plans"
             plans_dir.mkdir(parents=True)
-            queue_file = write_json_file([])
-            history_file = make_history([])
+            queue_file, history_file = self._queue_paths(tmp_path)
 
             result = run_typer(
                 aet.app,
@@ -191,8 +200,10 @@ class TestSprintAdd(unittest.TestCase):
 
             self.assertEqual(result.exit_code, 1)
             self.assertIn("No plan found", result.stderr)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                self.assertEqual(len(json.load(f)), 0)
+            queue = create_backend(
+                queue_file=queue_file, history_file=history_file
+            ).load()["queue"]
+            self.assertEqual(len(queue), 0)
 
     def test_sprint_add_refuses_non_approved_plan(self):
         """Only plan-approved plans may enter the sprint."""
@@ -214,8 +225,7 @@ class TestSprintAdd(unittest.TestCase):
             git(["add", "-A"], tmp)
             git(["commit", "-m", "initial"], tmp)
 
-            queue_file = write_json_file([])
-            history_file = make_history([])
+            queue_file, history_file = self._queue_paths(tmp_path)
 
             result = run_typer(
                 aet.app,
@@ -235,6 +245,10 @@ class TestSprintAdd(unittest.TestCase):
 
             self.assertEqual(result.exit_code, 1)
             self.assertIn("plan-approved", result.stderr)
+            queue = create_backend(
+                queue_file=queue_file, history_file=history_file
+            ).load()["queue"]
+            self.assertEqual(len(queue), 0)
 
     def test_sprint_add_accepts_untracked_plan(self):
         """Untracked plans are the normal intake path (ADR-054)."""
@@ -253,8 +267,7 @@ class TestSprintAdd(unittest.TestCase):
                 encoding="utf-8",
             )
             plan = make_plan(plans_dir, "feat-003.md")
-            queue_file = write_json_file([])
-            history_file = make_history([])
+            queue_file, history_file = self._queue_paths(tmp_path)
 
             result = run_typer(
                 aet.app,
@@ -274,8 +287,10 @@ class TestSprintAdd(unittest.TestCase):
 
             self.assertEqual(result.exit_code, 0, result.output + result.stderr)
             self.assertIn("queued without publishing", result.output)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                self.assertEqual(len(json.load(f)), 1)
+            queue = create_backend(
+                queue_file=queue_file, history_file=history_file
+            ).load()["queue"]
+            self.assertEqual(len(queue), 1)
 
 
 class TestBacklogGroup(unittest.TestCase):

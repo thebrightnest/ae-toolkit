@@ -43,7 +43,7 @@ TRACKED_AND_GATED_PATHS = {
 # forgiven because of it. `filelock` does not unlink on release, so an
 # unregistered lock halts the next run exactly as an unregistered store does.
 LOCK_PATH_BY_MODULE = {
-    "queue.py": ".agents/work-queue.json.lock",
+    "queue.py": ".agents/aet-queue.lock",
     "ledger.py": ".agents/ledger.jsonl.lock",
     "learnings.py": ".agents/learnings.jsonl.lock",
     "integration_lock.py": ".agents/integration.lock",

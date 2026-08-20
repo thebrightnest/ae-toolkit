@@ -20,7 +20,7 @@ from aet import telemetry  # noqa: E402
 
 def _leased_run_id() -> str | None:
     """Return the run_id holding the cwd's work-queue lease, if any."""
-    queue_file = Path(".agents/work-queue.json")
+    queue_file = Path(".agents/aet-queue")
     if not queue_file.is_file():
         return None
     from aet import queue as queue_lib  # noqa: PLC0415

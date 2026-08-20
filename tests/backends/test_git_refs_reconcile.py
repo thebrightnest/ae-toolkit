@@ -49,7 +49,7 @@ def _task(task_id: str, **fields) -> dict:
 
 def _backend(repo: Path) -> GitRefsBackend:
     return GitRefsBackend(
-        queue_file=str(repo / ".agents" / "work-queue.json"),
+        queue_file=str(repo / ".agents" / "aet-queue"),
         history_file=str(repo / ".agents" / "work-history.jsonl"),
     )
 

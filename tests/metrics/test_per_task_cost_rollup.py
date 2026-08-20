@@ -142,7 +142,7 @@ class TestPerTaskCostLedgerWrite(unittest.TestCase):
             worktree = Path(repo_root) / ".worktrees" / "nsr-06"
             worktree.mkdir(parents=True)
 
-            queue_file = str(Path(repo_root) / ".agents" / "work-queue.json")
+            queue_file = str(Path(repo_root) / ".agents" / "aet-queue")
             backend = orchestrator._make_backend(queue_file)
             task = self._make_task("nsr-06", "docs/plans/nsr-06.md", str(worktree))
             backend.save([task])
@@ -171,7 +171,7 @@ class TestPerTaskCostLedgerWrite(unittest.TestCase):
             worktree = Path(repo_root) / ".worktrees" / "nsr-06"
             worktree.mkdir(parents=True)
 
-            queue_file = str(Path(repo_root) / ".agents" / "work-queue.json")
+            queue_file = str(Path(repo_root) / ".agents" / "aet-queue")
             backend = orchestrator._make_backend(queue_file)
             task = self._make_task("nsr-06", "docs/plans/nsr-06.md", str(worktree))
             backend.save([task])

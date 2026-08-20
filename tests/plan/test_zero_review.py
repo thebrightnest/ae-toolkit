@@ -312,7 +312,7 @@ class TestAutoMergeAction(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.queue_file = self.root / ".agents" / "work-queue.json"
+        self.queue_file = self.root / ".agents" / "aet-queue"
         self.history_file = self.queue_file.with_name("work-history.jsonl")
         self.plan_file = self.root / "docs" / "plans" / "t-1.md"
         self.plan_file.parent.mkdir(parents=True, exist_ok=True)

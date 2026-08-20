@@ -32,7 +32,7 @@ def _write_queue(path: str, tasks: list[dict]) -> None:
 class TestGitHubProjection(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.queue_file = str(Path(self.tmp.name) / "work-queue.json")
+        self.queue_file = str(Path(self.tmp.name) / "aet-queue")
         self.history_file = str(Path(self.tmp.name) / "work-history.jsonl")
         self.backend = GitHubBackend(
             repo="owner/repo",

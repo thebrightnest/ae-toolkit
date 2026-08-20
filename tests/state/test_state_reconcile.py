@@ -13,7 +13,6 @@ import importlib.util
 import io
 import json
 import subprocess
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -45,7 +44,7 @@ def _init_repo(path: Path) -> Path:
     _git(path, "config", "user.name", "Test User")
     (path / ".agents").mkdir(parents=True, exist_ok=True)
     (path / ".agents" / "aet-config.json").write_text(
-        json.dumps({"task_backend": "git-refs"}), encoding="utf-8"
+        json.dumps({}), encoding="utf-8"
     )
     (path / "README.md").write_text("# test\n", encoding="utf-8")
     _git(path, "add", ".")
@@ -63,7 +62,7 @@ def _backend(repo: Path):
     from aet.backends.git_refs_backend import GitRefsBackend
 
     return GitRefsBackend(
-        queue_file=str(repo / ".agents" / "work-queue.json"),
+        queue_file=str(repo / ".agents" / "aet-queue"),
         history_file=str(repo / ".agents" / "work-history.jsonl"),
     )
 
@@ -72,7 +71,7 @@ def _clone_origin(origin: Path, clone: Path) -> None:
     _git(clone.parent, "clone", "-q", str(origin), str(clone))
     (clone / ".agents").mkdir(parents=True, exist_ok=True)
     (clone / ".agents" / "aet-config.json").write_text(
-        json.dumps({"task_backend": "git-refs"}), encoding="utf-8"
+        json.dumps({}), encoding="utf-8"
     )
     _git(clone, "config", "user.email", "test@example.com")
     _git(clone, "config", "user.name", "Test User")
@@ -122,7 +121,7 @@ def test_reconcile_dry_run_reports_stranded_and_keeps_unpushed(repo: Path) -> No
 
     args = argparse.Namespace(
         command="reconcile",
-        queue=str(repo / ".agents" / "work-queue.json"),
+        queue=str(repo / ".agents" / "aet-queue"),
         apply=False,
         force=False,
     )
@@ -163,7 +162,7 @@ def test_reconcile_apply_removes_only_stranded_refs(repo: Path) -> None:
 
     args = argparse.Namespace(
         command="reconcile",
-        queue=str(repo / ".agents" / "work-queue.json"),
+        queue=str(repo / ".agents" / "aet-queue"),
         apply=True,
         force=False,
     )
@@ -181,7 +180,7 @@ def test_reconcile_no_remote_reports_nothing_to_do(repo: Path) -> None:
 
     args = argparse.Namespace(
         command="reconcile",
-        queue=str(repo / ".agents" / "work-queue.json"),
+        queue=str(repo / ".agents" / "aet-queue"),
         apply=False,
         force=False,
     )
@@ -195,19 +194,16 @@ def test_reconcile_no_remote_reports_nothing_to_do(repo: Path) -> None:
 
 def test_reconcile_refuses_non_git_refs_backend() -> None:
     """The command is only meaningful for the git-refs backend."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        queue_path = Path(tmpdir) / "work-queue.json"
-        queue_path.write_text(json.dumps({"tasks": []}), encoding="utf-8")
-
-        args = argparse.Namespace(
-            command="reconcile",
-            queue=str(queue_path),
-            apply=False,
-            force=False,
-        )
-        stderr = io.StringIO()
+    args = argparse.Namespace(
+        command="reconcile",
+        queue=".agents/aet-queue",
+        apply=False,
+        force=False,
+    )
+    stderr = io.StringIO()
+    with patch.object(aet_state, "make_backend", return_value=object()):
         with patch.object(aet_state.sys, "stderr", stderr):
             rc = aet_state.cmd_reconcile(args)
 
-        assert rc == 1
-        assert "git-refs" in stderr.getvalue()
+    assert rc == 1
+    assert "git-refs" in stderr.getvalue()

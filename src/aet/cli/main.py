@@ -381,7 +381,7 @@ def run(
         on_failure, task_timeout, cli_bin, base, max_jobs=max_jobs
     )
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
-    argv = ["--queue-file", ".agents/work-queue.json", *flags]
+    argv = ["--queue-file", ".agents/aet-queue", *flags]
     raise typer.Exit(_spawn_detached(argv, run_id))
 
 

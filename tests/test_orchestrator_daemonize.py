@@ -239,7 +239,7 @@ class TestMainWritesReturncode(unittest.TestCase):
                     rc = orchestrator.main(
                         [
                             "--queue-file",
-                            os.path.join(repo_root, ".agents", "work-queue.json"),
+                            os.path.join(repo_root, ".agents", "aet-queue"),
                             "--repo-root",
                             repo_root,
                             "--run-id",

@@ -100,7 +100,7 @@ class TestBoardMembershipFromExplicitRecord(unittest.TestCase):
             content = draft_plan.read_text(encoding="utf-8")
             draft_plan.write_text(content.replace("---\n", "---\nstatus: draft\n", 1))
 
-            queue_file = root / ".agents" / "work-queue.json"
+            queue_file = root / ".agents" / "aet-queue"
             history_file = root / ".agents" / "work-history.jsonl"
             _write_queue_file(
                 queue_file,

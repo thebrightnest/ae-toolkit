@@ -57,7 +57,7 @@ def _init_git_repo(repo_root: str, origin_root: str) -> None:
         check=True,
     )
     Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
-    Path(repo_root, ".gitignore").write_text(".agents/work-queue.json\n", encoding="utf-8")
+    Path(repo_root, ".gitignore").write_text(".agents/aet-queue\n", encoding="utf-8")
     subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
     subprocess.run(
         ["git", "-C", repo_root, "commit", "-q", "-m", "initial"],
@@ -215,7 +215,7 @@ def _write_shadow_config(home_dir: str, slug: str) -> Path:
 
 def _write_queue(repo_root: str) -> str:
     """Write a wrapper-format queue file and return its path."""
-    queue_file = Path(repo_root) / ".agents" / "work-queue.json"
+    queue_file = Path(repo_root) / ".agents" / "aet-queue"
     queue_file.parent.mkdir(parents=True, exist_ok=True)
     queue_file.write_text(
         json.dumps(

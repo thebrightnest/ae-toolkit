@@ -78,7 +78,7 @@ def _init_git_repo(repo_root: str) -> None:
 
 def _write_queue(repo_root: str, tasks: list[dict]) -> str:
     """Write a wrapper-format queue file and return its path."""
-    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
     Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
     with open(queue_file, "w", encoding="utf-8") as f:
         json.dump(
@@ -97,7 +97,7 @@ class FakeBackend:
     """In-memory backend that records every load/save call."""
 
     def __init__(self, queue: list[dict]):
-        self.queue_file = "/fake/work-queue.json"
+        self.queue_file = "/fake/aet-queue"
         self.history_file = "/fake/work-history.jsonl"
         self._queue = list(queue)
         self.calls: list[tuple[str, dict]] = []
@@ -189,7 +189,7 @@ class TestRunSingleBackend(unittest.TestCase):
             )
 
             backend = FakeBackend([])
-            backend.queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+            backend.queue_file = os.path.join(repo_root, ".agents", "aet-queue")
             backend.history_file = os.path.join(
                 repo_root, ".agents", "work-history.jsonl"
             )
@@ -237,7 +237,7 @@ class TestRunSingleBackend(unittest.TestCase):
                         "title": "Demo",
                         "plan_file": "docs/plans/demo-plan.md",
                         "blocked_by": [],
-                        "state": "in_progress",
+                        "state": "planned",
                     }
                 ],
             )
@@ -249,14 +249,25 @@ class TestRunSingleBackend(unittest.TestCase):
                         "title": "Demo",
                         "plan_file": "docs/plans/demo-plan.md",
                         "blocked_by": [],
-                        "state": "in_progress",
+                        "state": "planned",
                     }
                 ]
             )
-            backend.queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+            backend.queue_file = os.path.join(repo_root, ".agents", "aet-queue")
             backend.history_file = os.path.join(
                 repo_root, ".agents", "work-history.jsonl"
             )
+
+            real_subprocess_run = subprocess.run
+
+            def fake_subprocess_run(cmd, **kwargs):
+                if any("aet_state.py" in str(part) for part in cmd):
+                    class Result:
+                        returncode = 0
+                        stdout = ""
+                        stderr = ""
+                    return Result()
+                return real_subprocess_run(cmd, **kwargs)
 
             args = _make_args(repo_root, plan_file)
             with patch.dict(
@@ -271,7 +282,10 @@ class TestRunSingleBackend(unittest.TestCase):
                         with patch.object(
                             orchestrator, "create_backend", return_value=backend
                         ):
-                            exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+                            with patch.object(
+                                subprocess, "run", side_effect=fake_subprocess_run
+                            ):
+                                exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
             save_calls = [c for c in backend.calls if c[0] == "save"]

@@ -57,7 +57,9 @@ class TestLegacyFailClosed(unittest.TestCase):
     def test_legacy_file_only_fails_closed_naming_migrate(self):
         agents = self.project / ".agents"
         agents.mkdir()
-        (agents / "aet-work.json").write_text(json.dumps({"task_backend": "git-refs"}), encoding="utf-8")
+        (agents / "aet-work.json").write_text(
+            json.dumps({"integration_mode": "single-pr"}), encoding="utf-8"
+        )
 
         env = {"HOME": str(self.home), "AET_REPO_ROOT": str(self.project)}
         with patch.dict(os.environ, env, clear=True):
@@ -100,7 +102,7 @@ class TestRootAnchoredResolution(unittest.TestCase):
         agents = self.project / ".agents"
         agents.mkdir()
         (agents / "aet-config.json").write_text(
-            json.dumps({"task_backend": "git-refs"}), encoding="utf-8"
+            json.dumps({"integration_mode": "single-pr"}), encoding="utf-8"
         )
 
         subdir = self.project / "src" / "nested"
@@ -111,7 +113,7 @@ class TestRootAnchoredResolution(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             config = resolve_config(DEFAULT_CONFIG_PATH)
 
-        self.assertEqual(config["task_backend"], "git-refs")
+        self.assertEqual(config["integration_mode"], "single-pr")
 
 
 class TestWorktreeIndependentExternalSlug(unittest.TestCase):
@@ -160,7 +162,7 @@ class TestWorktreeIndependentExternalSlug(unittest.TestCase):
         # External config under the main-worktree identity.
         external = self.home / ".aet" / "repo" / "main" / "config.json"
         external.parent.mkdir(parents=True)
-        external.write_text(json.dumps({"task_backend": "git-refs"}), encoding="utf-8")
+        external.write_text(json.dumps({"integration_mode": "single-pr"}), encoding="utf-8")
 
         os.chdir(worktree_dir)
         env = {"HOME": str(self.home), "AET_REPO_ROOT": str(worktree_dir)}
@@ -168,7 +170,7 @@ class TestWorktreeIndependentExternalSlug(unittest.TestCase):
             # Run from inside the linked worktree.
             config = resolve_config(DEFAULT_CONFIG_PATH)
 
-        self.assertEqual(config["task_backend"], "git-refs")
+        self.assertEqual(config["integration_mode"], "single-pr")
 
 
 class TestMigrateCommand(unittest.TestCase):
@@ -196,19 +198,24 @@ class TestMigrateCommand(unittest.TestCase):
         os.chdir(self._cwd)
         self.tmp.cleanup()
 
-    def test_migrate_renames_and_preserves_contents(self):
+    def test_migrate_renames_and_strips_removed_key(self):
         agents = self.project / ".agents"
         agents.mkdir()
         legacy = agents / LEGACY_CONFIG_NAME
         new_file = agents / NEW_CONFIG_NAME
-        legacy.write_text(json.dumps({"task_backend": "git-refs"}), encoding="utf-8")
+        legacy.write_text(
+            json.dumps({"task_backend": "git-refs", "integration_mode": "single-pr"}),
+            encoding="utf-8",
+        )
 
         with patch.dict(os.environ, {"AET_REPO_ROOT": str(self.project)}, clear=True):
             rc = _migrate_config(self.project)
         self.assertEqual(rc, 0)
         self.assertFalse(legacy.exists())
         self.assertTrue(new_file.exists())
-        self.assertEqual(json.loads(new_file.read_text(encoding="utf-8"))["task_backend"], "git-refs")
+        config = json.loads(new_file.read_text(encoding="utf-8"))
+        self.assertNotIn("task_backend", config)
+        self.assertEqual(config["integration_mode"], "single-pr")
 
     def test_migrate_refuses_overwrite_of_existing_new_file(self):
         agents = self.project / ".agents"
@@ -216,7 +223,7 @@ class TestMigrateCommand(unittest.TestCase):
         legacy = agents / LEGACY_CONFIG_NAME
         new_file = agents / NEW_CONFIG_NAME
         legacy.write_text(json.dumps({"task_backend": "git-refs"}), encoding="utf-8")
-        new_file.write_text(json.dumps({"task_backend": "json"}), encoding="utf-8")
+        new_file.write_text(json.dumps({"integration_mode": "pr-per-task"}), encoding="utf-8")
 
         with patch.dict(os.environ, {"AET_REPO_ROOT": str(self.project)}, clear=True):
             with self.assertRaises(SystemExit) as ctx:

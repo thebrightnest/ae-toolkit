@@ -9,15 +9,16 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
-import json
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from aet.queue import acquire_lease
+from tests.state._helpers import seed_git_queue
 
 _AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
+
 _state_spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
 )
@@ -72,39 +73,34 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     _git(root, "add", "-A")
     _git(root, "commit", "-q", "-m", "delete the plans")
 
-    queue_path = root / ".agents" / "work-queue.json"
-    queue_path.write_text(
-        json.dumps(
+    queue_path, history_path = seed_git_queue(
+        root,
+        [
             {
-                "tasks": [
-                    {
-                        "id": task_id,
-                        "title": f"Title for {task_id}",
-                        "plan_file": f"docs/plans/{task_id}.md",
-                        "state": "ready",
-                        "blocked_by": [],
-                        "history": [],
-                    }
-                    for task_id in ("owb-03", "owb-04")
-                ]
+                "id": task_id,
+                "title": f"Title for {task_id}",
+                "plan_file": f"docs/plans/{task_id}.md",
+                "state": "ready",
+                "blocked_by": [],
+                "history": [],
             }
-        ),
-        encoding="utf-8",
+            for task_id in ("owb-03", "owb-04")
+        ],
     )
-    (root / ".agents" / "work-history.jsonl").write_text("", encoding="utf-8")
+    history_path.write_text("", encoding="utf-8")
     monkeypatch.chdir(root)
     return root
 
 
 def _queue(repo: Path) -> list[dict]:
-    data = json.loads((repo / ".agents" / "work-queue.json").read_text(encoding="utf-8"))
-    return data["tasks"]
+    backend = aet_state.make_backend(str(repo / ".agents" / "aet-queue"))
+    return backend.load()["queue"]
 
 
 class TestBackfillSpecsCommand:
     def test_dry_run_reports_without_writing(self, repo: Path, capsys):
         rc = aet_state.main(
-            ["backfill-specs", ".agents/work-queue.json", "--rev", "HEAD~1"]
+            ["backfill-specs", ".agents/aet-queue", "--rev", "HEAD~1"]
         )
 
         assert rc == 0
@@ -117,7 +113,7 @@ class TestBackfillSpecsCommand:
     def test_an_unresolvable_revision_is_called_out(self, repo: Path, capsys):
         """The operator must be told the source is missing, not that the plans are."""
         rc = aet_state.main(
-            ["backfill-specs", ".agents/work-queue.json", "--rev", "deadbeef~1"]
+            ["backfill-specs", ".agents/aet-queue", "--rev", "deadbeef~1"]
         )
 
         assert rc == 0
@@ -127,7 +123,7 @@ class TestBackfillSpecsCommand:
 
     def test_apply_writes_the_spec_into_every_record(self, repo: Path):
         rc = aet_state.main(
-            ["backfill-specs", ".agents/work-queue.json", "--rev", "HEAD~1", "--apply"]
+            ["backfill-specs", ".agents/aet-queue", "--rev", "HEAD~1", "--apply"]
         )
 
         assert rc == 0
@@ -142,13 +138,13 @@ class TestBackfillSpecsCommand:
 
     def test_rerunning_after_apply_is_a_noop(self, repo: Path, capsys):
         aet_state.main(
-            ["backfill-specs", ".agents/work-queue.json", "--rev", "HEAD~1", "--apply"]
+            ["backfill-specs", ".agents/aet-queue", "--rev", "HEAD~1", "--apply"]
         )
         before = _queue(repo)
         capsys.readouterr()
 
         rc = aet_state.main(
-            ["backfill-specs", ".agents/work-queue.json", "--rev", "HEAD~1", "--apply"]
+            ["backfill-specs", ".agents/aet-queue", "--rev", "HEAD~1", "--apply"]
         )
 
         assert rc == 0
@@ -164,11 +160,11 @@ class TestBackfillSpecsCommand:
         would write over state the running orchestrator is about to save.
         """
         monkeypatch.delenv("AET_RUN_ID", raising=False)
-        queue_path = repo / ".agents" / "work-queue.json"
+        queue_path = repo / ".agents" / "aet-queue"
         acquire_lease(str(queue_path), "foreign-run")
 
         rc = aet_state.main(
-            ["backfill-specs", ".agents/work-queue.json", "--rev", "HEAD~1", "--apply"]
+            ["backfill-specs", ".agents/aet-queue", "--rev", "HEAD~1", "--apply"]
         )
 
         assert rc == 1
@@ -179,12 +175,12 @@ class TestBackfillSpecsCommand:
         self, repo: Path, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.delenv("AET_RUN_ID", raising=False)
-        queue_path = repo / ".agents" / "work-queue.json"
+        queue_path = repo / ".agents" / "aet-queue"
         acquire_lease(str(queue_path), "foreign-run")
 
         rc = aet_state.main([
             "backfill-specs",
-            ".agents/work-queue.json",
+            ".agents/aet-queue",
             "--rev",
             "HEAD~1",
             "--apply",
@@ -197,9 +193,10 @@ class TestBackfillSpecsCommand:
     def test_unrecoverable_record_is_named_and_the_rest_still_land(
         self, repo: Path, capsys
     ):
-        queue_path = repo / ".agents" / "work-queue.json"
-        data = json.loads(queue_path.read_text(encoding="utf-8"))
-        data["tasks"].append(
+        queue_path = repo / ".agents" / "aet-queue"
+        backend = aet_state.make_backend(str(queue_path))
+        data = backend.load()
+        data["queue"].append(
             {
                 "id": "ghost-99",
                 "title": "Ghost",
@@ -209,10 +206,10 @@ class TestBackfillSpecsCommand:
                 "history": [],
             }
         )
-        queue_path.write_text(json.dumps(data), encoding="utf-8")
+        backend.save(data["queue"])
 
         rc = aet_state.main(
-            ["backfill-specs", ".agents/work-queue.json", "--rev", "HEAD~1", "--apply"]
+            ["backfill-specs", ".agents/aet-queue", "--rev", "HEAD~1", "--apply"]
         )
 
         assert rc == 0

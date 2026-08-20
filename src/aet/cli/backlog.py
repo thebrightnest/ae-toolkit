@@ -127,7 +127,7 @@ def add(
     plans_dir: str = typer.Option("docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"),
     config: str = typer.Option(".agents/aet-config.json", "--config", help="Path to AET backend configuration"),
     queue_file: str = typer.Option(
-        ".agents/work-queue.json", "--queue-file", help="Path to work-queue.json"
+        ".agents/aet-queue", "--queue-file", help="Path to queue anchor"
     ),
     history_file: str = typer.Option(
         ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"

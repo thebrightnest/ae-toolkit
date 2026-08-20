@@ -1,7 +1,7 @@
 """Unified orchestrator for the Agentic Engineering Toolkit.
 
 Usage:
-    orchestrator --queue-file .agents/work-queue.json
+    orchestrator --queue-file .agents/aet-queue
     orchestrator --plan-file docs/plans/FEAT-001-plan.md
 
 Daemonization design (Open Question #3, nc-06-run-daemonization):
@@ -105,6 +105,16 @@ from aet.worktree import (  # noqa: E402
     run_git_plain,
     teardown_worktree,
 )
+
+
+def _task_in_queue(backend, task_id: str) -> bool:
+    """Return True when ``task_id`` is present in the backend's live queue."""
+    try:
+        queue = backend.load()["queue"]
+    except Exception:
+        return False
+    return any(t.get("id") == task_id for t in queue)
+
 
 # Global shutdown flag
 _shutdown_requested = False
@@ -282,8 +292,8 @@ def _record_stage(task: dict, stage: str, repo_root: str) -> bool:
     queue).
     """
     task_id = task.get("id")
-    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
-    if task_id and os.path.exists(queue_file):
+    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+    if task_id:
         aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
         result = subprocess.run(
             [
@@ -328,7 +338,7 @@ def enforce_base_hygiene(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AE Toolkit Unified Orchestrator")
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--queue-file", help="Path to work-queue.json (batch mode)")
+    group.add_argument("--queue-file", help="Path to queue anchor (batch mode)")
     group.add_argument("--plan-file", help="Path to a single plan.md (single-plan mode)")
     parser.add_argument("--repo-root", default=os.getcwd(), help="Repository root path")
     parser.add_argument("--cli-bin", default=None, help="Agent CLI binary path")
@@ -1785,15 +1795,14 @@ def process_task(
             )
         except IntegrationFailureError as exc:
             print(f"   ❌ Integration failure for {task_id}: {exc}")
-            queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
-            if os.path.exists(queue_file):
-                _mark_integration_failure(
-                    backend,
-                    queue_file,
-                    task_id,
-                    current_state(task) if task else "in_progress",
-                    str(exc),
-                )
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            _mark_integration_failure(
+                backend,
+                queue_file,
+                task_id,
+                current_state(task) if task else "in_progress",
+                str(exc),
+            )
             raise
 
     print(f"   ✅ Task complete: {task_id}")
@@ -1896,7 +1905,7 @@ def _integrate_single_pr_task(
     integration failure.
     """
     print(f"   🔀 Integrating {task_id} into {integration_branch}")
-    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
 
     # Remember repo_root HEAD so we can restore it after checking out the
     # integration branch for the squash-merge.
@@ -2044,7 +2053,7 @@ def _integrate_single_pr_task(
 
     # Record the merge commit on the task so the merged-state ancestry check
     # can pass even though the per-task branch has been deleted.
-    if backend is not None and os.path.exists(queue_file):
+    if backend is not None and _task_in_queue(backend, task_id):
         queue = backend.load()["queue"]
         for t in queue:
             if t.get("id") == task_id:
@@ -2052,7 +2061,7 @@ def _integrate_single_pr_task(
                 break
         backend.save(queue)
 
-    if os.path.exists(queue_file):
+    if backend is not None and _task_in_queue(backend, task_id):
         aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
         # Record the integration as awaiting_merge so the batch parent can
         # finalize it. We avoid transitioning straight to merged here because
@@ -3145,7 +3154,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # Ensure every subprocess (aet-state calls and stage sessions) inherits this
     # run id so their queue mutations pass the lease check.
     os.environ["AET_RUN_ID"] = logger.run_id
-    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
     start_time = telemetry.iso_now()
 
     if not os.path.isabs(plan_file):
@@ -3243,7 +3252,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         backend = _make_backend(queue_file)
         backend.fetch()
         queued_task = None
-        if os.path.exists(queue_file) and not spawned_by_batch:
+        if not spawned_by_batch:
             queue = backend.load()["queue"]
             queued_task = _find_queued_task(queue, plan_file)
 
@@ -3279,10 +3288,8 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         # Prefer the real queued task record so failure signatures are
         # persisted on the ledger (nsr-03). Fall back to a synthetic record for
         # manual run-one invocations that are not tracked in the queue.
-        real_task = None
-        if os.path.exists(queue_file):
-            queue = backend.load()["queue"]
-            real_task = next((t for t in queue if t.get("id") == task_id), None)
+        queue = backend.load()["queue"]
+        real_task = next((t for t in queue if t.get("id") == task_id), None)
         env_stage = os.environ.get("AET_STAGE") or None
         if real_task is not None:
             task = real_task
@@ -3489,7 +3496,7 @@ def orchestrator_callback(
     queue_file: Optional[str] = typer.Option(
         None,
         "--queue-file",
-        help="Path to work-queue.json (batch mode).",
+        help="Path to queue anchor (batch mode).",
     ),
     plan_file: Optional[str] = typer.Option(
         None,

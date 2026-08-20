@@ -3,9 +3,8 @@
 Each live task record is stored as a JSON blob addressed by a git ref under
 ``refs/aet/tasks/<task-id>``. Queue envelope metadata (``source_prd``,
 ``queue_updated_at``, ``schema_version``, …) lives at ``refs/aet/meta/queue``.
-Settled history is left in the append-only ``work-history.jsonl`` file, exactly
-as the JSON backend does — this backend is storage-only; state legality stays in
-``aet-state``.
+Settled history is left in the append-only ``work-history.jsonl`` file. This
+backend is storage-only; state legality stays in ``aet-state``.
 
 Ref updates are atomic under git's own ref locks. A multi-task ``save`` writes
 per-task refs and skips tasks whose blob is unchanged versus what was loaded, so
@@ -78,12 +77,16 @@ class GitRefsBackend(TaskBackend):
 
     def __init__(
         self,
-        queue_file: str = ".agents/work-queue.json",
+        queue_file: str = ".agents/aet-queue",
         history_file: str = ".agents/work-history.jsonl",
     ) -> None:
         self.queue_file = queue_file
         self.history_file = history_file
         queue_dir = Path(queue_file).resolve().parent
+        # The queue path need not exist yet; walk up to the nearest existing
+        # ancestor so discovery still works for freshly-created repos.
+        while not queue_dir.is_dir() and queue_dir != queue_dir.parent:
+            queue_dir = queue_dir.parent
         self.repo_root = self._discover_repo_root(queue_dir)
         # Blob SHAs observed at the most recent ``load`` (or last successful
         # ``save``), keyed by task id. Drives the skip-unchanged optimization and

@@ -254,7 +254,7 @@ class TestEnforceBaseHygiene(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, ".agents").mkdir()
-            Path(repo_root, ".agents", "work-queue.json").write_text(
+            Path(repo_root, ".agents", "aet-queue").write_text(
                 '{"tasks": []}', encoding="utf-8"
             )
             with patch.dict(os.environ, {}, clear=False):
@@ -265,7 +265,7 @@ class TestEnforceBaseHygiene(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, ".agents").mkdir()
-            queue_file = Path(repo_root, ".agents", "work-queue.json")
+            queue_file = Path(repo_root, ".agents", "aet-queue")
             queue_file.write_text('{"tasks": []}', encoding="utf-8")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(
@@ -285,7 +285,7 @@ class TestEnforceBaseHygiene(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, ".agents").mkdir()
-            Path(repo_root, ".agents", "work-queue.json").write_text(
+            Path(repo_root, ".agents", "aet-queue").write_text(
                 '{"tasks": []}', encoding="utf-8"
             )
             Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
@@ -592,7 +592,7 @@ class TestProcessTaskPlanPresence(unittest.TestCase):
 
 def _write_queue(repo_root: str, tasks: list[dict]) -> str:
     """Write a wrapper-format queue file and return its path."""
-    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
     Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
     with open(queue_file, "w", encoding="utf-8") as f:
         json.dump(
@@ -651,7 +651,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                         exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
-            with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
+            with open(os.path.join(repo_root, ".agents", "aet-queue"), encoding="utf-8") as f:
                 queue = json.load(f)
             task = queue["tasks"][0]
             self.assertEqual(task["state"], "awaiting_merge")
@@ -699,7 +699,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
-            with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
+            with open(os.path.join(repo_root, ".agents", "aet-queue"), encoding="utf-8") as f:
                 queue = json.load(f)
             task = queue["tasks"][0]
             self.assertEqual(task["state"], "planned")
@@ -749,7 +749,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
-            with open(os.path.join(repo_root, ".agents", "work-queue.json"), encoding="utf-8") as f:
+            with open(os.path.join(repo_root, ".agents", "aet-queue"), encoding="utf-8") as f:
                 queue = json.load(f)
             task = queue["tasks"][0]
             self.assertEqual(task["state"], "planned")

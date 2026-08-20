@@ -145,9 +145,9 @@ app = typer.Typer(invoke_without_command=True)
 @app.callback()
 def next_cmd(
     queue_file: str = typer.Option(
-        ".agents/work-queue.json",
+        ".agents/aet-queue",
         "--queue-file",
-        help="Path to work-queue.json",
+        help="Path to queue anchor",
     ),
     history_file: str = typer.Option(
         ".agents/work-history.jsonl",

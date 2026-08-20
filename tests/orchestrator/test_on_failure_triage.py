@@ -54,7 +54,7 @@ def _init_git_repo(repo_root: str) -> None:
 
 def _write_queue(repo_root: str, tasks: list[dict]) -> str:
     """Write a wrapper-format queue file and return its path."""
-    queue_file = os.path.join(repo_root, ".agents", "work-queue.json")
+    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
     Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
     with open(queue_file, "w", encoding="utf-8") as f:
         json.dump(

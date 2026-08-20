@@ -653,7 +653,7 @@ class TestCheckBaseHygiene(unittest.TestCase):
             self._init_repo(repo_root)
             agents_dir = Path(repo_root, ".agents")
             agents_dir.mkdir()
-            for sidecar in ("work-queue.json.lock", "work-queue.lease"):
+            for sidecar in ("aet-queue.lock", "aet-queue.lease"):
                 (agents_dir / sidecar).write_text("", encoding="utf-8")
 
             ok, msg = worktree.check_base_hygiene(repo_root)

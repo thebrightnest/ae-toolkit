@@ -230,7 +230,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
         task_id, plan, queue = _normalize_verify_args(
             args.task_id,
             getattr(args, "plan_or_queue", None),
-            getattr(args, "queue", ".agents/work-queue.json"),
+            getattr(args, "queue", ".agents/aet-queue"),
         )
     except ValueError as exc:
         return _fail(str(exc))
@@ -277,7 +277,7 @@ def cmd_ship(args):
         task_id, plan, queue = _normalize_close_args(
             args.task_id,
             getattr(args, "plan", None),
-            getattr(args, "queue", ".agents/work-queue.json"),
+            getattr(args, "queue", ".agents/aet-queue"),
         )
     except ValueError as exc:
         return _fail(str(exc))
@@ -1189,7 +1189,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         argparse.Namespace(
             command="record-merge",
             task_id=task_id,
-            queue=".agents/work-queue.json",
+            queue=".agents/aet-queue",
             plan=str(plan_path),
             dry_run=False,
             branch=task_id,
@@ -1222,8 +1222,8 @@ def _add_close_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "queue",
         nargs="?",
-        default=".agents/work-queue.json",
-        help="Path to the work queue JSON file.",
+        default=".agents/aet-queue",
+        help="Path to the queue anchor.",
     )
     parser.add_argument(
         "--branch",
@@ -1359,8 +1359,8 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument(
         "queue",
         nargs="?",
-        default=".agents/work-queue.json",
-        help="Path to the work queue JSON file.",
+        default=".agents/aet-queue",
+        help="Path to the queue anchor.",
     )
     verify_parser.add_argument(
         "--squash-fallback",
@@ -1642,8 +1642,8 @@ def ship_verify(
         help="Plan path (when first arg is a task ID) or queue path (when first arg is a plan).",
     ),
     queue: str = typer.Argument(
-        ".agents/work-queue.json",
-        help="Path to the work queue JSON file.",
+        ".agents/aet-queue",
+        help="Path to the queue anchor.",
     ),
     squash_fallback: bool = typer.Option(
         False,
@@ -1690,8 +1690,8 @@ def ship_close(
         ),
     ),
     queue: str = typer.Argument(
-        ".agents/work-queue.json",
-        help="Path to the work queue JSON file.",
+        ".agents/aet-queue",
+        help="Path to the queue anchor.",
     ),
     branch: Optional[str] = typer.Option(
         None,
@@ -1750,8 +1750,8 @@ def ship_record_merge(
         ),
     ),
     queue: str = typer.Argument(
-        ".agents/work-queue.json",
-        help="Path to the work queue JSON file.",
+        ".agents/aet-queue",
+        help="Path to the queue anchor.",
     ),
     branch: Optional[str] = typer.Option(
         None,

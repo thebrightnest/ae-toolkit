@@ -183,13 +183,22 @@ class TestOrchestratorBreakerWiring:
 
     def test_finalize_failure_records_signature(self, tmp_path):
         """A failed task has its failure signature recorded on the record."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True)
+        (repo / "file.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+
         backend = orchestrator._make_backend(
-            str(tmp_path / "work-queue.json")
+            str(repo / "aet-queue")
         )
         task = {
             "id": "t1",
             "state": "in_progress",
-            "plan_file": str(tmp_path / "plan.md"),
+            "plan_file": str(repo / "plan.md"),
         }
         backend.save([task])
 
@@ -213,8 +222,17 @@ class TestOrchestratorBreakerWiring:
 
     def test_finalize_canceled_does_not_record(self, tmp_path):
         """A canceled task does not get a failure signature."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True)
+        (repo / "file.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+
         backend = orchestrator._make_backend(
-            str(tmp_path / "work-queue.json")
+            str(repo / "aet-queue")
         )
         task = {"id": "t1", "state": "in_progress"}
         backend.save([task])
@@ -255,7 +273,7 @@ class TestOrchestratorBreakerWiring:
             capture_output=True,
         )
 
-        queue_file = str(repo / ".agents" / "work-queue.json")
+        queue_file = str(repo / ".agents" / "aet-queue")
         os.makedirs(os.path.dirname(queue_file), exist_ok=True)
         backend = orchestrator._make_backend(queue_file)
 

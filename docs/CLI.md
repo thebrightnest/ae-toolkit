@@ -50,7 +50,7 @@ Reconcile stored state against git without mutating.
 
 ### Options
 
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 
 ## `aet state heal`
 
@@ -58,7 +58,7 @@ Reconcile stored state against git and apply safe fixes.
 
 ### Options
 
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 - `--apply` *boolean* — Apply proposed changes; otherwise dry-run. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
@@ -71,7 +71,7 @@ Check if a transition is legal.
 - `task_id` *str* — Task ID. (required)
 - `from_stage` *str* — Current stage. (required)
 - `to_stage` *str* — Target stage. (required)
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 
 ## `aet state reset`
 
@@ -80,7 +80,7 @@ Recompute a task from git and blockers, reset to ready/blocked, clear stale runt
 ### Options
 
 - `task_id` *str* — Task ID. (required)
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 - `--apply` *boolean* — Apply the reset; otherwise dry-run. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
@@ -90,7 +90,7 @@ Backfill the portable plan spec into records that predate R-19.
 
 ### Options
 
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 - `--rev` *str* — Git revision that still carries the plan files. (default: `b95538dd~1`)
 - `--apply` *boolean* — Write the recovered specs; otherwise dry-run. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
@@ -104,7 +104,7 @@ Validate legality, then apply state change.
 - `task_id` *str* — Task ID. (required)
 - `from_stage` *str* — Current stage. (required)
 - `to_stage` *str* — Target stage. (required)
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 - `--reason` *str* — Reason for transition (used as history evidence).
 - `--dry-run` *boolean* — Show changes without applying them. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
@@ -117,7 +117,7 @@ Set the pipeline stage sub-state for an in-progress task.
 
 - `task_id` *str* — Task ID. (required)
 - `stage` *str* — Pipeline stage to record. (required)
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 - `--dry-run` *boolean* — Show changes without applying them. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
@@ -128,7 +128,7 @@ Resolve and record the merge commit for a task.
 ### Options
 
 - `task_id` *str* — Task ID. (required)
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of origin/<target-branch>.
 - `--target-branch` *str* — Branch to verify the merge against. Defaults to the configured integration branch.
@@ -142,7 +142,7 @@ Report/remove local refs stranded by the old model. Local-only; never touches or
 
 ### Options
 
-- `queue` *str* — Path to queue JSON. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 - `--apply` *boolean* — Remove stranded refs; otherwise dry-run. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
@@ -163,7 +163,7 @@ Add a plan to the backlog.
 - `target` *str* — Plan file path or task ID to add to the backlog (required)
 - `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
 - `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 
 ## `aet desk`
@@ -174,7 +174,7 @@ Review cockpit for awaiting_merge tasks.
 
 - `--eligibility` *boolean* — Show per-class clean-merge counts and zero-review eligibility. (default: `False`)
 - `--policy` *str* — Path to the zero-review policy JSON. (default: `.agents/review-policy.json`)
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to the settled work-history JSONL (also used for eligibility). (default: `.agents/work-history.jsonl`)
 - `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
 - `--json` *boolean* — Emit a machine-readable JSON projection. (default: `False`)
@@ -191,7 +191,7 @@ Merge a PR and record the task as merged.
 ### Options
 
 - `task_id` *str* — Task ID to merge. (required)
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to the settled work-history JSONL. (default: `.agents/work-history.jsonl`)
 
 ## `aet desk abandon`
@@ -202,7 +202,7 @@ Abandon a task with a recorded reason.
 
 - `task_id` *str* — Task ID to abandon. (required)
 - `--reason` *str* — Required reason for abandoning the task. (required)
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to the settled work-history JSONL. (default: `.agents/work-history.jsonl`)
 
 ## `aet docs`
@@ -394,7 +394,7 @@ Reconcile the existing work queue (never scans docs/plans).
 
 ### Options
 
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 - `--plans-dir` *str* — Deprecated and ignored: sync no longer scans the plans directory. (default: `docs/plans`)
 - `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
@@ -530,7 +530,7 @@ Verify a branch has merged without mutating state.
 
 - `task_id` *str* — Task ID to verify, or path to the plan markdown file. (required)
 - `plan_or_queue` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan).
-- `queue` *str* — Path to the work queue JSON file. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to the queue anchor. (default: `.agents/aet-queue`)
 - `--squash-fallback` *boolean* — Enable diff-based squash-merge fallback when ancestry and gh fail. (default: `False`)
 - `--branch` *str* — Branch name to verify. Overrides the task's branch field.
 - `--target-branch` *str* — Target branch to verify the merge against (default: configured integration branch).
@@ -543,7 +543,7 @@ Record post-merge closure for a task.
 
 - `task_id` *str* — Task ID to close, or path to the plan markdown file. (required)
 - `plan` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan). Must be a .md file unless the first arg is already a plan.
-- `queue` *str* — Path to the work queue JSON file. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to the queue anchor. (default: `.agents/aet-queue`)
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.
 - `--target-branch` *str* — Target branch the source branch merged into (default: configured integration branch). Use 'main' when closing an epic whose integration branch merged to trunk.
@@ -558,7 +558,7 @@ Hidden alias for close.
 
 - `task_id` *str* — Task ID to close, or path to the plan markdown file. (required)
 - `plan` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan). Must be a .md file unless the first arg is already a plan.
-- `queue` *str* — Path to the work queue JSON file. (default: `.agents/work-queue.json`)
+- `queue` *str* — Path to the queue anchor. (default: `.agents/aet-queue`)
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.
 - `--target-branch` *str* — Target branch the source branch merged into (default: configured integration branch). Use 'main' when closing an epic whose integration branch merged to trunk.
@@ -611,7 +611,7 @@ Promote an approved plan into the sprint.
 ### Options
 
 - `target` *str* — Plan file path or task ID to promote (required)
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 - `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
 - `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
@@ -635,7 +635,6 @@ Configure the AET project config.
 
 ### Options
 
-- `--task-backend` *str* — Choose the task backend (default: git-refs).
 - `--trunk-branch` *str* — Set the trunk branch name.
 - `--integration-mode` *str* — Set the integration mode.
 - `--integration-branch` *str* — Set the integration branch name.
@@ -697,7 +696,7 @@ Pick the next ready task.
 
 ### Options
 
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 - `--plans-dir` *path* — Directory containing atomic plan markdown files (default: `docs/plans`)
 
@@ -714,7 +713,7 @@ Reconcile live plans with their GitHub issue mirrors.
 - `--apply` *boolean* — Apply corrective writes (default is a dry run) (default: `False`)
 - `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
 - `--plans-dir` *path* — Directory containing atomic plan markdown files (default: `docs/plans`)
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 - `--json` *boolean* — Emit the raw reconcile report as JSON (default: `False`)
 
@@ -757,7 +756,7 @@ Show work queue status.
 
 ### Options
 
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 - `--plans-dir` *path* — Directory containing atomic plan markdown files (default: `docs/plans`)
 - `--json` *boolean* — Print a machine-readable JSON projection instead of the human report (default: `False`)

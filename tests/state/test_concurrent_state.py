@@ -15,8 +15,10 @@ import unittest
 from pathlib import Path
 
 from aet import queue as queue_lib
+from tests.state._helpers import init_git_repo, load_git_queue, seed_git_queue
 
 _AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
+
 _spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
 )
@@ -44,19 +46,21 @@ def _worker_set_stages(queue_path: str, task_id: str, stages: list[str]) -> None
 
 
 def _worker_reader(queue_path: str, stop: multiprocessing.Event, result_path: str) -> None:
+    from aet.backends.git_refs_backend import GitRefsBackend
+
+    backend = GitRefsBackend(
+        queue_file=queue_path,
+        history_file=str(Path(queue_path).with_name("work-history.jsonl")),
+    )
     reads = 0
     errors: list[str] = []
     while not stop.is_set():
         try:
-            with open(queue_path, "r", encoding="utf-8") as f:
-                json.load(f)
+            backend.load()
             reads += 1
-        except json.JSONDecodeError as e:
+        except Exception as e:  # noqa: BLE001
             errors.append(str(e))
             break
-        except FileNotFoundError:
-            # Writer may not have created the file yet.
-            time.sleep(0.001)
     Path(result_path).write_text(json.dumps({"reads": reads, "errors": errors}), encoding="utf-8")
 
 
@@ -88,7 +92,7 @@ class TestQueueLock(unittest.TestCase):
     def test_queue_lock_reentrant_same_process(self):
         """queue_lock can be nested in the same process without deadlocking."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = str(Path(tmpdir) / "work-queue.json")
+            queue_path = str(Path(tmpdir) / "aet-queue")
             Path(queue_path).write_text(json.dumps({"tasks": []}), encoding="utf-8")
 
             with queue_lib.queue_lock(queue_path):
@@ -99,7 +103,7 @@ class TestQueueLock(unittest.TestCase):
     def test_queue_lock_leaves_sidecar_file_on_disk(self):
         """The lock sidecar is never unlinked; it must survive release."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = str(Path(tmpdir) / "work-queue.json")
+            queue_path = str(Path(tmpdir) / "aet-queue")
             Path(queue_path).write_text(json.dumps({"tasks": []}), encoding="utf-8")
             lock_path = f"{queue_path}.lock"
 
@@ -114,7 +118,7 @@ class TestQueueLock(unittest.TestCase):
     def test_stale_lock_file_does_not_block_new_acquirer(self):
         """A leftover lock file with no live holder must not block acquisition."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = str(Path(tmpdir) / "work-queue.json")
+            queue_path = str(Path(tmpdir) / "aet-queue")
             Path(queue_path).write_text(json.dumps({"tasks": []}), encoding="utf-8")
             lock_path = f"{queue_path}.lock"
             Path(lock_path).write_text("", encoding="utf-8")
@@ -128,22 +132,15 @@ class TestSetStageBackendRouting(unittest.TestCase):
     def test_set_stage_routes_through_backend_and_preserves_envelope(self):
         """set-stage uses the backend, so dict-wrapper metadata survives."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
-            queue_path.write_text(
-                json.dumps(
-                    {
-                        "source_prd": "docs/prds/example.md",
-                        "queue_updated_at": "2026-07-09T00:00:00Z",
-                        "tasks": [
-                            {
-                                "id": "t1",
-                                "state": "in_progress",
-                                "stage": "plan-approved",
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [{"id": "t1", "state": "in_progress", "stage": "plan-approved"}],
+                wrapper={
+                    "source_prd": "docs/prds/example.md",
+                    "queue_updated_at": "2026-07-09T00:00:00Z",
+                },
             )
 
             args = aet_state.argparse.Namespace(
@@ -156,13 +153,12 @@ class TestSetStageBackendRouting(unittest.TestCase):
             rc = aet_state.cmd_set_stage(args)
             self.assertEqual(rc, 0)
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
+            backend = aet_state.make_backend(str(queue_path))
+            data = backend.load()
             self.assertIsInstance(data, dict)
-            self.assertEqual(data.get("source_prd"), "docs/prds/example.md")
-            self.assertIn("queue_updated_at", data)
-            task = data["tasks"][0]
+            self.assertEqual(backend._envelope.get("source_prd"), "docs/prds/example.md")
+            self.assertIn("queue_updated_at", backend._envelope)
+            task = data["queue"][0]
             self.assertEqual(task["stage"], "implemented")
             self.assertEqual(task["history"][0]["to"], "implemented")
 
@@ -171,12 +167,13 @@ class TestConcurrentState(unittest.TestCase):
     def test_parallel_set_stage_no_lost_updates(self):
         """Concurrent set-stage on distinct tasks never loses a history entry."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
             tasks = [
                 {"id": f"t{i}", "state": "in_progress", "stage": "plan-approved"}
                 for i in range(4)
             ]
-            queue_path.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
+            queue_path, _history_path = seed_git_queue(repo_root, tasks)
 
             processes = []
             for i in range(4):
@@ -192,10 +189,7 @@ class TestConcurrentState(unittest.TestCase):
                 p.join(timeout=60)
                 self.assertEqual(p.exitcode, 0, "worker process exited with error")
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            by_id = {t["id"]: t for t in data["tasks"]}
+            by_id = {t["id"]: t for t in load_git_queue(queue_path)}
             for i in range(4):
                 task_id = f"t{i}"
                 task = by_id[task_id]
@@ -204,14 +198,13 @@ class TestConcurrentState(unittest.TestCase):
                 self.assertEqual(history_tos, expected)
 
     def test_parallel_transitions_valid_json_every_read(self):
-        """A reader never sees a partially-written queue file."""
+        """A reader never sees a partially-written queue state."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            queue_path = Path(tmpdir) / "work-queue.json"
-            queue_path.write_text(
-                json.dumps(
-                    {"tasks": [{"id": "t1", "state": "in_progress", "stage": "start"}]}
-                ),
-                encoding="utf-8",
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [{"id": "t1", "state": "in_progress", "stage": "start"}],
             )
 
             stop = multiprocessing.Event()

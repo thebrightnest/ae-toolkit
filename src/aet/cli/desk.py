@@ -56,8 +56,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--queue-file",
-        default=".agents/work-queue.json",
-        help="Path to work-queue.json",
+        default=".agents/aet-queue",
+        help="Path to queue anchor",
     )
     parser.add_argument(
         "--history-file",
@@ -79,8 +79,8 @@ def build_parser() -> argparse.ArgumentParser:
     action_parent = argparse.ArgumentParser(add_help=False)
     action_parent.add_argument(
         "--queue-file",
-        default=".agents/work-queue.json",
-        help="Path to work-queue.json",
+        default=".agents/aet-queue",
+        help="Path to queue anchor",
     )
     action_parent.add_argument(
         "--history-file",
@@ -530,9 +530,9 @@ def desk_callback(
         help="Path to the zero-review policy JSON.",
     ),
     queue_file: str = typer.Option(
-        ".agents/work-queue.json",
+        ".agents/aet-queue",
         "--queue-file",
-        help="Path to work-queue.json",
+        help="Path to queue anchor",
     ),
     history_file: str = typer.Option(
         ".agents/work-history.jsonl",
@@ -570,9 +570,9 @@ def desk_callback(
 def desk_merge(
     task_id: str = typer.Argument(..., help="Task ID to merge."),
     queue_file: str = typer.Option(
-        ".agents/work-queue.json",
+        ".agents/aet-queue",
         "--queue-file",
-        help="Path to work-queue.json",
+        help="Path to queue anchor",
     ),
     history_file: str = typer.Option(
         ".agents/work-history.jsonl",
@@ -598,9 +598,9 @@ def desk_abandon(
         help="Required reason for abandoning the task.",
     ),
     queue_file: str = typer.Option(
-        ".agents/work-queue.json",
+        ".agents/aet-queue",
         "--queue-file",
-        help="Path to work-queue.json",
+        help="Path to queue anchor",
     ),
     history_file: str = typer.Option(
         ".agents/work-history.jsonl",

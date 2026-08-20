@@ -9,7 +9,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet.backends.git_refs_backend import GitRefsBackend
+from tests.state._helpers import init_git_repo, load_git_queue, seed_git_queue
+
 _AET_STATE_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
+
 _spec = importlib.util.spec_from_loader(
     "aet_state", importlib.machinery.SourceFileLoader("aet_state", str(_AET_STATE_PY))
 )
@@ -28,22 +32,28 @@ def _git_mock(responses):
     """Return a mock subprocess.run that answers git commands.
 
     responses maps tuple(git_args) -> (returncode, stdout, stderr).
+    Unknown git commands are delegated to the real subprocess so the
+    git-refs backend can operate on the temporary repository.
     """
+    real_run = __import__("subprocess").run
 
     def mock_run(cmd, **kwargs):
         args = tuple(cmd[1:])
-        rc, out, err = responses.get(args, (1, "", ""))
-        return MockResult(rc, out, err)
+        if args in responses:
+            rc, out, err = responses[args]
+            return MockResult(rc, out, err)
+        return real_run(cmd, **kwargs)
 
     return mock_run
 
 
-def _make_queue(tmpdir, task):
-    """Write a queue file and history sidecar under tmpdir."""
-    queue_path = Path(tmpdir) / "work-queue.json"
-    history_path = queue_path.with_name("work-history.jsonl")
-    history_path.write_text("", encoding="utf-8")
-    queue_path.write_text(json.dumps({"tasks": [task]}), encoding="utf-8")
+def _make_queue(tmpdir, tasks):
+    """Create a git-refs queue and history sidecar under tmpdir."""
+    repo_root = Path(tmpdir)
+    init_git_repo(repo_root)
+    if not isinstance(tasks, list):
+        tasks = [tasks]
+    queue_path, history_path = seed_git_queue(repo_root, tasks)
     return queue_path
 
 
@@ -88,9 +98,7 @@ class TestHealMissingBranch(unittest.TestCase):
                 rc = aet_state.cmd_heal(args)
 
             self.assertEqual(rc, 0)
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            task = after["tasks"][0]
+            task = load_git_queue(queue_path)[0]
             self.assertEqual(task["state"], "ready")
             self.assertNotIn("branch", task)
             self.assertNotIn("worktree", task)
@@ -125,9 +133,7 @@ class TestHealMissingBranch(unittest.TestCase):
                 rc = aet_state.cmd_heal(args)
 
             self.assertEqual(rc, 0)
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            task = after["tasks"][0]
+            task = load_git_queue(queue_path)[0]
             self.assertEqual(task["state"], "ready")
             self.assertNotIn("branch", task)
             self.assertNotIn("worktree", task)
@@ -149,9 +155,12 @@ class TestHealMissingBranch(unittest.TestCase):
                 },
             )
             # Append the blocker to the queue so derive_status can resolve it.
-            with open(queue_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            data["tasks"].append(
+            backend = GitRefsBackend(
+                queue_file=str(queue_path),
+                history_file=str(queue_path.with_name("work-history.jsonl")),
+            )
+            queue = backend.load()["queue"]
+            queue.append(
                 {
                     "id": "t2",
                     "state": "planned",
@@ -159,8 +168,7 @@ class TestHealMissingBranch(unittest.TestCase):
                     "branch": None,
                 }
             )
-            with open(queue_path, "w", encoding="utf-8") as f:
-                json.dump(data, f)
+            backend.save(queue)
 
             responses = {
                 ("show-ref", "--verify", "--quiet", "refs/heads/feat-t1"): (1, "", ""),
@@ -177,9 +185,7 @@ class TestHealMissingBranch(unittest.TestCase):
                 rc = aet_state.cmd_heal(args)
 
             self.assertEqual(rc, 0)
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            by_id = {t["id"]: t for t in after["tasks"]}
+            by_id = {t["id"]: t for t in load_git_queue(queue_path)}
             self.assertEqual(by_id["t1"]["state"], "blocked")
             self.assertNotIn("branch", by_id["t1"])
 
@@ -217,10 +223,9 @@ class TestHealMissingBranch(unittest.TestCase):
             self.assertIn("t1: in_progress -> ready", output)
             self.assertIn("branch no longer exists", output)
 
-            with open(queue_path, "r", encoding="utf-8") as f:
-                after = json.load(f)
-            self.assertEqual(after["tasks"][0]["state"], "in_progress")
-            self.assertEqual(after["tasks"][0]["branch"], "feat-t1")
+            task = load_git_queue(queue_path)[0]
+            self.assertEqual(task["state"], "in_progress")
+            self.assertEqual(task["branch"], "feat-t1")
 
     def test_audit_reports_missing_branch_pair(self):
         """audit names the (ready|blocked, in_progress) discrepancy."""
