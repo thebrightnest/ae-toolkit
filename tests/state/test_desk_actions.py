@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import io
+import json
 import sys
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -55,6 +56,12 @@ def _write_plan(tmp_path: Path, plan_id: str, status: str = "approved") -> Path:
 
 def _write_queue(tmp_path: Path, tasks: list[dict]) -> str:
     init_git_repo(tmp_path)
+    # Desk actions exercise the shared-posture seal/closure path, which
+    # requires a project-scope config so the history file is written and the
+    # mandatory push is not exempt under ADR-055. The config must sit next to
+    # the queue file because desk.py derives config_path from queue_file.
+    config_path = tmp_path / "aet-config.json"
+    config_path.write_text(json.dumps({}), encoding="utf-8")
     queue_path, history_path = seed_git_queue(
         tmp_path,
         tasks,

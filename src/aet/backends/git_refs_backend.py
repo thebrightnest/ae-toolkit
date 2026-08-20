@@ -27,7 +27,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from aet.backends.base import TaskBackend
+from aet.backends.base import SHADOW_POSTURE, SHARED_POSTURE, TaskBackend
 from aet.queue import read_history
 
 TASKS_REF_PREFIX = "refs/aet/tasks/"
@@ -79,9 +79,11 @@ class GitRefsBackend(TaskBackend):
         self,
         queue_file: str = ".agents/aet-queue",
         history_file: str = ".agents/work-history.jsonl",
+        posture: str = SHARED_POSTURE,
     ) -> None:
         self.queue_file = queue_file
         self.history_file = history_file
+        self.posture = posture
         queue_dir = Path(queue_file).resolve().parent
         # The queue path need not exist yet; walk up to the nearest existing
         # ancestor so discovery still works for freshly-created repos.
@@ -320,10 +322,24 @@ class GitRefsBackend(TaskBackend):
         closure boundary), a failure raises :exc:`RefsPushError` naming the
         recovery action.
 
+        In shadow posture pushes are suppressed entirely: best-effort pushes are
+        a no-op and mandatory pushes raise an explicit ADR-055 exemption rather
+        than silently bypassing the closure durability rule.
+
         A repository with no remote is treated as success for best-effort pushes
         (there is nothing to push), but mandatory pushes raise because the
         durability guarantee cannot be satisfied without a remote.
         """
+        if self.posture == SHADOW_POSTURE:
+            if mandatory:
+                raise self.RefsPushError(
+                    "Shadow posture exempts this closure from ADR-055's "
+                    "mandatory push of refs/aet/* (no project-scope config; "
+                    "refs stay local). Use `aet configure --scope team` to opt "
+                    "into shared posture."
+                )
+            return True
+
         if not _has_remote(self.repo_root):
             if mandatory:
                 raise self.RefsPushError(
@@ -456,6 +472,9 @@ class GitRefsBackend(TaskBackend):
         promoted here; ``aet-state`` advances the forward frontier before
         sealing.
 
+        In shadow posture the history file is not written: AET leaves no
+        artifact in the working tree.
+
         A per-task tombstone ref ``refs/aet/sealed/<id>`` is written in the
         same atomic transaction as the task ref deletion so the two cannot
         diverge. The tombstone replicates by fetch/push and lets other clones
@@ -467,8 +486,6 @@ class GitRefsBackend(TaskBackend):
         re-imported ``queue`` module would self-deadlock (see ``base.py``).
         Ref mutation is still atomic under git's own ref locks.
         """
-        from aet.queue import append_history_record
-
         data = self.load()
         task = next(
             (t for t in data["queue"] if t.get("id") == task_id), None
@@ -500,7 +517,10 @@ class GitRefsBackend(TaskBackend):
         self._envelope["schema_version"] = ENVELOPE_SCHEMA_VERSION
         self._write_envelope()
 
-        append_history_record(self._resolve_history(history_file), task)
+        if self.posture != SHADOW_POSTURE:
+            from aet.queue import append_history_record
+
+            append_history_record(self._resolve_history(history_file), task)
         return task
 
     # -- envelope -------------------------------------------------------------
