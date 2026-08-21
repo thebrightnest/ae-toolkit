@@ -1477,8 +1477,8 @@ class TestApplyTransitionClosure(unittest.TestCase):
         )
         return aet_state.make_backend(str(queue_path))
 
-    def test_abandoned_closure_archives_plan_outside_repo(self):
-        """An abandoned transition archives the plan to ~/.aet/<slug>/plans/archive/ (R-5)."""
+    def test_abandoned_closure_does_not_archive_plan(self):
+        """An abandoned transition no longer archives the plan (R-7)."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo(repo_root)
             plan = self._commit_plan(repo_root, "docs/plans/t1.md")
@@ -1503,14 +1503,10 @@ class TestApplyTransitionClosure(unittest.TestCase):
             ledger_path = Path(repo_root) / ".agents" / "ledger.jsonl"
             event = json.loads(ledger_path.read_text(encoding="utf-8").strip().split("\n")[0])
             self.assertEqual(event["kind"], "land")
-            archived_to = event["payload"].get("archived_to")
-            self.assertIsNotNone(archived_to)
-            self.assertFalse(Path(archived_to).is_relative_to(Path(repo_root)))
-            self.assertTrue(Path(archived_to).exists())
-            self.assertEqual(Path(archived_to).name, "t1.md")
+            self.assertNotIn("archived_to", event["payload"])
 
-    def test_merged_closure_archives_plan_outside_repo(self):
-        """A merged transition archives the plan to ~/.aet/<slug>/plans/archive/ (R-5)."""
+    def test_merged_closure_does_not_archive_plan(self):
+        """A merged transition no longer archives the plan (R-7)."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo(repo_root)
             plan = self._commit_plan(repo_root, "docs/plans/t1.md")
@@ -1541,11 +1537,7 @@ class TestApplyTransitionClosure(unittest.TestCase):
             ledger_path = Path(repo_root) / ".agents" / "ledger.jsonl"
             event = json.loads(ledger_path.read_text(encoding="utf-8").strip().split("\n")[0])
             self.assertEqual(event["kind"], "land")
-            archived_to = event["payload"].get("archived_to")
-            self.assertIsNotNone(archived_to)
-            self.assertFalse(Path(archived_to).is_relative_to(Path(repo_root)))
-            self.assertTrue(Path(archived_to).exists())
-            self.assertEqual(Path(archived_to).name, "t1.md")
+            self.assertNotIn("archived_to", event["payload"])
 
 
 if __name__ == "__main__":

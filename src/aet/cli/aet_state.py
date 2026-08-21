@@ -514,25 +514,12 @@ def _apply_transition(
         backend.close_task(task["id"], evidence)
 
         # Record the terminal closure event in the content-addressed ledger.
-        # Plan footer writes are gone (R-4/R-19), but R-5 archives the settled
-        # plan outside the repository so historical metrics keep a readable
-        # plan file without dual-reading the in-repo legacy archive.
-        from aet import telemetry  # local import avoids cycle with telemetry
-
+        # Plan footer writes are gone (R-4/R-19), and the R-5 plan archive is
+        # retired with R-7; the digest is derived from the task record itself.
         ledger_path = resolve_ledger_path()
         ledger = Ledger(ledger_path)
         merge_ref = task.get("merge_commit")
-        archived_to = None
-        plan_file = task.get("plan_file")
-        if plan_file:
-            archived_to = queue_lib.archive_plan_file(
-                plan_file,
-                telemetry.derive_project_slug(cwd),
-                repo_root=cwd,
-            )
-        land_payload = _land_digest(
-            task, archived_to=str(archived_to) if archived_to else None
-        )
+        land_payload = _land_digest(task)
         if merge_ref:
             ledger.write_event(
                 source="aet-state",
@@ -555,31 +542,33 @@ def _apply_transition(
             )
 
 
-def _land_digest(
-    task: dict[str, Any], archived_to: str | None = None
-) -> dict[str, Any]:
-    """Build the R-8 closure digest payload for a ``land`` event."""
+def _land_digest(task: dict[str, Any]) -> dict[str, Any]:
+    """Build the R-8 closure digest payload for a ``land`` event.
+
+    The digest is derived from the task record's portable spec (R-19) when
+    available; otherwise it falls back to the on-disk plan file.  The R-5
+    ``archived_to`` field is no longer written (R-7), but historical ``land``
+    events keep the field they were written with (ADR-059).
+    """
     digest: dict[str, Any] = {
         "merge_ref": task.get("merge_commit") or task.get("branch")
     }
-    if archived_to is not None:
-        digest["archived_to"] = archived_to
-    plan_file = task.get("plan_file")
-    # Prefer the archived copy: after R-5 the repo plan may be removed or
-    # absent on the machine that runs the closure.
-    path: Path | None = None
-    if archived_to is not None:
-        path = Path(archived_to)
-    elif plan_file is not None:
-        path = Path(plan_file)
-    if path is not None:
-        try:
-            content = path.read_bytes()
-            digest["plan_hash"] = hashlib.sha256(content).hexdigest()
-            text = content.decode("utf-8", errors="ignore")
-            digest["prd_r_ids"] = sorted(set(re.findall(r"R-\d+", text)))
-        except OSError:
-            pass
+    content: bytes | None = None
+    spec = task.get("spec")
+    if isinstance(spec, dict):
+        # Spec serialization is the durable source after R-19.
+        content = json.dumps(spec, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    else:
+        plan_file = task.get("plan_file")
+        if plan_file is not None:
+            try:
+                content = Path(plan_file).read_bytes()
+            except OSError:
+                content = None
+    if content is not None:
+        digest["plan_hash"] = hashlib.sha256(content).hexdigest()
+        text = content.decode("utf-8", errors="ignore")
+        digest["prd_r_ids"] = sorted(set(re.findall(r"R-\d+", text)))
     return digest
 
 
@@ -1139,8 +1128,8 @@ def cmd_backfill_specs(args):
 
     Records created before R-19 carry only ``plan_file``, and the plan files
     were deleted in the commit that introduced the spec. This recovers each
-    record's plan from ``--rev`` in git — reproducible in any clone — from the
-    working tree, or from ``docs/plans/archive/`` for plans removed before R-19.
+    record's plan from ``--rev`` in git — reproducible in any clone — or from
+    the working tree for plans added after that revision.
 
     By default the live queue is backfilled.  Pass ``--history-file`` to
     backfill the settled history log instead; the rewrite is atomic and touches

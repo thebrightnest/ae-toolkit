@@ -1,8 +1,8 @@
 """Corpus-level lint for ``docs/plans/``.
 
 The corpus is the non-recursive set of ``*.md`` files directly under
-``docs/plans/``. Settled plans are archived under ``docs/plans/archive/`` at
-terminal closure and are intentionally excluded from scans.
+``docs/plans/``. Settled-ness is recorded in the provenance ledger (ADR-055),
+not by plan location, so there is no separate archive directory to exclude.
 
 Plan frontmatter ``status`` left the contract with ADR-055. This linter flags
 any plan that still carries a live (non-terminal) ``status`` field so the

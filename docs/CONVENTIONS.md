@@ -220,7 +220,6 @@ The `docs/` directory has strict boundaries for planning documents. Only atomic,
 | Directory             | Purpose                                                                        | Queue Ingestion                                           |
 | --------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | `docs/plans/`         | Atomic, implementable task plans (single session, one coherent behaviour change) | Yes — plans are admitted to the board via `aet sprint add` and `aet backlog add` |
-| `docs/plans/archive/` | Settled plans (`merged`/`abandoned`) moved here at terminal closure; excluded from scans | No                                                        |
 | `docs/prds/`          | Product Requirements Documents                                                 | No                                                        |
 | `docs/roadmaps/`      | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
 | `docs/audits/`        | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
