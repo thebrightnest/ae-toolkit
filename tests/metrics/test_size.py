@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from aet import metrics
 
@@ -96,6 +99,39 @@ def _make_plan_file(repo_root: str, plan_path: str, size: str) -> None:
         f"---\nid: test-task\nsize: {size}\n---\n\n# Test plan\n",
         encoding="utf-8",
     )
+
+
+def _spec(size: str | None = None) -> dict:
+    """Build a portable spec with the given declared size."""
+    frontmatter: dict[str, Any] = {}
+    if size is not None:
+        frontmatter["size"] = size
+    return {"frontmatter": frontmatter, "title": "Test plan", "body": "", "tasks": []}
+
+
+class TestDeclaredSizeFromSpec:
+    """Declared size is read from the portable spec on the record."""
+
+    def test_declared_size_for_task_reads_size_from_spec(self):
+        task = {"id": "has-size", "spec": _spec("M")}
+
+        assert metrics._declared_size_for_task(task) == "M"
+
+    def test_declared_size_for_task_returns_none_when_size_missing(self):
+        task = {"id": "no-size", "spec": _spec()}
+
+        assert metrics._declared_size_for_task(task) is None
+
+    def test_declared_size_for_task_returns_none_for_unknown_size(self):
+        task = {"id": "bad-size", "spec": _spec("XL")}
+
+        assert metrics._declared_size_for_task(task) is None
+
+    def test_declared_size_for_task_raises_when_spec_missing(self):
+        task = {"id": "no-spec"}
+
+        with pytest.raises(metrics.MissingSpecError):
+            metrics._declared_size_for_task(task)
 
 
 class TestAggregateDeliveredSize:
@@ -207,6 +243,7 @@ class TestBackfillDeliveredSize:
                     "settled_at": "2026-07-15T00:00:00Z",
                     "merge_commit": merge_commit,
                     "plan_file": "docs/plans/test-task.md",
+                    "spec": _spec("S"),
                 },
             ],
         )
@@ -235,6 +272,7 @@ class TestBackfillDeliveredSize:
                     "settled_at": "2026-07-15T00:00:00Z",
                     "merge_commit": merge_commit,
                     "plan_file": "docs/plans/test-task.md",
+                    "spec": _spec("M"),
                     "delivered_size": {
                         "headline": 999,
                         "total": 999,
@@ -259,7 +297,11 @@ class TestBackfillDeliveredSize:
         _write_history(
             history,
             [
-                {"id": "no-merge", "settled_at": "2026-07-15T00:00:00Z"},
+                {
+                    "id": "no-merge",
+                    "settled_at": "2026-07-15T00:00:00Z",
+                    "spec": _spec("S"),
+                },
             ],
         )
 
@@ -269,6 +311,29 @@ class TestBackfillDeliveredSize:
         assert result["skipped"] == 0
         assert result["unresolvable"] == 1
         assert result["reasons"]["no merge_commit recorded"] == 1
+
+    def test_backfill_fails_closed_when_spec_missing(self, tmp_path):
+        history = tmp_path / "history.jsonl"
+        _write_history(
+            history,
+            [
+                {
+                    "id": "no-spec",
+                    "settled_at": "2026-07-15T00:00:00Z",
+                    "merge_commit": "abc1234",
+                },
+            ],
+        )
+
+        result = metrics.backfill_delivered_size(str(history), str(tmp_path))
+
+        assert result["measured"] == 0
+        assert result["skipped"] == 0
+        assert result["unresolvable"] == 1
+        assert result["reasons"]["no spec recorded"] == 1
+        tasks = _read_history(history)
+        assert tasks[0]["delivered_size"]["status"] == "failed"
+        assert tasks[0]["delivered_size"]["reason"] == "no spec recorded"
 
     def test_backfill_run_twice_is_idempotent(self, tmp_path):
         repo_root = str(tmp_path / "repo")
@@ -284,6 +349,7 @@ class TestBackfillDeliveredSize:
                     "settled_at": "2026-07-15T00:00:00Z",
                     "merge_commit": merge_commit,
                     "plan_file": "docs/plans/test-task.md",
+                    "spec": _spec("S"),
                 },
             ],
         )
@@ -306,6 +372,7 @@ class TestBackfillDeliveredSize:
                     "id": "bad-commit",
                     "settled_at": "2026-07-15T00:00:00Z",
                     "merge_commit": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+                    "spec": _spec("S"),
                 },
             ],
         )
