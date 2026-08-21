@@ -7,7 +7,6 @@ import argparse
 import os
 import subprocess
 import sys
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Optional
 
@@ -17,6 +16,7 @@ import typer.core as typer_core
 import typer.main as typer_main
 
 from aet import docs_lint
+from aet.cli.help_index import _walk_commands
 
 AUTO_GENERATED_HEADER = (
     "<!-- AUTO-GENERATED: do not edit manually — run `aet docs generate` to refresh. -->"
@@ -43,22 +43,6 @@ def _repo_root_from(path: Path) -> Path:
 def _fail(message: str) -> int:
     print(f"error: {message}", file=sys.stderr)
     return 1
-
-
-def _walk_commands(
-    click_group: click.Group,
-    prefix: tuple[str, ...],
-) -> Iterator[tuple[tuple[str, ...], click.Command]]:
-    """Yield (path, command) for every command reachable from *click_group*."""
-    ctx = click.Context(click_group)
-    for name in click_group.list_commands(ctx):
-        cmd = click_group.get_command(ctx, name)
-        if cmd is None:
-            continue
-        path = (*prefix, name)
-        yield path, cmd
-        if isinstance(cmd, (click.Group, typer_core.TyperGroup)):
-            yield from _walk_commands(cmd, path)
 
 
 def _render_default(default: object) -> str:
