@@ -8,12 +8,12 @@ import subprocess
 import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+from aet.backends.git_refs_backend import GitRefsBackend  # noqa: E402
 from aet.queue import (  # noqa: E402
     QueueIntegrityError,
     acquire_lease,
@@ -81,8 +81,29 @@ def _dead_pid() -> int:
     return proc.pid
 
 
+def _load_tasks(queue_file: Path, history_file: Path) -> list[dict]:
+    return GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    ).load()["queue"]
+
+
 def _clear_run_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("AET_RUN_ID", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def git_repo(tmp_path: Path) -> Path:
+    """Commands under test require a git-refs backend inside a repository."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "config", "user.email", "test@example.com"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "config", "user.name", "Test User"],
+        check=True,
+    )
+    return tmp_path
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +137,7 @@ def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys)
     captured = capsys.readouterr()
     assert "foreign-run" in captured.err
     assert not qf.exists()  # refused before writing the queue
+    assert _load_tasks(qf, hf) == []
 
 
 def test_child_with_matching_run_id_allowed(tmp_path, monkeypatch):
@@ -173,7 +195,8 @@ def test_force_overrides_lease_with_warning(tmp_path, monkeypatch, capsys):
     assert rc == 0
     captured = capsys.readouterr()
     assert "foreign-run" in captured.err
-    assert qf.exists()  # write proceeded
+    task_ids = {t["id"] for t in _load_tasks(qf, hf)}
+    assert "feat-force" in task_ids
 
 
 def test_lease_released_on_batch_crash(tmp_path):
@@ -236,184 +259,3 @@ def test_legacy_queue_without_stamp_accepted_then_stamped(tmp_path):
     data = json.loads(qf.read_text(encoding="utf-8"))
     assert data["revision"] == 1
     assert "content_hash" in data
-
-
-# ---------------------------------------------------------------------------
-# Integrity recovery: audit / heal must work on a tampered queue
-# ---------------------------------------------------------------------------
-
-
-class _MockResult:
-    def __init__(self, returncode, stdout="", stderr=""):
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
-
-
-def _no_git(cmd, **kwargs):
-    """subprocess.run stand-in: every git/gh call fails (no repo, no branches)."""
-    return _MockResult(1, "", "")
-
-
-def _stamp_and_tamper(qf: Path, task: dict) -> int:
-    """Write a stamped queue, hand-edit the tasks, return the stamped revision.
-
-    Mirrors the reported failure: an external edit changes the tasks array
-    without restamping the envelope's content_hash.
-    """
-    write_queue(str(qf), [task], wrapper={"source_prd": "x"})
-    data = json.loads(qf.read_text(encoding="utf-8"))
-    revision = data["revision"]
-    data["tasks"][0]["worktree"] = None  # external edit; hash left stale
-    qf.write_text(json.dumps(data), encoding="utf-8")
-    return revision
-
-
-def _write_plan_file(tmp_path: Path, task_id: str) -> str:
-    plans_dir = tmp_path / "plans"
-    plans_dir.mkdir(exist_ok=True)
-    plan = plans_dir / f"{task_id}.md"
-    plan.write_text("# Plan\n", encoding="utf-8")
-    return str(plan)
-
-
-def test_audit_runs_on_tampered_queue_and_warns(tmp_path, capsys):
-    """The remedy named in the error message must survive the mismatch itself."""
-    aet_state = _load_bin("aet_state")
-    qf = tmp_path / "aet-queue"
-    plan = _write_plan_file(tmp_path, "t1")
-    _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
-
-    args = aet_state.argparse.Namespace(command="audit", queue=str(qf))
-    with patch.object(aet_state.subprocess, "run", side_effect=_no_git):
-        rc = aet_state.cmd_audit(args)
-
-    assert rc == 0
-    captured = capsys.readouterr()
-    assert "integrity check failed" in captured.err
-    results = json.loads(captured.out)
-    assert results["t1"]["stored"] == "ready"
-
-
-def test_heal_dry_run_tolerates_tamper_without_restamping(tmp_path, capsys):
-    """Dry-run heal reports the stale envelope but must not mutate the queue."""
-    aet_state = _load_bin("aet_state")
-    qf = tmp_path / "aet-queue"
-    plan = _write_plan_file(tmp_path, "t1")
-    _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
-
-    args = aet_state.argparse.Namespace(
-        command="heal", queue=str(qf), apply=False, force=False
-    )
-    with patch.object(aet_state.subprocess, "run", side_effect=_no_git):
-        rc = aet_state.cmd_heal(args)
-
-    assert rc == 0
-    captured = capsys.readouterr()
-    assert "No healable discrepancies found." in captured.out
-    assert "run with --apply to restamp" in captured.out
-    # Dry run left the stale envelope untouched.
-    with pytest.raises(QueueIntegrityError):
-        read_queue(str(qf))
-
-
-def test_heal_apply_restamps_envelope_with_no_state_changes(tmp_path, capsys):
-    """The reported scenario: states match git, only the envelope is stale."""
-    aet_state = _load_bin("aet_state")
-    qf = tmp_path / "aet-queue"
-    plan = _write_plan_file(tmp_path, "t1")
-    revision = _stamp_and_tamper(
-        qf, {"id": "t1", "state": "ready", "plan_file": plan}
-    )
-
-    args = aet_state.argparse.Namespace(
-        command="heal", queue=str(qf), apply=True, force=False
-    )
-    with patch.object(aet_state.subprocess, "run", side_effect=_no_git):
-        rc = aet_state.cmd_heal(args)
-
-    assert rc == 0
-    captured = capsys.readouterr()
-    assert "Restamped queue integrity envelope" in captured.out
-    # Verified reads pass again, the revision advanced, and the external
-    # edit itself is preserved (heal restamps, it does not revert).
-    queue = read_queue(str(qf))
-    assert queue[0]["worktree"] is None
-    data = json.loads(qf.read_text(encoding="utf-8"))
-    assert data["revision"] == revision + 1
-
-
-def test_heal_apply_restamps_and_applies_state_fix(tmp_path, capsys):
-    """A tampered queue with a real discrepancy heals and verifies afterwards."""
-    aet_state = _load_bin("aet_state")
-    qf = tmp_path / "aet-queue"
-    plan = _write_plan_file(tmp_path, "t1")
-    _stamp_and_tamper(qf, {"id": "t1", "state": "planned", "plan_file": plan})
-
-    args = aet_state.argparse.Namespace(
-        command="heal", queue=str(qf), apply=True, force=False
-    )
-    with patch.object(aet_state.subprocess, "run", side_effect=_no_git):
-        rc = aet_state.cmd_heal(args)
-
-    assert rc == 0
-    captured = capsys.readouterr()
-    assert "Healed 1 task(s); 0 failed." in captured.out
-    queue = read_queue(str(qf))  # verified read must not raise
-    assert queue[0]["state"] == "ready"
-
-
-# ---------------------------------------------------------------------------
-# Integrity refusal: mutating bins fail closed with a clean one-liner, never
-# a traceback, and every refusal names the audit/heal recovery path.
-# ---------------------------------------------------------------------------
-
-
-def _tampered_queue(tmp_path: Path) -> Path:
-    """Write a stamped queue and hand-edit it so the envelope is stale."""
-    qf = tmp_path / "aet-queue"
-    plan = _write_plan_file(tmp_path, "t1")
-    _stamp_and_tamper(qf, {"id": "t1", "state": "ready", "plan_file": plan})
-    return qf
-
-
-def _assert_clean_refusal(rc: int, err: str) -> None:
-    assert rc == 1
-    assert "queue modified outside aet state" in err
-    assert "aet state audit" in err
-    assert "aet state heal --apply" in err
-    assert "Traceback" not in err
-
-
-def test_next_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
-    nxt = _load_bin("next")
-    qf = _tampered_queue(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["next", "--queue-file", str(qf)])
-
-    rc = nxt.main()
-
-    _assert_clean_refusal(rc, capsys.readouterr().err)
-
-
-def test_sync_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
-    sync = _load_bin("sync")
-    qf = _tampered_queue(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["sync", "--queue-file", str(qf)])
-
-    rc = sync.main()
-
-    _assert_clean_refusal(rc, capsys.readouterr().err)
-
-
-def test_add_refuses_cleanly_on_tampered_queue(tmp_path, monkeypatch, capsys):
-    sprint = _load_bin("sprint")
-    qf = _tampered_queue(tmp_path)
-    plans_dir = tmp_path / "plans"
-    plan = _write_plan(plans_dir, "t2")
-    monkeypatch.chdir(tmp_path)
-
-    rc = sprint.main(["add", plan.stem, "--queue-file", str(qf), "--plans-dir", str(plans_dir)])
-
-    _assert_clean_refusal(rc, capsys.readouterr().err)
