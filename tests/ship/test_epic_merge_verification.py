@@ -12,13 +12,15 @@ from __future__ import annotations
 import argparse
 import importlib.machinery
 import importlib.util
-import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from aet.backends.git_refs_backend import GitRefsBackend
 
 _SHIP_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "ship.py"
 _spec = importlib.util.spec_from_loader(
@@ -37,6 +39,16 @@ class TestEpicMergeVerification(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
         base = Path(self.tmpdir.name)
 
+        subprocess.run(["git", "init", "-q", str(base)], check=True)
+        subprocess.run(
+            ["git", "-C", str(base), "config", "user.email", "test@example.com"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(base), "config", "user.name", "Test User"],
+            check=True,
+        )
+
         self.queue_path = base / ".agents" / "aet-queue"
         self.queue_path.parent.mkdir(parents=True)
         self.history_file = self.queue_path.with_name("work-history.jsonl")
@@ -54,17 +66,19 @@ class TestEpicMergeVerification(unittest.TestCase):
             encoding="utf-8",
         )
 
-        queue = {
-            "tasks": [
+        GitRefsBackend(
+            queue_file=str(self.queue_path),
+            history_file=str(self.history_file),
+        ).save(
+            [
                 {
                     "id": "epic-01",
-                    "status": "awaiting_merge",
+                    "state": "awaiting_merge",
                     "branch": "epic-01",
                     "plan_file": str(self.plan_path),
                 }
             ]
-        }
-        self.queue_path.write_text(json.dumps(queue), encoding="utf-8")
+        )
 
         self.cwd = os.getcwd()
         self.addCleanup(os.chdir, self.cwd)
@@ -79,7 +93,7 @@ class TestEpicMergeVerification(unittest.TestCase):
             rc = ship.cmd_ship(
                 argparse.Namespace(
                     task_id="epic-01",
-                    plan=str(self.plan_path),
+                    plan=None,
                     queue=str(self.queue_path),
                     branch=None,
                     merge_commit=None,
@@ -102,7 +116,7 @@ class TestEpicMergeVerification(unittest.TestCase):
             rc = ship.cmd_ship(
                 argparse.Namespace(
                     task_id="epic-01",
-                    plan=str(self.plan_path),
+                    plan=None,
                     queue=str(self.queue_path),
                     branch="epic-01",
                     merge_commit=None,
@@ -123,7 +137,7 @@ class TestEpicMergeVerification(unittest.TestCase):
             rc = ship.cmd_ship(
                 argparse.Namespace(
                     task_id="epic-01",
-                    plan=str(self.plan_path),
+                    plan=None,
                     queue=str(self.queue_path),
                     branch="epic-01",
                     merge_commit=None,
@@ -146,7 +160,7 @@ class TestEpicMergeVerification(unittest.TestCase):
             rc = ship.cmd_ship(
                 argparse.Namespace(
                     task_id="epic-01",
-                    plan=str(self.plan_path),
+                    plan=None,
                     queue=str(self.queue_path),
                     branch="epic-01",
                     merge_commit="merge-sha-1",
