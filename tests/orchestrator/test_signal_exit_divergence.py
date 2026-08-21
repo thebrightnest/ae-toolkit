@@ -11,7 +11,6 @@ These tests exercise both extremes deterministically.
 from __future__ import annotations
 
 import importlib.util
-import json
 import os
 import signal
 import subprocess
@@ -25,6 +24,7 @@ from pathlib import Path
 import pytest
 
 from aet.cli_adapter import CLIAdapter
+from tests.orchestrator._helpers import load_queue, write_queue
 
 pytestmark = pytest.mark.xdist_group("process-group")
 
@@ -72,29 +72,20 @@ def _write_queue(
     state: str = "ready",
     failure_signatures: list[dict] | None = None,
 ) -> str:
-    """Write a wrapper-format queue file and return its path."""
-    queue_file = Path(repo_root, ".agents", "work-queue.json")
-    queue_file.parent.mkdir(parents=True, exist_ok=True)
-    queue_file.write_text(
-        json.dumps(
+    """Seed a single-task git-refs queue and return its path."""
+    return write_queue(
+        repo_root,
+        [
             {
-                "queue_updated_at": "2026-08-19T00:00:00Z",
-                "source_prd": "docs/prds/orchestrator-signal-exit-determinism-prd.md",
-                "tasks": [
-                    {
-                        "id": task_id,
-                        "title": task_id,
-                        "plan_file": f"docs/plans/{task_id}.md",
-                        "blocked_by": [],
-                        "state": state,
-                        "failure_signatures": failure_signatures or [],
-                    }
-                ],
+                "id": task_id,
+                "title": task_id,
+                "plan_file": f"docs/plans/{task_id}.md",
+                "blocked_by": [],
+                "state": state,
+                "failure_signatures": failure_signatures or [],
             }
-        ),
-        encoding="utf-8",
+        ],
     )
-    return str(queue_file)
 
 
 def _setup_plan_and_queue(repo_root: str, task_id: str) -> str:
@@ -266,7 +257,7 @@ class TestFinalizeSignalExitAuthoritative(unittest.TestCase):
             )
 
             self.assertEqual(deltas, {"successes": 0, "failures": 1, "stop_spawn": False})
-            queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
+            queue = load_queue(queue_file)
             self.assertEqual(queue[0]["state"], "failed")
             timeout_sigs = [
                 entry
@@ -297,7 +288,7 @@ class TestFinalizeSignalExitAuthoritative(unittest.TestCase):
                 on_failure="triage",
             )
 
-            queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
+            queue = load_queue(queue_file)
             timeout_sigs = [
                 entry
                 for entry in queue[0].get("failure_signatures", [])
@@ -328,7 +319,7 @@ class TestFinalizeSignalExitAuthoritative(unittest.TestCase):
             )
 
             self.assertEqual(deltas, {"successes": 0, "failures": 1, "stop_spawn": False})
-            queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
+            queue = load_queue(queue_file)
             self.assertEqual(queue[0]["state"], "failed")
             timeout_sigs = [
                 entry

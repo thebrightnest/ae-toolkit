@@ -237,6 +237,19 @@ class TestVariantTraversal(unittest.TestCase):
         with patch.dict(os.environ, env, clear=False):
             logger = telemetry.RunLogger(self.repo_root, run_id="r1")
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            queue_file = os.path.join(self.repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.save(
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": plan_file,
+                        "blocked_by": [],
+                        "state": "in_progress",
+                    }
+                ]
+            )
             with patch.object(
                 orchestrator, "run_stage_group", return_value=(0, None, None, "")
             ) as mock_group, patch.object(

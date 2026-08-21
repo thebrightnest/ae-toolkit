@@ -623,7 +623,7 @@ Read aet:sprint issues from GitHub and admit valid candidates.
 
 ### Options
 
-- `--queue-file` *str* — Path to work-queue.json (default: `.agents/work-queue.json`)
+- `--queue-file` *str* — Path to aet-queue (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 - `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
 - `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)

@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet.backends.git_refs_backend import GitRefsBackend
 from tests.cli._helpers import run_typer
 
 _REPO_ROOT = Path(__file__).parents[2]
@@ -58,6 +59,45 @@ def _make_history(tasks: list[dict]) -> str:
             json.dump(task, f)
             f.write("\n")
     return str(path)
+
+
+def _git_init(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.email", "test@example.com"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.name", "Test User"],
+        check=True,
+    )
+
+
+def _make_queue(
+    root: Path,
+    tasks: list[dict] | None = None,
+    history: list[dict] | None = None,
+) -> tuple[Path, Path]:
+    """Create a git-refs queue inside ``root`` and return its paths."""
+    _git_init(root)
+    queue_file = root / ".agents" / "aet-queue"
+    history_file = root / ".agents" / "work-history.jsonl"
+    queue_file.parent.mkdir(parents=True, exist_ok=True)
+    if history:
+        history_file.write_text(
+            "".join(json.dumps(task) + "\n" for task in history),
+            encoding="utf-8",
+        )
+    GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    ).save(tasks or [])
+    return queue_file, history_file
+
+
+def _read_queue(queue_file: Path, history_file: Path) -> list[dict]:
+    return GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    ).load()["queue"]
 
 
 def _make_plan(
@@ -128,21 +168,19 @@ class TestAddCommand(unittest.TestCase):
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
             plan = _make_plan(plans_dir, "feat-001.md")
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             rc = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
 
             self.assertEqual(rc, 0)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-001")
             self.assertEqual(queue[0]["state"], "ready")
@@ -156,15 +194,14 @@ class TestAddCommand(unittest.TestCase):
             plans_dir.mkdir()
             blocker = _make_plan(plans_dir, "feat-000.md")
             plan = _make_plan(plans_dir, "feat-001.md", blocked_by=["feat-000"])
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             rc = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(blocker),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
             self.assertEqual(rc, 0)
@@ -173,14 +210,13 @@ class TestAddCommand(unittest.TestCase):
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
             self.assertEqual(rc, 0)
 
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             tasks = {t["id"]: t for t in queue}
             self.assertEqual(tasks["feat-001"]["state"], "blocked")
             self.assertEqual(tasks["feat-001"]["pending_blockers"], 1)
@@ -194,21 +230,19 @@ class TestAddCommand(unittest.TestCase):
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
             _make_plan(plans_dir, "feat-002.md")
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             rc = run_typer(aet.app, [
                 "sprint",
                 "add",
                 "feat-002",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
 
             self.assertEqual(rc, 0)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-002")
             self.assertEqual(queue[0]["state"], "ready")
@@ -220,22 +254,20 @@ class TestAddCommand(unittest.TestCase):
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
             plan = _make_plan(plans_dir, "feat-003.md", footer_stage="merged")
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             result = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ])
 
             self.assertEqual(result.exit_code, 1)
             self.assertIn("merged", result.stderr.lower())
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 0)
 
     def test_add_rejects_abandoned_plan(self):
@@ -245,15 +277,14 @@ class TestAddCommand(unittest.TestCase):
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
             plan = _make_plan(plans_dir, "feat-004.md", footer_stage="abandoned")
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             result = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ])
 
@@ -266,15 +297,14 @@ class TestAddCommand(unittest.TestCase):
             tmp_path = Path(tmp)
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             rc = run_typer(aet.app, [
                 "sprint",
                 "add",
                 "nonexistent",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
 
@@ -287,15 +317,14 @@ class TestAddCommand(unittest.TestCase):
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
             plan = _make_plan(plans_dir, "feat-005.md")
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             rc1 = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
             self.assertEqual(rc1, 0)
@@ -304,37 +333,35 @@ class TestAddCommand(unittest.TestCase):
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
             self.assertEqual(rc2, 0)
 
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 1)
 
     def test_add_parks_ready_when_unblocked(self):
         """add parks a zero-blocker task at ready, never planned (curated intake)."""
         with tempfile.TemporaryDirectory() as tmp:
-            plans_dir = Path(tmp) / "plans"
+            tmp_path = Path(tmp)
+            plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
             plan = _make_plan(plans_dir, "feat-100.md")
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             rc = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
 
             self.assertEqual(rc, 0)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["state"], "ready")
             self.assertEqual(queue[0]["pending_blockers"], 0)
@@ -344,28 +371,27 @@ class TestAddCommand(unittest.TestCase):
     def test_add_parks_blocked_with_pending_blockers_and_builds_edges(self):
         """add parks a blocked task and rebuilds reverse blocks edges on the queue."""
         with tempfile.TemporaryDirectory() as tmp:
-            plans_dir = Path(tmp) / "plans"
+            tmp_path = Path(tmp)
+            plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
             blocker = _make_plan(plans_dir, "feat-200.md")
             dependent = _make_plan(plans_dir, "feat-201.md", blocked_by=["feat-200"])
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             self.assertEqual(run_typer(aet.app, [
                 "sprint",
                 "add",
-                str(blocker), "--queue-file", queue_file,
-                "--history-file", history_file, "--plans-dir", str(plans_dir),
+                str(blocker), "--queue-file", str(queue_file),
+                "--history-file", str(history_file), "--plans-dir", str(plans_dir),
             ]).exit_code, 0)
             self.assertEqual(run_typer(aet.app, [
                 "sprint",
                 "add",
-                str(dependent), "--queue-file", queue_file,
-                "--history-file", history_file, "--plans-dir", str(plans_dir),
+                str(dependent), "--queue-file", str(queue_file),
+                "--history-file", str(history_file), "--plans-dir", str(plans_dir),
             ]).exit_code, 0)
 
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             tasks = {t["id"]: t for t in queue}
             self.assertEqual(tasks["feat-201"]["state"], "blocked")
             self.assertEqual(tasks["feat-201"]["pending_blockers"], 1)
@@ -375,24 +401,23 @@ class TestAddCommand(unittest.TestCase):
     def test_intake_history_records_actual_initial_state(self):
         """The intake history entry records the real initial state, not a hardcoded planned."""
         with tempfile.TemporaryDirectory() as tmp:
-            plans_dir = Path(tmp) / "plans"
+            tmp_path = Path(tmp)
+            plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
             ready_plan = _make_plan(plans_dir, "feat-300.md")
             blocker = _make_plan(plans_dir, "feat-301.md")
             blocked_plan = _make_plan(plans_dir, "feat-302.md", blocked_by=["feat-301"])
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             for p in (ready_plan, blocker, blocked_plan):
                 self.assertEqual(run_typer(aet.app, [
                 "sprint",
                 "add",
-                    str(p), "--queue-file", queue_file,
-                    "--history-file", history_file, "--plans-dir", str(plans_dir),
+                    str(p), "--queue-file", str(queue_file),
+                    "--history-file", str(history_file), "--plans-dir", str(plans_dir),
                 ]).exit_code, 0)
 
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             tasks = {t["id"]: t for t in queue}
             self.assertIsNone(tasks["feat-300"]["history"][0]["from"])
             self.assertEqual(tasks["feat-300"]["history"][0]["to"], "ready")
@@ -413,21 +438,21 @@ class TestAddCommand(unittest.TestCase):
             plans_dir = Path(tmp) / "plans"
             plans_dir.mkdir()
             plan = _make_plan(plans_dir, "feat-400.md", blocked_by=["feat-399"])
-            queue_file = _write_json_file([])
-            history_file = _make_history([{"id": "feat-399", "state": "merged"}])
+            queue_file, history_file = _make_queue(
+                Path(tmp), history=[{"id": "feat-399", "state": "merged"}]
+            )
 
             rc = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ]).exit_code
 
             self.assertEqual(rc, 0)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["state"], "ready")
             self.assertEqual(queue[0]["pending_blockers"], 0)
@@ -444,25 +469,24 @@ class TestAddCommand(unittest.TestCase):
             dependent = _make_plan(
                 plans_dir, "feat-501.md", blocked_by=["feat-499", "feat-500"]
             )
-            queue_file = _write_json_file([])
-            history_file = _make_history([{"id": "feat-499", "state": "merged"}])
+            queue_file, history_file = _make_queue(
+                Path(tmp), history=[{"id": "feat-499", "state": "merged"}]
+            )
 
             self.assertEqual(run_typer(aet.app, [
                 "sprint",
                 "add",
-                str(live), "--queue-file", queue_file,
-                "--history-file", history_file, "--plans-dir", str(plans_dir),
+                str(live), "--queue-file", str(queue_file),
+                "--history-file", str(history_file), "--plans-dir", str(plans_dir),
             ]).exit_code, 0)
             self.assertEqual(run_typer(aet.app, [
                 "sprint",
                 "add",
-                str(dependent), "--queue-file", queue_file,
-                "--history-file", history_file, "--plans-dir", str(plans_dir),
+                str(dependent), "--queue-file", str(queue_file),
+                "--history-file", str(history_file), "--plans-dir", str(plans_dir),
             ]).exit_code, 0)
 
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
-            tasks = {t["id"]: t for t in queue}
+            tasks = {t["id"]: t for t in _read_queue(queue_file, history_file)}
             self.assertEqual(tasks["feat-501"]["state"], "blocked")
             self.assertEqual(tasks["feat-501"]["pending_blockers"], 1)
             # The live blocker still wires a reverse edge for its decrement.
@@ -484,22 +508,20 @@ class TestAddCommand(unittest.TestCase):
             plans_dir = Path(tmp) / "docs" / "plans"
             plans_dir.mkdir(parents=True)
             plan = _make_plan(plans_dir, "feat-600.md")  # never git-added
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(Path(tmp))
 
             result = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ])
 
             self.assertEqual(result.exit_code, 0)
             self.assertIn("queued without publishing", result.stdout)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-600")
 
@@ -525,22 +547,20 @@ class TestAddCommand(unittest.TestCase):
             plans_dir.mkdir(parents=True)
             plan = _make_plan(plans_dir, "feat-601.md")
             _git(["add", str(plan)], tmp)  # tracked (staged is enough)
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(Path(tmp))
 
             result = run_typer(aet.app, [
                 "sprint",
                 "add",
                 str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", str(plans_dir),
             ])
 
             self.assertEqual(result.exit_code, 0)
             self.assertIn("queued without publishing", result.stdout)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "feat-601")
 
@@ -676,15 +696,14 @@ class TestStatusEmptyQueue(unittest.TestCase):
             tmp_path = Path(tmp)
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            queue_file, history_file = _make_queue(tmp_path)
 
             result = run_typer(
                 aet.app,
                 [
                     "status",
-                    "--queue-file", queue_file,
-                    "--history-file", history_file,
+                    "--queue-file", str(queue_file),
+                    "--history-file", str(history_file),
                     "--plans-dir", str(plans_dir),
                 ],
             )

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import json
 import os
 import subprocess
 import tempfile
@@ -16,6 +15,7 @@ import pytest
 
 from aet import telemetry
 from aet.cli_adapter import CLIAdapter
+from tests.orchestrator._helpers import write_queue as _write_queue
 
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
 _orchestrator_loader = importlib.machinery.SourceFileLoader("orchestrator", str(_ORCHESTRATOR_BIN))
@@ -76,23 +76,6 @@ def _make_args(repo_root: str, plan_file: str, base: str | None = None) -> argpa
         on_failure="continue",
         base=base,
     )
-
-
-def _write_queue(repo_root: str, tasks: list[dict]) -> str:
-    """Write a wrapper-format queue file and return its path."""
-    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
-    Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
-    with open(queue_file, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "queue_updated_at": "2026-06-18T00:00:00Z",
-                "source_prd": "docs/prds/demo-prd.md",
-                "tasks": tasks,
-            },
-            f,
-            indent=2,
-        )
-    return queue_file
 
 
 class TestMissingPlanHalt(unittest.TestCase):

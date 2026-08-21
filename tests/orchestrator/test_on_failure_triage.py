@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
-import os
 import subprocess
 import tempfile
 import unittest
@@ -15,6 +13,7 @@ import pytest
 
 # Ensure src/aet is on the path.
 from aet import failure, triage
+from tests.orchestrator._helpers import write_queue as _write_queue
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
@@ -50,23 +49,6 @@ def _init_git_repo(repo_root: str) -> None:
         ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
         check=True,
     )
-
-
-def _write_queue(repo_root: str, tasks: list[dict]) -> str:
-    """Write a wrapper-format queue file and return its path."""
-    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
-    Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
-    with open(queue_file, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "queue_updated_at": "2026-06-18T00:00:00Z",
-                "source_prd": "docs/prds/demo-prd.md",
-                "tasks": tasks,
-            },
-            f,
-            indent=2,
-        )
-    return queue_file
 
 
 def _failure_entry(

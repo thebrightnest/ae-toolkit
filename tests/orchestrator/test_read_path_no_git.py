@@ -8,11 +8,8 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
-import io
 import json
-import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -111,85 +108,6 @@ class _NoGitRun:
         if "aet-state" in str(cmd[0]) and "derive" in cmd:
             return True
         return False
-
-
-class TestStatusReadPathNoGit(unittest.TestCase):
-    def test_status_uses_stored_state_no_subprocess(self):
-        """status renders a projection of stored state without calling git or derive."""
-        plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
-        plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
-            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
-            {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
-        ], plans_dir))
-        history_file = _make_history([])
-
-        repo_root_tmp = tempfile.TemporaryDirectory()
-        no_git = _NoGitRun()
-        stdout = io.StringIO()
-        with patch.dict(
-            os.environ,
-            {"AET_PROJECT_ID": "no-git-test", "AET_REPO_ROOT": repo_root_tmp.name},
-            clear=False,
-        ):
-            with patch.object(subprocess, "run", side_effect=no_git):
-                with patch.object(sys, "stdout", stdout):
-                    with patch.object(sys, "argv", [
-                        "status",
-                        "--queue-file", queue_file,
-                        "--history-file", history_file,
-                        "--plans-dir", plans_dir,
-                    ]):
-                        rc = status.main()
-
-        self.assertEqual(rc, 0)
-        output = stdout.getvalue()
-        self.assertIn("ready: 1", output)
-        self.assertIn("blocked: 1", output)
-        self.assertIn("t1", output)
-        self.assertIn("t2", output)
-
-
-class TestNextReadPathNoGit(unittest.TestCase):
-    def test_next_uses_stored_ready_task_no_git(self):
-        """next picks a stored ready task and transitions it without calling git or derive."""
-        plans_dir_tmp = _make_plans_dir(["t1.md"])
-        plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
-            {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
-        ], plans_dir))
-        history_file = _make_history([])
-
-        transition_calls = []
-
-        def mock_run(cmd, **kwargs):
-            transition_calls.append(list(cmd))
-            if _NoGitRun._is_forbidden(cmd):
-                raise AssertionError(f"next invoked forbidden subprocess: {cmd}")
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-
-        repo_root_tmp = tempfile.TemporaryDirectory()
-        stdout = io.StringIO()
-        with patch.dict(
-            os.environ,
-            {"AET_PROJECT_ID": "no-git-test", "AET_REPO_ROOT": repo_root_tmp.name},
-            clear=False,
-        ):
-            with patch.object(subprocess, "run", side_effect=mock_run):
-                with patch.object(sys, "stdout", stdout):
-                    with patch.object(sys, "argv", [
-                        "next",
-                        "--queue-file", queue_file,
-                        "--history-file", history_file,
-                        "--plans-dir", plans_dir,
-                    ]):
-                        rc = next_cmd.main()
-
-        self.assertEqual(rc, 0)
-        self.assertTrue(
-            any("t1" in c and "transition" in c and "in_progress" in c for c in transition_calls),
-            f"Expected transition call for t1, got {transition_calls}",
-        )
 
 
 class TestOrchestratorReadPathNoGit(unittest.TestCase):

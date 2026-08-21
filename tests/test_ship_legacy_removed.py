@@ -74,9 +74,9 @@ class TestShipBareInvocationGrepGuard(unittest.TestCase):
             self.fail("Bare 'ship' invocations found in canonical docs/skills:\n" + "\n".join(offenders))
 
 
-class TestShipCloseMatchesLegacyPositional(unittest.TestCase):
-    def test_close_produces_same_record_merge_call_as_legacy_positional(self):
-        """``aet ship close`` forwards the same namespace the old ``ship <tid> <plan>`` did."""
+class TestShipCloseRejectsLegacyPositional(unittest.TestCase):
+    def test_close_rejects_legacy_plan_path_positional(self):
+        """``aet ship close`` now rejects the old ``ship <tid> <plan>`` form."""
         captured: list[dict] = []
 
         def fake_record_merge(ns):
@@ -106,10 +106,9 @@ class TestShipCloseMatchesLegacyPositional(unittest.TestCase):
             )
             rc_legacy = ship.cmd_ship(legacy_ns)
 
-        self.assertEqual(rc_close, 0)
-        self.assertEqual(rc_legacy, 0)
-        self.assertEqual(len(captured), 2)
-        self.assertEqual(captured[0], captured[1])
+        self.assertNotEqual(rc_close, 0)
+        self.assertNotEqual(rc_legacy, 0)
+        self.assertEqual(len(captured), 0)
 
 
 if __name__ == "__main__":

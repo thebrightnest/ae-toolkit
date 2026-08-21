@@ -24,6 +24,14 @@ import pytest
 from aet import evidence, plan_parser, session_log_claude, telemetry
 from aet.cli_adapter import CLIAdapter, resolve_cli_adapter
 from aet.workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
+from tests.orchestrator._helpers import load_queue
+from tests.orchestrator._helpers import write_queue as _write_queue
+
+
+def _seed_queue_for_task(repo_root: str, task: dict) -> None:
+    """Seed the git-refs queue with a single in-progress task."""
+    _write_queue(repo_root, [{**task, "blocked_by": [], "state": "in_progress"}])
+
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
@@ -33,6 +41,14 @@ orchestrator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(orchestrator)
 
 pytestmark = pytest.mark.xdist_group("process-group")
+
+
+@pytest.fixture(autouse=True)
+def _reset_shutdown_flag():
+    """Prevent a timed-out batch test from killing subsequent stage sessions."""
+    orchestrator._shutdown_requested = False
+    yield
+    orchestrator._shutdown_requested = False
 
 
 _FAKE_ADAPTER = CLIAdapter(
@@ -474,6 +490,7 @@ class TestDependencyWarmup(unittest.TestCase):
                     with patch.dict(os.environ, env, clear=False):
                         logger = telemetry.RunLogger(repo_root, run_id="r1")
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        _seed_queue_for_task(repo_root, task)
                         _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
 
                         with patch.object(orchestrator, "run_stage", return_value=(0, None, None, "")):
@@ -548,6 +565,7 @@ class TestEnvironmentIssueEmission(unittest.TestCase):
                     with patch.dict(os.environ, env, clear=False):
                         logger = telemetry.RunLogger(repo_root, run_id="r1")
                         task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+                        _seed_queue_for_task(repo_root, task)
                         _write_passing(reports_dir, "qa", "review", "cso", "sync-docs")
 
                         with patch.object(orchestrator, "run_stage", return_value=(0, None, None, "")):
@@ -588,23 +606,6 @@ class TestProcessTaskPlanPresence(unittest.TestCase):
                 orchestrator.process_task(
                     task, repo_root, _FAKE_ADAPTER, "standard"
                 )
-
-
-def _write_queue(repo_root: str, tasks: list[dict]) -> str:
-    """Write a wrapper-format queue file and return its path."""
-    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
-    Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
-    with open(queue_file, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "queue_updated_at": "2026-06-18T00:00:00Z",
-                "source_prd": "docs/prds/demo-prd.md",
-                "tasks": tasks,
-            },
-            f,
-            indent=2,
-        )
-    return queue_file
 
 
 class TestRunOneQueueBookkeeping(unittest.TestCase):
@@ -651,9 +652,8 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                         exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
-            with open(os.path.join(repo_root, ".agents", "aet-queue"), encoding="utf-8") as f:
-                queue = json.load(f)
-            task = queue["tasks"][0]
+            queue = load_queue(os.path.join(repo_root, ".agents", "aet-queue"))
+            task = queue[0]
             self.assertEqual(task["state"], "awaiting_merge")
             self.assertNotIn("status", task)
             self.assertEqual(task["branch"], "demo")
@@ -699,9 +699,8 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
-            with open(os.path.join(repo_root, ".agents", "aet-queue"), encoding="utf-8") as f:
-                queue = json.load(f)
-            task = queue["tasks"][0]
+            queue = load_queue(os.path.join(repo_root, ".agents", "aet-queue"))
+            task = queue[0]
             self.assertEqual(task["state"], "planned")
             self.assertNotIn("status", task)
             self.assertEqual(task.get("branch"), None)
@@ -749,9 +748,8 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
 
             self.assertEqual(exit_code, 0)
-            with open(os.path.join(repo_root, ".agents", "aet-queue"), encoding="utf-8") as f:
-                queue = json.load(f)
-            task = queue["tasks"][0]
+            queue = load_queue(os.path.join(repo_root, ".agents", "aet-queue"))
+            task = queue[0]
             self.assertEqual(task["state"], "planned")
             self.assertNotIn("status", task)
             self.assertEqual(task.get("branch"), None)
@@ -825,9 +823,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
-            with open(queue_file, encoding="utf-8") as f:
-                queue = json.load(f)
-            self.assertEqual(queue["tasks"], [])
+            self.assertEqual(load_queue(queue_file), [])
 
             history_file = os.path.join(repo_root, ".agents", "work-history.jsonl")
             with open(history_file, encoding="utf-8") as f:
@@ -1062,7 +1058,11 @@ class TestOrchestratorLockedWrites(unittest.TestCase):
             def fake_run(cmd, **kwargs):
                 # Delegate transition calls to the real aet-state so the queue is
                 # mutated through the canonical writer, but count saves via the spy.
+                # Git plumbing must stay real because the git-refs backend relies on
+                # it for every load/save.
                 if aet_state_bin in cmd and "transition" in cmd:
+                    return real_subprocess_run(cmd, **kwargs)
+                if cmd and cmd[0] == "git":
                     return real_subprocess_run(cmd, **kwargs)
                 return subprocess.CompletedProcess(cmd, 0, "", "")
 
@@ -1389,6 +1389,9 @@ class TestGateRouting(unittest.TestCase):
             ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
             check=True,
         )
+        _seed_queue_for_task(
+            repo_root, {"id": "demo", "title": "Demo", "plan_file": plan_file}
+        )
         return plan_file
 
     def _process_task_capture(self, task, repo_root, mock_group, mock_stage):
@@ -1555,6 +1558,9 @@ class TestStageGroupSessionReuse(unittest.TestCase):
         subprocess.run(
             ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
             check=True,
+        )
+        _seed_queue_for_task(
+            repo_root, {"id": "demo", "title": "Demo", "plan_file": plan_file}
         )
         return plan_file
 
@@ -1747,6 +1753,9 @@ class TestWorkflowDrivenTraversal(unittest.TestCase):
         subprocess.run(
             ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
             check=True,
+        )
+        _seed_queue_for_task(
+            repo_root, {"id": "demo", "title": "Demo", "plan_file": plan_file}
         )
         return plan_file
 
@@ -2208,6 +2217,9 @@ class TestStageTelemetry(unittest.TestCase):
             ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
             check=True,
         )
+        _seed_queue_for_task(
+            repo_root, {"id": "demo", "title": "Demo", "plan_file": plan_file}
+        )
         return plan_file
 
     def _stage_records(self, logger, task_id: str = "demo") -> list[dict]:
@@ -2415,6 +2427,9 @@ class TestEvidenceGates(unittest.TestCase):
         subprocess.run(
             ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
             check=True,
+        )
+        _seed_queue_for_task(
+            repo_root, {"id": "demo", "title": "Demo", "plan_file": plan_file}
         )
         return plan_file
 
@@ -2901,9 +2916,8 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
                 self.assertEqual(rc, 0)
                 self.assertIn("awaiting merge", out)
 
-                with open(queue_file, encoding="utf-8") as f:
-                    queue = json.load(f)
-                task = next(t for t in queue["tasks"] if t["id"] == "alpha")
+                queue = load_queue(queue_file)
+                task = next(t for t in queue if t["id"] == "alpha")
                 self.assertEqual(task["state"], "awaiting_merge")
 
     def test_batch_spawns_task_promoted_mid_run(self):
@@ -2979,14 +2993,15 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
                             "verify_branch_has_commits",
                             return_value=(True, ""),
                         ):
-                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+                            rc, out, timed_out = self._run_batch(
+                                args, _FAKE_ADAPTER, timeout=30
+                            )
 
                 self.assertFalse(timed_out, "run_batch spun instead of exiting")
                 self.assertEqual(rc, 0)
 
-                with open(queue_file, encoding="utf-8") as f:
-                    queue = json.load(f)
-                by_id = {t["id"]: t for t in queue["tasks"]}
+                queue = load_queue(queue_file)
+                by_id = {t["id"]: t for t in queue}
                 # The blocker was sealed to history by record-merge.
                 self.assertNotIn("blocker", by_id)
                 self.assertEqual(by_id["alpha"]["state"], "awaiting_merge")
@@ -3078,69 +3093,6 @@ class TestStagePromptValidationDiscipline(unittest.TestCase):
         self.assertNotIn("footer", prompt.lower())
         self.assertNotIn("status", prompt.lower())
         self.assertNotIn("queue", prompt.lower())
-
-
-class TestBatchIntegrityRefusal(unittest.TestCase):
-    """A tampered queue must stop the batch with a clean refusal, not a
-    traceback (ADR-024: mutating paths fail closed and name the remedy)."""
-
-    @staticmethod
-    def _stamp_and_tamper(queue_file: str) -> None:
-        """Restamp the wrapper queue like write_queue would, then hand-edit."""
-        import hashlib
-
-        with open(queue_file, encoding="utf-8") as f:
-            data = json.load(f)
-        canon = json.dumps(
-            data["tasks"], sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        )
-        data["revision"] = 1
-        data["content_hash"] = hashlib.sha256(canon.encode()).hexdigest()
-        with open(queue_file, "w", encoding="utf-8") as f:
-            json.dump(data, f)
-        data["tasks"][0]["title"] = "hand edited"
-        with open(queue_file, "w", encoding="utf-8") as f:
-            json.dump(data, f)
-
-    def test_run_batch_refuses_cleanly_on_tampered_queue(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            queue_file = _write_queue(
-                repo_root,
-                [
-                    {
-                        "id": "t1",
-                        "title": "t1",
-                        "plan_file": "docs/plans/t1.md",
-                        "blocked_by": [],
-                        "state": "ready",
-                    }
-                ],
-            )
-            self._stamp_and_tamper(queue_file)
-            args = argparse.Namespace(
-                queue_file=queue_file,
-                plan_file=None,
-                repo_root=repo_root,
-                cli_bin="echo",
-                isolation="standard",
-                max_jobs=1,
-                task_timeout=60,
-                heartbeat_interval=60,
-                on_failure="continue",
-            )
-            env = {
-                "AET_TELEMETRY_ARCHIVE_DIR": os.path.join(repo_root, "telemetry")
-            }
-            buf = io.StringIO()
-            with patch.dict(os.environ, env):
-                with contextlib.redirect_stderr(buf):
-                    rc = orchestrator.run_batch(args, _FAKE_ADAPTER)
-
-            self.assertEqual(rc, 1)
-            err = buf.getvalue()
-            self.assertIn("queue modified outside aet state", err)
-            self.assertIn("aet state heal --apply", err)
 
 
 class TestUsageCapture(unittest.TestCase):
@@ -4287,6 +4239,8 @@ class TestTwoMachineSpecTransport(unittest.TestCase):
                 self.assertFalse(
                     os.path.exists(os.path.join(machine_b, "docs", "plans", "demo.md"))
                 )
+
+                _seed_queue_for_task(machine_b, carried)
 
                 with tempfile.TemporaryDirectory() as archive_dir:
                     with tempfile.TemporaryDirectory() as reports_dir:

@@ -20,6 +20,8 @@ from unittest.mock import patch
 import pytest
 
 from aet.cli_adapter import CLIAdapter
+from tests.orchestrator._helpers import load_queue
+from tests.orchestrator._helpers import write_queue as _write_queue
 
 pytestmark = pytest.mark.xdist_group("process-group")
 
@@ -76,23 +78,6 @@ def _init_git_repo(repo_root: str) -> None:
         ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
         check=True,
     )
-
-
-def _write_queue(repo_root: str, tasks: list[dict]) -> str:
-    """Write a wrapper-format queue file and return its path."""
-    queue_file = Path(repo_root, ".agents", "aet-queue")
-    queue_file.parent.mkdir(parents=True, exist_ok=True)
-    queue_file.write_text(
-        json.dumps(
-            {
-                "queue_updated_at": "2026-06-18T00:00:00Z",
-                "source_prd": "docs/prds/demo-prd.md",
-                "tasks": tasks,
-            }
-        ),
-        encoding="utf-8",
-    )
-    return str(queue_file)
 
 
 def _setup_plan_and_queue(repo_root: str, task_id: str) -> str:
@@ -455,7 +440,7 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
             self.assertEqual(rc, 1)
             self.assertIn("timed out after 0.5s", out)
 
-            queue = json.loads(Path(queue_file).read_text(encoding="utf-8"))["tasks"]
+            queue = load_queue(queue_file)
             self.assertEqual(queue[0]["state"], "failed")
 
 

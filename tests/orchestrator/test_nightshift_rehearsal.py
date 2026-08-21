@@ -25,6 +25,8 @@ import pytest
 
 # Ensure the aet-work lib is on the path before importing telemetry.
 from aet import breaker, failure
+from tests.orchestrator._helpers import load_queue
+from tests.orchestrator._helpers import write_queue as _write_queue
 
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
@@ -176,23 +178,6 @@ def _write_fake_claude(repo_root: str) -> Path:
     return fake_cli
 
 
-def _write_queue(repo_root: str, tasks: list[dict]) -> str:
-    """Write a wrapper-format queue file and return its path."""
-    queue_file = Path(repo_root) / ".agents" / "aet-queue"
-    queue_file.parent.mkdir(parents=True, exist_ok=True)
-    queue_file.write_text(
-        json.dumps(
-            {
-                "queue_updated_at": "2026-07-17T00:00:00Z",
-                "source_prd": "docs/prds/roadmap-p5-night-shift-runtime-prd.md",
-                "tasks": tasks,
-            }
-        ),
-        encoding="utf-8",
-    )
-    return str(queue_file)
-
-
 def _commit_repo_state(repo_root: str) -> None:
     """Commit fixtures, workflow, fake CLI, and queue so origin/main has the base state."""
     subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
@@ -319,7 +304,7 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
 
     def _load_queue(self) -> dict[str, dict]:
         """Return the shift's final tasks indexed by id."""
-        queue = json.loads(Path(self.queue_file).read_text(encoding="utf-8"))["tasks"]
+        queue = load_queue(self.queue_file)
         return {t["id"]: t for t in queue}
 
     def test_mixed_queue_finishes_unattended(self):
