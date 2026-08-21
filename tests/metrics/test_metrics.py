@@ -415,19 +415,11 @@ class TestPlanArchiveResolution:
         assert result["overall"]["merged"] == 1
         assert result["overall"]["first_pass"] == 1
 
-    def test_backfill_delivered_size_uses_archived_plan_declared_size(
+    def test_backfill_delivered_size_reads_declared_size_from_spec(
         self, tmp_path, monkeypatch
     ):
-        """When the repo plan is gone, backfill reads declared size from the archive."""
-        plans_archive = tmp_path / "plans-archive"
-        monkeypatch.setenv("AET_PLANS_ARCHIVE_DIR", str(plans_archive))
+        """Backfill reads declared size from the portable spec on the record."""
         history = tmp_path / "history.jsonl"
-        repo_plan = tmp_path / "docs" / "plans" / "legacy.md"
-        archived_plan = plans_archive / "legacy.md"
-        archived_plan.parent.mkdir(parents=True, exist_ok=True)
-        archived_plan.write_text(
-            "---\nid: legacy\nsize: M\n---\n", encoding="utf-8"
-        )
 
         _write_history(
             history,
@@ -437,7 +429,13 @@ class TestPlanArchiveResolution:
                     "state": "merged",
                     "merge_commit": "abc1234",
                     "settled_at": "2026-07-15T00:00:00Z",
-                    "plan_file": str(repo_plan),
+                    "plan_file": str(tmp_path / "docs" / "plans" / "legacy.md"),
+                    "spec": {
+                        "frontmatter": {"size": "M"},
+                        "title": "Legacy",
+                        "body": "",
+                        "tasks": [],
+                    },
                 }
             ],
         )

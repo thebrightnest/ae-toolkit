@@ -101,6 +101,11 @@ def _make_plan_file(repo_root: str, plan_path: str, size: str) -> None:
     )
 
 
+def _spec(size: str) -> dict:
+    """Build a portable spec with the given declared size."""
+    return {"frontmatter": {"size": size}, "title": "Test plan", "body": "", "tasks": []}
+
+
 def _run_size_cli(monkeypatch, argv: list[str]) -> int:
     monkeypatch.setattr(sys, "argv", ["size", *argv])
     return size_cli.main()
@@ -208,6 +213,7 @@ class TestSizeBackfillCli:
                     "settled_at": "2026-07-15T00:00:00Z",
                     "merge_commit": merge_commit,
                     "plan_file": "docs/plans/test-task.md",
+                    "spec": _spec("S"),
                 },
             ],
         )
@@ -237,6 +243,7 @@ class TestSizeBackfillCli:
                     "settled_at": "2026-07-15T00:00:00Z",
                     "merge_commit": merge_commit,
                     "plan_file": "docs/plans/test-task.md",
+                    "spec": _spec("S"),
                 },
             ],
         )
