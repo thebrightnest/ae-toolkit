@@ -173,3 +173,67 @@ rules:
     target: skills/aet-work/references/queue-commands.md
     value: "direct JSON update"
     reason: "Stale-worktree repair must go through aet state transition only"
+
+  # owb-14 / R-18: documentation truth — no ledger refs transport
+  - type: must_not_contain
+    target: docs/CONVENTIONS.md
+    value:
+      - "Queue and ledger state travel"
+      - "ledger state travel with the repo"
+    reason: "CONVENTIONS.md must not claim the provenance ledger travels via git refs (R-18)"
+
+  - type: must_not_contain
+    target: docs/WORKFLOW-github.md
+    value: "queue derived from ledger"
+    reason: "WORKFLOW-github.md must not claim the queue is derived from the ledger (R-18)"
+
+  - type: must_not_contain
+    target: CONTEXT.md
+    value:
+      - "queue and ledger state travel via `refs/aet/*`"
+      - "ledger lives in `refs/aet/*`"
+    reason: "CONTEXT.md must not claim the provenance ledger travels via git refs (R-18)"
+
+  - type: must_not_contain
+    target: src/aet/backends/git_refs_backend.py
+    value: "Replication to the forge remote is explicit"
+    reason: "git_refs_backend.py must not imply all aet-state output (including the ledger) replicates via refs (R-18)"
+
+  - type: must_not_contain
+    target: src/aet/cli/sync.py
+    value: "Path to AET backend configuration"
+    reason: "sync.py must not imply a generic AET backend that could include ledger transport (R-18)"
+
+  - type: must_not_contain
+    target: docs/adr/054-plan-documents-are-outside-the-durability-gate.md
+    value: "`status` remains the authoritative liveness signal"
+    reason: "ADR-054 must not retain the stale clause that ADR-055 removed (R-18)"
+
+  # owb-14 / R-18: agreed vocabulary lands in CONTEXT.md
+  - type: must_contain
+    target: CONTEXT.md
+    section: "Language"
+    value:
+      - "**Task**"
+      - "board entry"
+      - "**Rendered Plan**"
+      - "**Issue**"
+      - "projection"
+      - "**Board**"
+      - "**Plan Backlog**"
+      - "**Shadow Posture**"
+    reason: "CONTEXT.md must carry the R-18 agreed vocabulary"
+
+  # owb-14 / R-18: new ADR records the open-work board contract and shadow posture
+  - type: path_exists
+    target: docs/adr/063-open-work-board-contract-and-shadow-posture.md
+    reason: "R-18 requires a new ADR recording the open-work board contract and shadow posture"
+
+  - type: must_contain
+    target: docs/adr/063-open-work-board-contract-and-shadow-posture.md
+    value:
+      - "ADR-011"
+      - "ADR-013"
+      - "ADR-045"
+      - "ADR-055"
+    reason: "The new ADR must name every decision it amends (R-18)"

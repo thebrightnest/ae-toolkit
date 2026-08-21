@@ -9,9 +9,10 @@ backend is storage-only; state legality stays in ``aet-state``.
 Ref updates are atomic under git's own ref locks. A multi-task ``save`` writes
 per-task refs and skips tasks whose blob is unchanged versus what was loaded, so
 concurrent writers touching *different* tasks never clobber each other.
-Replication to the forge remote is explicit: mutating ``aet-state`` commands
-push ``refs/aet/*`` (forced, best-effort except at terminal closure) and read
-commands fetch it back.
+Replication of queue state to the forge remote is explicit: this backend's
+mutating commands push ``refs/aet/*`` (forced, best-effort except at terminal
+closure) and read commands fetch it back. The Provenance Ledger is a working-tree
+file with no transport; it is not stored or pushed by this backend.
 
 The envelope carries a ``schema_version`` field (ADR-055).  A previous chained
 ``content_hash`` over the task-ref set has been removed: a chain over a set is

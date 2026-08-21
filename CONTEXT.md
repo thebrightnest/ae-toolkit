@@ -6,21 +6,27 @@ The Agentic Engineering Toolkit uses a work queue and a provenance ledger to coo
 
 **Provenance Ledger**:
 The append-only, content-addressed store of task transition and closure events, at `.agents/ledger.jsonl`. Events are idempotent and commutative — concurrent appends from independent writers merge without conflict — and the store verifies every line against its own content address on load, refusing a file whose ids no longer attest their bodies.
-It has **five writers and no production reader**: `aet sprint add`, `aet state set-stage`, terminal closure, `aet gate submit`, and `aet ship open` append to it, and nothing in `src/aet` calls `read_events()`. It is a working-tree file under **every** backend — no backend implements ledger storage — and it is gitignored, so it does not travel between machines.
-ADR-055 decides that this store is the sole authority for settled-ness and that it travels as pushed git refs. **That decision is not implemented.** Until it is, treat the ledger as provenance only, and see **Settled-ness Authority** for what actually answers "is it done?".
+It has **five writers and no production reader**: `aet sprint add`, `aet state set-stage`, terminal closure, `aet gate submit`, and `aet ship open` append to it, and nothing in `src/aet` calls `read_events()`. It is a working-tree file under **every** backend — no backend implements ledger storage — and it is gitignored, so it does not travel between machines. It is provenance only, not the settled-ness authority. See **Settled-ness Authority** for what actually answers "is it done?".
 _Avoid_: describing the ledger as refs-borne or as the settled-ness authority; deriving settled-ness from plan frontmatter.
 
-**Work Queue / Sprint Board**:
-The ephemeral active list of tasks. Under the default `git-refs` backend it is stored in `refs/aet/meta/queue` and pushed to/fetched from origin; under the `json` backend it is `.agents/work-queue.json`. It is rebuilt by `aet init-queue` from `docs/plans/*.md`, filtered through **Settled-ness Authority**; the ledger is not consulted. Plans enter the queue only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is filesystem-based for the plans already in the queue, not git-based, so a plan need not be committed to be a sprint member (ADR-054).
-_Avoid_: issue tracker, backlog.
+**Board**:
+The set of open work: the ephemeral active list of tasks loaded by the queue backend. Under the `git-refs` backend it is stored in `refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, and the `refs/aet/meta/queue` envelope, and pushed to/fetched from origin. It is rebuilt by `aet init-queue` from `docs/plans/*.md`, filtered through **Settled-ness Authority**; the ledger is not consulted. Plans enter the board only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is filesystem-based for the plans already on the board, not git-based, so a plan need not be committed to be a sprint member (ADR-054).
+_Avoid_: issue tracker.
 
 **Task**:
-A single unit of work represented by one atomic `docs/plans/*.md` file and, while active, one queue entry.
+The board entry, carrying the spec. A task is represented by one record under `refs/aet/tasks/<id>` while active, plus one `docs/plans/*.md` plan file that is its rendered working copy. After R-19 no plan file need exist on the machine that runs the task.
 _Avoid_: ticket, story, issue.
 
 **Plan File**:
-The markdown document in `docs/plans/` that describes how to implement a task. It is the source of truth for intent. Terminal closure is recorded in the **Provenance Ledger** and reflected in the plan footer `*Stage:*` as a human breadcrumb maintained by code. Plan edits are local-only until terminal closure; queue and ledger state travel via `refs/aet/*`.
+The markdown document in `docs/plans/` that describes how to implement a task. It is the source of truth for intent. Terminal closure is recorded in the **Provenance Ledger** and reflected in the plan footer `*Stage:*` as a human breadcrumb maintained by code. Plan edits are local-only until terminal closure; queue state travels via `refs/aet/*`.
 _Avoid_: PRD, roadmap, spec.
+
+**Rendered Plan**:
+The ephemeral working copy produced in a worktree from the **Task** record. Never committed, never the source of anything.
+
+**Issue**:
+The GitHub projection of a **Task**, plus the carrier of the `aet:sprint` intent label. Not the source of truth.
+_Avoid_: using "issue" for a Task.
 
 **State**:
 The canonical workflow state stored in `tasks[].state` while a task is in the queue: `planned`, `ready`, `blocked`, `in_progress`, `awaiting_merge`, `failed`, or `quarantined`.
@@ -37,11 +43,14 @@ A task that must reach a terminal state before another task can become pickable.
 A task that is blocked by another task.
 
 **Terminal State**:
-A terminal ledger event that ends a task's lifecycle and satisfies blockers: `merged` or `abandoned`.
+A terminal closure event that ends a task's lifecycle and satisfies blockers: `merged` or `abandoned`. Recorded in both the **Provenance Ledger** and the **Execution Log**.
 _Avoid_: done.
 
 **Plan Backlog**:
-Approved plans in `docs/plans/` that are not yet in the queue and not yet closed.
+Approved plans in `docs/plans/` that are not yet on the board and not yet closed.
+
+**Shadow Posture**:
+The permanent local-only mode inferred from the absence of project-scope AET configuration. Configuration lives at user scope, no projection runs, and no AET artifact appears in the working tree. Because the operator has not opted into cross-device sharing, `refs/aet/*` are never pushed. Every run announces the inferred posture and its consequence.
 
 **Execution Log**:
 `.agents/work-history.jsonl`, the gitignored append-only log of transitions and closures. It feeds project-management reporting (`aet metrics`, `aet retro`, and ADR-028's zero-review track record) **and** it is one of the three inputs to **Settled-ness Authority** — it is not optional in practice, and it is read, not write-only.
@@ -81,16 +90,16 @@ The project-local configuration layer that overrides the team config for one rep
 - A **Task** may have zero or more **Blockers**.
 - A **Task** may be a **Blocker** for zero or more **Dependents**.
 - A **Dependent** becomes `ready` only when all its **Blockers** have a **Terminal State**; the writer promotes it forward when the last blocker reaches terminal.
-- A plan enters the **Work Queue** only when explicitly promoted via `aet sprint add`; queue membership is the sprint-add record, not a frontmatter field.
-- A plan is closed when its task reaches the terminal state `merged` or `abandoned`; at that point it no longer appears in the **Work Queue**.
-- Closure records the terminal event in the **Provenance Ledger** and updates the plan footer `*Stage:*` through a single code transaction; the commit is pushed so the terminal breadcrumb is versioned and reproducible across clones.
+- A plan enters the **Board** only when explicitly promoted via `aet sprint add`; board membership is the sprint-add record, not a frontmatter field.
+- A plan is closed when its task reaches the terminal state `merged` or `abandoned`; at that point it no longer appears on the **Board**.
+- Closure records the terminal event in the **Provenance Ledger** and **Execution Log** and updates the plan footer `*Stage:*` through a single code transaction; the commit is pushed so the terminal breadcrumb is versioned and reproducible across clones.
 - A **Task** has one **Declared Size** (predicted at plan time) and, once closed, one **Delivered Size** (measured at closure). The pair is what makes a **Band** checkable; neither substitutes for the other.
 
 ## Example dialogue
 
 > **Dev:** “I added a new plan file. Why doesn’t `aet-work status` show it as `ready`?”
 >
-> **Expert:** “Approved plans are not added to the sprint automatically. Run `aet sprint add docs/plans/<id>.md` to put it in the queue; it will become `ready` if it has no blockers. Use `aet gate review` to see all approved plans that are not yet queued.”
+> **Expert:** “Approved plans are not added to the sprint automatically. Run `aet sprint add docs/plans/<id>.md` to put it on the board; it will become `ready` if it has no blockers. Use `aet gate review` to see all approved plans that are not yet on the board.”
 
 ## Multi-Machine Operator Posture
 
@@ -170,7 +179,7 @@ Counter maintained forward by the state writer; a task becomes `ready` only when
 Sub-state of `in_progress` recorded in the task record (e.g., `implement`, `qa`, `review`) and reflected in the plan footer `*Stage:*`, which is maintained by code as a human breadcrumb.
 
 **Live Set**:
-Active tasks in the queue backend (`refs/aet/meta/queue` for `git-refs`, `.agents/work-queue.json` for `json`); the only set loaded for scheduling. The queue is recreated as needed.
+Active tasks in the queue backend (`refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, and the `refs/aet/meta/queue` envelope under `git-refs`); the only set loaded for scheduling. The board is recreated as needed.
 
 **Execution Log**:
 Optional, gitignored `.agents/work-history.jsonl` containing transitions and closure evidence. Projects may omit it.
@@ -240,7 +249,7 @@ Where a run or session launched — second slug segment, or parsed from a record
 
 **Live Run (panel)**:
 A run with no `last-run.json` whose archive activity is fresh — within `LIVE_FRESHNESS_MINUTES` of the newest recursive mtime, or with an mtime that advanced between panel polls (panel-live-executions PRD, lvp-01/lvp-02). A panel display status only.
-_Avoid_: conflating with the queue's **Live Set** (active tasks in `.agents/work-queue.json`) — the two share no code or data.
+_Avoid_: conflating with the queue's **Live Set** (active tasks in `refs/aet/tasks/*` and `refs/aet/meta/queue`) — the two share no code or data.
 
 **Incomplete Run (panel)**:
 A run with no `last-run.json` and stale archive activity — crashed, abandoned, or quiet mid-stage. Always rendered with its last-activity time, never as "success" or "crashed".
