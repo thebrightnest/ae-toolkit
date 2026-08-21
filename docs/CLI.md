@@ -476,7 +476,7 @@ Run the gate and, if it passes, open a PR (default behavior).
 
 ### Options
 
-- `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
+- `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
@@ -486,7 +486,7 @@ Run the pre-merge validation gate.
 
 ### Options
 
-- `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
+- `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
@@ -496,7 +496,7 @@ Run the gate and open a PR for the plan.
 
 ### Options
 
-- `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
+- `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
@@ -506,7 +506,7 @@ Run the gate, detect conflicts, merge directly into a target branch, and close.
 
 ### Options
 
-- `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
+- `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--branch` *str* — Target branch to merge into (default: resolved trunk branch).
 - `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
@@ -516,7 +516,7 @@ Split the PR range into caller-supplied commit groups.
 
 ### Options
 
-- `plan` *str* — Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md). (required)
+- `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
 - `--message` *str* — Commit message for one group. Repeat for each group.
 - `--paths` *str* — Comma-separated paths for one group. Repeat for each group, after its --message.
@@ -541,8 +541,8 @@ Record post-merge closure for a task.
 
 ### Options
 
-- `task_id` *str* — Task ID to close, or path to the plan markdown file. (required)
-- `plan` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan). Must be a .md file unless the first arg is already a plan.
+- `task_id` *str* — Task ID to close (use `aet sprint add` to intake a plan). (required)
+- `plan` *str* — Deprecated and ignored: plan paths are no longer accepted (R-3).
 - `queue` *str* — Path to the queue anchor. (default: `.agents/aet-queue`)
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.
@@ -556,8 +556,8 @@ Hidden alias for close.
 
 ### Options
 
-- `task_id` *str* — Task ID to close, or path to the plan markdown file. (required)
-- `plan` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan). Must be a .md file unless the first arg is already a plan.
+- `task_id` *str* — Task ID to close (use `aet sprint add` to intake a plan). (required)
+- `plan` *str* — Deprecated and ignored: plan paths are no longer accepted (R-3).
 - `queue` *str* — Path to the queue anchor. (default: `.agents/aet-queue`)
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.

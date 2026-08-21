@@ -1530,5 +1530,87 @@ class TestApplyTransitionClosure(unittest.TestCase):
             self.assertEqual(Path(archived_to).name, "t1.md")
 
 
+class TestResolveTaskRecord(unittest.TestCase):
+    """Tests for the shared task-record lookup helper."""
+
+    def test_live_task_is_returned(self):
+        """A live task record is returned with no sealed record."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            spec = {"frontmatter": {"id": "t1"}, "title": "Plan T1", "body": "", "tasks": []}
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [{"id": "t1", "state": "in_progress", "spec": spec}],
+            )
+
+            task, sealed = aet_state.resolve_task_record("t1", str(queue_path))
+
+            self.assertIsNotNone(task)
+            self.assertIsNone(sealed)
+            self.assertEqual(task["id"], "t1")
+            self.assertEqual(task["spec"], spec)
+
+    def test_sealed_merged_task_is_returned(self):
+        """A sealed merged task is returned when no live task exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, history_path = seed_git_queue(repo_root, [])
+            with open(history_path, "w", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "id": "t1",
+                            "state": "merged",
+                            "merge_commit": "abc1234",
+                            "merge_strategy": "regular",
+                        }
+                    )
+                    + "\n"
+                )
+
+            task, sealed = aet_state.resolve_task_record("t1", str(queue_path))
+
+            self.assertIsNone(task)
+            self.assertIsNotNone(sealed)
+            self.assertEqual(sealed["state"], "merged")
+            self.assertEqual(sealed["merge_commit"], "abc1234")
+
+    def test_missing_task_returns_none(self):
+        """When no live or sealed record exists, the helper returns (None, None)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, _history_path = seed_git_queue(repo_root, [])
+
+            task, sealed = aet_state.resolve_task_record("no-such-task", str(queue_path))
+
+            self.assertIsNone(task)
+            self.assertIsNone(sealed)
+
+    def test_non_merged_sealed_record_is_ignored(self):
+        """A sealed record that is not merged is treated as missing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, history_path = seed_git_queue(repo_root, [])
+            with open(history_path, "w", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "id": "t1",
+                            "state": "abandoned",
+                        }
+                    )
+                    + "\n"
+                )
+
+            task, sealed = aet_state.resolve_task_record("t1", str(queue_path))
+
+            self.assertIsNone(task)
+            self.assertIsNone(sealed)
+
+
 if __name__ == "__main__":
     unittest.main()

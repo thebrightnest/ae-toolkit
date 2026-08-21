@@ -12,12 +12,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet import plan_parser
+from aet.backends.git_refs_backend import GitRefsBackend
+
 # Prefer the worktree source tree over any installed ``aet`` package.
 _REPO_SRC = Path(__file__).parents[1] / "src"
 if str(_REPO_SRC) not in sys.path:
     sys.path.insert(0, str(_REPO_SRC))
-
-from aet.plan_parser import resolve_plan_arg  # noqa: E402
 
 _SHIP_PY = Path(__file__).parents[1] / "src" / "aet" / "cli" / "ship.py"
 _spec = importlib.util.spec_from_loader(
@@ -38,8 +39,10 @@ class MockResult:
 def _subprocess_mock(responses, record=None):
     """Return a mock subprocess.run that answers git and test commands.
 
-    responses maps tuple(program, *args) -> (returncode, stdout, stderr).
+    Unknown commands are delegated to the real subprocess so the git-refs backend
+    can operate on the temporary repository.
     """
+    real_run = subprocess.run
 
     def mock_run(cmd, **kwargs):
         if record is not None:
@@ -48,14 +51,14 @@ def _subprocess_mock(responses, record=None):
         if args in responses:
             rc, out, err = responses[args]
             return MockResult(rc, out, err)
-        return MockResult(1, "", f"unexpected: {cmd!r}")
+        return real_run(cmd, **kwargs)
 
     return mock_run
 
 
 def _open_mock(responses, record=None):
     """Like _subprocess_mock but allows push and gh pr create to succeed."""
-    base = _subprocess_mock(responses, record)
+    real_run = subprocess.run
 
     def mock_run(cmd, **kwargs):
         if isinstance(cmd, list):
@@ -67,53 +70,24 @@ def _open_mock(responses, record=None):
                 if record is not None:
                     record.append(tuple(cmd))
                 return MockResult(0, "https://github.com/org/repo/pull/42\n", "")
-        return base(cmd, **kwargs)
+        if record is not None:
+            record.append(cmd if isinstance(cmd, str) else tuple(cmd))
+        args = tuple(cmd)
+        if args in responses:
+            rc, out, err = responses[args]
+            return MockResult(rc, out, err)
+        return real_run(cmd, **kwargs)
 
     return mock_run
 
 
 class TestShipOpenParser(unittest.TestCase):
-    def test_open_subcommand_parses_plan_argument(self):
-        """aet ship open accepts a plan file path."""
+    def test_open_subcommand_parses_task_argument(self):
+        """aet ship open accepts a task id."""
         parser = ship.build_parser()
-        args = parser.parse_args(["open", "docs/plans/t1.md"])
+        args = parser.parse_args(["open", "t1"])
         self.assertEqual(args.command, "open")
-        self.assertEqual(args.plan, "docs/plans/t1.md")
-
-
-class TestResolvePlanArg(unittest.TestCase):
-    """Bare task ids resolve to the conventional docs/plans/<id>.md path."""
-
-    def setUp(self):
-        self.tmpdir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmpdir.cleanup)
-        base = Path(self.tmpdir.name)
-        plan_dir = base / "docs" / "plans"
-        plan_dir.mkdir(parents=True)
-        self.plan_path = plan_dir / "t1.md"
-        self.plan_path.write_text("---\nid: t1\n---\n", encoding="utf-8")
-        self.cwd = os.getcwd()
-        self.addCleanup(os.chdir, self.cwd)
-
-    def test_md_path_passes_through(self):
-        """A .md argument is returned unchanged, even if the file is missing."""
-        self.assertEqual(
-            resolve_plan_arg("docs/plans/elsewhere.md"),
-            "docs/plans/elsewhere.md",
-        )
-
-    def test_bare_id_resolves_to_conventional_plan_path(self):
-        """A bare task id resolves to docs/plans/<id>.md when that file exists."""
-        os.chdir(self.tmpdir.name)
-        self.assertEqual(resolve_plan_arg("t1"), "docs/plans/t1.md")
-
-    def test_bare_id_without_plan_file_raises(self):
-        """A bare id with no conventional plan file errors naming both interpretations."""
-        os.chdir(self.tmpdir.name)
-        with self.assertRaises(ValueError) as ctx:
-            resolve_plan_arg("no-such-task")
-        self.assertIn("no-such-task", str(ctx.exception))
-        self.assertIn("docs/plans/no-such-task.md", str(ctx.exception))
+        self.assertEqual(args.plan, "t1")
 
 
 class TestDeterminePrBase(unittest.TestCase):
@@ -183,9 +157,19 @@ class TestShipOpenChecks(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
         base = Path(self.tmpdir.name)
 
-        self.plan_path = base / "docs" / "plans" / "t1.md"
+        self.repo = base / "repo"
+        self.repo.mkdir()
+        subprocess.run(["git", "-C", str(self.repo), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "test@example.com"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Test User"], check=True)
+        (self.repo / ".agents").mkdir(parents=True, exist_ok=True)
+        (self.repo / "README.md").write_text("hello\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "initial"], check=True)
+
+        self.plan_path = self.repo / "docs" / "plans" / "t1.md"
         self.plan_path.parent.mkdir(parents=True)
-        self._write_plan(
+        self._default_content = (
             "---\n"
             "id: t1\n"
             "status: awaiting_merge\n"
@@ -194,20 +178,45 @@ class TestShipOpenChecks(unittest.TestCase):
             "## Task List\n\n"
             "- [x] task one\n\n"
             "---\n\n"
-            "*Stage: implemented*\n",
+            "*Stage: implemented*\n"
         )
+        self.plan_path.write_text(self._default_content, encoding="utf-8")
+        self._save_task(self._spec())
 
         self.cwd = os.getcwd()
         self.addCleanup(os.chdir, self.cwd)
+        os.chdir(self.repo)
 
-    def _write_plan(self, content: str) -> None:
-        self.plan_path.write_text(content, encoding="utf-8")
+    def _spec(self, content: str | None = None) -> dict:
+        """Build a spec dict from the given plan content."""
+        text = content if content is not None else self.plan_path.read_text(encoding="utf-8")
+        return plan_parser.extract_plan_spec_from_text(text, "t1")
+
+    def _save_task(self, spec: dict, task_id: str = "t1") -> None:
+        backend = GitRefsBackend(
+            queue_file=str(self.repo / ".agents" / "aet-queue"),
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        )
+        data = backend.load()
+        queue = data["queue"]
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        if task is None:
+            task = {
+                "id": task_id,
+                "state": "awaiting_merge",
+                "stage": "qa-complete",
+                "branch": "feat-001",
+                "plan_file": str(Path("docs/plans") / f"{task_id}.md"),
+            }
+            queue.append(task)
+        task["spec"] = spec
+        backend.save(queue)
 
     def _base_responses(self, branch="feat-001", pr_base="origin/main"):
         """Default happy-path git responses (independent branch, no rebase)."""
         origin_main = "origin-main-sha"
         return {
-            ("git", "rev-parse", "--show-toplevel"): (0, "/repo\n", ""),
+            ("git", "rev-parse", "--show-toplevel"): (0, f"{self.repo}\n", ""),
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "merge-base", "HEAD", "origin/main"): (
                 0,
@@ -245,7 +254,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -253,7 +262,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
     def test_open_stops_on_monolithic_commit(self):
         """A single commit spanning the range with >1 task stops the PR."""
-        self._write_plan(
+        content = (
             "---\n"
             "id: t1\n"
             "status: awaiting_merge\n"
@@ -263,23 +272,24 @@ class TestShipOpenChecks(unittest.TestCase):
             "- [x] task one\n"
             "- [x] task two\n\n"
             "---\n\n"
-            "*Stage: implemented*\n",
+            "*Stage: implemented*\n"
         )
+        self._save_task(self._spec(content))
         responses = self._base_responses()
         env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
         self.assertFalse(any(c[0] == "git" and c[1] == "push" for c in commands))
 
     def test_open_generates_changelog_entry(self):
-        """The changelog entry references the plan and lists commit subjects."""
-        entry = ship._generate_changelog_entry(["feat: add open", "feat: wire parser"], self.plan_path)
+        """The changelog entry references the task id and title and lists commit subjects."""
+        entry = ship._generate_changelog_entry(["feat: add open", "feat: wire parser"], self._spec())
         self.assertIn("Plan T1", entry)
         self.assertIn("t1", entry)
         self.assertIn("feat: add open", entry)
@@ -295,12 +305,13 @@ class TestShipOpenChecks(unittest.TestCase):
             "",
         )
         responses[("git", "rebase", "--onto", "origin/main", "old-merge-base", "feat-001")] = (0, "", "")
+        responses[("git", "log", "--oneline", "--decorate", "--ancestry-path", "old-merge-base..HEAD")] = (0, "", "")
         env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertEqual(rc, 0)
         push_cmds = [c for c in commands if c[0] == "git" and c[1] == "push"]
@@ -319,31 +330,15 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertEqual(rc, 0)
         push_cmds = [c for c in commands if c[0] == "git" and c[1] == "push"]
         self.assertEqual(len(push_cmds), 1)
         self.assertNotIn("--force-with-lease", push_cmds[0])
 
-    def test_open_accepts_bare_task_id(self):
-        """aet ship open <task-id> resolves the plan via docs/plans/<id>.md."""
-        os.chdir(self.tmpdir.name)
-        responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
-        commands: list[tuple[str, ...]] = []
-
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
-
-        self.assertEqual(rc, 0)
-        gh_cmds = [c for c in commands if c[0] == "gh"]
-        self.assertEqual(len(gh_cmds), 1)
-
-    def test_open_bare_id_without_plan_file_fails_cleanly(self):
-        """aet ship open <task-id> fails with a clear error when no plan matches."""
-        os.chdir(self.tmpdir.name)
+    def test_open_missing_task_fails_cleanly(self):
+        """aet ship open fails with a clear error when no task record exists."""
         responses = self._base_responses()
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
@@ -353,10 +348,20 @@ class TestShipOpenChecks(unittest.TestCase):
 
     def test_open_pr_body_includes_scope_audit_when_present(self):
         """The PR body contains a scope-audit section when files are flagged."""
+        content = (
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "Source: `docs/prds/demo-prd.md`\n\n"
+            "---\n\n"
+            "*Stage: implemented*\n"
+        )
         body = ship._build_pr_body(
-            self.plan_path,
+            self._spec(content),
             ship.StackInfo(trunk_ref="origin/main", base_ref="origin/main", parent=None, position=None),
-            ["docs/plans/OTHER-01.md"],
+            ["docs/prds/OTHER-01.md"],
             "changelog\n",
         )
         self.assertIn("Scope audit", body)
@@ -365,7 +370,7 @@ class TestShipOpenChecks(unittest.TestCase):
     def test_open_pr_body_omits_scope_audit_when_empty(self):
         """The PR body has no scope-audit section when nothing is flagged."""
         body = ship._build_pr_body(
-            self.plan_path,
+            self._spec(),
             ship.StackInfo(trunk_ref="origin/main", base_ref="origin/main", parent=None, position=None),
             [],
             "changelog\n",
@@ -375,7 +380,7 @@ class TestShipOpenChecks(unittest.TestCase):
     def test_open_pr_body_includes_stacked_warning_when_not_main(self):
         """The PR body warns when the base is a feature branch."""
         body = ship._build_pr_body(
-            self.plan_path,
+            self._spec(),
             ship.StackInfo(
                 trunk_ref="origin/main",
                 base_ref="feat-parent",
@@ -393,7 +398,7 @@ class TestShipOpenChecks(unittest.TestCase):
     def test_open_pr_body_omits_stacked_warning_when_main(self):
         """The PR body has no stacked-PR warning when the base is origin/main."""
         body = ship._build_pr_body(
-            self.plan_path,
+            self._spec(),
             ship.StackInfo(trunk_ref="origin/main", base_ref="origin/main", parent=None, position=None),
             [],
             "changelog\n",
@@ -413,7 +418,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -431,7 +436,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -464,7 +469,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
             stdout_capture = StringIO()
             with patch.object(sys, "stdout", stdout_capture):
-                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
         self.assertEqual(rc, 0)
         output = stdout_capture.getvalue()
         self.assertIn("STACKED PR", output)
@@ -502,7 +507,7 @@ class TestShipOpenChecks(unittest.TestCase):
             patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")),
             patch.object(ship.Ledger, "write_event", side_effect=fake_write_event),
         ):
-            rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+            rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertEqual(rc, 0)
         self.assertEqual(len(captured), 1)
@@ -540,6 +545,7 @@ class TestShipOpenIntegration(unittest.TestCase):
         self._git("config", "user.name", "Test User")
         readme = self.clone / "README.md"
         readme.write_text("hello\n", encoding="utf-8")
+        (self.clone / ".agents").mkdir(parents=True, exist_ok=True)
         self._git("add", "README.md")
         self._git("commit", "-m", "initial")
         self._git("push", "-u", "origin", "main")
@@ -548,7 +554,7 @@ class TestShipOpenIntegration(unittest.TestCase):
         plan_dir = self.clone / "docs" / "plans"
         plan_dir.mkdir(parents=True)
         self.plan_path = plan_dir / "t1.md"
-        self.plan_path.write_text(
+        plan_content = (
             "---\n"
             "id: t1\n"
             "status: awaiting_merge\n"
@@ -557,8 +563,25 @@ class TestShipOpenIntegration(unittest.TestCase):
             "## Task List\n\n"
             "- [x] task one\n\n"
             "---\n\n"
-            "*Stage: implemented*\n",
-            encoding="utf-8",
+            "*Stage: implemented*\n"
+        )
+        self.plan_path.write_text(plan_content, encoding="utf-8")
+        spec = plan_parser.extract_plan_spec_from_text(plan_content, "t1")
+        backend = GitRefsBackend(
+            queue_file=str(self.clone / ".agents" / "aet-queue"),
+            history_file=str(self.clone / ".agents" / "work-history.jsonl"),
+        )
+        backend.save(
+            [
+                {
+                    "id": "t1",
+                    "state": "awaiting_merge",
+                    "stage": "qa-complete",
+                    "branch": "feat-001",
+                    "plan_file": "docs/plans/t1.md",
+                    "spec": spec,
+                }
+            ]
         )
         src_dir = self.clone / "src" / "aet" / "cli"
         src_dir.mkdir(parents=True)
@@ -597,9 +620,15 @@ class TestShipOpenIntegration(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_recording_run):
-                rc = ship.cmd_open(ship.parse_args(["open", str(self.plan_path)]))
+                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
 
         self.assertEqual(rc, 0)
         self.assertTrue(any(c[0] == "gh" for c in commands))
         push_cmds = [c for c in commands if c[0] == "git" and c[1] == "push"]
+
         self.assertEqual(len(push_cmds), 1)
+        self.assertNotIn("--force-with-lease", push_cmds[0])
+
+
+if __name__ == "__main__":
+    unittest.main()

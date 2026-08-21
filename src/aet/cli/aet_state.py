@@ -65,6 +65,29 @@ def find_task(queue, task_id):
     return None
 
 
+def resolve_task_record(task_id, queue, backend=None):
+    """Resolve a task id to a live or sealed merged task record.
+
+    Searches the live queue first, then the sealed ``work-history.jsonl``.
+    Returns ``(task, sealed_task)`` where exactly one is non-``None`` when a
+    record is found, or ``(None, None)`` when no record exists. Idempotent on
+    settled tasks (R-4).
+    """
+    if backend is None:
+        backend = make_backend(queue)
+        backend.fetch()
+    data = backend.load()
+    task = find_task(data["queue"], task_id)
+    if task:
+        return task, None
+    history_file = getattr(backend, "history_file", None)
+    if history_file:
+        sealed = find_task(queue_lib.read_history(history_file), task_id)
+        if sealed and sealed.get("state") == "merged":
+            return None, sealed
+    return None, None
+
+
 def run_git(*args, cwd=None):
     """Run a git command; return (returncode, stdout, stderr)."""
     cmd = ["git", *args]
@@ -1241,7 +1264,6 @@ def cmd_record_merge(args):
     backend = make_backend(args.queue)
     backend.fetch()
     cwd = os.path.dirname(args.queue) if args.queue else "."
-    history_file = getattr(backend, "history_file", None)
     trunk_branch = _resolve_trunk(args.queue)
     integration_branch = getattr(args, "target_branch", None) or _resolve_integration(args.queue)
 
@@ -1252,17 +1274,9 @@ def cmd_record_merge(args):
     # merged, the durable outcome is already recorded; plan files are no longer
     # committed or pushed by this command (R-4, R-19).
     with queue_lib.queue_lock(args.queue):
-        data = backend.load()
-        queue = data["queue"]
-        task = find_task(queue, args.task_id)
-        sealed_task = None
-        if not task and history_file:
-            sealed_task = find_task(
-                queue_lib.read_history(history_file), args.task_id
-            )
-            if sealed_task and sealed_task.get("state") != "merged":
-                sealed_task = None
-
+        task, sealed_task = resolve_task_record(
+            args.task_id, args.queue, backend=backend
+        )
         if not task and not sealed_task:
             print(f"Task not found: {args.task_id}", file=sys.stderr)
             return 1

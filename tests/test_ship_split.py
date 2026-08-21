@@ -12,6 +12,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet import plan_parser
+from aet.backends.git_refs_backend import GitRefsBackend
+
 _SHIP_PY = Path(__file__).parents[1] / "src" / "aet" / "cli" / "ship.py"
 _spec = importlib.util.spec_from_loader(
     "aet_ship_split", importlib.machinery.SourceFileLoader("aet_ship_split", str(_SHIP_PY))
@@ -31,13 +34,13 @@ class MockResult:
 class TestShipSplitParser(unittest.TestCase):
     """Argument parsing for the split subcommand."""
 
-    def test_split_subcommand_parses_plan_and_groups(self):
-        """aet ship split accepts a plan and repeated message/paths groups."""
+    def test_split_subcommand_parses_task_and_groups(self):
+        """aet ship split accepts a task id and repeated message/paths groups."""
         parser = ship.build_parser()
         args = parser.parse_args(
             [
                 "split",
-                "docs/plans/t1.md",
+                "t1",
                 "--message",
                 "feat: add alpha",
                 "--paths",
@@ -50,7 +53,7 @@ class TestShipSplitParser(unittest.TestCase):
             ]
         )
         self.assertEqual(args.command, "split")
-        self.assertEqual(args.plan, "docs/plans/t1.md")
+        self.assertEqual(args.plan, "t1")
         self.assertEqual(args.message, ["feat: add alpha", "feat: add beta"])
         self.assertEqual(args.paths, [["alpha.py"], ["beta.py", "gamma.py"]])
 
@@ -63,7 +66,17 @@ class TestShipSplitCommand(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
         base = Path(self.tmpdir.name)
 
-        self.plan_path = base / "docs" / "plans" / "t1.md"
+        self.repo = base / "repo"
+        self.repo.mkdir()
+        subprocess.run(["git", "-C", str(self.repo), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "test@example.com"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Test User"], check=True)
+        (self.repo / ".agents").mkdir(parents=True, exist_ok=True)
+        (self.repo / "README.md").write_text("hello\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "initial"], check=True)
+
+        self.plan_path = self.repo / "docs" / "plans" / "t1.md"
         self.plan_path.parent.mkdir(parents=True)
         self._write_plan(
             "---\n"
@@ -77,9 +90,34 @@ class TestShipSplitCommand(unittest.TestCase):
             "---\n\n"
             "*Stage: implemented*\n",
         )
+        self._save_task(self._spec())
 
         self.cwd = os.getcwd()
         self.addCleanup(os.chdir, self.cwd)
+        os.chdir(self.repo)
+
+    def _spec(self) -> dict:
+        return plan_parser.extract_plan_spec_from_text(
+            self.plan_path.read_text(encoding="utf-8"), "t1"
+        )
+
+    def _save_task(self, spec: dict) -> None:
+        backend = GitRefsBackend(
+            queue_file=str(self.repo / ".agents" / "aet-queue"),
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        )
+        backend.save(
+            [
+                {
+                    "id": "t1",
+                    "state": "awaiting_merge",
+                    "stage": "qa-complete",
+                    "branch": "feat-001",
+                    "plan_file": "docs/plans/t1.md",
+                    "spec": spec,
+                }
+            ]
+        )
 
     def _write_plan(self, content: str) -> None:
         self.plan_path.write_text(content, encoding="utf-8")
@@ -87,7 +125,7 @@ class TestShipSplitCommand(unittest.TestCase):
     def test_split_refuses_dirty_tree(self):
         """A dirty working tree stops split before resetting."""
         responses = {
-            ("git", "rev-parse", "--show-toplevel"): (0, "/repo\n", ""),
+            ("git", "rev-parse", "--show-toplevel"): (0, f"{self.repo}\n", ""),
             ("git", "status", "--short"): (0, " M src/aet/cli/ship.py\n", ""),
         }
         with patch.object(ship.subprocess, "run", side_effect=self._mock_run(responses)):
@@ -95,7 +133,7 @@ class TestShipSplitCommand(unittest.TestCase):
                 ship.parse_args(
                     [
                         "split",
-                        str(self.plan_path),
+                        "t1",
                         "--message",
                         "feat: one",
                         "--paths",
@@ -108,7 +146,7 @@ class TestShipSplitCommand(unittest.TestCase):
     def test_split_refuses_empty_range(self):
         """No commits between base and HEAD stops split."""
         responses = {
-            ("git", "rev-parse", "--show-toplevel"): (0, "/repo\n", ""),
+            ("git", "rev-parse", "--show-toplevel"): (0, f"{self.repo}\n", ""),
             ("git", "status", "--short"): (0, "", ""),
             ("git", "rev-list", "--count", "origin/main..HEAD"): (0, "0\n", ""),
         }
@@ -117,7 +155,9 @@ class TestShipSplitCommand(unittest.TestCase):
                 ship.parse_args(
                     [
                         "split",
-                        str(self.plan_path),
+                        "t1",
+                        "--base",
+                        "origin/main",
                         "--message",
                         "feat: one",
                         "--paths",
@@ -130,7 +170,7 @@ class TestShipSplitCommand(unittest.TestCase):
     def test_split_refuses_mismatched_message_paths_count(self):
         """Different numbers of --message and --paths groups is an error."""
         responses = {
-            ("git", "rev-parse", "--show-toplevel"): (0, "/repo\n", ""),
+            ("git", "rev-parse", "--show-toplevel"): (0, f"{self.repo}\n", ""),
             ("git", "status", "--short"): (0, "", ""),
         }
         with patch.object(ship.subprocess, "run", side_effect=self._mock_run(responses)):
@@ -138,7 +178,7 @@ class TestShipSplitCommand(unittest.TestCase):
                 ship.parse_args(
                     [
                         "split",
-                        str(self.plan_path),
+                        "t1",
                         "--message",
                         "feat: one",
                         "--paths",
@@ -152,12 +192,14 @@ class TestShipSplitCommand(unittest.TestCase):
 
     @staticmethod
     def _mock_run(responses):
+        real_run = subprocess.run
+
         def mock_run(cmd, **kwargs):
             args = tuple(cmd)
             if args in responses:
                 rc, out, err = responses[args]
                 return MockResult(rc, out, err)
-            return MockResult(1, "", f"unexpected: {cmd!r}")
+            return real_run(cmd, **kwargs)
 
         return mock_run
 
@@ -185,6 +227,7 @@ class TestShipSplitIntegration(unittest.TestCase):
         self._git("config", "user.name", "Test User")
         readme = self.clone / "README.md"
         readme.write_text("hello\n", encoding="utf-8")
+        (self.clone / ".agents").mkdir(parents=True, exist_ok=True)
         self._git("add", "README.md")
         self._git("commit", "-m", "initial")
         self._git("push", "-u", "origin", "main")
@@ -193,7 +236,7 @@ class TestShipSplitIntegration(unittest.TestCase):
         plan_dir = self.clone / "docs" / "plans"
         plan_dir.mkdir(parents=True)
         self.plan_path = plan_dir / "t1.md"
-        self.plan_path.write_text(
+        plan_content = (
             "---\n"
             "id: t1\n"
             "status: awaiting_merge\n"
@@ -203,8 +246,25 @@ class TestShipSplitIntegration(unittest.TestCase):
             "- [x] task one\n"
             "- [x] task two\n\n"
             "---\n\n"
-            "*Stage: implemented*\n",
-            encoding="utf-8",
+            "*Stage: implemented*\n"
+        )
+        self.plan_path.write_text(plan_content, encoding="utf-8")
+        spec = plan_parser.extract_plan_spec_from_text(plan_content, "t1")
+        backend = GitRefsBackend(
+            queue_file=str(self.clone / ".agents" / "aet-queue"),
+            history_file=str(self.clone / ".agents" / "work-history.jsonl"),
+        )
+        backend.save(
+            [
+                {
+                    "id": "t1",
+                    "state": "awaiting_merge",
+                    "stage": "qa-complete",
+                    "branch": "feat-001",
+                    "plan_file": "docs/plans/t1.md",
+                    "spec": spec,
+                }
+            ]
         )
         (self.clone / "alpha.py").write_text("alpha\n", encoding="utf-8")
         (self.clone / "beta.py").write_text("beta\n", encoding="utf-8")
@@ -240,7 +300,7 @@ class TestShipSplitIntegration(unittest.TestCase):
             ship.parse_args(
                 [
                     "split",
-                    str(self.plan_path),
+                    "t1",
                     "--message",
                     "feat: add alpha",
                     "--paths",
@@ -280,7 +340,7 @@ class TestShipSplitIntegration(unittest.TestCase):
             ship.parse_args(
                 [
                     "split",
-                    str(self.plan_path),
+                    "t1",
                     "--message",
                     "feat: add alpha only",
                     "--paths",

@@ -2,25 +2,24 @@
 """aet-ship — Pre-merge gate, PR creation, and post-merge closure for AE Toolkit tasks.
 
 Usage:
-  aet ship <plan_file|task_id>        Run the gate, then open a PR.
-  aet ship gate <plan_file|task_id>   Run the pre-merge gate (steps 1-9).
-  aet ship open <plan_file|task_id>   Run the gate and open a PR.
-  aet ship merge <plan_file|task_id> [--branch <target>]
+  aet ship <task_id>                  Run the gate, then open a PR.
+  aet ship gate <task_id>             Run the pre-merge gate (steps 1-9).
+  aet ship open <task_id>             Run the gate and open a PR.
+  aet ship merge <task_id> [--branch <target>]
                                       Run the gate, detect conflicts against the target branch,
                                       merge directly into it, and record closure. Target defaults to
                                       the resolved trunk branch.
-  aet ship split <plan_file|task_id> --message <msg> --paths <path>...
+  aet ship split <task_id> --message <msg> --paths <path>...
                                       Split the PR range into logical commits.
-  aet ship close <plan_file>          Record post-merge closure (task id derived from plan frontmatter).
-  aet ship close <task_id>            Record post-merge closure (plan derived from queue task).
-  aet ship close <task_id> <plan_file> [queue_file]
-                                      Record post-merge closure (explicit identifiers).
-  aet ship record-merge <task_id> <plan_file> [queue_file]
+  aet ship close <task_id>            Record post-merge closure (task id from queue task).
+  aet ship close <task_id> [queue_file]
+                                      Record post-merge closure (explicit queue).
+  aet ship record-merge <task_id> [queue_file]
                                       Hidden alias for ``close``.
 
-A bare task id given to ``gate``, ``open``, ``merge``, ``split``, or the default command resolves to
-the conventional ``docs/plans/<task_id>.md`` path. The pre-merge gate, PR
-creation, direct merge, split, and merge closure are all implemented in code.
+``gate``, ``open``, ``merge``, ``split``, and the default command resolve the task id to a
+live task record (or a sealed merged record) in the work queue. Plan file paths are no longer
+accepted; use ``aet sprint add`` to intake a plan.
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 
 import typer
 from typer.core import TyperGroup
@@ -100,17 +99,6 @@ class GateResult:
         self.stack = stack
 
 
-def _task_id_from_plan(plan_path: str | Path) -> str:
-    """Return the task id from a plan file's YAML frontmatter, falling back to the filename stem."""
-    path = Path(plan_path)
-    if not path.is_file():
-        raise ValueError(f"Plan file not found: {path}")
-    task_id = plan_parser.parse_frontmatter(path).get("id")
-    if not task_id:
-        return path.stem
-    return task_id
-
-
 def _resolve_feature_branch(task_id: str) -> Optional[str]:
     """Resolve a task's feature branch by name.
 
@@ -132,51 +120,32 @@ def _normalize_close_args(
     plan: Optional[str],
     queue: str,
 ) -> tuple[str, Optional[str], str]:
-    """Resolve flexible ``aet ship close`` argument forms to (task_id, plan, queue).
+    """Resolve ``aet ship close`` argument forms to (task_id, plan, queue).
 
-    Supported forms:
-      - ``close <plan_file>`` — derive task id from plan frontmatter.
-      - ``close <plan_file> <queue_file>`` — derive task id; explicit queue.
-      - ``close <task_id>`` — plan is read from the queue task's ``plan_file``.
-      - ``close <task_id> <plan_file>`` — explicit task id and plan.
-      - ``close <task_id> <plan_file> <queue_file>`` — explicit identifiers.
-
-    The second positional is constrained to avoid silent misinterpretation:
-    when the first argument is a plan file, the second must not also be a
-    ``.md`` path (that would be two plans); when the first argument is a task
-    id, the second must be a ``.md`` plan path (use the third positional for
-    the queue).
+    ``close`` accepts a task id only; plan file paths are no longer supported
+    (R-3). The optional second and third positionals are retained for parser
+    compatibility but any ``.md`` path or unexpected extra positional is
+    rejected with a message naming ``aet sprint add`` as the intake entry point.
     """
 
     def _is_plan_path(value: str) -> bool:
         return value.lower().endswith(".md")
 
-    if _is_plan_path(task_id):
-        resolved_plan = task_id
-        resolved_task_id = _task_id_from_plan(resolved_plan)
-        if plan and _is_plan_path(plan):
-            raise ValueError(
-                f"Ambiguous closure arguments: both '{task_id}' and '{plan}' "
-                "look like plan files. Pass the queue path as the second "
-                "argument or omit it."
-            )
-        resolved_queue = plan if plan else queue
-        return resolved_task_id, resolved_plan, resolved_queue
+    if _is_plan_path(task_id) or (plan is not None and _is_plan_path(plan)):
+        raise ValueError(
+            "Plan file paths are no longer accepted by `aet ship`. "
+            "Use `aet sprint add <task-id>` to put the task on the board, "
+            "then pass the task id."
+        )
 
-    resolved_task_id = task_id
     if plan:
-        if not _is_plan_path(plan):
-            raise ValueError(
-                f"Expected a plan markdown path (.md) as the second argument, "
-                f"got: {plan}. Use the third positional for the queue file."
-            )
-        resolved_plan = plan
-        resolved_queue = queue
-    else:
-        resolved_plan = None
-        resolved_queue = queue
+        raise ValueError(
+            "Unexpected second positional argument. `aet ship close` accepts "
+            "a task id only; plan paths are no longer supported. Use "
+            "`aet sprint add` to intake the plan, then pass the task id."
+        )
 
-    return resolved_task_id, resolved_plan, resolved_queue
+    return task_id, None, queue
 
 
 def _normalize_verify_args(
@@ -198,11 +167,51 @@ def _normalize_verify_args(
 
     if _is_plan_path(task_id):
         resolved_plan = task_id
-        resolved_task_id = _task_id_from_plan(resolved_plan)
+        resolved_task_id = plan_parser.parse_frontmatter(Path(resolved_plan)).get(
+            "id"
+        ) or Path(resolved_plan).stem
         resolved_queue = plan if plan else queue
         return resolved_task_id, resolved_plan, resolved_queue
 
     return task_id, plan, queue
+
+
+def _resolve_ship_task(args: argparse.Namespace) -> int | None:
+    """Resolve a ship command's ``plan`` argument to a live task record.
+
+    Rejects ``.md`` paths, reports settled tasks, and fails closed when no
+    record or no spec exists. On success, sets ``args.task_id`` and
+    ``args.spec`` and returns ``None``. Otherwise returns the exit code the
+    caller should use.
+    """
+    plan_arg = args.plan
+    if plan_arg.lower().endswith(".md"):
+        return _fail(
+            "Plan file paths are no longer accepted by `aet ship`. "
+            "Use `aet sprint add <task-id>` to put the task on the board, "
+            "then pass the task id."
+        )
+
+    queue = getattr(args, "queue", ".agents/aet-queue")
+    task, sealed = aet_state.resolve_task_record(plan_arg, queue)
+    if sealed:
+        print(
+            f"Recorded merge for {plan_arg}: "
+            f"{sealed.get('merge_commit')} ({sealed.get('merge_strategy')})"
+        )
+        return 0
+    if task is None:
+        return _fail(f"Task not found: {plan_arg}")
+
+    spec = task.get("spec")
+    if not isinstance(spec, dict):
+        return _fail(
+            f"Task {plan_arg} has no spec. Run `aet sprint add` to intake the plan."
+        )
+
+    args.task_id = task.get("id", plan_arg)
+    args.spec = spec
+    return None
 
 
 def _resolve_task_branch(task_id: str, queue: str) -> Optional[str]:
@@ -324,16 +333,12 @@ def cmd_ship(args):
 
 
 def cmd_default(args: argparse.Namespace) -> int:
-    """Run the gate and, if it passes, open a PR for a plan."""
-    try:
-        args.plan = plan_parser.resolve_plan_arg(args.plan)
-    except ValueError as exc:
-        return _fail(str(exc))
-    plan_path = Path(args.plan)
-    if not plan_path.is_file():
-        return _fail(f"Plan file not found: {plan_path}")
+    """Run the gate and, if it passes, open a PR for a task."""
+    rc = _resolve_ship_task(args)
+    if rc is not None:
+        return rc
 
-    print(f"Running aet ship for {plan_path}")
+    print(f"Running aet ship for {args.task_id}")
     gate_rc = cmd_gate(args)
     if gate_rc != 0:
         return gate_rc
@@ -441,16 +446,7 @@ def _is_working_tree_clean() -> bool:
 
 def _run_gate(args: argparse.Namespace) -> GateResult:
     """Execute gate checks and return a structured result for reuse."""
-    plan_path = Path(args.plan)
-    if not plan_path.is_file():
-        return GateResult(
-            ok=False,
-            pr_base="",
-            rebased=False,
-            scope_audit=[],
-            dry_run=args.dry_run,
-            message=f"Plan file not found: {plan_path}",
-        )
+    spec = args.spec
 
     _fetch_origin()
     trunk_ref = _resolve_trunk_ref()
@@ -501,9 +497,9 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
     if coverage_cmd:
         subprocess.run(shlex.split(coverage_cmd), capture_output=True, text=True)
 
-    work_class = _work_class_from_plan(plan_path)
+    work_class = _work_class_from_spec(spec)
     if work_class == "critical":
-        task_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
+        task_id = args.task_id
         evidence_paths = [
             Path(".agents/verify") / f"{task_id}-evidence.md",
             Path(".agents/verify") / f"{task_id}-evidence",
@@ -523,7 +519,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                 stack=stack,
             )
 
-    flagged = _scope_audit(plan_path, pr_base)
+    flagged = _scope_audit(spec, pr_base)
     return GateResult(
         ok=True,
         pr_base=pr_base,
@@ -536,16 +532,12 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
 
 
 def cmd_gate(args: argparse.Namespace) -> int:
-    """Run the pre-merge gate for a plan."""
-    try:
-        args.plan = plan_parser.resolve_plan_arg(args.plan)
-    except ValueError as exc:
-        return _fail(str(exc))
-    plan_path = Path(args.plan)
-    if not plan_path.is_file():
-        return _fail(f"Plan file not found: {plan_path}")
+    """Run the pre-merge gate for a task."""
+    rc = _resolve_ship_task(args)
+    if rc is not None:
+        return rc
 
-    print(f"Running pre-merge gate for {plan_path}")
+    print(f"Running pre-merge gate for {args.task_id}")
     result = _run_gate(args)
     if result.ok:
         print("✅ Pre-merge gate passed.")
@@ -553,55 +545,36 @@ def cmd_gate(args: argparse.Namespace) -> int:
     return _fail(result.message)
 
 
-def _work_class_from_plan(plan_path: Path) -> str:
-    """Return the work class from the plan footer, defaulting to normal."""
-    content = plan_path.read_text(errors="ignore")
-    match = re.search(r"(?im)^[_*]Work class:\s*(.+?)[_*]$", content)
-    if match:
-        return match.group(1).strip().lower()
+def _work_class_from_spec(spec: dict[str, Any]) -> str:
+    """Return the work class from the task record, defaulting to normal."""
+    work_class = spec.get("frontmatter", {}).get("work_class")
+    if work_class:
+        return str(work_class).strip().lower()
     return "normal"
 
 
-def _scope_audit(plan_path: Path, pr_base: str) -> list[str]:
+def _scope_audit(spec: dict[str, Any], pr_base: str) -> list[str]:
     """Return a list of out-of-scope files changed against pr_base."""
     result = _run_git("diff", pr_base, "--name-only", check=False)
     if result.returncode != 0:
         return []
     changed = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    associated_prd = None
-    # Look for an associated PRD link in the plan body.
-    content = plan_path.read_text(errors="ignore")
-    for match in re.finditer(r"Source:\s*`?([^`\n]+?)`?", content):
-        candidate = match.group(1).strip()
-        if candidate.startswith("docs/prds/") and candidate.endswith(".md"):
-            associated_prd = candidate
-            break
+    associated_prd = _extract_prd_link(spec)
     flagged: list[str] = []
     for path in changed:
-        if path.startswith("docs/plans/") and path.endswith(".md"):
-            if path != str(plan_path):
-                flagged.append(path)
-        elif path.startswith("docs/prds/") and path.endswith(".md"):
+        if path.startswith("docs/prds/") and path.endswith(".md"):
             if associated_prd and path != associated_prd:
                 flagged.append(path)
     return flagged
 
 
-def _unchecked_tasks(plan_path: Path) -> list[str]:
-    """Return the text of unchecked tasks in the plan's task list."""
-    content = plan_path.read_text(errors="ignore")
+def _unchecked_tasks(spec: dict[str, Any]) -> list[str]:
+    """Return the text of unchecked tasks from the task record."""
     unchecked: list[str] = []
-    in_tasks = False
-    for line in content.splitlines():
-        if line.strip().lower() in ("## task list", "### task list"):
-            in_tasks = True
-            continue
-        if in_tasks:
-            if line.startswith("##"):
-                break
-            stripped = line.strip()
-            if stripped.startswith("- [ ]"):
-                unchecked.append(stripped[5:].strip())
+    for item in spec.get("tasks", []):
+        stripped = item.strip()
+        if stripped.startswith("- [ ]") or stripped.startswith("* [ ]"):
+            unchecked.append(stripped[5:].strip())
     return unchecked
 
 
@@ -618,21 +591,13 @@ def _print_stage_skips(stage: str) -> None:
     # qa-complete or earlier: run review, then conditional CSO.
 
 
-def _plan_task_count(plan_path: Path) -> int:
-    """Count checked/unchecked tasks under the plan's Task List section."""
-    content = plan_path.read_text(errors="ignore")
+def _plan_task_count(spec: dict[str, Any]) -> int:
+    """Count checked/unchecked tasks from the task record."""
     count = 0
-    in_tasks = False
-    for line in content.splitlines():
-        if line.strip().lower() in ("## task list", "### task list"):
-            in_tasks = True
-            continue
-        if in_tasks:
-            if line.startswith("##"):
-                break
-            stripped = line.strip()
-            if stripped.startswith("- [ ]") or stripped.startswith("- [x]"):
-                count += 1
+    for item in spec.get("tasks", []):
+        stripped = item.strip()
+        if stripped.startswith("- [ ]") or stripped.startswith("- [x]"):
+            count += 1
     return count
 
 
@@ -655,27 +620,27 @@ def _commit_subjects(pr_base: str) -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _is_monolithic_commit(pr_base: str, plan_path: Path) -> bool:
+def _is_monolithic_commit(pr_base: str, spec: dict[str, Any]) -> bool:
     """True when one commit covers the whole range while the plan has >1 task."""
-    return _commit_count(pr_base) == 1 and _plan_task_count(plan_path) > 1
+    return _commit_count(pr_base) == 1 and _plan_task_count(spec) > 1
 
 
-def _extract_prd_link(plan_path: Path) -> str | None:
-    """Return the PRD path referenced in the plan's Source line, if any."""
-    content = plan_path.read_text(errors="ignore")
-    for match in re.finditer(r"Source:\s*`?([^`\n]+?)`?", content):
+def _extract_prd_link(spec: dict[str, Any]) -> str | None:
+    """Return the PRD path referenced in the task record's Source line, if any."""
+    body = spec.get("body", "")
+    for match in re.finditer(r"Source:\s*`?([^`\n]+?)`?", body):
         candidate = match.group(1).strip()
         if candidate.startswith("docs/prds/") and candidate.endswith(".md"):
             return candidate
     return None
 
 
-def _generate_changelog_entry(subjects: list[str], plan_path: Path) -> str:
+def _generate_changelog_entry(subjects: list[str], spec: dict[str, Any]) -> str:
     """Build a PR/commit-trail changelog entry; never writes CHANGELOG.md."""
-    plan_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
-    title = plan_parser.title_from_plan(plan_path)
+    plan_id = spec.get("frontmatter", {}).get("id")
+    title = spec.get("title", plan_id or "unknown")
     lines = ["## CHANGELOG entry", ""]
-    lines.append(f"Derived from [{plan_path.name}]({plan_path}) — **{plan_id}**: {title}.")
+    lines.append(f"**{plan_id}**: {title}.")
     lines.append("")
     if subjects:
         lines.append("Commits in this PR:")
@@ -688,15 +653,14 @@ def _generate_changelog_entry(subjects: list[str], plan_path: Path) -> str:
 
 
 def _build_pr_body(
-    plan_path: Path,
+    spec: dict[str, Any],
     stack: StackInfo,
     scope_audit: list[str],
     changelog_entry: str,
 ) -> str:
     """Assemble the PR body with links, scope audit, and stacked-PR warnings."""
     parts: list[str] = []
-    prd = _extract_prd_link(plan_path)
-    parts.append(f"Plan: [{plan_path.name}]({plan_path})")
+    prd = _extract_prd_link(spec)
     if prd:
         parts.append(f"PRD: [{prd}]({prd})")
     parts.append("")
@@ -794,16 +758,13 @@ def _check_release_guard(pr_base: str) -> str | None:
 
 
 def cmd_open(args: argparse.Namespace) -> int:
-    """Run the gate and open a PR for a plan."""
-    try:
-        args.plan = plan_parser.resolve_plan_arg(args.plan)
-    except ValueError as exc:
-        return _fail(str(exc))
-    plan_path = Path(args.plan)
-    if not plan_path.is_file():
-        return _fail(f"Plan file not found: {plan_path}")
+    """Run the gate and open a PR for a task."""
+    rc = _resolve_ship_task(args)
+    if rc is not None:
+        return rc
 
-    print(f"Running aet ship open for {plan_path}")
+    spec = args.spec
+    print(f"Running aet ship open for {args.task_id}")
 
     result = _run_gate(args)
     if not result.ok:
@@ -814,14 +775,14 @@ def cmd_open(args: argparse.Namespace) -> int:
     if guard_error:
         return _fail(guard_error)
 
-    if _is_monolithic_commit(result.pr_base, plan_path):
+    if _is_monolithic_commit(result.pr_base, spec):
         return _fail(
             "Monolithic commit detected: one commit spans the entire PR range "
             "while the plan lists multiple tasks.\n"
             "Run `aet ship split` to split it into logical pieces before opening the PR."
         )
 
-    changelog_entry = _generate_changelog_entry(_commit_subjects(result.pr_base), plan_path)
+    changelog_entry = _generate_changelog_entry(_commit_subjects(result.pr_base), spec)
 
     print("Pushing branch...")
     ok, output = _push_branch(result.rebased, args.dry_run)
@@ -830,15 +791,15 @@ def cmd_open(args: argparse.Namespace) -> int:
     if output.strip():
         print(f"   {output.strip()}")
 
-    plan_id = plan_parser.parse_frontmatter(plan_path).get("id", plan_path.stem)
-    title = f"{plan_id}: {plan_parser.title_from_plan(plan_path)}"
+    plan_id = spec.get("frontmatter", {}).get("id", args.task_id)
+    title = f"{plan_id}: {spec.get('title', plan_id)}"
     stack = result.stack or StackInfo(
         trunk_ref=_resolve_trunk_ref(),
         base_ref=result.pr_base,
         parent=None,
         position=None,
     )
-    body = _build_pr_body(plan_path, stack, result.scope_audit, changelog_entry)
+    body = _build_pr_body(spec, stack, result.scope_audit, changelog_entry)
 
     print("Creating PR...")
     ok, output = _create_pr(result.pr_base, title, body, args.dry_run)
@@ -882,13 +843,9 @@ def cmd_split(args: argparse.Namespace) -> int:
     ``--message``/``--paths`` group in order. The fail-closed post-condition
     requires that the resulting tree matches the original HEAD tree.
     """
-    try:
-        args.plan = plan_parser.resolve_plan_arg(args.plan)
-    except ValueError as exc:
-        return _fail(str(exc))
-    plan_path = Path(args.plan)
-    if not plan_path.is_file():
-        return _fail(f"Plan file not found: {plan_path}")
+    rc = _resolve_ship_task(args)
+    if rc is not None:
+        return rc
 
     messages = args.message or []
     path_groups = args.paths or []
@@ -1109,17 +1066,14 @@ def _merge_into_target(target_branch: str, feature_branch: str, dry_run: bool) -
 
 def cmd_merge(args: argparse.Namespace) -> int:
     """Run the gate, detect conflicts, merge directly into a target branch, and close."""
-    try:
-        args.plan = plan_parser.resolve_plan_arg(args.plan)
-    except ValueError as exc:
-        return _fail(str(exc))
-    plan_path = Path(args.plan)
-    if not plan_path.is_file():
-        return _fail(f"Plan file not found: {plan_path}")
+    rc = _resolve_ship_task(args)
+    if rc is not None:
+        return rc
 
+    spec = args.spec
     trunk_ref = _resolve_trunk_ref()
     target_branch = args.branch or trunk_ref.removeprefix("origin/")
-    task_id = _task_id_from_plan(plan_path)
+    task_id = args.task_id
     feature_branch = _resolve_feature_branch(task_id)
     if not feature_branch:
         return _fail(
@@ -1133,7 +1087,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
             f"branch equals the target branch ({target_branch!r})."
         )
 
-    print(f"Running aet ship merge for {plan_path} into {target_branch}")
+    print(f"Running aet ship merge for {task_id} into {target_branch}")
 
     # The gate should treat the target branch as the merge base so tests and
     # checks run against the same integration point we will merge into.
@@ -1162,7 +1116,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
     if guard_error:
         return _fail(guard_error)
 
-    if _is_monolithic_commit(result.pr_base, plan_path):
+    if _is_monolithic_commit(result.pr_base, spec):
         return _fail(
             "Monolithic commit detected: one commit spans the entire merge range "
             "while the plan lists multiple tasks.\n"
@@ -1190,7 +1144,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
             command="record-merge",
             task_id=task_id,
             queue=".agents/aet-queue",
-            plan=str(plan_path),
+            plan=None,
             dry_run=False,
             branch=task_id,
             merge_commit=merge_commit,
@@ -1208,16 +1162,13 @@ def _add_close_args(parser: argparse.ArgumentParser) -> None:
     """Add the post-merge closure arguments to *parser*."""
     parser.add_argument(
         "task_id",
-        help="Task ID to close, or path to the plan markdown file.",
+        help="Task ID to close (use `aet sprint add` to intake a plan).",
     )
     parser.add_argument(
         "plan",
         nargs="?",
         default=None,
-        help=(
-            "Plan path (when first arg is a task ID) or queue path (when first arg is a plan). "
-            "Must be a .md file unless the first arg is already a plan."
-        ),
+        help="Deprecated and ignored: plan paths are no longer accepted (R-3).",
     )
     parser.add_argument(
         "queue",
@@ -1263,7 +1214,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gate_parser.add_argument(
         "plan",
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     )
     gate_parser.add_argument(
         "--base",
@@ -1281,7 +1232,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     open_parser.add_argument(
         "plan",
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     )
     open_parser.add_argument(
         "--base",
@@ -1299,7 +1250,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     merge_parser.add_argument(
         "plan",
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     )
     merge_parser.add_argument(
         "--branch",
@@ -1318,7 +1269,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     split_parser.add_argument(
         "plan",
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     )
     split_parser.add_argument(
         "--base",
@@ -1396,7 +1347,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     default_parser.add_argument(
         "plan",
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     )
     default_parser.add_argument(
         "--base",
@@ -1417,7 +1368,7 @@ _KNOWN_SUBCOMMANDS = {"gate", "open", "merge", "split", "verify", "close", "reco
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse arguments.
 
-    A bare ``aet ship <plan_file>`` is treated as the default subcommand, which
+    A bare ``aet ship <task_id>`` is treated as the default subcommand, which
     runs the gate and then opens a PR. Explicit subcommands are dispatched
     unchanged.
     """
@@ -1480,7 +1431,7 @@ app = typer.Typer(
 def ship_default(
     plan: str = typer.Argument(
         ...,
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     ),
     base: Optional[str] = typer.Option(
         None,
@@ -1502,7 +1453,7 @@ def ship_default(
 def ship_gate(
     plan: str = typer.Argument(
         ...,
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     ),
     base: Optional[str] = typer.Option(
         None,
@@ -1524,7 +1475,7 @@ def ship_gate(
 def ship_open(
     plan: str = typer.Argument(
         ...,
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     ),
     base: Optional[str] = typer.Option(
         None,
@@ -1546,7 +1497,7 @@ def ship_open(
 def ship_merge(
     plan: str = typer.Argument(
         ...,
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     ),
     branch: Optional[str] = typer.Option(
         None,
@@ -1568,7 +1519,7 @@ def ship_merge(
 def ship_split(
     plan: str = typer.Argument(
         ...,
-        help="Path to the plan markdown file, or a task id (resolved to docs/plans/<id>.md).",
+        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
     ),
     base: Optional[str] = typer.Option(
         None,
@@ -1680,14 +1631,11 @@ def ship_verify(
 def ship_close(
     task_id: str = typer.Argument(
         ...,
-        help="Task ID to close, or path to the plan markdown file.",
+        help="Task ID to close (use `aet sprint add` to intake a plan).",
     ),
     plan: Optional[str] = typer.Argument(
         None,
-        help=(
-            "Plan path (when first arg is a task ID) or queue path (when first arg is a plan). "
-            "Must be a .md file unless the first arg is already a plan."
-        ),
+        help="Deprecated and ignored: plan paths are no longer accepted (R-3).",
     ),
     queue: str = typer.Argument(
         ".agents/aet-queue",
@@ -1721,7 +1669,12 @@ def ship_close(
     ),
 ) -> None:
     """Record post-merge closure for a task."""
-    resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(task_id, plan, queue)
+    try:
+        resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(
+            task_id, plan, queue
+        )
+    except ValueError as exc:
+        raise typer.Exit(_fail(str(exc)))
     raise typer.Exit(
         _run_ship_close(
             resolved_task_id,
@@ -1740,14 +1693,11 @@ def ship_close(
 def ship_record_merge(
     task_id: str = typer.Argument(
         ...,
-        help="Task ID to close, or path to the plan markdown file.",
+        help="Task ID to close (use `aet sprint add` to intake a plan).",
     ),
     plan: Optional[str] = typer.Argument(
         None,
-        help=(
-            "Plan path (when first arg is a task ID) or queue path (when first arg is a plan). "
-            "Must be a .md file unless the first arg is already a plan."
-        ),
+        help="Deprecated and ignored: plan paths are no longer accepted (R-3).",
     ),
     queue: str = typer.Argument(
         ".agents/aet-queue",
@@ -1781,7 +1731,12 @@ def ship_record_merge(
     ),
 ) -> None:
     """Hidden alias for close."""
-    resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(task_id, plan, queue)
+    try:
+        resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(
+            task_id, plan, queue
+        )
+    except ValueError as exc:
+        raise typer.Exit(_fail(str(exc)))
     raise typer.Exit(
         _run_ship_close(
             resolved_task_id,

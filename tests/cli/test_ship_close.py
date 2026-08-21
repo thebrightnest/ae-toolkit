@@ -138,7 +138,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         _git(self.repo, "merge", "-q", "--no-ff", "t1", "-m", "Merge t1")
         args = argparse.Namespace(
             command="close",
-            task_id=str(plan_path),
+            task_id="t1",
             plan=None,
             queue=queue_file,
             branch=None,
@@ -295,7 +295,7 @@ class TestShipCloseTransaction(unittest.TestCase):
 
         args = argparse.Namespace(
             command="close",
-            task_id=str(plan_path),
+            task_id="t1",
             plan=None,
             queue=queue_file,
             branch=None,
@@ -324,7 +324,7 @@ class TestShipCloseTransaction(unittest.TestCase):
 
         args = argparse.Namespace(
             command="close",
-            task_id=str(plan_path),
+            task_id="t1",
             plan=None,
             queue=queue_file,
             branch=None,
@@ -355,7 +355,7 @@ class TestShipCloseTransaction(unittest.TestCase):
 
         args = argparse.Namespace(
             command="close",
-            task_id=str(plan_path),
+            task_id="t1",
             plan=None,
             queue=queue_file,
             branch=None,
@@ -374,9 +374,9 @@ class TestShipCloseTransaction(unittest.TestCase):
 class TestShipCloseParser(unittest.TestCase):
     """Argument parsing for the close subcommand."""
 
-    def test_close_subcommand_parses_plan_path(self):
-        """aet ship close accepts a plan file as the first positional."""
+    def test_close_subcommand_parses_task_id(self):
+        """aet ship close accepts a task id as the first positional."""
         parser = ship.build_parser()
-        args = parser.parse_args(["close", "docs/plans/t1.md"])
+        args = parser.parse_args(["close", "t1"])
         self.assertEqual(args.command, "close")
-        self.assertEqual(args.task_id, "docs/plans/t1.md")
+        self.assertEqual(args.task_id, "t1")

@@ -13,6 +13,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet import plan_parser
+from aet.backends.git_refs_backend import GitRefsBackend
+
 _SHIP_PY = Path(__file__).parents[1] / "src" / "aet" / "cli" / "ship.py"
 _spec = importlib.util.spec_from_loader(
     "aet_ship_merge", importlib.machinery.SourceFileLoader("aet_ship_merge", str(_SHIP_PY))
@@ -35,17 +38,17 @@ class TestShipMergeParser(unittest.TestCase):
     def test_merge_subcommand_defaults_branch_to_none(self):
         """aet ship merge defaults --branch to None for runtime trunk resolution."""
         parser = ship.build_parser()
-        args = parser.parse_args(["merge", "docs/plans/t1.md"])
+        args = parser.parse_args(["merge", "t1"])
         self.assertEqual(args.command, "merge")
-        self.assertEqual(args.plan, "docs/plans/t1.md")
+        self.assertEqual(args.plan, "t1")
         self.assertIsNone(args.branch)
 
     def test_merge_subcommand_parses_branch(self):
         """aet ship merge accepts an explicit --branch."""
         parser = ship.build_parser()
-        args = parser.parse_args(["merge", "docs/plans/t1.md", "--branch", "dev"])
+        args = parser.parse_args(["merge", "t1", "--branch", "dev"])
         self.assertEqual(args.command, "merge")
-        self.assertEqual(args.plan, "docs/plans/t1.md")
+        self.assertEqual(args.plan, "t1")
         self.assertEqual(args.branch, "dev")
 
 
@@ -102,9 +105,19 @@ class TestShipMergeCommand(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
         base = Path(self.tmpdir.name)
 
-        self.plan_path = base / "docs" / "plans" / "t1.md"
+        self.repo = base / "repo"
+        self.repo.mkdir()
+        subprocess.run(["git", "-C", str(self.repo), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "test@example.com"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Test User"], check=True)
+        (self.repo / ".agents").mkdir(parents=True, exist_ok=True)
+        (self.repo / "README.md").write_text("hello\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "initial"], check=True)
+
+        self.plan_path = self.repo / "docs" / "plans" / "t1.md"
         self.plan_path.parent.mkdir(parents=True)
-        self._write_plan(
+        self._default_content = (
             "---\n"
             "id: t1\n"
             "status: awaiting_merge\n"
@@ -113,18 +126,42 @@ class TestShipMergeCommand(unittest.TestCase):
             "## Task List\n\n"
             "- [x] task one\n\n"
             "---\n\n"
-            "*Stage: implemented*\n",
+            "*Stage: implemented*\n"
         )
+        self.plan_path.write_text(self._default_content, encoding="utf-8")
+        self._save_task(self._spec())
 
         self.cwd = os.getcwd()
         self.addCleanup(os.chdir, self.cwd)
+        os.chdir(self.repo)
 
-    def _write_plan(self, content: str) -> None:
-        self.plan_path.write_text(content, encoding="utf-8")
+    def _spec(self, content: str | None = None) -> dict:
+        text = content if content is not None else self.plan_path.read_text(encoding="utf-8")
+        return plan_parser.extract_plan_spec_from_text(text, "t1")
+
+    def _save_task(self, spec: dict, task_id: str = "t1") -> None:
+        backend = GitRefsBackend(
+            queue_file=str(self.repo / ".agents" / "aet-queue"),
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        )
+        data = backend.load()
+        queue = data["queue"]
+        task = next((t for t in queue if t.get("id") == task_id), None)
+        if task is None:
+            task = {
+                "id": task_id,
+                "state": "awaiting_merge",
+                "stage": "qa-complete",
+                "branch": "t1",
+                "plan_file": str(Path("docs/plans") / f"{task_id}.md"),
+            }
+            queue.append(task)
+        task["spec"] = spec
+        backend.save(queue)
 
     def test_merge_defaults_branch_to_none_for_runtime_resolution(self):
         """argparse defaults --branch to None so cmd_merge resolves the trunk at runtime."""
-        args = ship.parse_args(["merge", str(self.plan_path)])
+        args = ship.parse_args(["merge", "t1"])
         self.assertIsNone(args.branch)
 
     def test_merge_refuses_to_proceed_when_gate_fails(self):
@@ -141,7 +178,7 @@ class TestShipMergeCommand(unittest.TestCase):
             patch.object(ship, "_run_gate", return_value=gate_result),
             patch.object(ship, "_resolve_feature_branch", return_value="t1"),
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan=str(self.plan_path), branch="dev", dry_run=False))
+            rc = ship.cmd_merge(argparse.Namespace(plan="t1", branch="dev", dry_run=False))
         self.assertNotEqual(rc, 0)
 
     def test_merge_stops_on_conflict_detection(self):
@@ -163,7 +200,7 @@ class TestShipMergeCommand(unittest.TestCase):
                     with patch.object(ship, "_has_merge_conflicts", return_value=(True, "conflict!")):
                         with patch.object(ship, "_merge_into_target", return_value=(True, "", "sha")) as merge_mock:
                             rc = ship.cmd_merge(
-                                argparse.Namespace(plan=str(self.plan_path), branch="dev", dry_run=False)
+                                argparse.Namespace(plan="t1", branch="dev", dry_run=False)
                             )
         self.assertNotEqual(rc, 0)
         merge_mock.assert_not_called()
@@ -192,7 +229,7 @@ class TestShipMergeCommand(unittest.TestCase):
                         ):
                             with patch.object(ship.aet_state, "cmd_record_merge", return_value=0) as close_mock:
                                 rc = ship.cmd_merge(
-                                    argparse.Namespace(plan=str(self.plan_path), branch="dev", dry_run=False)
+                                    argparse.Namespace(plan="t1", branch="dev", dry_run=False)
                                 )
         self.assertEqual(rc, 0)
         close_mock.assert_called_once()
@@ -226,7 +263,7 @@ class TestShipMergeCommand(unittest.TestCase):
                         ):
                             with patch.object(ship.aet_state, "cmd_record_merge") as close_mock:
                                 rc = ship.cmd_merge(
-                                    argparse.Namespace(plan=str(self.plan_path), branch="dev", dry_run=True)
+                                    argparse.Namespace(plan="t1", branch="dev", dry_run=True)
                                 )
         self.assertEqual(rc, 0)
         close_mock.assert_not_called()
@@ -260,7 +297,7 @@ class TestShipMergeCommand(unittest.TestCase):
                         ) as merge_mock:
                             with patch.object(ship.aet_state, "cmd_record_merge") as close_mock:
                                 rc = ship.cmd_merge(
-                                    argparse.Namespace(plan=str(self.plan_path), branch="main", dry_run=False)
+                                    argparse.Namespace(plan="t1", branch="main", dry_run=False)
                                 )
         self.assertNotEqual(rc, 0)
         merge_mock.assert_not_called()
@@ -293,7 +330,7 @@ class TestShipMergeCommand(unittest.TestCase):
                         with patch.object(ship, "_merge_into_target", return_value=(True, "merged", "abc123")):
                             with patch.object(ship.aet_state, "cmd_record_merge", return_value=0):
                                 rc = ship.cmd_merge(
-                                    argparse.Namespace(plan=str(self.plan_path), branch="feat-parent", dry_run=False)
+                                    argparse.Namespace(plan="t1", branch="feat-parent", dry_run=False)
                                 )
         self.assertEqual(rc, 0)
 
@@ -325,7 +362,7 @@ class TestShipMergeCommand(unittest.TestCase):
                             with patch.object(ship.aet_state, "cmd_record_merge", return_value=0):
                                 rc = ship.cmd_merge(
                                     argparse.Namespace(
-                                        plan=str(self.plan_path),
+                                        plan="t1",
                                         branch="main",
                                         base="origin/feat-parent",
                                         dry_run=False,
@@ -364,6 +401,31 @@ class TestShipMergeCommand(unittest.TestCase):
         git("add", f"{task_id}.txt")
         git("commit", "-q", "-m", f"work for {task_id}")
         git("checkout", "-q", "main")
+
+        # Add a task record so cmd_merge can resolve the spec.
+        (repo / ".agents").mkdir(parents=True, exist_ok=True)
+        backend = GitRefsBackend(
+            queue_file=str(repo / ".agents" / "aet-queue"),
+            history_file=str(repo / ".agents" / "work-history.jsonl"),
+        )
+        spec = {
+            "frontmatter": {"id": task_id},
+            "title": f"Plan {task_id}",
+            "body": "",
+            "tasks": ["- [x] task one"],
+        }
+        backend.save(
+            [
+                {
+                    "id": task_id,
+                    "state": "awaiting_merge",
+                    "stage": "qa-complete",
+                    "branch": task_id,
+                    "plan_file": f"docs/plans/{task_id}.md",
+                    "spec": spec,
+                }
+            ]
+        )
         return repo
 
     def test_merge_resolves_feature_branch_from_task_not_checkout(self):
@@ -398,7 +460,7 @@ class TestShipMergeCommand(unittest.TestCase):
             patch.object(ship, "_merge_into_target", side_effect=fake_merge),
             patch.object(ship.aet_state, "cmd_record_merge", return_value=0),
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan=str(self.plan_path), branch="main", dry_run=False))
+            rc = ship.cmd_merge(argparse.Namespace(plan="t1", branch="main", dry_run=False))
         self.assertEqual(rc, 0)
         # The task branch — never the "main" checkout — is what gets merged.
         self.assertEqual(captured["feature"], "t1")
@@ -418,7 +480,7 @@ class TestShipMergeCommand(unittest.TestCase):
             patch.object(ship, "_merge_into_target") as merge_mock,
             patch.object(ship.aet_state, "cmd_record_merge") as close_mock,
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan=str(self.plan_path), branch="main", dry_run=False))
+            rc = ship.cmd_merge(argparse.Namespace(plan="t1", branch="main", dry_run=False))
         self.assertNotEqual(rc, 0)
         merge_mock.assert_not_called()
         close_mock.assert_not_called()
@@ -431,7 +493,7 @@ class TestShipMergeCommand(unittest.TestCase):
             patch.object(ship, "_merge_into_target") as merge_mock,
             patch.object(ship.aet_state, "cmd_record_merge") as close_mock,
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan=str(self.plan_path), branch="main", dry_run=False))
+            rc = ship.cmd_merge(argparse.Namespace(plan="t1", branch="main", dry_run=False))
         self.assertNotEqual(rc, 0)
         merge_mock.assert_not_called()
         close_mock.assert_not_called()
