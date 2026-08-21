@@ -347,6 +347,26 @@ All five implementation tasks landed; merge verification remains owned by `aet-s
 
 - **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
 
+## Divergence Summary — owb-12-config-honesty
+
+*Recorded: 2026-08-21 — Branch: owb-12-config-honesty*
+
+All five implementation tasks landed; merge verification remains owned by `aet-ship`.
+
+### Changed from plan
+
+- **Task 4 — default-backend contradiction**: the plan named a disagreement between `configure --task-backend` help and `factory.py` defaults. The `task_backend` axis and json backend were removed in `owb-07-git-refs-only-store`, so the contradiction no longer exists and no code change was required in this branch.
+
+### Added (unplanned)
+
+- **`docs/CLI.md` regenerated** to document the new `aet configure --shared` flag.
+- **`tests/backends/test_config_honesty.py`**: new test module covering unknown-key rejection, misspelled-key rejection, and projection-in-shadow contradiction.
+- **`tests/projections/test_projection_dispatcher.py` updated** to assert that projections in shadow config are rejected and that non-projection keys still resolve external-first.
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
 ---
 
 *Stage: synced*
