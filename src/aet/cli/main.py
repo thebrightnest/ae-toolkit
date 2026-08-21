@@ -61,7 +61,9 @@ from aet.plan_parser import resolve_plan_arg
 
 app = typer.Typer(
     help="Agentic Engineering Toolkit CLI",
-    no_args_is_help=True,
+    no_args_is_help=False,
+    invoke_without_command=True,
+    add_help_option=False,
     add_completion=False,
 )
 
@@ -106,8 +108,17 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _help_callback(value: bool) -> None:
+    if value:
+        from aet.cli.help_index import render_help_index
+
+        render_help_index(app)
+        raise typer.Exit()
+
+
 @app.callback()
 def _main_callback(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False,
         "--version",
@@ -115,8 +126,21 @@ def _main_callback(
         is_eager=True,
         callback=_version_callback,
     ),
+    help: bool = typer.Option(  # noqa: A002  # click's conventional option name
+        False,
+        "--help",
+        "-h",
+        help="Show this help message and exit.",
+        is_eager=True,
+        callback=_help_callback,
+    ),
 ) -> None:
-    """Top-level callback; handles --version only."""
+    """Top-level callback; handles --version and --help."""
+    if ctx.invoked_subcommand is None:
+        from aet.cli.help_index import render_help_index
+
+        render_help_index(app)
+        raise typer.Exit()
 
 
 # ---------------------------------------------------------------------------
