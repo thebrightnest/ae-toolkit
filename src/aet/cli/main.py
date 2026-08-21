@@ -140,7 +140,9 @@ def _main_callback(
         from aet.cli.help_index import render_help_index
 
         render_help_index(app)
-        raise typer.Exit()
+        # Preserve the historical exit code for a bare ``aet`` invocation; only
+        # an explicit ``--help`` exits 0.
+        raise typer.Exit(2)
 
 
 # ---------------------------------------------------------------------------

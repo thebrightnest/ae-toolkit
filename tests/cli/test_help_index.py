@@ -138,9 +138,10 @@ def test_cli_help_non_tty_has_no_box_drawing() -> None:
 
 
 def test_cli_no_args_shows_help_index() -> None:
-    """Invoking ``aet`` with no arguments shows the flat help index."""
+    """Invoking ``aet`` with no arguments shows the flat help index (exit 2)."""
     result = run_typer(app, [])
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 2, result.output
+    assert "Usage:" in result.output
     assert "Commands:" in result.output
     assert "Plan work" in result.output
 
