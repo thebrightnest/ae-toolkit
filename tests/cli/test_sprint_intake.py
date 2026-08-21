@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from aet.backends.git_refs_backend import GitRefsBackend
 from aet.cli import sprint as sprint_cmd
 
 
@@ -77,18 +78,28 @@ def _git_init(root: Path) -> None:
 def _write_config(root: Path, projections: list[dict] | None = None) -> Path:
     path = root / ".agents" / "aet-config.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    config: dict = {"task_backend": "json"}
+    config: dict = {}
     if projections is not None:
         config["projections"] = projections
     path.write_text(json.dumps(config), encoding="utf-8")
     return path
 
 
-def _write_queue(root: Path, tasks: list[dict]) -> Path:
-    queue_file = root / ".agents" / "work-queue.json"
+def _seed_queue(root: Path, tasks: list[dict]) -> tuple[Path, Path]:
+    queue_file = root / ".agents" / "aet-queue"
+    history_file = root / ".agents" / "work-history.jsonl"
     queue_file.parent.mkdir(parents=True, exist_ok=True)
-    queue_file.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
-    return queue_file
+    backend = GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    )
+    backend.save(tasks)
+    return queue_file, history_file
+
+
+def _read_queue(queue_file: Path, history_file: Path) -> list[dict]:
+    return GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    ).load()["queue"]
 
 
 def _completed(stdout: str = "", returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess:
@@ -157,7 +168,7 @@ class TestSprintIntakeAdmitsUnblockedCandidate(unittest.TestCase):
                 root, projections=[{"type": "github", "repo": "owner/repo"}]
             )
             history_file = root / ".agents" / "work-history.jsonl"
-            queue_file = _write_queue(root, [])
+            queue_file, _ = _seed_queue(root, [])
 
             issue = {
                 "number": 7,
@@ -189,8 +200,8 @@ class TestSprintIntakeAdmitsUnblockedCandidate(unittest.TestCase):
                     rc = sprint_cmd.main()
 
             self.assertEqual(rc, 0)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            ids = [t["id"] for t in data.get("tasks", [])]
+            data = _read_queue(queue_file, history_file)
+            ids = [t["id"] for t in data]
             self.assertIn("feat-001", ids)
 
 
@@ -210,7 +221,7 @@ class TestSprintIntakeRefusesBlockedCandidate(unittest.TestCase):
                 root, projections=[{"type": "github", "repo": "owner/repo"}]
             )
             history_file = root / ".agents" / "work-history.jsonl"
-            queue_file = _write_queue(
+            queue_file, _ = _seed_queue(
                 root,
                 [
                     {
@@ -254,8 +265,8 @@ class TestSprintIntakeRefusesBlockedCandidate(unittest.TestCase):
                             rc = sprint_cmd.main()
 
             self.assertEqual(rc, 0)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            ids = {t["id"] for t in data.get("tasks", [])}
+            data = _read_queue(queue_file, history_file)
+            ids = {t["id"] for t in data}
             self.assertNotIn("feat-002", ids)
             output = stdout.getvalue() + stderr.getvalue()
             self.assertIn("blocked by blocker-001", output)
@@ -276,7 +287,7 @@ class TestSprintIntakeHaltsOnForgeFailure(unittest.TestCase):
                 root, projections=[{"type": "github", "repo": "owner/repo"}]
             )
             history_file = root / ".agents" / "work-history.jsonl"
-            queue_file = _write_queue(root, [])
+            queue_file, _ = _seed_queue(root, [])
 
             attempts = []
 
@@ -313,8 +324,8 @@ class TestSprintIntakeHaltsOnForgeFailure(unittest.TestCase):
                     rc = sprint_cmd.main()
 
             self.assertEqual(rc, 1)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            ids = [t["id"] for t in data.get("tasks", [])]
+            data = _read_queue(queue_file, history_file)
+            ids = [t["id"] for t in data]
             self.assertEqual(ids, [])
             self.assertGreaterEqual(len(attempts), 1)
 
@@ -334,7 +345,7 @@ class TestSprintIntakeSkipsKnownTasks(unittest.TestCase):
                 root, projections=[{"type": "github", "repo": "owner/repo"}]
             )
             history_file = root / ".agents" / "work-history.jsonl"
-            queue_file = _write_queue(
+            queue_file, _ = _seed_queue(
                 root,
                 [
                     {
@@ -376,8 +387,8 @@ class TestSprintIntakeSkipsKnownTasks(unittest.TestCase):
                             rc = sprint_cmd.main()
 
             self.assertEqual(rc, 0)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            self.assertEqual(len(data.get("tasks", [])), 1)
+            data = _read_queue(queue_file, history_file)
+            self.assertEqual(len(data), 1)
             output = stdout.getvalue() + stderr.getvalue()
             self.assertIn("already in queue", output)
 
@@ -398,7 +409,7 @@ class TestSprintIntakeSkipsKnownTasks(unittest.TestCase):
                 json.dumps({"id": "feat-005", "state": "merged"}) + "\n",
                 encoding="utf-8",
             )
-            queue_file = _write_queue(root, [])
+            queue_file, _ = _seed_queue(root, [])
 
             issue = {
                 "number": 10,
@@ -430,8 +441,8 @@ class TestSprintIntakeSkipsKnownTasks(unittest.TestCase):
                             rc = sprint_cmd.main()
 
             self.assertEqual(rc, 0)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            self.assertEqual(data.get("tasks", []), [])
+            data = _read_queue(queue_file, history_file)
+            self.assertEqual(data, [])
             output = stdout.getvalue() + stderr.getvalue()
             self.assertIn("already settled", output)
 
@@ -452,7 +463,7 @@ class TestSprintIntakeEnumeratesOnce(unittest.TestCase):
                 root, projections=[{"type": "github", "repo": "owner/repo"}]
             )
             history_file = root / ".agents" / "work-history.jsonl"
-            queue_file = _write_queue(root, [])
+            queue_file, _ = _seed_queue(root, [])
 
             issues = [
                 {
@@ -508,8 +519,8 @@ class TestSprintIntakeEnumeratesOnce(unittest.TestCase):
             self.assertEqual(rc, 0)
             issue_list_calls = [c for c in list_calls if "list" in c]
             self.assertEqual(len(issue_list_calls), 1)
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
-            ids = {t["id"] for t in data.get("tasks", [])}
+            data = _read_queue(queue_file, history_file)
+            ids = {t["id"] for t in data}
             self.assertEqual(ids, {"feat-006", "feat-007"})
 
 
