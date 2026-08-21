@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from aet.backends.factory import resolve_config
+from aet.backends.factory import ConfigContradictionError, resolve_config
 from aet.projections.base import Projection
 from aet.projections.dispatcher import ProjectionDispatcher, resolve_projections
 
@@ -231,7 +231,27 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(config), encoding="utf-8")
 
-    def test_projections_resolved_external_first(self):
+    def test_projections_resolved_from_project_config(self):
+        """Projections are a shared-device feature and live in the team config."""
+        self._write_in_tree(
+            {
+                "projections": [{"type": "github", "repo": "in/tree"}],
+            }
+        )
+
+        with mock.patch.dict(
+            os.environ,
+            {"HOME": str(self.home), "AET_PROJECT_ID": "myproject/main"},
+            clear=True,
+        ):
+            config = resolve_config(str(self.project / ".agents" / "aet-config.json"))
+
+        dispatcher = resolve_projections(config)
+        self.assertEqual(len(dispatcher.projections), 1)
+        self.assertEqual(dispatcher.projections[0].repo, "in/tree")
+
+    def test_projections_in_external_config_rejected(self):
+        """Shadow posture cannot carry projections: contradiction is stated."""
         self._write_in_tree(
             {
                 "projections": [{"type": "github", "repo": "in/tree"}],
@@ -249,18 +269,18 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
             {"HOME": str(self.home), "AET_PROJECT_ID": "myproject/main"},
             clear=True,
         ):
-            config = resolve_config(str(self.project / ".agents" / "aet-config.json"))
+            with self.assertRaises(ConfigContradictionError) as ctx:
+                resolve_config(str(self.project / ".agents" / "aet-config.json"))
 
-        dispatcher = resolve_projections(config)
-        self.assertEqual(len(dispatcher.projections), 1)
-        self.assertEqual(dispatcher.projections[0].repo, "external/repo")
+        self.assertIn("projections", str(ctx.exception))
 
     def test_precedence_env_over_external_over_in_tree(self):
+        """Non-projection keys still resolve external-first."""
         env_config = self.home / "env-config.json"
         env_config.write_text(
             json.dumps(
                 {
-                    "projections": [{"type": "github", "repo": "env/repo"}],
+                    "integration_mode": "single-pr",
                 }
             ),
             encoding="utf-8",
@@ -269,12 +289,12 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
         self._write_external(
             "myproject/main",
             {
-                "projections": [{"type": "github", "repo": "external/repo"}],
+                "integration_mode": "pr-per-task",
             },
         )
         self._write_in_tree(
             {
-                "projections": [{"type": "github", "repo": "in/tree"}],
+                "integration_mode": "single-pr",
             }
         )
 
@@ -289,8 +309,7 @@ class TestProjectionsResolvedExternalFirst(unittest.TestCase):
         ):
             config = resolve_config(str(self.project / ".agents" / "aet-config.json"))
 
-        dispatcher = resolve_projections(config)
-        self.assertEqual(dispatcher.projections[0].repo, "env/repo")
+        self.assertEqual(config["integration_mode"], "single-pr")
 
 
 if __name__ == "__main__":

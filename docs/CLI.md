@@ -643,6 +643,7 @@ Configure the AET project config.
 - `--non-interactive` *boolean* — Fail if a required value is missing instead of prompting. (default: `False`)
 - `--migrate` *boolean* — Rename legacy .agents/aet-work.json to .agents/aet-config.json. (default: `False`)
 - `--guided` *boolean* — Run the two-question guided setup flow (scope + integration mode). (default: `False`)
+- `--shared` *boolean* — Declare this project shared across devices (writes .agents/aet-config.json). (default: `False`)
 
 ## `aet context`
 
