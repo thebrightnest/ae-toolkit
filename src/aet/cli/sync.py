@@ -80,7 +80,7 @@ def sync(
         "docs/plans", "--plans-dir", help="Deprecated and ignored: sync no longer scans the plans directory."
     ),
     config: str = typer.Option(
-        ".agents/aet-config.json", "--config", help="Path to AET backend configuration"
+        ".agents/aet-config.json", "--config", help="Path to AET queue backend configuration"
     ),
     force: bool = typer.Option(
         False,

@@ -20,7 +20,7 @@ aet sprint add docs/plans/foo.md           ← the human decision: "work on this
       no blockers       → aet:ready
 
 aet run                                    (laptop or cloud — identical)
-  → fetch refs/aet/* → queue derived from ledger → runs what AET marked ready
+  → fetch refs/aet/* → load queue → runs what AET marked ready
   → transitions relabel #N (aet:in-progress → aet:awaiting-merge)
 
 aet ship → merge → record-merge

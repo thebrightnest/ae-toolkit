@@ -90,9 +90,11 @@ protects. Durability for a plan is deferred to the PR that carries it.
 
 This revises **ADR-034 decision 3** ("Status writes are committed and pushed").
 Terminal status writes remain committed and pushed; non-terminal status writes
-on plan paths do not. ADR-034's decisions 1, 2, and 4 are unaffected: plan
-`status` remains the authoritative liveness signal, `init-queue` still reads
-plan status rather than history, and the queue remains an ephemeral cache.
+on plan paths do not. ADR-034's decision 4 (the queue remains an ephemeral
+cache) is unaffected. ADR-034's decisions 1 and 2 (plan `status` as the
+authoritative liveness signal, and `init-queue` reading plan status rather than
+history) were superseded by **ADR-055**: the `status` field left the plan
+contract, and settled-ness is now derived by the Settled-ness Authority.
 
 Scope is `docs/plans/` only. PRDs, ADRs, audits, retros, and product-briefs keep
 today's posture, and `copy_untracked_files`' six-directory untracked mirror is

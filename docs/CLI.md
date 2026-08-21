@@ -398,7 +398,7 @@ Reconcile the existing work queue (never scans docs/plans).
 - `--queue-file` *str* — Path to queue anchor (default: `.agents/aet-queue`)
 - `--history-file` *str* — Path to work-history.jsonl (default: `.agents/work-history.jsonl`)
 - `--plans-dir` *str* — Deprecated and ignored: sync no longer scans the plans directory. (default: `docs/plans`)
-- `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
+- `--config` *str* — Path to AET queue backend configuration (default: `.agents/aet-config.json`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
 ## `aet setup`

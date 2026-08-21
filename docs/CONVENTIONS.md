@@ -404,7 +404,7 @@ Rules:
 
 ### Multi-machine state
 
-Queue and ledger state travel with the repo via `refs/aet/*` on origin; a fresh clone must fetch them explicitly with `git fetch origin 'refs/aet/*:refs/aet/*'`. Config, telemetry, and reports stay machine-local in `~/.aet`. Offline work is safe; closure is the syncing boundary.
+Queue state travels with the repo via `refs/aet/*` on origin; a fresh clone must fetch it explicitly with `git fetch origin 'refs/aet/*:refs/aet/*'`. The Provenance Ledger and Execution Log are gitignored working-tree files with no transport. Config, telemetry, and reports stay machine-local in `~/.aet`. Offline work is safe; closure is the syncing boundary.
 
 ## Execution Mode
 

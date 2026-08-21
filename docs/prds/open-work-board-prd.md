@@ -369,6 +369,28 @@ All five implementation tasks landed; merge verification remains owned by `aet-s
 
 ---
 
+## Divergence Summary — owb-14-documentation-truth
+
+*Recorded: 2026-08-21 — Branch: owb-14-documentation-truth*
+
+All four implementation tasks landed; merge verification remains owned by `aet-ship`.
+
+### Changed from plan
+
+- **Task 1 — transport claims**: corrected across the five named files. `src/aet/backends/git_refs_backend.py` was narrowed to "queue state" replication and `src/aet/cli/sync.py` to "queue backend configuration"; the corrections are also enforced by new rules in `.agents/doc-rules.yaml`.
+- **Task 3 — ADR number**: the new ADR was assigned number `063` (`docs/adr/063-open-work-board-contract-and-shadow-posture.md`).
+- **Task 4 — vocabulary**: the agreed vocabulary landed in `CONTEXT.md` and was propagated to related glossary entries and example dialogue (e.g., "Work Queue" → "Board").
+
+### Added (unplanned)
+
+- `.agents/doc-rules.yaml` gained `must_not_contain`, `must_contain`, and `path_exists` rules to make R-18 documentation truth durable.
+- `docs/CLI.md` was regenerated to reflect the narrowed `sync.py` help text.
+- `.agents/learnings.jsonl` gained an entry recording the QA full-suite red-ness triage.
+
+### Deferred
+
+- **Merge branch to main and verify integration** — owned by the `aet-ship` stage and completed when that stage runs.
+
 *Stage: synced*
 
 *Next step: run `aet-ship`*
