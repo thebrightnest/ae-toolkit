@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aet import telemetry
+from tests.orchestrator._helpers import write_queue
 
 pytestmark = pytest.mark.xdist_group("telemetry-dir")
 
@@ -130,36 +131,30 @@ class TestRecordStage(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo_root:
             agents_dir = Path(repo_root) / ".agents"
             agents_dir.mkdir()
-            queue_file = agents_dir / "aet-queue"
-            queue = [{"id": "t1", "state": "in_progress", "title": "One"}]
-            queue_file.write_text(json.dumps(queue), encoding="utf-8")
+            queue_file = write_queue(
+                repo_root,
+                [{"id": "t1", "state": "in_progress", "title": "One"}],
+            )
 
             task = {"id": "t1"}
             result = orchestrator._record_stage(task, "implemented", repo_root)
 
             self.assertTrue(result)
             self.assertEqual(task["stage"], "implemented")
-            data = json.loads(queue_file.read_text(encoding="utf-8"))
+            backend = orchestrator._make_backend(queue_file)
+            data = backend.load()["queue"]
             self.assertEqual(data[0]["stage"], "implemented")
             self.assertEqual(data[0]["history"][0]["to"], "implemented")
-
-    def test_record_stage_without_queue_updates_in_memory(self):
-        """_record_stage updates the task dict directly when no queue exists."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            task = {"id": "t1"}
-            result = orchestrator._record_stage(task, "implemented", repo_root)
-
-            self.assertTrue(result)
-            self.assertEqual(task["stage"], "implemented")
 
     def test_record_stage_returns_false_when_set_stage_fails(self):
         """_record_stage returns False if aet-state set-stage rejects."""
         with tempfile.TemporaryDirectory() as repo_root:
             agents_dir = Path(repo_root) / ".agents"
             agents_dir.mkdir()
-            queue_file = agents_dir / "aet-queue"
-            queue = [{"id": "t1", "state": "ready", "title": "One"}]
-            queue_file.write_text(json.dumps(queue), encoding="utf-8")
+            write_queue(
+                repo_root,
+                [{"id": "t1", "state": "ready", "title": "One"}],
+            )
 
             task = {"id": "t1"}
             result = orchestrator._record_stage(task, "implemented", repo_root)

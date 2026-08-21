@@ -196,6 +196,11 @@ class TestRunLoggerInheritsRunId(unittest.TestCase):
     def test_run_single_uses_args_run_id(self):
         with tempfile.TemporaryDirectory() as archive_dir:
             with tempfile.TemporaryDirectory() as repo_root:
+                # git-refs backend requires the queue to live inside a git repository.
+                subprocess.run(["git", "init", "-q"], cwd=repo_root, check=True)
+                subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_root, check=True)
+                subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_root, check=True)
+
                 plan_file = Path(repo_root, "docs", "plans", "demo.md")
                 plan_file.parent.mkdir(parents=True, exist_ok=True)
                 plan_file.write_text(

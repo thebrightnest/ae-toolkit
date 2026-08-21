@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from aet.backends.git_refs_backend import GitRefsBackend
 from aet.backends.github_backend import GitHubBackend
 from tests.cli._helpers import run_typer
 
@@ -246,13 +247,11 @@ class TestBacklogAdd(unittest.TestCase):
 
             config_path = _make_config(tmp_path)
             queue_file = tmp_path / ".agents" / "aet-queue"
+            history_file = tmp_path / ".agents" / "work-history.jsonl"
             queue_file.parent.mkdir(parents=True, exist_ok=True)
-            queue_file.write_text(
-                json.dumps(
-                    [{"id": "feat-002", "state": "planned", "plan_file": str(plan)}]
-                ),
-                encoding="utf-8",
-            )
+            GitRefsBackend(
+                queue_file=str(queue_file), history_file=str(history_file)
+            ).save([{"id": "feat-002", "state": "planned", "plan_file": str(plan)}])
 
             with mock.patch.object(
                 GitHubBackend, "_run_gh", autospec=True

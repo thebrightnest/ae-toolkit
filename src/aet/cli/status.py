@@ -96,26 +96,22 @@ def _active_runs(runs_dir: Path) -> list[dict]:
     return runs
 
 
-def _queue_updated_at(queue_file: str) -> str | None:
-    """Return the wrapper's queue_updated_at for JSON-backed queues, else None."""
-    try:
-        with open(queue_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return None
-    if isinstance(data, dict):
-        return data.get("queue_updated_at")
+def _queue_updated_at(backend) -> str | None:
+    """Return the wrapper's queue_updated_at from the backend envelope, else None."""
+    envelope = getattr(backend, "_envelope", {})
+    if isinstance(envelope, dict):
+        return envelope.get("queue_updated_at")
     return None
 
 
-def _json_projection(queue: list[dict], queue_file: str, runs_dir: Path) -> dict:
+def _json_projection(queue: list[dict], backend, runs_dir: Path) -> dict:
     """Build the machine-readable status projection (minimal v1 schema)."""
     counts: dict[str, int] = {}
     for task in queue:
         category = _display_category(task)
         counts[category] = counts.get(category, 0) + 1
     return {
-        "queue_updated_at": _queue_updated_at(queue_file),
+        "queue_updated_at": _queue_updated_at(backend),
         "active_runs": _active_runs(runs_dir),
         "summary": counts,
         "tasks": [
@@ -160,7 +156,7 @@ def _run(
     runs_dir = Path.cwd() / ".agents" / "runs"
 
     if json_output:
-        print(json.dumps(_json_projection(queue, queue_file, runs_dir), indent=2))
+        print(json.dumps(_json_projection(queue, backend, runs_dir), indent=2))
         return 0
 
     counts = {

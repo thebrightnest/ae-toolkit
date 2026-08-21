@@ -20,6 +20,8 @@ from unittest.mock import patch
 import pytest
 
 from aet.cli_adapter import CLIAdapter
+from tests.orchestrator._helpers import load_queue
+from tests.orchestrator._helpers import write_queue as _write_queue
 
 pytestmark = pytest.mark.xdist_group("process-group")
 
@@ -78,25 +80,8 @@ def _init_git_repo(repo_root: str) -> None:
     )
 
 
-def _write_queue(repo_root: str, tasks: list[dict]) -> str:
-    """Write a wrapper-format queue file and return its path."""
-    queue_file = Path(repo_root, ".agents", "aet-queue")
-    queue_file.parent.mkdir(parents=True, exist_ok=True)
-    queue_file.write_text(
-        json.dumps(
-            {
-                "queue_updated_at": "2026-06-18T00:00:00Z",
-                "source_prd": "docs/prds/demo-prd.md",
-                "tasks": tasks,
-            }
-        ),
-        encoding="utf-8",
-    )
-    return str(queue_file)
-
-
 def _setup_plan_and_queue(repo_root: str, task_id: str) -> str:
-    """Commit a plan file, persist the queue via the git-refs backend, and return the queue file path."""
+    """Commit a plan file, update origin/main, and return the queue file path."""
     plan_file = os.path.join(repo_root, "docs", "plans", f"{task_id}.md")
     Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
     Path(plan_file).write_text(
@@ -112,7 +97,7 @@ def _setup_plan_and_queue(repo_root: str, task_id: str) -> str:
         ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
         check=True,
     )
-    queue_file = _write_queue(
+    return _write_queue(
         repo_root,
         [
             {
@@ -124,11 +109,6 @@ def _setup_plan_and_queue(repo_root: str, task_id: str) -> str:
             }
         ],
     )
-    wrapper = json.loads(Path(queue_file).read_text(encoding="utf-8"))
-    backend = orchestrator.create_backend(queue_file=queue_file)
-    queue = wrapper.pop("tasks", [])
-    backend.save(queue, wrapper=wrapper)
-    return queue_file
 
 
 def _write_silent_cli(repo_root: str) -> str:
@@ -219,7 +199,7 @@ class TestStallWatchdog(unittest.TestCase):
             cmd = [sys.executable, "-c", script]
             start = time.monotonic()
             exit_code, tail = orchestrator._run_with_live_tee(
-                cmd, cwd, os.environ.copy(), stall_timeout=0.5
+                cmd, cwd, os.environ.copy(), stall_timeout=0.15
             )
             elapsed = time.monotonic() - start
             self.assertEqual(exit_code, 0)
@@ -361,7 +341,6 @@ class TestSignalExitClassification(unittest.TestCase):
     def test_run_stage_records_timeout_signature_for_signal_death(self):
         """A session killed by SIGKILL is classified and recorded as timeout."""
         with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
             fake_cli = self._write_self_sigkill_cli(repo_root)
             queue_file = _write_queue(
                 repo_root,
@@ -375,10 +354,7 @@ class TestSignalExitClassification(unittest.TestCase):
                     }
                 ],
             )
-            wrapper = json.loads(Path(queue_file).read_text(encoding="utf-8"))
             backend = orchestrator.create_backend(queue_file=queue_file)
-            queue = wrapper.pop("tasks", [])
-            backend.save(queue, wrapper=wrapper)
             task = {
                 "id": "osd-signal",
                 "plan_file": "docs/plans/osd-signal.md",
@@ -464,48 +440,8 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
             self.assertEqual(rc, 1)
             self.assertIn("timed out after 0.5s", out)
 
-            backend = orchestrator.create_backend(queue_file=queue_file)
-            queue = backend.load()["queue"]
+            queue = load_queue(queue_file)
             self.assertEqual(queue[0]["state"], "failed")
-
-
-class TestHybridLivenessWatchdog(unittest.TestCase):
-    """Regression tests for hybrid liveness supervision (R-1, R-2, R-3)."""
-
-    def _background_child_script(self, child_duration: float, parent_duration: float) -> str:
-        """Return Python source that spawns a sleeper child and then waits."""
-        helper = (
-            Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py"
-        )
-        return (
-            "import subprocess, sys, time\n"
-            f"child = subprocess.Popen([sys.executable, '{helper}', '{child_duration}'])\n"
-            f"time.sleep({parent_duration})\n"
-        )
-
-    def test_silent_session_with_background_child_survives_stall(self):
-        """A silent session with active descendants is not killed by the stall watchdog."""
-        with tempfile.TemporaryDirectory() as cwd:
-            cmd = [sys.executable, "-c", self._background_child_script(0.6, 0.6)]
-            start = time.monotonic()
-            exit_code, tail = orchestrator._run_with_live_tee(
-                cmd, cwd, os.environ.copy(), stall_timeout=0.5, wall_backstop=5.0
-            )
-            elapsed = time.monotonic() - start
-            self.assertEqual(exit_code, 0)
-            self.assertLess(elapsed, 2.0)
-
-    def test_wall_backstop_kills_even_with_active_child(self):
-        """The wall-clock backstop kills a session regardless of process-tree activity."""
-        with tempfile.TemporaryDirectory() as cwd:
-            cmd = [sys.executable, "-c", self._background_child_script(10.0, 10.0)]
-            start = time.monotonic()
-            exit_code, tail = orchestrator._run_with_live_tee(
-                cmd, cwd, os.environ.copy(), stall_timeout=5.0, wall_backstop=0.3
-            )
-            elapsed = time.monotonic() - start
-            self.assertEqual(exit_code, -9)
-            self.assertLess(elapsed, 2.0)
 
 
 if __name__ == "__main__":

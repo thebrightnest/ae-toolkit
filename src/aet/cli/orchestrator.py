@@ -2282,6 +2282,10 @@ def _integrate_single_pr_task(
                 t["merge_commit"] = merge_commit
                 break
         backend.save(queue)
+        # Push the merge_commit ref immediately so that the aet-state transition
+        # below (which fetches origin first) does not overwrite our local write
+        # with a stale remote ref.
+        backend.push()
 
     if backend is not None and _task_in_queue(backend, task_id):
         aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")

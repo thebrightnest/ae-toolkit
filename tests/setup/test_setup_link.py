@@ -16,13 +16,36 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tests.cli._helpers import make_history, run_typer, write_json_file
+from aet.backends.git_refs_backend import GitRefsBackend
+from tests.cli._helpers import run_typer
 
 # Module under test
 aet_setup = importlib.import_module("aet.cli.setup")
 aet_main = importlib.import_module("aet.cli.main")
 
 _CONSOLE_SCRIPT = (Path(sys.executable).parent / "aet").resolve()
+
+
+def _git_init(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.email", "test@example.com"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.name", "Test User"],
+        check=True,
+    )
+
+
+def _seed_queue(root: Path, tasks: list[dict]) -> tuple[Path, Path]:
+    queue_file = root / ".agents" / "aet-queue"
+    history_file = root / ".agents" / "work-history.jsonl"
+    queue_file.parent.mkdir(parents=True, exist_ok=True)
+    GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    ).save(tasks)
+    return queue_file, history_file
 
 
 class SetupLinkTestCase(unittest.TestCase):
@@ -245,17 +268,18 @@ class TestSetupLinkSubcommandDoesNotTouchLink(SetupLinkTestCase):
         link.symlink_to(other)
 
         with tempfile.TemporaryDirectory() as tmp:
-            queue_file = write_json_file([])
-            history_file = make_history([])
-            plans_dir = Path(tmp) / "plans"
+            root = Path(tmp)
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
+            plans_dir = root / "plans"
             plans_dir.mkdir()
             result = self._dispatch(
                 [
                     "status",
                     "--queue-file",
-                    queue_file,
+                    str(queue_file),
                     "--history-file",
-                    history_file,
+                    str(history_file),
                     "--plans-dir",
                     str(plans_dir),
                 ],
@@ -301,6 +325,8 @@ class TestSetupLinkIntegration(SetupLinkTestCase):
 
         run_dir = Path(self.tmp.name) / "run"
         run_dir.mkdir()
+        _git_init(run_dir)
+        queue_file, history_file = _seed_queue(run_dir, [])
         plans_dir = run_dir / "plans"
         plans_dir.mkdir()
         result = subprocess.run(
@@ -310,9 +336,9 @@ class TestSetupLinkIntegration(SetupLinkTestCase):
                 "aet.cli.main",
                 "status",
                 "--queue-file",
-                str(run_dir / "queue.json"),
+                str(queue_file),
                 "--history-file",
-                str(run_dir / "history.jsonl"),
+                str(history_file),
                 "--plans-dir",
                 str(plans_dir),
             ],

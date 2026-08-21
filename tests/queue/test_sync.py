@@ -10,6 +10,33 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[2]
 
+from aet.backends.git_refs_backend import GitRefsBackend  # noqa: E402
+
+
+def _git_init(path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.email", "test@example.com"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.name", "Test User"],
+        check=True,
+    )
+
+
+def _seed_queue(queue_file: Path, history_file: Path, tasks: list[dict], wrapper: dict | None = None) -> None:
+    backend = GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    )
+    backend.save(tasks, wrapper=wrapper)
+
+
+def _seed_from_dict(queue_file: Path, history_file: Path, data: dict) -> None:
+    tasks = data.get("tasks", [])
+    wrapper = {k: v for k, v in data.items() if k != "tasks"}
+    _seed_queue(queue_file, history_file, tasks, wrapper=wrapper or None)
+
 
 def _seed_queue_from_plans(queue_file, plans_dir):
     """Create a minimal queue file containing every plan in ``plans_dir``."""
@@ -72,12 +99,11 @@ def read_queue_dict(queue_file):
         return json.load(f)
 
 
-def read_tasks(queue_file):
-    """Read the task list from a queue file, regardless of wrapper format."""
-    data = read_queue_dict(queue_file)
-    if isinstance(data, dict):
-        return data.get("tasks", [])
-    return data
+def read_tasks(queue_file, history_file):
+    """Read the task list from the git-refs backend."""
+    return GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    ).load()["queue"]
 
 
 def _ensure_default_prd(path: Path) -> None:
@@ -127,6 +153,7 @@ class TestSync(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        _git_init(self.root)
         self.plans_dir = self.root / "plans"
         self.prds_dir = self.root / "prds"
         self.queue_file = self.root / "aet-queue"
@@ -160,7 +187,7 @@ class TestSync(unittest.TestCase):
                 }
             ],
         }
-        self.queue_file.write_text(json.dumps(initial))
+        _seed_from_dict(self.queue_file, self.history_file, initial)
 
         make_plan(self.plans_dir / "new.md", "New task", blocked_by=["existing"])
 
@@ -169,9 +196,7 @@ class TestSync(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        data = read_queue_dict(self.queue_file)
-        self.assertIsInstance(data, dict)
-        tasks = {t["id"]: t for t in data["tasks"]}
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file, self.history_file)}
 
         # Existing task preserved.
         self.assertEqual(tasks["existing"]["state"], "in_progress")
@@ -195,6 +220,7 @@ class TestSync(unittest.TestCase):
                     "blocked_by": [],
                     "blocks": [],
                     "status": "merge_verified",
+                    "state": "merged",
                     "merge_commit": "def5678",
                     "branch": None,
                     "worktree": None,
@@ -203,20 +229,20 @@ class TestSync(unittest.TestCase):
                 }
             ]
         }
-        self.queue_file.write_text(json.dumps(initial))
+        _seed_from_dict(self.queue_file, self.history_file, initial)
 
         result, _ = run_sync(
             self.root, self.queue_file, self.history_file, self.plans_dir
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file, self.history_file)}
         self.assertNotIn("legacy", tasks)
         self.assertIn("1 skipped (already settled)", result.stdout)
 
     def test_does_not_call_derive(self):
         """sync must not invoke aet-state derive."""
-        self.queue_file.write_text(json.dumps({"tasks": []}))
+        _seed_queue(self.queue_file, self.history_file, [])
         result, log_file = run_sync(
             self.root, self.queue_file, self.history_file, self.plans_dir
         )
@@ -229,16 +255,17 @@ class TestSync(unittest.TestCase):
         self.assertEqual(derive_calls, [])
 
     def test_creates_missing_queue_file(self):
-        """sync recreates a missing queue file on demand."""
+        """sync recreates a missing queue on demand."""
         self.assertFalse(self.queue_file.exists())
 
         result, _ = run_sync(
             self.root, self.queue_file, self.history_file, self.plans_dir
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(
-            self.queue_file.exists(),
-            "sync must create the queue file when it is missing",
+        self.assertEqual(
+            read_tasks(self.queue_file, self.history_file),
+            [],
+            "sync must create an empty queue when it is missing",
         )
 
     def test_sync_preserves_explicit_members_regardless_of_status(self):
@@ -271,15 +298,15 @@ class TestSync(unittest.TestCase):
                 }
             ]
         }
-        self.queue_file.write_text(json.dumps(initial))
+        _seed_from_dict(self.queue_file, self.history_file, initial)
 
         result, _ = run_sync(
             self.root, self.queue_file, self.history_file, self.plans_dir
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        data = json.loads(self.queue_file.read_text(encoding="utf-8"))
-        ids = {t["id"] for t in data.get("tasks", [])}
+        tasks = read_tasks(self.queue_file, self.history_file)
+        ids = {t["id"] for t in tasks}
         self.assertEqual(ids, {"existing"})
 
     def test_sync_never_adds_new_plans(self):
@@ -303,7 +330,7 @@ class TestSync(unittest.TestCase):
                 }
             ]
         }
-        self.queue_file.write_text(json.dumps(initial))
+        _seed_from_dict(self.queue_file, self.history_file, initial)
         # A second plan exists on disk but was never explicitly added via `add`.
         make_plan(self.plans_dir / "new.md", "New task", size="S")
 
@@ -312,7 +339,7 @@ class TestSync(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file, self.history_file)}
         self.assertIn("existing", tasks)
         self.assertNotIn("new", tasks)
         self.assertIn("0 new tasks added", result.stdout)
@@ -353,14 +380,14 @@ class TestSync(unittest.TestCase):
                 },
             ]
         }
-        self.queue_file.write_text(json.dumps(initial))
+        _seed_from_dict(self.queue_file, self.history_file, initial)
 
         result, _ = run_sync(
             self.root, self.queue_file, self.history_file, self.plans_dir
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file, self.history_file)}
         # Reverse edges rebuilt for the whole queue.
         self.assertEqual(tasks["a"]["blocks"], ["b"])
         self.assertEqual(tasks["b"]["blocks"], [])
@@ -389,13 +416,13 @@ class TestSync(unittest.TestCase):
                 }
             ]
         }
-        self.queue_file.write_text(json.dumps(initial))
+        _seed_from_dict(self.queue_file, self.history_file, initial)
 
         result, _ = run_sync(
             self.root, self.queue_file, self.history_file, self.plans_dir
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        tasks = {t["id"]: t for t in read_tasks(self.queue_file)}
+        tasks = {t["id"]: t for t in read_tasks(self.queue_file, self.history_file)}
         self.assertIn("existing", tasks)
         self.assertNotIn("bad", tasks)
 

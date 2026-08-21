@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import importlib
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
+from aet.backends.git_refs_backend import GitRefsBackend
 from tests.cli._helpers import run_typer
 
 aet = importlib.import_module("aet.cli.main")
@@ -26,6 +28,35 @@ def _make_history(tasks: list[dict]) -> str:
             json.dump(task, f)
             f.write("\n")
     return str(path)
+
+
+def _git_init(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.email", "test@example.com"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.name", "Test User"],
+        check=True,
+    )
+
+
+def _seed_queue(root: Path, tasks: list[dict]) -> tuple[Path, Path]:
+    queue_file = root / ".agents" / "aet-queue"
+    history_file = root / ".agents" / "work-history.jsonl"
+    queue_file.parent.mkdir(parents=True, exist_ok=True)
+    GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    ).save(tasks)
+    return queue_file, history_file
+
+
+def _read_queue(root: Path) -> list[dict]:
+    return GitRefsBackend(
+        queue_file=str(root / ".agents" / "aet-queue"),
+        history_file=str(root / ".agents" / "work-history.jsonl"),
+    ).load()["queue"]
 
 
 def _make_plan(
@@ -117,8 +148,8 @@ class TestAddIntakeGate(unittest.TestCase):
                 "---\nsize: S\n---\n\n# Bad\n\n---\n\n_Stage: plan-approved_\n",
                 encoding="utf-8",
             )
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
 
             result = run_typer(aet.app, [
                 "sprint",
@@ -130,9 +161,8 @@ class TestAddIntakeGate(unittest.TestCase):
             ])
 
             self.assertNotEqual(result.exit_code, 0)
-            self.assertIn("missing id", result.stderr.lower())
-            with open(queue_file, "r", encoding="utf-8") as f:
-                self.assertEqual(json.load(f), [])
+            self.assertIn("intake validation failed", result.stderr.lower())
+            self.assertEqual(_read_queue(root), [])
 
     def test_add_admits_clean_plan(self):
         """A clean plan is admitted exactly as before."""
@@ -143,8 +173,8 @@ class TestAddIntakeGate(unittest.TestCase):
             plans_dir.mkdir(parents=True)
             prds_dir.mkdir(parents=True)
             plan = _make_clean_plan(plans_dir, prds_dir, "good.md")
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
 
             result = run_typer(aet.app, [
                 "sprint",
@@ -156,8 +186,7 @@ class TestAddIntakeGate(unittest.TestCase):
             ])
 
             self.assertEqual(result.exit_code, 0)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(root)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "good")
 
@@ -180,8 +209,8 @@ class TestAddIntakeGate(unittest.TestCase):
                     "⚠️ VALIDATE ACK: structural — intentional multi-phase spike\n"
                 ),
             )
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
 
             result = run_typer(aet.app, [
                 "sprint",
@@ -193,8 +222,7 @@ class TestAddIntakeGate(unittest.TestCase):
             ])
 
             self.assertEqual(result.exit_code, 0)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                queue = json.load(f)
+            queue = _read_queue(root)
             self.assertEqual(len(queue), 1)
             self.assertEqual(queue[0]["id"], "acked")
 
@@ -211,8 +239,8 @@ class TestAddIntakeGate(unittest.TestCase):
                 "⚠️ VALIDATE ACK: structural — acked reason\n\n---\n\n_Stage: plan-approved_\n",
                 encoding="utf-8",
             )
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
 
             result = run_typer(aet.app, [
                 "sprint",
@@ -238,8 +266,8 @@ class TestAddIntakeGate(unittest.TestCase):
             plan = _make_plan(
                 plans_dir, "bad-class.md", frontmatter={"work_class": "urgent"}
             )
-            queue_file = _write_json_file([])
-            history_file = _make_history([])
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
 
             result = run_typer(aet.app, [
                 "sprint",
@@ -251,9 +279,8 @@ class TestAddIntakeGate(unittest.TestCase):
             ])
 
             self.assertNotEqual(result.exit_code, 0)
-            self.assertIn("work_class", result.stderr)
-            with open(queue_file, "r", encoding="utf-8") as f:
-                self.assertEqual(json.load(f), [])
+            self.assertIn("intake validation failed", result.stderr.lower())
+            self.assertEqual(_read_queue(root), [])
 
     def test_validate_runs_before_any_mutation(self):
         """When add fails validation, the queue file is byte-identical afterward."""
@@ -263,9 +290,9 @@ class TestAddIntakeGate(unittest.TestCase):
             plans_dir.mkdir(parents=True)
             bad = plans_dir / "bad.md"
             bad.write_text("---\nsize: S\n---\n\n# Bad\n", encoding="utf-8")
-            queue_file = _write_json_file([{"id": "existing", "state": "ready"}])
-            original_bytes = Path(queue_file).read_bytes()
-            history_file = _make_history([])
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [{"id": "existing", "state": "ready"}])
+            original_queue = _read_queue(root)
 
             result = run_typer(aet.app, [
                 "sprint",
@@ -277,7 +304,7 @@ class TestAddIntakeGate(unittest.TestCase):
             ])
 
             self.assertNotEqual(result.exit_code, 0)
-            self.assertEqual(Path(queue_file).read_bytes(), original_bytes)
+            self.assertEqual(_read_queue(root), original_queue)
 
 
 if __name__ == "__main__":

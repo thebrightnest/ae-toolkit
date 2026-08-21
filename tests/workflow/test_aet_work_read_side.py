@@ -11,9 +11,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet.backends.git_refs_backend import GitRefsBackend
 from tests.cli._helpers import run_typer
 
 _REPO_ROOT = Path(__file__).parents[2]
+
+# Captured before any test patches subprocess.run, so git backend calls can
+# still reach the real executable while we intercept aet-state transitions.
+_REAL_SUBPROCESS_RUN = subprocess.run
 _STATUS_PY = _REPO_ROOT / "src" / "aet" / "cli" / "status.py"
 
 aet = importlib.import_module("aet.cli.main")
@@ -25,8 +30,28 @@ def _write_json_file(data) -> str:
         return f.name
 
 
-def _make_queue(tasks: list[dict]) -> str:
-    return _write_json_file(tasks)
+def _git_init(root: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.email", "test@example.com"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.name", "Test User"],
+        check=True,
+    )
+
+
+def _make_queue(tasks: list[dict], wrapper: dict | None = None) -> tuple[Path, Path]:
+    tmp = Path(tempfile.mkdtemp())
+    _git_init(tmp)
+    queue_file = tmp / ".agents" / "aet-queue"
+    history_file = tmp / ".agents" / "work-history.jsonl"
+    queue_file.parent.mkdir(parents=True, exist_ok=True)
+    GitRefsBackend(
+        queue_file=str(queue_file), history_file=str(history_file)
+    ).save(tasks, wrapper=wrapper)
+    return queue_file, history_file
 
 
 def _make_history(tasks: list[dict]) -> str:
@@ -67,16 +92,15 @@ class TestStatusStoredState(unittest.TestCase):
         """status uses stored state for the summary counts."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -89,15 +113,14 @@ class TestStatusStoredState(unittest.TestCase):
         """status summary includes awaiting_merge tasks."""
         plans_dir_tmp = _make_plans_dir(["t1.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "awaiting_merge", "title": "Done-ish", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -109,15 +132,14 @@ class TestStatusStoredState(unittest.TestCase):
         """Failed tasks are reported from stored state."""
         plans_dir_tmp = _make_plans_dir(["t1.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "failed", "title": "Broke", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -130,16 +152,15 @@ class TestStatusStoredState(unittest.TestCase):
         """The 'Next ready tasks' list uses stored state."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -154,13 +175,15 @@ class TestStatusStoredState(unittest.TestCase):
         """status exits cleanly and hides empty sections when files are missing."""
         plans_dir_tmp = _make_plans_dir([])
         plans_dir = plans_dir_tmp.name
-        queue_file = str(Path(tempfile.mkdtemp()) / "missing-queue.json")
-        history_file = str(Path(tempfile.mkdtemp()) / "missing-history.jsonl")
+        tmp = Path(tempfile.mkdtemp())
+        _git_init(tmp)
+        queue_file = str(tmp / ".agents" / "aet-queue")
+        history_file = str(tmp / ".agents" / "work-history.jsonl")
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -176,15 +199,14 @@ class TestStatusStoredState(unittest.TestCase):
         """status reports queue state and ignores plans not in the queue."""
         plans_dir_tmp = _make_plans_dir(["orphan.md", "t1.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -199,17 +221,16 @@ class TestStatusStoredState(unittest.TestCase):
         """status summary uses canonical state labels, not legacy status strings."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md", "t3.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "in_progress", "title": "Two", "plan_file": "docs/plans/t2.md"},
             {"id": "t3", "state": "blocked", "title": "Three", "plan_file": "docs/plans/t3.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -228,17 +249,16 @@ class TestStatusStoredState(unittest.TestCase):
             sizes={"t1": "S", "t2": "M", "t3": "L"},
         )
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "ready", "title": "Two", "plan_file": "docs/plans/t2.md"},
             {"id": "t3", "state": "blocked", "title": "Three", "plan_file": "docs/plans/t3.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -256,15 +276,14 @@ class TestStatusStoredState(unittest.TestCase):
         plans_dir = plans_dir_tmp.name
         plan_path = Path(plans_dir) / "t1.md"
         plan_path.write_text("---\nid: t1\nstatus: queued\n---\n\n# Plan\n", encoding="utf-8")
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -277,17 +296,16 @@ class TestStatusJson(unittest.TestCase):
         """status --json prints a machine-readable summary and no human report."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "blocked", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
             "--json",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -304,7 +322,7 @@ class TestStatusJson(unittest.TestCase):
         """Each task entry carries id/state/size/stage/blocked_by/pending_blockers/plan_file."""
         plans_dir_tmp = _make_plans_dir(["t1.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {
                 "id": "t1",
                 "state": "blocked",
@@ -314,13 +332,12 @@ class TestStatusJson(unittest.TestCase):
                 "blocked_by": ["t0"],
             },
         ], plans_dir))
-        history_file = _make_history([])
 
         result = run_typer(aet.app, [
             "status",
             "--json",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -343,17 +360,16 @@ class TestStatusJson(unittest.TestCase):
         tasks = _resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
         ], plans_dir)
-        queue_file = _write_json_file({
-            "queue_updated_at": "2026-07-10T12:00:00Z",
-            "tasks": tasks,
-        })
-        history_file = _make_history([])
+        queue_file, history_file = _make_queue(
+            tasks,
+            wrapper={"queue_updated_at": "2026-07-10T12:00:00Z"},
+        )
 
         result = run_typer(aet.app, [
             "status",
             "--json",
-            "--queue-file", queue_file,
-            "--history-file", history_file,
+            "--queue-file", str(queue_file),
+            "--history-file", str(history_file),
             "--plans-dir", plans_dir,
         ])
 
@@ -365,17 +381,16 @@ class TestStatusJson(unittest.TestCase):
         """The real binary's --json output parses cleanly via python3 -m json.tool."""
         plans_dir_tmp = _make_plans_dir(["t1.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         proc = subprocess.run(
             [
                 sys.executable, str(_STATUS_PY),
                 "--json",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", plans_dir,
             ],
             capture_output=True,
@@ -400,22 +415,23 @@ class TestNextStoredState(unittest.TestCase):
         """next picks a stored-ready task and ignores plans not in the queue."""
         plans_dir_tmp = _make_plans_dir(["orphan.md", "t1.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         transition_calls = []
 
         def mock_run(cmd, **_kwargs):
+            if cmd and cmd[0] == "git":
+                return _REAL_SUBPROCESS_RUN(cmd, **_kwargs)
             transition_calls.append(list(cmd))
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch.object(subprocess, "run", side_effect=mock_run):
             result = run_typer(aet.app, [
                 "next",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", plans_dir,
             ])
 
@@ -430,23 +446,24 @@ class TestNextStoredState(unittest.TestCase):
         """next picks the first stored-ready task and transitions it to in_progress."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "blocked", "title": "One", "plan_file": "docs/plans/t1.md"},
             {"id": "t2", "state": "ready", "title": "Two", "plan_file": "docs/plans/t2.md"},
         ], plans_dir))
-        history_file = _make_history([])
 
         transition_calls = []
 
         def mock_run(cmd, **_kwargs):
+            if cmd and cmd[0] == "git":
+                return _REAL_SUBPROCESS_RUN(cmd, **_kwargs)
             transition_calls.append(list(cmd))
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch.object(subprocess, "run", side_effect=mock_run):
             result = run_typer(aet.app, [
                 "next",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", plans_dir,
             ])
 
@@ -460,23 +477,24 @@ class TestNextStoredState(unittest.TestCase):
         """next picks the earliest stored-ready task in topological order."""
         plans_dir_tmp = _make_plans_dir(["t1.md", "t2.md"])
         plans_dir = plans_dir_tmp.name
-        queue_file = _make_queue(_resolve_plan_files([
+        queue_file, history_file = _make_queue(_resolve_plan_files([
             {"id": "t1", "state": "ready", "title": "One", "plan_file": "docs/plans/t1.md", "blocked_by": []},
             {"id": "t2", "state": "ready", "title": "Two", "plan_file": "docs/plans/t2.md", "blocked_by": ["t1"]},
         ], plans_dir))
-        history_file = _make_history([])
 
         transition_calls = []
 
         def mock_run(cmd, **_kwargs):
+            if cmd and cmd[0] == "git":
+                return _REAL_SUBPROCESS_RUN(cmd, **_kwargs)
             transition_calls.append(list(cmd))
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch.object(subprocess, "run", side_effect=mock_run):
             result = run_typer(aet.app, [
                 "next",
-                "--queue-file", queue_file,
-                "--history-file", history_file,
+                "--queue-file", str(queue_file),
+                "--history-file", str(history_file),
                 "--plans-dir", plans_dir,
             ])
 

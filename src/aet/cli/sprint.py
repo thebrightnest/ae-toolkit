@@ -350,7 +350,7 @@ def add(
 @app.command("intake")
 def intake(
     queue_file: str = typer.Option(
-        ".agents/work-queue.json", "--queue-file", help="Path to work-queue.json"
+        ".agents/aet-queue", "--queue-file", help="Path to aet-queue"
     ),
     history_file: str = typer.Option(
         ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"

@@ -632,6 +632,7 @@ def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dic
 AET_IGNORED_PATHS = {
     ".agents/aet-queue",
     ".agents/aet-queue.lock",
+    ".agents/aet-queue.lease",
     ".agents/work-queue.lease",
     ".agents/work-history.jsonl",
     ".agents/integration.lock",

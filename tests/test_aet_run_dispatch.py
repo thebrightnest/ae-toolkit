@@ -372,6 +372,11 @@ class TestIntegrationDetachedSpawn(_IsolatedBinDir):
             queue_file.write_text('{"queue_updated_at": "2026-01-01T00:00:00Z", "tasks": []}', encoding="utf-8")
             history_file.write_text("", encoding="utf-8")
 
+            # git-refs backend requires the queue to live inside a git repository.
+            subprocess.run(["git", "init", "-q"], cwd=tmp, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp, check=True)
+
             env = {**os.environ, "AET_BIN_DIR": str(self.bin_dir), "PYTHONPATH": str(_REPO_ROOT / "src")}
             result = subprocess.run(
                 [

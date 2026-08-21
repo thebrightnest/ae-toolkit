@@ -24,6 +24,8 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.orchestrator._helpers import write_queue
+
 # Load the orchestrator script (no .py extension) as a module.
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
 _orchestrator_loader = importlib.machinery.SourceFileLoader(
@@ -214,37 +216,28 @@ def _write_shadow_config(home_dir: str, slug: str) -> Path:
 
 
 def _write_queue(repo_root: str) -> str:
-    """Write a wrapper-format queue file and return its path."""
-    queue_file = Path(repo_root) / ".agents" / "aet-queue"
-    queue_file.parent.mkdir(parents=True, exist_ok=True)
-    queue_file.write_text(
-        json.dumps(
+    """Seed the single-pr rehearsal queue into the git-refs backend."""
+    return write_queue(
+        repo_root,
+        [
             {
-                "queue_updated_at": "2026-08-11T00:00:00Z",
-                "source_prd": "docs/prds/structural-review-tier-2-prd.md",
-                "tasks": [
-                    {
-                        "id": "first-task",
-                        "title": "First fixture task",
-                        "plan_file": "tests/fixtures/single-pr/first-task.md",
-                        "blocked_by": [],
-                        "blocks": ["second-task"],
-                        "state": "ready",
-                    },
-                    {
-                        "id": "second-task",
-                        "title": "Second fixture task",
-                        "plan_file": "tests/fixtures/single-pr/second-task.md",
-                        "blocked_by": ["first-task"],
-                        "pending_blockers": 1,
-                        "state": "blocked",
-                    },
-                ],
-            }
-        ),
-        encoding="utf-8",
+                "id": "first-task",
+                "title": "First fixture task",
+                "plan_file": "tests/fixtures/single-pr/first-task.md",
+                "blocked_by": [],
+                "blocks": ["second-task"],
+                "state": "ready",
+            },
+            {
+                "id": "second-task",
+                "title": "Second fixture task",
+                "plan_file": "tests/fixtures/single-pr/second-task.md",
+                "blocked_by": ["first-task"],
+                "pending_blockers": 1,
+                "state": "blocked",
+            },
+        ],
     )
-    return str(queue_file)
 
 
 def _commit_repo_state(repo_root: str) -> None:
