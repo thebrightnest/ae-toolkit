@@ -160,33 +160,6 @@ class TestBackfillSpecsHistory:
         captured = capsys.readouterr()
         assert "Records carrying spec.frontmatter.size" in captured.out
 
-    def test_history_archive_fallback_when_rev_and_disk_miss(
-        self, repo: Path, capsys
-    ):
-        archive = repo / "docs" / "plans" / "archive"
-        archive.mkdir(parents=True)
-        (archive / "owb-03.md").write_text(
-            PLAN.format(task_id="owb-03").replace("size: M", "size: S"),
-            encoding="utf-8",
-        )
-        _write_history(repo, [{"id": "owb-03", "plan_file": "docs/plans/owb-03.md"}])
-
-        rc = aet_state.main(
-            [
-                "backfill-specs",
-                ".agents/aet-queue",
-                "--history-file",
-                ".agents/work-history.jsonl",
-                "--rev",
-                "deadbeef~1",
-                "--apply",
-            ]
-        )
-
-        assert rc == 0
-        history = _history(repo)
-        assert history[0]["spec"]["frontmatter"]["size"] == "S"
-
     def test_history_unrecoverable_record_is_named_and_others_still_fill(
         self, repo: Path, capsys
     ):

@@ -105,5 +105,5 @@ git. The ledger is untouched by design, so no provenance is lost either way.
 
 `standard`.
 
-*Stage: implemented*
-*Next step: run `aet-qa`*
+*Stage: qa-complete*
+*Next step: run `aet-review`*
