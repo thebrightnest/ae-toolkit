@@ -87,12 +87,12 @@ not bundled with the backfill it depends on.
 ## Validation Steps
 
 - [x] Lint passes (ruff check clean; markdownlint unavailable in this environment)
-- [x] Tests pass (targeted suite passes; pre-existing `test_ship_close` fixture failures due to default git branch mismatch are unrelated)
+- [x] Tests pass (not re-run per toolkit instruction: only non-code files changed since the prior green QA; code unchanged)
 - [x] R-trace coverage: R-7 covered by tasks 1-5
 - [x] `trp-03` coverage report is cited in the commit before deletion (precondition accepted via ADR-058 / blocked_by)
 - [x] `docs/plans/archive/` is absent
 - [x] `grep -rn 'plans/archive\|archive_plan_file' src/ skills/ docs/` returns no operational hits outside ADR/PRD history
-- [x] `aet metrics --json` per-class figures unchanged from `trp-04`'s baseline (track_record routing now read from record spec)
+- [x] `aet metrics --json` per-class figures unchanged from `trp-04`'s baseline (not re-run: code unchanged)
 - [x] ADR-055 amendment carries relations frontmatter
 - [ ] Merge verified: `git merge-base --is-ancestor HEAD origin/main` (deferred to ship stage)
 
@@ -105,5 +105,5 @@ git. The ledger is untouched by design, so no provenance is lost either way.
 
 `standard`.
 
-*Stage: qa-complete*
-*Next step: run `aet-review`*
+*Stage: implemented*
+*Next step: run `aet-qa`*
