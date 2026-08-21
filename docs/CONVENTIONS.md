@@ -92,15 +92,21 @@ The in-tree file is resolved against the repository root
 
 ### Adoption Modes
 
-| Mode  | Where config lives                    | Best for                                      |
-| ----- | ------------------------------------- | --------------------------------------------- |
-| Team  | `.agents/aet-config.json` (committed) | Whole team shares one backend/mode setup.     |
-| Shadow | `~/.aet/{config-slug}/config.json`   | Solo adoption on a shared repo; zero footprint. |
+| Mode   | Where config lives                    | Best for                                        |
+| ------ | ------------------------------------- | ----------------------------------------------- |
+| Team   | `.agents/aet-config.json` (committed) | Whole team shares one backend/mode setup.       |
+| Shadow | `~/.aet/{config-slug}/config.json`    | Solo adoption on a shared repo; zero footprint. |
+
+A project nobody has configured is **local (shadow)** by default; no command
+pushes `refs/aet/*` or creates committed AET artifacts. Use `aet configure --shared`
+as the explicit one-command way to declare a project shared across devices; it
+writes `.agents/aet-config.json` and sets `integration_mode` to `pr-per-task` if
+not specified. `--scope project` is the same writer for direct, non-declarative
+writes, and `--scope user` writes the shadow file.
 
 Use `aet configure --guided` to choose the mode and integration mode in two
 questions; the command writes the file in the right place with valid values.
-Direct writes use `--scope project` for the team file or `--scope user` for the
-shadow file. Guided mode exposes the same choice as `--scope team|shadow`.
+Guided mode exposes the same choice as `--scope team|shadow`.
 
 ### Shadow Mode Setup
 

@@ -14,6 +14,7 @@ from aet.backends.factory import (
     resolve_integration_mode_with_provenance,
 )
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch
+from aet.project_id import resolve_repo_root
 from aet.worktree import AET_IGNORED_PATHS
 
 app = typer.Typer(help="Setup and bootstrap commands.")
@@ -310,13 +311,18 @@ def setup_verify(
         )
         raise typer.Exit(1)
 
-    repo_root = _repo_root()
-    config_path = str(repo_root / ".agents" / "aet-config.json")
+    # Config belongs to the repository where the command runs, not to the
+    # installed package location (important under a venv install where
+    # _repo_root() resolves to site-packages).
+    config_repo_root = resolve_repo_root()
+    config_path = str(config_repo_root / ".agents" / "aet-config.json")
     try:
-        config, config_source = resolve_config_with_source(config_path)
+        config, config_source = resolve_config_with_source(
+            config_path, repo_root=config_repo_root
+        )
         mode, mode_provenance = resolve_integration_mode_with_provenance(config_path)
-        integration = resolve_integration_branch(repo_root, config)
-        trunk = resolve_trunk_branch(repo_root, config)
+        integration = resolve_integration_branch(config_repo_root, config)
+        trunk = resolve_trunk_branch(config_repo_root, config)
     except FileNotFoundError:
         typer.echo(
             "  ⚠ could not resolve config: git is not available on PATH",

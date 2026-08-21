@@ -190,3 +190,37 @@ class TestSetupVerifyConfigProvenance(SetupVerifyTestCase):
         self.assertIn("integration_mode: pr-per-task (default)", out)
         self.assertIn("integration_branch: main (trunk)", out)
         self.assertIn("trunk: main (fallback)", out)
+
+    def test_finds_project_config_when_package_root_differs_from_repo_root(self):
+        """When aet is installed in a venv, config is still resolved from cwd repo."""
+        repo = Path(self.tmp.name) / "repo"
+        repo.mkdir()
+        self._init_repo(repo)
+
+        config = {
+            "integration_mode": "single-pr",
+            "integration_branch": "feat/epic",
+            "trunk_branch": "develop",
+        }
+        config_path = repo / ".agents" / "aet-config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        venv_root = Path(self.tmp.name) / "venv" / "lib" / "site-packages"
+        venv_root.mkdir(parents=True)
+
+        env = {
+            "AET_BIN_DIR": str(self.bin_dir),
+            "PATH": f"{self.bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        }
+        # Simulate a venv install: _repo_root() points to site-packages, but the
+        # process cwd is the actual repo. Config resolution must use cwd repo.
+        with patch.object(aet_setup, "_repo_root", lambda: venv_root):
+            with patch.object(aet_setup, "_is_worktree_copy", lambda _script: False):
+                result = run_typer(aet_setup.app, ["verify"], env=env, cwd=str(repo))
+
+        rc, out, err = result.exit_code, result.stdout, result.stderr
+        self.assertEqual(rc, 0, err)
+        self.assertIn("integration_mode: single-pr (config (project))", out)
+        self.assertIn("integration_branch: feat/epic (config (project))", out)
+        self.assertIn("trunk: develop (config (project))", out)

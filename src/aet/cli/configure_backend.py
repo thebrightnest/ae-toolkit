@@ -5,8 +5,9 @@ Usage:
   aet configure [--trunk-branch B]
                 [--integration-mode pr-per-task|single-pr]
                 [--integration-branch B] [--scope project|user]
-                [--non-interactive] [--help]
+                [--shared] [--non-interactive] [--help]
   aet configure --guided [--scope team|shadow] [--integration-mode pr-per-task|single-pr]
+  aet configure --shared [--integration-mode pr-per-task|single-pr]
   aet configure --migrate
 
 The ``--guided`` flow is the setup-time entry point: it asks exactly two
@@ -25,7 +26,9 @@ Use --scope user for a non-invasive project: the config is written to
 ~/.aet/{slug}/config.json and nothing is written inside the repo. The default
 scope is project when an in-tree config already exists, and user otherwise.
 In guided mode ``--scope team`` is an alias for ``project`` and ``shadow`` is an
-alias for ``user``.
+alias for ``user``. An unconfigured project is local (shadow) by default;
+``--shared`` is the explicit one-command way to declare a project shared across
+devices.
 
 Use --migrate to rename a legacy .agents/aet-work.json to the canonical
 .agents/aet-config.json. The rename uses git mv when the legacy file is
@@ -339,11 +342,22 @@ def _run(
     non_interactive: bool,
     migrate: bool,
     guided: bool,
+    shared: bool,
 ) -> int:
     project_root = Path.cwd()
 
     if migrate:
         return _migrate_config(project_root)
+
+    if shared:
+        if scope is not None and scope != "project":
+            _error("--shared cannot be combined with --scope user")
+            return 1
+        scope = "project"
+        # When --shared is the only input, write a minimal shared config so one
+        # command is enough to declare a project shared across devices.
+        if integration_mode is None and not trunk_branch and not integration_branch:
+            integration_mode = "pr-per-task"
 
     if guided:
         return _run_guided(scope, integration_mode)
@@ -418,6 +432,11 @@ def configure(
         "--guided",
         help="Run the two-question guided setup flow (scope + integration mode).",
     ),
+    shared: bool = typer.Option(
+        False,
+        "--shared",
+        help="Declare this project shared across devices (writes .agents/aet-config.json).",
+    ),
 ) -> None:
     """Configure the AET project config."""
     rc = _run(
@@ -428,6 +447,7 @@ def configure(
         non_interactive,
         migrate,
         guided,
+        shared,
     )
     raise typer.Exit(rc)
 

@@ -50,8 +50,25 @@ class LegacyConfigError(ValueError):
     """
 
 
+class UnknownConfigKeyError(ValueError):
+    """Raised when a config file contains a key that is not legal."""
+
+
+class ConfigContradictionError(ValueError):
+    """Raised when config contains mutually exclusive settings."""
+
+
 # Legal values for the ``integration_mode`` project setting.
 INTEGRATION_MODES = frozenset({"pr-per-task", "single-pr"})
+
+# Legal top-level keys for an AET config file. Removed keys (e.g. task_backend)
+# are special-cased with a migration message before this set is consulted.
+LEGAL_CONFIG_KEYS = frozenset({
+    "trunk_branch",
+    "integration_branch",
+    "integration_mode",
+    "projections",
+})
 
 # Removed-key migration message reused by config resolution and CLI.
 _TASK_BACKEND_REMOVED_MSG = (
@@ -137,6 +154,35 @@ def resolve_posture(
     return SHARED_POSTURE if source == "project" else SHADOW_POSTURE
 
 
+def _validate_config_keys(config: dict[str, Any]) -> None:
+    """Reject unknown keys, naming the legal ones."""
+    unknown = set(config.keys()) - LEGAL_CONFIG_KEYS
+    if unknown:
+        raise UnknownConfigKeyError(
+            f"Unknown config key(s): {', '.join(sorted(unknown))}. "
+            f"Legal keys are: {', '.join(sorted(LEGAL_CONFIG_KEYS))}."
+        )
+
+
+def _validate_config_consistency(
+    config: dict[str, Any], source: str, project_path: Path | None
+) -> None:
+    """Reject combinations that cannot take effect in the resolved posture.
+
+    Projections are a shared-device feature: they write to a forge and assume
+    refs/aet/* are pushed. In shadow posture (any source other than project)
+    a ``projections`` entry is a contradiction.
+    """
+    if source != "project" and "projections" in config:
+        raise ConfigContradictionError(
+            "Config source is shadow (no project-scope config is effective), "
+            "but a 'projections' entry is present. Projections require shared "
+            "posture and must live in the in-tree team config. "
+            f"Move 'projections' to {project_path or '.agents/aet-config.json'} "
+            "or remove it."
+        )
+
+
 def resolve_config_with_source(
     config_path: str, repo_root: str | Path | None = None
 ) -> tuple[dict[str, Any], str]:
@@ -151,21 +197,30 @@ def resolve_config_with_source(
     When ``repo_root`` is provided it is used directly; otherwise the root is
     discovered via ``resolve_repo_root()``.
 
+    Unknown keys fail closed, naming the legal alternatives. A surviving
+    ``task_backend`` key fails closed with a migration message. A
+    ``projections`` entry in a shadow source fails closed because projections
+    require shared posture.
+
     If the legacy ``.agents/aet-work.json`` exists and the canonical
     ``.agents/aet-config.json`` does not, resolution fails closed with
     :class:`LegacyConfigError` naming ``aet configure --migrate`` as the
     remedy.
-
-    A surviving ``task_backend`` key fails closed with
-    :class:`LegacyTaskBackendError` naming the migration action.
     """
+    root = resolve_repo_root(repo_root)
+    path = Path(config_path)
+    if not path.is_absolute():
+        path = root / path
+
     env_override = os.environ.get(AET_WORK_CONFIG_ENV)
     if env_override:
-        path = Path(env_override)
-        if path.exists():
-            config = _load_config(path)
+        env_path = Path(env_override)
+        if env_path.exists():
+            config = _load_config(env_path)
             if "task_backend" in config:
                 raise LegacyTaskBackendError(_TASK_BACKEND_REMOVED_MSG)
+            _validate_config_keys(config)
+            _validate_config_consistency(config, "env", project_path=path)
             return config, "env"
 
     slug = derive_config_slug(repo_root)
@@ -174,17 +229,16 @@ def resolve_config_with_source(
         config = _load_config(external_path)
         if "task_backend" in config:
             raise LegacyTaskBackendError(_TASK_BACKEND_REMOVED_MSG)
+        _validate_config_keys(config)
+        _validate_config_consistency(config, "user", project_path=path)
         return config, "user"
-
-    root = resolve_repo_root(repo_root)
-    path = Path(config_path)
-    if not path.is_absolute():
-        path = root / path
 
     if path.exists():
         config = _load_config(path)
         if "task_backend" in config:
             raise LegacyTaskBackendError(_TASK_BACKEND_REMOVED_MSG)
+        _validate_config_keys(config)
+        _validate_config_consistency(config, "project", project_path=path)
         return config, "project"
 
     legacy_path = root / LEGACY_CONFIG_PATH

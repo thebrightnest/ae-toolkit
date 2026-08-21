@@ -201,6 +201,43 @@ class TestConfigureWriter(unittest.TestCase):
         self.assertEqual(result.exit_code, 2)
         self.assertIn("No such command", result.output)
 
+    def test_shared_flag_writes_project_config(self):
+        """--shared is the explicit one-command way to declare a shared project."""
+        rc = self._run(["--shared"])
+        self.assertEqual(rc, 0)
+        config = self._read_project_config()
+        self.assertIsNotNone(config)
+        self.assertEqual(config["integration_mode"], "pr-per-task")
+        self.assertIsNone(self._read_user_config())
+
+    def test_shared_flag_conflicts_with_scope_user(self):
+        """--shared cannot be combined with --scope user."""
+        rc = self._run(["--shared", "--scope", "user"])
+        self.assertEqual(rc, 1)
+        self.assertIsNone(self._read_project_config())
+        self.assertIsNone(self._read_user_config())
+
+    def test_shared_flag_preserves_existing_keys(self):
+        """--shared merges with existing project config like other scope writes."""
+        agents = self.project / ".agents"
+        agents.mkdir()
+        existing = agents / "aet-config.json"
+        existing.write_text(
+            json.dumps({
+                "trunk_branch": "main",
+                "integration_mode": "single-pr",
+                "integration_branch": "release",
+            }),
+            encoding="utf-8",
+        )
+
+        rc = self._run(["--shared", "--trunk-branch", "develop"])
+        self.assertEqual(rc, 0)
+        config = self._read_project_config()
+        self.assertEqual(config["trunk_branch"], "develop")
+        self.assertEqual(config["integration_mode"], "single-pr")
+        self.assertEqual(config["integration_branch"], "release")
+
 
 if __name__ == "__main__":
     unittest.main()
