@@ -48,7 +48,7 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 | `make test`             | Run pytest suite                                                                     |
 | `make validate`         | Run lint-py + workflow lint + skills-lint + skill-structure validator + `aet plans lint` + `aet docs lint` + test (pytest skipped for prose-only changes) |
 | `aet status`            | Show queue health and plan drift; use after queue/state edits                        |
-| `aet plans lint`        | Lint the live `docs/plans/` corpus; settled plans live in `docs/plans/archive/` and are excluded from the scan |
+| `aet plans lint`        | Lint the live `docs/plans/` corpus; settled-ness is recorded in the provenance ledger (ADR-055) |
 | `aet docs lint`         | Lint documentation against the declarative rules in `.agents/doc-rules.yaml`          |
 | `aet docs generate`     | Regenerate `docs/CLI.md` from the Typer command tree                                 |
 | `make install-hooks`    | Install pre-commit hooks                                                             |
@@ -118,4 +118,4 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 - **CLI/skill namespace taxonomy:** Deterministic work becomes code/CLI (`aet <noun> <verb>`), judgment stays in skills, and collisions are resolved by atomic alias-free renames. See ADR-039.
 - **No CI:** All gates local via pre-commit + Make. Keeps the repo portable and free of vendor lock-in.
 - **Trimmed tooling:** Dropped cspell, lychee, detect-secrets, and prettier. Cosmetic formatting (prettier) produced churn without catching real defects; the quality surface is structure (`validate-skills`), semantics (`skills-lint`, `validate-workflows`), and code (`ruff`, `pytest`). Markdownlint remains as a light, staged-only guard.
-- **Narrowed base hygiene for plans:** `docs/plans/` is outside the intake durability gate. Untracked/modified plans are ignored by base hygiene, local branches may be ahead when only plan paths diverge, and `aet sprint add` no longer accepts `--allow-untracked`. The durable write for plan paths happens only at terminal closure (`merged`/`abandoned`), which also moves the plan into `docs/plans/archive/`. See ADR-054 and ADR-055.
+- **Narrowed base hygiene for plans:** `docs/plans/` is outside the intake durability gate. Untracked/modified plans are ignored by base hygiene, local branches may be ahead when only plan paths diverge, and `aet sprint add` no longer accepts `--allow-untracked`. The durable write for plan paths happens only at terminal closure (`merged`/`abandoned`), which records the settled state in the provenance ledger (ADR-055). See ADR-054 and ADR-055.

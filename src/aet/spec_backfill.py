@@ -118,14 +118,13 @@ def backfill_specs(
     """Fill in the missing ``spec`` on every record in *queue*, in place.
 
     Each record without a spec is resolved from the plan at *rev* first, then
-    from the working tree — a plan added after *rev* exists only on disk — and
-    finally from ``docs/plans/archive/``, which is the surviving source for
-    plans removed before R-19.  A record whose plan is in none of those places
-    is reported as skipped and the migration continues.
+    from the working tree — a plan added after *rev* exists only on disk.  A
+    record whose plan is in neither place is reported as skipped and the
+    migration continues.
 
-    An unresolvable *rev* is not fatal — the working tree or archive may still
-    hold every plan — but it is recorded, so the caller can say why the
-    revision produced nothing instead of blaming each record in turn.
+    An unresolvable *rev* is not fatal — the working tree may still hold every
+    plan — but it is recorded, so the caller can say why the revision produced
+    nothing instead of blaming each record in turn.
     """
     result = BackfillResult()
     root = Path(repo_root)
@@ -145,15 +144,12 @@ def backfill_specs(
             if not on_disk.is_absolute():
                 on_disk = root / rel_path
             text = _plan_text_at_path(on_disk)
-        if text is None:
-            archive = root / "docs" / "plans" / "archive" / Path(rel_path).name
-            text = _plan_text_at_path(archive)
 
         if text is None:
             result.skipped.append(
                 (
                     task_id,
-                    f"no plan at {source}, on disk, or in archive: {rel_path}",
+                    f"no plan at {source} or on disk: {rel_path}",
                 )
             )
             continue

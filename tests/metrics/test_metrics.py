@@ -359,48 +359,42 @@ class TestAggregate:
         assert result["classes"]["weird"]["merged"] == 1
 
 
-class TestPlanArchiveResolution:
-    """Settled plans live outside the repo; metrics must still find them."""
+class TestRecordResolution:
+    """Settled plans live on the task record; metrics reads routing from the spec."""
 
-    def test_aggregate_resolves_archived_plan_for_verdict_kinds(
-        self, tmp_path, monkeypatch
-    ):
-        """When the repo plan is gone, metrics reads required verdict kinds from the archive."""
+    def test_aggregate_resolves_record_spec_for_verdict_kinds(self, tmp_path):
+        """When the repo plan is gone, metrics reads required verdict kinds from the spec."""
         archive = tmp_path / "telemetry"
         reports = tmp_path / "reports"
         project = "test/project"
         history = tmp_path / "history.jsonl"
-        plans_archive = tmp_path / "plans-archive"
-        monkeypatch.setenv("AET_PLANS_ARCHIVE_DIR", str(plans_archive))
 
-        repo_plan = tmp_path / "docs" / "plans" / "archived-task.md"
-        archived_plan = plans_archive / "archived-task.md"
-        archived_plan.parent.mkdir(parents=True, exist_ok=True)
-        archived_plan.write_text(
-            "---\n"
-            "id: archived-task\n"
-            "security_review: skipped\n"
-            "security_review_reason: legacy\n"
-            "---\n",
-            encoding="utf-8",
-        )
-
-        _write_verdicts(reports, project, "archived-task", ("qa", "review", "sync-docs"))
+        _write_verdicts(reports, project, "record-task", ("qa", "review", "sync-docs"))
         _write_telemetry(
             archive,
             project,
-            "archived-task",
+            "record-task",
             [{"type": "stage", "stage": "implement", "token_count": 10, "cost_estimate": 0.1}],
         )
         _write_history(
             history,
             [
                 {
-                    "id": "archived-task",
+                    "id": "record-task",
                     "state": "merged",
                     "work_class": "normal",
                     "settled_at": "2026-07-15T00:00:00Z",
-                    "plan_file": str(repo_plan),
+                    "plan_file": str(tmp_path / "docs" / "plans" / "record-task.md"),
+                    "spec": {
+                        "frontmatter": {
+                            "id": "record-task",
+                            "security_review": "skipped",
+                            "security_review_reason": "legacy",
+                        },
+                        "title": "Record task",
+                        "body": "",
+                        "tasks": [],
+                    },
                 }
             ],
         )

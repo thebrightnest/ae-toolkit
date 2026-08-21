@@ -55,11 +55,13 @@ writers generate an irreconcilable conflict by construction.
    failures it guards against; the configurations promote that from
    preference to requirement.
 4. **Queue and ledger travel with the repo as pushed git refs; config,
-   telemetry, and reports stay machine-local.** The transport is the GitHub
-   remote every AET project already has — `refs/aet/*` lives inside the
-   repository, outside the working tree, invisible to every PR diff. Push
-   is best-effort and offline-tolerant everywhere except closure, where it
-   is mandatory.
+   telemetry, and reports stay machine-local. The R-5 plan archive is retired:**
+   the settled plan is the task record's portable spec (R-19), so there is no
+   second archive location to maintain or dual-read. The transport is the
+   GitHub remote every AET project already has — `refs/aet/*` lives inside
+   the repository, outside the working tree, invisible to every PR diff.
+   Push is best-effort and offline-tolerant everywhere except closure, where
+   it is mandatory.
 5. **Closure and stage transitions are code transactions.** No skill or
    orchestrator prompt instructs an agent to mutate plan status, footer, or
    queue state. The footer survives as a human breadcrumb maintained by
