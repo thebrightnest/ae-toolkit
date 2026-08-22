@@ -40,3 +40,9 @@ def test_error_output_has_no_box_drawing_characters() -> None:
     assert result.exit_code == 2, result.output
     found = _BOX_DRAWING & set(result.output)
     assert not found, f"found box-drawing characters: {sorted(found)}"
+
+
+def test_non_standalone_mode_returns_exit_code_without_raising() -> None:
+    """Programmatic callers using standalone_mode=False receive the exit code."""
+    rc = app(["sprint", "add"], standalone_mode=False)
+    assert rc == 2

@@ -131,6 +131,10 @@ class AETGroup(typer_core.TyperGroup):
         windows_expand_args: bool = True,
         **extra: Any,
     ) -> Any:
+        # We always run the inner Click main in non-standalone mode so we can
+        # intercept usage errors and append teaching examples.  The caller's
+        # requested ``standalone_mode`` then decides whether we return the code
+        # or exit the process.
         try:
             result = super().main(
                 args=args,
@@ -142,15 +146,23 @@ class AETGroup(typer_core.TyperGroup):
             )
         except _typer_click_exc.UsageError as exc:
             _print_usage_error(exc)
-            sys.exit(exc.exit_code)
+            if standalone_mode:
+                sys.exit(exc.exit_code)
+            return exc.exit_code
         except typer.Exit as exc:
-            sys.exit(exc.exit_code)
+            if standalone_mode:
+                sys.exit(exc.exit_code)
+            return exc.exit_code
         except typer.Abort:
-            sys.exit(1)
+            if standalone_mode:
+                sys.exit(1)
+            return 1
         # In non-standalone mode Click returns explicit exit codes instead of
-        # raising, so mirror the normal standalone behaviour here.
+        # raising, so mirror Typer's normal standalone behaviour when requested.
         if isinstance(result, int) and result != 0:
-            sys.exit(result)
+            if standalone_mode:
+                sys.exit(result)
+            return result
         return result
 
 
