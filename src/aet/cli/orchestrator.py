@@ -80,13 +80,17 @@ from aet.integration_lock import (  # noqa: E402
     integration_lock,
 )
 from aet.queue import (  # noqa: E402
+    LEASE_HELD_EXIT_CODE,
     LEGAL_TRANSITIONS,
+    LeaseHeldError,
     QueueIntegrityError,
     acquire_lease,
     current_state,
     get_next_unblocked,
     queue_lock,
+    record_task_meta,
     release_lease,
+    resolve_base_commit,
 )
 from aet.queue import (  # noqa: E402
     has_pending_tasks as queue_has_pending_tasks,
@@ -123,6 +127,16 @@ def _task_in_queue(backend, task_id: str) -> bool:
 
 # Global shutdown flag
 _shutdown_requested = False
+
+
+class LeaseRefusedError(Exception):
+    """Raised when a queue write is refused because another run owns the queue.
+
+    This is not a failure of the work. The commits are on the branch and the
+    verdicts are on disk; only the record could not be written. Callers abort
+    the task and leave its recorded state untouched, so it resumes once the
+    lease clears instead of being marked failed for a write it never got to do.
+    """
 
 
 class MissingPlanError(Exception):
@@ -330,6 +344,14 @@ def _record_stage(task: dict, stage: str, repo_root: str) -> bool:
     if result.returncode == 0:
         task["stage"] = stage
         return True
+    if result.returncode == LEASE_HELD_EXIT_CODE:
+        # The queue is owned by another run. This says nothing about the work,
+        # so it must not be reported as a failure of the work: the caller
+        # aborts the task and leaves its recorded state untouched.
+        raise LeaseRefusedError(
+            f"Cannot record stage '{stage}' for {task_id}: "
+            f"{result.stderr.strip() or 'the queue is owned by another run'}"
+        )
     print(f"   ⚠️  Could not set stage for {task_id}: {result.stderr.strip()}")
     return False
 
@@ -3113,8 +3135,21 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             )
             teardown_leftovers.append(task_id)
 
+    # Refuse at startup rather than seizing the queue and letting the incumbent
+    # run discover it one failed write at a time. Acquired outside the try so a
+    # refusal never reaches the finally that releases another run's lease.
     try:
-        acquire_lease(queue_file, logger.run_id)
+        acquire_lease(queue_file, logger.run_id, force=getattr(args, "force", False))
+    except LeaseHeldError as exc:
+        print(f"⛔ {exc}")
+        print(
+            "   Another run owns this queue; starting now would leave that run "
+            "unable to record its work. Wait for it to finish. If that run is "
+            "dead, its lease is reclaimed automatically on the next attempt."
+        )
+        return 1
+
+    try:
         while True:
             # Refresh stored state before each spawn pass.
             queue = backend.load()["queue"]
@@ -3180,13 +3215,18 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 env["AET_INTEGRATION_MODE"] = integration_mode
 
                 # Store a repo-relative worktree path for portability under lock.
+                # base_commit records where the branch started (ADR-064); without
+                # it the task can never derive merged from branch ancestry.
+                base_commit = resolve_base_commit(repo_root, task_id)
                 with queue_lock(queue_file):
                     queue = backend.load()["queue"]
-                    for qt in queue:
-                        if qt.get("id") == task_id:
-                            qt["worktree"] = os.path.relpath(worktree_dir, repo_root)
-                            qt["branch"] = task_id
-                            break
+                    record_task_meta(
+                        queue,
+                        task_id,
+                        os.path.relpath(worktree_dir, repo_root),
+                        task_id,
+                        base_commit=base_commit,
+                    )
                     backend.save(queue)
                 backend.push()
 
@@ -3315,6 +3355,7 @@ def _record_run_one_in_queue(
     task_id: str,
     worktree: str,
     branch: str,
+    repo_root: str,
 ) -> bool:
     """Transition a queued task to in-progress and record branch/worktree.
 
@@ -3353,13 +3394,10 @@ def _record_run_one_in_queue(
             return False
 
         # Re-read the latest queue under lock and record branch/worktree.
+        base_commit = resolve_base_commit(repo_root, branch)
         with queue_lock(queue_file):
             queue = backend.load()["queue"]
-            for qt in queue:
-                if qt.get("id") == task_id:
-                    qt["worktree"] = worktree
-                    qt["branch"] = branch
-                    break
+            record_task_meta(queue, task_id, worktree, branch, base_commit=base_commit)
             backend.save(queue)
         backend.push()
         print(f"   📝 Recorded {task_id} as in-progress (branch={branch}, worktree={worktree})")
@@ -3459,10 +3497,24 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # out-of-band mutators refuse. Batch children share the parent's lease via
     # AET_RUN_ID and must not acquire/release their own.
     owns_lease = False
+    if not spawned_by_batch:
+        # Refuse at startup; see run_batch. Batch children share the parent's
+        # lease via AET_RUN_ID and never reach this branch.
+        try:
+            acquire_lease(
+                queue_file, logger.run_id, force=getattr(args, "force", False)
+            )
+        except LeaseHeldError as exc:
+            print(f"⛔ {exc}")
+            print(
+                "   Another run owns this queue; starting now would leave that "
+                "run unable to record its work. Wait for it to finish. If that "
+                "run is dead, its lease is reclaimed automatically."
+            )
+            return 1
+        owns_lease = True
+
     try:
-        if not spawned_by_batch:
-            acquire_lease(queue_file, logger.run_id)
-            owns_lease = True
 
         # Create a synthetic task. Prefer the batch-provided task ID/worktree so
         # parent and child agree on worktree/branch names (e.g. "*-plan" suffixes).
@@ -3508,7 +3560,14 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 print(f"   📁 Telemetry: {logger.run_dir}")
                 return 4
             worktree_rel = os.path.relpath(worktree_dir, repo_root)
-            _record_run_one_in_queue(backend, queue_file, queued_task_id, worktree_rel, queued_task_id)
+            _record_run_one_in_queue(
+                backend,
+                queue_file,
+                queued_task_id,
+                worktree_rel,
+                queued_task_id,
+                repo_root,
+            )
             task_id = queued_task_id
 
         # Prefer the real queued task record so failure signatures are
@@ -3569,6 +3628,17 @@ def run_single(args: argparse.Namespace, adapter) -> int:
             print(f"   {exc}")
             success = False
             exit_code = 3
+        except LeaseRefusedError as exc:
+            # Not a failure of the work: the commits are on the branch and the
+            # verdicts are on disk. Abort without touching the task's recorded
+            # state so it resumes once the lease clears.
+            print(f"   ⛔ {exc}")
+            print(
+                f"   ↩️  Leaving {task_id} state untouched; re-run after the "
+                f"owning run finishes."
+            )
+            success = False
+            exit_code = LEASE_HELD_EXIT_CODE
 
         # Roll up per-task cost from this child's telemetry and persist it on the
         # queued task record. The batch parent later seals state, but cost must

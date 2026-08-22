@@ -19,6 +19,7 @@ from aet.queue import (  # noqa: E402
     QueueIntegrityError,
     current_state,
     record_task_meta,
+    resolve_base_commit,
 )
 
 
@@ -94,7 +95,13 @@ def transition_task(backend, task: dict) -> bool:
     queue = data["queue"]
     branch = task_id
     worktree = f".worktrees/{task_id}"
-    record_task_meta(queue, task_id, worktree, branch)
+    record_task_meta(
+        queue,
+        task_id,
+        worktree,
+        branch,
+        base_commit=resolve_base_commit(".", branch),
+    )
     backend.save(queue)
     return True
 

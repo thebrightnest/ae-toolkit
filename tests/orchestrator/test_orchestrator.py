@@ -2778,8 +2778,20 @@ class _InstantProc:
 class TestBatchLivePickupAndExit(unittest.TestCase):
     """run_batch frontier pickup and exit-when-idle behavior (frh-16)."""
 
-    def _init_batch_repo(self, repo_root: str, tasks: list[dict]) -> str:
-        """Init a repo, commit any referenced plan files, and write the queue."""
+    def _init_batch_repo(
+        self,
+        repo_root: str,
+        tasks: list[dict],
+        external_blocker: tuple[str, str] | None = None,
+    ) -> str:
+        """Init a repo, commit any referenced plan files, and write the queue.
+
+        ``external_blocker`` is an optional ``(task_id, branch)`` pair for a
+        task merged outside the batch. Its branch is created and merged before
+        the queue is written so the record can carry the ``base_commit`` the
+        merge proof needs (ADR-064); the queue is written exactly once, since
+        the git-refs backend refuses to recreate an existing task ref.
+        """
         _init_git_repo(repo_root)
         for task in tasks:
             plan_file = task.get("plan_file")
@@ -2799,10 +2811,26 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
             ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
             check=True,
         )
+        if external_blocker is not None:
+            blocker_id, blocker_branch = external_blocker
+            base_commit = self._merge_external_blocker(repo_root, blocker_branch)
+            for task in tasks:
+                if task.get("id") == blocker_id:
+                    task["base_commit"] = base_commit
         return _write_queue(repo_root, tasks)
 
-    def _merge_external_blocker(self, repo_root: str, branch: str) -> None:
-        """Create ``branch`` with a commit that is an ancestor of origin/main."""
+    def _merge_external_blocker(self, repo_root: str, branch: str) -> str:
+        """Create ``branch`` with a commit that is an ancestor of origin/main.
+
+        Returns the commit the branch was created at, which the queue record
+        must carry as ``base_commit`` for the merge to be provable (ADR-064).
+        """
+        base_commit = subprocess.run(
+            ["git", "-C", repo_root, "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
         subprocess.run(
             ["git", "-C", repo_root, "checkout", "-q", "-b", branch], check=True
         )
@@ -2822,6 +2850,7 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
             ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
             check=True,
         )
+        return base_commit
 
     def _run_batch(self, args, adapter, timeout: float = 10):
         """Run run_batch in a thread; return (rc, stdout, timed_out)."""
@@ -2953,8 +2982,9 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
                         "state": "planned",
                     },
                 ]
-                queue_file = self._init_batch_repo(repo_root, tasks)
-                self._merge_external_blocker(repo_root, "blocker-branch")
+                queue_file = self._init_batch_repo(
+                    repo_root, tasks, external_blocker=("blocker", "blocker-branch")
+                )
 
                 aet_state_bin = str(
                     Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"

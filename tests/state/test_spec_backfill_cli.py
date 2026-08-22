@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from aet import queue as queue_lib
 from aet.queue import acquire_lease
 from tests.state._helpers import seed_git_queue
 
@@ -167,7 +168,9 @@ class TestBackfillSpecsCommand:
             ["backfill-specs", ".agents/aet-queue", "--rev", "HEAD~1", "--apply"]
         )
 
-        assert rc == 1
+        # A lease refusal has its own exit code so callers can tell it
+        # apart from a failure of the work itself.
+        assert rc == queue_lib.LEASE_HELD_EXIT_CODE
         assert "foreign-run" in capsys.readouterr().err
         assert all("spec" not in task for task in _queue(repo))
 

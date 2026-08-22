@@ -61,10 +61,13 @@ class TestDoneMeansIntegrated(unittest.TestCase):
             "id": "t1",
             "plan_file": plan_path,
             "branch": "t1",
+            "base_commit": "base0000",
         }
 
         responses = {
             ("show-ref", "--verify", "--quiet", "refs/heads/t1"): (0, "", ""),
+            ("rev-parse", "t1"): (0, "t1tip00\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             # Ancestor of origin/epic-01 but not origin/main.
             ("merge-base", "--is-ancestor", "t1", "origin/epic-01"): (0, "", ""),
             ("merge-base", "--is-ancestor", "t1", "origin/main"): (1, "", ""),
@@ -87,10 +90,13 @@ class TestDoneMeansIntegrated(unittest.TestCase):
             "id": "t1",
             "plan_file": plan_path,
             "branch": "t1",
+            "base_commit": "base0000",
         }
 
         responses = {
             ("show-ref", "--verify", "--quiet", "refs/heads/t1"): (0, "", ""),
+            ("rev-parse", "t1"): (0, "t1tip00\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             ("merge-base", "--is-ancestor", "t1", "origin/epic-01"): (1, "", ""),
         }
 
@@ -141,9 +147,12 @@ class TestDoneMeansIntegrated(unittest.TestCase):
             "id": "t1",
             "state": "awaiting_merge",
             "branch": "t1",
+            "base_commit": "base0000",
         }
 
         responses = {
+            ("rev-parse", "t1"): (0, "t1tip00\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             ("merge-base", "--is-ancestor", "t1", "origin/epic-01"): (0, "", ""),
             ("merge-base", "--is-ancestor", "t1", "origin/main"): (1, "", ""),
         }
@@ -168,10 +177,13 @@ class TestDoneMeansIntegrated(unittest.TestCase):
             "id": "t1",
             "plan_file": plan_path,
             "branch": "t1",
+            "base_commit": "base0000",
         }
 
         responses = {
             ("show-ref", "--verify", "--quiet", "refs/heads/t1"): (0, "", ""),
+            ("rev-parse", "t1"): (0, "t1tip00\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             ("merge-base", "--is-ancestor", "t1", "origin/main"): (0, "", ""),
         }
 

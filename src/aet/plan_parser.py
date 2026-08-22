@@ -439,13 +439,22 @@ def task_plan_path(task: dict[str, Any], repo_root: str | Path | None = None) ->
     return root / "docs" / "plans" / f"{task_id}.md"
 
 
-def new_task_from_plan(path: Path, live_tasks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def new_task_from_plan(
+    path: Path,
+    live_tasks: list[dict[str, Any]] | None = None,
+    settled_ids: set[str] | None = None,
+) -> dict[str, Any]:
     """Create a fresh queue task dict from a plan file using the frontmatter contract.
 
-    ``live_tasks`` is the current open-work board. A blocker that has already
-    left the board is terminal, so it must not count toward ``pending_blockers``
-    — otherwise the task deadlocks on arrival. Blockers that are still on the
-    board are pending until they become terminal.
+    ``live_tasks`` is the current open-work board and ``settled_ids`` the tasks
+    that have left it by assertion (ADR-059 tombstones).
+
+    A blocker counts as satisfied only on positive evidence: it is on the board
+    in a terminal state, or it carries a tombstone. A blocker that is simply
+    absent is *not* evidence of completion — it is most often a blocker that
+    has not been added to the sprint yet, and treating absence as done is what
+    let a task dispatch in parallel with its own blocker. Absence therefore
+    fails closed (ADR-011 decision 4): unknown means pending.
     """
     data = parse_frontmatter(path)
     blocked_by = data.get("blocked_by", [])
@@ -454,12 +463,17 @@ def new_task_from_plan(path: Path, live_tasks: list[dict[str, Any]] | None = Non
     blocked_by = [b for b in blocked_by if isinstance(b, str)]
 
     live_by_id = {t["id"]: t for t in (live_tasks or []) if t.get("id")}
+    settled = settled_ids or set()
     terminal = {"merged", "abandoned"}
-    pending = [
-        b
-        for b in blocked_by
-        if b in live_by_id and live_by_id[b].get("state") not in terminal
-    ]
+
+    def _is_satisfied(blocker: str) -> bool:
+        if blocker in settled:
+            return True
+        if blocker in live_by_id:
+            return live_by_id[blocker].get("state") in terminal
+        return False  # absent: no evidence either way, so it stays pending
+
+    pending = [b for b in blocked_by if not _is_satisfied(b)]
 
     state = "ready" if not pending else "blocked"
     work_class = data.get("work_class")

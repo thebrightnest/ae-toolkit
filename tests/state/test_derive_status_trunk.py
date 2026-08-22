@@ -47,10 +47,13 @@ class TestDeriveStatusNonMainTrunk(unittest.TestCase):
             "id": "t1",
             "plan_file": plan_path,
             "branch": "feat-001",
+            "base_commit": "base0000",
         }
 
         responses = {
             ("show-ref", "--verify", "--quiet", "refs/heads/feat-001"): (0, "", ""),
+            ("rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             ("merge-base", "--is-ancestor", "feat-001", "origin/dev"): (0, "", ""),
         }
 
@@ -95,6 +98,7 @@ class TestDeriveStatusNonMainTrunk(unittest.TestCase):
             "id": "t1",
             "plan_file": plan_path,
             "branch": "feat-001",
+            "base_commit": "base0000",
         }
 
         responses = {
@@ -117,9 +121,12 @@ class TestValidateTransitionNonMainTrunk(unittest.TestCase):
             "id": "t1",
             "state": "awaiting_merge",
             "branch": "feat-001",
+            "base_commit": "base0000",
         }
 
         responses = {
+            ("rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             ("merge-base", "--is-ancestor", "feat-001", "origin/dev"): (0, "", ""),
         }
 
@@ -136,6 +143,7 @@ class TestValidateTransitionNonMainTrunk(unittest.TestCase):
             "id": "t1",
             "state": "awaiting_merge",
             "branch": "feat-001",
+            "base_commit": "base0000",
         }
 
         responses = {
