@@ -81,6 +81,20 @@ def test_walk_leaf_commands_excludes_options(leaves_by_name: dict[str, LeafComma
     assert leaves_by_name["docs lint"].args == ()
 
 
+def test_leaf_command_example_includes_required_arguments(
+    leaves_by_name: dict[str, LeafCommand],
+) -> None:
+    """The example invocation shows the full command with required arguments."""
+    assert leaves_by_name["sprint add"].example == "aet sprint add <target>"
+    assert leaves_by_name["run-one"].example == "aet run-one <plan_file>"
+    assert leaves_by_name["ship gate"].example == "aet ship gate <plan>"
+    assert (
+        leaves_by_name["state transition"].example
+        == "aet state transition <task_id> <from_stage> <to_stage>"
+    )
+    assert leaves_by_name["docs lint"].example == "aet docs lint"
+
+
 def test_every_leaf_command_resolves_to_exactly_one_section(leaves: list[LeafCommand]) -> None:
     """The static section map covers every top-level name without overlap."""
     seen: dict[str, str] = {}

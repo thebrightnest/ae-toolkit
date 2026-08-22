@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 import secrets
 import string
 import subprocess
@@ -18,12 +19,16 @@ import time
 from pathlib import Path
 from typing import Any
 
+import click
 import typer
+import typer._click.exceptions as _typer_click_exc
+import typer.core as typer_core
 
 # Import subcommand modules. Each module exposes an ``app`` attribute that is a
 # ``typer.Typer()`` instance registered under a top-level name below.
 # isort: off
 from aet.cli import (
+    help_index,
     aet_state,
     backlog,
     configure_backend,
@@ -59,7 +64,98 @@ from aet.backends.factory import QueueOutsideRepositoryError
 from aet.ledger import LedgerCorruptionError
 from aet.plan_parser import resolve_plan_arg
 
+# Cache populated on first usage error; keys are full command path tuples.
+_EXAMPLE_MAP: dict[tuple[str, ...], str] | None = None
+
+
+def _example_for_path(path: tuple[str, ...]) -> str | None:
+    """Return the cached runnable example for a command *path*, if any."""
+    global _EXAMPLE_MAP
+    if _EXAMPLE_MAP is None:
+        _EXAMPLE_MAP = {
+            leaf.path: leaf.example for leaf in help_index.walk_leaf_commands(app)
+        }
+    return _EXAMPLE_MAP.get(path)
+
+
+_DID_YOU_MEAN_RE = re.compile(r"Did you mean '([^']+)'")
+
+
+def _command_path_tuple(ctx: click.Context) -> tuple[str, ...]:
+    """Return the command path as a tuple, normalizing the program name to ``aet``."""
+    names: list[str] = []
+    current: click.Context | None = ctx
+    while current is not None:
+        if current.info_name:
+            names.append(current.info_name)
+        current = current.parent
+    names.reverse()
+    # The first name is the runtime program name (aet, python -m ..., root in tests);
+    # normalize it to the canonical "aet" prefix used by the help index.
+    return ("aet",) + tuple(names[1:])
+
+
+def _example_for_usage_error(exc: _typer_click_exc.UsageError) -> str | None:
+    """Return a runnable example for a missing-argument or unknown-command error."""
+    ctx = exc.ctx
+    if ctx is None:
+        return None
+    path = _command_path_tuple(ctx)
+    if isinstance(exc, _typer_click_exc.MissingParameter):
+        return _example_for_path(path)
+    message = exc.format_message()
+    if message.startswith("No such command"):
+        match = _DID_YOU_MEAN_RE.search(message)
+        if match:
+            return _example_for_path(path + (match.group(1),))
+    return None
+
+
+def _print_usage_error(exc: _typer_click_exc.UsageError) -> None:
+    """Print a Click usage error followed by a runnable example when available."""
+    exc.show()
+    example = _example_for_usage_error(exc)
+    if example:
+        click.echo(f"Example: {example}", err=True)
+
+
+class AETGroup(typer_core.TyperGroup):
+    """Top-level group that teaches correct invocations on usage errors."""
+
+    def main(
+        self,
+        args: Any = None,
+        prog_name: str | None = None,
+        complete_var: str | None = None,
+        standalone_mode: bool = True,
+        windows_expand_args: bool = True,
+        **extra: Any,
+    ) -> Any:
+        try:
+            result = super().main(
+                args=args,
+                prog_name=prog_name,
+                complete_var=complete_var,
+                standalone_mode=False,
+                windows_expand_args=windows_expand_args,
+                **extra,
+            )
+        except _typer_click_exc.UsageError as exc:
+            _print_usage_error(exc)
+            sys.exit(exc.exit_code)
+        except typer.Exit as exc:
+            sys.exit(exc.exit_code)
+        except typer.Abort:
+            sys.exit(1)
+        # In non-standalone mode Click returns explicit exit codes instead of
+        # raising, so mirror the normal standalone behaviour here.
+        if isinstance(result, int) and result != 0:
+            sys.exit(result)
+        return result
+
+
 app = typer.Typer(
+    cls=AETGroup,
     help="Agentic Engineering Toolkit CLI",
     no_args_is_help=False,
     invoke_without_command=True,
