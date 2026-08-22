@@ -118,7 +118,15 @@ class TestAuditCommand(unittest.TestCase):
             plan_path = "docs/plans/t1.md"
             queue_path, _history_path = seed_git_queue(
                 repo_root,
-                [{"id": "t1", "state": "ready", "plan_file": plan_path, "branch": "feat-001"}],
+                [
+                    {
+                        "id": "t1",
+                        "state": "ready",
+                        "plan_file": plan_path,
+                        "branch": "feat-001",
+                        "base_commit": "base0000",
+                    }
+                ],
             )
 
             responses = {
@@ -155,10 +163,19 @@ class TestRecordMerge(unittest.TestCase):
         config_path.write_text(json.dumps({}), encoding="utf-8")
         self.queue_file_path, _history_path = seed_git_queue(
             self.repo_root,
-            [{"id": "t1", "state": "awaiting_merge", "branch": "feat-001"}],
+            [{"id": "t1", "state": "awaiting_merge", "branch": "feat-001", "base_commit": "base0000"}],
         )
         self.history_file = str(self.queue_file_path.with_name("work-history.jsonl"))
-        self.queue = {"tasks": [{"id": "t1", "state": "awaiting_merge", "branch": "feat-001"}]}
+        self.queue = {
+            "tasks": [
+                {
+                    "id": "t1",
+                    "state": "awaiting_merge",
+                    "branch": "feat-001",
+                    "base_commit": "base0000",
+                }
+            ]
+        }
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -181,6 +198,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
         }
 
@@ -208,6 +226,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "branch_tip", "origin/main"): (1, "", ""),
             ("gh", "pr", "view", "feat-001", "--json", "mergeCommit"): (
                 0,
@@ -240,6 +259,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "branch_tip", "origin/main"): (1, "", ""),
             ("gh", "pr", "view", "feat-001", "--json", "mergeCommit"): (1, "", "gh failed"),
             ("git", "merge-base", "feat-001", "origin/main"): (0, "merge_base\n", ""),
@@ -277,6 +297,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "branch_tip", "origin/main"): (1, "", ""),
             ("gh", "pr", "view", "feat-001", "--json", "mergeCommit"): (1, "", "gh failed"),
             ("git", "merge-base", "feat-001", "origin/main"): (0, "merge_base\n", ""),
@@ -321,6 +342,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
         }
 
@@ -366,6 +388,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
         }
         mutations = []
@@ -428,6 +451,7 @@ class TestRecordMerge(unittest.TestCase):
                     "merge_strategy": "regular",
                     "plan_file": str(plan_path),
                     "branch": "feat-001",
+                    "base_commit": "base0000",
                 },
                 f,
             )
@@ -464,6 +488,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
         }
 
@@ -502,6 +527,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "branch_tip\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "branch_tip", "origin/main"): (1, "", ""),
             ("gh", "pr", "view", "feat-001", "--json", "mergeCommit"): (1, "", "gh failed"),
             ("git", "merge-base", "feat-001", "origin/main"): (0, "merge_base\n", ""),
@@ -536,6 +562,7 @@ class TestRecordMerge(unittest.TestCase):
         responses = {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
         }
 
@@ -573,6 +600,7 @@ class TestRecordMerge(unittest.TestCase):
                     "merge_strategy": "regular",
                     "plan_file": str(plan_path),
                     "branch": "feat-001",
+                    "base_commit": "base0000",
                 },
                 f,
             )
@@ -680,6 +708,7 @@ class TestDeriveStatus(unittest.TestCase):
             "id": "t1",
             "plan_file": plan_path,
             "branch": "feat-001",
+            "base_commit": "base0000",
             "blocked_by": ["t0"],
         }
 
@@ -703,10 +732,13 @@ class TestDeriveStatus(unittest.TestCase):
             "id": "t1",
             "plan_file": plan_path,
             "branch": "feat-001",
+            "base_commit": "base0000",
         }
 
         responses = {
             ("show-ref", "--verify", "--quiet", "refs/heads/feat-001"): (0, "", ""),
+            ("rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             ("merge-base", "--is-ancestor", "feat-001", "origin/main"): (0, "", ""),
         }
 
@@ -1087,15 +1119,22 @@ class TestStateTransition(unittest.TestCase):
         """Every legal lifecycle transition is accepted by validate_transition."""
         ancestry_responses = {
             ("git", "merge-base", "--is-ancestor", "feat-001", "origin/main"): (0, "", ""),
+            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
         }
 
         for from_state, targets in aet_state.queue_lib.LEGAL_TRANSITIONS.items():
             for to_state in targets:
                 # Pre-intake has neither state nor status; otherwise use state.
                 if from_state is None:
-                    task = {"id": "t", "branch": "feat-001"}
+                    task = {"id": "t", "branch": "feat-001", "base_commit": "base0000"}
                 else:
-                    task = {"id": "t", "state": from_state, "branch": "feat-001"}
+                    task = {
+                        "id": "t",
+                        "state": from_state,
+                        "branch": "feat-001",
+                        "base_commit": "base0000",
+                    }
                 with patch.object(
                     aet_state.subprocess, "run", side_effect=_subprocess_mock(ancestry_responses)
                 ):
@@ -1228,6 +1267,7 @@ class TestStateTransition(unittest.TestCase):
                         "id": "blocker",
                         "state": "awaiting_merge",
                         "branch": "feat-blocker",
+                        "base_commit": "base0000",
                         "blocks": ["dependent"],
                     },
                     {
@@ -1242,6 +1282,7 @@ class TestStateTransition(unittest.TestCase):
             responses = {
                 ("git", "fetch", "origin"): (0, "", ""),
                 ("git", "rev-parse", "feat-blocker"): (0, "abc1234\n", ""),
+                ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
                 ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
             }
 
@@ -1292,6 +1333,7 @@ class TestStateTransition(unittest.TestCase):
                         "id": "blocker",
                         "state": "awaiting_merge",
                         "branch": "feat-blocker",
+                        "base_commit": "base0000",
                         "blocks": ["dependent"],
                     },
                     {
@@ -1306,6 +1348,7 @@ class TestStateTransition(unittest.TestCase):
             responses = {
                 ("git", "fetch", "origin"): (0, "", ""),
                 ("git", "rev-parse", "feat-blocker"): (0, "abc1234\n", ""),
+                ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
                 ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
             }
 

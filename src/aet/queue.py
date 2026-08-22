@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -112,6 +113,11 @@ def queue_lock(queue_file: str) -> Iterator[None]:
 
 LEASE_FILENAME = "work-queue.lease"
 
+# Distinct exit code for "the queue is owned by another run", so a caller can
+# tell a refusal to write from a failure of the work itself. A refusal says
+# nothing about whether the work succeeded.
+LEASE_HELD_EXIT_CODE = 75
+
 
 def lease_path(queue_file: str) -> str:
     """Return the lease sidecar path for a given queue file."""
@@ -147,14 +153,24 @@ def read_lease(queue_file: str) -> dict[str, Any] | None:
     return data
 
 
-def acquire_lease(queue_file: str, run_id: str) -> dict[str, Any]:
+def acquire_lease(
+    queue_file: str, run_id: str, force: bool = False
+) -> dict[str, Any]:
     """Declare that ``run_id`` owns the queue by writing the lease sidecar.
 
     The lease records ``run_id``, the acquiring ``pid``, and ``started_at``.
     Acquisition is serialized under ``queue_lock`` and written atomically so a
     concurrent orchestrator cannot observe a partial lease.
+
+    Ownership is checked before it is claimed: a live lease held by another run
+    raises ``LeaseHeldError`` rather than being overwritten. Seizing a live
+    lease leaves the incumbent run able to do work but unable to record any of
+    it, which is worse than refusing to start. ``force`` overrides the check
+    (a stale lease whose PID is dead is reclaimed either way).
     """
     path = lease_path(queue_file)
+    if not force:
+        check_lease(queue_file)
     lease = {
         "run_id": run_id,
         "pid": os.getpid(),
@@ -498,17 +514,50 @@ def has_pending_tasks(queue: list[dict[str, Any]]) -> bool:
     return False
 
 
+def resolve_base_commit(repo_root: str, branch: str | None) -> str | None:
+    """Return the commit ``branch`` was created at, or None when unresolvable.
+
+    ADR-064 decision 1: a branch's origin is recorded when the branch is
+    created, not reconstructed later. Ancestry cannot tell an undiverged
+    branch from a merged one after the fact, so this value is what makes the
+    two distinguishable.
+    """
+    if not branch:
+        return None
+    result = subprocess.run(
+        ["git", "-C", repo_root, "rev-parse", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
 def record_task_meta(
     queue: list[dict[str, Any]],
     task_id: str,
     worktree: str | None,
     branch: str | None,
+    base_commit: str | None = None,
 ) -> None:
-    """Record worktree and branch metadata for a task."""
+    """Record worktree, branch, and branch-origin metadata for a task.
+
+    ``base_commit`` is the commit the branch was created at (ADR-064). It is
+    written once, at branch creation; a task whose record lacks it can never
+    derive ``merged`` from branch ancestry, so every branch-creation path must
+    supply it.
+    """
     for task in queue:
         if task.get("id") == task_id:
             task["worktree"] = worktree
             task["branch"] = branch
+            # Written once, at branch creation. A task re-recorded after it has
+            # committed would otherwise stamp its current tip as its origin,
+            # erasing the very divergence the field exists to prove.
+            if base_commit and not task.get("base_commit"):
+                task["base_commit"] = base_commit
 
 
 # ---------------------------------------------------------------------------
@@ -585,5 +634,3 @@ def seal_terminal(queue_file: str, history_file: str, task_id: str) -> dict[str,
         append_history_record(history_file, task)
         write_queue(queue_file, live)
     return task
-
-

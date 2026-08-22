@@ -134,6 +134,7 @@ class TestShipClosure(unittest.TestCase):
                     "state": state,
                     "stage": "qa-complete",
                     "branch": "feat-001",
+                    "base_commit": "base0000",
                     "plan_file": str(self.plan_path.relative_to(self.repo)),
                     "spec": _spec(task_id),
                 }
@@ -144,6 +145,7 @@ class TestShipClosure(unittest.TestCase):
         return {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
             ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (
                 0,
                 "",

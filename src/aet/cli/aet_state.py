@@ -140,8 +140,88 @@ def is_ancestor_of_target(branch, target_branch, cwd=None):
     return rc == 0
 
 
+def _resolve_sha(ref, cwd=None):
+    """Return the resolved sha for ``ref``, or None when it cannot be resolved."""
+    if not ref:
+        return None
+    rc, out, _ = run_git("rev-parse", ref, cwd=cwd)
+    if rc != 0:
+        return None
+    return out.strip() or None
+
+
+def _is_same_commit(a, b, cwd=None):
+    """Return True when ``a`` and ``b`` are provably the same commit.
+
+    Compares the raw values first so a recorded sha needs no git call, then
+    falls back to resolving both. Unresolvable refs return False: this answers
+    "are these provably identical", and it is used to *disqualify* evidence,
+    so an unknown answer must not disqualify.
+    """
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    sha_a = _resolve_sha(a, cwd=cwd)
+    sha_b = _resolve_sha(b, cwd=cwd)
+    return bool(sha_a and sha_b and sha_a == sha_b)
+
+
+def branch_has_own_commits(branch, base_commit, cwd=None):
+    """Return True when ``branch`` has moved past the commit it was created at.
+
+    ADR-064 decision 2: a branch still sitting on its ``base_commit`` has
+    authored nothing, so nothing it authored can be on the trunk.
+
+    Fails closed (decision 4): an unrecorded or unresolvable ``base_commit``
+    returns False, because the absence of a recorded origin is not evidence
+    that the branch carries work.
+    """
+    tip = _resolve_sha(branch, cwd=cwd)
+    base = _resolve_sha(base_commit, cwd=cwd)
+    if not tip or not base:
+        return False
+    return tip != base
+
+
+def has_merge_evidence(branch, merge_commit, base_commit, target_branch, cwd=None):
+    """Return True when there is evidence the task's work reached the target.
+
+    ADR-064: ancestry alone is not merge evidence. An undiverged task branch
+    sits at its base and is trivially an ancestor of that base, which is
+    indistinguishable from a merged branch by ancestry alone.
+
+    Evidence is either of:
+      - a recorded ``merge_commit``, distinct from the branch's base, that is
+        an ancestor of ``origin/<target_branch>``; or
+      - a branch that has moved past its ``base_commit`` and is an ancestor of
+        ``origin/<target_branch>``.
+    """
+    # A recorded merge commit is positive evidence on its own. The base check
+    # only disqualifies it when the two are provably the same commit — a
+    # "merge commit" that is the branch's own base records no work.
+    if (
+        merge_commit
+        and not _is_same_commit(merge_commit, base_commit, cwd=cwd)
+        and is_ancestor_of_target(merge_commit, target_branch, cwd=cwd)
+    ):
+        return True
+    if (
+        branch
+        and branch_has_own_commits(branch, base_commit, cwd=cwd)
+        and is_ancestor_of_target(branch, target_branch, cwd=cwd)
+    ):
+        return True
+    return False
+
+
 def resolve_merge_commit(
-    branch, cwd=None, trunk_branch="main", target_branch=None, use_diff_fallback=True
+    branch,
+    cwd=None,
+    trunk_branch="main",
+    target_branch=None,
+    use_diff_fallback=True,
+    base_commit=None,
 ):
     """Resolve the merge commit for a branch on the remote target branch.
 
@@ -154,6 +234,13 @@ def resolve_merge_commit(
     ``target_branch`` defaults to ``trunk_branch`` so ``pr-per-task`` behavior is
     unchanged; ``single-pr`` callers pass the epic integration branch.
 
+    ``base_commit`` is the commit the branch was created at. Per ADR-064
+    decision 3, the ancestry path resolves only for a branch that has moved
+    past it: a branch sitting at its base authored no commit, so reporting its
+    tip would manufacture evidence out of the absence of work. An unrecorded
+    ``base_commit`` fails that path closed; the squash and diff paths still
+    apply, because both match on content the task actually produced.
+
     Returns (merge_commit, merge_strategy, match_kind). ``match_kind`` is
     ``ancestry`` for regular merges, ``gh-api`` for squash merges resolved
     through GitHub, ``exact``/``drift`` for diff fallback, ``ambiguous`` when
@@ -164,10 +251,10 @@ def resolve_merge_commit(
 
     target = target_branch or trunk_branch
 
-    # 1. Regular merge: branch tip is on the remote target branch.
-    rc, out, _ = run_git("rev-parse", branch, cwd=cwd)
-    if rc == 0:
-        tip = out.strip()
+    # 1. Regular merge: branch tip is on the remote target branch, and the
+    #    branch has moved past its base so the tip is a commit it authored.
+    tip = _resolve_sha(branch, cwd=cwd)
+    if tip and branch_has_own_commits(branch, base_commit, cwd=cwd):
         if is_ancestor_of_target(tip, target, cwd=cwd):
             return tip, "regular", "ancestry"
 
@@ -283,7 +370,10 @@ def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main", i
     """Derive canonical state from ground truth.
 
     Derivation rules, applied in order:
-      1. merged   — branch or merge_commit is an ancestor of origin/<integration_branch>.
+      1. merged   — there is merge evidence on origin/<integration_branch>:
+                   a recorded merge_commit, or a branch that has moved past
+                   its base_commit, that is an ancestor of the target
+                   (ADR-064; ancestry alone is not evidence).
       2. in_progress — local branch exists.
       3. ready    — plan exists, no branch, and all blockers are terminal
                    (including the case of no blockers).
@@ -322,12 +412,12 @@ def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main", i
     else:
         derived["branch_exists"] = False
 
-    # Ancestry check (branch OR merge_commit must be on the remote target branch)
-    on_trunk = False
-    if branch and is_ancestor_of_target(branch, target_branch, cwd=cwd):
-        on_trunk = True
-    if merge_commit and is_ancestor_of_target(merge_commit, target_branch, cwd=cwd):
-        on_trunk = True
+    # Merge evidence (ADR-064): ancestry alone is not proof. A branch that has
+    # not moved past its base is trivially an ancestor of that base and has
+    # authored nothing.
+    on_trunk = has_merge_evidence(
+        branch, merge_commit, task.get("base_commit"), target_branch, cwd=cwd
+    )
     derived["on_trunk"] = on_trunk
 
     # Worktree present?
@@ -417,17 +507,15 @@ def validate_transition(task, from_stage, to_stage, cwd=None, trunk_branch="main
     if to_stage not in legal:
         return (False, f"Illegal transition: {from_stage} -> {to_stage}.")
 
-    # Cannot set merged without ancestry check against the remote target branch.
+    # Cannot set merged without evidence of merged content (ADR-064).
     if to_stage == "merged":
-        on_trunk = False
-        if branch:
-            on_trunk = is_ancestor_of_target(branch, target_branch, cwd=cwd)
-        if merge_commit:
-            on_trunk = on_trunk or is_ancestor_of_target(merge_commit, target_branch, cwd=cwd)
-        if not on_trunk:
+        if not has_merge_evidence(
+            branch, merge_commit, task.get("base_commit"), target_branch, cwd=cwd
+        ):
             return (
                 False,
-                f"Cannot set merged: branch/merge_commit is not ancestor of origin/{target_branch}.",
+                f"Cannot set merged: no merge evidence on origin/{target_branch} "
+                f"(branch/merge_commit must carry commits past the task's base).",
             )
 
     return (True, "Transition is valid.")
@@ -475,17 +563,18 @@ def _apply_transition(
         if not ok:
             raise RuntimeError(msg)
     elif to_state == "merged":
-        # Even repairs must prove ancestry before recording merged.
-        on_trunk = False
-        branch = task.get("branch")
-        merge_commit = task.get("merge_commit")
-        if branch:
-            on_trunk = is_ancestor_of_target(branch, target_branch, cwd=cwd)
-        if merge_commit:
-            on_trunk = on_trunk or is_ancestor_of_target(merge_commit, target_branch, cwd=cwd)
-        if not on_trunk:
+        # Repair bypasses lifecycle legality; it does not bypass evidence
+        # (ADR-064 decision 5).
+        if not has_merge_evidence(
+            task.get("branch"),
+            task.get("merge_commit"),
+            task.get("base_commit"),
+            target_branch,
+            cwd=cwd,
+        ):
             raise RuntimeError(
-                f"Cannot set merged: branch/merge_commit is not ancestor of origin/{target_branch}."
+                f"Cannot set merged: no merge evidence on origin/{target_branch} "
+                f"(branch/merge_commit must carry commits past the task's base)."
             )
 
     now = datetime.now(timezone.utc).isoformat()
@@ -623,7 +712,7 @@ def cmd_set_stage(args):
     backend.fetch()
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
-        return 1
+        return queue_lib.LEASE_HELD_EXIT_CODE
 
     with queue_lib.queue_lock(args.queue):
         data = backend.load()
@@ -913,7 +1002,7 @@ def cmd_heal(args):
             return 0
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
-        return 1
+        return queue_lib.LEASE_HELD_EXIT_CODE
 
     if not integrity_ok:
         # Restamp before applying fixes: every later load in this run (the
@@ -1060,7 +1149,7 @@ def cmd_reset(args):
         return 0
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
-        return 1
+        return queue_lib.LEASE_HELD_EXIT_CODE
 
     with queue_lib.queue_lock(args.queue):
         # Re-load under the lock in case another process changed the queue.
@@ -1181,7 +1270,7 @@ def cmd_backfill_specs(args):
         return 0
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
-        return 1
+        return queue_lib.LEASE_HELD_EXIT_CODE
 
     with queue_lib.queue_lock(args.queue):
         # Re-load under the lock in case another process changed the file.
@@ -1260,7 +1349,7 @@ def cmd_transition(args):
     integration_branch = _resolve_integration(args.queue)
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
-        return 1
+        return queue_lib.LEASE_HELD_EXIT_CODE
 
     with queue_lib.queue_lock(args.queue):
         data = backend.load()
@@ -1315,7 +1404,7 @@ def cmd_record_merge(args):
     integration_branch = getattr(args, "target_branch", None) or _resolve_integration(args.queue)
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
-        return 1
+        return queue_lib.LEASE_HELD_EXIT_CODE
 
     # Load task. If a previous record-merge already transitioned the task to
     # merged, the durable outcome is already recorded; plan files are no longer
@@ -1362,7 +1451,11 @@ def cmd_record_merge(args):
             print(f"Task {args.task_id} has no branch. Use --branch or --merge-commit.", file=sys.stderr)
             return 1
         merge_commit, merge_strategy, _match_kind = resolve_merge_commit(
-            branch, cwd=cwd, trunk_branch=trunk_branch, target_branch=integration_branch
+            branch,
+            cwd=cwd,
+            trunk_branch=trunk_branch,
+            target_branch=integration_branch,
+            base_commit=task.get("base_commit"),
         )
 
     if not merge_commit:
@@ -1487,7 +1580,7 @@ def cmd_reconcile(args):
         return 0
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
-        return 1
+        return queue_lib.LEASE_HELD_EXIT_CODE
 
     removed: list[str] = []
     with queue_lib.queue_lock(args.queue):

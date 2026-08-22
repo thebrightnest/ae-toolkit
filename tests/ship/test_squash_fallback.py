@@ -222,6 +222,7 @@ class TestResolveMergeCommit(unittest.TestCase):
 
     def test_regular_merge_reports_ancestry(self):
         """A branch merged with --no-ff resolves as regular/ancestry."""
+        base = _git(self.repo, "rev-parse", "HEAD").stdout.strip()
         self._branch("feat", "feat.txt", "feature\n")
         tip = _git(self.repo, "rev-parse", "HEAD").stdout.strip()
         _git(self.repo, "checkout", "-q", "main")
@@ -229,12 +230,26 @@ class TestResolveMergeCommit(unittest.TestCase):
         _git(self.repo, "push", "origin", "main", check=False)
 
         merge_commit, strategy, kind = aet_state.resolve_merge_commit(
-            "feat", cwd=self.repo, trunk_branch="main"
+            "feat", cwd=self.repo, trunk_branch="main", base_commit=base
         )
 
         self.assertEqual(merge_commit, tip)
         self.assertEqual(strategy, "regular")
         self.assertEqual(kind, "ancestry")
+
+    def test_regular_merge_without_base_commit_does_not_resolve_by_ancestry(self):
+        """ADR-064: with no recorded base, the ancestry path fails closed."""
+        self._branch("feat", "feat.txt", "feature\n")
+        _git(self.repo, "checkout", "-q", "main")
+        _git(self.repo, "merge", "-q", "--no-ff", "feat", "-m", "Merge feat")
+        _git(self.repo, "push", "origin", "main", check=False)
+
+        merge_commit, _strategy, kind = aet_state.resolve_merge_commit(
+            "feat", cwd=self.repo, trunk_branch="main", use_diff_fallback=False
+        )
+
+        self.assertIsNone(merge_commit)
+        self.assertIsNone(kind)
 
     def test_squash_merge_reports_exact_kind(self):
         """A clean squash merge resolves as squash/exact."""

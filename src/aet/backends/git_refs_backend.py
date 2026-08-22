@@ -186,6 +186,18 @@ class GitRefsBackend(TaskBackend):
 
     # -- TaskBackend interface ------------------------------------------------
 
+    def settled_ids(self) -> set[str]:
+        """Return the ids of tasks that have left the board by assertion.
+
+        A tombstone at ``refs/aet/sealed/<id>`` is data (ADR-059): it says the
+        task settled. The *absence* of a task ref says nothing — the task may
+        never have been added. Callers that must distinguish "done" from
+        "not here yet" read this, not the gap in the live board.
+        """
+        return {
+            ref[len(SEALED_REF_PREFIX) :] for ref in self._list_sealed_refs()
+        }
+
     def load(self, verify: bool = True) -> dict[str, Any]:
         """Return queue (from refs) and settled history (from JSONL).
 

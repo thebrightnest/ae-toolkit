@@ -231,10 +231,14 @@ def _run(
     else:
         print("\nNo failed tasks.")
 
+    # Worktree paths are recorded relative to the repo root, so they must be
+    # resolved against it and not against the current directory — otherwise
+    # `aet status` run from inside a worktree reports every worktree as stale.
+    repo_root = Path(queue_file).resolve().parent.parent
     stale_worktrees = []
     for task in queue:
         worktree = task.get("worktree")
-        if worktree and not Path(worktree).is_dir():
+        if worktree and not (repo_root / worktree).is_dir():
             stale_worktrees.append((task.get("id"), worktree))
     if stale_worktrees:
         print("\nWorktree validation:")

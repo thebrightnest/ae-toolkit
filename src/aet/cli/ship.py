@@ -214,18 +214,21 @@ def _resolve_ship_task(args: argparse.Namespace) -> int | None:
     return None
 
 
-def _resolve_task_branch(task_id: str, queue: str) -> Optional[str]:
-    """Return the branch recorded for *task_id* in *queue*, or None."""
+def _load_task_record(task_id: str, queue: str) -> Optional[dict]:
+    """Return the task record for *task_id* in *queue*, or None."""
     try:
         backend = aet_state.make_backend(queue)
         backend.fetch()
         data = backend.load()
-        task = aet_state.find_task(data["queue"], task_id)
-        if task:
-            return task.get("branch")
+        return aet_state.find_task(data["queue"], task_id)
     except Exception:
-        pass
-    return None
+        return None
+
+
+def _resolve_task_branch(task_id: str, queue: str) -> Optional[str]:
+    """Return the branch recorded for *task_id* in *queue*, or None."""
+    task = _load_task_record(task_id, queue)
+    return task.get("branch") if task else None
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
@@ -244,9 +247,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
     except ValueError as exc:
         return _fail(str(exc))
 
+    task_record = _load_task_record(task_id, queue)
     branch = getattr(args, "branch", None)
     if not branch:
-        branch = _resolve_task_branch(task_id, queue)
+        branch = task_record.get("branch") if task_record else None
     if not branch:
         return _fail(f"Cannot verify {task_id}: no branch recorded and none provided.")
 
@@ -260,6 +264,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
         trunk_branch=trunk_branch,
         target_branch=integration_branch,
         use_diff_fallback=args.squash_fallback,
+        base_commit=task_record.get("base_commit") if task_record else None,
     )
 
     if not merge_commit:

@@ -84,7 +84,14 @@ def _write_queue(repo: Path, tasks: list[dict]) -> str:
     return str(queue_path)
 
 
-def _task(task_id: str, plan_path: Path, branch: str) -> dict:
+def _head(repo: Path) -> str:
+    """Return the current HEAD sha — the commit a branch made now starts at."""
+    return _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+
+def _task(
+    task_id: str, plan_path: Path, branch: str, base_commit: str | None = None
+) -> dict:
     return {
         "id": task_id,
         "state": "awaiting_merge",
@@ -92,6 +99,10 @@ def _task(task_id: str, plan_path: Path, branch: str) -> dict:
         "title": f"task {task_id}",
         "plan_file": str(plan_path.relative_to(plan_path.parents[2])),
         "branch": branch,
+        # ADR-064: the commit the branch was created at. Recorded by the
+        # orchestrator at branch creation; without it, closure cannot tell an
+        # undiverged branch from a merged one.
+        "base_commit": base_commit,
     }
 
 
@@ -126,7 +137,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         """aet ship close seals queue and ledger; the plan file is left alone (R-4)."""
         plan_path = _write_plan(self.repo, "t1", r_ids=["R-5", "R-8"])
         original_content = plan_path.read_text(encoding="utf-8")
-        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1", _head(self.repo))])
         history_file = str(self.repo / ".agents" / "work-history.jsonl")
 
         # Create and merge a feature branch.
@@ -193,7 +204,7 @@ class TestShipCloseTransaction(unittest.TestCase):
     def test_close_succeeds_when_plan_file_missing(self):
         """Closure resolves from the record; a missing plan file is not fatal (R-19)."""
         plan_path = self.repo / "docs" / "plans" / "t1.md"
-        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1", _head(self.repo))])
 
         _git(self.repo, "checkout", "-q", "-b", "t1")
         (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
@@ -227,7 +238,7 @@ class TestShipCloseTransaction(unittest.TestCase):
     def test_close_leaves_no_partial_refs_on_save_failure(self):
         """A failure during the atomic ref transaction writes no partial refs."""
         plan_path = _write_plan(self.repo, "t1")
-        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1", _head(self.repo))])
         history_file = str(self.repo / ".agents" / "work-history.jsonl")
 
         _git(self.repo, "checkout", "-q", "-b", "t1")
@@ -282,7 +293,7 @@ class TestShipCloseTransaction(unittest.TestCase):
     def test_close_delete_branch_removes_remote_and_local_after_record(self):
         """`--delete-branch` deletes remote and local branches after closure."""
         plan_path = _write_plan(self.repo, "t1")
-        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1", _head(self.repo))])
 
         _git(self.repo, "checkout", "-q", "-b", "t1")
         (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
@@ -313,7 +324,7 @@ class TestShipCloseTransaction(unittest.TestCase):
     def test_close_delete_branch_leaves_branches_intact_when_record_fails(self):
         """A failing record-merge exits EXIT_DELETE_BEFORE_RECORD without deleting branches."""
         plan_path = _write_plan(self.repo, "t1")
-        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1", _head(self.repo))])
 
         _git(self.repo, "checkout", "-q", "-b", "t1")
         (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
@@ -342,7 +353,7 @@ class TestShipCloseTransaction(unittest.TestCase):
     def test_close_delete_branch_dry_run_does_not_delete(self):
         """`--delete-branch --dry-run` reports deletions without executing them."""
         plan_path = _write_plan(self.repo, "t1")
-        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1")])
+        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1", _head(self.repo))])
 
         _git(self.repo, "checkout", "-q", "-b", "t1")
         (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")

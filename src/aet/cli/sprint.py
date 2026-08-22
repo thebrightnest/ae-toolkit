@@ -31,10 +31,50 @@ from aet.plan_parser import (  # noqa: E402
 )
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
 from aet.queue import (  # noqa: E402
+    HISTORY_TERMINAL_STATES,
     QueueIntegrityError,
     build_blocks,
     lease_guard,
+    read_history,
 )
+
+
+def _settled_ids(backend, history_file: str | None = None) -> set[str]:
+    """Return ids of tasks that left the board by assertion.
+
+    Two sources, both positive evidence of settling (never absence):
+
+    - ADR-059 tombstones at ``refs/aet/sealed/<id>``, the authority for the
+      git-refs backend.
+    - The append-only settled history log. A blocker merged and archived before
+      a dependent was added has a history record; without it, add-after-merge
+      would count the blocker as unresolved and deadlock the dependent.
+
+    Backends with neither report nothing settled, which keeps blocker
+    resolution fail-closed rather than optimistic.
+    """
+    settled: set[str] = set()
+
+    getter = getattr(backend, "settled_ids", None)
+    if getter is not None:
+        try:
+            settled |= getter()
+        except Exception:
+            pass
+
+    path = history_file or getattr(backend, "history_file", None)
+    if path:
+        try:
+            settled |= {
+                record["id"]
+                for record in read_history(str(path))
+                if record.get("id")
+                and record.get("state") in HISTORY_TERMINAL_STATES
+            }
+        except Exception:
+            pass
+
+    return settled
 
 
 def resolve_plan(target: str, plans_dir: Path) -> Path | None:
@@ -139,7 +179,9 @@ def _add(args: argparse.Namespace) -> int:
             print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
         return 1
 
-    task = new_task_from_plan(plan_file, live_tasks=queue)
+    task = new_task_from_plan(
+        plan_file, live_tasks=queue, settled_ids=_settled_ids(backend, args.history_file)
+    )
     queue.append(task)
     build_blocks(queue)
 
@@ -243,7 +285,9 @@ def _intake(args: argparse.Namespace) -> int:
             )
             continue
 
-        task = new_task_from_plan(plan_file, live_tasks=queue)
+        task = new_task_from_plan(
+            plan_file, live_tasks=queue, settled_ids=_settled_ids(backend, args.history_file)
+        )
         if task["state"] == "blocked":
             blockers = [
                 b

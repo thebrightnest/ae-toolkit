@@ -249,6 +249,7 @@ class TestBackendAwareTransition(unittest.TestCase):
                                 "id": "blocker",
                                 "state": "awaiting_merge",
                                 "branch": "feat-blocker",
+                                "base_commit": "base0000",
                                 "blocks": ["dependent"],
                             },
                             {
@@ -267,7 +268,14 @@ class TestBackendAwareTransition(unittest.TestCase):
             backend.history_file = str(queue_path.with_name("work-history.jsonl"))
 
             responses = {
+                ("git", "rev-parse", "feat-blocker"): (0, "blockertip\n", ""),
+                ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
                 ("git", "merge-base", "--is-ancestor", "feat-blocker", "origin/main"): (
+                    0,
+                    "",
+                    "",
+                ),
+                ("git", "merge-base", "--is-ancestor", "blockertip", "origin/main"): (
                     0,
                     "",
                     "",
@@ -315,6 +323,7 @@ class TestBackendAwareRecordMerge(unittest.TestCase):
                                 "id": "t1",
                                 "state": "awaiting_merge",
                                 "branch": "feat-001",
+                                "base_commit": "base0000",
                             }
                         ]
                     }
@@ -328,6 +337,7 @@ class TestBackendAwareRecordMerge(unittest.TestCase):
             responses = {
                 ("git", "fetch", "origin"): (0, "", ""),
                 ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
+                ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
                 (
                     "git",
                     "merge-base",
