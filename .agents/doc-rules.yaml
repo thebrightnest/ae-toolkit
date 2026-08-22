@@ -237,3 +237,21 @@ rules:
       - "ADR-045"
       - "ADR-055"
     reason: "The new ADR must name every decision it amends (R-18)"
+
+  # cdc-03: CLI syntax must be generated or absent (R-4)
+  - type: must_not_contain
+    target: skills
+    value: "## Options"
+    reason: "CLI option references must be generated from the command tree or absent; never hand-copied (R-4)"
+
+  - type: must_not_contain
+    target: skills
+    value:
+      - "*str*"
+      - "*boolean*"
+      - "*int*"
+      - "*path*"
+      - "<str>"
+      - "<int>"
+      - "[default:"
+    reason: "CLI option syntax must be generated from the command tree or absent; verbatim Typer/Click markers are hand-copied syntax (R-4)"

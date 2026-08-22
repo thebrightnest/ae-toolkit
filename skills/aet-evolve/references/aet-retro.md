@@ -27,13 +27,7 @@ Run `aet retro`; `aet setup link` puts the `aet` dispatcher on `PATH` (run via `
 5. For AET-level findings, run `aet-evolve system-evolve` and persist the learning with `aet learnings append`.
 6. For project-level findings, create or queue fixes in the current project.
 
-## Options
-
-- `--archive-dir PATH` — use a custom telemetry archive root (default: `~/.aet/telemetry`).
-- `--project-slug SLUG` — override the project slug (default: derived from git origin or cwd).
-- `--lookback-days N` — days of per-task telemetry to read for the current project (default: 7).
-- `--output PATH` — write the retro to a specific file.
-- `--no-mine` — skip `aet mine-learnings` and only use the current project's recent telemetry.
+Run `aet retro --help` and `aet metrics --help` for the current options and defaults.
 
 ## Metrics Evidence Step
 

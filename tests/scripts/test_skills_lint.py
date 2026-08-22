@@ -78,6 +78,12 @@ class TestRule1Errors(unittest.TestCase):
         self.assertEqual(rc, 0, out)
         self.assertNotIn("error:", out)
 
+    def test_help_flag_passes(self):
+        """`--help` is accepted as a valid flag for any aet command."""
+        rc, out = run_lint("--legacy=error", str(_FIXTURES / "help.md"))
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("error:", out)
+
 
 class TestRule2Legacy(unittest.TestCase):
     """Rule 2: legacy names warn or error per --legacy severity."""

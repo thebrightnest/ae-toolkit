@@ -80,7 +80,7 @@ def _click_group_grammar(group):
     flags: option strings declared on the group itself (e.g. callback options).
     choices: names of commands registered directly on the group.
     """
-    flags: set[str] = set()
+    flags: set[str] = {"--help"}
     for param in group.params:
         if hasattr(param, "opts"):
             flags.update(param.opts)
@@ -90,7 +90,7 @@ def _click_group_grammar(group):
 
 def _click_command_grammar(command):
     """Return option strings declared on a Click/Typer command."""
-    flags: set[str] = set()
+    flags: set[str] = {"--help"}
     for param in command.params:
         if hasattr(param, "opts"):
             flags.update(param.opts)

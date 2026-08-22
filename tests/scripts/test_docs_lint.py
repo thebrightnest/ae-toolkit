@@ -526,5 +526,125 @@ def test_make_validate_invokes_docs_lint():
     assert "aet.cli.main docs lint" in makefile
 
 
+def test_options_heading_blocked_in_skills(tmp_path):
+    """A hand-copied ``## Options`` heading in ``skills/`` fails the lint."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    skills = repo / "skills"
+    skills.mkdir()
+    doc = skills / "aet-evolve" / "references" / "aet-retro.md"
+    doc.parent.mkdir(parents=True)
+    doc.write_text(
+        "# aet retro\n\n## Options\n\n- `--flag` *str* [default: x]\n",
+        encoding="utf-8",
+    )
+    rules = repo / ".agents" / "doc-rules.yaml"
+    rules.parent.mkdir(parents=True)
+    _write_rules(
+        rules,
+        [
+            {
+                "type": "must_not_contain",
+                "target": "skills",
+                "value": "## Options",
+                "reason": "CLI option references must be generated or absent (R-4)",
+            }
+        ],
+    )
+
+    violations = docs_lint.lint_docs(rules, repo)
+    assert len(violations) == 1
+    assert violations[0][0].name == "aet-retro.md"
+    assert "## Options" in violations[0][1]
+
+
+def test_typer_markers_blocked_in_skills(tmp_path):
+    """Verbatim Typer-style option markers in ``skills/`` fail the lint."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    skills = repo / "skills"
+    skills.mkdir()
+    doc = skills / "bad.md"
+    doc.write_text(
+        "# Bad\n\n- `--name` *str* [default: foo]\n- `--count` *int*\n- `--path` *path*\n- `--flag` *boolean*\n",
+        encoding="utf-8",
+    )
+    rules = repo / ".agents" / "doc-rules.yaml"
+    rules.parent.mkdir(parents=True)
+    _write_rules(
+        rules,
+        [
+            {
+                "type": "must_not_contain",
+                "target": "skills",
+                "value": ["*str*", "*boolean*", "*int*", "*path*", "<str>", "<int>", "[default:"],
+                "reason": "CLI option syntax must be generated or absent (R-4)",
+            }
+        ],
+    )
+
+    violations = docs_lint.lint_docs(rules, repo)
+    assert len(violations) == 1
+    assert violations[0][0].name == "bad.md"
+    messages = violations[0][1]
+    assert "*str*" in messages
+    assert "*int*" in messages
+    assert "*path*" in messages
+    assert "*boolean*" in messages
+    assert "[default:" in messages
+
+
+def test_real_skills_tree_passes_after_retro_options_removal():
+    """The post-removal ``skills/`` tree satisfies the actual docs-lint rules."""
+    violations = docs_lint.lint_docs(REPO_ROOT / ".agents" / "doc-rules.yaml", REPO_ROOT)
+    skill_violations = [v for v in violations if "skills" in str(v[0])]
+    assert skill_violations == []
+
+
+def test_false_positives_allowed(tmp_path):
+    """Third-party flags and AET flag semantics are not blocked by the option rules."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    skills = repo / "skills"
+    skills.mkdir()
+    doc = skills / "aet-work" / "references" / "queue-commands.md"
+    doc.parent.mkdir(parents=True)
+    doc.write_text(
+        textwrap.dedent(
+            """\
+            # Queue commands
+
+            Use `git rev-list --count` to measure history.
+
+            Run `pytest --dist` for parallel execution.
+
+            `--follow` does **not** tail or stream the run log.
+            """
+        ),
+        encoding="utf-8",
+    )
+    rules = repo / ".agents" / "doc-rules.yaml"
+    rules.parent.mkdir(parents=True)
+    _write_rules(
+        rules,
+        [
+            {
+                "type": "must_not_contain",
+                "target": "skills",
+                "value": "## Options",
+                "reason": "CLI option references must be generated or absent (R-4)",
+            },
+            {
+                "type": "must_not_contain",
+                "target": "skills",
+                "value": ["*str*", "*boolean*", "*int*", "*path*", "<str>", "<int>", "[default:"],
+                "reason": "CLI option syntax must be generated or absent (R-4)",
+            },
+        ],
+    )
+
+    assert docs_lint.lint_docs(rules, repo) == []
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
