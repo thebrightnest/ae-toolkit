@@ -112,6 +112,12 @@ class TestShipClosure(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
 
         self.repo = _init_repo(Path(self.tmpdir.name) / "repo")
+        # Project-scope config puts the backend in shared posture. Shadow
+        # posture — the default with no such file — skips the work-history
+        # write entirely, and these tests assert on the sealed record.
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            json.dumps({"integration_mode": "pr-per-task"}), encoding="utf-8"
+        )
         self.queue_path = self.repo / ".agents" / "aet-queue"
         self.history_file = self.repo / ".agents" / "work-history.jsonl"
         self.plan_path = _write_plan(self.repo, "t1")

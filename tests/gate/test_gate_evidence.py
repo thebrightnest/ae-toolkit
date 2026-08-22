@@ -352,7 +352,13 @@ class TestGroupSessionEnvVars(unittest.TestCase):
         captured = {}
 
         class _StubPopen:
+            # pid and poll are read by the liveness monitor and its watchdog,
+            # which _run_with_live_tee starts around every adapter subprocess.
             stdout = io.StringIO("")
+            pid = 99998
+
+            def poll(self):
+                return 0
 
             def wait(self):
                 return 0

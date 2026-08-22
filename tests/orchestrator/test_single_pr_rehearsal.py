@@ -358,14 +358,35 @@ class TestSinglePrRehearsal(unittest.TestCase):
         return repo_root, queue_file, args, adapter
 
     def _settled_tasks(self) -> dict[str, dict]:
-        """Return tasks sealed to the settled history log, indexed by id."""
-        history_file = Path(self.queue_file).with_name("work-history.jsonl")
-        tasks: list[dict] = []
-        if history_file.exists():
-            for line in history_file.read_text(encoding="utf-8").splitlines():
-                if line.strip():
-                    tasks.append(json.loads(line))
-        return {t["id"]: t for t in tasks}
+        """Return sealed task records, indexed by id.
+
+        The rehearsal runs in shadow posture — its config resolves from the
+        user-scope layer, and resolution is external-first, so no in-tree
+        config can make ``project`` the effective source. Shadow posture keeps
+        AET artifacts out of the working tree, so ``work-history.jsonl`` is
+        never written; the durable settled record is the per-task tombstone
+        blob at ``refs/aet/sealed/<id>``.
+        """
+        refs = subprocess.run(
+            [
+                "git", "-C", self.repo_root, "for-each-ref",
+                "--format=%(refname)", "refs/aet/sealed/",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        tasks: dict[str, dict] = {}
+        for ref in refs:
+            blob = subprocess.run(
+                ["git", "-C", self.repo_root, "cat-file", "blob", ref],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            record = json.loads(blob)
+            tasks[record["id"]] = record
+        return tasks
 
     def test_batch_succeeds(self):
         """The rehearsal shift exits cleanly."""

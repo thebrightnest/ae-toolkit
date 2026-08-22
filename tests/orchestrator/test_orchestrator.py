@@ -96,6 +96,21 @@ def _init_git_repo(repo_root: str) -> None:
         capture_output=True,
     )
 
+def _use_shared_posture(repo_root: str) -> None:
+    """Write project-scope config so the backend runs in shared posture.
+
+    Shadow posture — the default when no ``.agents/aet-config.json`` exists —
+    deliberately skips the work-history write, and that write is what stamps
+    ``delivered_size``. Tests asserting on a settled record must opt in; tests
+    asserting on tree cleanliness or the deferred-durability notice must not,
+    which is why this is not folded into ``_init_git_repo``.
+    """
+    agents_dir = Path(repo_root, ".agents")
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    (agents_dir / "aet-config.json").write_text(
+        json.dumps({"integration_mode": "pr-per-task"}), encoding="utf-8"
+    )
+
 
 def _make_args(repo_root: str, plan_file: str) -> argparse.Namespace:
     return argparse.Namespace(
@@ -758,6 +773,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
     def test_record_merge_succeeds_after_run_one(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
+            _use_shared_posture(repo_root)
             plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
             Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
             Path(plan_file).write_text(
@@ -798,6 +814,19 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                         exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
             self.assertEqual(exit_code, 0)
 
+            # process_task is stubbed, so the branch would otherwise sit at its
+            # base_commit. ADR-064 decision 3 refuses to resolve a merge commit
+            # for a branch that authored nothing, so give it a real commit —
+            # that divergence from base_commit is the merge evidence.
+            worktree_dir = os.path.join(repo_root, ".worktrees", "demo")
+            Path(worktree_dir, "src").mkdir(parents=True, exist_ok=True)
+            Path(worktree_dir, "src", "demo.py").write_text("a\n", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", worktree_dir, "commit", "-q", "-m", "implement demo"],
+                check=True,
+            )
+
             # Simulate the branch being merged into origin/main by fast-forwarding
             # the local main to the worktree branch tip, then updating origin/main.
             subprocess.run(
@@ -836,6 +865,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
         """A sealed history record carries delivered_size paired with declared size."""
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
+            _use_shared_posture(repo_root)
             plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
             Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
             Path(plan_file).write_text(
@@ -853,6 +883,12 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
             )
 
             # Create a feature branch with both code and planning-artifact changes.
+            base_commit = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
             subprocess.run(
                 ["git", "-C", repo_root, "checkout", "-b", "demo"],
                 check=True,
@@ -892,6 +928,9 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
                         "blocked_by": [],
                         "state": "awaiting_merge",
                         "branch": "demo",
+                        # ADR-064 decision 1: the branch's origin is recorded at
+                        # creation. Without it the ancestry path fails closed.
+                        "base_commit": base_commit,
                     }
                 ],
             )
@@ -923,6 +962,7 @@ class TestRunOneQueueBookkeeping(unittest.TestCase):
         """A task with an invalid merge_commit settles with a failed size record."""
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
+            _use_shared_posture(repo_root)
             plan_file = os.path.join(repo_root, "docs", "plans", "demo-plan.md")
             Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
             Path(plan_file).write_text(
@@ -2753,11 +2793,20 @@ class TestWireTestRunProvenance(unittest.TestCase):
 
 
 class _StubPopen:
-    """subprocess.Popen stand-in for _run_with_live_tee: canned output + exit code."""
+    """subprocess.Popen stand-in for _run_with_live_tee: canned output + exit code.
+
+    ``pid`` and ``poll`` are consumed by the liveness monitor and its watchdog
+    thread, which _run_with_live_tee starts around every adapter subprocess.
+    """
+
+    pid = 99998
 
     def __init__(self, output: str = "", returncode: int = 0):
         self.stdout = io.StringIO(output)
         self._returncode = returncode
+
+    def poll(self):
+        return self._returncode
 
     def wait(self):
         return self._returncode
