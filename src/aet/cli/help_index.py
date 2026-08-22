@@ -85,6 +85,13 @@ class LeafCommand:
         """Return the full runnable invocation including ``aet``."""
         return " ".join(self.path)
 
+    @property
+    def example(self) -> str:
+        """Return a runnable example with placeholder tokens for required args."""
+        parts = list(self.path)
+        parts.extend(f"<{arg}>" for arg in self.args)
+        return " ".join(parts)
+
 
 def _is_group(cmd: click.Command) -> bool:
     return isinstance(cmd, (click.Group, typer_core.TyperGroup))
