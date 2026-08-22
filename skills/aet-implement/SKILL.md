@@ -9,9 +9,9 @@ Implementation execution for agentic engineering. Read the plan, write the code,
 
 ## When to Use
 
-- A `docs/plans/{ticket}-plan.md` exists and has been reviewed
+- A task spec has been reviewed and approved; the orchestrator provides it as a rendered plan file
 - You are in a fresh session (context cleared from planning)
-- The plan.md is the only context needed to execute
+- The plan content is the only context needed to execute
 
 ## Context
 
@@ -62,7 +62,7 @@ Execute a plan.md from start to finish with self-validation.
    4. Check unpulled commits: `git rev-list --count main..origin/main`
       - If > 0: print `"Local main is behind origin/main. Pull first: git pull origin main"`; **hard stop** unless user confirms
 
-3. Read the plan.md file specified by the user
+3. Read the rendered plan file provided for this task
 4. **Reconciliation checkpoint:** Before writing code, compare constraints and requirements stated in the plan's prose against the code blocks and file edits. If they disagree:
    - Stop and print the discrepancy
    - Do not silently follow the code block over the prose
@@ -77,7 +77,7 @@ Execute a plan.md from start to finish with self-validation.
 **Fresh session reminder:**
 If this session still contains planning context, strongly recommend clearing it first:
 
-> "⚠️ This appears to be the same session where planning occurred. For best results, open a fresh session and run `/implement docs/plans/{file}.md` with only the plan as context."
+> "⚠️ This appears to be the same session where planning occurred. For best results, open a fresh session and run `/implement <task-id>` with only the plan content as context."
 >
 > Note: entering a worktree does **not** clear the context window. If context is stale, start a new session first, then set up the worktree.
 

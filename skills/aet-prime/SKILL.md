@@ -32,7 +32,7 @@ Load project context and classify the incoming request before any coding.
 #### Step 0 — Load context
 
 1. Read `AGENTS.md` at project root (always — this is the foundation)
-2. If a ticket ID or plan.md is provided, read that specific `docs/plans/{ticket}-plan.md`
+2. If a plan.md path is provided, read it; if a task ID is provided, load the task record and read the rendered plan only when one is present
 3. If no specific ticket, read the most recently modified PRD from `docs/prds/`
 4. Read recent git commits (last 5–10) to understand current patterns and conventions
 5. Check the current branch name for context

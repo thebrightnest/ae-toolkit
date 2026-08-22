@@ -39,7 +39,7 @@ Analyze what went wrong in the last loop and identify the systemic root cause.
    - Verified done → mark complete.
    - Not done → convert to a queue task in `.agents/work-queue.json` or explicitly drop with reason.
    - Record the outcome in the current retro context.
-2. Read the completed `docs/plans/{ticket}-plan.md` and the actual implementation (git diff).
+2. Read the completed task's spec (rendered plan or task record) and the actual implementation (git diff).
 3. Identify deviations: what did the agent do differently from the plan? What did you have to correct?
 4. Ask: which layer allowed this? Options:
    - **Global rules** (`AGENTS.md`) — coding style, testing strategy, logging

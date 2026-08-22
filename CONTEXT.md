@@ -9,16 +9,16 @@ The append-only, content-addressed store of task transition and closure events, 
 It has **five writers and no production reader**: `aet sprint add`, `aet state set-stage`, terminal closure, `aet gate submit`, and `aet ship open` append to it, and nothing in `src/aet` calls `read_events()`. It is a working-tree file under **every** backend — no backend implements ledger storage — and it is gitignored, so it does not travel between machines. It is provenance only, not the settled-ness authority. See **Settled-ness Authority** for what actually answers "is it done?".
 _Avoid_: describing the ledger as refs-borne or as the settled-ness authority; deriving settled-ness from plan frontmatter.
 
-**Board**:
-The set of open work: the ephemeral active list of tasks loaded by the queue backend. Under the `git-refs` backend it is stored in `refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, and the `refs/aet/meta/queue` envelope, and pushed to/fetched from origin. It is rebuilt by `aet init-queue` from `docs/plans/*.md`, filtered through **Settled-ness Authority**; the ledger is not consulted. Plans enter the board only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is filesystem-based for the plans already on the board, not git-based, so a plan need not be committed to be a sprint member (ADR-054).
+**Board** (also called the **Work Queue**):
+The set of open work: the ephemeral active list of tasks loaded by the queue backend. Under the `git-refs` backend it is stored in `refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, and the `refs/aet/meta/queue` envelope, and pushed to/fetched from origin. Plans enter the board only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is record-based; `aet queue sync` never scans the plans directory (ADR-054).
 _Avoid_: issue tracker.
 
 **Task**:
-The board entry, carrying the spec. A task is represented by one record under `refs/aet/tasks/<id>` while active, plus one `docs/plans/*.md` plan file that is its rendered working copy. After R-19 no plan file need exist on the machine that runs the task.
+The board entry, carrying the spec. A task is represented by one record under `refs/aet/tasks/<id>` while active, plus an optional sealed record under `refs/aet/sealed/<id>` once terminal. After intake, the record's `spec` is the source of the plan; no plan file need exist on the machine that runs it.
 _Avoid_: ticket, story, issue.
 
 **Plan File**:
-The markdown document in `docs/plans/` that describes how to implement a task. It is the source of truth for intent. Terminal closure is recorded in the **Provenance Ledger** and reflected in the plan footer `*Stage:*` as a human breadcrumb maintained by code. Plan edits are local-only until terminal closure; queue state travels via `refs/aet/*`.
+The markdown document in `docs/plans/` authored in the planning phase. It describes how to implement a task and is the artifact of the **Author** phase. After intake, the task record's `spec` is the source of intent; the plan file may be rendered into a worktree as an ephemeral working copy, and the footer `*Stage:*` is updated by code as a human breadcrumb at terminal closure.
 _Avoid_: PRD, roadmap, spec.
 
 **Rendered Plan**:
@@ -57,8 +57,8 @@ The permanent local-only mode inferred from the absence of project-scope AET con
 _Avoid_: calling it write-only telemetry, or assuming a task's closure survives its loss.
 
 **Settled-ness Authority**:
-What actually answers "is it done?": `_is_settled_from_authority` (`src/aet/cli/init_queue.py`), used by `aet queue sync` and `init-queue`. It reads three things — a terminal record in the **Execution Log**, a merge commit naming the task id on `origin/main`, or a terminal `_Stage:_` footer in the plan file. Two of the three are machine-local, so a fresh clone's answer depends on which machine it is standing on.
-_Avoid_: attributing this role to the **Provenance Ledger** (ADR-055 assigns it there; the code does not implement it).
+What actually answers "is it done?": the sealed task record in `work-history.jsonl`, consulted by `aet queue sync` (reporting "skipped (already settled)") and verified by `aet state record-merge` against the resolved trunk branch. The authority is a task record, not the plan file or the **Provenance Ledger**.
+_Avoid_: attributing this role to the **Provenance Ledger** (ADR-055 assigns it there; the code does not implement it) or to a plan-file footer.
 
 **Source PRD**:
 The product requirements document that generated the plan, referenced from the plan file's Context section.
@@ -84,9 +84,19 @@ The repo-level configuration (`integration_mode: pr-per-task | single-pr`) contr
 **Shadow Config**:
 The project-local configuration layer that overrides the team config for one repo (ADR-048). The configuration used in anger pairs `single-pr` with a shadow config and a heavy dependency environment — distinct from the dogfooded configuration (trunk + team config + no dependencies).
 
+## Plan Lifecycle (ADR-061)
+
+The source of truth for a task's spec changes at one explicit handoff:
+
+1. **Author** — `aet-plan` writes `docs/plans/<id>.md`. The file is the artifact.
+2. **Intake** — `aet sprint add` ingests the file into the task record's `spec`. This is the handoff.
+3. **Post-intake** — execution, shipping, closure, and measurement read `spec.frontmatter`, `spec.title`, `spec.body`, and `spec.tasks` from the record. No consumer resolves `plan_file` as a path.
+
+See ADR-061 (`docs/adr/061-the-record-is-the-plan-after-intake.md`) for the full decision and consequences.
+
 ## Relationships
 
-- A **Task** has exactly one **Plan File**.
+- A **Task** has a `spec` ingested at intake. Before intake, the **Plan File** is its authoring artifact; after intake, the record's `spec` is the source of intent.
 - A **Task** may have zero or more **Blockers**.
 - A **Task** may be a **Blocker** for zero or more **Dependents**.
 - A **Dependent** becomes `ready` only when all its **Blockers** have a **Terminal State**; the writer promotes it forward when the last blocker reaches terminal.

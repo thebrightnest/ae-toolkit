@@ -103,11 +103,11 @@ Run the full pipeline on a single plan with session-isolated stages. Replaces th
 
 **Procedure:**
 
-1. Accept a plan file path or task id: `aet run-one docs/plans/FEAT-001-plan.md` or `aet run-one FEAT-001`
+1. Accept a plan file path (pre-intake) or task id: `aet run-one docs/plans/FEAT-001-plan.md` or `aet run-one FEAT-001`. For a task already on the board, use the task id.
 2. Invoke the orchestrator in single-plan mode:
 
    ```bash
-   aet run-one docs/plans/FEAT-001-plan.md
+   aet run-one FEAT-001
    ```
 
 3. The command spawns the orchestrator in a detached process and **blocks** until the run reaches a terminal state.
@@ -128,13 +128,13 @@ Record a verified merge in the work queue and close the plan file.
 1. Resolve the task by ID from `.agents/work-queue.json` (or from `.agents/work-history.jsonl` if the task is already sealed).
 2. Verify the merge commit is an ancestor of the resolved trunk/integration branch.
 3. Transition the task to `merged` and seal it to history.
-4. If the task references a plan file (or `--plan` is given), update the plan footer to `*Stage: merged*` through the closure transaction and push the resulting commit.
+4. Update the plan footer to `*Stage: merged*` through the closure transaction and push the resulting commit. The plan path is no longer an accepted argument (R-3); the task is resolved by ID from the record.
 
 **Fail semantics:**
 
 - Merge verification failures are non-zero; the queue is not mutated.
 - Push failures are non-zero but recoverable: the local commit is intact and a re-run retries the push.
-- If the plan file is missing from the checkout, `record-merge` tries to resolve it from the merged branch before concluding it is gone. If it cannot be found in the checkout or on the merged branch, closure fails closed: the merge record stays intact, the command returns non-zero, and the message names the missing plan path and the recovery options (restore the file or pass `--plan`).
+- If the rendered plan file is missing from the checkout, `record-merge` reports the missing file but does not treat the plan path as a fallback source of truth.
 
 **When to use:** After a PR has merged and you want to record the merge commit and version the terminal plan status.
 
@@ -182,9 +182,9 @@ Reconcile stored state against git ground truth without mutating the queue. `aud
 2. For each task, compute the expected status from git ground truth in order:
    - `merged` — `branch` or `merge_commit` is an ancestor of the resolved trunk branch
    - `in-progress` — local `branch` exists
-   - `unblocked` — `plan_file` exists, no local branch, and every task in `blocked_by` is terminal (`merged` or `abandoned`)
-   - `blocked` — `plan_file` exists, no local branch, and some blocker is not terminal
-   - `drift` — `plan_file` is missing
+   - `unblocked` — no local branch, the task is not settled, and every task in `blocked_by` is terminal (`merged` or `abandoned`)
+   - `blocked` — no local branch, the task is not settled, and some blocker is not terminal
+   - `drift` — the task is not settled but no branch or live record supports its stored state
 3. Compare stored `state` against the expected status for each task
 4. Report any discrepancies (e.g., `⚠️ Task {id} stored as awaiting_merge but expected in-progress from git`)
 5. Return a JSON object showing `stored`, `expected`, and `discrepancy` for every task

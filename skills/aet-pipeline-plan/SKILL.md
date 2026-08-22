@@ -139,7 +139,7 @@ After the pipeline completes all steps:
    - Queue:     .agents/work-queue.json (sync verified, no drift)
 
    Next step:
-   - Single task: run `aet run-one docs/plans/{ticket}-plan.md`
+   - Single task: run `aet run-one {ticket-id}`
    - All tasks (AFK): run `aet run`
    ```
 
