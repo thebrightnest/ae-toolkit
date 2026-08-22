@@ -23,12 +23,10 @@ Pre-merge gate, PR creation, merge, and post-merge closure for AET tasks.
 - `aet ship merge <plan_file|task_id> [--branch <target>]` — run the gate, detect conflicts against the target branch, merge directly into it, and record closure. `--branch` defaults to the resolved trunk branch.
 - `aet ship split <plan_file|task_id> --message <msg> --paths <path>...` — split a monolithic PR range into logical commits. Repeat `--message`/`--paths` pairs in order. Fails closed if the resulting tree does not match the original HEAD.
 - `aet ship verify <task_id|plan> [--squash-fallback]` — verify a branch has merged without mutating queue or ledger state. Prints `<merge-sha> <strategy> (<match-kind>)`.
-- `aet ship close <plan_file>` — record post-merge closure (task id derived from plan frontmatter).
-- `aet ship close <task_id>` — record post-merge closure (plan derived from the queue task's `plan_file`).
-- `aet ship close <task_id> <plan_file>` — record post-merge closure with explicit identifiers.
+- `aet ship close <task_id>` — record post-merge closure (task looked up in the live queue, then sealed history).
 - `aet ship close <...> --delete-branch` — after successful closure, delete the remote and local feature branch atomically.
 
-A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet ship merge` resolves to the conventional `docs/plans/<task_id>.md` path.
+A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet ship merge` resolves to the task record (live queue first, then sealed history); the plan file is never consulted after intake.
 
 `aet ship merge` checks for merge conflicts against `origin/<target>` before merging and records the resulting merge commit in the work queue.
 
@@ -39,7 +37,7 @@ A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet sh
 Each task ships in its own PR to the resolved trunk branch. Typical flow:
 
 ```bash
-aet ship open docs/plans/FEAT-001.md
+aet ship open FEAT-001
 # After the PR merges:
 aet ship close FEAT-001
 ```

@@ -147,9 +147,9 @@ Under parallel execution, only the main orchestrator loop reads and writes `.age
 
 Queue mutations are serialized by the `queue_lock` helper in `aet-work/lib/aet_queue.py`, which uses an advisory `flock` on a sidecar lock file. The orchestrator wraps every load→mutate→save cycle in this lock, and `aet state` acquires the same lock around every transition. No database is required, but file locking is required even within a single process because child CLI sessions and the orchestrator itself can write concurrently.
 
-## Plan Overlay Snapshot Semantics
+## Plan Snapshot Semantics
 
-When `aet run` or `aet run-one` materializes a task worktree, the orchestrator overlays the working-tree contents of `docs/plans/` into that worktree before any pipeline stage runs. The overlay is **by content, not by git state**: untracked, tracked-but-modified, and tracked-but-absent-from-base plans all resolve to the latest local file. This guarantees the implementing agent reads the plan text the operator just edited, not a stale committed copy.
+When `aet run` or `aet run-one` materializes a task worktree, the orchestrator renders the task record's `spec` into a plan file in that worktree before any pipeline stage runs. The rendered copy is **by content, not by git state**: the agent reads the spec the operator just edited, not a stale committed copy.
 
 The overlay is a **snapshot** taken at worktree creation and refresh. Editing a plan in the main checkout after the task has started does **not** propagate into the running worktree. Closure later operates on the post-merge checkout, so there is no write race between the two copies.
 

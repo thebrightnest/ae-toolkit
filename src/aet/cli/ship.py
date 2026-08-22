@@ -1299,7 +1299,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verify_parser.add_argument(
         "task_id",
-        help="Task ID to verify, or path to the plan markdown file.",
+        help="Task ID to verify.",
     )
     verify_parser.add_argument(
         "plan_or_queue",
@@ -1586,7 +1586,7 @@ def _run_ship_close(
 def ship_verify(
     task_id: str = typer.Argument(
         ...,
-        help="Task ID to verify, or path to the plan markdown file.",
+        help="Task ID to verify.",
     ),
     plan_or_queue: Optional[str] = typer.Argument(
         None,

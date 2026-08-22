@@ -30,7 +30,7 @@ Compare the original plan against what was actually built, and update both the P
 **Procedure:**
 
 1. Identify the active plan and PRD:
-   - Read the most-recently-modified `docs/plans/*.md`
+   - Read the active plan content from the orchestrator context (e.g., `AET_PLAN_FILE`)
    - Read its corresponding `docs/prds/*.md` (via the plan's `PRD Reference` field or infer from filename)
 2. Read the git diff for the current branch (what was actually built)
 3. Compare plan intent vs. actual diff:

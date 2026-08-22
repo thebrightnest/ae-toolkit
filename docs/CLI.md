@@ -529,7 +529,7 @@ Verify a branch has merged without mutating state.
 
 ### Options
 
-- `task_id` *str* — Task ID to verify, or path to the plan markdown file. (required)
+- `task_id` *str* — Task ID to verify. (required)
 - `plan_or_queue` *str* — Plan path (when first arg is a task ID) or queue path (when first arg is a plan).
 - `queue` *str* — Path to the queue anchor. (default: `.agents/aet-queue`)
 - `--squash-fallback` *boolean* — Enable diff-based squash-merge fallback when ancestry and gh fail. (default: `False`)

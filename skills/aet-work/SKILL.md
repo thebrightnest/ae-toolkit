@@ -24,9 +24,15 @@ banner it emits. Do not ask the user for this context manually.
 
 This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet status`, `aet queue sync`, `aet next`, `aet report`, `aet run`). `aet` must be on `PATH`. Run `aet setup link` once after installing skills. If you are developing in this repo, `make install-skills` runs it automatically.
 
-## Mental Model: Plan Files Are the Source of Truth
+## Mental Model: One Source of Truth Per Phase
 
-`docs/plans/{id}.md` files are the durable source of truth for intent, current stage, and terminal closure. `.agents/work-queue.json` is an ephemeral, gitignored sprint board that holds only the active tasks you have explicitly chosen to work on. `.agents/work-history.jsonl` is an optional, gitignored execution log.
+The lifecycle has one source of truth per phase and one explicit handoff (ADR-061):
+
+1. **Author** — `aet-plan` writes `docs/plans/{id}.md`. The file is the artifact.
+2. **Intake** — `aet sprint add` ingests the file into the task record's `spec`. This is the handoff.
+3. **Post-intake** — the task record's `spec` is the source of intent, stage, and terminal closure. The plan file may be rendered into a worktree as an ephemeral working copy; its footer `*Stage:*` is updated by code as a human breadcrumb at terminal closure.
+
+`.agents/work-queue.json` is an ephemeral, gitignored sprint board that holds only the active tasks you have explicitly chosen to work on. `.agents/work-history.jsonl` is an optional, gitignored execution log.
 
 This means:
 
@@ -39,10 +45,10 @@ This means:
 
 | File                         | Role                                                    | Tracked         |
 | ---------------------------- | ------------------------------------------------------- | --------------- |
-| `docs/plans/{id}.md`         | Source of truth for intent, stage, and terminal closure | Yes             |
+| `docs/plans/{id}.md`         | Authoring artifact; rendered into worktrees as a working copy | Yes             |
 | `.agents/work-queue.json`    | Ephemeral sprint board: active tasks only               | No (gitignored) |
 | `.agents/work-history.jsonl` | Optional execution log for transitions and timing       | No (gitignored) |
-| `.agents/ledger.jsonl`       | Content-addressed provenance ledger (settled-ness)      | No (gitignored) |
+| `.agents/ledger.jsonl`       | Content-addressed provenance ledger                     | No (gitignored) |
 
 The ledger is an append-only, content-addressed event store. Do not edit it by hand: each event id is a SHA256 over its canonical fields, so any manual change leaves the id disagreeing with the body. The next load verifies every line and refuses the whole file, so every command that records provenance fails until the ledger is restored — and there is no rebuild path for it.
 
@@ -153,7 +159,7 @@ The per-epic integration branch is a per-run input, not a config value. Use
 
 ```bash
 aet run --base feat/epic-name
-aet run-one --base feat/epic-name docs/plans/FEAT-001.md
+aet run-one --base feat/epic-name FEAT-001
 ```
 
 `aet setup verify` prints the resolved `trunk_branch`, `integration_branch`, and
@@ -225,7 +231,7 @@ Configuration and detailed behavior: [`references/queue-commands.md`](references
 Run the full pipeline on a single plan without adding it to the queue.
 
 ```bash
-aet run-one docs/plans/FEAT-001.md
+aet run-one FEAT-001
 ```
 
 ### `sync`
