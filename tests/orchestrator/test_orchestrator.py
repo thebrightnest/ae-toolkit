@@ -2998,6 +2998,47 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
                 task = next(t for t in queue if t["id"] == "alpha")
                 self.assertEqual(task["state"], "awaiting_merge")
 
+    def test_batch_exits_when_only_orphaned_in_progress_remains(self):
+        """A stored in_progress task with no live worker must not spin forever.
+
+        Reproduction for the E40 hang: run_batch treats in_progress as
+        actionable regardless of whether this run owns a worker for it, so a
+        task left in_progress by a dead run keeps has_actionable_tasks True
+        while get_next_ready_task returns nothing. The loop sleeps and retries
+        forever, holding the lease.
+        """
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "orphan",
+                        "title": "orphan",
+                        "plan_file": "docs/plans/orphan.md",
+                        "blocked_by": [],
+                        "state": "in_progress",
+                    }
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=1)
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn():
+                        rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+
+                self.assertFalse(
+                    timed_out,
+                    "run_batch spun instead of exiting with an orphaned "
+                    "in_progress task and no running workers",
+                )
+                # The stranded task must be named on the way out, not dropped
+                # silently: it is the reason the run had nothing to do.
+                self.assertIn("orphaned in progress", out)
+                self.assertEqual(rc, 0)
+
     def test_batch_spawns_task_promoted_mid_run(self):
         """A dependent promoted to ready while the batch runs is spawned.
 

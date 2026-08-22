@@ -39,6 +39,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any, Optional
 
@@ -2359,8 +2360,18 @@ _BATCH_ACTIONABLE_STATES = frozenset({"ready", "in_progress"})
 # report. Terminal states (merged/abandoned) are excluded: a fully terminal
 # queue is a clean completion, not a leftover. ``quarantined`` is non-actionable
 # and must be surfaced so a human can un-quarantine it (nsr-02).
-_BATCH_LEFTOVER_STATES = ("awaiting_merge", "blocked", "planned", "failed", "quarantined")
+_BATCH_LEFTOVER_STATES = (
+    "in_progress",
+    "awaiting_merge",
+    "blocked",
+    "planned",
+    "failed",
+    "quarantined",
+)
 _BATCH_LEFTOVER_LABELS = {
+    # An in_progress task in the leftover report is one no live worker owns:
+    # a run died holding it. It is the most alarming leftover, so it leads.
+    "in_progress": "orphaned in progress",
     "awaiting_merge": "awaiting merge",
     "blocked": "blocked",
     "planned": "planned",
@@ -2369,9 +2380,27 @@ _BATCH_LEFTOVER_LABELS = {
 }
 
 
-def has_actionable_tasks(queue: list[dict]) -> bool:
-    """Return True if any stored task is ``ready`` or ``in_progress``."""
-    return any(current_state(task) in _BATCH_ACTIONABLE_STATES for task in queue)
+def has_actionable_tasks(queue: list[dict], owned_ids: Collection[str] = ()) -> bool:
+    """Return True if any stored task can still make progress on its own.
+
+    A ``ready`` task is actionable: the spawn loop can pick it up. An
+    ``in_progress`` task is actionable only when this run owns a live worker
+    for it — ``owned_ids`` carries those task ids.
+
+    Stored state alone is not enough. A task left ``in_progress`` by a run
+    that died is not going to advance: no worker owns it, and the spawn loop
+    will not dispatch it because it is not ``ready``. Counting it as
+    actionable is what kept an idle orchestrator sleeping and retrying for
+    eight hours while holding the lease.
+    """
+    owned = set(owned_ids)
+    for task in queue:
+        state = current_state(task)
+        if state == "ready":
+            return True
+        if state == "in_progress" and task.get("id") in owned:
+            return True
+    return False
 
 
 def leftover_counts(queue: list[dict]) -> dict[str, int]:
@@ -3264,7 +3293,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             if not running:
                 if stop_spawn or _shutdown_requested:
                     break
-                if has_actionable_tasks(queue):
+                if has_actionable_tasks(queue, running.keys()):
                     time.sleep(0.2)
                     continue
                 # Nothing running and nothing that can still make progress on its
