@@ -190,4 +190,23 @@ Both questions raised at draft were settled during scope validation:
 
 ---
 
-*Stage: scope-validated*
+## Divergence Summary
+
+*Recorded: 2026-08-22 — Branch: cdc-03-cli-syntax-lint*
+
+### Changed from plan
+
+- (none)
+
+### Added (unplanned)
+
+- `scripts/skills-lint`: treat `--help` as a valid flag for any `aet` command, with a new `tests/fixtures/skills-lint/help.md` fixture. This prevents the skills-lint rule that validates command invocations from rejecting the `--help` references now used in place of the removed option table.
+
+### Deferred
+
+- Task 4 (merge branch to main and verify integration): handled by the next pipeline stage, `aet-ship`.
+
+---
+
+*Stage: synced*
+*Next step: run `aet-ship`*
