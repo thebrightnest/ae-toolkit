@@ -70,10 +70,20 @@ def find_task(queue, task_id):
 def resolve_task_record(task_id, queue, backend=None):
     """Resolve a task id to a live or sealed merged task record.
 
-    Searches the live queue first, then the sealed ``work-history.jsonl``.
-    Returns ``(task, sealed_task)`` where exactly one is non-``None`` when a
-    record is found, or ``(None, None)`` when no record exists. Idempotent on
-    settled tasks (R-4).
+    Searches the live queue, then the sealed tombstone, then the history
+    JSONL. Returns ``(task, sealed_task)`` where exactly one is non-``None``
+    when a record is found, or ``(None, None)`` when no record exists.
+    Idempotent on settled tasks (R-4).
+
+    The tombstone is consulted before the JSONL because it is the record that
+    always exists: ``seal`` writes it in every posture, in the same atomic
+    transaction as the task-ref deletion, while shadow posture — the default
+    for an unconfigured project — never writes the JSONL at all. Reading only
+    the file made an already-settled task report as "Task not found", turning
+    a resumed closure into a hard error.
+
+    The JSONL remains as a fallback for records sealed before tombstones
+    existed (ADR-055).
     """
     if backend is None:
         backend = make_backend(queue)
@@ -82,6 +92,11 @@ def resolve_task_record(task_id, queue, backend=None):
     task = find_task(data["queue"], task_id)
     if task:
         return task, None
+    read_sealed = getattr(backend, "read_sealed", None)
+    if read_sealed is not None:
+        sealed = read_sealed(task_id)
+        if sealed and sealed.get("state") == "merged":
+            return None, sealed
     history_file = getattr(backend, "history_file", None)
     if history_file:
         sealed = find_task(queue_lib.read_history(history_file), task_id)

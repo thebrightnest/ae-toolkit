@@ -198,6 +198,28 @@ class GitRefsBackend(TaskBackend):
             ref[len(SEALED_REF_PREFIX) :] for ref in self._list_sealed_refs()
         }
 
+    def read_sealed(self, task_id: str) -> dict[str, Any] | None:
+        """Return the sealed record for ``task_id``, or ``None`` if absent.
+
+        The tombstone blob at ``refs/aet/sealed/<id>`` carries the full task
+        record as it stood when it settled. It is written in the same atomic
+        transaction as the task-ref deletion (ADR-055), in every posture —
+        unlike the history JSONL, which shadow posture deliberately does not
+        write. A caller that must recognise an already-settled task therefore
+        reads this, not the working-tree file.
+
+        A corrupt or partial blob reads as absent rather than raising, matching
+        how ``load`` treats an unreadable task ref.
+        """
+        sha = self._ref_sha(SEALED_REF_PREFIX + task_id)
+        if sha is None:
+            return None
+        try:
+            record = json.loads(self._read_blob(sha))
+        except (json.JSONDecodeError, subprocess.CalledProcessError):
+            return None
+        return record if isinstance(record, dict) else None
+
     def load(self, verify: bool = True) -> dict[str, Any]:
         """Return queue (from refs) and settled history (from JSONL).
 

@@ -202,3 +202,104 @@ class TestShadowAnnouncement:
         _announce_posture(SHARED_POSTURE)
         captured = capsys.readouterr()
         assert captured.out == ""
+
+
+class TestSealedRecordVisibility:
+    """A settled task is recognisable in every posture, not just shared.
+
+    Regression for the shadow-posture blind spot: ``resolve_task_record`` read
+    only ``work-history.jsonl``, which shadow posture never writes, so an
+    already-settled task reported as "Task not found" and a resumed
+    ``record-merge`` / ``ship close`` failed instead of being idempotent (R-4).
+    """
+
+    @staticmethod
+    def _backend(project: Path):
+        agents = project / ".agents"
+        agents.mkdir(parents=True, exist_ok=True)
+        return create_backend(
+            config_path=str(agents / "aet-config.json"),
+            queue_file=str(agents / "aet-queue"),
+            history_file=str(agents / "work-history.jsonl"),
+        )
+
+    @staticmethod
+    def _seal_merged(backend, history_file: str) -> None:
+        backend.save(
+            [
+                {
+                    "id": "t1",
+                    "state": "merged",
+                    "merge_commit": "d" * 40,
+                    "branch": "feat-1",
+                }
+            ]
+        )
+        backend.seal("t1", history_file)
+
+    def test_read_sealed_returns_the_tombstone_record(
+        self, project: Path, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(Path, "home", lambda: home)
+        backend = self._backend(project)
+        assert backend.posture == SHADOW_POSTURE
+        history_file = str(project / ".agents" / "work-history.jsonl")
+        self._seal_merged(backend, history_file)
+
+        # The premise: shadow posture wrote no history file at all.
+        assert not Path(history_file).exists()
+
+        record = backend.read_sealed("t1")
+        assert record is not None
+        assert record["state"] == "merged"
+        assert record["merge_commit"] == "d" * 40
+
+    def test_read_sealed_is_none_for_an_unknown_task(
+        self, project: Path, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(Path, "home", lambda: home)
+        backend = self._backend(project)
+        assert backend.read_sealed("never-existed") is None
+
+    def test_resolve_task_record_finds_a_task_sealed_in_shadow_posture(
+        self, project: Path, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(Path, "home", lambda: home)
+        from aet.cli.aet_state import resolve_task_record
+
+        backend = self._backend(project)
+        assert backend.posture == SHADOW_POSTURE
+        queue_file = str(project / ".agents" / "aet-queue")
+        history_file = str(project / ".agents" / "work-history.jsonl")
+        self._seal_merged(backend, history_file)
+
+        fresh = self._backend(project)
+        task, sealed = resolve_task_record("t1", queue_file, backend=fresh)
+        assert task is None
+        assert sealed is not None, (
+            "a task sealed in shadow posture must still resolve as settled"
+        )
+        assert sealed["merge_commit"] == "d" * 40
+
+    def test_resolve_task_record_still_reads_history_for_pre_tombstone_records(
+        self, project: Path, home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A record in the JSONL with no tombstone still resolves."""
+        monkeypatch.setattr(Path, "home", lambda: home)
+        from aet.cli.aet_state import resolve_task_record
+
+        backend = self._backend(project)
+        queue_file = str(project / ".agents" / "aet-queue")
+        history_file = project / ".agents" / "work-history.jsonl"
+        history_file.write_text(
+            json.dumps(
+                {"id": "old", "state": "merged", "merge_commit": "a" * 40}
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        task, sealed = resolve_task_record("old", queue_file, backend=backend)
+        assert task is None
+        assert sealed is not None
+        assert sealed["merge_commit"] == "a" * 40
