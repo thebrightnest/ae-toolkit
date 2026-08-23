@@ -37,6 +37,7 @@ import os
 import time
 from pathlib import Path
 run_dir = Path(os.environ["AET_TEST_RUN_DIR"])
+run_dir.mkdir(parents=True, exist_ok=True)
 time.sleep({delay})
 (run_dir / "returncode").write_text(str({returncode}), encoding="utf-8")
 """
