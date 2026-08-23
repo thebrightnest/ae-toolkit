@@ -280,12 +280,9 @@ After the `plan` command completes and the plan.md is ready for review:
    *Next step: run `aet-validate-scope`*
    ```
 
-2. Ensure the plan.md footer reads:
-
-   ```
-   *Stage: plan-draft*
-   *Next step: run `aet-validate-scope`*
-   ```
+2. Do not write a `*Stage:*` footer into plan.md. Plan files are transient
+   working copies (gitignored); the task's stage is recorded on the
+   queue/ledger by code from `aet sprint add` onward.
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
 4. The new plan files are ready to queue. Because mid-sprint queue state is local-only, remind the user that untracked plans are load-bearing: `git clean -fdx` or git-following backups will discard in-flight work.

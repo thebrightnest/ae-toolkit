@@ -137,12 +137,9 @@ Do not hand-edit `.agents/runs/<run-id>/handoff.json`; use `aet handoff append`.
 
 After `qa` completes and all tiers pass:
 
-1. The plan.md footer will read:
-
-   ```
-   *Stage: qa-complete*
-   *Next step: run `aet-review`*
-   ```
+1. The stage transition (`qa-complete`) is recorded on the task record by the
+   pipeline engine. Do not touch the plan.md footer — plan files are transient
+   working copies (gitignored); the queue/ledger is the stage source.
 
 2. Print: `"✓ Stage: qa-complete → Next step: run \`aet-review\`"`
 

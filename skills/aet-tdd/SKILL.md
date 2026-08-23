@@ -168,12 +168,9 @@ Before declaring `tdd-complete`, run the test suite with coverage. List every ne
 
 After `refactor` completes, all tests pass, and coverage completeness is satisfied:
 
-1. The plan.md footer will read:
-
-   ```
-   *Stage: tdd-complete*
-   *Next step: run `aet-implement`*
-   ```
+1. The stage transition (`tdd-complete`) is recorded on the task record by the
+   pipeline engine. Do not touch the plan.md footer — plan files are transient
+   working copies (gitignored); the queue/ledger is the stage source.
 
 2. Print: `"✓ Stage: tdd-complete → Next step: run \`aet-implement\` to write code that satisfies these tests"`
 

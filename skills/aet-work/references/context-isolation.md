@@ -99,7 +99,7 @@ Parent agent session (clean)
   → invokes `aet run-one docs/plans/FEAT-001.md`
     → Orchestrator spawns Agent CLI process #1 (clean context)
       → Stage group 1: aet-tdd → aet-implement, then aet-qa
-      → Commits and updates plan footer between stages
+      → Commits between stages
     → Orchestrator spawns Agent CLI process #2 (clean context)
       → Stage group 2: aet-review
     → Orchestrator spawns Agent CLI process #3 (clean context)
@@ -114,7 +114,7 @@ Parent agent session (clean)
 
 **Verification and fallback:**
 
-After a group session exits, the orchestrator verifies that the plan footer reached the expected final stage. If the group session did not advance far enough, the orchestrator falls back to the original per-stage execution for that group, resuming from the stage recorded in the plan footer.
+After a group session exits, the orchestrator verifies that the stage recorded on the task record reached the expected final stage. If the group session did not advance far enough, the orchestrator falls back to the original per-stage execution for that group, resuming from the recorded stage.
 
 ## Parallel Execution Is Safe
 

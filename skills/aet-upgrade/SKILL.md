@@ -70,7 +70,7 @@ Produce a risk-mapped upgrade plan by analyzing the changelog and grepping the c
 6. **Smoke before/after requirement**
    - Before starting the upgrade: run foundation smoke checks. If they fail, fix smoke first — do not upgrade on a broken baseline.
    - After completing the upgrade: run foundation smoke checks again. If they fail, the upgrade is not complete.
-   - Document smoke results in the plan footer.
+   - Document smoke results in the plan (a verification section, not the footer — plan footers are no longer written).
 
 **Rules:**
 
@@ -87,19 +87,14 @@ Post-upgrade verification. Run after the dependency has been bumped and code cha
 1. Run the full test suite
 2. Run foundation smoke checks
 3. Verify no high-risk breaking changes remain unaddressed
-4. Update the plan footer with verification results
+4. Record the verification results in the upgrade plan
 
 ## Completion Protocol
 
 After the upgrade plan is produced:
 
-1. Update the plan.md footer:
-
-   ```
-   *Stage: plan-approved*
-   *Work class: critical*
-   *Next step: aet-work*
-   ```
+1. Do not touch the plan.md footer. Plan files are transient working copies
+   (gitignored); the task's stage is recorded on the queue/ledger by code.
 
 2. Print:
 

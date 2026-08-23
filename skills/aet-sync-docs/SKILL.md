@@ -1,6 +1,6 @@
 ---
 name: aet-sync-docs
-description: Sync PRD and plan.md to reflect what was actually built. Compares the original plan intent against the git diff, appends a Divergence Summary to the PRD, and updates the plan task list. Run after aet-review or aet-cso when deviations were noted, or whenever the PRD feels stale. Triggers on requests like "sync the docs," "update the PRD," "the plan changed," or "document what we actually built."
+description: Sync the PRD to reflect what was actually built. Compares the original plan intent against the git diff and appends a Divergence Summary to the PRD. Run after aet-review or aet-cso when deviations were noted, or whenever the PRD feels stale. Triggers on requests like "sync the docs," "update the PRD," "the plan changed," or "document what we actually built."
 ---
 
 # aet-sync-docs
@@ -11,7 +11,7 @@ Documentation sync for agentic engineering. When implementation diverges from th
 
 - After `aet-review` or `aet-cso` noted deviations from the plan
 - After `aet-implement` reported divergences
-- Whenever the PRD or plan.md no longer matches the branch reality
+- Whenever the PRD no longer matches the branch reality
 - As the final step in the implementation pipeline (automatic)
 - Manually, when a PRD feels stale after any implementation cycle
 
@@ -25,7 +25,7 @@ banner it emits. Do not ask the user for this context manually.
 
 ### `sync`
 
-Compare the original plan against what was actually built, and update both the PRD and plan.md accordingly.
+Compare the original plan against what was actually built, and update the PRD accordingly. The plan file is read as the statement of intent; it is never written back to.
 
 **Procedure:**
 
@@ -62,16 +62,19 @@ Compare the original plan against what was actually built, and update both the P
    - {Task}: {what was deferred and when it might be addressed}
    ```
 
-6. Update the plan.md task list:
-   - Mark completed-as-planned tasks with `✓`
-   - Add inline notes to changed tasks: `[Changed: {brief reason}]`
-   - Mark deferred tasks: `[Deferred: {brief reason}]`
-7. Update footers on both files:
-   - PRD: `*Stage: synced*` / `*Next step: run \`aet-ship\`\*`
-   - Plan: `*Stage: synced*` / `*Next step: run \`aet-ship\`\*`
-8. Commit the updated docs with message: `docs: sync PRD and plan to implementation reality [{branch}]`
+6. Record per-task outcomes in the PRD's Divergence Summary, not in plan.md:
+   - Completed as planned — no entry needed
+   - Changed: `{task}: {brief reason}`
+   - Deferred: `{task}: {brief reason}`
 
-**Gate:** If no changes to PRD or plan were needed (no divergences, stage already synced), skip the commit.
+   Do not edit plan.md. Plan files are transient working copies (gitignored);
+   an edit there is discarded and never reaches a reader.
+7. Update the PRD footer: `*Stage: synced*` / `*Next step: run \`aet-ship\`\*`.
+   Do not touch the plan.md footer — the task's stage is recorded on the
+   queue/ledger by code.
+8. Commit the updated PRD with message: `docs: sync PRD to implementation reality [{branch}]`
+
+**Gate:** If the PRD needed no changes (no divergences, stage already synced), skip the commit.
 
 **Evidence verdict (writer contract):**
 
@@ -92,7 +95,7 @@ Hand-authoring the full payload and passing `--evidence <payload-file>` still wo
 
 After `sync` completes:
 
-1. Both files have `*Stage: synced*` in their footers.
+1. The PRD has `*Stage: synced*` in its footer.
 2. Print: `"✓ Stage: synced → Next step: run \`aet-ship\`"`
 
 ## Key Principles

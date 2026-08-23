@@ -77,11 +77,12 @@ commit that actually landed on trunk.
 ## Closure
 
 `aet ship close` is a single code transaction. It writes the terminal queue
-state transition, records the `land` event in the content-addressed ledger
-(including the plan content hash, PRD requirement ids, and merge ref), and
-updates the plan footer as a code-maintained breadcrumb. The queue-ref update
-is atomic under a single `git update-ref --stdin` transaction; the mandatory
-push of `refs/aet/*` must succeed before closure reports success.
+state transition and records the `land` event in the content-addressed ledger
+(including the plan content hash, PRD requirement ids, and merge ref). The
+queue-ref update is atomic under a single `git update-ref --stdin`
+transaction; the mandatory push of `refs/aet/*` must succeed before closure
+reports success. Plan files are transient working copies — closure no longer
+touches them (R-4/R-19).
 
 Do not ask an agent to update the plan footer, queue state, or ledger. Those
 writes are owned by `aet ship close` and `aet gate submit`. In particular, never

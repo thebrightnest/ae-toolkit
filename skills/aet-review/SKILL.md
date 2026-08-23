@@ -117,12 +117,9 @@ After `review` completes with pass status:
 1. Determine next step:
    - Diff touches auth, data models, API endpoints, or dependencies → `aet-cso`
    - Diff does not touch those → `aet-sync-docs`
-2. The plan.md footer will read:
-
-   ```
-   *Stage: reviewed*
-   *Next step: run `{determined skill from step 1}`*
-   ```
+2. The stage transition (`reviewed`) is recorded on the task record by the
+   pipeline engine. Do not touch the plan.md footer — plan files are transient
+   working copies (gitignored); the queue/ledger is the stage source.
 
 3. Print: `"✓ Stage: reviewed → Next step: run \`{aet-cso or aet-sync-docs}\`"`
 

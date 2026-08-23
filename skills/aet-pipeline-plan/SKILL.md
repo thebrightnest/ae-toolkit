@@ -105,7 +105,8 @@ If the user's request contains implementation directives (e.g., "make", "change"
 2. Surface conflicts, fuzzy language, code contradictions
 3. Apply the UI Coverage Lens if the PRD describes user-facing interfaces
 4. Update CONTEXT.md and propose ADRs as needed
-5. Update plan footers to `scope-validated` / `plan-approved`
+5. The stage transition is recorded on the task record by code; do not edit
+   plan footers — plan files are transient working copies (gitignored)
 
 **Step 3 — aet sprint add + sync:**
 

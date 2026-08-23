@@ -10,9 +10,7 @@ Put a plan on the board. This is the entry point for making a plan visible in Gi
 
 1. Resolve `<plan>` to a plan file in `docs/plans/` (by path or by id).
 2. Validate the plan file exists and parses.
-3. Call the configured projection to create exactly one issue keyed by plan id, labeled:
-   - `aet:draft` when the plan footer stage is `plan-draft`
-   - `aet:backlog` when the plan footer stage is `plan-approved`
+3. Call the configured projection to create exactly one issue keyed by plan id, labeled `aet:backlog`. The projection is fail-open: a missing `gh` or a network problem warns but does not block the local record (R-4), and shadow posture suppresses projections entirely.
 4. If the issue already exists — because the command was re-run or run from a second clone — reconcile its label instead of creating a duplicate.
 
 **Fail semantics:**
@@ -128,7 +126,7 @@ Record a verified merge in the work queue and close the plan file.
 1. Resolve the task by ID from `.agents/work-queue.json` (or from `.agents/work-history.jsonl` if the task is already sealed).
 2. Verify the merge commit is an ancestor of the resolved trunk/integration branch.
 3. Transition the task to `merged` and seal it to history.
-4. Update the plan footer to `*Stage: merged*` through the closure transaction and push the resulting commit. The plan path is no longer an accepted argument (R-3); the task is resolved by ID from the record.
+4. Closure no longer touches plan files (R-4/R-19): the merge record is the durable outcome. The plan path is no longer an accepted argument (R-3); the task is resolved by ID from the record.
 
 **Fail semantics:**
 

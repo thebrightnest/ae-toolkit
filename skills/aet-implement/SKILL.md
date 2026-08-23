@@ -154,12 +154,9 @@ After `implement` completes and all validation passes:
    analysis if the full suite later fails on a missed test. Do not hand-edit
    `.agents/runs/<run-id>/handoff.json`; use `aet handoff append`.
 
-2. The plan.md footer will read:
-
-   ```
-   *Stage: implemented*
-   *Next step: run `aet-qa`*
-   ```
+2. The stage transition (`implemented`) is recorded on the task record by the
+   pipeline engine. Do not touch the plan.md footer — plan files are transient
+   working copies (gitignored); the queue/ledger is the stage source.
 
 3. Print: `"✓ Stage: implemented → Next step: run \`aet-qa\`"`
 

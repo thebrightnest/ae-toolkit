@@ -20,7 +20,7 @@ Run `aet context` and parse its JSON for session context (branch, repo
 state, AGENTS.md, learnings, active plan/PRD stage); print the stage
 banner it emits. Do not ask the user for this context manually.
 
-- `WORK_CLASS` — from the plan footer (`*Work class:`) or infer from task scope (trivial / normal / critical)
+- `WORK_CLASS` — from the task record (`work_class`, surfaced by `aet context`) or infer from task scope (trivial / normal / critical)
 - `SMOKE_CMD` — the project's smoke command (`make smoke`, `npm run smoke`, etc.) or check `.agents/smoke/`
 - `QA_REPORT_PATH` — `/tmp/aet-reports/{task-id}/qa-report.md` (standard aet-qa output location)
 

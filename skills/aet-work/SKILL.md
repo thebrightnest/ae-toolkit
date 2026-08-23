@@ -30,7 +30,7 @@ The lifecycle has one source of truth per phase and one explicit handoff (ADR-06
 
 1. **Author** — `aet-plan` writes `docs/plans/{id}.md`. The file is the artifact.
 2. **Intake** — `aet sprint add` ingests the file into the task record's `spec`. This is the handoff.
-3. **Post-intake** — the task record's `spec` is the source of intent, stage, and terminal closure. The plan file may be rendered into a worktree as an ephemeral working copy; its footer `*Stage:*` is updated by code as a human breadcrumb at terminal closure.
+3. **Post-intake** — the task record's `spec` is the source of intent, stage, and terminal closure. The plan file may be rendered into a worktree as an ephemeral working copy; nothing writes back to it (R-4/R-19), so its contents are never authoritative.
 
 `.agents/work-queue.json` is an ephemeral, gitignored sprint board that holds only the active tasks you have explicitly chosen to work on. `.agents/work-history.jsonl` is an optional, gitignored execution log.
 
@@ -72,7 +72,7 @@ The `git-refs` backend is `schema_version`-stamped (ADR-055) and treats the live
 4. Task reaches `awaiting_merge`.
 5. PR is opened and merged into the resolved trunk branch.
 6. `aet-ship` verifies the merge commit is on the resolved trunk branch.
-7. `aet-ship` records the terminal ledger event, appends closure to `.agents/work-history.jsonl`, and removes the task from `.agents/work-queue.json`. The plan footer `*Stage: merged*` is updated by code as part of the closure transaction.
+7. `aet-ship` records the terminal ledger event, appends closure to `.agents/work-history.jsonl`, and removes the task from `.agents/work-queue.json`. Plan files are transient working copies — closure no longer touches them (R-4/R-19).
 
 ## Task Backends
 
@@ -196,7 +196,7 @@ Scan all `docs/plans/*.md` files and print a human-readable status summary. Boar
 aet gate review
 ```
 
-This reads plan footer stages; it does not modify the queue.
+This reads the board from the active task backend; it does not modify the queue.
 
 ### `status`
 

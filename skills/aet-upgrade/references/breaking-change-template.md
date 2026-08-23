@@ -60,10 +60,5 @@ Repeat this section for each breaking change:
 
 ## Footer
 
-```markdown
----
-
-_Stage: plan-approved_
-_Work class: critical_
-_Next step: aet-work_
-```
+No footer. Plan files are transient working copies (gitignored); stage and
+work class are recorded on the task record by code, not in the plan file.

@@ -173,12 +173,8 @@ After `validate` completes, conflicts are resolved, and the closure check passes
    *Next step: run `aet-work` (single-plan or multi-task queue)*
    ```
 
-2. Update the plan.md footer to:
-
-   ```
-   *Stage: plan-approved*
-   *Next step: run `aet-work`*
-   ```
+2. Do not touch the plan.md footer. Plan files are transient working copies
+   (gitignored); the task's stage is recorded on the queue/ledger by code.
 
 3. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-work\`"`
 

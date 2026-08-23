@@ -87,12 +87,9 @@ Hand-authoring the full payload and passing `--evidence <payload-file>` still wo
 
 After `cso` completes with pass status (no Critical or High findings):
 
-1. The plan.md footer will read:
-
-   ```
-   *Stage: secure*
-   *Next step: run `aet-sync-docs`, then `aet-ship`*
-   ```
+1. The stage transition (`secure`) is recorded on the task record by the
+   pipeline engine. Do not touch the plan.md footer — plan files are transient
+   working copies (gitignored); the queue/ledger is the stage source.
 
 2. Print: `"✓ Stage: secure → Next step: run \`aet-sync-docs\` (if plan diverged), then \`aet-ship\`"`
 3. If `cso` FAILS (Critical or High finding): do NOT update stage. Print: `"⛔ Stage unchanged — fix Critical/High findings before advancing."`
