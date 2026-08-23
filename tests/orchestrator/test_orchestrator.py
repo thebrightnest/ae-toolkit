@@ -3890,6 +3890,17 @@ class TestWireTestRunEmission(unittest.TestCase):
 
         def _write_stub(home: Path, repo_root: str) -> Path:
             stub = home / "claude-stub"
+            # Resolve the transcript directory with the production slug rule
+            # rather than reimplementing it. cwd_slug replaces every character
+            # outside [A-Za-z0-9-], while a naive replace("/", "-") does not —
+            # so any tempfile name containing "_" (its alphabet includes one)
+            # sent the stub's transcript to a directory the reader never looked
+            # in, and session_ref resolved to None about one run in five.
+            transcript_dir = session_log_claude.transcript_path_for(
+                str(Path(repo_root).resolve()),
+                session_id,
+                home=home / ".claude",
+            ).parent
             call_record = json.dumps(
                 {
                     "timestamp": "2026-07-28T17:00:00Z",
@@ -3937,9 +3948,7 @@ class TestWireTestRunEmission(unittest.TestCase):
                 "from pathlib import Path",
                 "import json, os, subprocess, sys",
                 "cwd = os.getcwd()",
-                'home = os.path.expanduser("~")',
-                'slug = cwd.rstrip("/").replace("/", "-")',
-                'transcript_dir = os.path.join(home, ".claude", "projects", slug)',
+                f'transcript_dir = {str(transcript_dir)!r}',
                 "os.makedirs(transcript_dir, exist_ok=True)",
                 f'transcript = os.path.join(transcript_dir, "{session_id}.jsonl")',
                 'with open(transcript, "w") as f:',
