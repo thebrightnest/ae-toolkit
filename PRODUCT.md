@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.9.0
+## Current Version: 1.10.0
 
-Last updated: 2026-08-15
+Last updated: 2026-08-23
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, optional GitHub Issues or git-refs backend, detached-only run invocation with bounded completion reports, adapter-resolved supervision defaults, night-shift runtime resilience, configurable branch models including single-PR integration mode, local-only plans that defer durability to the PR, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, mechanical terminal closure that archives plans automatically, portable plan specs carried in the task record, and recovery of missing stage verdicts without re-running the whole stage.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, and recovery of missing stage verdicts without re-running the whole stage.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -34,16 +34,16 @@ Verify code before it ships.
 
 - **aet-review** — Staff-level code review with multi-lens checks, supported by mechanical identity-conflation and boundary-contract lenses at `aet gate submit --stage review`.
 - **aet-cso** — Diff-focused security audit. Verdicts are submitted via `aet gate submit` with built-in evidence builders.
-- **aet-qa** — Automated QA with tiered validation. Defaults to impact-scoped tests and falls back to the full suite when needed. Verdicts are submitted via `aet gate submit` with built-in pytest, summary, and divergence builders.
+- **aet-qa** — Automated QA with tiered validation. Runs the full suite unconditionally, and when it fails, compares the failures against the targeted set implement already ran so a gap in coverage is named rather than guessed at. Verdicts are submitted via `aet gate submit` with built-in pytest, summary, and divergence builders.
 - **aet-verify** — Conditional live verification with evidence capture.
 
 ### Shipping and Release Skills
 
 Land code cleanly and document releases.
 
-- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, provider-specific merge-guard harness detection, squash-merge verification fallback, stacked PR split and trunk substitution, and optional branch deletion on close. Accepts plan paths or bare task ids across open, gate, close, merge, split, and verify.
+- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, provider-specific merge-guard harness detection, squash-merge verification fallback, stacked PR split and trunk substitution, and optional branch deletion on close. Resolves a task id against the record across open, gate, close, merge, split, and verify; plan paths are no longer accepted.
 - **aet-release-prep** — Release preparation: commit analysis, changelog updates, and version bump suggestions.
-- **aet-sync-docs** — Sync PRD and `plan.md` to reflect what was actually built.
+- **aet-sync-docs** — Sync the PRD to reflect what was actually built.
 
 ### Maintenance Skills
 
@@ -61,6 +61,8 @@ Carry context and lessons across runs.
 - **aet context** — Loads git state, filesystem facts, canonical plan stages, budgets, rules digest, and durable insights into a structured payload for agent session start. Supports `--memories-only`, `--hook-json` SessionStart envelopes, and `PRIME.md` override.
 - **aet learnings append** — Records append-only JSONL learnings with schema validation.
 - **aet handoff** — Writes and reads run-scoped handoff notes so agents can pass context between sessions.
+- **aet sprint intake** — Reads `aet:sprint` issues from GitHub, checks each candidate against the dependency graph, and admits it or refuses with the blocking reason named.
+- **aet state reconcile** — Reports and clears refs stranded on a clone, so a board that drifted can be brought back in line without hand-editing refs.
 
 ---
 
@@ -73,13 +75,25 @@ Carry context and lessons across runs.
 | `aet context`         | Session-start context loader that surfaces git state, plan stages, budgets, rules digest, and recent learnings. |
 | `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates. |
 | Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, run history, test-run provenance badges, and session-log traceability. |
-| GitHub Issues         | Optional task backend for `aet-work`. Syncs queue state with labeled GitHub issues.                                                  |
-| git-refs backend      | `aet-work` task backend that stores queue state in tracked git refs instead of local JSON files; now the default written backend and travels with the repository.              |
+| GitHub Issues         | One-way projection of the board, plus `aet sprint intake` for reading `aet:sprint` issues as declared intent. Not a task store.       |
+| git-refs backend      | The task store. Queue state lives in tracked git refs and travels with the repository; in shadow posture it stays entirely local and is never pushed.              |
 | Git                   | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required.                             |
 
 ---
 
 ## What's New
+
+### What's New in v1.10.0
+
+- **`aet --help` answers in one hop** — every command appears in a single sectioned index with its required arguments inline, and a mistyped command now suggests the right one and shows a runnable example.
+- **Quiet sessions are no longer killed** — supervision watches the process tree and run log instead of stdout silence, so a long-running agent that has stopped printing keeps working.
+- **Faster implement, stricter QA** — implement runs a targeted test set chosen from the changed paths, QA always runs the full suite, and a QA failure outside the targeted set is reported as a coverage gap.
+- **Your board can stay entirely local** — a project with no committed AET config keeps its queue on the machine, pushes nothing, and says so once per run.
+- **Sprint intake from GitHub** — label issues `aet:sprint` and `aet sprint intake` admits the ones whose dependencies allow it, naming the blocker for the ones it refuses.
+- **Completed work stays completed across clones** — sealing a task leaves a durable marker, so a finished task can no longer reappear as live work on another machine.
+- **Merges must show evidence** — a branch is recorded as merged only when there is a recorded merge commit or real movement past its base, closing a path where an untouched branch could be sealed as merged.
+
+**Upgrading from 1.9.x:** the JSON task backend, `aet init-queue`, and the `docs/plans/archive/` directory are removed, and `aet ship` takes task ids rather than plan paths. A leftover `task_backend` config key is rejected with a migration message.
 
 ### What's New in v1.9.0
 

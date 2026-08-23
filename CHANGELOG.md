@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.10.0] — 2026-08-23
+
+### Removed
+
+- **The JSON task backend is gone** — `git-refs` is now the only task store. The `task_backend` config key is rejected with a migration message, and the backend selection axis has been collapsed entirely (owb-07).
+- **`aet init-queue` is gone** — the board is derived from open work rather than rebuilt by scanning `docs/plans/`. `aet queue sync` now reconciles the existing live queue only; it no longer scans or validates plan files (owb-05).
+- **The plan archive is retired** — `docs/plans/archive/` and its 264 files are removed, along with `queue.archive_plan_file` and the `plans_archive_dir` telemetry path. Terminal closure no longer moves plan files anywhere (trp-05, ADR-055 decision 4).
+- **`aet ship` no longer accepts plan paths** — all five ship entry points resolve a task id against the record. Passing a `.md` path is rejected with a message naming `aet sprint add` (trp-02, R-3).
+
+### Added
+
+- **Sprint intake from GitHub labels** — `aet sprint intake` reads `aet:sprint` issues, validates each candidate against the dependency graph, and admits it or refuses with the blocking reason named. Forge reads retry with backoff and then fail closed (owb-10, ADR-032/033).
+- **Tombstones replace absence** — sealing a task writes `refs/aet/sealed/<id>` in the same atomic transaction as the task-ref deletion, so clones converge by reading and a task that vanished is distinguishable from one that never existed. `aet state reconcile` reports and removes refs stranded by the old model (dia-01, dia-02, ADR-059).
+- **Shadow posture** — projects with no in-tree config keep their board entirely local: nothing is pushed, projections are suppressed, and the inferred posture is announced once per run (owb-11).
+- **Stage-based validation** — implement runs a targeted test set selected from the changed paths and hands the result to QA, which always runs the full suite. A single-run file-hash cache skips redundant re-validation within a run, and a failed QA compares its failures against the implement set to attach a gap analysis to the task's failure record (validation-01, validation-02, validation-03).
+- **Hybrid liveness supervision** — process-tree and run-log liveness replace the stdout-silence watchdog, so a quiet-but-working session is no longer killed. Adapter stall and wall-clock timeouts are uniform at 7200s (liveness-01).
+- **A single-hop command index** — `aet --help` renders every command in one flat, sectioned index with required arguments inline, instead of forcing a second call to discover subcommands. Missing-argument and unknown-command errors now append a runnable example (cdc-01, cdc-02).
+- **`aet state backfill-specs`** — recovers a task's plan spec from a git revision that still has it, for records created before the spec moved into the task record (owb-15, R-19).
+- **Config schema validation** — unknown keys are rejected with legal alternatives named, projections are refused in shadow sources, and `aet configure --shared` declares a config as shared across devices (owb-12).
+- **Computable plan-size floor signals** — file-set overlap with a linearly-ordered sibling, and docs-only with a single sibling consumer, reported as lint warnings under a 2-of-N trigger (gdl-01).
+
+### Changed
+
+- **Plan files are transient working copies** — nothing writes back to them. Stage lives on the queue and ledger; every skill that told a worker to update or commit a `*Stage:*` footer has been rewritten. PRD footers are unaffected (R-4/R-19).
+- **Signal death is authoritative for timeout classification** — any negative exit code classifies as `timeout` at all three call sites, and a signal exit is treated as evidence of timeout even when the child could not record one (osd-02, ADR-060).
+- **The settled-plan archive is machine-local** rather than tracked (owb-03), and the ledger path is derived in one place instead of three (owb-08).
+
+### Fixed
+
+- **Proxy signals were being read as evidence** — ancestry was treated as proof of merge, absence as proof of completion, and a nonzero exit as proof of failed work. Merge now requires a recorded `merge_commit` or movement past a recorded `base_commit`; leases refuse to overwrite a live holder; blocker satisfaction requires positive evidence. `aet state heal --apply` could previously seal a zero-commit task as merged with a merge commit it invented (ADR-064).
+- **Settled tasks were invisible in the default posture** — `seal` writes the settled record to two places but only the tombstone unconditionally, and the resolver read only the JSONL. Re-running a closure reported "Task not found" for a task that had settled successfully, breaking R-4 idempotency.
+- **An idle run held the queue lease for 8+ hours** — `has_actionable_tasks` counted any stored `in_progress` task as actionable, so a task left behind by a dead run kept the exit condition from firing. Ownership, not stored state, now distinguishes a live worker from a dead one.
+- **Queue bookkeeping degraded into silent data loss** — programming errors in `_record_run_one_in_queue` surfaced as a single warning while metadata recording stopped. Those now propagate; environmental failures still warn without blocking the run.
+- **Failure triage misclassified design defects as environmental** — bare `missing`, `not found`, `dependency`, and `cannot find` patterns matched almost any log tail and leaned toward requeue instead of triage.
+- **Worktree teardown failures were silent** (osd-03), **git-refs runtime metadata did not replicate to origin** (4409f891), and **ledger repo-root discovery failed quietly on a nonexistent path** (8e2b160c).
+
+### Documentation
+
+- ADR-059 (absence is not a fact), ADR-060 (signal death is timeout), and ADR-064 (merge evidence) record the decisions behind this release.
+- Skills now state the phase model explicitly (trp-06) and describe what the code actually does rather than what it once did (owb-14).
+- A docs-lint guard rejects hand-copied CLI option tables, which drift from the real `--help` output (cdc-03).
+
+---
+
 ## [1.9.0] — 2026-08-15
 
 ### Added
