@@ -1475,9 +1475,9 @@ def build_stage_group_prompt(
     """Build a compound prompt for running multiple stages in one session.
 
     Each stage block preserves the single-stage prompt format so the agent
-    can execute them sequentially, committing between stages. Plan footer
-    updates are performed by the engine, not the agent. Successors resolve
-    through the workflow's list order.
+    can execute them sequentially, committing between stages. Stage state is
+    recorded on the task record by the engine, not in plan footers (R-4/R-19).
+    Successors resolve through the workflow's list order.
     """
     preamble = (
         "Execute the following consecutive pipeline stages in order. "
@@ -3378,6 +3378,12 @@ def _find_queued_task(queue: list[dict], plan_file: str) -> dict | None:
     return None
 
 
+# Errors that indicate broken code rather than an environmental failure.
+# These are never swallowed by tolerant bookkeeping handlers: continuing after
+# one would silently drop queue bookkeeping for the entire run.
+_PROGRAMMING_ERRORS = (NameError, AttributeError, TypeError, ImportError)
+
+
 def _record_run_one_in_queue(
     backend,
     queue_file: str,
@@ -3390,8 +3396,11 @@ def _record_run_one_in_queue(
 
     Uses ``aet-state transition`` to keep the queue's sole-writer rule intact,
     then re-reads the queue through the backend and records worktree/branch
-    metadata atomically via ``backend.save``. Errors are logged but not raised
-    so that a queue bookkeeping failure does not block the underlying run.
+    metadata atomically via ``backend.save``. Environmental errors (lock
+    contention, IO, queue data) are logged but not raised so that a queue
+    bookkeeping failure does not block the underlying run. Programming errors
+    (``_PROGRAMMING_ERRORS``) are re-raised — they mean the bookkeeping code
+    itself is broken, and continuing would silently drop metadata.
     """
     try:
         queue = backend.load()["queue"]
@@ -3431,7 +3440,9 @@ def _record_run_one_in_queue(
         backend.push()
         print(f"   📝 Recorded {task_id} as in-progress (branch={branch}, worktree={worktree})")
         return True
-    except Exception as exc:  # pragma: no cover - defensive logging
+    except _PROGRAMMING_ERRORS:
+        raise
+    except Exception as exc:
         print(f"   ⚠️  Queue bookkeeping failed for {task_id}: {exc}")
         return False
 
