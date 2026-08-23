@@ -77,6 +77,55 @@ def test_classify_ambiguous_defaults_environment():
     )
 
 
+@pytest.mark.parametrize(
+    ("tail", "verdict_recorded", "expected"),
+    [
+        # Bare "missing" / "not found" / "dependency" in a design-failure tail
+        # must not drag the class to environment.
+        (
+            "FAILED test_api.py::test_create - AssertionError: field missing from response\n",
+            True,
+            FailureClass.DESIGN,
+        ),
+        (
+            "FAILED test_gate.py::test_x - fixture 'db' not found\n",
+            True,
+            FailureClass.DESIGN,
+        ),
+        (
+            "TypeError: dependency injection container mismatch\n",
+            True,
+            FailureClass.DESIGN,
+        ),
+        # Without a recorded verdict, the same tails are flaky, not environment.
+        ("AssertionError: field missing from response\n", False, FailureClass.FLAKY),
+        # Qualified environment signals still classify as environment.
+        ("pip failed: missing dependency 'libssl'\n", False, FailureClass.ENVIRONMENT),
+        ("sh: aet-state: command not found\n", False, FailureClass.ENVIRONMENT),
+        ("ld: cannot find module 'ssl'\n", False, FailureClass.ENVIRONMENT),
+        # Bare "cannot find" in a design tail is not an environment signal.
+        (
+            "FAILED test_plan.py::test_x - cannot find a matching task in the queue\n",
+            True,
+            FailureClass.DESIGN,
+        ),
+    ],
+)
+def test_classify_narrowed_environment_patterns(tail, verdict_recorded, expected):
+    """Qualified environment signals match; bare words in design tails do not."""
+    assert (
+        classify(
+            exit_code=1,
+            tail=tail,
+            stage="run",
+            verdict_recorded=verdict_recorded,
+            shutdown=False,
+            killed_by_timeout=False,
+        )
+        == expected
+    )
+
+
 def test_signature_stable_across_volatile_spans():
     """Volatile spans (paths, PIDs, timestamps, line numbers) do not change the signature."""
     base_error = "AssertionError: expected 2 but got 1"

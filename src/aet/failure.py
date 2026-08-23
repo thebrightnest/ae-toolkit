@@ -18,10 +18,11 @@ class FailureClass(str, Enum):
 
 
 # Environment-side signals: missing tools/dependencies, network problems, auth.
+# Keep these qualified — bare words like "missing" or "not found" match almost
+# any real log tail and misclassify design failures as environmental.
 _ENVIRONMENT_PATTERNS = [
     re.compile(r"\bcommand not found\b", re.IGNORECASE),
     re.compile(r"\bno such file or directory\b", re.IGNORECASE),
-    re.compile(r"\bnot found\b", re.IGNORECASE),
     re.compile(r"\bpermission denied\b", re.IGNORECASE),
     re.compile(r"\bconnection refused\b", re.IGNORECASE),
     re.compile(r"\bnetwork is unreachable\b", re.IGNORECASE),
@@ -33,9 +34,15 @@ _ENVIRONMENT_PATTERNS = [
     re.compile(r"\bmodule not found\b", re.IGNORECASE),
     re.compile(r"\bno module named\b", re.IGNORECASE),
     re.compile(r"\bimport error\b", re.IGNORECASE),
-    re.compile(r"\bdependency\b", re.IGNORECASE),
-    re.compile(r"\bmissing\b", re.IGNORECASE),
-    re.compile(r"\bcannot find\b", re.IGNORECASE),
+    re.compile(r"\b(?:missing|unresolved) dependenc(?:y|ies)\b", re.IGNORECASE),
+    re.compile(
+        r"\bmissing\s+(?:module|package|command|tool|binary|executable)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bcannot find\s+(?:module|package|command|tool|binary|executable|file)\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\bpackage not found\b", re.IGNORECASE),
 ]
 
