@@ -310,6 +310,20 @@ def _build_payload(
     return record
 
 
+def _verdict_tree_root() -> Path:
+    """Return the working tree a verdict attests to.
+
+    ``AET_WORKTREE`` is set by the orchestrator for every task session and
+    names the tree the work is in; ``telemetry.resolve_repo_root`` prefers
+    ``AET_REPO_ROOT``, the main checkout. Outside a task session the two
+    coincide and the fallback is correct.
+    """
+    worktree = os.environ.get("AET_WORKTREE")
+    if worktree:
+        return Path(worktree)
+    return Path(telemetry.resolve_repo_root())
+
+
 def _submit(args: argparse.Namespace) -> int:
     backend = create_backend(
         config_path=".agents/aet-config.json",
@@ -367,9 +381,14 @@ def _submit(args: argparse.Namespace) -> int:
             return _fail(f"evidence payload must be a JSON object ({evidence_file})")
 
     # Stamp tree_hash before validating so the skill writer contract (which
-    # does not require tree_hash) stays unchanged — ADR-025.
+    # does not require tree_hash) stays unchanged — ADR-025. The tree a verdict
+    # attests to is the one the work is in: under the orchestrator that is
+    # AET_WORKTREE, while AET_REPO_ROOT (which resolve_repo_root prefers) names
+    # the main checkout. The freshness reader hashes the worktree
+    # (orchestrator._qa_freshness_decision), so stamping the main checkout here
+    # compares two different trees.
     if "tree_hash" not in record:
-        root = telemetry.resolve_repo_root()
+        root = _verdict_tree_root()
         record = {**record, "tree_hash": evidence.verifier.working_tree_hash(str(root))}
 
     try:

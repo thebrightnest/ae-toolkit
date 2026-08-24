@@ -15,6 +15,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aet import verifier
 from aet.boundary import BoundaryResult
 from aet.identity import IdentityResult
 
@@ -242,6 +243,48 @@ class TestGateSubmit(unittest.TestCase):
             written = json.loads(dest.read_text(encoding="utf-8"))
             self.assertIn("tree_hash", written)
             self.assertNotEqual(written["tree_hash"], "")
+
+    def test_submit_stamps_the_worktree_not_the_main_checkout(self):
+        """A task session attests to the tree the work is in (AET_WORKTREE)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "qa.json"
+            main_checkout = tmp / "main"
+            worktree = tmp / "wt"
+            for repo, content in ((main_checkout, "main"), (worktree, "worktree")):
+                repo.mkdir()
+                subprocess.run(["git", "init", "-q", str(repo)], check=True)
+                (repo / "file.txt").write_text(content, encoding="utf-8")
+
+            record = _qa_payload()
+            del record["tree_hash"]
+            payload = self._write_payload(tmp, record)
+            env = {
+                "AET_EVIDENCE_PATH": str(dest),
+                "AET_REPO_ROOT": str(main_checkout),
+                "AET_WORKTREE": str(worktree),
+            }
+            with patch.dict(os.environ, env, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "qa",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+
+            self.assertEqual(rc, 0, err)
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(
+                written["tree_hash"], verifier.working_tree_hash(str(worktree))
+            )
+            self.assertNotEqual(
+                written["tree_hash"], verifier.working_tree_hash(str(main_checkout))
+            )
 
     def test_submit_preserves_explicit_tree_hash(self):
         """An explicit tree_hash supplied by the caller is not overwritten."""
