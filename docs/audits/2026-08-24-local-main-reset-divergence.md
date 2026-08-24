@@ -9,7 +9,9 @@ reset and the exact command that brings each one back.
 
 ## Preserved refs
 
-Nothing was deleted. Two local branches hold the discarded state:
+*Both branches were deleted on 2026-08-24 once every item below was replayed;
+the SHAs remain valid in the reflog for its expiry window.* Two local branches
+held the discarded state:
 
 | Ref | SHA | Contents |
 |---|---|---|

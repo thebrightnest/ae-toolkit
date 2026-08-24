@@ -1,7 +1,7 @@
 # Open items: reset replay, validation scoping, client-project findings
 
 *Compiled 2026-08-24 — every item verified against `main` at `7c94b248` (v1.10.0).
-Twelve items closed the same day; the closures are recorded under "Closed".*
+Thirteen items closed the same day; the closures are recorded under "Closed".*
 
 Three sources feed this register: the divergence record at
 `docs/audits/2026-08-24-local-main-reset-divergence.md`, which lists work
@@ -23,7 +23,6 @@ Ordering is by leverage. IDs are stable; the order is not.
 | OI-09 | Decide the direction for test-target selection | review F-2 | design |
 | OI-17 | `test_stall_killed_and_classified_timeout` is flaky and unfiled | review | S |
 | OI-18 | Scope `validate-skills.sh` to changed skills | review | S |
-| OI-19 | Delete the preserved reset branches | reset | one line |
 
 ## OI-05 — Settled siblings drop out of r-trace coverage
 
@@ -112,23 +111,6 @@ The script takes 5 s over all 20 skills on every `make validate`, the only
 structural gate above a second. Trigger-uniqueness and the repo-wide link check
 are inherently global, so scoping saves part of it at best. Lowest priority in
 this register.
-
-## OI-19 — Delete the preserved reset branches
-
-`backup/main-pre-sync` and `wip/main-sync-merge-20260824` hold the discarded
-state and are unpushed. Every claim on them is settled: OI-03, OI-08, OI-10,
-OI-11 and OI-15 are replayed, and `e011f9cf` — the last commit the record
-treated as superseded — contributed the `--show-toplevel` guard test its
-upstream fix never got.
-
-What remains on `backup/main-pre-sync` and not on `main` is upstream's own
-removals: the 250 files under `docs/plans/archive/`, retired by trp-05;
-`src/aet/backends/json_backend.py`, removed by owb-07; and the two test files
-covering those. Nothing there is unharvested.
-
-`.worktrees/owb-13-prd-integration-branch` outlives the branches and is removed
-with `git worktree remove`; removing it does not change what `aet` executes,
-which is a non-editable install of `~/.local/share/ae-toolkit/repo`.
 
 ## Closed 2026-08-24
 
@@ -275,6 +257,18 @@ longer exists; both now seed and read through the git-refs backend.
 
 The three divergence summaries in `docs/prds/open-work-board-prd.md` are
 additive and all three are kept, each with its own Deferred section.
+
+**OI-19 — Delete the preserved reset branches.** `backup/main-pre-sync`
+(`e011f9cf`) and `wip/main-sync-merge-20260824` (`4750bac9`) deleted, along with
+`owb-13-prd-integration-branch` (`7362ee51`) and its worktree. Every claim on
+them was replayed first; what they carried that `main` does not is upstream's
+own removals — the 250 files under `docs/plans/archive/` retired by trp-05,
+`src/aet/backends/json_backend.py` removed by owb-07, and the two test files
+covering those. All three SHAs are named in the divergence record and held by
+the reflog for its expiry window.
+
+The `dia-03-record-the-principle` and `owb-05-board-is-open-work` worktrees are
+unrelated to the reset and were left in place.
 
 ## Not open
 
