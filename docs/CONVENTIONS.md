@@ -36,14 +36,26 @@ module reads Markdown from the checkout outside `tests/`. Any new test that
 does so will fail the regression guard in `tests/test_change_scope.py`.
 
 For code changes, `make validate` asks `src/aet/change_scope.py` for the
-smallest safe set of pytest targets. `change_scope` keeps an explicit,
-path-prefix → test-dir mapping in `src/aet/change_scope.py:_PATH_TARGETS` and
-**fails toward the full suite**: any `conftest.py`, shared fixture, unmapped
-path, or undetermined diff returns `tests/` rather than risk a silent skip.
-The installer smoke test (`tests/installer/test_installer.py`) is included
-only when the installer surface (`scripts/install.sh` or `src/aet/cli/setup.py`)
-changed. Add a mapping entry when a new subsystem has a dedicated test
-directory; until then the safe fallback runs the whole suite.
+smallest safe set of pytest targets, and `change_scope` derives them from the
+source: `src/aet/test_deps.py` reads which test files reference which modules —
+by import or by the quoted-path idiom that feeds `SourceFileLoader` — and
+follows those references transitively, so a test driving an entry point counts
+for everything that entry point reaches. Nothing is hand-maintained, and no
+target is named that does not exist.
+
+Selection **fails toward the full suite**: any `conftest.py`, shared fixture,
+undetermined diff, or code path no test reaches returns `tests/` rather than
+risk a silent skip, and a change reaching most of the suite is reported as the
+full suite rather than as a long file list.
+
+The installer smoke test (`tests/installer/test_installer.py`) is included when
+`scripts/install.sh` changes, because the test names the script, and when
+`src/aet/cli/setup.py` changes, because `test_deps.BOUNDARY_EDGES` declares it.
+That declaration is for coverage crossing a boundary the source cannot show — a
+test driving a shell script that invokes the CLI exercises the Python behind it
+while naming neither the module nor anything that imports it. Entries need a
+reason; `tests/test_change_scope.py` fails when one names a file that moved, and
+when a source file no test reaches is not on the acknowledged list.
 
 ## Package-Deliverable Rules
 

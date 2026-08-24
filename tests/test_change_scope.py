@@ -12,9 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from aet import change_scope, telemetry
+from aet import change_scope, telemetry, test_deps
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+_REHEARSAL = "tests/orchestrator/test_single_pr_rehearsal.py"
 TESTS_DIR = REPO_ROOT / "tests"
 
 
@@ -197,23 +198,35 @@ class TestDecide:
 class TestTargetsAndTier:
     """Targeted validation scope derived from the change set, never the plan stage."""
 
-    def test_change_scope_maps_source_dir_to_targeted_test_dir(self):
-        assert change_scope.targets(["src/aet/queue.py"]) == ["tests/queue"]
+    def test_change_scope_selects_only_tests_that_reach_the_change(self):
+        selected = change_scope.targets(["src/aet/identity.py"])
+        assert "tests/test_identity.py" in selected
+        assert all(Path(REPO_ROOT / t).exists() for t in selected), selected
 
     def test_change_scope_falls_back_to_full_suite_on_conftest_or_shared_fixture(self):
         assert change_scope.targets(["tests/conftest.py"]) == ["tests/"]
         assert change_scope.targets(["tests/fixtures/skills-lint/legacy.md"]) == ["tests/"]
 
     def test_change_scope_emits_installer_target_only_when_installer_surface_changed(self):
-        assert change_scope.targets(["scripts/install.sh"]) == [
-            "tests/installer/test_installer.py"
-        ]
-        assert change_scope.targets(["src/aet/cli/setup.py"]) == [
-            "tests/installer/test_installer.py"
-        ]
+        """ADR-049 §2. The setup.py edge crosses a shell boundary the source
+        cannot show, so it is declared in ``test_deps.BOUNDARY_EDGES``."""
+        deps = test_deps.dependency_map(str(REPO_ROOT))
+        installer = "tests/installer/test_installer.py"
 
-    def test_change_scope_maps_identity_lens_to_unit_test(self):
-        assert change_scope.targets(["src/aet/identity.py"]) == ["tests/test_identity.py"]
+        assert installer in change_scope.targets(["scripts/install.sh"])
+        assert installer in deps.tests_for("src/aet/cli/setup.py")
+        assert installer not in deps.tests_for("src/aet/identity.py")
+        assert installer not in change_scope.targets(["src/aet/identity.py"])
+
+    def test_change_scope_never_names_a_path_pytest_cannot_collect(self):
+        """A phantom target makes pytest exit 4 and runs nothing.
+
+        The filename-derived mechanism this replaced appended its floor
+        unmapped-or-not, naming a non-existent file for 69 of 82 modules.
+        """
+        for module in test_deps.dependency_map(str(REPO_ROOT)).modules:
+            for target in change_scope.targets([module]):
+                assert (REPO_ROOT / target).exists(), f"{module} -> {target}"
 
     def test_change_scope_omits_installer_target_for_unrelated_change(self):
         assert "tests/installer/test_installer.py" not in change_scope.targets(
@@ -242,24 +255,39 @@ class TestTargetsAndTier:
             "src/aet/backends/factory.py",
         ],
     )
-    def test_rehearsal_trigger_prefix_adds_single_pr_rehearsal(self, path):
-        targets = change_scope.targets([path])
-        assert change_scope.REHEARSAL_TARGET in targets
-        # The mapped target for the changed file is still present.
-        assert change_scope._target_for(path) in targets
+    def test_single_pr_rehearsal_covers_the_integration_surface(self, path):
+        """ADR-049's rehearsal trigger, now a property rather than a list.
 
-    def test_rehearsal_trigger_is_additive_and_does_not_narrow(self):
-        targets = change_scope.targets(["src/aet/queue.py"])
-        assert change_scope.REHEARSAL_TARGET not in targets
-        assert targets == ["tests/queue"]
+        The four prefixes were named explicitly because a table cannot know
+        what a test exercises. The rehearsal reaches all four through the
+        import graph, so the trigger needs no separate declaration — and this
+        fails if the rehearsal ever stops covering one of them. Asserted on the
+        derivation rather than on ``targets``, which collapses a hub module's
+        selection to the whole suite.
+        """
+        deps = test_deps.dependency_map(str(REPO_ROOT))
+        assert _REHEARSAL in deps.tests_for(path)
 
-    def test_rehearsal_trigger_falls_back_to_full_suite_on_shared_fixture(self):
+    def test_selection_narrows_to_the_change(self):
+        assert _REHEARSAL not in change_scope.targets(["src/aet/identity.py"])
+
+    def test_shared_fixture_in_the_change_set_forces_the_full_suite(self):
         targets = change_scope.targets(["src/aet/integration_lock.py", "tests/conftest.py"])
         assert targets == ["tests/"]
 
-    def test_rehearsal_trigger_falls_back_to_full_suite_on_unmapped_path(self):
-        targets = change_scope.targets(["src/aet/integration_lock.py", "some/unrecognized/binary"])
+    def test_a_path_no_test_reaches_forces_the_full_suite(self):
+        targets = change_scope.targets(
+            ["src/aet/integration_lock.py", "some/unrecognized/binary"]
+        )
         assert targets == ["tests/"]
+
+    def test_root_config_changes_force_the_full_suite(self):
+        for path in ("pyproject.toml", "Makefile"):
+            assert change_scope.targets([path]) == ["tests/"], path
+
+    def test_a_hub_module_collapses_to_the_full_suite(self):
+        """Naming most of the suite one file at a time is the same run, spelled long."""
+        assert change_scope.targets(["src/aet/plan_parser.py"]) == ["tests/"]
 
 
 class TestResolvedTargetsMarker:
@@ -275,10 +303,12 @@ class TestResolvedTargetsMarker:
         return capsys.readouterr().out
 
     def test_change_scope_emits_resolved_targets_marker(self, monkeypatch, capsys):
-        out = self._explain(monkeypatch, capsys, ["src/aet/queue.py"])
-        assert f"{telemetry.TEST_SCOPE_MARKER_PREFIX} tests/queue" in out
+        selected = " ".join(change_scope.targets(["src/aet/identity.py"]))
+        out = self._explain(monkeypatch, capsys, ["src/aet/identity.py"])
+
+        assert f"{telemetry.TEST_SCOPE_MARKER_PREFIX} {selected}" in out
         # The operator-facing line survives alongside it.
-        assert "→ targeted tests: tests/queue" in out
+        assert f"→ targeted tests: {selected}" in out
 
     def test_marker_absent_for_prose_only_change(self, monkeypatch, capsys):
         out = self._explain(monkeypatch, capsys, ["README.md"])
@@ -292,66 +322,61 @@ class TestResolvedTargetsMarker:
         pytest run against a non-existent path, so the separation is pinned
         rather than left to the reader of ``main``.
         """
-        monkeypatch.setattr(change_scope, "changed_paths", lambda: ["src/aet/queue.py"])
+        monkeypatch.setattr(
+            change_scope, "changed_paths", lambda: ["src/aet/identity.py"]
+        )
+        expected = " ".join(change_scope.targets(["src/aet/identity.py"]))
         change_scope.main([])
-        assert capsys.readouterr().out == "tests/queue\n"
+        assert capsys.readouterr().out == f"{expected}\n"
 
 
-# Modules with no entry in ``_PATH_TARGETS``. Touching any of them runs the
-# whole suite, which is safe but slow. The set exists so that *new* unmapped
-# modules fail the guard below instead of silently joining this list — the
-# absence of such a check is why the list grew to fifteen unnoticed.
-#
-# Removing an entry is a deliberate decision per module: the mapped target must
-# actually cover that module, because a too-narrow mapping silently under-tests
-# it on every scoped run. ``__init__.py`` and ``cli_adapter.py`` are expected to
-# stay here; both are imported broadly enough that the full suite is the honest
-# target.
-_UNMAPPED_MODULES = {
-    "src/aet/__init__.py",
-    "src/aet/breaker.py",
-    "src/aet/cli_adapter.py",
-    "src/aet/context_digest.py",
-    "src/aet/docs_lint.py",
-    "src/aet/handoff.py",
-    "src/aet/harness_guard.py",
-    "src/aet/project_id.py",
-    "src/aet/risk.py",
-    "src/aet/session_log.py",
-    "src/aet/session_log_claude.py",
-    "src/aet/spec_backfill.py",
-    "src/aet/test_runners.py",
-    "src/aet/track_record.py",
-    "src/aet/triage.py",
-}
+# The acknowledged-uncovered list is data, not code: a path named in a Python
+# test file would read as coverage of that path to the deriver under test, and
+# the list would make itself true.
+_UNCOVERED_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "uncovered-source-files.txt"
 
 
-def _unmapped_source_files() -> set[str]:
-    """Every ``src/aet`` module with no ``_PATH_TARGETS`` prefix match."""
-    prefixes = [prefix for prefix, _target in change_scope._PATH_TARGETS]
-    unmapped = set()
-    for path in (REPO_ROOT / "src" / "aet").rglob("*.py"):
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        if not any(rel.startswith(prefix) for prefix in prefixes):
-            unmapped.add(rel)
-    return unmapped
+def _acknowledged_uncovered() -> set[str]:
+    """Source files recorded as reached by no test."""
+    lines = _UNCOVERED_FIXTURE.read_text(encoding="utf-8").splitlines()
+    return {
+        line.strip()
+        for line in lines
+        if line.strip() and not line.lstrip().startswith("#")
+    }
 
 
-class TestPathTargetsDrift:
-    """``_PATH_TARGETS`` is hand-maintained; nothing else notices it drifting."""
+def _uncovered_source_files() -> set[str]:
+    """Every source file that no test file reaches."""
+    deps = test_deps.dependency_map(str(REPO_ROOT))
+    return {path for path in deps.modules if not deps.tests_for(path)}
 
-    def test_new_modules_declare_a_test_target(self):
-        new = _unmapped_source_files() - _UNMAPPED_MODULES
+
+class TestCoverageDerivationDrift:
+    """Selection is derived, but "nothing reaches this" still needs a guard."""
+
+    def test_every_source_file_is_reached_by_some_test(self):
+        new = _uncovered_source_files() - _acknowledged_uncovered()
         assert not new, (
-            f"These modules have no _PATH_TARGETS mapping: {sorted(new)}. "
-            "Add a mapping to src/aet/change_scope.py so `make validate` runs "
-            "their tests on a scoped run, or add them to _UNMAPPED_MODULES "
-            "with a reason if the full suite really is the right target."
+            f"No test reaches these source files: {sorted(new)}. Add a test "
+            "that imports the module (or names the script), or add them to "
+            "tests/fixtures/uncovered-source-files.txt with a reason if the full suite really is the right "
+            "target."
         )
 
-    def test_unmapped_list_has_no_stale_entries(self):
-        stale = _UNMAPPED_MODULES - _unmapped_source_files()
+    def test_the_uncovered_list_has_no_stale_entries(self):
+        stale = _acknowledged_uncovered() - _uncovered_source_files()
         assert not stale, (
-            f"These modules are mapped now but still listed as unmapped: "
-            f"{sorted(stale)}. Remove them from _UNMAPPED_MODULES."
+            f"These source files are reached by tests now but still listed as "
+            f"uncovered: {sorted(stale)}. Remove them from tests/fixtures/uncovered-source-files.txt."
         )
+
+    def test_boundary_edges_name_real_files(self):
+        """A declared edge that names a moved file would silently stop working."""
+        deps = test_deps.dependency_map(str(REPO_ROOT))
+        known_tests = set(deps.test_files)
+        known_sources = set(deps.modules)
+        for source, tests in test_deps.BOUNDARY_EDGES.items():
+            assert source in known_sources, source
+            for test in tests:
+                assert test in known_tests, test

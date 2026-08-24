@@ -10,64 +10,18 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
-from aet import evidence, telemetry
+from aet import evidence, telemetry, test_deps
 
 FULL = "full"
 DOCS = "docs"
 
 BASE_REF = "origin/main"
 
-# Path-prefix → pytest target table. Longest prefix wins.
-_PATH_TARGETS: list[tuple[str, str]] = [
-    ("src/aet/backends/", "tests/backends"),
-    ("src/aet/cli/", "tests/cli"),
-    ("src/aet/panel/", "tests/panel"),
-    ("src/aet/projections/", "tests/projections"),
-    ("src/aet/failure.py", "tests/failure"),
-    ("src/aet/gate.py", "tests/gate"),
-    ("src/aet/evidence.py", "tests/gate"),
-    ("src/aet/ledger.py", "tests/ledger"),
-    ("src/aet/metrics.py", "tests/metrics"),
-    ("src/aet/queue.py", "tests/queue"),
-    ("src/aet/telemetry.py", "tests/telemetry"),
-    ("src/aet/usage.py", "tests/usage"),
-    ("src/aet/workflow.py", "tests/workflow"),
-    ("src/aet/worktree.py", "tests/worktree"),
-    ("src/aet/wirelog.py", "tests/wirelog"),
-    ("src/aet/plan_parser.py", "tests/plan"),
-    ("src/aet/plan_size.py", "tests/plan"),
-    ("src/aet/plan_validate.py", "tests/plan"),
-    ("src/aet/plans_lint.py", "tests/plan"),
-    ("src/aet/verifier.py", "tests/plan"),
-    ("src/aet/boundary.py", "tests/test_boundary.py"),
-    ("src/aet/identity.py", "tests/test_identity.py"),
-    ("src/aet/branch_ref.py", "tests/test_branch_ref.py"),
-    ("src/aet/change_scope.py", "tests/test_change_scope.py"),
-    ("src/aet/liveness.py", "tests/orchestrator/test_liveness.py"),
-    ("src/aet/validation.py", "tests/test_validation.py"),
-    ("src/aet/validation_cache.py", "tests/test_validation_cache.py"),
-    ("src/aet/cli/release_prep.py", "tests/test_release_prep.py"),
-    ("src/aet/cli/ship.py", "tests/ship"),
-    ("src/aet/cli/orchestrator.py", "tests/orchestrator"),
-    ("src/aet/integration_lock.py", "tests/orchestrator"),
-    ("scripts/install.sh", "tests/installer/test_installer.py"),
-    ("src/aet/cli/setup.py", "tests/installer/test_installer.py"),
-    ("scripts/", "tests/scripts"),
-]
-
-# Path prefixes that exercise the single-pr / non-trunk integration surface.
-# When the change set touches any of them, the rehearsal is added to the target
-# list so the production-shaped config path is exercised (ADR-049).
-REHEARSAL_TRIGGER_PREFIXES: frozenset[str] = frozenset(
-    {
-        "src/aet/cli/orchestrator.py",
-        "src/aet/integration_lock.py",
-        "src/aet/worktree.py",
-        "src/aet/backends/factory.py",
-    }
-)
-REHEARSAL_TARGET = "tests/orchestrator/test_single_pr_rehearsal.py"
+# A change set that selects at least this share of the suite is reported as the
+# full suite instead: the coverage is the same and the command line stays short.
+FULL_SUITE_SHARE = 0.5
 
 
 def is_code_path(path: str) -> bool:
@@ -96,16 +50,6 @@ def _is_shared_fixture(path: str) -> bool:
     if p.startswith("tests/fixtures/"):
         return True
     return False
-
-
-def _target_for(path: str) -> str | None:
-    """Return the pytest target for a single changed path, or ``None`` if unmapped."""
-    matches = [(prefix, target) for prefix, target in _PATH_TARGETS if path.startswith(prefix)]
-    if not matches:
-        return None
-    # Longest prefix wins.
-    matches.sort(key=lambda pair: len(pair[0]), reverse=True)
-    return matches[0][1]
 
 
 def _git(*args: str) -> str | None:
@@ -172,35 +116,49 @@ def tier(paths: list[str] | None) -> str:
     return evidence.LINT_ONLY
 
 
-def targets(paths: list[str] | None) -> list[str]:
+def targets(paths: list[str] | None, repo_root: str | Path | None = None) -> list[str]:
     """Map a change set to the smallest safe set of pytest targets.
 
     - ``None`` or an empty diff → ``["tests/"]`` (fail-safe).
     - Prose-only change → ``[]`` (the Makefile skips pytest).
-    - ``conftest.py``, shared fixtures, or an unmapped code path → ``["tests/"]``.
-    - Otherwise, the deduplicated, sorted target list from :data:`_PATH_TARGETS`,
-      plus the single-pr rehearsal when the change touches that surface.
+    - ``conftest.py`` or a shared fixture → ``["tests/"]``.
+    - A changed code path that no test reaches → ``["tests/"]``. Running
+      nothing for it would be the one unsafe answer.
+    - Otherwise the test files that reach the changed paths, collapsed to
+      ``["tests/"]`` once they are most of the suite.
+
+    Selection is derived from the source (:mod:`aet.test_deps`), not from a
+    table: the fact "this test covers that module" is written in the test file,
+    and a second copy of it in this module could only drift.
+
+    ``repo_root`` defaults to the resolved repository root, which is what the
+    ``make validate`` entry point wants; callers holding a root pass it.
     """
     if paths is None:
         return ["tests/"]
     code_paths = [p for p in paths if is_code_path(p)]
     if not code_paths:
         return []
-    rehearsal_triggered = any(
-        p.startswith(prefix)
-        for p in code_paths
-        for prefix in REHEARSAL_TRIGGER_PREFIXES
-    )
     if any(_is_shared_fixture(p) for p in code_paths):
         return ["tests/"]
-    mapped = [_target_for(p) for p in code_paths]
-    if None in mapped:
+
+    root = str(Path(repo_root).resolve()) if repo_root else str(telemetry.resolve_repo_root())
+    deps = test_deps.dependency_map(root)
+    selected: set[str] = set()
+    for path in code_paths:
+        if path.startswith("tests/"):
+            selected.add(path)
+            continue
+        reached = deps.tests_for(path)
+        if not reached:
+            return ["tests/"]
+        selected.update(reached)
+
+    if not selected:
         return ["tests/"]
-    result = sorted(set(mapped))
-    if rehearsal_triggered and REHEARSAL_TARGET not in result:
-        result.append(REHEARSAL_TARGET)
-        result.sort()
-    return result
+    if len(selected) >= len(deps.test_files) * FULL_SUITE_SHARE:
+        return ["tests/"]
+    return sorted(selected)
 
 
 def decide(paths: list[str] | None) -> str:

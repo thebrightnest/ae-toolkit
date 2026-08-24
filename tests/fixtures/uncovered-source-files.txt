@@ -1,0 +1,22 @@
+# Source files that no test file reaches. Touching one runs the whole suite,
+# which is safe but slow. The list exists so a *new* uncovered file fails the
+# guard in tests/test_change_scope.py instead of silently joining it.
+#
+# It lives here rather than in the test module because selection is derived
+# from the text of test files: a path named in a Python test would look to the
+# deriver like coverage of that path, and the list would make itself true.
+
+# One-shot migrations, kept for the record; their runs are done.
+scripts/archive/migrate-plan-archive.py
+scripts/archive/migrate-plans-to-frontmatter.py
+
+# Entry points exercised by hand, or by the gate rather than by pytest.
+scripts/check-editable-install.py
+scripts/hooks/pre-commit
+scripts/prevent-release-on-feature-branch.sh
+scripts/test-build-system.sh
+scripts/test-hooks.sh
+scripts/test-merge-verified-removed.sh
+scripts/test-panel-live-runs.mjs
+scripts/test-panel-plan-detail.mjs
+scripts/test-pqg-01.sh

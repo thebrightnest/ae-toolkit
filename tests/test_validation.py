@@ -9,9 +9,25 @@ from aet import validation
 
 
 class TestSelectTargetedTests:
-    """Path-based floor: same-directory or matching-name test files."""
+    """The stage-session entry point onto the one selection authority."""
+
+    def test_it_delegates_to_change_scope(self, monkeypatch):
+        """One authority: a stage session and `make validate` cannot disagree."""
+        seen = {}
+
+        def fake(paths, repo_root=None):
+            seen["paths"] = paths
+            return ["tests/sentinel.py"]
+
+        monkeypatch.setattr(validation.change_scope, "targets", fake)
+
+        assert validation.select_targeted_tests(["src/aet/identity.py"]) == [
+            "tests/sentinel.py"
+        ]
+        assert seen["paths"] == ["src/aet/identity.py"]
 
     def test_empty_change_set_falls_back_to_full_suite(self):
+        """From this caller an empty list means "undetermined", not "nothing"."""
         assert validation.select_targeted_tests([]) == ["tests/"]
 
     def test_shared_infrastructure_runs_full_suite(self):
@@ -28,69 +44,23 @@ class TestSelectTargetedTests:
             "tests/test_foo.py"
         ]
 
-    def test_changed_source_file_matches_same_directory_test(self, tmp_path: Path):
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "src" / "aet").mkdir(parents=True)
-        (repo / "src" / "aet" / "foo.py").write_text("x")
-        (repo / "tests").mkdir()
-        (repo / "tests" / "test_foo.py").write_text("x")
+    def test_prose_only_change_runs_nothing(self):
+        assert validation.select_targeted_tests(["README.md"]) == []
 
-        assert validation.select_targeted_tests(
-            ["src/aet/foo.py"], repo_root=str(repo)
-        ) == ["tests/test_foo.py"]
-
-    def test_changed_source_file_matches_name_anywhere_under_tests(self, tmp_path: Path):
-        repo = tmp_path / "repo"
-        (repo / "src" / "aet").mkdir(parents=True)
-        (repo / "src" / "aet" / "foo.py").write_text("x")
-        (repo / "tests" / "cli").mkdir(parents=True)
-        (repo / "tests" / "cli" / "test_foo.py").write_text("x")
+    def test_a_real_module_selects_only_tests_that_exist(self):
+        """The rule this replaced named a non-existent file for 69 of 82 modules."""
+        repo_root = Path(__file__).resolve().parents[1]
 
         targets = validation.select_targeted_tests(
-            ["src/aet/foo.py"], repo_root=str(repo)
+            ["src/aet/identity.py"], repo_root=repo_root
         )
-        assert "tests/cli/test_foo.py" in targets
 
-    def test_changed_source_in_subdirectory_matches_same_directory_test(self, tmp_path: Path):
-        repo = tmp_path / "repo"
-        (repo / "src" / "aet" / "cli").mkdir(parents=True)
-        (repo / "src" / "aet" / "cli" / "bar.py").write_text("x")
-        (repo / "tests" / "cli").mkdir(parents=True)
-        (repo / "tests" / "cli" / "test_bar.py").write_text("x")
+        assert targets and targets != ["tests/"]
+        for target in targets:
+            assert (repo_root / target).exists(), target
 
-        assert validation.select_targeted_tests(
-            ["src/aet/cli/bar.py"], repo_root=str(repo)
-        ) == ["tests/cli/test_bar.py"]
-
-    def test_unmapped_path_outside_src_falls_back_to_full_suite(self):
-        assert validation.select_targeted_tests(["README.md"]) == ["tests/"]
+    def test_an_unreachable_source_path_falls_back_to_full_suite(self):
         assert validation.select_targeted_tests(["scripts/unknown.sh"]) == ["tests/"]
-
-    def test_deduplicates_and_sorts_targets(self, tmp_path: Path):
-        repo = tmp_path / "repo"
-        (repo / "src" / "aet").mkdir(parents=True)
-        (repo / "src" / "aet" / "foo.py").write_text("x")
-        (repo / "src" / "aet" / "bar.py").write_text("x")
-        (repo / "tests").mkdir()
-        (repo / "tests" / "test_bar.py").write_text("x")
-        (repo / "tests" / "test_foo.py").write_text("x")
-
-        assert validation.select_targeted_tests(
-            ["src/aet/foo.py", "src/aet/bar.py"], repo_root=str(repo)
-        ) == ["tests/test_bar.py", "tests/test_foo.py"]
-
-
-class TestIsSharedPath:
-    def test_known_shared_paths(self):
-        assert validation._is_shared("pyproject.toml")
-        assert validation._is_shared("Makefile")
-        assert validation._is_shared("tests/conftest.py")
-        assert validation._is_shared("tests/fixtures/skills-lint/legacy.md")
-
-    def test_regular_paths_are_not_shared(self):
-        assert not validation._is_shared("src/aet/foo.py")
-        assert not validation._is_shared("tests/test_foo.py")
 
 
 class TestTargetedTestsPath:
