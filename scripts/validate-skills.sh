@@ -99,25 +99,41 @@ done
 echo
 echo "=== Trigger Uniqueness Check ==="
 
+# One python pass rather than a sed/grep/tr/sed chain per skill and per phrase.
+# The bash form spawned upwards of a hundred processes to read twenty short
+# frontmatter lines. Output format, normalization and skip rules are unchanged:
+# quoted phrases only, lowercased, one trailing punctuation mark stripped,
+# longer than two characters.
 TRIGGER_TMP=$(mktemp)
-for skill_dir in ${SKILL_DIRS[@]+"${SKILL_DIRS[@]}"}; do
-  name="$(basename "${skill_dir%/}")"
-  skill_file="${skill_dir}SKILL.md"
-  frontmatter_desc=$(sed -n '/^---$/,/^---$/p' "$skill_file" | grep -m1 '^description:' | sed 's/^description: *//') || true
-  if [ -z "$frontmatter_desc" ]; then
-    continue
-  fi
-  # Extract quoted strings from description
-  phrases=$(echo "$frontmatter_desc" | grep -oE '"[^"]+"' | tr -d '"' || true)
-  while IFS= read -r phrase; do
-    [ -z "$phrase" ] && continue
-    # Normalize: lowercase, strip trailing punctuation
-    norm=$(echo "$phrase" | tr '[:upper:]' '[:lower:]' | sed 's/[.,;:!?]$//')
-    if [ -n "$norm" ] && [ ${#norm} -gt 2 ]; then
-      echo "$norm|$name"
-    fi
-  done <<< "$phrases"
-done > "$TRIGGER_TMP"
+python3 - "$TRIGGER_TMP" ${SKILL_DIRS[@]+"${SKILL_DIRS[@]}"} <<'PYEOF'
+import re
+import sys
+
+out_path, skill_dirs = sys.argv[1], sys.argv[2:]
+desc_re = re.compile(r"^description:[ \t]*(.*)$", re.MULTILINE)
+quoted_re = re.compile(r'"([^"]+)"')
+
+rows = []
+for skill_dir in skill_dirs:
+    name = skill_dir.rstrip("/").rsplit("/", 1)[-1]
+    try:
+        text = open(f"{skill_dir}SKILL.md", encoding="utf-8", errors="replace").read()
+    except OSError:
+        continue
+    # The description is a frontmatter field: only the leading block counts.
+    parts = text.split("---", 2)
+    frontmatter = parts[1] if len(parts) > 2 and text.lstrip().startswith("---") else text
+    match = desc_re.search(frontmatter)
+    if not match:
+        continue
+    for phrase in quoted_re.findall(match.group(1)):
+        norm = phrase.lower().rstrip(".,;:!?")
+        if len(norm) > 2:
+            rows.append(f"{norm}|{name}")
+
+with open(out_path, "w", encoding="utf-8") as fh:
+    fh.write("".join(row + "\n" for row in rows))
+PYEOF
 
 TRIGGER_COLLISIONS=$(sort "$TRIGGER_TMP" | cut -d'|' -f1 | uniq -d)
 if [ -n "$TRIGGER_COLLISIONS" ]; then
