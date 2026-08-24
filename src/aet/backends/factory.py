@@ -140,7 +140,10 @@ def create_backend(
         )
     posture = SHARED_POSTURE if source == "project" else SHADOW_POSTURE
     return GitRefsBackend(
-        queue_file=queue_file, history_file=history_file, posture=posture
+        queue_file=queue_file,
+        history_file=history_file,
+        repo_root=queue_root,
+        posture=posture,
     )
 
 

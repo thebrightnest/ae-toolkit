@@ -80,17 +80,25 @@ class GitRefsBackend(TaskBackend):
         self,
         queue_file: str = ".agents/aet-queue",
         history_file: str = ".agents/work-history.jsonl",
+        repo_root: str | None = None,
         posture: str = SHARED_POSTURE,
     ) -> None:
         self.queue_file = queue_file
         self.history_file = history_file
         self.posture = posture
-        queue_dir = Path(queue_file).resolve().parent
-        # The queue path need not exist yet; walk up to the nearest existing
-        # ancestor so discovery still works for freshly-created repos.
-        while not queue_dir.is_dir() and queue_dir != queue_dir.parent:
-            queue_dir = queue_dir.parent
-        self.repo_root = self._discover_repo_root(queue_dir)
+        # ``repo_root`` is the root ``create_backend`` already derived from the
+        # queue file's own location, in pure Python. Accepting it keeps the
+        # store anchored to the same repository as the config that selected
+        # this backend, and spends no subprocess recomputing a value the caller
+        # holds. Discovery stays as the fallback for direct construction.
+        if repo_root is None:
+            queue_dir = Path(queue_file).resolve().parent
+            # The queue path need not exist yet; walk up to the nearest existing
+            # ancestor so discovery still works for freshly-created repos.
+            while not queue_dir.is_dir() and queue_dir != queue_dir.parent:
+                queue_dir = queue_dir.parent
+            repo_root = self._discover_repo_root(queue_dir)
+        self.repo_root = repo_root
         # Blob SHAs observed at the most recent ``load`` (or last successful
         # ``save``), keyed by task id. Drives the skip-unchanged optimization and
         # the compare-and-swap ``update-ref`` that makes disjoint concurrent

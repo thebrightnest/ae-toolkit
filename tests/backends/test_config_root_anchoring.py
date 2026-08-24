@@ -110,3 +110,69 @@ def test_root_discovery_returns_none_outside_a_repository(tmp_path):
     outside.mkdir()
 
     assert queue_repo_root(str(outside / "q.json")) is None
+
+
+def test_backend_construction_does_not_rediscover_the_root(tmp_path, monkeypatch):
+    """The factory holds the root already; construction must not recompute it.
+
+    ``create_backend`` derives ``queue_root`` in pure Python and anchors both
+    config resolution and the out-of-repo refusal to it. Re-deriving the same
+    value in ``GitRefsBackend.__init__`` spent a ``git rev-parse
+    --show-toplevel`` on every backend construction.
+
+    Scoped to that one call rather than to git as a whole: config resolution
+    reaches ``derive_config_slug``, which still runs ``git rev-parse
+    --git-common-dir``, so construction is not subprocess-free.
+    """
+    repo = _repo(tmp_path / "repo")
+    queue = repo / ".agents" / "aet-queue"
+    queue.write_text("[]", encoding="utf-8")
+
+    calls: list[list[str]] = []
+    real_run = subprocess.run
+
+    def recording_run(cmd, *args, **kwargs):
+        calls.append(list(cmd) if isinstance(cmd, (list, tuple)) else [str(cmd)])
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", recording_run)
+    backend = create_backend(
+        queue_file=str(queue), history_file=str(repo / ".agents" / "h.jsonl")
+    )
+
+    assert backend.repo_root == str(repo)
+    assert not [c for c in calls if "--show-toplevel" in c], (
+        f"backend construction re-discovered the root: {calls}"
+    )
+
+
+def test_direct_construction_still_discovers_its_own_root(tmp_path, monkeypatch):
+    """Discovery stays the fallback for callers that hold no root."""
+    repo = _repo(tmp_path / "repo")
+    queue = repo / ".agents" / "aet-queue"
+    queue.write_text("[]", encoding="utf-8")
+
+    backend = GitRefsBackend(queue_file=str(queue))
+
+    assert backend.repo_root == str(repo)
+
+
+@pytest.mark.xdist_group("cwd")
+def test_subdirectory_invocation_roots_the_store_at_the_repository(
+    tmp_path, monkeypatch
+):
+    """The store follows the config's root, not the process cwd."""
+    repo = _repo(tmp_path / "repo", config={})
+    (repo / ".agents" / "aet-queue").write_text("[]", encoding="utf-8")
+    nested = repo / "a" / "b" / "c"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    backend = create_backend(
+        config_path=".agents/aet-config.json",
+        queue_file=".agents/aet-queue",
+        history_file=".agents/work-history.jsonl",
+    )
+
+    assert isinstance(backend, GitRefsBackend)
+    assert backend.repo_root == str(repo)
