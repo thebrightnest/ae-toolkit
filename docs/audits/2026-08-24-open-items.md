@@ -1,7 +1,8 @@
-# Open items: reset replay, validation scoping, client-project findings
+# Open items register: reset replay, validation scoping, client-project findings
 
 *Compiled 2026-08-24 — every item verified against `main` at `7c94b248` (v1.10.0).
-Fifteen items closed the same day; the closures are recorded under "Closed".*
+All nineteen items closed the same day; the closures are recorded under
+"Closed".*
 
 Three sources feed this register: the divergence record at
 `docs/audits/2026-08-24-local-main-reset-divergence.md`, which lists work
@@ -11,59 +12,12 @@ already resolved when those documents were written are listed under "Not open";
 items closed against this register are listed under "Closed 2026-08-24". Both
 carry the evidence that closed them.
 
-Ordering is by leverage. IDs are stable; the order is not.
+Ordering was by leverage. IDs are stable and are not reused.
 
 ## Summary
 
-| ID | Item | Source | Size |
-|---|---|---|---|
-| OI-06 | `run-one` skips the intake validation `sprint add` enforces | client 1 | M |
-| OI-07 | No failure class for "retry cannot succeed yet" | client 8 | S |
-| OI-17 | `test_stall_killed_and_classified_timeout` is flaky and unfiled | review | S |
-| OI-18 | Scope `validate-skills.sh` to changed skills | review | S |
-
-## OI-06 — `run-one` skips the intake validation `sprint add` enforces
-
-`sprint add` refuses a plan that fails intake validation
-(`src/aet/cli/sprint.py:168`, `:175`). `plan_validate` appears nowhere in
-`src/aet/cli/orchestrator.py`, and `run-one` records its task in the queue on
-completion (`:3603`). A plan `sprint add` refuses runs through `run-one`, and the
-resulting queue entry is indistinguishable from a validated one.
-
-Two properties follow: intake quality is advisory while presenting as mandatory,
-and the audit trail cannot answer whether a queued task passed intake. Either
-`run-one` applies the same validation with an explicit recorded `--skip-intake`,
-or `_record_run_one_in_queue` marks the task intake-unvalidated.
-
-## OI-07 — No failure class for "retry cannot succeed yet"
-
-`FailureClass` (`src/aet/failure.py:10-17`) offers `environment`, `flaky`,
-`design`, `timeout` and `canceled`. No pattern in `_ENVIRONMENT_PATTERNS`
-(`:23-47`) matches a rate limit, quota or session limit, so an API 429 with a
-non-zero exit falls through to `FLAKY` at `:91` and is requeued. Nothing about a
-session limit is transient within the retry interval.
-
-The unbounded cycling recorded in the client project is now capped: signatures
-normalise timestamps, hex and paths (`:116-143`), and
-`breaker.should_quarantine_task` with a threshold of 3 is consulted at
-`src/aet/cli/orchestrator.py:2850`. Three wasted attempts and a quarantine
-replace 185 attempts. The classification is still wrong, and a class whose
-remedy is "wait for the window" has no representation.
-
-## OI-17 — `test_stall_killed_and_classified_timeout` is flaky and unfiled
-
-`tests/orchestrator/test_nightshift_rehearsal.py:325`. Measured at roughly
-13–27% failure across two arms of a 30-run comparison in August 2026; last
-touched by `6bc5367f` (osd-02), which addressed signal-exit classification
-rather than the flake. It passed in the 2026-08-24 full-suite run. No bug
-document exists for it.
-
-## OI-18 — Scope `validate-skills.sh` to changed skills
-
-The script takes 5 s over all 20 skills on every `make validate`, the only
-structural gate above a second. Trigger-uniqueness and the repo-wide link check
-are inherently global, so scoping saves part of it at best. Lowest priority in
-this register.
+No open items. All nineteen are closed; each closure names what the code now
+does and the test that holds it there.
 
 ## Closed 2026-08-24
 
@@ -288,6 +242,56 @@ when a source file no test reaches is unacknowledged, and when an acknowledged
 file gains coverage. The `make test-affected` target OI-09 left deferred is now
 trivial — `changed_paths` and `targets` are already separate — but nothing has
 asked for it.
+
+**OI-06 — `run-one` skips the intake validation `sprint add` enforces.**
+`run-one` runs the same suite over the same corpus with the same
+record-sourced coverage and the same ack escape hatch, and refuses on an
+unacked finding (`src/aet/cli/orchestrator.py:_intake_findings`).
+`--skip-intake` runs anyway and records the bypassed check ids as
+`intake_skipped` on the task record; an empty bypass leaves the field off, so
+its presence means exactly one thing. A batch child is not re-judged: its task
+passed intake on the way in, and re-judging mid-flight would fail a run for a
+PRD edited after promotion. Held by
+`tests/orchestrator/test_run_one_intake_gate.py`.
+
+The item's premise was half right. There was no queue entry to be
+indistinguishable from a validated one — `_find_queued_task` only ever finds
+tasks already on the board, so a refused plan ran as a synthetic task with no
+entry at all. The defect was the execution, not the record.
+
+**OI-07 — No failure class for "retry cannot succeed yet".** `throttled` is the
+sixth class, added by ADR-065 amending ADR-030's fixed menu. Its patterns are
+qualified the way `_ENVIRONMENT_PATTERNS` documents — a bare `rate limit`
+matches a pytest line for `test_rate_limit_handling` — and it is checked ahead
+of `environment` because a 429 body often carries an auth word too. A throttle
+is not breaker evidence, the task is requeued, and the shift stops spawning:
+the limited resource is shared, so the next task meets the same wall. This
+overrides `--on-failure continue`, which would otherwise burn the queue on one
+limit. No triage session is spent on an answer already known.
+
+**OI-17 — `test_stall_killed_and_classified_timeout` is flaky and unfiled.**
+Filed at `docs/bugs/20260824-nightshift-stall-timeout-flake.md`, and not
+reproduced: 0 failures in 25 isolated runs, 0 in 12 under four-way parallel
+load, 0 across 8 full-suite runs. `6bc5367f` (osd-02) made a signal exit
+classify as timeout — the assertion's own subject — and is the likeliest reason
+the August measurement no longer holds. The writeup names three candidate
+mechanisms with anchors; the first is that every branch tests `exit_code < 0`,
+and a shell in the path turns `-9` into `137`. The assertions now carry the
+whole signature list, which the diagnosis needs and the last entry did not give.
+
+**OI-18 — Scope `validate-skills.sh` to changed skills.** Rejected as written,
+on measurement. The script takes 2.17 s, not 5 s, and divides as: structure
+loop 0.79 s, trigger uniqueness 0.77 s, next-step consistency 0.25 s, internal
+links 0.29 s. Scoping cannot touch trigger uniqueness or the link check — both
+are inherently global — so it addresses at most half the cost while making a
+structural gate depend on the diff.
+
+The cost is process spawning: roughly thirteen `grep`/`sed`/`tr` invocations per
+skill across the two loops, plus two per trigger phrase. The trigger loop is now
+one python pass, 0.77 s to 0.27 s, most of the remainder being interpreter
+startup through a pyenv shim. The structure loop is left at 0.79 s deliberately:
+collapsing it means rewriting seventy lines of checks, which is not worth 0.7 s
+against a 170 s suite.
 
 ## Not open
 
