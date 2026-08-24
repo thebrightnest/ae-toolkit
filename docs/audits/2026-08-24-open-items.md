@@ -1,7 +1,7 @@
 # Open items: reset replay, validation scoping, client-project findings
 
 *Compiled 2026-08-24 — every item verified against `main` at `7c94b248` (v1.10.0).
-Thirteen items closed the same day; the closures are recorded under "Closed".*
+Fifteen items closed the same day; the closures are recorded under "Closed".*
 
 Three sources feed this register: the divergence record at
 `docs/audits/2026-08-24-local-main-reset-divergence.md`, which lists work
@@ -17,34 +17,10 @@ Ordering is by leverage. IDs are stable; the order is not.
 
 | ID | Item | Source | Size |
 |---|---|---|---|
-| OI-05 | Settled siblings drop out of r-trace coverage | client 2 | design |
 | OI-06 | `run-one` skips the intake validation `sprint add` enforces | client 1 | M |
 | OI-07 | No failure class for "retry cannot succeed yet" | client 8 | S |
-| OI-09 | Decide the direction for test-target selection | review F-2 | design |
 | OI-17 | `test_stall_killed_and_classified_timeout` is flaky and unfiled | review | S |
 | OI-18 | Scope `validate-skills.sh` to changed skills | review | S |
-
-## OI-05 — Settled siblings drop out of r-trace coverage
-
-`src/aet/plan_validate.py:393-394` builds the coverage union from a
-non-recursive `plans_dir.glob("*.md")` filtered by `plan_parser.is_settled_plan`.
-A plan whose footer reads `Stage: merged` is settled, and `docs/plans/archive/`
-falls outside the glob, so a merged plan is invisible twice over. For a PRD whose
-siblings have all merged, a new plan is judged against its own traces alone and
-intake demands it trace every requirement the PRD declares — 30 findings for a
-plan legitimately delivering 6 of 38, in the reported case. Staging the archived
-siblings back into `docs/plans/` does not help, because the staged copies are
-settled.
-
-The pressure this creates is to annotate requirements a plan does not deliver,
-which falsifies the check's own input. No live plan covers it:
-`docs/prds/the-record-is-the-plan-prd.md` (R-1 through R-10) addresses
-post-intake consumers, ship resolution, metrics and archive retirement, and
-never touches r-trace.
-
-Three candidate directions: credit coverage from settled plans, scope the
-requirement set per plan rather than per PRD, or emit a distinct finding class
-for "covered by a settled sibling" that does not block promotion.
 
 ## OI-06 — `run-one` skips the intake validation `sprint add` enforces
 
@@ -73,29 +49,6 @@ normalise timestamps, hex and paths (`:116-143`), and
 `src/aet/cli/orchestrator.py:2850`. Three wasted attempts and a quarantine
 replace 185 attempts. The classification is still wrong, and a class whose
 remedy is "wait for the window" has no representation.
-
-## OI-09 — Decide the direction for test-target selection
-
-Two mechanisms select pytest targets and neither references the other.
-`change_scope.targets` reads the hand-maintained `_PATH_TARGETS`
-(`src/aet/change_scope.py:22-54`) over the whole branch diff against
-`origin/main` (`:140-146`), and drives `make validate`.
-`validation.select_targeted_tests` (`src/aet/validation.py:84-98`) derives
-targets from a caller-supplied changed-file list by same-directory and
-matching-name lookup, needs no table, and drives `aet-implement`
-(`skills/aet-implement/SKILL.md:125`). Both fail safe to `["tests/"]`.
-`validation.py` is itself one of the three unmapped modules in OI-08.
-
-The scoped-validation review's recommendation was to hand-map the fifteen
-unmapped modules. That predates the derived mechanism. Two of its candidate
-mappings are unsupported: `src/aet/risk.py` and the root-level
-`src/aet/harness_guard.py` have no importing tests.
-
-The open question the review left — whether `change_scope` should offer a
-working-tree-only mode for mid-branch iteration — is partly answered:
-`select_targeted_tests` is that mode, reached through a different caller and not
-wired into `make`. A `make test-affected` target stays deferred until the two
-mechanisms are reconciled.
 
 ## OI-17 — `test_stall_killed_and_classified_timeout` is flaky and unfiled
 
@@ -269,6 +222,72 @@ the reflog for its expiry window.
 
 The `dia-03-record-the-principle` and `owb-05-board-is-open-work` worktrees are
 unrelated to the reset and were left in place.
+
+**OI-05 — Settled siblings drop out of r-trace coverage.** Coverage is read
+from the task record. `plan_validate.record_coverage` maps each record's
+`spec.tasks` traces onto the PRD its `spec.body` references;
+`coverage_from_backend` sources the records from the live board plus the sealed
+tombstones, which are written in every posture and pushed, unlike the history
+JSONL — 9 history records against 29 tombstones in this repository.
+`plan_validate` receives the result as `extra_coverage` and gains no backend
+dependency; `aet plan validate` and `sprint add` supply it, sharing one repo
+root because the PRD paths are dict keys.
+
+ADR-061 places `plan validate` in phase 1 and has it glob `docs/plans/*.md`.
+That holds for the structural checks, which ask whether a file parses. It does
+not hold for coverage, which asks what the whole decomposition has delivered
+over time, and the record is the only place that answer lives. The carve-out is
+narrowed to the checks it fits.
+
+Records carrying no spec are named rather than skipped (ADR-059), and a store
+that cannot be read degrades to empty coverage with the reason printed. In this
+repository the corpus run drops from 49 findings across 6 plans to 26 across 5,
+and names the one pre-R-19 record whose coverage cannot be counted.
+
+Three premises of the item as written were stale. `docs/plans/archive/` no
+longer exists — trp-05 retired it — so nothing falls outside the glob. Nothing
+writes a terminal `*Stage:*` footer any more, so `is_settled_plan` returns False
+for every file on disk and the filter the item blamed is a no-op; the real
+settled signal is `refs/aet/sealed/<id>`. And staging archived siblings back in
+would not have failed for the reason given: the files are gitignored and mostly
+absent, not filtered.
+
+**OI-09 — Decide the direction for test-target selection.** Derivation is
+authoritative and the table is deleted. `aet.test_deps` reads which test files
+reference which source files — imports, plus the quoted-path idiom that feeds
+`SourceFileLoader` in 68 of 161 test files — and follows those references
+transitively, so a test driving an entry point counts for what the entry point
+reaches. `change_scope.targets` selects from it and
+`validation.select_targeted_tests` delegates, so ADR-049's single authority has
+a single implementation.
+
+The measurement that settled the direction: the filename rule named a
+non-existent test file for 69 of the 82 modules under `src/aet` and fell back
+to the full suite for none, because the same-directory floor was appended
+without an existence check and the phantom kept the list non-empty. `pytest`
+exits 4 on such a path. Every test for that rule built a synthetic repo in which
+the matching file existed.
+
+Import derivation is also more accurate than the table it replaces: no phantom
+targets, every source file reached by some test, 74 of 83 files selecting under
+half the suite, median 32 of 162, built in 0.4 s. `src/aet/liveness.py` was
+mapped to one test file while 46 tests reach it. Hub modules now select most of
+the suite — the honest answer for a hub — and anything at or above half is
+reported as `tests/`.
+
+Two things derivation cannot see, handled rather than lost. Coverage crossing a
+shell boundary is declared in `test_deps.BOUNDARY_EDGES`, whose one entry is
+ADR-049 §2's `src/aet/cli/setup.py` → installer edge. And a test naming paths
+as data is textually indistinguishable from one exercising them, so the
+acknowledged-uncovered list lives in
+`tests/fixtures/uncovered-source-files.txt`: in a Python test module it would
+have made itself true.
+
+The OI-08 drift guard is replaced in kind. `TestCoverageDerivationDrift` fails
+when a source file no test reaches is unacknowledged, and when an acknowledged
+file gains coverage. The `make test-affected` target OI-09 left deferred is now
+trivial — `changed_paths` and `targets` are already separate — but nothing has
+asked for it.
 
 ## Not open
 
