@@ -963,6 +963,15 @@ class TestGateDispatcherRouting(unittest.TestCase):
                 # repository and appends to its provenance ledger.
                 "AET_LEDGER_PATH": str(tmp / "ledger.jsonl"),
             }
+            # The queue path `gate submit` builds is relative, so it anchors on
+            # the child's cwd. Running the child in the real checkout resolves
+            # its git-refs backend and fetches `refs/aet/*` from its remote —
+            # conftest's _no_real_remote guard patches a module attribute and
+            # cannot cross a process boundary. A remote-less tmpdir repository
+            # anchors the queue somewhere harmless.
+            child_repo = tmp / "child-repo"
+            (child_repo / ".agents").mkdir(parents=True)
+            subprocess.run(["git", "init", "-q", str(child_repo)], check=True)
             result = subprocess.run(
                 [
                     sys.executable,
@@ -979,6 +988,7 @@ class TestGateDispatcherRouting(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 env=env,
+                cwd=str(child_repo),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(dest.is_file(), result.stderr)
