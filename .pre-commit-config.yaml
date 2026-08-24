@@ -20,8 +20,6 @@ repos:
     rev: v0.15.12
     hooks:
       - id: ruff
-        args: ["."]
-        pass_filenames: false
 
   - repo: local
     hooks:
