@@ -336,3 +336,25 @@ class TestMergeSuccess:
         # The merged transition must still be recorded by aet-state record-merge,
         # proving desk merge did not introduce a second closure writer.
         assert transition_entry["by"] == "record-merge"
+
+
+def test_merge_runner_answers_show_toplevel_with_a_path():
+    """``--show-toplevel`` must answer with a path, not a commit SHA.
+
+    ``monkeypatch.setattr(desk.subprocess, "run", ...)`` replaces
+    ``subprocess.run`` process-wide, so ``aet.ledger``'s own root discovery
+    reads this mock too. Answering ``--show-toplevel`` with a SHA made the
+    ledger resolve a relative root and write
+    ``<repo>/abc123def456/.agents/ledger.jsonl`` into the real checkout.
+    """
+    runner = _merge_subprocess_runner(cwd="/tmp/merge-runner-probe")
+
+    toplevel = runner(["git", "rev-parse", "--show-toplevel"]).stdout.strip()
+    assert Path(toplevel).is_absolute(), (
+        f"--show-toplevel returned {toplevel!r}; a relative value makes the "
+        "ledger write into whatever directory the suite happens to run from"
+    )
+    assert toplevel == "/tmp/merge-runner-probe"
+
+    # The SHA-returning form is unchanged; the merge tests assert on it.
+    assert runner(["git", "rev-parse", "HEAD"]).stdout.strip() == "abc123def456"
