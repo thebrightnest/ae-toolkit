@@ -261,25 +261,43 @@ def record_coverage(
 
 
 def coverage_from_backend(backend: Any, repo_root: Path | None) -> RecordCoverage:
-    """Read r-trace coverage from a task backend's live and sealed records.
+    """Read r-trace coverage from a task backend's live and settled records.
 
     Sealed tombstones (``refs/aet/sealed/<id>``) are the complete, pushed
     source: they are written in every posture, unlike the history JSONL, which
-    shadow posture does not write. A store that cannot be read yields empty
-    coverage and a named reason rather than raising — validation must still
-    run without a reachable store, it just credits fewer siblings, and the
-    caller says so instead of reporting the shortfall as the plan's fault.
+    shadow posture does not write. They are a git-refs capability rather than
+    part of the backend interface, so a backend without them contributes what
+    its history log holds and says the source was partial.
+
+    A store that cannot be read yields empty coverage and a named reason rather
+    than raising — validation must still run without a reachable store, it just
+    credits fewer siblings, and the caller says so instead of reporting the
+    shortfall as the plan's fault.
     """
     records: list[dict[str, Any]] = []
+    settled_ids = getattr(backend, "settled_ids", None)
+    read_sealed = getattr(backend, "read_sealed", None)
+    partial = ""
     try:
-        records.extend(backend.load(verify=False)["queue"])
-        for task_id in sorted(backend.settled_ids()):
-            record = backend.read_sealed(task_id)
-            if record is not None:
-                records.append(record)
+        data = backend.load()
+        records.extend(data.get("queue", []))
+        if callable(settled_ids) and callable(read_sealed):
+            for task_id in sorted(settled_ids()):
+                record = read_sealed(task_id)
+                if record is not None:
+                    records.append(record)
+        else:
+            records.extend(data.get("history", []))
+            partial = (
+                f"{type(backend).__name__} exposes no sealed tombstones; "
+                "settled coverage comes from the history log only"
+            )
     except _STORE_ERRORS as exc:
         return RecordCoverage({}, (), f"{type(exc).__name__}: {exc}")
-    return record_coverage(records, repo_root)
+    result = record_coverage(records, repo_root)
+    if partial:
+        return RecordCoverage(result.coverage, result.unreadable, partial)
+    return result
 
 
 def corpus_dir(repo_root: Path | None) -> Path | None:

@@ -422,6 +422,15 @@ def build_parser() -> argparse.ArgumentParser:
             "spawning; halt stops the shift on the first failure."
         ),
     )
+    parser.add_argument(
+        "--skip-intake",
+        action="store_true",
+        help=(
+            "Run a plan that fails intake validation. The bypassed check ids "
+            "are recorded on the task record, so the audit trail says the task "
+            "did not pass intake."
+        ),
+    )
     return parser
 
 
@@ -3395,6 +3404,7 @@ def _record_run_one_in_queue(
     worktree: str,
     branch: str,
     repo_root: str,
+    intake_skipped: list[str] | None = None,
 ) -> bool:
     """Transition a queued task to in-progress and record branch/worktree.
 
@@ -3405,6 +3415,11 @@ def _record_run_one_in_queue(
     bookkeeping failure does not block the underlying run. Programming errors
     (``_PROGRAMMING_ERRORS``) are re-raised — they mean the bookkeeping code
     itself is broken, and continuing would silently drop metadata.
+
+    ``intake_skipped`` names the check ids a ``--skip-intake`` run bypassed. It
+    is stamped on the record so the audit trail can answer whether a task
+    passed intake; an empty bypass leaves the field off entirely, so its
+    presence means exactly one thing.
     """
     try:
         queue = backend.load()["queue"]
@@ -3440,6 +3455,10 @@ def _record_run_one_in_queue(
         with queue_lock(queue_file):
             queue = backend.load()["queue"]
             record_task_meta(queue, task_id, worktree, branch, base_commit=base_commit)
+            if intake_skipped:
+                recorded = next((t for t in queue if t.get("id") == task_id), None)
+                if recorded is not None:
+                    recorded["intake_skipped"] = sorted(set(intake_skipped))
             backend.save(queue)
         backend.push()
         print(f"   📝 Recorded {task_id} as in-progress (branch={branch}, worktree={worktree})")
@@ -3449,6 +3468,36 @@ def _record_run_one_in_queue(
     except Exception as exc:
         print(f"   ⚠️  Queue bookkeeping failed for {task_id}: {exc}")
         return False
+
+
+def _intake_findings(plan_file: str, repo_root: str, backend) -> list:
+    """Unacked intake findings for ``plan_file``, judged as ``sprint add`` judges.
+
+    Same suite, same corpus, same record-sourced r-trace coverage, same ack
+    escape hatch. Answering differently here is what made intake advisory: a
+    plan the board door refuses runs through ``run-one`` unchanged.
+
+    Returns an empty list when validation cannot run at all, so a broken
+    checkout does not become a refusal to work.
+    """
+    from aet import plan_validate
+
+    root = Path(repo_root)
+    plan_path = Path(plan_file)
+    plans_dir = root / "docs" / "plans"
+    try:
+        all_plans = sorted(plans_dir.glob("*.md")) if plans_dir.is_dir() else []
+        if plan_path not in all_plans:
+            all_plans.append(plan_path)
+        record = plan_validate.coverage_from_backend(backend, root)
+        findings = plan_validate.validate(
+            all_plans, repo_root=root, extra_coverage=record.coverage
+        )
+        texts = {p: p.read_text(errors="ignore") for p in all_plans if p.is_file()}
+        findings = plan_validate.apply_acks(findings, texts)
+    except (OSError, ValueError):
+        return []
+    return [f for f in findings if f.plan == plan_path and not f.acked]
 
 
 def run_single(args: argparse.Namespace, adapter) -> int:
@@ -3472,6 +3521,51 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # base hygiene and will dirty the working tree by updating the queue file
     # between spawning tasks. Re-checking here would deadlock the pipeline.
     spawned_by_batch = bool(os.environ.get("AET_TASK_ID"))
+
+    # Intake applies at every door onto the board, not only at `sprint add`.
+    # A batch child's task already passed it on the way in, and re-judging a
+    # plan mid-flight would fail a run for a PRD edited after promotion.
+    skip_intake = bool(getattr(args, "skip_intake", False))
+    intake_unacked: list = []
+    if not spawned_by_batch:
+        intake_backend = _make_backend(queue_file)
+        try:
+            intake_unacked = _intake_findings(plan_file, repo_root, intake_backend)
+        finally:
+            intake_backend.close()
+    if intake_unacked and not skip_intake:
+        print(
+            f"⛔ Refusing to run {os.path.basename(plan_file)}: "
+            "intake validation failed."
+        )
+        for finding in intake_unacked:
+            print(f"  - {finding.check_id}: {finding.message}")
+        print("  Fix the plan, or override a check that does not apply by adding")
+        print("  a line to it:")
+        print("    ⚠️ VALIDATE ACK: <check-id> — <reason>")
+        print("  To run anyway and have the bypass recorded: --skip-intake")
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=start_time,
+                end_time=telemetry.iso_now(),
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=1,
+                outcome="failure",
+                exit_code=1,
+                task_ids=[],
+                final_stage=None,
+            )
+        )
+        return 1
+    if intake_unacked:
+        print(
+            f"⚠️  Running {os.path.basename(plan_file)} with intake validation "
+            f"skipped: {len(intake_unacked)} unacked finding(s)."
+        )
+        for finding in intake_unacked:
+            print(f"  - {finding.check_id}: {finding.message}")
 
     # Resolve trunk and integration branch once per run so every consumer
     # agrees on the base (ADR-044). Batch children inherit the parent's
@@ -3611,6 +3705,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 worktree_rel,
                 queued_task_id,
                 repo_root,
+                intake_skipped=[f.check_id for f in intake_unacked],
             )
             task_id = queued_task_id
 

@@ -34,6 +34,11 @@ _FAKE_ADAPTER = CLIAdapter(
 
 
 def _make_args(repo_root: str, plan_file: str) -> argparse.Namespace:
+    """Args for a single-plan run.
+
+    ``skip_intake`` is on because these tests exercise backend plumbing, not
+    the intake gate, and their fixture plans are deliberately minimal.
+    """
     return argparse.Namespace(
         queue_file=None,
         plan_file=plan_file,
@@ -42,6 +47,7 @@ def _make_args(repo_root: str, plan_file: str) -> argparse.Namespace:
         isolation="standard",
         max_jobs=4,
         on_failure="continue",
+        skip_intake=True,
     )
 
 

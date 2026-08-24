@@ -113,6 +113,13 @@ def _use_shared_posture(repo_root: str) -> None:
 
 
 def _make_args(repo_root: str, plan_file: str) -> argparse.Namespace:
+    """Args for a single-plan run.
+
+    ``skip_intake`` is on because these tests exercise orchestration, not the
+    intake gate, and their fixture plans are deliberately minimal — most would
+    be refused by the gate `run-one` now applies. The gate has its own coverage
+    in ``tests/orchestrator/test_run_one_intake_gate.py``.
+    """
     return argparse.Namespace(
         queue_file=None,
         plan_file=plan_file,
@@ -121,6 +128,7 @@ def _make_args(repo_root: str, plan_file: str) -> argparse.Namespace:
         isolation="standard",
         max_jobs=4,
         on_failure="continue",
+        skip_intake=True,
     )
 
 

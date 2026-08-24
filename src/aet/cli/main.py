@@ -452,6 +452,7 @@ def _build_orchestrator_flags(
     cli_bin: str | None,
     base: str | None,
     max_jobs: int = 4,
+    skip_intake: bool = False,
 ) -> list[str]:
     """Build the forwarded flag list for the orchestrator.
 
@@ -467,6 +468,8 @@ def _build_orchestrator_flags(
         flags.extend(["--cli-bin", cli_bin])
     if base is not None:
         flags.extend(["--base", base])
+    if skip_intake:
+        flags.append("--skip-intake")
     return flags
 
 
@@ -533,6 +536,11 @@ def run_one(
     task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
     cli_bin: str | None = typer.Option(None, "--cli-bin", help="Agent CLI binary path."),
     base: str | None = typer.Option(None, "--base", help="Override the worktree base branch/ref."),
+    skip_intake: bool = typer.Option(
+        False,
+        "--skip-intake",
+        help="Run a plan that fails intake validation; the bypass is recorded.",
+    ),
 ) -> None:
     """Run the orchestrator for a single plan."""
     if follow is not None:
@@ -546,7 +554,9 @@ def run_one(
         raise typer.Exit(1) from exc
 
     run_id = _generate_run_id()
-    flags = _build_orchestrator_flags(on_failure, task_timeout, cli_bin, base)
+    flags = _build_orchestrator_flags(
+        on_failure, task_timeout, cli_bin, base, skip_intake=skip_intake
+    )
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
     argv = ["--plan-file", resolved, *flags]
     _spawn_detached(argv, run_id)

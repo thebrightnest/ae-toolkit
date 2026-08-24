@@ -27,6 +27,7 @@ Run the orchestrator for a single plan.
 - `--task-timeout` *int* — Per-task timeout (s).
 - `--cli-bin` *str* — Agent CLI binary path.
 - `--base` *str* — Override the worktree base branch/ref.
+- `--skip-intake` *boolean* — Run a plan that fails intake validation; the bypass is recorded. (default: `False`)
 
 ## `aet state`
 
