@@ -201,6 +201,21 @@ def _prd_coverage(
     return coverage
 
 
+def corpus_dir(repo_root: Path | None) -> Path | None:
+    """Return the plan-set directory backing whole-set coverage, or ``None``.
+
+    R-trace coverage is a property of the whole plan set (see
+    ``_prd_coverage``). It is only available when the plan directory can be
+    located; without it every plan is judged against its own traces alone,
+    which reports fewer uncovered requirements than the plan set does. Callers
+    that print results use this to name which of the two modes ran.
+    """
+    if repo_root is None:
+        return None
+    plans_dir = repo_root / "docs" / "plans"
+    return plans_dir if plans_dir.is_dir() else None
+
+
 def rtrace_findings(
     plan: Path,
     repo_root: Path | None = None,
@@ -388,12 +403,10 @@ def validate(
 
     # Structural checks parse every live plan in the directory so that blocker
     # references and duplicate-id detection remain accurate.
-    if repo_root is not None:
-        plans_dir = repo_root / "docs" / "plans"
-        all_plans = (
-            sorted(p for p in plans_dir.glob("*.md") if not plan_parser.is_settled_plan(p))
-            if plans_dir.exists()
-            else live_plans
+    corpus = corpus_dir(repo_root)
+    if corpus is not None:
+        all_plans = sorted(
+            p for p in corpus.glob("*.md") if not plan_parser.is_settled_plan(p)
         )
     else:
         all_plans = live_plans

@@ -363,7 +363,7 @@ Validate plan files for intake quality.
 
 ### Options
 
-- `plans` *str* — Plan files to validate (default: docs/plans/*.md)
+- `plans` *str* — Plan files or directories to validate (default: docs/plans/*.md)
 
 ## `aet plans`
 

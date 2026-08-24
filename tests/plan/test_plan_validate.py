@@ -417,7 +417,7 @@ class TestPlanValidateRouting(unittest.TestCase):
 
         result = self._run_aet(repo, "plan", "validate", "docs/plans/clean.md")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("all plans passed validation", result.stdout)
+        self.assertIn("1 plan passed validation", result.stdout)
 
 
 if __name__ == "__main__":
