@@ -60,7 +60,11 @@ from aet.cli import (
 )
 # isort: on
 from aet import telemetry
-from aet.backends.factory import QueueOutsideRepositoryError
+from aet.backends.factory import (
+    LegacyConfigError,
+    LegacyTaskBackendError,
+    QueueOutsideRepositoryError,
+)
 from aet.ledger import LedgerCorruptionError
 from aet.plan_parser import resolve_plan_arg
 
@@ -562,6 +566,12 @@ def main() -> int:
     except QueueOutsideRepositoryError as exc:
         # A named refusal, not a traceback: the operator chose a backend that
         # cannot store anything at the path they pointed it at.
+        typer.echo(f"⛔ {exc}", err=True)
+        return 1
+    except (LegacyTaskBackendError, LegacyConfigError) as exc:
+        # A config the operator has to edit, reached by read-only commands as
+        # readily as by mutating ones. The message names its own remedy; a
+        # traceback buries it behind frames from the resolution path.
         typer.echo(f"⛔ {exc}", err=True)
         return 1
     except LedgerCorruptionError as exc:
