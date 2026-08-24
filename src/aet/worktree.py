@@ -644,6 +644,18 @@ AET_IGNORED_PATHS = {
 }
 
 
+# Names the toolkit used to write and no longer does. The ignore writer only
+# appends, so a rename leaves the old name in every `.gitignore` it has ever
+# touched and nothing reports the gap. Recording a retired name here is what
+# lets `aet setup` report it; an entry leaves this set only when no project
+# could still be carrying it.
+AET_RETIRED_IGNORED_PATHS = {
+    ".agents/work-queue.json",
+    ".agents/work-queue.json.lock",
+    ".agents/work-archive.json",
+}
+
+
 # Paths the toolkit writes that are meant to be tracked and committed, but whose
 # mid-run mutation must not halt the next unattended run. This is the "tolerate
 # this dirty" declaration, and it feeds the hygiene gate only: writing one of

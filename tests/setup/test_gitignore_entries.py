@@ -71,5 +71,65 @@ class TestWriteAetGitignoreEntries(unittest.TestCase):
             self.assertEqual(lines.index(".env"), 1)
 
 
+class TestGitignoreDrift(unittest.TestCase):
+    """Renames leave the old name behind; the drift is reported, not silent."""
+
+    def test_missing_entries_are_reported_without_writing(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            missing = aet_setup.missing_aet_gitignore_entries(repo_root)
+
+            self.assertEqual(set(missing), set(aet.worktree.AET_IGNORED_PATHS))
+            self.assertFalse((Path(repo_root) / ".gitignore").exists())
+
+    def test_nothing_is_missing_after_a_write(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            aet_setup.write_aet_gitignore_entries(repo_root)
+
+            self.assertEqual(aet_setup.missing_aet_gitignore_entries(repo_root), [])
+
+    def test_a_retired_name_is_reported_stale(self):
+        retired = sorted(aet.worktree.AET_RETIRED_IGNORED_PATHS)[0]
+        with tempfile.TemporaryDirectory() as repo_root:
+            gitignore = Path(repo_root) / ".gitignore"
+            gitignore.write_text(f"{retired}\n", encoding="utf-8")
+
+            self.assertEqual(
+                aet_setup.stale_aet_gitignore_entries(repo_root), [retired]
+            )
+
+    def test_a_live_entry_is_never_reported_stale(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            aet_setup.write_aet_gitignore_entries(repo_root)
+
+            self.assertEqual(aet_setup.stale_aet_gitignore_entries(repo_root), [])
+
+    def test_a_projects_own_entry_is_never_reported_stale(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            gitignore = Path(repo_root) / ".gitignore"
+            gitignore.write_text(".agents/my-own-scratch\n", encoding="utf-8")
+
+            self.assertEqual(aet_setup.stale_aet_gitignore_entries(repo_root), [])
+
+    def test_no_retired_name_is_also_a_live_one(self):
+        """A path cannot be both written and retired."""
+        self.assertEqual(
+            aet.worktree.AET_IGNORED_PATHS & aet.worktree.AET_RETIRED_IGNORED_PATHS,
+            set(),
+        )
+
+    def test_bootstrap_reports_a_retired_entry_it_cannot_prune(self):
+        retired = sorted(aet.worktree.AET_RETIRED_IGNORED_PATHS)[0]
+        with tempfile.TemporaryDirectory() as repo_root:
+            (Path(repo_root) / ".gitignore").write_text(
+                f"{retired}\n", encoding="utf-8"
+            )
+
+            result = run_typer(aet_setup.app, ["bootstrap"], cwd=repo_root)
+
+            self.assertEqual(result.exit_code, 0, result.stderr)
+            self.assertIn(retired, result.stdout)
+            self.assertIn("retired", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

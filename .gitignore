@@ -8,8 +8,6 @@ node_modules/
 .qa-report.md
 .security-*.md
 __pycache__
-.agents/work-queue.json
-.agents/work-queue.json.lock
 .agents/work-queue.lease
 .agents/work-history.jsonl
 .agents/ledger.jsonl*
@@ -20,8 +18,11 @@ __pycache__
 aet-work.log
 aet-work-*.log
 *.skill
-.agents/work-archive.json
 .venv
 .coverage
 # Live plans are transient working copies; durable state is in the provenance ledger.
 docs/plans/*.md
+.agents/aet-queue
+.agents/aet-queue.lease
+.agents/ledger.jsonl
+.agents/ledger.jsonl.lock

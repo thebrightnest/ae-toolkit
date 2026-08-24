@@ -141,14 +141,19 @@ def _normalize(path: str) -> str | None:
 
 
 def discover_agents_paths() -> dict[str, set[str]]:
-    """Return every `.agents/` path the toolkit's source names, by module."""
+    """Return every `.agents/` path the toolkit's source names, by module.
+
+    Names in ``AET_RETIRED_IGNORED_PATHS`` are excluded: the toolkit declares
+    them precisely because it no longer writes them, so requiring them to be
+    covered by a write-time declaration would invert the guard.
+    """
     discovered: dict[str, set[str]] = {}
     for module in sorted(SOURCE_ROOT.rglob("*.py")):
         tree = ast.parse(module.read_text(encoding="utf-8"))
         raw = _constant_agents_paths(tree) | _joined_agents_paths(tree)
         for path in raw:
             normalized = _normalize(path)
-            if normalized:
+            if normalized and normalized not in worktree.AET_RETIRED_IGNORED_PATHS:
                 discovered.setdefault(normalized, set()).add(module.name)
     return discovered
 

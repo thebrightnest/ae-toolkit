@@ -15,7 +15,7 @@ from aet.backends.factory import (
 )
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch
 from aet.project_id import resolve_repo_root
-from aet.worktree import AET_IGNORED_PATHS
+from aet.worktree import AET_IGNORED_PATHS, AET_RETIRED_IGNORED_PATHS
 
 app = typer.Typer(help="Setup and bootstrap commands.")
 
@@ -42,6 +42,24 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
+def _gitignore_lines(repo_root: str | Path) -> set[str]:
+    """Return the stripped lines of ``repo_root/.gitignore``, empty if absent."""
+    gitignore = Path(repo_root) / ".gitignore"
+    if not gitignore.exists():
+        return set()
+    return {line.strip() for line in gitignore.read_text(encoding="utf-8").splitlines()}
+
+
+def missing_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
+    """Return AET ignore entries absent from ``repo_root/.gitignore``.
+
+    Comparison is literal, so a glob that happens to cover an entry still
+    reports it as missing; the writer appends the exact name.
+    """
+    existing = _gitignore_lines(repo_root)
+    return sorted(AET_IGNORED_PATHS - existing)
+
+
 def write_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
     """Idempotently write AET ignore entries to ``repo_root/.gitignore``.
 
@@ -53,16 +71,7 @@ def write_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
     are never appended.
     """
     gitignore = Path(repo_root) / ".gitignore"
-    existing_lines: set[str] = set()
-    if gitignore.exists():
-        existing_lines = {
-            line.strip() for line in gitignore.read_text(encoding="utf-8").splitlines()
-        }
-
-    added: list[str] = []
-    for entry in AET_IGNORED_PATHS:
-        if entry not in existing_lines:
-            added.append(entry)
+    added = missing_aet_gitignore_entries(repo_root)
 
     if added:
         with gitignore.open("a", encoding="utf-8") as f:
@@ -70,6 +79,18 @@ def write_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
                 f.write(f"{entry}\n")
 
     return added
+
+
+def stale_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
+    """Return ``.gitignore`` lines naming a path the toolkit no longer writes.
+
+    Reads ``AET_RETIRED_IGNORED_PATHS``. The writer only appends, so a rename
+    adds the new name and leaves the old one in place; the stale line ignores
+    nothing and the new path stays untracked until the next bootstrap. Reports
+    only names the toolkit itself once wrote, so a project's own entries are
+    never flagged.
+    """
+    return sorted(_gitignore_lines(repo_root) & AET_RETIRED_IGNORED_PATHS)
 
 
 def _bin_dir() -> Path:
@@ -337,6 +358,11 @@ def setup_verify(
         trunk_provenance = _format_branch_provenance(trunk.provenance, config_source)
         typer.echo(f"  trunk: {trunk.ref} ({trunk_provenance})")
 
+    for entry in missing_aet_gitignore_entries(config_repo_root):
+        typer.echo(f"  ⚠ .gitignore is missing {entry}; run `aet setup bootstrap`", err=True)
+    for entry in stale_aet_gitignore_entries(config_repo_root):
+        typer.echo(f"  ⚠ .gitignore names {entry}, a path the toolkit no longer writes", err=True)
+
     path_aet = shutil.which("aet", path=os.environ.get("PATH"))
 
     if link.is_symlink():
@@ -409,3 +435,6 @@ def setup_bootstrap(
         typer.echo(f"✓ wrote {len(added)} AET ignore entries to .gitignore")
     else:
         typer.echo("= all AET ignore entries already present")
+
+    for entry in stale_aet_gitignore_entries(repo_root):
+        typer.echo(f"  - {entry} (retired: the toolkit no longer writes this path)")
