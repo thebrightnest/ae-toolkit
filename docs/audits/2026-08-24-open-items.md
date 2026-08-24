@@ -1,7 +1,7 @@
 # Open items: reset replay, validation scoping, client-project findings
 
 *Compiled 2026-08-24 — every item verified against `main` at `7c94b248` (v1.10.0).
-Eleven items closed the same day; the closures are recorded under "Closed".*
+Twelve items closed the same day; the closures are recorded under "Closed".*
 
 Three sources feed this register: the divergence record at
 `docs/audits/2026-08-24-local-main-reset-divergence.md`, which lists work
@@ -21,7 +21,6 @@ Ordering is by leverage. IDs are stable; the order is not.
 | OI-06 | `run-one` skips the intake validation `sprint add` enforces | client 1 | M |
 | OI-07 | No failure class for "retry cannot succeed yet" | client 8 | S |
 | OI-09 | Decide the direction for test-target selection | review F-2 | design |
-| OI-10 | Replay owb-13: integration branch derived from the PRD (R-17) | reset 1 | L |
 | OI-17 | `test_stall_killed_and_classified_timeout` is flaky and unfiled | review | S |
 | OI-18 | Scope `validate-skills.sh` to changed skills | review | S |
 | OI-19 | Delete the preserved reset branches | reset | one line |
@@ -99,18 +98,6 @@ working-tree-only mode for mid-branch iteration — is partly answered:
 wired into `make`. A `make test-affected` target stays deferred until the two
 mechanisms are reconciled.
 
-## OI-10 — Replay owb-13: integration branch derived from the PRD (R-17)
-
-Commits `53ca943f` and `7362ee51`, discarded in the reset. R-17 is open upstream:
-`docs/prds/open-work-board-prd.md:73` states it, its acceptance criterion at
-`:131` is unchecked, and `:143` records that "R-17 is the delta, not the mode".
-The discarded work is the only implementation.
-
-Each commit conflicts in one file on replay — `src/aet/cli/aet_state.py` and
-`docs/prds/open-work-board-prd.md`. The same work is also live at
-`.worktrees/owb-13-prd-integration-branch`, checked out at `7362ee51`. Item 1 of
-the divergence record carries the file inventory and the review commands.
-
 ## OI-17 — `test_stall_killed_and_classified_timeout` is flaky and unfiled
 
 `tests/orchestrator/test_nightshift_rehearsal.py:325`. Measured at roughly
@@ -129,11 +116,19 @@ this register.
 ## OI-19 — Delete the preserved reset branches
 
 `backup/main-pre-sync` and `wip/main-sync-merge-20260824` hold the discarded
-state and are unpushed. OI-03, OI-08, OI-11 and OI-15 are replayed, so OI-10 is
-the last claim on them. `.worktrees/owb-13-prd-integration-branch`
-outlives them and is removed with `git worktree remove`; removing it does not
-change what `aet` executes, which is a non-editable install of
-`~/.local/share/ae-toolkit/repo`.
+state and are unpushed. Every claim on them is settled: OI-03, OI-08, OI-10,
+OI-11 and OI-15 are replayed, and `e011f9cf` — the last commit the record
+treated as superseded — contributed the `--show-toplevel` guard test its
+upstream fix never got.
+
+What remains on `backup/main-pre-sync` and not on `main` is upstream's own
+removals: the 250 files under `docs/plans/archive/`, retired by trp-05;
+`src/aet/backends/json_backend.py`, removed by owb-07; and the two test files
+covering those. Nothing there is unharvested.
+
+`.worktrees/owb-13-prd-integration-branch` outlives the branches and is removed
+with `git worktree remove`; removing it does not change what `aet` executes,
+which is a non-editable install of `~/.local/share/ae-toolkit/repo`.
 
 ## Closed 2026-08-24
 
@@ -252,6 +247,34 @@ restored: two of each rode along with the OI-03 and OI-11 replays, and the
 third of each was checked out of `backup/main-pre-sync`. The learnings entries
 slot in at their own 2026-08-19 timestamps, ahead of what upstream appended
 from 2026-08-20 onward; the rest of the append-only file is unchanged.
+
+**OI-10 — Replay owb-13: integration branch derived from the PRD (R-17).**
+`53ca943f` and `7362ee51` replayed. `derive_integration_branch_from_prd` and
+`resolve_integration_branch_for_task` (`src/aet/branch_ref.py`) resolve a
+task's integration branch from its PRD in `single-pr` mode, with explicit CLI
+and env overrides still winning and `pr-per-task` unchanged — ADR-045's
+Scenario A stays the degenerate case. `aet state` audit, heal, validate, reset,
+transition and record-merge resolve per task; `ship verify` checks the derived
+target branch; `plan_parser.prd_path_from_text` and `prd_path_for_plan` are the
+shared extraction that `plan_validate` now calls through to. The R-17
+acceptance criterion in `docs/prds/open-work-board-prd.md` is checked.
+
+Three resolutions the replay had to make, none of them in the original commits:
+
+`_derive_all_states` (`src/aet/cli/aet_state.py`) was the substantive conflict.
+Upstream had removed its `history` parameter under R-8 — the settled log is not
+an authority, and a blocker absent from the board is terminal — while owb-13
+layered per-task branch resolution onto the older history-seeded version.
+Upstream's semantics are kept and the per-task resolution layered on top of
+them: `_task_target` falls back to the static branch when the caller supplies
+no repository context, which is what leaves the many direct callers unchanged.
+
+`tests/cli/test_ship_verify.py` and `tests/state/test_aet_state.py` seeded
+`.agents/work-queue.json` and read it back with `json.load`. That store no
+longer exists; both now seed and read through the git-refs backend.
+
+The three divergence summaries in `docs/prds/open-work-board-prd.md` are
+additive and all three are kept, each with its own Deferred section.
 
 ## Not open
 
