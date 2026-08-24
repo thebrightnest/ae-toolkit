@@ -177,6 +177,12 @@ def _add(args: argparse.Namespace) -> int:
         )
         for finding in unacked:
             print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
+        print(
+            "  Fix the plan, or override a check that does not apply by adding "
+            "a line to it:",
+            file=sys.stderr,
+        )
+        print("    ⚠️ VALIDATE ACK: <check-id> — <reason>", file=sys.stderr)
         return 1
 
     task = new_task_from_plan(

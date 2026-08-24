@@ -164,6 +164,32 @@ class TestAddIntakeGate(unittest.TestCase):
             self.assertIn("intake validation failed", result.stderr.lower())
             self.assertEqual(_read_queue(root), [])
 
+    def test_refusal_names_the_ack_syntax_that_resolves_it(self):
+        """Without it the visible options are padding traces or bypassing the gate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plans_dir = root / "docs" / "plans"
+            plans_dir.mkdir(parents=True)
+            bad = plans_dir / "bad.md"
+            bad.write_text(
+                "---\nsize: S\n---\n\n# Bad\n\n---\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
+
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(bad),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
+
+            self.assertNotEqual(result.exit_code, 0)
+            self.assertIn("VALIDATE ACK: <check-id>", result.stderr)
+
     def test_add_admits_clean_plan(self):
         """A clean plan is admitted exactly as before."""
         with tempfile.TemporaryDirectory() as tmp:
