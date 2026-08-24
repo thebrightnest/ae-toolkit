@@ -165,7 +165,20 @@ def _add(args: argparse.Namespace) -> int:
             if record.get("id"):
                 settled_ids.add(record["id"])
 
-    findings = plan_validate.validate(all_plan_files, extra_known_ids=settled_ids)
+    # A sibling that already delivered part of the PRD has usually left
+    # docs/plans/ for the record (ADR-061). Crediting its coverage is what
+    # keeps intake from demanding this plan trace requirements another plan
+    # covered — the pressure that falsifies the check's own input.
+    # One root for both sources: the PRD paths they produce are dict keys, so
+    # a mismatch would silently credit nothing.
+    repo_root = Path(backend.repo_root)
+    record = plan_validate.coverage_from_backend(backend, repo_root)
+    findings = plan_validate.validate(
+        all_plan_files,
+        repo_root=repo_root,
+        extra_known_ids=settled_ids,
+        extra_coverage=record.coverage,
+    )
     plan_texts = {pf: pf.read_text(errors="ignore") for pf in all_plan_files}
     findings = plan_validate.apply_acks(findings, plan_texts)
     unacked = [f for f in findings if f.plan == plan_file and not f.acked]
@@ -183,6 +196,18 @@ def _add(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         print("    ⚠️ VALIDATE ACK: <check-id> — <reason>", file=sys.stderr)
+        for task_id in record.unreadable:
+            print(
+                f"  note: task record {task_id} carries no readable spec; "
+                "its requirement coverage is not counted",
+                file=sys.stderr,
+            )
+        if record.source_error:
+            print(
+                f"  note: no coverage read from the task record "
+                f"({record.source_error})",
+                file=sys.stderr,
+            )
         return 1
 
     task = new_task_from_plan(

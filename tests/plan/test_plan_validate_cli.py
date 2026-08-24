@@ -141,7 +141,8 @@ class TestPlanValidateNamesItsMode(unittest.TestCase):
             rc, _, err = _run([str(loose / "alpha.md")])
 
         self.assertEqual(rc, 1)
-        self.assertIn("own traces only", err)
+        self.assertIn("each plan's own traces", err)
+        self.assertIn("no task record", err)
 
     def test_failure_summarises_scope_and_names_the_ack_syntax(self):
         _write_prd(self.root / "docs" / "prds" / "default-prd.md", ["R-1", "R-2"])

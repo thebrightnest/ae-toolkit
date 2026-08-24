@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from aet import plan_parser
 
@@ -150,6 +152,11 @@ def structural_findings(
 # (b) R-trace coverage
 # ---------------------------------------------------------------------------
 
+# Reading the task store is an optimization on top of the authoring corpus:
+# these are the failures that mean "no store here", not "validation is
+# broken". Anything else propagates.
+_STORE_ERRORS = (OSError, RuntimeError, ValueError, subprocess.SubprocessError)
+
 _RID_RE = re.compile(r"\bR-\d+\b")
 _TASK_TRACE_RE = re.compile(r"\(\s*traces:\s*([^)]+)\)")
 
@@ -168,8 +175,12 @@ def _requirements_rids(prd: Path) -> set[str]:
 
 
 def _task_trace_rids(plan: Path) -> set[str]:
-    """Collect R-ids cited in the plan's task list."""
-    text = plan.read_text(errors="ignore")
+    """Collect R-ids cited in the plan file's task list."""
+    return _trace_rids_in(plan.read_text(errors="ignore"))
+
+
+def _trace_rids_in(text: str) -> set[str]:
+    """Collect R-ids cited by ``(traces: ...)`` in a task list."""
     section = _section_body(text, "Task List") or text
     rids: set[str] = set()
     for match in _TASK_TRACE_RE.finditer(section):
@@ -194,6 +205,81 @@ def _prd_coverage(
             continue
         coverage.setdefault(prd, set()).update(_task_trace_rids(plan))
     return coverage
+
+
+@dataclass(frozen=True)
+class RecordCoverage:
+    """Per-PRD coverage recovered from task records, and what could not be.
+
+    ``unreadable`` names the records that carry no spec to read, and
+    ``source_error`` the reason the record store could not be read at all.
+    Both are reported rather than skipped: a record contributing nothing is
+    indistinguishable from a plan that traced nothing, and the difference
+    decides whether an uncovered requirement is real (ADR-059).
+    """
+
+    coverage: dict[Path, set[str]]
+    unreadable: tuple[str, ...]
+    source_error: str = ""
+
+
+def record_coverage(
+    records: Iterable[dict[str, Any]], repo_root: Path | None
+) -> RecordCoverage:
+    """Union of task-traced R-ids per PRD, read from task records.
+
+    A plan file is an authoring artifact; after intake the record carries the
+    spec (ADR-061). Coverage is the one r-trace property that outlives
+    authoring — the siblings that already delivered a PRD's requirements have
+    left ``docs/plans/`` — so it is read from the record, while the structural
+    checks stay on the authoring corpus.
+
+    Each record contributes the R-ids its ``spec.tasks`` cites to the PRD its
+    ``spec.body`` references. A record with neither is named in ``unreadable``.
+    """
+    coverage: dict[Path, set[str]] = {}
+    unreadable: list[str] = []
+    for record in records:
+        task_id = str(record.get("id") or "<unidentified>")
+        spec = record.get("spec")
+        if not isinstance(spec, dict):
+            unreadable.append(task_id)
+            continue
+        body = spec.get("body") or ""
+        tasks = spec.get("tasks") or ""
+        if isinstance(tasks, list):
+            tasks = "\n".join(str(item) for item in tasks)
+        if not body and not tasks:
+            unreadable.append(task_id)
+            continue
+        prd = plan_parser.prd_path_from_text(body, repo_root=repo_root)
+        if prd is None:
+            unreadable.append(task_id)
+            continue
+        coverage.setdefault(prd, set()).update(_trace_rids_in(tasks or body))
+    return RecordCoverage(coverage, tuple(sorted(unreadable)))
+
+
+def coverage_from_backend(backend: Any, repo_root: Path | None) -> RecordCoverage:
+    """Read r-trace coverage from a task backend's live and sealed records.
+
+    Sealed tombstones (``refs/aet/sealed/<id>``) are the complete, pushed
+    source: they are written in every posture, unlike the history JSONL, which
+    shadow posture does not write. A store that cannot be read yields empty
+    coverage and a named reason rather than raising — validation must still
+    run without a reachable store, it just credits fewer siblings, and the
+    caller says so instead of reporting the shortfall as the plan's fault.
+    """
+    records: list[dict[str, Any]] = []
+    try:
+        records.extend(backend.load(verify=False)["queue"])
+        for task_id in sorted(backend.settled_ids()):
+            record = backend.read_sealed(task_id)
+            if record is not None:
+                records.append(record)
+    except _STORE_ERRORS as exc:
+        return RecordCoverage({}, (), f"{type(exc).__name__}: {exc}")
+    return record_coverage(records, repo_root)
 
 
 def corpus_dir(repo_root: Path | None) -> Path | None:
@@ -375,6 +461,7 @@ def validate(
     plans: list[Path],
     repo_root: Path | None = None,
     extra_known_ids: set[str] | None = None,
+    extra_coverage: dict[Path, set[str]] | None = None,
 ) -> list[Finding]:
     """Run the full check suite over the requested live plan files.
 
@@ -388,6 +475,12 @@ def validate(
 
     ``extra_known_ids`` allows callers to include settled history ids as valid
     blocker references.
+
+    ``extra_coverage`` is r-trace coverage from outside the authoring corpus,
+    built by :func:`record_coverage` from task records. Without it a plan whose
+    siblings have all settled is judged as though nothing had been delivered
+    for its PRD. Callers that can reach the task store build it and pass it in;
+    ``plan_validate`` itself stays free of a backend dependency.
     """
     if repo_root is None and plans:
         repo_root = _repo_root_for(plans[0])
@@ -409,10 +502,13 @@ def validate(
         structural_findings(all_plans, limit_to=limit_to, extra_known_ids=extra_known_ids)
     )
 
-    # R-trace coverage is a whole-plan-set property: one PRD decomposes into
-    # many atomic plans, so a requirement is covered when any live sibling
-    # traces it. Build the union from the live plan set, then report per plan.
+    # R-trace coverage is a whole-plan-set property that outlives authoring:
+    # one PRD decomposes into many atomic plans, and a requirement stays
+    # covered once a sibling has delivered it. The authoring corpus holds only
+    # the plans still on disk, so the record supplies the rest (ADR-061).
     coverage = _prd_coverage(all_plans, repo_root)
+    for prd, rids in (extra_coverage or {}).items():
+        coverage.setdefault(prd, set()).update(rids)
 
     for plan in live_plans:
         findings.extend(rtrace_findings(plan, repo_root=repo_root, coverage=coverage))

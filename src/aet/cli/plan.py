@@ -17,6 +17,10 @@ import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_parser, plan_validate  # noqa: E402
+from aet.backends.factory import (  # noqa: E402
+    QueueOutsideRepositoryError,
+    create_backend,
+)
 
 
 def _repo_root_from(path: Path) -> Path:
@@ -60,21 +64,67 @@ def _expand_plan_args(plans: list[str]) -> list[Path]:
     return paths
 
 
-def _scope_note(repo_root: Path) -> str:
-    """Name which r-trace mode ran, per the plan set the run could see.
+def _record_coverage(repo_root: Path) -> plan_validate.RecordCoverage:
+    """R-trace coverage contributed by the task record, or an empty result.
 
-    A requirement is covered when any plan sharing the PRD traces it, so a run
-    that cannot locate the plan set reports fewer uncovered requirements than
-    one that can. The two results are otherwise identical in form.
+    A settled sibling has left ``docs/plans/`` but its record still carries the
+    requirements it delivered (ADR-061). Reading it is what stops a plan being
+    asked to trace requirements another plan already covered.
+    """
+    try:
+        backend = create_backend(
+            config_path=str(repo_root / ".agents" / "aet-config.json"),
+            queue_file=str(repo_root / ".agents" / "aet-queue"),
+            history_file=str(repo_root / ".agents" / "work-history.jsonl"),
+        )
+    except (QueueOutsideRepositoryError, OSError) as exc:
+        # No store here — validate the authoring corpus alone and say so. A
+        # config error is not caught: it names a remedy and the CLI boundary
+        # already prints it without a traceback.
+        return plan_validate.RecordCoverage({}, (), f"{type(exc).__name__}: {exc}")
+    try:
+        return plan_validate.coverage_from_backend(backend, repo_root)
+    finally:
+        backend.close()
+
+
+def _scope_note(repo_root: Path, record: plan_validate.RecordCoverage) -> str:
+    """Name which r-trace sources the run could see.
+
+    A requirement is covered when any plan sharing the PRD traces it, and the
+    plans that already delivered one have usually left the authoring corpus for
+    the record. A run missing either source reports fewer uncovered
+    requirements than one with both, and the two results are identical in form
+    unless the output says which ran.
     """
     corpus = plan_validate.corpus_dir(repo_root)
     if corpus is None:
-        return "r-trace coverage judged against each plan's own traces only"
-    try:
-        where = corpus.relative_to(repo_root)
-    except ValueError:
-        where = corpus
-    return f"r-trace coverage judged against the plan set in {where}/"
+        sources = ["each plan's own traces"]
+    else:
+        try:
+            where = corpus.relative_to(repo_root)
+        except ValueError:
+            where = corpus
+        sources = [f"the plan set in {where}/"]
+    if record.source_error:
+        sources.append(f"no task record ({record.source_error})")
+    else:
+        sources.append(f"{len(record.coverage)} PRD(s) from the task record")
+    return "r-trace coverage judged against " + " and ".join(sources)
+
+
+def _report_unreadable(record: plan_validate.RecordCoverage) -> None:
+    """Name the records whose coverage could not be counted (ADR-059).
+
+    An uncovered requirement caused by an unreadable record is not the plan's
+    fault, and the two are indistinguishable in the findings.
+    """
+    for task_id in record.unreadable:
+        print(
+            f"note: task record {task_id} carries no readable spec; "
+            "its requirement coverage is not counted",
+            file=sys.stderr,
+        )
 
 
 def _fail(message: str) -> int:
@@ -101,7 +151,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
     if missing:
         return _fail(f"plan file not found: {missing[0]}")
 
-    findings = plan_validate.validate(live_paths, repo_root=repo_root)
+    record = _record_coverage(repo_root)
+    findings = plan_validate.validate(
+        live_paths, repo_root=repo_root, extra_coverage=record.coverage
+    )
     plan_texts = {p: p.read_text(errors="ignore") for p in live_paths}
     findings = plan_validate.apply_acks(findings, plan_texts)
 
@@ -114,7 +167,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
                 f"acked — {finding.ack_reason}"
             )
 
-    scope = _scope_note(repo_root)
+    scope = _scope_note(repo_root, record)
 
     if unacked:
         for finding in unacked:
@@ -133,10 +186,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         print("  ⚠️ VALIDATE ACK: <check-id> — <reason>", file=sys.stderr)
+        _report_unreadable(record)
         return 1
 
     noun = "plan" if len(live_paths) == 1 else "plans"
     print(f"✓ {len(live_paths)} {noun} passed validation — {scope}")
+    _report_unreadable(record)
     return 0
 
 
