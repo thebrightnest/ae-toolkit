@@ -1,7 +1,7 @@
 # Open items: reset replay, validation scoping, client-project findings
 
 *Compiled 2026-08-24 — every item verified against `main` at `7c94b248` (v1.10.0).
-Seven items closed the same day; the closures are recorded under "Closed".*
+Eleven items closed the same day; the closures are recorded under "Closed".*
 
 Three sources feed this register: the divergence record at
 `docs/audits/2026-08-24-local-main-reset-divergence.md`, which lists work
@@ -17,45 +17,14 @@ Ordering is by leverage. IDs are stable; the order is not.
 
 | ID | Item | Source | Size |
 |---|---|---|---|
-| OI-03 | Replay the test-isolation guard against the real remote | reset 2, review F-1 | S |
 | OI-05 | Settled siblings drop out of r-trace coverage | client 2 | design |
 | OI-06 | `run-one` skips the intake validation `sprint add` enforces | client 1 | M |
 | OI-07 | No failure class for "retry cannot succeed yet" | client 8 | S |
-| OI-08 | Replay the `_PATH_TARGETS` drift guard | reset 3, review F-2 | S |
 | OI-09 | Decide the direction for test-target selection | review F-2 | design |
 | OI-10 | Replay owb-13: integration branch derived from the PRD (R-17) | reset 1 | L |
-| OI-11 | `GitRefsBackend(repo_root=…)` pass-through | reset 4 | S |
-| OI-15 | Restore three bug writeups and three learnings entries | reset 5 | S |
 | OI-17 | `test_stall_killed_and_classified_timeout` is flaky and unfiled | review | S |
 | OI-18 | Scope `validate-skills.sh` to changed skills | review | S |
 | OI-19 | Delete the preserved reset branches | reset | one line |
-
-## OI-03 — Replay the test-isolation guard against the real remote
-
-Commit `223814c4`, discarded in the reset. `src/aet/cli/gate.py:314-319`
-constructs the backend with a hard-coded relative `.agents/aet-queue` and then
-calls `backend.fetch()`. It is the only module that hard-codes that path — every
-other `create_backend` call site takes the queue path from its arguments — which
-is why the blast radius is one test file. Under
-`patch.dict(os.environ, ..., clear=True)` the queue resolves to this checkout and
-the fetch runs against its real remote. `_AET_FETCH_REFSPEC` is
-`+refs/aet/*:refs/aet/*` (`src/aet/backends/git_refs_backend.py:45`), so the
-fetch overwrites local `refs/aet/*` from origin wherever git auth survives a
-cleared environment.
-
-Confirmed on 2026-08-24: a single run of
-`tests/gate/test_gate_submit.py::TestGateSubmit::test_submit_writes_valid_verdict`
-updated `.git/FETCH_HEAD`.
-
-The runtime cost the review measured is not reproducible and should not be
-quoted. On this machine `env -i git ls-remote origin` returns in 2.0 s and the
-full suite runs in 3 m 34 s (1915 passed, 2 skipped). The reason to replay is the
-forced refspec, not the clock. The priority is raised by
-`skills/aet-qa/SKILL.md:39`, which now runs the full suite unconditionally, so
-every QA stage crosses this path.
-
-Recovery and the two-file conflict resolution are recorded as item 2 of the
-divergence record.
 
 ## OI-05 — Settled siblings drop out of r-trace coverage
 
@@ -107,23 +76,6 @@ normalise timestamps, hex and paths (`:116-143`), and
 replace 185 attempts. The classification is still wrong, and a class whose
 remedy is "wait for the window" has no representation.
 
-## OI-08 — Replay the `_PATH_TARGETS` drift guard
-
-Commit `2bce0d7e`, discarded in the reset; it cherry-picks onto `7c94b248`
-without conflict. The guard fails when a `src/aet` module has no `_PATH_TARGETS`
-prefix match and is not in the allowlist the same commit ships, and fails again
-when the allowlist keeps an entry that has since been mapped.
-
-18 of 82 modules under `src/aet` have no prefix match. Fifteen are exactly the
-shipped allowlist; the three the guard would flag are `src/aet/liveness.py`,
-`src/aet/validation.py` and `src/aet/validation_cache.py`, each with a dedicated
-test file that no mapping names.
-
-Drift costs precision, not coverage: `change_scope.targets` returns `["tests/"]`
-as soon as any changed path is unmapped (`src/aet/change_scope.py:194`), so a
-module falling out of the table widens `make validate` to the full suite rather
-than dropping its tests. The guard defends the scoping.
-
 ## OI-09 — Decide the direction for test-target selection
 
 Two mechanisms select pytest targets and neither references the other.
@@ -159,33 +111,6 @@ Each commit conflicts in one file on replay — `src/aet/cli/aet_state.py` and
 `.worktrees/owb-13-prd-integration-branch`, checked out at `7362ee51`. Item 1 of
 the divergence record carries the file inventory and the review commands.
 
-## OI-11 — `GitRefsBackend(repo_root=…)` pass-through
-
-The backend half of `49977159`, discarded in the reset; upstream kept the factory
-half. `create_backend` derives `queue_root` in pure Python
-(`src/aet/backends/factory.py:84-107`), anchors config resolution and the
-out-of-repo refusal to it, and does not pass it on; `GitRefsBackend.__init__`
-re-derives its own root through `git rev-parse --show-toplevel`
-(`src/aet/backends/git_refs_backend.py:88-93`, `:105-118`). One git subprocess
-per backend construction recomputes a value the caller holds.
-
-The subprocess-free property therefore covers config resolution only.
-`tests/orchestrator/test_read_path_no_git.py`, which `queue_repo_root`'s
-docstring cites for the requirement, never constructs a backend.
-
-The resolved form combining the pass-through with upstream's `posture` parameter
-and walk-up fallback is at
-`wip/main-sync-merge-20260824:src/aet/backends/git_refs_backend.py`. Item 4 of
-the divergence record names the test-helper signature change the replay needs.
-
-## OI-15 — Restore three bug writeups and three learnings entries
-
-Three `docs/bugs/` documents and three `.agents/learnings.jsonl` entries
-timestamped 2026-08-19 exist only on `backup/main-pre-sync`. Two of the writeups
-ride along with the OI-03 and OI-11 commits; the third records a bug upstream
-fixed independently and is the only surviving analysis of it. Item 5 of the
-divergence record carries the checkout command and the ledger ordering.
-
 ## OI-17 — `test_stall_killed_and_classified_timeout` is flaky and unfiled
 
 `tests/orchestrator/test_nightshift_rehearsal.py:325`. Measured at roughly
@@ -204,8 +129,8 @@ this register.
 ## OI-19 — Delete the preserved reset branches
 
 `backup/main-pre-sync` and `wip/main-sync-merge-20260824` hold the discarded
-state and are unpushed. They can go once OI-03, OI-08, OI-10, OI-11 and OI-15 are
-each replayed or explicitly abandoned. `.worktrees/owb-13-prd-integration-branch`
+state and are unpushed. OI-03, OI-08, OI-11 and OI-15 are replayed, so OI-10 is
+the last claim on them. `.worktrees/owb-13-prd-integration-branch`
 outlives them and is removed with `git worktree remove`; removing it does not
 change what `aet` executes, which is a non-editable install of
 `~/.local/share/ae-toolkit/repo`.
@@ -287,6 +212,46 @@ Both are held by `tests/plan/test_plan_validate_cli.py`.
 **OI-16 — Pre-commit ruff lints the whole repo on every commit.** The `ruff`
 hook carries neither `args: ["."]` nor `pass_filenames: false`
 (`.pre-commit-config.yaml:19-22`), so it receives the staged filenames.
+
+**OI-03 — Replay the test-isolation guard against the real remote.** `223814c4`
+replayed. The autouse `_no_real_remote` fixture in `tests/conftest.py` makes
+`git_refs_backend._has_remote` report no remote for this checkout only, so the
+forced `+refs/aet/*:refs/aet/*` refspec cannot overwrite local refs from origin;
+the scoping keeps the tests that exercise fetch and push against tmpdir fixture
+remotes working. `tests/test_suite_isolation.py` pins both halves.
+
+The fixture patches a module attribute, which does not cross a process
+boundary, so `TestGateDispatcherRouting` — which spawns the real dispatcher
+with a hand-built env — still reached the remote. Its child now runs in a
+remote-less tmpdir repository. With both changes the full suite leaves
+`.git/FETCH_HEAD` untouched; `tests/gate/test_gate_submit.py` runs in 7.3 s
+against 84.7 s before.
+
+**OI-08 — Replay the `_PATH_TARGETS` drift guard.** `2bce0d7e` cherry-picked
+without conflict. `src/aet/liveness.py`, `src/aet/validation.py` and
+`src/aet/validation_cache.py` — the three modules the guard flagged — map to
+their own test files, so the unmapped set is exactly the `_UNMAPPED_MODULES`
+allowlist and both drift assertions hold.
+
+**OI-11 — `GitRefsBackend(repo_root=…)` pass-through.** The constructor accepts
+an optional pre-resolved `repo_root` and `create_backend` passes the
+`queue_root` it already derived; discovery stays the fallback for direct
+construction. Construction is still not subprocess-free — config resolution
+reaches `derive_config_slug`, which runs `git rev-parse --git-common-dir` — so
+`test_backend_construction_does_not_rediscover_the_root` is scoped to the
+`--show-toplevel` call it removes rather than to git as a whole.
+
+The wider claim in `queue_repo_root`'s docstring is therefore narrower than it
+reads: the read path resolves config with a git subprocess, and
+`tests/orchestrator/test_read_path_no_git.py`, which the docstring cites, never
+constructs a backend. Not tracked as an item; noted where the next reader of
+that docstring will meet it.
+
+**OI-15 — Restore three bug writeups and three learnings entries.** All six
+restored: two of each rode along with the OI-03 and OI-11 replays, and the
+third of each was checked out of `backup/main-pre-sync`. The learnings entries
+slot in at their own 2026-08-19 timestamps, ahead of what upstream appended
+from 2026-08-20 onward; the rest of the append-only file is unchanged.
 
 ## Not open
 
