@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.11.0] — 2026-08-24
+
+### Added
+
+- **Intake validation applies at every door** — `aet run-one` now runs the same check suite `aet sprint add` enforces, over the same plan corpus and with the same `⚠️ VALIDATE ACK` escape hatch, and refuses a plan that fails it. `--skip-intake` runs anyway and records the bypassed check ids on the task record, so the audit trail can answer whether a task passed intake. A batch child is not re-judged; its task passed on the way in (OI-06).
+- **A `throttled` failure class** — a provider rate limit, quota, or session limit is classified on its own terms instead of as a flake. The task is requeued, the shift stops spawning, and no triage session is spent: the limit is shared, so the next task would meet the same wall. Throttles are not circuit-breaker evidence, so a task is never quarantined for a closed window (OI-07, ADR-065).
+- **R-trace coverage read from the task record** — a requirement stays covered once any plan sharing the PRD delivers it, and settled siblings live in the record rather than in `docs/plans/`. `aet plan validate` and `aet sprint add` now credit them, so a plan whose siblings have all merged is no longer asked to trace requirements they already covered. Records carrying no spec are named rather than skipped (OI-05).
+- **`aet setup verify` reports `.gitignore` drift** — both an entry the toolkit writes that the file lacks, and a retired name it still carries. Reporting is limited to names the toolkit itself once wrote, so a project's own entries are never flagged (OI-02).
+
+### Changed
+
+- **Test selection is derived from the source, not a table** — `make validate` and `aet-implement` now share one mechanism, which reads which test files reference which modules (imports, plus the quoted-path idiom used to load CLI modules) and follows those references transitively. The hand-maintained path table is gone. No selected target names a file that does not exist, a source file that no test reaches has to be acknowledged explicitly rather than silently widening the run, and a change reaching most of the suite is reported as the full suite (OI-09).
+- **`aet plan validate` states what it checked** — the result names the number of plans validated and which sources decided r-trace coverage, so a single-file run is no longer indistinguishable in form from a whole-corpus one. Failures add a finding count and the ack syntax that resolves them (OI-13).
+- **`aet plan validate` accepts a directory** — `docs/plans/` expands to its `*.md` children instead of raising (OI-14).
+- **The intake refusal names the override** — `aet sprint add` prints the `⚠️ VALIDATE ACK: <check-id> — <reason>` syntax at the point of refusal, rather than leaving it documented only in module docstrings (OI-01).
+- **Integration branches derive from the PRD** — in `single-pr` mode a task's integration branch comes from the PRD it belongs to, so concurrent PRDs each carry their own branch and PR. Explicit CLI and environment overrides still win, and `pr-per-task` is unchanged (owb-13, R-17).
+
+### Fixed
+
+- **`aet state audit` no longer aborts with a traceback** — a config carrying the removed `task_backend` key, or only the legacy `.agents/aet-work.json`, is refused by name with the migration it needs. Read-only commands were exiting 1 with a full Rich traceback that buried the remedy (OI-12).
+- **`aet plan validate` with no arguments validated nothing** — the repository root resolved to the parent of the checkout, so the documented default invocation found no plans and reported success. It now resolves the repository it runs in (OI-14).
+- **Verdicts attest to the tree the work is in** — `aet gate submit` stamped its tree fingerprint from the main checkout while the freshness check hashed the worktree, so the two compared different trees. Both now use the worktree (OI-04).
+- **The test suite no longer reaches the real repository's remote** — tests running backend code under a cleared environment resolved this checkout and fetched `refs/aet/*` with a forced refspec, which on a machine whose git auth survived would overwrite local refs from origin. A full run now leaves `.git/FETCH_HEAD` untouched (OI-03).
+- **Backend construction no longer re-derives a root it was given** — `create_backend` computes the repository root in pure Python and now passes it through, instead of spending a `git rev-parse` per construction to recompute it (OI-11).
+- **Pre-commit `ruff` lints what is staged** — it ran over the whole repository on every commit, so an error in an untouched file could block an unrelated commit (OI-16).
+
+### Documentation
+
+- ADR-065 (throttling is not a flake) records the taxonomy change; the open-items register at `docs/audits/2026-08-24-open-items.md` carries all nineteen closures with the evidence for each.
+- Three bug writeups and three learnings entries discarded in a local `main` reset are restored, and the divergence record notes that its preserved branches have since been deleted (OI-15, OI-19).
+- The nightshift stall-timeout flake is filed with a measurement that could not reproduce it, three candidate mechanisms, and what to capture if it recurs (OI-17).
+
+---
+
 ## [1.10.0] — 2026-08-23
 
 ### Removed

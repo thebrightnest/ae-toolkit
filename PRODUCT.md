@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.10.0
+## Current Version: 1.11.0
 
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 
 ---
 
@@ -16,7 +16,7 @@ Last updated: 2026-08-23
 
 Turn ideas into actionable, validated plans.
 
-- **aet-plan** — PRD creation, goal clarification, atomic `plan.md` generation, and a `validate` command that checks plans against structure, scope, dependency, and traceability rules.
+- **aet-plan** — PRD creation, goal clarification, atomic `plan.md` generation, and a `validate` command that checks plans against structure, scope, dependency, and traceability rules. Requirement coverage counts the work already finished for the same PRD, so a plan is only asked to trace what nobody has delivered yet, and each result names how many plans it checked and against what.
 - **aet-pipeline-plan** — End-to-end planning pipeline that runs discovery, planning, and scope validation in sequence.
 - **aet-validate-scope** — Stress-test plans against the existing domain model, terminology, and documented decisions.
 
@@ -24,8 +24,8 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, and recovery of missing stage verdicts without re-running the whole stage.
-- **aet-implement** — Fresh-session implementation from an approved `plan.md`.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, and a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall.
+- **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
 ### Quality and Security Skills
@@ -49,7 +49,7 @@ Land code cleanly and document releases.
 
 Keep projects and the toolkit itself healthy.
 
-- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries.
+- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes.
 - **aet-upgrade** — Dependency and framework upgrade planning with breaking-change analysis.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
@@ -82,6 +82,18 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.11.0
+
+- **A plan cannot slip onto the board unchecked** — `aet run-one` applies the same plan-quality validation `aet sprint add` does, so the two doors onto the board agree. When you need to run a plan anyway, `--skip-intake` does it and records that the task did not pass.
+- **A rate limit stops the run instead of burning the queue** — hitting a provider quota or session limit now pauses the shift and puts the task back in the queue, rather than retrying into the same closed window and eventually setting the task aside as broken.
+- **Plan validation stops asking for work already done** — requirement coverage counts what previous plans for the same PRD delivered, so a plan that legitimately covers part of a PRD is no longer flagged for the rest.
+- **Validation results say what they checked** — every run names how many plans it looked at and what it judged coverage against, so a one-file check can no longer be mistaken for a full one.
+- **One pull request per epic, even with several in flight** — in single-PR mode the integration branch comes from the PRD a task belongs to, so concurrent epics each carry their own branch and review.
+- **Tests chosen from the change, not from a list** — the targeted tests a stage runs are derived from the code itself, so new code is covered the day it arrives instead of the day someone remembers to register it.
+- **Clearer refusals** — a config left over from an earlier version now names the migration instead of printing a stack trace, and a rejected plan shows the exact line that overrides a check you have judged not to apply.
+
+**Upgrading from 1.10.x:** `aet run-one` now refuses a plan that fails intake validation; pass `--skip-intake` to run it anyway. A run that meets a provider rate limit stops spawning even under `--on-failure continue`.
 
 ### What's New in v1.10.0
 
