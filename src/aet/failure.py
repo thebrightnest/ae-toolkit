@@ -15,6 +15,7 @@ class FailureClass(str, Enum):
     DESIGN = "design"
     TIMEOUT = "timeout"
     CANCELED = "canceled"
+    THROTTLED = "throttled"
 
 
 # Environment-side signals: missing tools/dependencies, network problems, auth.
@@ -44,6 +45,28 @@ _ENVIRONMENT_PATTERNS = [
         re.IGNORECASE,
     ),
     re.compile(r"\bpackage not found\b", re.IGNORECASE),
+]
+
+# Provider-side limits: the work is fine and the window is closed. Distinct
+# from ``environment`` because the remedy is not repair but waiting, and from
+# ``flaky`` because nothing about a session limit is transient within a retry
+# interval — a requeue inside the window fails again for the same reason.
+#
+# Qualified as tightly as the environment patterns, and for the same reason: a
+# bare "rate limit" matches a pytest line for ``test_rate_limit_handling`` and
+# would file a design failure as a throttle.
+_THROTTLE_PATTERNS = [
+    re.compile(r"\b(?:HTTP|status(?:\s+code)?)\s*[:=]?\s*429\b", re.IGNORECASE),
+    re.compile(r"\b429\s+too\s+many\s+requests\b", re.IGNORECASE),
+    re.compile(r"\btoo\s+many\s+requests\b", re.IGNORECASE),
+    re.compile(r"\brate[_\s-]?limit(?:ed|s)?\s+(?:exceeded|reached|hit)\b", re.IGNORECASE),
+    re.compile(r"\brate[_\s-]?limit[_\s-]?error\b", re.IGNORECASE),
+    re.compile(r"\bquota\s+(?:exceeded|exhausted)\b", re.IGNORECASE),
+    re.compile(r"\b(?:usage|session|token|message)\s+limit\s+(?:reached|exceeded)\b", re.IGNORECASE),
+    re.compile(r"\bretry[-_\s]after\b", re.IGNORECASE),
+    re.compile(r"\boverloaded_error\b", re.IGNORECASE),
+    re.compile(r"\bresource[_\s]exhausted\b", re.IGNORECASE),
+    re.compile(r"\binsufficient_quota\b", re.IGNORECASE),
 ]
 
 # Design-side signals: test, assertion, type, lint failures.
@@ -80,6 +103,11 @@ def classify(
         return FailureClass.CANCELED
     if killed_by_timeout:
         return FailureClass.TIMEOUT
+
+    # Ahead of environment: a 429 tail often also carries an auth or network
+    # word, and the wait-for-the-window remedy is the more specific one.
+    if _matches_any(tail, _THROTTLE_PATTERNS):
+        return FailureClass.THROTTLED
 
     if _matches_any(tail, _ENVIRONMENT_PATTERNS):
         return FailureClass.ENVIRONMENT

@@ -38,10 +38,13 @@ def append_failure_if_countable(
     signature: str,
     timestamp: str | None = None,
 ) -> bool:
-    """Append *signature* to *record* unless *failure_class* is canceled.
+    """Append *signature* to *record* unless the class is not the task's fault.
 
     Returns ``True`` when the signature was recorded, ``False`` when it was
-    skipped because ``canceled`` failures are not breaker evidence (ADR-030).
+    skipped. ``canceled`` failures are not breaker evidence (ADR-030), and
+    neither are ``throttled`` ones: the breaker exists to stop a task that
+    keeps failing for its own reasons, and three attempts against a closed
+    provider window say nothing about the task.
     """
     # Import here to avoid a hard dependency on failure.py for pure tests.
     try:
@@ -49,8 +52,13 @@ def append_failure_if_countable(
     except ImportError:  # pragma: no cover - defensive fallback
         FailureClass = None
 
-    if FailureClass is not None and getattr(failure_class, "value", failure_class) == FailureClass.CANCELED.value:
-        return False
+    if FailureClass is not None:
+        not_the_task_s_fault = {
+            FailureClass.CANCELED.value,
+            FailureClass.THROTTLED.value,
+        }
+        if getattr(failure_class, "value", failure_class) in not_the_task_s_fault:
+            return False
     record_failure_signature(record, signature, timestamp=timestamp)
     return True
 

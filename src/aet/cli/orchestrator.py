@@ -2500,7 +2500,34 @@ _TRIAGE_DEFAULT_ACTIONS: dict[str, str] = {
     failure_lib.FailureClass.TIMEOUT.value: "requeue",
     failure_lib.FailureClass.DESIGN.value: "quarantine",
     failure_lib.FailureClass.CANCELED.value: "quarantine",
+    failure_lib.FailureClass.THROTTLED.value: "requeue",
 }
+
+
+def _requeue_task(
+    backend, queue_file: str, task_id: str, failed_state: str, aet_state_bin: str
+) -> bool:
+    """Transition ``failed -> ready``, reporting failure rather than raising."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            aet_state_bin,
+            "transition",
+            task_id,
+            failed_state,
+            "ready",
+            queue_file,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True
+    print(
+        f"   ⚠️  Could not transition {task_id} to ready: "
+        f"{result.stderr.strip()}; leaving failed"
+    )
+    return False
 
 
 def _consult_triage_session(
@@ -2871,6 +2898,26 @@ def _finalize_task(
     task = next((t for t in queue if t.get("id") == task_id), None)
     failed_state = current_state(task) if task else "failed"
 
+    # A closed provider window is shared by every task in the run, so the
+    # remedy is to stop and come back — not to triage, not to keep spawning
+    # into the same wall. This overrides `--on-failure continue` deliberately:
+    # continuing would burn the rest of the queue on the same limit.
+    throttled = failure_lib.FailureClass.THROTTLED.value
+    if ((task.get("failure_signatures") or [{}])[-1].get("class") if task else None) == throttled:
+        requeued = _requeue_task(
+            backend, queue_file, task_id, failed_state, aet_state_bin
+        )
+        print(
+            f"   ⏸️  {task_id} hit a provider limit; "
+            f"{'requeued and ' if requeued else ''}stopping the run. "
+            "Re-run once the window resets."
+        )
+        return {
+            "successes": 0,
+            "failures": 0 if requeued else 1,
+            "stop_spawn": True,
+        }
+
     if on_failure == "halt":
         return {"successes": 0, "failures": 1, "stop_spawn": True}
 
@@ -2915,25 +2962,9 @@ def _finalize_task(
         # If quarantine transition fails, fall through to requeue/failed.
 
     # action == "requeue" (or quarantine transition failed): failed -> ready.
-    result = subprocess.run(
-        [
-            sys.executable,
-            aet_state_bin,
-            "transition",
-            task_id,
-            failed_state,
-            "ready",
-            queue_file,
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
+    if _requeue_task(backend, queue_file, task_id, failed_state, aet_state_bin):
         print(f"   🔄 {task_id} requeued")
         return {"successes": 0, "failures": 0, "stop_spawn": False}
-    print(
-        f"   ⚠️  Could not transition {task_id} to ready: {result.stderr.strip()}; leaving failed"
-    )
     return {"successes": 0, "failures": 1, "stop_spawn": False}
 
 
