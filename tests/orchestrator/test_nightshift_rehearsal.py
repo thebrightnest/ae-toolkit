@@ -323,16 +323,24 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
         )
 
     def test_stall_killed_and_classified_timeout(self):
-        """The stall fixture is killed and its failure class is timeout."""
+        """The stall fixture is killed and its failure class is timeout.
+
+        Measured flaky at 13–27% in August 2026 and not reproducible since; see
+        `docs/bugs/20260824-nightshift-stall-timeout-flake.md`. The failure
+        messages carry the whole signature list because the recorded diagnosis
+        needs it and the last entry alone did not distinguish the candidates.
+        """
         task = self._load_queue()["nightshift-stall"]
+        signatures = task.get("failure_signatures") or []
+        context = f"state={task.get('state')!r} signatures={signatures!r}"
         # The stall task is either quarantined by the breaker or still failed;
         # either way the recorded failure class is timeout.
-        self.assertIn(task["state"], {"quarantined", "failed"})
-        last_entry = (task.get("failure_signatures") or [])[-1:]
-        self.assertTrue(last_entry, "expected at least one failure signature")
+        self.assertIn(task["state"], {"quarantined", "failed"}, context)
+        self.assertTrue(signatures, f"expected a failure signature; {context}")
         self.assertEqual(
-            last_entry[0].get("class"),
+            signatures[-1].get("class"),
             failure.FailureClass.TIMEOUT.value,
+            context,
         )
 
     def test_both_incidents_costed_on_ledger(self):
