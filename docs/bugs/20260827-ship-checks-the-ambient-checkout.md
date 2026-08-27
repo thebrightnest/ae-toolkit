@@ -89,7 +89,21 @@ checked out, pulls, and merges `--no-ff` before pushing; gating inside that
 window is `subprocess.run(..., cwd=worktree)` plus a reset on failure. That
 removes the implicit cwd dependency rather than documenting around it.
 
-Interim, one line: refuse when `HEAD` is not `feature_branch`.
+~~Interim, one line: refuse when `HEAD` is not `feature_branch`.~~ **Withdrawn
+2026-08-27.** Attempted and reverted: the guard contradicts a shipped fix.
+`903c4f55` ("resolve merge source from task id, not the checkout") exists
+precisely because `aet ship merge` is run from a trunk checkout, and
+`test_merge_resolves_feature_branch_from_task_not_checkout` pins that shape with
+a real repo whose HEAD is on `main`. Four further tests in
+`tests/test_ship_merge.py` merge from `main` as their normal case. Refusing on
+`HEAD != feature_branch` would forbid the workflow that regression test was
+written to protect, so the "interim" line is not additive — it is a behaviour
+reversal that needs the same deliberation as the structural fix.
+
+That leaves the structural fix as the only route, and it is the better one
+anyway: gating inside `_merge_into_target`'s worktree validates the tree that is
+actually about to merge *while preserving checkout independence*, so it needs no
+guard and breaks no existing caller.
 
 Documentation, independent of either: state in `skills/aet-ship/SKILL.md` that a
 parallel batch's per-branch verdicts do not compose, and that the rebase inside
