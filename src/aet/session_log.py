@@ -9,6 +9,7 @@ Supported CLIs:
 
 - ``kimi`` — reads ``agents/*/wire.jsonl`` under a kimi session directory.
 - ``claude`` — reads a Claude Code transcript JSONL file.
+- ``agy`` — reads an Antigravity transcript JSONL file.
 
 An unsupported CLI returns an empty list; that is an explicit, tested property
 of the seam rather than an accidental silence.
@@ -19,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from aet import session_log_claude, wirelog
+from aet import session_log_agy, session_log_claude, wirelog
 
 
 def extract_test_invocations(
@@ -31,10 +32,10 @@ def extract_test_invocations(
     """Return test invocations for ``agent_cli`` from ``session_ref``.
 
     ``session_ref`` is an adapter-resolved session identifier (a session id
-    for both kimi and Claude). ``worktree_dir`` is required for the Claude
-    reader, which builds the transcript path from the cwd slug.
-    ``home`` overrides the default CLI home directory (``~/.kimi-code`` or
-    ``~/.claude``) for tests or non-standard installs.
+    for kimi and Claude, conversation id for Antigravity). ``worktree_dir`` is
+    required for the Claude reader, which builds the transcript path from the cwd slug.
+    ``home`` overrides the default CLI home directory (``~/.kimi-code``,
+    ``~/.claude``, or ``~/.gemini/antigravity-cli``) for tests or non-standard installs.
 
     Returns ``[]`` for adapters without a reader or when the reference cannot
     be resolved to a log.
@@ -46,5 +47,9 @@ def extract_test_invocations(
             return []
         return session_log_claude.extract_test_invocations(
             session_ref, worktree_dir, home=home
+        )
+    if agent_cli == "agy":
+        return session_log_agy.extract_test_invocations(
+            session_ref, worktree_dir=worktree_dir, home=home
         )
     return []

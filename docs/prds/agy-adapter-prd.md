@@ -1,7 +1,7 @@
 # PRD: aet Orchestrator Adapter for agy CLI
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*
 
 ## Overview
 
@@ -43,12 +43,12 @@ This is an **enhancement (new provider capability)** extending AET's pluggable a
 
 ## Acceptance Criteria
 
-- [ ] `resolve_cli_adapter("agy")` returns the configured `agy` adapter. (satisfies: R-1)
-- [ ] `adapter.build_cmd("test prompt", headless=True)` returns `["agy", "--dangerously-skip-permissions", "-p", "test prompt"]`. (satisfies: R-2)
-- [ ] `adapter.resolve_session_ref` successfully parses conversation IDs from output and confirms transcript presence on disk. (satisfies: R-3)
-- [ ] `session_log_agy.extract_test_invocations` extracts `pytest` / test runner tool invocations from fixture transcripts with correct timestamps, durations, and exit statuses. (satisfies: R-4, R-5)
-- [ ] `usage.parse_usage("agy", ...)` parses token counts accurately from `agy` session logs. (satisfies: R-6)
-- [ ] `pytest tests/cli/test_cli_adapter.py tests/test_session_log_agy.py` passes cleanly with 100% assertion success. (satisfies: R-7)
+- [x] `resolve_cli_adapter("agy")` returns the configured `agy` adapter. (satisfies: R-1)
+- [x] `adapter.build_cmd("test prompt", headless=True)` returns `["agy", "--dangerously-skip-permissions", "-p", "test prompt"]`. (satisfies: R-2)
+- [x] `adapter.resolve_session_ref` successfully parses conversation IDs from output and confirms transcript presence on disk. (satisfies: R-3)
+- [x] `session_log_agy.extract_test_invocations` extracts `pytest` / test runner tool invocations from fixture transcripts with correct timestamps, durations, and exit statuses. (satisfies: R-4, R-5)
+- [x] `usage.parse_usage("agy", ...)` parses token counts accurately from `agy` session logs. (satisfies: R-6)
+- [x] `pytest tests/cli/test_cli_adapter.py tests/test_session_log_agy.py` passes cleanly with 100% assertion success. (satisfies: R-7)
 
 ## Technical Notes
 

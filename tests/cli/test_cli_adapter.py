@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from aet import session_log_claude
+from aet import session_log_agy, session_log_claude
 from aet.cli_adapter import ADAPTERS, CLIAdapter, resolve_cli_adapter
 
 
@@ -35,6 +35,35 @@ class TestCLIAdapter(unittest.TestCase):
         self.assertIsNone(adapter.workdir_flag)
         self.assertEqual(adapter.headless_flag, "--dangerously-skip-permissions")
 
+    def test_agy_adapter(self):
+        """R-1: Antigravity is a first-class adapter alongside kimi and claude."""
+        adapter = resolve_cli_adapter("agy")
+        self.assertEqual(adapter.name, "agy")
+        self.assertEqual(adapter.bin, "agy")
+        self.assertEqual(adapter.prompt_flag, "-p")
+        self.assertIsNone(adapter.workdir_flag)
+        self.assertEqual(adapter.headless_flag, "--dangerously-skip-permissions")
+        self.assertEqual(adapter.usage_mode, "json-envelope")
+        self.assertEqual(adapter.stall_timeout, 7200.0)
+        self.assertEqual(adapter.wall_backstop, 7200.0)
+
+    def test_agy_build_cmd_requests_the_json_envelope(self):
+        """R-2: the envelope carries both the usage block and the conversation
+        id, so a headless ``agy`` invocation must always ask for it."""
+        adapter = resolve_cli_adapter("agy")
+        cmd = adapter.build_cmd("run tests", headless=True)
+        self.assertEqual(
+            cmd,
+            [
+                "agy",
+                "--dangerously-skip-permissions",
+                "--output-format",
+                "json",
+                "-p",
+                "run tests",
+            ],
+        )
+
     def test_build_cmd(self):
         adapter = CLIAdapter(
             name="test",
@@ -60,6 +89,11 @@ class TestCLIAdapter(unittest.TestCase):
         )
         cmd = adapter.build_cmd("run tests", headless=True)
         self.assertEqual(cmd, ["test", "-p", "run tests"])
+
+
+    def test_agy_is_last_in_the_path_probe_order(self):
+        """Adding agy must not change which CLI an existing box auto-selects."""
+        self.assertEqual(list(ADAPTERS), ["kimi", "claude", "agy"])
 
     def test_unsupported_cli_raises(self):
         with self.assertRaises(ValueError) as ctx:
@@ -297,6 +331,88 @@ class TestResolveSessionRef(unittest.TestCase):
             with patch("pathlib.Path.home", return_value=home):
                 ref = adapter.resolve_session_ref(envelope, workdir=str(link_dir))
             self.assertEqual(ref, "s1")
+
+    def _write_agy_transcript(self, home: Path, conversation_id: str) -> Path:
+        transcript = session_log_agy.transcript_path_for(conversation_id, home=home)
+        transcript.parent.mkdir(parents=True, exist_ok=True)
+        transcript.write_text("", encoding="utf-8")
+        return transcript
+
+    def test_agy_session_reference(self):
+        """R-3: the conversation id comes from the envelope and is confirmed
+        against the transcript agy wrote for it."""
+        conversation_id = "e9cd2e5f-a0e5-4f41-8ffc-ab2ee2d9b890"
+        envelope = json.dumps(
+            {
+                "conversation_id": conversation_id,
+                "status": "SUCCESS",
+                "response": "done",
+                "duration_seconds": 0.33,
+                "num_turns": 1,
+                "usage": {"input_tokens": 5, "output_tokens": 3, "total_tokens": 8},
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._write_agy_transcript(
+                home / ".gemini" / "antigravity-cli", conversation_id
+            )
+            adapter = resolve_cli_adapter("agy")
+            with patch("pathlib.Path.home", return_value=home):
+                ref = adapter.resolve_session_ref(envelope, workdir="/tmp/proj")
+            self.assertEqual(ref, conversation_id)
+
+    def test_agy_session_reference_survives_log_noise_before_envelope(self):
+        conversation_id = "e9cd2e5f-a0e5-4f41-8ffc-ab2ee2d9b890"
+        noisy = "ERROR: logging before google.Init: ...\n" + json.dumps(
+            {"conversation_id": conversation_id, "usage": {}}
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._write_agy_transcript(
+                home / ".gemini" / "antigravity-cli", conversation_id
+            )
+            adapter = resolve_cli_adapter("agy")
+            with patch("pathlib.Path.home", return_value=home):
+                ref = adapter.resolve_session_ref(noisy, workdir="/tmp/proj")
+            self.assertEqual(ref, conversation_id)
+
+    def test_agy_session_reference_null_when_transcript_missing(self):
+        """No transcript means no telemetry to point at — never a guessed id."""
+        envelope = json.dumps({"conversation_id": "c-absent", "usage": {}})
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = resolve_cli_adapter("agy")
+            with patch("pathlib.Path.home", return_value=Path(tmp)):
+                ref = adapter.resolve_session_ref(envelope, workdir="/tmp/proj")
+            self.assertIsNone(ref)
+
+    def test_agy_session_reference_null_when_id_is_not_a_uuid(self):
+        """A non-UUID id would point the reader at an attacker-shaped path."""
+        conversation_id = "../../etc"
+        envelope = '{"conversation_id":"%s"}' % conversation_id
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = resolve_cli_adapter("agy")
+            with patch("pathlib.Path.home", return_value=Path(tmp)):
+                self.assertIsNone(adapter.resolve_session_ref(envelope))
+
+    def test_agy_session_reference_null_when_envelope_unparseable(self):
+        adapter = resolve_cli_adapter("agy")
+        self.assertIsNone(adapter.resolve_session_ref("plain text", workdir="/tmp"))
+
+    def test_agy_session_reference_needs_no_workdir(self):
+        """agy's transcript path is keyed by conversation id, not by cwd."""
+        conversation_id = "e9cd2e5f-a0e5-4f41-8ffc-ab2ee2d9b890"
+        envelope = json.dumps({"conversation_id": conversation_id, "usage": {}})
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._write_agy_transcript(
+                home / ".gemini" / "antigravity-cli", conversation_id
+            )
+            adapter = resolve_cli_adapter("agy")
+            with patch("pathlib.Path.home", return_value=home):
+                self.assertEqual(
+                    adapter.resolve_session_ref(envelope), conversation_id
+                )
 
     def test_unknown_adapter_returns_none_session_reference(self):
         adapter = CLIAdapter(
