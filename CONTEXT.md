@@ -104,9 +104,9 @@ See ADR-061 (`docs/adr/061-the-record-is-the-plan-after-intake.md`) for the full
 - A **Task** may have zero or more **Blockers**.
 - A **Task** may be a **Blocker** for zero or more **Dependents**.
 - A **Dependent** becomes `ready` only when all its **Blockers** have a **Terminal State**; the writer promotes it forward when the last blocker reaches terminal.
-- A plan enters the **Board** only when explicitly promoted via `aet sprint add`; board membership is the sprint-add record, not a frontmatter field.
+- A plan enters the **Board** through `aet sprint add` or `aet sprint intake`; board membership is the admission record, not a frontmatter field.
 - A plan is closed when its task reaches the terminal state `merged` or `abandoned`; at that point it no longer appears on the **Board**.
-- Closure records the terminal event in the **Provenance Ledger** and **Execution Log** and updates the plan footer `*Stage:*` through a single code transaction; the commit is pushed so the terminal breadcrumb is versioned and reproducible across clones.
+- Closure records the terminal event in the **Provenance Ledger** and **Execution Log**.
 - A **Task** has one **Declared Size** (predicted at plan time) and, once closed, one **Delivered Size** (measured at closure). The pair is what makes a **Band** checkable; neither substitutes for the other.
 
 ## Example dialogue
