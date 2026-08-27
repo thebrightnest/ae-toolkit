@@ -59,10 +59,34 @@ class TestCLIAdapter(unittest.TestCase):
                 "--dangerously-skip-permissions",
                 "--output-format",
                 "json",
+                "--model",
+                "gemini-3.7-flash",
+                "--effort",
+                "high",
                 "-p",
                 "run tests",
             ],
         )
+
+    def test_agy_build_cmd_custom_model_and_effort(self):
+        adapter = resolve_cli_adapter("agy")
+        with patch.dict("os.environ", {"AET_AGY_MODEL": "gemini-3.1-pro", "AET_AGY_EFFORT": "low"}):
+            cmd = adapter.build_cmd("run tests", headless=True)
+            self.assertEqual(
+                cmd,
+                [
+                    "agy",
+                    "--dangerously-skip-permissions",
+                    "--output-format",
+                    "json",
+                    "--model",
+                    "gemini-3.1-pro",
+                    "--effort",
+                    "low",
+                    "-p",
+                    "run tests",
+                ],
+            )
 
     def test_build_cmd(self):
         adapter = CLIAdapter(

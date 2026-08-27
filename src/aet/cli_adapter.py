@@ -62,6 +62,13 @@ class CLIAdapter:
             # Before the prompt flag: some CLIs consume the token after -p as
             # the prompt value, so trailing flags would break the invocation.
             cmd.extend(_USAGE_MODE_FLAGS.get(self.usage_mode, ()))
+        if self.name == "agy":
+            model = os.environ.get("AET_AGY_MODEL", "gemini-3.7-flash")
+            effort = os.environ.get("AET_AGY_EFFORT", "high")
+            if model:
+                cmd.extend(["--model", model])
+            if effort:
+                cmd.extend(["--effort", effort])
         if self.prompt_flag:
             cmd.extend([self.prompt_flag, prompt])
         else:
