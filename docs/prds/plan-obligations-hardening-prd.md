@@ -225,6 +225,23 @@ _Recorded: 2026-08-27 — Branch: poh-04-divergence-is-recorded-at-closure_
 
 ---
 
+## Divergence Summary — poh-03-ship-resolves-verify-from-the-workflow
+
+_Recorded: 2026-08-27 — Branch: poh-03-ship-resolves-verify-from-the-workflow_
+
+### Changed from plan
+
+- (none)
+
+### Added (unplanned)
+
+- (none)
+
+### Deferred
+
+- **Task 3 (Merge branch to main and verify integration)**: deferred to the `aet-ship` closure stage, consistent with the standard pipeline.
+
+---
+
 *Stage: synced*
 *Next step: run `aet-ship`*
-

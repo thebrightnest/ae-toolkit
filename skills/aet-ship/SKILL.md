@@ -30,6 +30,16 @@ A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet sh
 
 `aet ship merge` checks for merge conflicts against `origin/<target>` before merging and records the resulting merge commit in the work queue.
 
+## Pre-Merge Gate
+
+`aet ship gate` (and pre-merge commands including `aet ship open` and `aet ship merge`) runs the gate verification checks:
+1. Rebase verification against trunk.
+2. Clean working tree check.
+3. Test suite execution (`AET_SHIP_TEST_CMD`, defaulting to `make validate`).
+4. Optional coverage check (`AET_SHIP_COVERAGE_CMD`).
+5. **Evidence resolution**: Resolves required evidence from the workflow definition via `gate.required_evidence`. If a workflow stage produces `verify` evidence (such as `synced` for `critical` work class), `.agents/verify/<task>-evidence.md` (or `.agents/verify/<task>-evidence`) must exist. If missing, the gate pauses and reports the producing stage name in the refusal.
+6. Scope audit against declared files in the plan spec.
+
 ## Integration Modes
 
 ### `pr-per-task` (default)
