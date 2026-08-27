@@ -211,6 +211,20 @@ _Recorded: 2026-08-27 — Branch: poh-02-verify-routing-key-and-work-class-gate-
 
 ---
 
+## Divergence Summary — poh-04-divergence-is-recorded-at-closure
+
+_Recorded: 2026-08-27 — Branch: poh-04-divergence-is-recorded-at-closure_
+
+### Changed from plan
+
+- **Task 3 (History record integration)**: Divergence calculation at closure was wired into `src/aet/queue.py` (`append_history_record`) and `src/aet/cli/orchestrator.py` instead of `src/aet/cli/aet_state.py`, matching the history recording pipeline for all closure paths.
+
+### Deferred
+
+- **Task 5 (merge branch to main and verify integration)**: deferred to the `aet-ship` closure stage.
+
+---
+
 *Stage: synced*
 *Next step: run `aet-ship`*
 

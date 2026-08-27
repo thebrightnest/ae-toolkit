@@ -592,7 +592,7 @@ def append_history_record(history_file: str, task: dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(history_file), exist_ok=True)
     record = {**task, "settled_at": datetime.now(timezone.utc).isoformat()}
 
-    from aet import plan_parser  # local import avoids a cycle with plan_parser
+    from aet import divergence, plan_parser  # local import avoids a cycle with plan_parser
 
     repo_root = Path(history_file).parent.parent
     # After R-19 the rendered spec travels with the task record, so the declared
@@ -603,6 +603,11 @@ def append_history_record(history_file: str, task: dict[str, Any]) -> None:
 
     size_info = plan_size.delivered_size(repo_root, task.get("merge_commit"))
     record["delivered_size"] = {**size_info, "declared_size": declared_size}
+
+    div_info = divergence.compute_divergence(
+        repo_root, task.get("merge_commit"), spec=task.get("spec"), task=task
+    )
+    record["divergence"] = div_info
 
     with open(history_file, "a", encoding="utf-8") as f:
         json.dump(record, f)

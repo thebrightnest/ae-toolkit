@@ -48,6 +48,7 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import (  # noqa: E402
     breaker,
+    divergence,
     evidence,
     gate,
     handoff,
@@ -2743,6 +2744,9 @@ def _attach_delivered_size(task: dict, repo_root: str) -> bool:
     routing_data = plan_parser.task_routing_data(task, repo_root=repo_root)
     declared_size = routing_data.get("size")
     task["delivered_size"] = {**size_info, "declared_size": declared_size}
+    task["divergence"] = divergence.compute_divergence(
+        repo_root, merge_commit, spec=task.get("spec"), task=task
+    )
     return True
 
 
