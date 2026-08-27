@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-08-27
 - **Severity:** medium
-- **Status:** open
+- **Status:** fixed 2026-08-27
 - **Related plan:** `docs/plans/osd-03-worktree-teardown-visibility.md` (plan-approved) owns
   this code; its task 1 is the diagnosis recorded here.
 

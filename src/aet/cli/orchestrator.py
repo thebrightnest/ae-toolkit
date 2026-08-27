@@ -3197,7 +3197,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     report = breaker.systemic_report(systemic_tally)
                     print(f"⛔ {report}")
                     stop_spawn = True
-        teardown = teardown_worktree(repo_root, task_id, base_branch)
+        teardown = teardown_worktree(repo_root, task_id)
         if not teardown["removed"]:
             obstruction_text = (
                 _format_paths(teardown.get("obstructions", []))

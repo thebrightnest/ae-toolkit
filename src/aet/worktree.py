@@ -271,24 +271,20 @@ def _remove_deferred_untracked(worktree_dir: str) -> tuple[bool, list[str]]:
     return (not errors), errors
 
 
-def _worktree_obstructions(worktree_dir: str, base_branch: str) -> list[str]:
-    """Return non-deferred paths that should block worktree removal.
+def _worktree_obstructions(worktree_dir: str) -> list[str]:
+    """Return uncommitted non-deferred paths that should block teardown.
 
-    Includes tracked changes relative to the integration base and untracked
-    files that are neither deferred nor declared AET-generated ignored paths.
+    Only *uncommitted* work is at risk here: ``git worktree remove`` does not
+    touch branch refs, so anything already committed survives removal on the
+    branch. Unioning in the ``base..HEAD`` diff — as this did until 2026-08-27 —
+    made end-of-run teardown fail by construction, because that set is non-empty
+    for every task that did anything.
+
+    The diff-based risk model still applies to the refresh path, which recreates
+    the worktree and rebuilds the branch from base; that caller keeps its own
+    predicate in ``_worktree_has_non_deferred_changes``.
     """
     obstructions: set[str] = set()
-
-    diff = subprocess.run(
-        ["git", "-C", worktree_dir, "diff", "--name-only", f"{base_branch}..HEAD"],
-        capture_output=True,
-        text=True,
-    )
-    if diff.returncode == 0:
-        for path in diff.stdout.splitlines():
-            path = path.strip()
-            if path and not _is_deferred_path(path):
-                obstructions.add(path)
 
     status = subprocess.run(
         ["git", "-C", worktree_dir, "status", "--porcelain", "--untracked-files=all"],
@@ -314,9 +310,7 @@ def _worktree_obstructions(worktree_dir: str, base_branch: str) -> list[str]:
     return sorted(obstructions)
 
 
-def teardown_worktree(
-    repo_root: str, task_id: str, base_branch: str = "origin/main"
-) -> dict[str, Any]:
+def teardown_worktree(repo_root: str, task_id: str) -> dict[str, Any]:
     """Tear down a task worktree, cleaning AET artifacts but refusing real work.
 
     Returns a dict with keys ``removed`` (bool), ``reason`` (str), and
@@ -335,9 +329,9 @@ def teardown_worktree(
         result["obstructions"] = errors
         return result
 
-    obstructions = _worktree_obstructions(worktree_dir, base_branch)
+    obstructions = _worktree_obstructions(worktree_dir)
     if obstructions:
-        result["reason"] = "worktree has non-deferred changes"
+        result["reason"] = "worktree has uncommitted changes"
         result["obstructions"] = obstructions
         return result
 
@@ -351,7 +345,7 @@ def teardown_worktree(
         result["removed"] = True
     except subprocess.CalledProcessError as exc:
         result["reason"] = exc.stderr.strip() or "git worktree remove failed"
-        result["obstructions"] = _worktree_obstructions(worktree_dir, base_branch)
+        result["obstructions"] = _worktree_obstructions(worktree_dir)
 
     return result
 

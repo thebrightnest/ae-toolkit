@@ -947,7 +947,7 @@ class TestTeardownWorktree(unittest.TestCase):
             plan.parent.mkdir(parents=True, exist_ok=True)
             plan.write_text("plan", encoding="utf-8")
 
-            result = worktree.teardown_worktree(repo_root, "task-001", "origin/main")
+            result = worktree.teardown_worktree(repo_root, "task-001")
 
             self.assertTrue(result["removed"], result)
             self.assertFalse(os.path.isdir(worktree_dir))
@@ -960,14 +960,18 @@ class TestTeardownWorktree(unittest.TestCase):
             Path(worktree_dir, "src").mkdir(parents=True, exist_ok=True)
             Path(worktree_dir, "src", "code.py").write_text("code", encoding="utf-8")
 
-            result = worktree.teardown_worktree(repo_root, "task-001", "origin/main")
+            result = worktree.teardown_worktree(repo_root, "task-001")
 
             self.assertFalse(result["removed"])
             self.assertTrue(os.path.isdir(worktree_dir))
             self.assertIn("src/code.py", result["obstructions"])
 
-    def test_teardown_refuses_tracked_non_deferred_change(self):
-        """A committed non-deferred change is real work and blocks teardown."""
+    def test_teardown_removes_worktree_with_committed_work(self):
+        """Committed work lives on the branch ref and survives removal.
+
+        Regression for teardown unioning the ``base..HEAD`` diff into its
+        obstructions, which stranded every worktree that had done any work.
+        """
         with tempfile.TemporaryDirectory() as repo_root:
             _init_repo_with_origin(repo_root)
             worktree_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
@@ -979,11 +983,18 @@ class TestTeardownWorktree(unittest.TestCase):
                 check=True,
             )
 
-            result = worktree.teardown_worktree(repo_root, "task-001", "origin/main")
+            result = worktree.teardown_worktree(repo_root, "task-001")
 
-            self.assertFalse(result["removed"])
-            self.assertTrue(os.path.isdir(worktree_dir))
-            self.assertIn("src/code.py", result["obstructions"])
+            self.assertTrue(result["removed"], result)
+            self.assertFalse(os.path.isdir(worktree_dir))
+            # The commit survives on the branch the worktree was removed from.
+            log = subprocess.run(
+                ["git", "-C", repo_root, "log", "-1", "--format=%s", "task-001"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(log.stdout.strip(), "implement")
 
 
 class TestRemoveWorktreeClassification(unittest.TestCase):
