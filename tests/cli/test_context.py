@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 from tests.cli._helpers import git, run_typer
 
@@ -577,9 +578,12 @@ class TestContextCommand(unittest.TestCase):
         agents_md.write_text("# AGENTS\n", encoding="utf-8")
         _set_mtime(agents_md, "2026-08-01T12:00:00+00:00")
 
-        _write_prd(prds_dir, "default-prd.md", stage="scope-validated")
-        _write_plan(plans_dir, "feat-001.md", stage="implemented")
-        _write_plan(plans_dir, "feat-002.md", stage="plan-approved")
+        prd = _write_prd(prds_dir, "default-prd.md", stage="scope-validated")
+        _set_mtime(prd, "2026-08-01T12:00:00+00:00")
+        p1 = _write_plan(plans_dir, "feat-001.md", stage="implemented")
+        _set_mtime(p1, "2026-08-01T12:00:00+00:00")
+        p2 = _write_plan(plans_dir, "feat-002.md", stage="plan-approved")
+        _set_mtime(p2, "2026-08-02T12:00:00+00:00")
 
         _write_learnings(
             agents_dir,
@@ -604,14 +608,18 @@ class TestContextCommand(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             self._make_golden_repo(tmp_path)
-            for harness in ("claude-code", "codex", "gemini"):
-                result = run_typer(
-                    aet.app, ["context", "--hook-json", harness], cwd=tmp_path
-                )
-                self.assertEqual(result.exit_code, 0, result.output + result.stderr)
-                fixture_path = fixtures_dir / f"{harness.replace('-', '_')}_envelope.json"
-                expected = fixture_path.read_text(encoding="utf-8")
-                self.assertEqual(result.output, expected)
+            with mock.patch(
+                "aet.cli.context._recent_plan",
+                return_value=tmp_path / "docs" / "plans" / "feat-002.md",
+            ):
+                for harness in ("claude-code", "codex", "gemini"):
+                    result = run_typer(
+                        aet.app, ["context", "--hook-json", harness], cwd=tmp_path
+                    )
+                    self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+                    fixture_path = fixtures_dir / f"{harness.replace('-', '_')}_envelope.json"
+                    expected = fixture_path.read_text(encoding="utf-8")
+                    self.assertEqual(result.output, expected)
 
     def test_context_learnings_tolerates_legacy_date_field(self):
         """Learnings entries with legacy ``date`` field are selected correctly."""

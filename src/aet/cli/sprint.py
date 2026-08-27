@@ -17,76 +17,28 @@ from pathlib import Path
 import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import plan_validate  # noqa: E402
+from aet.admission import (  # noqa: E402
+    Admitted,
+    RefusalReason,
+    Refused,
+    SkipReason,
+    Skipped,
+    admit_plan,
+    resolve_plan,
+    settled_ids_from as _settled_ids,
+)
 from aet.backends.factory import (  # noqa: E402
     create_backend,
     resolve_config,
 )
 from aet.backends.github_backend import BackendError, GitHubBackend  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
-from aet.plan_parser import (  # noqa: E402
-    new_task_from_plan,
-    resolve_plan_arg,
-    stage_from_plan,
-)
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
 from aet.queue import (  # noqa: E402
-    HISTORY_TERMINAL_STATES,
     QueueIntegrityError,
     build_blocks,
     lease_guard,
-    read_history,
 )
-
-
-def _settled_ids(backend, history_file: str | None = None) -> set[str]:
-    """Return ids of tasks that left the board by assertion.
-
-    Two sources, both positive evidence of settling (never absence):
-
-    - ADR-059 tombstones at ``refs/aet/sealed/<id>``, the authority for the
-      git-refs backend.
-    - The append-only settled history log. A blocker merged and archived before
-      a dependent was added has a history record; without it, add-after-merge
-      would count the blocker as unresolved and deadlock the dependent.
-
-    Backends with neither report nothing settled, which keeps blocker
-    resolution fail-closed rather than optimistic.
-    """
-    settled: set[str] = set()
-
-    getter = getattr(backend, "settled_ids", None)
-    if getter is not None:
-        try:
-            settled |= getter()
-        except Exception:
-            pass
-
-    path = history_file or getattr(backend, "history_file", None)
-    if path:
-        try:
-            settled |= {
-                record["id"]
-                for record in read_history(str(path))
-                if record.get("id")
-                and record.get("state") in HISTORY_TERMINAL_STATES
-            }
-        except Exception:
-            pass
-
-    return settled
-
-
-def resolve_plan(target: str, plans_dir: Path) -> Path | None:
-    """Resolve ``target`` to a plan file path.
-
-    Wraps the shared resolver and converts its ``ValueError`` into ``None``,
-    preserving ``aet sprint add``'s existing contract.
-    """
-    try:
-        return Path(resolve_plan_arg(target, plans_dir=plans_dir))
-    except ValueError:
-        return None
 
 
 def _fail(message: str) -> int:
@@ -94,65 +46,8 @@ def _fail(message: str) -> int:
     return 1
 
 
-def _unacked_intake_findings(
-    plan_file: Path,
-    plans_dir: Path,
-    backend,
-    history_file: str | None,
-) -> tuple[list[plan_validate.Finding], plan_validate.RecordCoverage]:
-    """Return ``plan_file``'s unacked intake findings and the coverage record.
-
-    Both board doors — ``aet sprint add`` and ``aet sprint intake`` — must apply
-    the same admission policy. Only the *decision* lives here; each door renders
-    the refusal in its own shape (a message and exit code, or a refused-row in a
-    batch summary), so presentation stays with the caller.
-    """
-    # Validate the target plan in the context of every plan in plans_dir so
-    # blocker references resolve, but only report findings for the target plan.
-    all_plan_files = sorted(plans_dir.glob("*.md"))
-    if plan_file not in all_plan_files:
-        all_plan_files.append(plan_file)
-    # Settled history ids are valid blocker references even when the plan file
-    # is gone, so include them in the structural cross-reference set.
-    settled_ids: set[str] = set()
-    if history_file and Path(history_file).exists():
-        for line in Path(history_file).read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record_line = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if record_line.get("id"):
-                settled_ids.add(record_line["id"])
-
-    # A sibling that already delivered part of the PRD has usually left
-    # docs/plans/ for the record (ADR-061). Crediting its coverage is what
-    # keeps intake from demanding this plan trace requirements another plan
-    # covered — the pressure that falsifies the check's own input.
-    # One root for both sources: the PRD paths they produce are dict keys, so
-    # a mismatch would silently credit nothing.
-    repo_root = Path(backend.repo_root)
-    record = plan_validate.coverage_from_backend(backend, repo_root)
-    findings = plan_validate.validate(
-        all_plan_files,
-        repo_root=repo_root,
-        extra_known_ids=settled_ids,
-        extra_coverage=record.coverage,
-    )
-    plan_texts = {pf: pf.read_text(errors="ignore") for pf in all_plan_files}
-    findings = plan_validate.apply_acks(findings, plan_texts)
-    unacked = [f for f in findings if f.plan == plan_file and not f.acked]
-    return unacked, record
-
-
 def _add(args: argparse.Namespace) -> int:
     plans_dir = Path(args.plans_dir)
-    plan_file = resolve_plan(args.target, plans_dir)
-
-    if plan_file is None:
-        return _fail(f"No plan found for '{args.target}' in {plans_dir}")
 
     backend = create_backend(
         config_path=args.config,
@@ -173,82 +68,103 @@ def _add(args: argparse.Namespace) -> int:
     queue = data["queue"]
     history = data["history"]
 
-    plan_str = str(plan_file)
-    existing = next(
-        (t for t in queue if t.get("plan_file") == plan_str or t.get("id") == plan_file.stem),
-        None,
+    outcome = admit_plan(
+        args.target,
+        plans_dir=plans_dir,
+        backend=backend,
+        history_file=args.history_file,
+        queue=queue,
+        history=history,
+        allow_blocked=True,
     )
-    if existing is not None:
-        print(f"✓ {plan_file.name} is already in the queue ({existing.get('state', 'planned')}).")
-        backend.close()
-        return 0
 
-    settled_ids = {t.get("id") for t in history if t.get("id")}
-    if plan_file.stem in settled_ids:
+    if isinstance(outcome, Skipped):
         backend.close()
-        return _fail(
-            f"Refusing to promote {plan_file.name}: task is already settled in history."
-        )
+        if outcome.reason == SkipReason.ALREADY_IN_QUEUE:
+            plan_name = (
+                outcome.plan_file.name if outcome.plan_file else args.target
+            )
+            state = (
+                outcome.existing_task.get("state", "planned")
+                if outcome.existing_task
+                else "planned"
+            )
+            print(f"✓ {plan_name} is already in the queue ({state}).")
+            return 0
+        if outcome.reason == SkipReason.ALREADY_SETTLED:
+            plan_name = (
+                outcome.plan_file.name if outcome.plan_file else args.target
+            )
+            return _fail(
+                f"Refusing to promote {plan_name}: task is already settled in history."
+            )
 
-    stage = stage_from_plan(plan_file)
-    if stage != "plan-approved":
+    if isinstance(outcome, Refused):
         backend.close()
-        return _fail(
-            f"Refusing to promote {plan_file.name}: plan stage is '{stage or 'unknown'}'; "
-            f"only 'plan-approved' plans may enter the sprint."
-        )
-
-    unacked, record = _unacked_intake_findings(
-        plan_file, plans_dir, backend, args.history_file
-    )
-    if unacked:
-        backend.close()
-        print(
-            f"⛔ Refusing to promote {plan_file.name}: intake validation failed.",
-            file=sys.stderr,
-        )
-        for finding in unacked:
-            print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
-        # "cites unknown requirement" has a class of input it cannot accept: a
-        # plan whose deliverable is to mint the R-id it cites. The check reads
-        # the register as it stands, so such a plan can never satisfy it, and
-        # both wrong fixes are attractive — pre-minting the anchor moves the
-        # deliverable outside the plan, padding (traces: …) makes it false.
-        if unacked and all(
-            f.check_id == "rtrace" and "cites unknown requirement" in f.message
-            for f in unacked
-        ):
+        if outcome.reason == RefusalReason.PLAN_NOT_FOUND:
+            return _fail(f"No plan found for '{args.target}' in {plans_dir}")
+        if outcome.reason == RefusalReason.VALIDATION_FAILED:
+            plan_name = (
+                outcome.plan_file.name if outcome.plan_file else args.target
+            )
             print(
-                "  note: this check compares citations against requirements that "
-                "already exist,\n"
-                "        so a plan that introduces one cannot satisfy it. If the "
-                "requirement is\n"
-                "        this plan's own deliverable, an ack is the intended route.",
+                f"⛔ Refusing to promote {plan_name}: intake validation failed.",
                 file=sys.stderr,
             )
-        print(
-            "  Fix the plan, or override a check that does not apply by adding "
-            "a line to it:",
-            file=sys.stderr,
-        )
-        print("    ⚠️ VALIDATE ACK: <check-id> — <reason>", file=sys.stderr)
-        for task_id in record.unreadable:
+            findings = outcome.findings or []
+            for finding in findings:
+                print(
+                    f"  - {finding.check_id}: {finding.message}",
+                    file=sys.stderr,
+                )
+            if findings and all(
+                f.check_id == "rtrace"
+                and "cites unknown requirement" in f.message
+                for f in findings
+            ):
+                print(
+                    "  note: this check compares citations against requirements that "
+                    "already exist,\n"
+                    "        so a plan that introduces one cannot satisfy it. If the "
+                    "requirement is\n"
+                    "        this plan's own deliverable, an ack is the intended route.",
+                    file=sys.stderr,
+                )
             print(
-                f"  note: task record {task_id} carries no readable spec; "
-                "its requirement coverage is not counted",
+                "  Fix the plan, or override a check that does not apply by adding "
+                "a line to it:",
                 file=sys.stderr,
             )
-        if record.source_error:
-            print(
-                f"  note: no coverage read from the task record "
-                f"({record.source_error})",
-                file=sys.stderr,
+            print("    ⚠️ VALIDATE ACK: <check-id> — <reason>", file=sys.stderr)
+            if outcome.coverage:
+                for task_id in outcome.coverage.unreadable:
+                    print(
+                        f"  note: task record {task_id} carries no readable spec; "
+                        "its requirement coverage is not counted",
+                        file=sys.stderr,
+                    )
+                if outcome.coverage.source_error:
+                    print(
+                        f"  note: no coverage read from the task record "
+                        f"({outcome.coverage.source_error})",
+                        file=sys.stderr,
+                    )
+            return 1
+        if outcome.reason == RefusalReason.BLOCKED:
+            plan_name = (
+                outcome.plan_file.name if outcome.plan_file else args.target
             )
-        return 1
+            blockers_str = (
+                f"blocked by {', '.join(outcome.blockers)}"
+                if outcome.blockers
+                else "blocked"
+            )
+            return _fail(f"Refusing to promote {plan_name}: {blockers_str}")
 
-    task = new_task_from_plan(
-        plan_file, live_tasks=queue, settled_ids=_settled_ids(backend, args.history_file)
-    )
+    assert isinstance(outcome, Admitted)
+    task = outcome.task
+    plan_file = outcome.plan_file
+
     queue.append(task)
     build_blocks(queue)
 
@@ -326,71 +242,55 @@ def _intake(args: argparse.Namespace) -> int:
     refused: list[tuple[str, int, str]] = []
     skipped: list[tuple[str, int, str]] = []
 
-    settled_ids = {t.get("id") for t in history if t.get("id")}
-    live_ids = {t.get("id") for t in queue if t.get("id")}
-
     for candidate in candidates:
         task_id = candidate["task_id"]
         issue_number = candidate["issue_number"]
 
-        if task_id in live_ids:
-            skipped.append((task_id, issue_number, "already in queue"))
-            continue
-        if task_id in settled_ids:
-            skipped.append((task_id, issue_number, "already settled"))
-            continue
-
-        plan_file = resolve_plan(task_id, plans_dir)
-        if plan_file is None or not plan_file.exists():
-            refused.append((task_id, issue_number, "plan file not found"))
-            continue
-
-        stage = stage_from_plan(plan_file)
-        if stage != "plan-approved":
-            refused.append(
-                (task_id, issue_number, f"plan stage is '{stage or 'unknown'}'")
-            )
-            continue
-
-        # The forge door admits onto the same board as `aet sprint add`, so it
-        # answers to the same policy. Until 2026-08-27 it ran no validation at
-        # all: a plan reachable from an `aet:sprint` issue entered the queue
-        # without the frontmatter contract, rtrace citations, or coverage ever
-        # being checked, and acks written for `add` went unread here.
-        unacked, _coverage = _unacked_intake_findings(
-            plan_file, plans_dir, backend, args.history_file
+        outcome = admit_plan(
+            task_id,
+            plans_dir=plans_dir,
+            backend=backend,
+            history_file=args.history_file,
+            queue=queue,
+            history=history,
+            allow_blocked=False,
         )
-        if unacked:
-            detail = "; ".join(f"{f.check_id}: {f.message}" for f in unacked[:3])
-            if len(unacked) > 3:
-                detail += f"; (+{len(unacked) - 3} more)"
-            refused.append((task_id, issue_number, f"intake validation failed — {detail}"))
+
+        if isinstance(outcome, Skipped):
+            if outcome.reason == SkipReason.ALREADY_IN_QUEUE:
+                skipped.append((task_id, issue_number, "already in queue"))
+            elif outcome.reason == SkipReason.ALREADY_SETTLED:
+                skipped.append((task_id, issue_number, "already settled"))
             continue
 
-        task = new_task_from_plan(
-            plan_file, live_tasks=queue, settled_ids=_settled_ids(backend, args.history_file)
-        )
-        if task["state"] == "blocked":
-            blockers = [
-                b
-                for b in task.get("blocked_by", [])
-                if b in live_ids
-                and next(
-                    (
-                        t
-                        for t in queue
-                        if t.get("id") == b
-                        and t.get("state") in {"merged", "abandoned"}
-                    ),
-                    None,
+        if isinstance(outcome, Refused):
+            if outcome.reason == RefusalReason.PLAN_NOT_FOUND:
+                refused.append((task_id, issue_number, "plan file not found"))
+            elif outcome.reason == RefusalReason.VALIDATION_FAILED:
+                findings = outcome.findings or []
+                detail = "; ".join(
+                    f"{f.check_id}: {f.message}" for f in findings[:3]
                 )
-                is None
-            ]
-            reason = f"blocked by {', '.join(blockers)}" if blockers else "blocked"
-            refused.append((task_id, issue_number, reason))
+                if len(findings) > 3:
+                    detail += f"; (+{len(findings) - 3} more)"
+                refused.append(
+                    (
+                        task_id,
+                        issue_number,
+                        f"intake validation failed — {detail}",
+                    )
+                )
+            elif outcome.reason == RefusalReason.BLOCKED:
+                reason = (
+                    f"blocked by {', '.join(outcome.blockers)}"
+                    if outcome.blockers
+                    else "blocked"
+                )
+                refused.append((task_id, issue_number, reason))
             continue
 
-        queue.append(task)
+        assert isinstance(outcome, Admitted)
+        queue.append(outcome.task)
         admitted.append((task_id, issue_number))
 
     if admitted:
@@ -426,7 +326,10 @@ def _intake(args: argparse.Namespace) -> int:
     for task_id, issue_number in admitted:
         print(f"✓ Admitted {task_id} (#{issue_number}) to the sprint.")
     for task_id, issue_number, reason in refused:
-        print(f"⛔ Refused {task_id} (#{issue_number}): {reason}.", file=sys.stderr)
+        print(
+            f"⛔ Refused {task_id} (#{issue_number}): {reason}.",
+            file=sys.stderr,
+        )
     for task_id, issue_number, reason in skipped:
         print(f"⚠️  Skipped {task_id} (#{issue_number}): {reason}.")
 

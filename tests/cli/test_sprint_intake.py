@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from unittest.mock import patch
 
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.cli import sprint as sprint_cmd
@@ -302,6 +303,80 @@ class TestSprintIntakeRunsIntakeValidation(unittest.TestCase):
             refusal = stderr.getvalue()
             self.assertIn("rtrace", refusal)
             self.assertIn("R-99", refusal)
+
+    def test_intake_admits_footerless_clean_plan(self):
+        """A clean plan with NO _Stage: footer is admitted by sprint intake (R-10)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plans_dir = root / "docs" / "plans"
+            plans_dir.mkdir(parents=True)
+            _write_default_prd(plans_dir)
+            plan_path = plans_dir / "feat-clean.md"
+            plan_path.write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "id: feat-clean",
+                        "size: S",
+                        "---",
+                        "",
+                        "# feat-clean",
+                        "",
+                        "## Context",
+                        "PRD: docs/prds/default.md",
+                        "",
+                        "## Task List",
+                        "1. Do something (traces: R-1).",
+                        "",
+                        "## Files to Modify",
+                        "- `src/widget.py` (new)",
+                        "",
+                        "## Validation Steps",
+                        "- [ ] test_widget verifies widget.py",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            _git_init(root)
+            config_path = _write_config(
+                root, projections=[{"type": "github", "repo": "owner/repo"}]
+            )
+            queue_file, history_file = _seed_queue(root, [])
+            issue = {
+                "number": 42,
+                "title": "feat-clean",
+                "body": "<!-- aet-id: feat-clean -->\nPlan file: docs/plans/feat-clean.md",
+                "labels": [{"name": "aet:sprint"}],
+                "state": "open",
+            }
+            with mock.patch(
+                "aet.backends.github_backend.subprocess.run"
+            ) as mock_run:
+                mock_run.side_effect = _gh_side_effect(
+                    _all_aet_labels(), json.dumps([issue])
+                )
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "sprint",
+                        "intake",
+                        "--queue-file",
+                        str(queue_file),
+                        "--history-file",
+                        str(history_file),
+                        "--plans-dir",
+                        str(plans_dir),
+                        "--config",
+                        str(config_path),
+                    ],
+                ):
+                    rc = sprint_cmd.main()
+
+            self.assertEqual(rc, 0)
+            ids = [t["id"] for t in _read_queue(queue_file, history_file)]
+            self.assertIn("feat-clean", ids)
 
 
 class TestSprintIntakeRefusesBlockedCandidate(unittest.TestCase):

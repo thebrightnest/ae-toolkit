@@ -10,7 +10,7 @@ It has **five writers and no production reader**: `aet sprint add`, `aet state s
 _Avoid_: describing the ledger as refs-borne or as the settled-ness authority; deriving settled-ness from plan frontmatter.
 
 **Board** (also called the **Work Queue**):
-The set of open work: the ephemeral active list of tasks loaded by the queue backend. Under the `git-refs` backend it is stored in `refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, and the `refs/aet/meta/queue` envelope, and pushed to/fetched from origin. Plans enter the board only through `aet sprint add`, not from frontmatter fields (ADR-055). Discovery is record-based; `aet queue sync` never scans the plans directory (ADR-054).
+The set of open work: the ephemeral active list of tasks loaded by the queue backend. Under the `git-refs` backend it is stored in `refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, and the `refs/aet/meta/queue` envelope, and pushed to/fetched from origin. Plans enter the board through `aet sprint add` or `aet sprint intake`, not from frontmatter fields (ADR-055, ADR-066). Discovery is record-based; `aet queue sync` never scans the plans directory (ADR-054).
 _Avoid_: issue tracker.
 
 **Task**:
@@ -18,7 +18,7 @@ The board entry, carrying the spec. A task is represented by one record under `r
 _Avoid_: ticket, story, issue.
 
 **Plan File**:
-The markdown document in `docs/plans/` authored in the planning phase. It describes how to implement a task and is the artifact of the **Author** phase. After intake, the task record's `spec` is the source of intent; the plan file may be rendered into a worktree as an ephemeral working copy, and the footer `*Stage:*` is updated by code as a human breadcrumb at terminal closure.
+The markdown document in `docs/plans/` authored in the planning phase. It describes how to implement a task and is the artifact of the **Author** phase. After intake, the task record's `spec` is the source of intent; the plan file may be rendered into a worktree as an ephemeral working copy.
 _Avoid_: PRD, roadmap, spec.
 
 **Rendered Plan**:
@@ -33,7 +33,7 @@ The canonical workflow state stored in `tasks[].state` while a task is in the qu
 _Avoid_: using `state` for terminal truth.
 
 **Status (plan lifecycle)**:
-_Deprecated._ The `status` frontmatter field left the plan contract in ADR-055 and is now rejected by `aet plans lint`. Settled-ness is derived by **Settled-ness Authority**, which still reads the plan footer as one of its three inputs — so `_Stage:_` is not yet a breadcrumb only, despite ADR-055's intent.
+_Deprecated._ The `status` frontmatter field left the plan contract in ADR-055 and is now rejected by `aet plans lint`. Settled-ness is derived by **Settled-ness Authority**. The `_Stage:_` footer is a breadcrumb only.
 _Avoid_: using plan `status` for any runtime scheduling or settled-ness decision.
 
 **Blocker**:
@@ -47,7 +47,7 @@ A terminal closure event that ends a task's lifecycle and satisfies blockers: `m
 _Avoid_: done.
 
 **Plan Backlog**:
-Approved plans in `docs/plans/` that are not yet on the board and not yet closed.
+Plans in `docs/plans/` that are not yet on the board and not yet closed.
 
 **Shadow Posture**:
 The permanent local-only mode inferred from the absence of project-scope AET configuration. Configuration lives at user scope, no projection runs, and no AET artifact appears in the working tree. Because the operator has not opted into cross-device sharing, `refs/aet/*` are never pushed. Every run announces the inferred posture and its consequence.
@@ -186,7 +186,7 @@ Append-only log of transition entries and closure events written to the optional
 Counter maintained forward by the state writer; a task becomes `ready` only when `pending_blockers == 0`.
 
 **Stage**:
-Sub-state of `in_progress` recorded in the task record (e.g., `implement`, `qa`, `review`) and reflected in the plan footer `*Stage:*`, which is maintained by code as a human breadcrumb.
+Sub-state of `in_progress` recorded in the task record (e.g., `implement`, `qa`, `review`).
 
 **Live Set**:
 Active tasks in the queue backend (`refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, and the `refs/aet/meta/queue` envelope under `git-refs`); the only set loaded for scheduling. The board is recreated as needed.

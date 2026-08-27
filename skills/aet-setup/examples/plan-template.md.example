@@ -49,9 +49,3 @@ Before declaring complete, verify:
 
 -{What is explicitly NOT included in this implementation}
 -{What will be handled in a follow-up ticket}
-
----
-
-*Created: {date}*
-*Stage: plan-draft*
-*Next step: run `aet-validate-scope`*

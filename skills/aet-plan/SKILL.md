@@ -280,14 +280,10 @@ After the `plan` command completes and the plan.md is ready for review:
    *Next step: run `aet-validate-scope`*
    ```
 
-2. Write the plan footer `_Stage: plan-approved_`, as
-   `.agents/templates/plan-template.md` does. `aet sprint add` resolves the stage
-   through `stage_from_plan`, which reads that footer and nothing else, and
-   refuses any plan whose stage is not `plan-approved`
-   (`src/aet/cli/sprint.py:140-146`). A plan written without a footer cannot
-   enter the sprint. ADR-055's intent is that the footer become a breadcrumb
-   only; until intake stops reading it, it is load-bearing — see
-   `CONTEXT.md`, **Status (plan lifecycle)**.
+2. Plan files do not require a footer. Admission onto the board is governed
+   by the operator's invocation (`aet sprint add`) or GitHub label
+   (`aet sprint intake`), with validation enforced by the single admission
+   operation (ADR-066). Existing footers are treated as breadcrumbs only.
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
 4. The new plan files are ready to queue. Because mid-sprint queue state is local-only, remind the user that untracked plans are load-bearing: `git clean -fdx` or git-following backups will discard in-flight work.

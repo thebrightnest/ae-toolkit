@@ -16,14 +16,8 @@ import typer
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import plan_parser  # noqa: E402
 from aet.backends.factory import create_backend, resolve_config  # noqa: E402
-from aet.plan_parser import stage_from_plan  # noqa: E402
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
 from aet.queue import QueueIntegrityError  # noqa: E402
-
-# Plans accepted by the backlog entry point. Plans that are not already sprint
-# members may be added to the board; sprint members are managed through
-# ``aet sprint add`` instead.
-_BACKLOG_STAGES = {"plan-draft", "plan-approved"}
 
 
 def resolve_plan(target: str, plans_dir: Path) -> Path | None:
@@ -60,14 +54,6 @@ def _add(args: argparse.Namespace) -> int:
     plan_file = resolve_plan(args.target, plans_dir)
     if plan_file is None:
         return _fail(f"No plan found for '{args.target}' in {plans_dir}")
-
-    stage = stage_from_plan(plan_file)
-    if stage not in _BACKLOG_STAGES:
-        return _fail(
-            f"Refusing to add {plan_file.name}: plan stage is "
-            f"'{stage or 'unknown'}'; only draft or approved plans may be "
-            f"added to the backlog."
-        )
 
     backend = create_backend(
         config_path=args.config,
