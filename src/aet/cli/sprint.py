@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import sys
 from pathlib import Path
 
@@ -21,12 +20,12 @@ from aet.admission import (  # noqa: E402
     Admitted,
     RefusalReason,
     Refused,
-    SkipReason,
     Skipped,
+    SkipReason,
     admit_plan,
-    resolve_plan,
-    settled_ids_from as _settled_ids,
 )
+from aet.admission import resolve_plan as resolve_plan  # noqa: E402, F401
+from aet.admission import settled_ids_from as _settled_ids  # noqa: E402, F401
 from aet.backends.factory import (  # noqa: E402
     create_backend,
     resolve_config,

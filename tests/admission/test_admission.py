@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from aet import admission
 from aet.admission import (
     Admitted,
     RefusalReason,
     Refused,
-    SkipReason,
     Skipped,
+    SkipReason,
     admit_plan,
 )
 from aet.backends.git_refs_backend import GitRefsBackend
@@ -186,7 +184,7 @@ class TestAdmitPlanOperation(unittest.TestCase):
 
     def test_skip_already_settled(self):
         """A plan already settled in history is skipped (R-2)."""
-        plan = _make_clean_plan(self.plans_dir, self.prds_dir, "settled.md")
+        _make_clean_plan(self.plans_dir, self.prds_dir, "settled.md")
         history = [{"id": "settled", "state": "merged"}]
         outcome = admit_plan(
             "settled",

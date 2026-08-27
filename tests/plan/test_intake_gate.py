@@ -381,6 +381,8 @@ class TestAddIntakeGate(unittest.TestCase):
                 "--history-file", history_file,
                 "--plans-dir", str(plans_dir),
             ])
+            self.assertNotEqual(result.exit_code, 0)
+            self.assertEqual(_read_queue(root), original_queue)
 
     def test_add_admits_footerless_clean_plan(self):
         """A clean plan with NO _Stage: footer is admitted by sprint add (R-10)."""

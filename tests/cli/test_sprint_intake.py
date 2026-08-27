@@ -11,7 +11,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from unittest.mock import patch
 
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.cli import sprint as sprint_cmd
