@@ -1414,6 +1414,36 @@ class TestStageEnabled(unittest.TestCase):
         # A docs_sync skip must not leak into the security_review gate.
         self.assertTrue(orchestrator.stage_enabled(self._gated(), {"docs_sync": "skipped"}))
 
+    def test_critical_only_gate_default(self):
+        stage = WorkflowStage(
+            name="synced",
+            skills=["aet-verify"],
+            evidence="verify",
+            gate_key="verify",
+            gate_default="critical-only",
+        )
+        # work_class: critical -> runs
+        self.assertTrue(orchestrator.stage_enabled(stage, {"work_class": "critical"}))
+        # work_class: normal -> skips
+        self.assertFalse(orchestrator.stage_enabled(stage, {"work_class": "normal"}))
+        # work_class: trivial -> skips
+        self.assertFalse(orchestrator.stage_enabled(stage, {"work_class": "trivial"}))
+        # work_class: unclassified or missing -> skips
+        self.assertFalse(orchestrator.stage_enabled(stage, {}))
+        self.assertFalse(orchestrator.stage_enabled(stage, {"work_class": "unclassified"}))
+        # explicit override on normal plan: verify: required -> runs
+        self.assertTrue(
+            orchestrator.stage_enabled(
+                stage, {"work_class": "normal", "verify": "required"}
+            )
+        )
+        # explicit override on critical plan: verify: skipped -> skips
+        self.assertFalse(
+            orchestrator.stage_enabled(
+                stage, {"work_class": "critical", "verify": "skipped"}
+            )
+        )
+
 
 class TestGateRouting(unittest.TestCase):
     """End-to-end gate routing: plan frontmatter drives stage skip/run (wfd-01)."""
@@ -1526,12 +1556,14 @@ class TestGateRouting(unittest.TestCase):
                     "security_review_reason: engine gate logic changed\n"
                     "docs_sync: required\n"
                     "docs_sync_reason: frontmatter contract documented in skills\n"
+                    "verify: required\n"
+                    "verify_reason: live verify required\n"
                 ),
             )
             task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
             with tempfile.TemporaryDirectory() as reports_dir:
                 with tempfile.TemporaryDirectory() as archive_dir:
-                    _write_passing(reports_dir, "cso", "sync-docs")
+                    _write_passing(reports_dir, "cso", "sync-docs", "verify")
                     with patch.dict(
                         os.environ, _gate_env(reports_dir, archive_dir), clear=False
                     ):
@@ -1548,9 +1580,39 @@ class TestGateRouting(unittest.TestCase):
         self.assertTrue(result)
         mock_group.assert_called_once()
         stages_arg = mock_group.call_args[0][4]
-        self.assertEqual([s.name for s in stages_arg], ["reviewed", "secure"])
+        self.assertEqual([s.name for s in stages_arg], ["reviewed", "secure", "synced"])
         mock_stage.assert_not_called()
         self.assertNotIn("Skipping gated stage", out)
+
+    def test_critical_plan_runs_verify_stage_by_default(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            plan_file = self._setup_repo_with_plan(
+                repo_root,
+                frontmatter_extra="work_class: critical\n",
+            )
+            task = {"id": "demo", "title": "Demo", "plan_file": plan_file}
+            with tempfile.TemporaryDirectory() as reports_dir:
+                with tempfile.TemporaryDirectory() as archive_dir:
+                    _write_passing(reports_dir, "cso", "sync-docs", "verify")
+                    with patch.dict(
+                        os.environ, _gate_env(reports_dir, archive_dir), clear=False
+                    ):
+                        with patch.object(
+                            orchestrator, "run_stage_group", return_value=(0, None, None, "")
+                        ) as mock_group:
+                            with patch.object(
+                                orchestrator, "run_stage", return_value=(0, None, None, "")
+                            ) as mock_stage:
+                                result, out = self._process_task_capture(
+                                    task, repo_root, mock_group, mock_stage
+                                )
+
+        self.assertTrue(result)
+        mock_group.assert_called_once()
+        stages_arg = mock_group.call_args[0][4]
+        self.assertEqual([s.name for s in stages_arg], ["reviewed", "secure", "synced"])
+        mock_stage.assert_not_called()
+        self.assertNotIn("Skipping gated stage: synced", out)
 
     def test_mixed_gates_walk_per_stage_and_report_both_sources(self):
         # security_review skipped + docs_sync absent → only sync-docs runs, and

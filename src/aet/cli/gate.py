@@ -44,6 +44,7 @@ LEGACY_BUCKETS: dict[str, str] = {
     "plan-approved": "approved",
     "approved": "approved",
     "synced": "queued",
+    "verified": "queued",
     "queued": "queued",
     "tdd-complete": "in-progress",
     "implemented": "in-progress",
@@ -63,6 +64,7 @@ KIND_TO_STAGE: dict[str, str] = {
     "review": "reviewed",
     "cso": "secure",
     "sync-docs": "synced",
+    "verify": "verified",
 }
 
 KIND_TO_SKILL: dict[str, str] = {
@@ -70,6 +72,7 @@ KIND_TO_SKILL: dict[str, str] = {
     "review": "aet-review",
     "cso": "aet-cso",
     "sync-docs": "aet-sync-docs",
+    "verify": "aet-verify",
 }
 
 
@@ -306,6 +309,8 @@ def _build_payload(
         record["findings"] = []
     elif stage == "sync-docs":
         record["divergences"] = _load_divergences(divergences)
+    elif stage == "verify":
+        pass
 
     return record
 
@@ -505,7 +510,7 @@ app = typer.Typer()
 @app.command("submit")
 def submit(
     stage: str = typer.Option(
-        ..., "--stage", help="Verdict stage: qa, review, cso, or sync-docs"
+        ..., "--stage", help="Verdict stage: qa, review, cso, sync-docs, or verify"
     ),
     verdict: str = typer.Option(
         ..., "--verdict", help="Declared verdict; must match the payload's verdict field"

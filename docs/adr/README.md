@@ -76,6 +76,15 @@ Do **not** write an ADR for:
 - [056 — ADR Relations Are Declared in ADR Frontmatter](056-adr-relations-as-frontmatter.md)
 - [057 — Boundary-Contract Lens Rides the Review Verdict in Code](057-boundary-contract-lens-in-code.md)
 - [058 — A Migration Populates Its Target Before It Removes Its Source](058-migration-populates-before-it-removes.md)
+- [059 — Absence Is Not a Fact](059-absence-is-not-a-fact.md)
+- [060 — Signal Death Is Timeout](060-signal-death-is-timeout.md)
+- [061 — The Record Is the Plan After Intake](061-the-record-is-the-plan-after-intake.md)
+- [062 — Supervision Uniformity](062-supervision-uniformity.md)
+- [063 — Open Work Board Contract and Shadow Posture](063-open-work-board-contract-and-shadow-posture.md)
+- [064 — Merge Evidence Is Recorded, Not Inferred](064-merge-evidence-is-recorded-not-inferred.md)
+- [065 — Throttling Is Not a Flake](065-throttling-is-not-a-flake.md)
+- [066 — Board Admission Has One Path](066-board-admission-has-one-path.md)
+- [067 — A Gate Default May Derive from Plan-Time Data](067-a-gate-default-may-derive-from-plan-time-data.md)
 
 ## Format
 

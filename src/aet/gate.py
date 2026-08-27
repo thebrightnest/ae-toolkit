@@ -72,8 +72,13 @@ def required_evidence(repo_root: str | Path, plan_fm: dict[str, Any]) -> list[tu
     for stage in workflow.stages:
         if not stage.evidence:
             continue
-        if stage.gate_key and plan_fm.get(stage.gate_key) == "skipped":
-            continue
+        if stage.gate_key:
+            if stage.gate_key in plan_fm:
+                if plan_fm[stage.gate_key] == "skipped":
+                    continue
+            elif stage.gate_default == "critical-only":
+                if plan_fm.get("work_class") != "critical":
+                    continue
         required.append((stage.name, stage.evidence))
     return required
 

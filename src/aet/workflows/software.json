@@ -33,13 +33,20 @@
       "evidence": "sync-docs",
       "gate_key": "docs_sync"
     },
-    { "name": "synced", "skills": [], "evidence": null, "gate_key": null }
+    {
+      "name": "synced",
+      "skills": ["aet-verify"],
+      "evidence": "verify",
+      "gate_key": "verify",
+      "gate_default": "critical-only"
+    },
+    { "name": "verified", "skills": [], "evidence": null, "gate_key": null }
   ],
   "execution_policy": {
     "session_groups": [
       ["plan-approved", "implemented"],
       ["qa-complete"],
-      ["reviewed", "secure"]
+      ["reviewed", "secure", "synced"]
     ]
   },
   "routing": {

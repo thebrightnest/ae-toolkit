@@ -543,12 +543,13 @@ def new_task_from_plan(
 # optional (a missing key defaults to ``required`` at run time); when present
 # it must be ``required`` or ``skipped``, and ``skipped`` must carry a
 # non-empty ``<key>_reason`` recording the plan-time judgment.
-ROUTING_GATE_KEYS = ("security_review", "docs_sync")
+ROUTING_GATE_KEYS = ("security_review", "docs_sync", "verify")
 
 # Map from verdict kind to the plan-frontmatter routing key that controls it.
 VERDICT_GATE_KEYS: dict[str, str] = {
     "cso": "security_review",
     "sync-docs": "docs_sync",
+    "verify": "verify",
 }
 
 
@@ -556,13 +557,20 @@ def required_verdict_kinds(plan_data: dict[str, Any]) -> list[str]:
     """Return the required verdict kinds for a task from its parsed frontmatter.
 
     ``qa`` and ``review`` are always required. A gated kind is required unless
-    its routing key is explicitly set to ``skipped``. A missing routing key
-    defaults to required — the standing fail-safe.
+    its routing key is explicitly set to ``skipped``, or its gate defaults to
+    critical-only (e.g. verify) and the work class is not critical.
+    A missing routing key defaults to required — the standing fail-safe.
     """
     required = ["qa", "review"]
     for kind, key in VERDICT_GATE_KEYS.items():
-        if plan_data.get(key) != "skipped":
-            required.append(kind)
+        if key == "verify":
+            if plan_data.get(key) == "required" or (
+                key not in plan_data and plan_data.get("work_class") == "critical"
+            ):
+                required.append(kind)
+        else:
+            if plan_data.get(key) != "skipped":
+                required.append(kind)
     return required
 
 

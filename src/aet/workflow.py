@@ -17,10 +17,11 @@ from aet import evidence
 
 SUPPORTED_VERSION = 1
 VALID_ISOLATION_LEVELS = {"minimal", "standard", "full"}
+VALID_GATE_DEFAULTS = {"required", "critical-only"}
 
 _PACKAGED_DIR = Path(__file__).resolve().parent / "workflows"
 
-_STAGE_KEYS = {"name", "skills", "evidence", "gate_key"}
+_STAGE_KEYS = {"name", "skills", "evidence", "gate_key", "gate_default"}
 _EXECUTION_POLICY_KEYS = {"session_groups"}
 _ROUTING_KEYS = {"default", "by_stage"}
 _WORKFLOW_KEYS = {
@@ -45,6 +46,7 @@ class WorkflowStage:
     skills: list[str]
     evidence: str | None
     gate_key: str | None
+    gate_default: str = "required"
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -217,12 +219,22 @@ def _parse_stages(raw_stages: Any, path: Path) -> list[WorkflowStage]:
             raise WorkflowError(
                 f"Stage {stage_name!r} in {path} requires 'gate_key' as a string or null"
             )
+        gate_default = raw_stage.get("gate_default")
+        if gate_default is not None:
+            if not isinstance(gate_default, str) or gate_default not in VALID_GATE_DEFAULTS:
+                raise WorkflowError(
+                    f"Stage {stage_name!r} in {path} has unknown gate_default {gate_default!r} "
+                    f"(expected one of {sorted(VALID_GATE_DEFAULTS)})"
+                )
+        else:
+            gate_default = "required"
         stages.append(
             WorkflowStage(
                 name=stage_name,
                 skills=list(skills),
                 evidence=verdict_kind,
                 gate_key=gate_key,
+                gate_default=gate_default,
                 extra={k: v for k, v in raw_stage.items() if k not in _STAGE_KEYS},
             )
         )
