@@ -337,8 +337,45 @@ def resolve_agy_conversation_id_from_output(text: str) -> str | None:
     return None
 
 
+def _find_agy_result_event(text: str) -> dict[str, Any] | None:
+    """Return the payload of the last stream-json ``result`` event, or ``None``.
+
+    Under ``--output-format stream-json`` agy emits NDJSON and wraps the final
+    payload as ``{"event": "result", "result": {...}}``. That inner object is
+    field-for-field the same envelope ``--output-format json`` prints on its
+    own, so unwrapping it here lets one parser serve both output modes.
+
+    The tail bound can truncate the first line, and a session killed before it
+    finished emits no result event at all; both are ordinary and yield ``None``.
+    """
+    found: dict[str, Any] | None = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("{") or '"result"' not in line:
+            continue
+        try:
+            doc = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(doc, dict) or doc.get("event") != "result":
+            continue
+        payload = doc.get("result")
+        if isinstance(payload, dict) and "conversation_id" in payload:
+            found = payload
+    return found
+
+
 def _find_agy_envelope(text: str) -> dict[str, Any] | None:
-    """Locate the JSON envelope carrying conversation_id in agy's output."""
+    """Locate the JSON envelope carrying conversation_id in agy's output.
+
+    Handles both output modes: the stream-json ``result`` event is preferred
+    when present, since a stream also carries ``init`` and ``step_update``
+    objects with a ``conversation_id`` but no usage block.
+    """
+    result_event = _find_agy_result_event(text)
+    if result_event is not None:
+        return result_event
+
     stripped = text.strip()
     if stripped:
         try:

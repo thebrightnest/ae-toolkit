@@ -69,6 +69,27 @@ _THROTTLE_PATTERNS = [
     re.compile(r"\binsufficient_quota\b", re.IGNORECASE),
 ]
 
+# A deadline the agent CLI enforced on itself, reported on its own stdout
+# rather than as a signal death. ``killed_by_timeout`` covers the supervisor's
+# kill; this covers the CLI reaching its own limit first, which is what happened
+# on 2026-08-27 when agy's --print-timeout (default 5m0s) aborted seven of seven
+# stage sessions while AET's 7200s stall timeout never fired.
+#
+# Qualified as tightly as the lists above: a bare "timeout" matches any pytest
+# tail containing ``test_timeout``, so each pattern names the phrasing a CLI
+# actually emits when a deadline expires.
+_ADAPTER_TIMEOUT_PATTERNS = [
+    re.compile(r"\btimeout waiting for response\b", re.IGNORECASE),
+    re.compile(r"\bcontext deadline exceeded\b", re.IGNORECASE),
+    re.compile(r"\bdeadline exceeded\b", re.IGNORECASE),
+    # agy's print-mode abort message, observed at the same 302-314s wall as the
+    # explicit timeout string above on retries of the same tasks.
+    re.compile(
+        r"\bthe stream was interrupted\b\.?\s*please continue the task\b",
+        re.IGNORECASE,
+    ),
+]
+
 # Design-side signals: test, assertion, type, lint failures.
 _DESIGN_PATTERNS = [
     re.compile(r"\bFAILED\b"),
@@ -108,6 +129,12 @@ def classify(
     # word, and the wait-for-the-window remedy is the more specific one.
     if _matches_any(tail, _THROTTLE_PATTERNS):
         return FailureClass.THROTTLED
+
+    # Ahead of environment: a deadline tail often carries transport words
+    # ("stream", "connection"), and ahead of the exit-code fallthrough, which
+    # would otherwise file a deterministic deadline as a transient flake.
+    if _matches_any(tail, _ADAPTER_TIMEOUT_PATTERNS):
+        return FailureClass.TIMEOUT
 
     if _matches_any(tail, _ENVIRONMENT_PATTERNS):
         return FailureClass.ENVIRONMENT

@@ -524,3 +524,78 @@ class TestUsageAgy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# Real `agy --output-format stream-json -p ...` output captured 2026-08-27
+# against agy 1.1.22 (tool list on the init event abridged). One NDJSON message
+# per line; the terminal `result` event wraps the same envelope the buffered
+# `--output-format json` mode prints on its own.
+AGY_STREAM = "\n".join(
+    [
+        '{"event":"init","conversation_id":"70c6710c-a0e3-45e1-8acb-42d38a384d83",'
+        '"init":{"cwd":"/tmp/wt","tools":["view_file","run_command"],'
+        '"permission_mode":"always-proceed"}}',
+        '{"event":"step_update","step_update":{"conversation_id":'
+        '"70c6710c-a0e3-45e1-8acb-42d38a384d83","step_index":0,"state":"DONE",'
+        '"step_type":"user_input"}}',
+        '{"event":"step_update","step_update":{"conversation_id":'
+        '"70c6710c-a0e3-45e1-8acb-42d38a384d83","step_index":1,"state":"ACTIVE",'
+        '"step_type":"agent_response","text_delta":"OK"}}',
+        '{"event":"result","result":{"conversation_id":'
+        '"70c6710c-a0e3-45e1-8acb-42d38a384d83","status":"SUCCESS","response":"OK\\n",'
+        '"duration_seconds":2.14,"num_turns":1,"usage":{"input_tokens":120,'
+        '"output_tokens":40,"thinking_tokens":15,"cache_read_tokens":900,'
+        '"total_tokens":1075}}}',
+    ]
+)
+
+
+class TestUsageAgyStreamJson(unittest.TestCase):
+    """agy streams NDJSON so an aborted session leaves its partial work behind.
+
+    The buffered envelope is printed only at the end, so the 2026-08-27
+    print-timeout aborts discarded ~6.8M tokens of work. The stream's terminal
+    `result` event carries the identical payload, so one parser serves both.
+    """
+
+    def test_parses_usage_from_the_terminal_result_event(self):
+        self.assertEqual(
+            parse_usage("agy", AGY_STREAM),
+            {
+                "input_tokens": 1020,
+                "output_tokens": 55,
+                "total_tokens": 1075,
+                "cost_usd": None,
+            },
+        )
+
+    def test_resolves_the_conversation_id_from_a_stream(self):
+        self.assertEqual(
+            resolve_agy_conversation_id_from_output(AGY_STREAM),
+            "70c6710c-a0e3-45e1-8acb-42d38a384d83",
+        )
+
+    def test_result_event_wins_over_earlier_conversation_id_bearing_events(self):
+        """init and step_update also carry a conversation_id but no usage.
+
+        Taking the last object that merely mentions one would find a step_update
+        and parse no usage at all.
+        """
+        self.assertIsNotNone(parse_usage("agy", AGY_STREAM))
+
+    def test_an_aborted_stream_yields_no_usage_but_still_names_its_session(self):
+        """A killed session emits no result event; the init event survives.
+
+        Usage is genuinely unavailable, but the conversation id still resolves,
+        so the session log remains reachable for diagnosis.
+        """
+        aborted = "\n".join(AGY_STREAM.splitlines()[:3])
+        self.assertIsNone(parse_usage("agy", aborted))
+        self.assertEqual(
+            resolve_agy_conversation_id_from_output(aborted),
+            "70c6710c-a0e3-45e1-8acb-42d38a384d83",
+        )
+
+    def test_the_buffered_envelope_still_parses(self):
+        """Back-compat: older captures and any non-stream mode keep working."""
+        self.assertEqual(parse_usage("agy", AGY_ENVELOPE)["total_tokens"], 1075)

@@ -17,6 +17,11 @@ from aet import usage as usage_lib
 # files) need no flags — the tee already captures what they parse from.
 _USAGE_MODE_FLAGS: dict[str, tuple[str, ...]] = {
     "json-envelope": ("--output-format", "json"),
+    # NDJSON: one message per line, terminal payload wrapped in a ``result``
+    # event. Preferred over "json-envelope" where the CLI offers it — a buffered
+    # envelope is emitted only on success, so an aborted session discards every
+    # token it produced, while a stream leaves the partial work on stdout.
+    "json-stream": ("--output-format", "stream-json"),
 }
 
 
@@ -144,7 +149,11 @@ ADAPTERS: dict[str, CLIAdapter] = {
         prompt_flag="-p",
         workdir_flag=None,
         headless_flag="--dangerously-skip-permissions",
-        usage_mode="json-envelope",
+        # Streamed rather than buffered: the 2026-08-27 run lost ~6.8M tokens of
+        # work because a buffered envelope prints nothing when print mode aborts.
+        # The stream's terminal ``result`` event carries the same fields, so
+        # usage parsing and session resolution are unchanged (verified 1.1.22).
+        usage_mode="json-stream",
         stall_timeout=7200.0,
         wall_backstop=7200.0,
     ),

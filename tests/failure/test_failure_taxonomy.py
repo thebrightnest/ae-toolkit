@@ -245,3 +245,70 @@ def test_a_throttle_wins_over_an_environment_word_in_the_same_tail():
         )
         is FailureClass.THROTTLED
     )
+
+
+def test_adapter_reported_deadline_is_a_timeout_not_a_flake():
+    """A CLI that reaches its own deadline reports it on stdout, not as a signal.
+
+    ``killed_by_timeout`` covers the supervisor's kill. On 2026-08-27 agy's own
+    --print-timeout (default 5m0s) aborted seven of seven stage sessions while
+    AET's 7200s stall timeout never fired, so every one fell through to the
+    exit-code branch and was recorded as ``flaky`` — a transient class for a
+    deterministic deadline, which is what made the run's telemetry misleading.
+    """
+    for tail in (
+        '{"status":"ERROR","error":"timeout waiting for response"}',
+        '{"status":"ERROR","error":"The stream was interrupted. '
+        'Please continue the task you were working on."}',
+        "context deadline exceeded",
+    ):
+        assert (
+            classify(
+                exit_code=1,
+                tail=tail,
+                stage="qa",
+                verdict_recorded=False,
+                shutdown=False,
+                killed_by_timeout=False,
+            )
+            is FailureClass.TIMEOUT
+        ), tail
+
+
+def test_a_pytest_name_containing_timeout_words_is_not_a_timeout():
+    """The deadline patterns are space-qualified so identifiers cannot match.
+
+    ``test_timeout_waiting_for_response`` is a plausible test name; matching it
+    would file a real design failure as an infrastructure timeout.
+    """
+    assert (
+        classify(
+            exit_code=1,
+            tail="FAILED tests/t.py::test_timeout_waiting_for_response - AssertionError",
+            stage="qa",
+            verdict_recorded=True,
+            shutdown=False,
+            killed_by_timeout=False,
+        )
+        is FailureClass.DESIGN
+    )
+
+
+def test_a_throttle_still_wins_over_an_adapter_deadline():
+    """A closed provider window is the more specific remedy.
+
+    A rate-limited session can hang until the CLI's deadline expires, so both
+    signals appear in one tail; waiting for the window is the fix, and a
+    throttle is not breaker evidence while a timeout is.
+    """
+    assert (
+        classify(
+            exit_code=1,
+            tail="429 too many requests\ntimeout waiting for response\n",
+            stage="qa",
+            verdict_recorded=False,
+            shutdown=False,
+            killed_by_timeout=False,
+        )
+        is FailureClass.THROTTLED
+    )

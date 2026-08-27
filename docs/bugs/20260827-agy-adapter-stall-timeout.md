@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-08-27
 - **Severity:** high — no task using the `agy` adapter completed any work
-- **Status:** fixed 2026-08-27 (timeout); stream-format change still open
+- **Status:** fixed 2026-08-27 — timeout, output format, and classification
 
 ## Symptoms
 
@@ -66,7 +66,7 @@ The loss is total rather than partial because of the *output format*. With
 the end, so a print-mode abort yields `"response":""` — every token produced is
 discarded. Roughly 6.8M tokens across seven attempts returned no output at all.
 
-## Fix Applied
+## Fix Applied: the timeout
 
 `build_cmd` now passes `--print-timeout`, derived from the adapter's own
 `stall_timeout` rather than written as an independent number:
@@ -84,23 +84,25 @@ reproduce it the next time either moved. Verified that `agy` accepts both
 
 - No work completed. Four tasks consumed roughly 6.8M tokens across seven
   attempts and produced nothing.
-- **Misclassified as `flaky`, so the retry policy made it worse.** A flake is
-  worth retrying; a deterministic ceiling is not. Each task burned its retry on
-  a second attempt that failed identically, at full prompt cost.
+- **Misclassified as `flaky`.** A flake is transient; a deadline is
+  deterministic. **Correction:** an earlier revision of this report claimed the
+  misclassification cost the second attempt. It did not —
+  `_TRIAGE_DEFAULT_ACTIONS` routes both `flaky` and `timeout` to `requeue`, and
+  `append_failure_if_countable` counts both as breaker evidence, so the retry
+  would have happened either way. The cost was diagnostic: the telemetry
+  described a deterministic ceiling as a transient fault, which is what made the
+  run's own records misleading about their cause.
 - The zero-commit branches this leaves are the input to a second defect:
   `aet state reset` derives `merged` from their ancestry
   (`docs/bugs/20260827-reset-derives-merged-from-zero-commit-ancestry.md`).
   Together the two would have settled three unimplemented tasks as done.
 
-## Still Open: the output format
+## Fix Applied: the output format
 
-The timeout fix stops the abort. It does not change the fact that an abort
-loses everything, and that is a separate property of `--output-format json`.
-
-`agy` also offers `--output-format stream-json`, and its terminal `result` event
-carries a payload **identical** to the `json` envelope — same
-`conversation_id`, `status`, `response`, `duration_seconds`, `num_turns`, and
-`usage` block. Verified 2026-08-27 against agy 1.1.22:
+`--output-format json` buffers the whole response, so the abort printed
+`"response":""` and discarded every token produced. The adapter now requests
+`stream-json`, whose terminal `result` event carries a payload **identical** to
+the buffered envelope — verified against agy 1.1.22:
 
 ```
 {"event":"init","conversation_id":"...","init":{"cwd":"...","tools":[...]}}
@@ -110,28 +112,34 @@ carries a payload **identical** to the `json` envelope — same
    "usage":{...}}}
 ```
 
-What that would buy:
+`_find_agy_result_event` unwraps that event, and `_find_agy_envelope` prefers it
+when present, falling back to the buffered shape. One parser serves both modes,
+so older captures still parse. The preference matters: a stream's `init` and
+`step_update` objects also carry a `conversation_id` but no usage block, so
+taking the last object merely *mentioning* one would parse no usage at all.
 
-- **Partial work survives an abort.** Output arrives incrementally instead of in
-  one terminal blob.
-- **A real liveness signal.** `step_update` events are exactly the run-log
-  writes the hybrid-liveness model wants, rather than inferring life from
-  process-tree activity.
-- **Progress visibility.** Every failed record here reads `num_turns: 1` with no
-  further detail; `step_index` and `step_type` would show where a session
-  actually stopped.
+An aborted stream now yields no usage — correctly, none exists — while still
+resolving its conversation id from the `init` event, so the session log stays
+reachable for diagnosis.
 
-What it costs:
+## Fix Applied: the classification
 
-- `usage.parse_usage`'s `json-envelope` mode parses stdout as a single JSON
-  object. Stream mode needs it to take the last `event: "result"` line — the
-  same fields, one level deeper.
-- `_resolve_agy_session_id` reads `conversation_id` from the envelope; in stream
-  mode it is available earlier, on the `init` event.
-- `_USAGE_MODE_FLAGS` needs a mode whose flag is `stream-json`.
+`_ADAPTER_TIMEOUT_PATTERNS` classifies a CLI-reported deadline as `TIMEOUT`
+rather than letting it fall through the exit-code branch to `FLAKY`. It sits
+after the throttle check, because a rate-limited session can hang until the
+deadline expires and waiting for the window is the more specific remedy, and
+before the environment check, because a deadline tail often carries transport
+words. The patterns are space-qualified, so a test named
+`test_timeout_waiting_for_response` still classifies as `DESIGN`.
 
-Not applied here: it changes a parser contract shared with the usage and
-session-log layers, which is more than a timeout fix should carry.
+## Still Open: is an adapter deadline the task's fault?
+
+`append_failure_if_countable` excludes `canceled` and `throttled` from circuit
+breaker evidence on the grounds that they say nothing about the task. An adapter
+deadline arguably belongs with them — three sessions killed by a CLI's own
+default say nothing about the plan either, yet they count toward quarantining
+it. Not changed here: the exclusion set is ADR-030's, and widening it is a
+decision about the breaker's contract rather than a classification fix.
 
 ## Notes
 

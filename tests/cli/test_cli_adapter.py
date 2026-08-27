@@ -43,13 +43,17 @@ class TestCLIAdapter(unittest.TestCase):
         self.assertEqual(adapter.prompt_flag, "-p")
         self.assertIsNone(adapter.workdir_flag)
         self.assertEqual(adapter.headless_flag, "--dangerously-skip-permissions")
-        self.assertEqual(adapter.usage_mode, "json-envelope")
+        self.assertEqual(adapter.usage_mode, "json-stream")
         self.assertEqual(adapter.stall_timeout, 7200.0)
         self.assertEqual(adapter.wall_backstop, 7200.0)
 
-    def test_agy_build_cmd_requests_the_json_envelope(self):
-        """R-2: the envelope carries both the usage block and the conversation
-        id, so a headless ``agy`` invocation must always ask for it."""
+    def test_agy_build_cmd_requests_the_json_stream(self):
+        """R-2: the terminal ``result`` event carries both the usage block and
+        the conversation id, so a headless ``agy`` invocation must ask for it.
+
+        Streamed rather than buffered: a buffered envelope prints only on
+        completion, so an aborted session discards every token it produced.
+        """
         adapter = resolve_cli_adapter("agy")
         cmd = adapter.build_cmd("run tests", headless=True)
         self.assertEqual(
@@ -58,7 +62,7 @@ class TestCLIAdapter(unittest.TestCase):
                 "agy",
                 "--dangerously-skip-permissions",
                 "--output-format",
-                "json",
+                "stream-json",
                 "--model",
                 "gemini-3.7-flash",
                 "--effort",
@@ -80,7 +84,7 @@ class TestCLIAdapter(unittest.TestCase):
                     "agy",
                     "--dangerously-skip-permissions",
                     "--output-format",
-                    "json",
+                    "stream-json",
                     "--model",
                     "gemini-3.1-pro",
                     "--effort",
