@@ -193,7 +193,24 @@ what R-11 requires.
       `telemetry.report` scanning the wrong archive file — were routed to
       `aet-bug-report` rather than planned here
 
+## Divergence Summary
+
+_Recorded: 2026-08-27 — Branch: poh-02-verify-routing-key-and-work-class-gate-default_
+
+### Changed from plan
+
+- (none)
+
+### Added (unplanned)
+
+- Re-export `settled_ids_from` in `src/aet/cli/sprint.py` to maintain backward compatibility across sprint subcommands.
+
+### Deferred
+
+- **Task 8 (merge branch to main and verify integration)**: deferred to the `aet-ship` closure stage, consistent with the standard pipeline.
+
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*
+
