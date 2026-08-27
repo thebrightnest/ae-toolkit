@@ -10,10 +10,14 @@ format``), so its absence is a failure, not a skip.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+if not shutil.which("node"):
+    pytest.skip("node is required to evaluate index.html JS helpers", allow_module_level=True)
 
 PANEL_HTML = Path(__file__).parents[2] / "src" / "aet" / "panel" / "index.html"
 MARK_START = "// PROVENANCE-HELPERS-START"

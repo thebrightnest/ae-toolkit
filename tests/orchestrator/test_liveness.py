@@ -39,7 +39,7 @@ class TestProcessTreeLiveness:
     def test_not_alive_after_process_exits(self):
         """A dead pid is not process-tree alive, even if its child still runs."""
         with subprocess.Popen(
-            [sys.executable, "-c", _parent_with_child_script(0.5)],
+            [sys.executable, "-c", _parent_with_child_script(1.0)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         ) as parent:

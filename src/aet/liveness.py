@@ -13,6 +13,7 @@ ultimate ceiling for truly stuck sessions (R-3).
 
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 import time
@@ -21,11 +22,31 @@ from typing import Iterable
 
 
 def _all_processes() -> dict[int, int]:
-    """Return a pid -> ppid map for every process visible to ``ps``.
+    """Return a mapping of ``{pid: ppid}`` for all observable processes.
 
     Falls back to an empty map when ``ps`` is unavailable or produces unexpected
     output, so a missing tool never crashes the watchdog.
     """
+    if os.path.isdir("/proc"):
+        mapping: dict[int, int] = {}
+        try:
+            for entry in os.scandir("/proc"):
+                if not entry.name.isdigit():
+                    continue
+                try:
+                    with open(f"/proc/{entry.name}/stat", "r") as f:
+                        content = f.read()
+                    rparen = content.rfind(")")
+                    if rparen != -1:
+                        ppid = int(content[rparen + 1 :].split()[1])
+                        mapping[int(entry.name)] = ppid
+                except (OSError, ValueError, IndexError):
+                    continue
+            if mapping:
+                return mapping
+        except OSError:
+            pass
+
     try:
         result = subprocess.run(
             ["ps", "-ax", "-o", "pid=", "-o", "ppid="],
@@ -37,7 +58,7 @@ def _all_processes() -> dict[int, int]:
     except (OSError, subprocess.TimeoutExpired):
         return {}
 
-    mapping: dict[int, int] = {}
+    mapping = {}
     for line in result.stdout.splitlines():
         parts = line.strip().split()
         if len(parts) != 2:
