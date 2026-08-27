@@ -69,6 +69,16 @@ class CLIAdapter:
                 cmd.extend(["--model", model])
             if effort:
                 cmd.extend(["--effort", effort])
+            # agy's own --print-timeout defaults to 5m0s, and print mode aborts
+            # the whole turn when it expires — losing every token produced, since
+            # the JSON envelope is emitted only at the end. On 2026-08-27 that
+            # killed seven of seven stage attempts at a stage total of 302-314s
+            # while this adapter's stall_timeout (7200s) never came close.
+            #
+            # Derived from stall_timeout rather than written as its own number:
+            # a CLI deadline 24x tighter than the supervisor's is the whole bug,
+            # so the two must not be independently settable.
+            cmd.extend(["--print-timeout", f"{int(self.stall_timeout)}s"])
         if self.prompt_flag:
             cmd.extend([self.prompt_flag, prompt])
         else:

@@ -63,6 +63,8 @@ class TestCLIAdapter(unittest.TestCase):
                 "gemini-3.7-flash",
                 "--effort",
                 "high",
+                "--print-timeout",
+                "7200s",
                 "-p",
                 "run tests",
             ],
@@ -83,10 +85,28 @@ class TestCLIAdapter(unittest.TestCase):
                     "gemini-3.1-pro",
                     "--effort",
                     "low",
+                    "--print-timeout",
+                    "7200s",
                     "-p",
                     "run tests",
                 ],
             )
+
+    def test_agy_print_timeout_tracks_the_stall_timeout(self):
+        """agy's own --print-timeout defaults to 5m0s and aborts the whole turn.
+
+        Regression: seven of seven stage attempts died at a stage total of
+        302-314s on 2026-08-27 while this adapter's stall_timeout was 7200s and
+        never fired. The CLI deadline must not be tighter than the supervisor's,
+        so it is derived from stall_timeout rather than written independently.
+        """
+        adapter = resolve_cli_adapter("agy")
+        cmd = adapter.build_cmd("run tests", headless=True)
+        self.assertIn("--print-timeout", cmd)
+        passed = cmd[cmd.index("--print-timeout") + 1]
+        self.assertEqual(passed, f"{int(adapter.stall_timeout)}s")
+        # The bug was a CLI default 24x tighter than the supervisor's ceiling.
+        self.assertGreaterEqual(int(passed.removesuffix("s")), adapter.stall_timeout)
 
     def test_build_cmd(self):
         adapter = CLIAdapter(

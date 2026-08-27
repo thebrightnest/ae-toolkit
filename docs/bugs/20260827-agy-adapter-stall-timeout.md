@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-08-27
 - **Severity:** high — no task using the `agy` adapter completed any work
-- **Status:** open
+- **Status:** fixed 2026-08-27 (timeout); stream-format change still open
 
 ## Symptoms
 
@@ -38,23 +38,47 @@ runs to completion, or the kill is classified as a timeout rather than a flake.
 
 ## Root Cause
 
-Not established. Three things are known and one is suspicious.
+`agy --print-timeout` defaults to **`5m0s`**, and AET never passed the flag.
 
-Known:
+```
+--print-timeout   Timeout for print mode wait (default 5m0s)
+```
 
-- The wall is consistent. Seven attempts, 285–298 seconds, never longer. A
-  consistent ceiling across independent sessions is a configured limit, not a
-  provider fluctuation.
-- `num_turns: 1` on every attempt. The session never completed its first turn,
-  so this is not a stall mid-task; it is a first response that never arrived.
-- Both error strings come from the adapter's own JSON envelope, not from the
-  orchestrator, so the adapter observed the failure and reported it.
+The stage totals confirm it — the *stage* wall is pinned at 302-314s on every
+attempt even where agy's own internal counter varies:
 
-Suspicious: ADR-053 removed `--stall-timeout` from `run`/`run-one` and made it a
-per-adapter default. A ~300s per-adapter default applied to a first turn that
-legitimately takes longer — these prompts are large — would produce exactly this
-signature. The `agy` adapter's default and whether it measures inter-token
-silence or total elapsed time both need checking.
+| Task | Attempt | agy internal | stage total |
+| --- | --- | --- | --- |
+| poh-01 | 1 / 2 | 293.5s / 298.4s | 303.1s / 303.4s |
+| poh-02 | 1 / 2 | 297.0s / 213.9s | 302.7s / 314.5s |
+| poh-03 | 1 | 285.1s | 302.4s |
+| poh-04 | 1 / 2 | 294.3s / 292.0s | 302.8s / 302.4s |
+
+**An earlier revision of this report blamed an AET per-adapter default under
+ADR-053. That was wrong.** This adapter's `stall_timeout` and `wall_backstop`
+are both `7200.0` (`src/aet/cli_adapter.py`), 24x looser than the CLI's own
+deadline, so AET's supervision never came close to firing. The kill came from
+inside `agy`, which is why it arrived as an ERROR envelope on the CLI's own
+stdout rather than as a signal death.
+
+The loss is total rather than partial because of the *output format*. With
+`--output-format json` the CLI buffers the entire response and emits one blob at
+the end, so a print-mode abort yields `"response":""` — every token produced is
+discarded. Roughly 6.8M tokens across seven attempts returned no output at all.
+
+## Fix Applied
+
+`build_cmd` now passes `--print-timeout`, derived from the adapter's own
+`stall_timeout` rather than written as an independent number:
+
+```python
+cmd.extend(["--print-timeout", f"{int(self.stall_timeout)}s"])
+```
+
+Deriving it is the point. A CLI deadline settable independently of the
+supervisor's ceiling is the whole defect; two numbers that can drift would
+reproduce it the next time either moved. Verified that `agy` accepts both
+`7200s` and `2h0m0s`.
 
 ## Consequences
 
@@ -68,21 +92,46 @@ silence or total elapsed time both need checking.
   (`docs/bugs/20260827-reset-derives-merged-from-zero-commit-ancestry.md`).
   Together the two would have settled three unimplemented tasks as done.
 
-## Fix Direction
+## Still Open: the output format
 
-Two separable pieces.
+The timeout fix stops the abort. It does not change the fact that an abort
+loses everything, and that is a separate property of `--output-format json`.
 
-**Classification, independent of the cause.** A session that dies at the adapter
-timeout is a timeout, not a flake — ADR-060 already holds that signal death is a
-timeout, and this is the same argument for an adapter-reported deadline. The
-distinction is not cosmetic: it decides whether a retry is spent. A retry that
-reproduces the previous attempt's duration to within a few seconds is evidence
-the failure is deterministic, and is available to the classifier.
+`agy` also offers `--output-format stream-json`, and its terminal `result` event
+carries a payload **identical** to the `json` envelope — same
+`conversation_id`, `status`, `response`, `duration_seconds`, `num_turns`, and
+`usage` block. Verified 2026-08-27 against agy 1.1.22:
 
-**The timeout itself.** Establish the `agy` adapter's effective default, whether
-it is elapsed-time or silence-based, and whether it is reachable by a legitimate
-large first turn. If a large prompt can exhaust it, the default is wrong for the
-prompt sizes the orchestrator produces.
+```
+{"event":"init","conversation_id":"...","init":{"cwd":"...","tools":[...]}}
+{"event":"step_update","step_update":{"step_index":1,"state":"ACTIVE",
+   "step_type":"agent_response","text_delta":"OK"}}
+{"event":"result","result":{"conversation_id":"...","status":"SUCCESS",
+   "usage":{...}}}
+```
+
+What that would buy:
+
+- **Partial work survives an abort.** Output arrives incrementally instead of in
+  one terminal blob.
+- **A real liveness signal.** `step_update` events are exactly the run-log
+  writes the hybrid-liveness model wants, rather than inferring life from
+  process-tree activity.
+- **Progress visibility.** Every failed record here reads `num_turns: 1` with no
+  further detail; `step_index` and `step_type` would show where a session
+  actually stopped.
+
+What it costs:
+
+- `usage.parse_usage`'s `json-envelope` mode parses stdout as a single JSON
+  object. Stream mode needs it to take the last `event: "result"` line — the
+  same fields, one level deeper.
+- `_resolve_agy_session_id` reads `conversation_id` from the envelope; in stream
+  mode it is available earlier, on the `init` event.
+- `_USAGE_MODE_FLAGS` needs a mode whose flag is `stream-json`.
+
+Not applied here: it changes a parser contract shared with the usage and
+session-log layers, which is more than a timeout fix should carry.
 
 ## Notes
 
