@@ -280,13 +280,18 @@ After the `plan` command completes and the plan.md is ready for review:
    *Next step: run `aet-validate-scope`*
    ```
 
-2. Do not write a `*Stage:*` footer into plan.md. Plan files are transient
-   working copies (gitignored); the task's stage is recorded on the
-   queue/ledger by code from `aet sprint add` onward.
+2. Write the plan footer `_Stage: plan-approved_`, as
+   `.agents/templates/plan-template.md` does. `aet sprint add` resolves the stage
+   through `stage_from_plan`, which reads that footer and nothing else, and
+   refuses any plan whose stage is not `plan-approved`
+   (`src/aet/cli/sprint.py:140-146`). A plan written without a footer cannot
+   enter the sprint. ADR-055's intent is that the footer become a breadcrumb
+   only; until intake stops reading it, it is load-bearing — see
+   `CONTEXT.md`, **Status (plan lifecycle)**.
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
 4. The new plan files are ready to queue. Because mid-sprint queue state is local-only, remind the user that untracked plans are load-bearing: `git clean -fdx` or git-following backups will discard in-flight work.
-5. Confirm the new plan files were explicitly added to `.agents/work-queue.json` with `aet sprint add`; run `aet queue sync` only to reconcile existing entries and report drift.
+5. Do not run `aet sprint add`, and do not report on whether intake happened. Intake belongs to the operator, or to `aet-pipeline-plan` Step 3 when this skill runs inside that pipeline. This mirrors step 9 of `create-stories`; the two must not diverge.
 6. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
 
 ## Key Principles
