@@ -125,7 +125,3 @@ frontmatter and is read by `aet run`/`run-one`.
 
 Only change this after considering task risk. Auth, data-model, API, and
 dependency changes should usually use `standard` or `full`.
-
----
-
-_Stage: plan-approved_

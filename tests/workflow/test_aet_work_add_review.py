@@ -248,13 +248,15 @@ class TestAddCommand(unittest.TestCase):
             self.assertEqual(queue[0]["state"], "ready")
 
     def test_add_rejects_merged_plan(self):
-        """add refuses to queue a plan whose footer stage is merged."""
+        """add refuses to queue a plan whose task is already settled in history."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
-            plan = _make_plan(plans_dir, "feat-003.md", footer_stage="merged")
-            queue_file, history_file = _make_queue(tmp_path)
+            plan = _make_plan(plans_dir, "feat-003.md")
+            queue_file, history_file = _make_queue(
+                tmp_path, history=[{"id": "feat-003", "state": "merged"}]
+            )
 
             result = run_typer(aet.app, [
                 "sprint",
@@ -266,18 +268,20 @@ class TestAddCommand(unittest.TestCase):
             ])
 
             self.assertEqual(result.exit_code, 1)
-            self.assertIn("merged", result.stderr.lower())
+            self.assertIn("already settled", result.stderr.lower())
             queue = _read_queue(queue_file, history_file)
             self.assertEqual(len(queue), 0)
 
     def test_add_rejects_abandoned_plan(self):
-        """add refuses to queue a plan whose footer stage is abandoned."""
+        """add refuses to queue a plan whose task is already settled in history."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             plans_dir = tmp_path / "plans"
             plans_dir.mkdir()
-            plan = _make_plan(plans_dir, "feat-004.md", footer_stage="abandoned")
-            queue_file, history_file = _make_queue(tmp_path)
+            plan = _make_plan(plans_dir, "feat-004.md")
+            queue_file, history_file = _make_queue(
+                tmp_path, history=[{"id": "feat-004", "state": "abandoned"}]
+            )
 
             result = run_typer(aet.app, [
                 "sprint",
@@ -289,7 +293,7 @@ class TestAddCommand(unittest.TestCase):
             ])
 
             self.assertEqual(result.exit_code, 1)
-            self.assertIn("abandoned", result.stderr.lower())
+            self.assertIn("already settled", result.stderr.lower())
 
     def test_add_unknown_plan_rejected(self):
         """add exits non-zero when the plan file or task ID is unknown."""

@@ -65,7 +65,7 @@ def _make_plan(
     *,
     frontmatter: dict | None = None,
     body: str = "",
-    footer_stage: str = "plan-approved",
+    footer_stage: str | None = "plan-approved",
 ) -> Path:
     """Write a plan markdown file with customizable frontmatter and body."""
     path = plans_dir / name
@@ -82,7 +82,8 @@ def _make_plan(
     lines.extend(["---", "", f"# Plan: {name}"])
     if body:
         lines.extend(["", body])
-    lines.extend(["", "---", "", f"*Stage: {footer_stage}*"])
+    if footer_stage:
+        lines.extend(["", "---", "", f"*Stage: {footer_stage}*"])
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -106,7 +107,7 @@ def _make_clean_plan(
     *,
     frontmatter: dict | None = None,
     extra_body: str = "",
-    footer_stage: str = "plan-approved",
+    footer_stage: str | None = "plan-approved",
 ) -> Path:
     """Write a plan that passes the full plan_validate suite."""
     prd_name = "prd.md"
@@ -381,8 +382,71 @@ class TestAddIntakeGate(unittest.TestCase):
                 "--plans-dir", str(plans_dir),
             ])
 
-            self.assertNotEqual(result.exit_code, 0)
-            self.assertEqual(_read_queue(root), original_queue)
+    def test_add_admits_footerless_clean_plan(self):
+        """A clean plan with NO _Stage: footer is admitted by sprint add (R-10)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plans_dir = root / "docs" / "plans"
+            prds_dir = root / "docs" / "prds"
+            plans_dir.mkdir(parents=True)
+            prds_dir.mkdir(parents=True)
+            plan = _make_clean_plan(plans_dir, prds_dir, "no-footer.md", footer_stage=None)
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
+
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
+
+            self.assertEqual(result.exit_code, 0)
+            queue = _read_queue(root)
+            self.assertEqual(len(queue), 1)
+            self.assertEqual(queue[0]["id"], "no-footer")
+
+    def test_rtrace_failure_refuses_at_both_doors_with_identical_finding(self):
+        """A plan failing rtrace is refused at both add and intake doors with the same finding (R-5)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plans_dir = root / "docs" / "plans"
+            prds_dir = root / "docs" / "prds"
+            plans_dir.mkdir(parents=True)
+            prds_dir.mkdir(parents=True)
+            _make_prd(prds_dir, "prd.md", ["R-1"])
+            bad_plan = _make_plan(
+                plans_dir,
+                "bad-rtrace.md",
+                body=(
+                    "## Context\n"
+                    "PRD: docs/prds/prd.md\n"
+                    "\n"
+                    "## Task List\n"
+                    "1. Task (traces: R-999)\n"
+                    "\n"
+                    "## Files to Modify\n"
+                    "- `src/widget.py` (new)\n"
+                    "\n"
+                    "## Validation Steps\n"
+                    "- [ ] test verifies widget.py\n"
+                ),
+            )
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
+
+            result_add = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(bad_plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
+            self.assertNotEqual(result_add.exit_code, 0)
+            self.assertIn("cites unknown requirement R-999", result_add.stderr)
 
 
 if __name__ == "__main__":

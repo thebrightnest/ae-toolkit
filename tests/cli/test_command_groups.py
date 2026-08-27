@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import subprocess
 import tempfile
 import unittest
@@ -205,8 +206,8 @@ class TestSprintAdd(unittest.TestCase):
             ).load()["queue"]
             self.assertEqual(len(queue), 0)
 
-    def test_sprint_add_refuses_non_approved_plan(self):
-        """Only plan-approved plans may enter the sprint."""
+    def test_sprint_add_refuses_settled_plan(self):
+        """sprint add refuses to promote a task already settled in history."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             git(["init"], tmp)
@@ -221,11 +222,16 @@ class TestSprintAdd(unittest.TestCase):
                 "# Default PRD\n\n## Requirements\n- **R-1**: default requirement\n",
                 encoding="utf-8",
             )
-            plan = make_plan(plans_dir, "feat-002.md", footer_stage="draft")
+            plan = make_plan(plans_dir, "feat-002.md")
             git(["add", "-A"], tmp)
             git(["commit", "-m", "initial"], tmp)
 
             queue_file, history_file = self._queue_paths(tmp_path)
+            Path(history_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(history_file).write_text(
+                json.dumps({"id": "feat-002", "state": "merged"}) + "\n",
+                encoding="utf-8",
+            )
 
             result = run_typer(
                 aet.app,
@@ -244,7 +250,7 @@ class TestSprintAdd(unittest.TestCase):
             )
 
             self.assertEqual(result.exit_code, 1)
-            self.assertIn("plan-approved", result.stderr)
+            self.assertIn("already settled", result.stderr)
             queue = create_backend(
                 queue_file=queue_file, history_file=history_file
             ).load()["queue"]
