@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-08-27
 - **Severity:** medium
-- **Status:** open
+- **Status:** planned 2026-08-27 — `adm-01`/`adm-02`/`adm-03` under ADR-066
 - **Related:** `docs/retros/2026-08-27-planning-pipeline-contradictions-retro.md`
   (Finding 1), which closed this at the skill layer only.
 
@@ -66,7 +66,44 @@ Two accepted decisions say that document is not authoritative:
 - The retro's skill-layer fix documents the contradiction rather than removing
   it, and carries a note that must be retired when this is fixed.
 
-## Fix Direction
+## Update, 2026-08-27
+
+Two things changed after this was filed.
+
+**The disposition is not open.** This report cites ADR-055 and ADR-061 and
+presents three candidate dispositions. It missed the one that decides the matter
+literally — **ADR-019 decision 4**, accepted long before either: *"The plan
+footer `*Stage:*` is demoted to a human breadcrumb everywhere; no gating decision
+reads it."* With three accepted, live ADRs pointing the same way, "treat the
+invocation as the approval" is not the smallest of three options; it is the only
+conforming one. The `aet-pipeline-plan` intake triage routed the disposition out
+as a conformance defect rather than a planning target.
+
+**A worse defect was hiding behind it.** Admission happens at two doors —
+`aet sprint add` and `aet sprint intake` — and each inlined its own check
+sequence. The footer read was the only policy both shared. The `plan_validate`
+suite ran at `add` only, so a plan reachable from an `aet:sprint` issue reached
+the board with its frontmatter contract, rtrace citations, coverage and acks
+never checked, while the identical plan was refused at the other door. Fixed in
+`9aa5c7b4`, verified by removal: without it the regression test reports
+`✓ Admitted feat-bad (#9) to the sprint` for a plan citing an absent R-id.
+
+That gap is why the remaining work is not "delete the footer read". Removing it
+from each gating site leaves N sites that can drift again, and leaves the
+ADR-019 audit as expensive as it was — grep six `stage_from_plan` call sites and
+classify each as gate or breadcrumb. The generative cause is that admission has
+no canonical site. **ADR-066 (Board Admission Has One Path)** decides the
+singularity, and `docs/prds/single-admission-path-prd.md` carries the work as
+`adm-01` (the admission operation, footer read gone), `adm-02` (`aet backlog add`
+stops gating on it), and `adm-03` (retire the three emitters and correct
+`CONTEXT.md`).
+
+One further finding from scope validation: **no code writes the plan footer.**
+`update_plan_footer()` is absent from `src/`, so the footer is produced only by
+templates and a skill instruction, and consumed only by gates. Once both ends
+go, it does not become a breadcrumb — it ceases to exist for new plans.
+
+## Fix Direction (as filed)
 
 Three options, in the order they seem worth considering.
 

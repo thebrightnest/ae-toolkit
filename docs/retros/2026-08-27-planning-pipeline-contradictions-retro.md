@@ -95,7 +95,7 @@ change.
 | Correct the two `aet-plan` instructions | this retro | ✅ applied |
 | `make install-skills` so the installed copy matches the repo | operator | open |
 | Per-file audit of `.agents/work-queue.json` references across `skills/` | `docs/TECHNICAL_DEBT.md` — "Skills still name `.agents/work-queue.json` as the board" | ✅ filed |
-| Remove the footer read from `stage_from_plan`'s intake use, per ADR-055 | `docs/bugs/20260827-intake-gates-on-plan-footer-prose.md` | ✅ filed |
+| Remove the footer read from `stage_from_plan`'s intake use, per ADR-055 | `docs/bugs/20260827-intake-gates-on-plan-footer-prose.md` | ✅ filed → planned 2026-08-27 as `adm-01`/`adm-02`/`adm-03` under ADR-066; ADR-019 d4 turned out to decide it literally, and a second door (`aet sprint intake`) was running no validation at all (fixed in `9aa5c7b4`) |
 
 Both deferred items are filed rather than left as rows here. A learning records
 the failure mode so it is not repeated; it is not a work item, and neither of
