@@ -226,3 +226,16 @@ Run against `CONTEXT.md`, the ADR set, and the code on 2026-08-27.
       file (`e99766a2`), `teardown_worktree`'s obstruction predicate
       (`611b4b2a`), the unresolvable-rtrace refusal message (`7c2f7761`), and
       `aet sprint intake` running no validation (`9aa5c7b4`).
+
+## Divergence Summary
+
+_Recorded: 2026-08-27 — Branch: adm-01-single-admission-operation_
+
+### Deferred
+
+- **Task 7 (merge branch to main and verify integration)**: deferred to the `aet-ship` closure stage, consistent with the standard pipeline.
+
+---
+
+_Stage: synced_
+_Next step: run `aet-ship`_
