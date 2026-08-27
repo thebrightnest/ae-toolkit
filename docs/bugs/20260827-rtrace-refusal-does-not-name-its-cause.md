@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-08-27
 - **Severity:** low
-- **Status:** open
+- **Status:** fixed 2026-08-27
 
 ## Symptoms
 

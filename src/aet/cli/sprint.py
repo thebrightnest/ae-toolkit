@@ -190,6 +190,23 @@ def _add(args: argparse.Namespace) -> int:
         )
         for finding in unacked:
             print(f"  - {finding.check_id}: {finding.message}", file=sys.stderr)
+        # "cites unknown requirement" has a class of input it cannot accept: a
+        # plan whose deliverable is to mint the R-id it cites. The check reads
+        # the register as it stands, so such a plan can never satisfy it, and
+        # both wrong fixes are attractive — pre-minting the anchor moves the
+        # deliverable outside the plan, padding (traces: …) makes it false.
+        if unacked and all(
+            f.check_id == "rtrace" and "cites unknown requirement" in f.message
+            for f in unacked
+        ):
+            print(
+                "  note: this check compares citations against requirements that "
+                "already exist,\n"
+                "        so a plan that introduces one cannot satisfy it. If the "
+                "requirement is\n"
+                "        this plan's own deliverable, an ack is the intended route.",
+                file=sys.stderr,
+            )
         print(
             "  Fix the plan, or override a check that does not apply by adding "
             "a line to it:",

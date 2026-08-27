@@ -190,6 +190,58 @@ class TestAddIntakeGate(unittest.TestCase):
             self.assertNotEqual(result.exit_code, 0)
             self.assertIn("VALIDATE ACK: <check-id>", result.stderr)
 
+    def test_unknown_requirement_refusal_names_why_it_cannot_pass(self):
+        """A plan whose deliverable is to mint an R-id can never satisfy rtrace.
+
+        The bare finding reads as a typo or a renumbering, and both wrong fixes
+        are attractive: pre-minting the anchor moves the deliverable outside the
+        plan, and padding traces makes the annotations false. The refusal has to
+        say the check has an input class it cannot accept.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plans_dir = root / "docs" / "plans"
+            prds_dir = root / "docs" / "prds"
+            plans_dir.mkdir(parents=True)
+            prds_dir.mkdir(parents=True)
+            _make_prd(prds_dir, "prd.md", ["R-1"])
+            # Traces R-1 so coverage is satisfied; cites R-84, which this plan
+            # is what introduces. That leaves exactly one unacked finding.
+            plan = _make_plan(
+                plans_dir,
+                "mints.md",
+                body=(
+                    "## Context\n"
+                    "PRD: docs/prds/prd.md\n"
+                    "\n"
+                    "## Task List\n"
+                    "1. Do something (traces: R-1)\n"
+                    "2. Introduce the preflight requirement (traces: R-84)\n"
+                    "\n"
+                    "## Files to Modify\n"
+                    "- `src/widget.py` (new)\n"
+                    "\n"
+                    "## Validation Steps\n"
+                    "- [ ] test_widget_creation verifies widget.py\n"
+                ),
+            )
+            _git_init(root)
+            queue_file, history_file = _seed_queue(root, [])
+
+            result = run_typer(aet.app, [
+                "sprint",
+                "add",
+                str(plan),
+                "--queue-file", queue_file,
+                "--history-file", history_file,
+                "--plans-dir", str(plans_dir),
+            ])
+
+            self.assertNotEqual(result.exit_code, 0)
+            self.assertIn("cites unknown requirement R-84", result.stderr)
+            self.assertIn("cannot satisfy it", result.stderr)
+            self.assertIn("VALIDATE ACK: <check-id>", result.stderr)
+
     def test_add_admits_clean_plan(self):
         """A clean plan is admitted exactly as before."""
         with tempfile.TemporaryDirectory() as tmp:
