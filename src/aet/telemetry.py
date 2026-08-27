@@ -695,14 +695,37 @@ def _average_isolation_level(stages: list[dict[str, Any]]) -> str:
     return min(level_values, key=lambda level: abs(level_values[level] - avg_value))
 
 
+def read_run_summary(path: str | Path) -> dict[str, Any] | None:
+    """Read a ``last-run.json`` run summary, or ``None`` if absent/malformed."""
+    path = Path(path)
+    if not path.exists():
+        return None
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return record if isinstance(record, dict) else None
+
+
 def _scan_records(root: Path, since: str | None = None) -> list[dict[str, Any]]:
-    """Read all task JSONL records under a directory tree."""
+    """Read all archived records under a directory tree.
+
+    The archive holds two shapes: per-task stage records in ``{task-id}.jsonl``
+    and the once-per-run summary in ``last-run.json`` (see
+    ``TelemetryLogger.write_last_run``). Both are collected here — globbing
+    only the JSONL half is what left every summary-derived figure at zero.
+    """
     records: list[dict[str, Any]] = []
     if not root.exists():
         return records
 
     for path in root.rglob("*.jsonl"):
         records.extend(read_jsonl(path))
+
+    for path in root.rglob("last-run.json"):
+        summary = read_run_summary(path)
+        if summary is not None:
+            records.append(summary)
 
     if since:
         since_dt = _parse_iso(since)

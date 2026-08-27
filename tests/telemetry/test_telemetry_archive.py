@@ -94,6 +94,38 @@ class TestDirectArchive(unittest.TestCase):
         self.assertTrue(last_run.exists())
         self.assertEqual(json.loads(last_run.read_text())["outcome"], "success")
 
+    def test_report_over_archive_reads_the_run_summary(self):
+        """The run summary lives in last-run.json, not a .jsonl.
+
+        Regression for the archive scan globbing only ``*.jsonl``, which left
+        Runs/Tasks spawned/Succeeded/Failed/Wall-clock at zero for every
+        archive-wide report while ``Runs observed`` counted the run.
+        """
+        logger = telemetry.RunLogger(self.project_dir, run_id="run-001")
+        logger.append_record({"type": "stage", "run_id": "run-001"}, task_id="t1")
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id="run-001",
+                start_time="2026-06-20T00:00:00Z",
+                end_time="2026-06-20T00:01:00Z",
+                tasks_spawned=3,
+                tasks_succeeded=2,
+                tasks_failed=1,
+                outcome="success",
+                exit_code=0,
+                task_ids=["t1"],
+            )
+        )
+
+        # The project archive root, i.e. the no-argument report's scope.
+        text = telemetry.report(target=logger.run_dir.parent.parent)
+
+        self.assertIn("Runs: 1", text)
+        self.assertIn("Tasks spawned: 3", text)
+        self.assertIn("Succeeded: 2", text)
+        self.assertIn("Failed: 1", text)
+        self.assertIn("Wall-clock time: 60.0s", text)
+
 
 class TestMineLearnings(unittest.TestCase):
     def setUp(self):
