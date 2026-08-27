@@ -80,6 +80,9 @@ Session-log extraction is adapter-dispatched, mirroring `usage.parse_usage`.
 - `claude` — reads Claude Code's transcript JSONL at
   `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl`
   (`src/aet/session_log_claude.py`).
+- `agy` — reads Google Antigravity transcript JSONL at
+  `~/.gemini/antigravity-cli/brain/<conversation-id>/.system_generated/logs/transcript.jsonl`
+  (`src/aet/session_log_agy.py`).
 
 Each reader returns the same shape (`command`, `start_time`, `end_time`,
 `duration_seconds`, `exit_code`, `output`) and applies the same defensive rules:
@@ -181,6 +184,9 @@ reconstructed from the id using the documented rules below.
   accepted at emission time, at least one record inside the transcript must
   report a `cwd` that resolves to the same path as the session's working
   directory (symlinks are followed on both sides).
+- `agy` — the identifier is the `<conversation-id>` from the session output or
+  runtime context. The transcript lives at
+  `~/.gemini/antigravity-cli/brain/<conversation-id>/.system_generated/logs/transcript.jsonl`.
 
 To go from a record to a log by hand, read `session_identifier` and apply the
 rule above. Because the stored value is an identifier rather than a path, an
