@@ -274,6 +274,10 @@ class TestShipGateChecks(unittest.TestCase):
 
     def test_gate_missing_evidence_stops_for_critical(self):
         """A critical-class plan without verify evidence stops the gate."""
+        self.test_verify_evidence_required_for_critical()
+
+    def test_verify_evidence_required_for_critical(self):
+        """A critical task whose workflow declares a verify stage is refused without evidence and passes with it."""
         content = (
             "---\n"
             "id: t1\n"
@@ -290,11 +294,92 @@ class TestShipGateChecks(unittest.TestCase):
         responses = self._base_responses()
         env = {"AET_SHIP_TEST_CMD": "true"}
 
+        # Without evidence -> refused
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            with patch.dict(os.environ, env):
+                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+        self.assertNotEqual(rc, 0)
+
+        # With evidence -> passes
+        evidence_dir = self.repo / ".agents" / "verify"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        (evidence_dir / "t1-evidence.md").write_text("# Evidence\n", encoding="utf-8")
+
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            with patch.dict(os.environ, env):
+                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+        self.assertEqual(rc, 0)
+
+    def test_workflow_without_verify_stage_imposes_no_requirement(self):
+        """A workflow with no verify stage produces no verify requirement, including for a critical task."""
+        import json
+
+        workflows_dir = self.repo / ".agents" / "workflows"
+        workflows_dir.mkdir(parents=True, exist_ok=True)
+        noverify_workflow = {
+            "version": 1,
+            "name": "noverify",
+            "done_state": "done",
+            "stages": [
+                {"name": "plan-approved", "skills": ["aet-tdd"], "evidence": None, "gate_key": None},
+                {"name": "implemented", "skills": ["aet-qa"], "evidence": "qa", "gate_key": None},
+            ],
+            "execution_policy": {"session_groups": [["plan-approved", "implemented"]]},
+            "routing": {"default": {"harness": "claude", "model": None}, "by_stage": {}},
+        }
+        (workflows_dir / "noverify.json").write_text(json.dumps(noverify_workflow), encoding="utf-8")
+
+        content = (
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "workflow: noverify\n"
+            "work_class: critical\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "## Task List\n\n"
+            "- [x] task one\n\n"
+            "---\n\n"
+            "*Stage: implemented*\n"
+        )
+        self._save_task(self._spec(content))
+        responses = self._base_responses()
+        env = {"AET_SHIP_TEST_CMD": "true"}
+
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
                 rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
 
-        self.assertNotEqual(rc, 0)
+        self.assertEqual(rc, 0)
+
+    def test_refusal_names_the_producing_stage(self):
+        """The refusal message names the workflow stage that produces verify evidence."""
+        content = (
+            "---\n"
+            "id: t1\n"
+            "status: awaiting_merge\n"
+            "work_class: critical\n"
+            "---\n\n"
+            "# Plan T1\n\n"
+            "## Task List\n\n"
+            "- [x] task one\n\n"
+            "---\n\n"
+            "*Stage: implemented*\n"
+        )
+        self._save_task(self._spec(content))
+        responses = self._base_responses()
+        env = {"AET_SHIP_TEST_CMD": "true"}
+
+        args = ship.parse_args(["gate", "t1"])
+        args.task_id = "t1"
+        args.spec = self._spec(content)
+
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            with patch.dict(os.environ, env):
+                result = ship._run_gate(args)
+
+        self.assertFalse(result.ok)
+        self.assertIn("synced", result.message)
 
     def test_gate_scope_audit_flags_other_prds(self):
         """A diff touching other PRD files is flagged but does not stop the gate."""

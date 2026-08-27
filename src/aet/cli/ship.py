@@ -40,7 +40,7 @@ import typer
 from typer.core import TyperGroup
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import plan_parser  # noqa: E402
+from aet import gate, plan_parser  # noqa: E402
 from aet.backends.factory import resolve_config  # noqa: E402
 from aet.branch_ref import resolve_trunk_branch  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
@@ -520,8 +520,14 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
     if coverage_cmd:
         subprocess.run(shlex.split(coverage_cmd), capture_output=True, text=True)
 
-    work_class = _work_class_from_spec(spec)
-    if work_class == "critical":
+    repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
+    plan_fm = spec.get("frontmatter", {}) if isinstance(spec, dict) else {}
+    req_evidence = gate.required_evidence(repo_root, plan_fm)
+    verify_stages = [
+        stage_name for stage_name, evidence_kind in req_evidence if evidence_kind == "verify"
+    ]
+    if verify_stages:
+        verify_stage = verify_stages[0]
         task_id = args.task_id
         evidence_paths = [
             Path(".agents/verify") / f"{task_id}-evidence.md",
@@ -536,7 +542,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                 dry_run=args.dry_run,
                 message=(
                     "⛔ Pipeline paused at aet-ship.\n"
-                    "Critical-class task requires aet-verify evidence.\n"
+                    f"Workflow stage '{verify_stage}' requires aet-verify evidence.\n"
                     f"Attach evidence at .agents/verify/{task_id}-evidence.md before shipping."
                 ),
                 stack=stack,
