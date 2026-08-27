@@ -1,4 +1,4 @@
-"""Tests for the `aet backlog add` command (R-10, R-13)."""
+"""Tests for the `aet backlog add` command (R-6, R-10, R-13)."""
 
 from __future__ import annotations
 
@@ -49,9 +49,14 @@ def _make_plan(
     plans_dir: Path,
     name: str,
     *,
-    stage: str = "plan-approved",
+    stage: str | None = "plan-approved",
 ) -> Path:
     path = plans_dir / name
+    footer = (
+        f"\n---\n\n_Stage: {stage}_\n_Next step: run `aet-backlog-add`_\n"
+        if stage
+        else "\n"
+    )
     body = f"""---
 id: {Path(name).stem}
 size: M
@@ -74,12 +79,7 @@ PRD: docs/prds/default-prd.md
 ## Validation Steps
 
 - [ ] test_thing verifies thing.py
-
----
-
-_Stage: {stage}_
-_Next step: run `aet-backlog-add`_
-"""
+{footer}"""
     path.write_text(body, encoding="utf-8")
     return path
 
@@ -445,6 +445,52 @@ class TestBacklogAdd(unittest.TestCase):
             self.assertNotIn("status:", plan_text)
             self.assertIn("_Stage: plan-draft_", plan_text)
 
+    def test_backlog_add_footerless_plan_accepted(self):
+        """A plan without a stage footer is accepted and boarded with aet:backlog (R-6)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            _git(["init"], tmp)
+            _git(["config", "user.email", "test@example.com"], tmp)
+            _git(["config", "user.name", "Test"], tmp)
+
+            plans_dir = tmp_path / "docs" / "plans"
+            plans_dir.mkdir(parents=True)
+            plan = _make_plan(plans_dir, "feat-006.md", stage=None)
+            _git(["add", "-A"], tmp)
+            _git(["commit", "-m", "initial"], tmp)
+
+            config_path = _make_config(tmp_path)
+
+            with mock.patch.object(
+                GitHubBackend, "_run_gh", autospec=True
+            ) as mock_run:
+
+                def side_effect(self, args):
+                    if args[:3] == ["label", "list", "--repo"]:
+                        return _completed(stdout=_label_list_response())
+                    if args[:3] == ["issue", "list", "--repo"]:
+                        return _completed(stdout=json.dumps([]))
+                    if args[:3] == ["issue", "create", "--repo"]:
+                        return _completed(
+                            stdout="https://github.com/owner/repo/issues/46\n"
+                        )
+                    raise AssertionError(f"unexpected command: {args}")
+
+                mock_run.side_effect = side_effect
+                result = self._run_backlog_add(tmp, str(plan), config_path, plans_dir)
+
+            self.assertEqual(result.exit_code, 0)
+            self.assertIn("Added feat-006.md to the backlog", result.stdout)
+
+            create_calls = [
+                call.args[1]
+                for call in mock_run.call_args_list
+                if call.args[1][:3] == ["issue", "create", "--repo"]
+            ]
+            self.assertEqual(len(create_calls), 1)
+            self.assertIn("aet:backlog", create_calls[0])
+
 
 if __name__ == "__main__":
     unittest.main()
+
