@@ -227,7 +227,7 @@ Run against `CONTEXT.md`, the ADR set, and the code on 2026-08-27.
       (`611b4b2a`), the unresolvable-rtrace refusal message (`7c2f7761`), and
       `aet sprint intake` running no validation (`9aa5c7b4`).
 
-## Divergence Summary
+## Divergence Summary — adm-01-single-admission-operation
 
 _Recorded: 2026-08-27 — Branch: adm-01-single-admission-operation_
 
@@ -235,7 +235,20 @@ _Recorded: 2026-08-27 — Branch: adm-01-single-admission-operation_
 
 - **Task 7 (merge branch to main and verify integration)**: deferred to the `aet-ship` closure stage, consistent with the standard pipeline.
 
+## Divergence Summary — adm-02-backlog-stops-gating-on-the-footer
+
+_Recorded: 2026-08-27 — Branch: adm-02-backlog-stops-gating-on-the-footer_
+
+### Changed from plan
+
+- **Test placement (Task 4):** The regression test for admitting footerless plans to the backlog was added to `tests/projections/test_backlog_add.py` rather than `tests/cli/test_backlog.py` (which does not exist; backlog add projection tests are housed under `tests/projections/`).
+
+### Deferred
+
+- **Task 5 (merge branch to main and verify integration)**: deferred to the `aet-ship` closure stage, consistent with the standard pipeline.
+
 ---
 
 _Stage: synced_
 _Next step: run `aet-ship`_
+
