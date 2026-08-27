@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import subprocess
@@ -203,6 +204,104 @@ class TestSprintIntakeAdmitsUnblockedCandidate(unittest.TestCase):
             data = _read_queue(queue_file, history_file)
             ids = [t["id"] for t in data]
             self.assertIn("feat-001", ids)
+
+
+class TestSprintIntakeRunsIntakeValidation(unittest.TestCase):
+    """The forge door answers to the same admission policy as `sprint add`.
+
+    Regression: `_intake` ran no validation at all. plan_validate was reachable
+    only from `_add`, so a plan reachable from an aet:sprint issue entered the
+    board without its frontmatter contract, rtrace citations or coverage ever
+    being checked — while the identical plan was refused at the other door.
+    """
+
+    def _invalid_plan(self, plans_dir: Path, stem: str) -> Path:
+        """A footer-approved plan citing an R-id absent from the PRD."""
+        path = plans_dir / f"{stem}.md"
+        path.write_text(
+            "\n".join(
+                [
+                    "---",
+                    f"id: {stem}",
+                    "size: S",
+                    "---",
+                    "",
+                    f"# {stem}",
+                    "",
+                    "## Context",
+                    "PRD: docs/prds/default.md",
+                    "",
+                    "## Task List",
+                    "1. Do something (traces: R-1).",
+                    "2. Cite a requirement that does not exist (traces: R-99).",
+                    "",
+                    "## Files to Modify",
+                    "- `src/widget.py` (new)",
+                    "",
+                    "## Validation Steps",
+                    "- [ ] test_widget_creation verifies widget.py",
+                    "",
+                    "---",
+                    "",
+                    "*Stage: plan-approved*",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_intake_refuses_a_plan_that_fails_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plans_dir = root / "docs" / "plans"
+            plans_dir.mkdir(parents=True)
+            _write_default_prd(plans_dir)
+            self._invalid_plan(plans_dir, "feat-bad")
+            _git_init(root)
+            config_path = _write_config(
+                root, projections=[{"type": "github", "repo": "owner/repo"}]
+            )
+            history_file = root / ".agents" / "work-history.jsonl"
+            queue_file, _ = _seed_queue(root, [])
+
+            issue = {
+                "number": 9,
+                "body": "<!-- aet-id: feat-bad -->\nPlan file: docs/plans/feat-bad.md",
+                "labels": [{"name": "aet:sprint"}],
+                "state": "open",
+            }
+
+            stderr = io.StringIO()
+            with mock.patch("aet.backends.github_backend.subprocess.run") as mock_run:
+                mock_run.side_effect = _gh_side_effect(
+                    _all_aet_labels(), json.dumps([issue])
+                )
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "sprint",
+                        "intake",
+                        "--queue-file",
+                        str(queue_file),
+                        "--history-file",
+                        str(history_file),
+                        "--plans-dir",
+                        str(plans_dir),
+                        "--config",
+                        str(config_path),
+                    ],
+                ):
+                    with contextlib.redirect_stderr(stderr):
+                        rc = sprint_cmd.main()
+
+            self.assertEqual(rc, 0)
+            ids = [t["id"] for t in _read_queue(queue_file, history_file)]
+            self.assertNotIn("feat-bad", ids, "invalid plan must not reach the board")
+            refusal = stderr.getvalue()
+            self.assertIn("rtrace", refusal)
+            self.assertIn("R-99", refusal)
 
 
 class TestSprintIntakeRefusesBlockedCandidate(unittest.TestCase):

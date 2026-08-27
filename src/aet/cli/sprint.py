@@ -94,6 +94,59 @@ def _fail(message: str) -> int:
     return 1
 
 
+def _unacked_intake_findings(
+    plan_file: Path,
+    plans_dir: Path,
+    backend,
+    history_file: str | None,
+) -> tuple[list[plan_validate.Finding], plan_validate.RecordCoverage]:
+    """Return ``plan_file``'s unacked intake findings and the coverage record.
+
+    Both board doors — ``aet sprint add`` and ``aet sprint intake`` — must apply
+    the same admission policy. Only the *decision* lives here; each door renders
+    the refusal in its own shape (a message and exit code, or a refused-row in a
+    batch summary), so presentation stays with the caller.
+    """
+    # Validate the target plan in the context of every plan in plans_dir so
+    # blocker references resolve, but only report findings for the target plan.
+    all_plan_files = sorted(plans_dir.glob("*.md"))
+    if plan_file not in all_plan_files:
+        all_plan_files.append(plan_file)
+    # Settled history ids are valid blocker references even when the plan file
+    # is gone, so include them in the structural cross-reference set.
+    settled_ids: set[str] = set()
+    if history_file and Path(history_file).exists():
+        for line in Path(history_file).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record_line = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if record_line.get("id"):
+                settled_ids.add(record_line["id"])
+
+    # A sibling that already delivered part of the PRD has usually left
+    # docs/plans/ for the record (ADR-061). Crediting its coverage is what
+    # keeps intake from demanding this plan trace requirements another plan
+    # covered — the pressure that falsifies the check's own input.
+    # One root for both sources: the PRD paths they produce are dict keys, so
+    # a mismatch would silently credit nothing.
+    repo_root = Path(backend.repo_root)
+    record = plan_validate.coverage_from_backend(backend, repo_root)
+    findings = plan_validate.validate(
+        all_plan_files,
+        repo_root=repo_root,
+        extra_known_ids=settled_ids,
+        extra_coverage=record.coverage,
+    )
+    plan_texts = {pf: pf.read_text(errors="ignore") for pf in all_plan_files}
+    findings = plan_validate.apply_acks(findings, plan_texts)
+    unacked = [f for f in findings if f.plan == plan_file and not f.acked]
+    return unacked, record
+
+
 def _add(args: argparse.Namespace) -> int:
     plans_dir = Path(args.plans_dir)
     plan_file = resolve_plan(args.target, plans_dir)
@@ -145,43 +198,9 @@ def _add(args: argparse.Namespace) -> int:
             f"only 'plan-approved' plans may enter the sprint."
         )
 
-    # Validate the target plan in the context of every plan in plans_dir so
-    # blocker references resolve, but only report findings for the target plan.
-    all_plan_files = sorted(plans_dir.glob("*.md"))
-    if plan_file not in all_plan_files:
-        all_plan_files.append(plan_file)
-    # Settled history ids are valid blocker references even when the plan file
-    # is gone, so include them in the structural cross-reference set.
-    settled_ids = set()
-    if Path(args.history_file).exists():
-        for line in Path(args.history_file).read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if record.get("id"):
-                settled_ids.add(record["id"])
-
-    # A sibling that already delivered part of the PRD has usually left
-    # docs/plans/ for the record (ADR-061). Crediting its coverage is what
-    # keeps intake from demanding this plan trace requirements another plan
-    # covered — the pressure that falsifies the check's own input.
-    # One root for both sources: the PRD paths they produce are dict keys, so
-    # a mismatch would silently credit nothing.
-    repo_root = Path(backend.repo_root)
-    record = plan_validate.coverage_from_backend(backend, repo_root)
-    findings = plan_validate.validate(
-        all_plan_files,
-        repo_root=repo_root,
-        extra_known_ids=settled_ids,
-        extra_coverage=record.coverage,
+    unacked, record = _unacked_intake_findings(
+        plan_file, plans_dir, backend, args.history_file
     )
-    plan_texts = {pf: pf.read_text(errors="ignore") for pf in all_plan_files}
-    findings = plan_validate.apply_acks(findings, plan_texts)
-    unacked = [f for f in findings if f.plan == plan_file and not f.acked]
     if unacked:
         backend.close()
         print(
@@ -331,6 +350,21 @@ def _intake(args: argparse.Namespace) -> int:
             refused.append(
                 (task_id, issue_number, f"plan stage is '{stage or 'unknown'}'")
             )
+            continue
+
+        # The forge door admits onto the same board as `aet sprint add`, so it
+        # answers to the same policy. Until 2026-08-27 it ran no validation at
+        # all: a plan reachable from an `aet:sprint` issue entered the queue
+        # without the frontmatter contract, rtrace citations, or coverage ever
+        # being checked, and acks written for `add` went unread here.
+        unacked, _coverage = _unacked_intake_findings(
+            plan_file, plans_dir, backend, args.history_file
+        )
+        if unacked:
+            detail = "; ".join(f"{f.check_id}: {f.message}" for f in unacked[:3])
+            if len(unacked) > 3:
+                detail += f"; (+{len(unacked) - 3} more)"
+            refused.append((task_id, issue_number, f"intake validation failed — {detail}"))
             continue
 
         task = new_task_from_plan(
