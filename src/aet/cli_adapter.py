@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aet import session_log_claude
+from aet import session_log_agy, session_log_claude
 from aet import usage as usage_lib
 
 # Flags each usage mode needs appended to a headless invocation. Modes absent
@@ -76,8 +76,9 @@ class CLIAdapter:
         """Return an identifier for this adapter's session log, or ``None``.
 
         The identifier is adapter-defined: a session id for both kimi and
-        Claude. It is intentionally not a filesystem path — paths go stale when
-        an archive moves; the identifier plus the documented resolution rule in
+        Claude, or conversation id for Antigravity. It is intentionally not
+        a filesystem path — paths go stale when an archive moves; the
+        identifier plus the documented resolution rule in
         ``docs/telemetry-guide.md`` survives relocation (ADR-031).
 
         An unresolvable session returns ``None``; the orchestrator turns that
@@ -88,6 +89,8 @@ class CLIAdapter:
             return usage_lib.resolve_kimi_session_id_from_output(output)
         if self.name == "claude":
             return _resolve_claude_session_id(output, workdir)
+        if self.name == "agy":
+            return _resolve_agy_session_id(output)
         return None
 
 
@@ -115,6 +118,16 @@ ADAPTERS: dict[str, CLIAdapter] = {
         usage_mode="json-envelope",
         # Hybrid liveness uses process-tree activity and run-log writes, so the
         # stall timeout is the same uniform backstop for every adapter.
+        stall_timeout=7200.0,
+        wall_backstop=7200.0,
+    ),
+    "agy": CLIAdapter(
+        name="agy",
+        bin="agy",
+        prompt_flag="-p",
+        workdir_flag=None,
+        headless_flag="--dangerously-skip-permissions",
+        usage_mode="json-envelope",
         stall_timeout=7200.0,
         wall_backstop=7200.0,
     ),
@@ -216,4 +229,21 @@ def _extract_claude_session_id(output: str) -> str | None:
         sid = result.get("session_id")
         if isinstance(sid, str) and sid:
             return sid
+    return None
+
+
+def _resolve_agy_session_id(output: str) -> str | None:
+    """Resolve an Antigravity conversation id from the JSON envelope.
+
+    The envelope's ``conversation_id`` is the identifier; confirmed by checking
+    that the transcript exists on disk.
+    """
+    if not output:
+        return None
+    conv_id = usage_lib.resolve_agy_conversation_id_from_output(output)
+    if conv_id is None or not session_log_agy.is_conversation_id(conv_id):
+        return None
+    transcript_path = session_log_agy.transcript_path_for(conv_id)
+    if transcript_path.is_file():
+        return conv_id
     return None

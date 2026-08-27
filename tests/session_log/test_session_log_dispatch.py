@@ -540,3 +540,48 @@ class TestClaudeReaderAgainstRealShape:
         )
 
         assert len(found) == 1
+
+
+class TestSessionLogDispatch:
+    """R-5: ``agy`` reaches the Antigravity reader through the same seam."""
+
+    FIXTURE = _fixture_path("agy") / "transcript.jsonl"
+    CONVERSATION_ID = "7c054dec-a00c-4fad-a7d7-b395cc48d629"
+
+    def _agy_home(self, tmp_path: Path) -> Path:
+        home = tmp_path / ".gemini" / "antigravity-cli"
+        transcript = (
+            home
+            / "brain"
+            / self.CONVERSATION_ID
+            / ".system_generated"
+            / "logs"
+            / "transcript.jsonl"
+        )
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text(self.FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+        return home
+
+    def test_dispatch_selects_agy_reader_by_agent_cli(self, tmp_path):
+        home = self._agy_home(tmp_path)
+
+        invocations = session_log.extract_test_invocations(
+            "agy", self.CONVERSATION_ID, home=home
+        )
+
+        assert [inv["command"] for inv in invocations] == [
+            "python3 -m pytest tests/test_identity.py -q",
+        ]
+
+    def test_dispatch_does_not_require_worktree_dir_for_agy(self, tmp_path):
+        """Antigravity keys transcripts by conversation id, not by cwd slug."""
+        home = self._agy_home(tmp_path)
+
+        assert session_log.extract_test_invocations(
+            "agy", self.CONVERSATION_ID, home=home
+        ) == session_log.extract_test_invocations(
+            "agy", self.CONVERSATION_ID, worktree_dir="/somewhere/else", home=home
+        )
+
+    def test_dispatch_returns_empty_for_unknown_agy_conversation(self, tmp_path):
+        assert session_log.extract_test_invocations("agy", "no-such-id", home=tmp_path) == []

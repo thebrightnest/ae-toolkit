@@ -21,6 +21,7 @@ from typing import Any
 TAIL_SCAN_BYTES = 256 * 1024
 
 _RESULT_MARKER_RE = re.compile(r'\{\s*"type"\s*:\s*"result"')
+_AGY_ENVELOPE_RE = re.compile(r'\{\s*"conversation_id"\s*:')
 
 # Kimi prints no usage to stdout; the resume hint at exit carries the session
 # id, and per-step usage lives in that session's wire files. Both `session_`
@@ -62,6 +63,8 @@ def parse_usage(
         return _parse_claude(text)
     if agent_cli == "kimi":
         return _parse_kimi(text, kimi_home)
+    if agent_cli == "agy":
+        return _parse_agy(text)
     return None
 
 
@@ -287,3 +290,72 @@ def _sum_wire_usage(session_dir: Path) -> dict[str, Any] | None:
 
 def _as_int(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _parse_agy(text: str) -> dict[str, Any] | None:
+    """Parse Antigravity's JSON envelope.
+
+    agy prints a JSON object with `conversation_id`, `status`, and `usage`.
+    Cache reads are added to `input_tokens`; thinking tokens to `output_tokens`.
+    `cost_usd` is null (Antigravity does not publish per-token pricing in the envelope).
+    """
+    doc = _find_agy_envelope(text)
+    if doc is None:
+        return None
+    usage = doc.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    input_tokens = _as_int(usage.get("input_tokens")) + _as_int(
+        usage.get("cache_read_tokens")
+    )
+    output_tokens = _as_int(usage.get("output_tokens")) + _as_int(
+        usage.get("thinking_tokens")
+    )
+    total = input_tokens + output_tokens
+    if total == 0:
+        return None
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total,
+        "cost_usd": None,
+    }
+
+
+def resolve_agy_conversation_id_from_output(text: str) -> str | None:
+    """Return the conversation id from an agy JSON envelope, or ``None``."""
+    if not text:
+        return None
+    if len(text) > TAIL_SCAN_BYTES:
+        text = text[-TAIL_SCAN_BYTES:]
+    doc = _find_agy_envelope(text)
+    if doc is None:
+        return None
+    conv_id = doc.get("conversation_id")
+    if isinstance(conv_id, str) and conv_id:
+        return conv_id
+    return None
+
+
+def _find_agy_envelope(text: str) -> dict[str, Any] | None:
+    """Locate the JSON envelope carrying conversation_id in agy's output."""
+    stripped = text.strip()
+    if stripped:
+        try:
+            doc = json.loads(stripped)
+            if isinstance(doc, dict) and "conversation_id" in doc:
+                return doc
+        except ValueError:
+            pass
+
+    markers = list(_AGY_ENVELOPE_RE.finditer(text))
+    if not markers:
+        return None
+    decoder = json.JSONDecoder()
+    try:
+        element, _end = decoder.raw_decode(text, markers[-1].start())
+        if isinstance(element, dict) and "conversation_id" in element:
+            return element
+    except ValueError:
+        return None
+    return None

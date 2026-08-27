@@ -5,7 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aet.usage import parse_usage, resolve_kimi_session_dir_from_output
+from aet.usage import (
+    parse_usage,
+    resolve_agy_conversation_id_from_output,
+    resolve_kimi_session_dir_from_output,
+)
 
 # Trimmed from real `claude -p --output-format json` output captured 2026-07-12:
 # a single-line JSON array whose final element (type "result") carries `usage`
@@ -427,6 +431,95 @@ class TestResolveKimiSessionDirFromOutput(unittest.TestCase):
 
     def test_empty_output_returns_none(self):
         self.assertIsNone(resolve_kimi_session_dir_from_output("", kimi_home=self.kimi_home))
+
+
+# Real `agy --dangerously-skip-permissions --output-format json -p ...` output
+# captured 2026-08-27: a single JSON object carrying `conversation_id` and a
+# flat `usage` block. agy prints no cost field and publishes no per-token
+# price for its models, so `cost_usd` stays null (same discipline as kimi).
+AGY_ENVELOPE = (
+    '{"conversation_id":"e9cd2e5f-a0e5-4f41-8ffc-ab2ee2d9b890","status":"SUCCESS",'
+    '"response":"OK","error":"","duration_seconds":0.330402,"num_turns":1,'
+    '"usage":{"input_tokens":120,"output_tokens":40,"thinking_tokens":15,'
+    '"cache_read_tokens":900,"total_tokens":1075}}'
+)
+
+
+class TestUsageAgy(unittest.TestCase):
+    """R-6: agy usage rides in its print-mode JSON envelope."""
+
+    def test_parses_the_json_envelope(self):
+        usage = parse_usage("agy", AGY_ENVELOPE)
+        self.assertEqual(
+            usage,
+            {
+                # Cache reads are input; thinking tokens are billed as output.
+                "input_tokens": 1020,
+                "output_tokens": 55,
+                "total_tokens": 1075,
+                "cost_usd": None,
+            },
+        )
+
+    def test_survives_log_noise_before_the_envelope(self):
+        noisy = "ERROR: logging before google.Init: ...\n" + AGY_ENVELOPE
+        self.assertEqual(parse_usage("agy", noisy)["total_tokens"], 1075)
+
+    def test_zero_token_envelope_records_nothing(self):
+        """agy emits an all-zero usage block when the turn errors out."""
+        envelope = json.dumps(
+            {
+                "conversation_id": "c1",
+                "status": "ERROR",
+                "error": "Selected model is not supported in the selected location.",
+                "usage": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "thinking_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "total_tokens": 0,
+                },
+            }
+        )
+        self.assertIsNone(parse_usage("agy", envelope))
+
+    def test_missing_usage_block_records_nothing(self):
+        envelope = json.dumps({"conversation_id": "c1", "status": "SUCCESS"})
+        self.assertIsNone(parse_usage("agy", envelope))
+
+    def test_unparseable_output_records_nothing(self):
+        self.assertIsNone(parse_usage("agy", "not json at all\n"))
+
+    def test_text_mode_output_has_no_usage(self):
+        self.assertIsNone(parse_usage("agy", "The tests passed.\n"))
+
+    def test_empty_output_has_no_usage(self):
+        self.assertIsNone(parse_usage("agy", ""))
+
+    def test_totals_are_recomputed_not_trusted(self):
+        """A disagreeing `total_tokens` never overrides the summed parts."""
+        envelope = json.dumps(
+            {
+                "conversation_id": "c1",
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 4,
+                    "thinking_tokens": 1,
+                    "cache_read_tokens": 0,
+                    "total_tokens": 99999,
+                },
+            }
+        )
+        self.assertEqual(parse_usage("agy", envelope)["total_tokens"], 15)
+
+    def test_resolves_the_conversation_id_from_the_envelope(self):
+        self.assertEqual(
+            resolve_agy_conversation_id_from_output(AGY_ENVELOPE),
+            "e9cd2e5f-a0e5-4f41-8ffc-ab2ee2d9b890",
+        )
+
+    def test_conversation_id_is_none_without_an_envelope(self):
+        self.assertIsNone(resolve_agy_conversation_id_from_output("plain text"))
 
 
 if __name__ == "__main__":
