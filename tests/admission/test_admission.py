@@ -153,9 +153,7 @@ class TestAdmitPlanOperation(unittest.TestCase):
 
     def test_admit_clean_plan_with_footer(self):
         """A clean plan with a footer is also admitted (footer ignored, R-4)."""
-        plan = _make_clean_plan(
-            self.plans_dir, self.prds_dir, "clean-with-footer.md", footer="*Stage: plan-approved*"
-        )
+        plan = _make_clean_plan(self.plans_dir, self.prds_dir, "clean-with-footer.md", footer="*Stage: plan-approved*")
         outcome = admit_plan(
             plan,
             plans_dir=self.plans_dir,
@@ -229,9 +227,7 @@ class TestAdmitPlanOperation(unittest.TestCase):
 
     def test_refuse_blocked_when_disallowed(self):
         """A blocked plan is refused when allow_blocked=False (for sprint intake)."""
-        plan = _make_clean_plan(
-            self.plans_dir, self.prds_dir, "feat-002.md", blocked_by=["blocker-001"]
-        )
+        plan = _make_clean_plan(self.plans_dir, self.prds_dir, "feat-002.md", blocked_by=["blocker-001"])
         queue = [{"id": "blocker-001", "state": "ready"}]
         outcome = admit_plan(
             plan,
@@ -248,9 +244,7 @@ class TestAdmitPlanOperation(unittest.TestCase):
 
     def test_admit_blocked_when_allowed(self):
         """A blocked plan is admitted when allow_blocked=True (for sprint add)."""
-        plan = _make_clean_plan(
-            self.plans_dir, self.prds_dir, "feat-002.md", blocked_by=["blocker-001"]
-        )
+        plan = _make_clean_plan(self.plans_dir, self.prds_dir, "feat-002.md", blocked_by=["blocker-001"])
         queue = [{"id": "blocker-001", "state": "ready"}]
         outcome = admit_plan(
             plan,

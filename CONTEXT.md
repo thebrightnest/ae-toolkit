@@ -32,6 +32,10 @@ _Avoid_: using "issue" for a Task.
 The canonical workflow state stored in `tasks[].state` while a task is in the queue: `planned`, `ready`, `blocked`, `in_progress`, `awaiting_merge`, `failed`, or `quarantined`.
 _Avoid_: using `state` for terminal truth.
 
+**Inert Task**:
+A task on the board that has not yet run: its state is one of `planned`, `ready`, or `blocked`, and it has no `branch`, `worktree`, or `merge_commit` assigned. An inert task's plan spec can be re-ingested from the plan file via `aet sprint add` without deleting refs on origin (ADR-067).
+_Avoid_: re-ingesting a task that carries run state.
+
 **Status (plan lifecycle)**:
 _Deprecated._ The `status` frontmatter field left the plan contract in ADR-055 and is now rejected by `aet plans lint`. Settled-ness is derived by **Settled-ness Authority**. The `_Stage:_` footer is a breadcrumb only.
 _Avoid_: using plan `status` for any runtime scheduling or settled-ness decision.
@@ -88,15 +92,15 @@ The repo-level configuration (`integration_mode: pr-per-task | single-pr`) contr
 **Shadow Config**:
 The project-local configuration layer that overrides the team config for one repo (ADR-048). The configuration used in anger pairs `single-pr` with a shadow config and a heavy dependency environment — distinct from the dogfooded configuration (trunk + team config + no dependencies).
 
-## Plan Lifecycle (ADR-061)
+## Plan Lifecycle (ADR-061, ADR-067)
 
 The source of truth for a task's spec changes at one explicit handoff:
 
 1. **Author** — `aet-plan` writes `docs/plans/<id>.md`. The file is the artifact.
-2. **Intake** — `aet sprint add` ingests the file into the task record's `spec`. This is the handoff.
+2. **Intake** — `aet sprint add` ingests the file into the task record's `spec`. This intake is repeatable while the task remains an **Inert Task** (ADR-067); once execution begins, the record's `spec` is frozen.
 3. **Post-intake** — execution, shipping, closure, and measurement read `spec.frontmatter`, `spec.title`, `spec.body`, and `spec.tasks` from the record. No consumer resolves `plan_file` as a path.
 
-See ADR-061 (`docs/adr/061-the-record-is-the-plan-after-intake.md`) for the full decision and consequences.
+See ADR-061 (`docs/adr/061-the-record-is-the-plan-after-intake.md`) and ADR-067 (`docs/adr/067-intake-is-repeatable-while-a-task-is-inert.md`) for the full decisions and consequences.
 
 ## Relationships
 

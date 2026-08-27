@@ -54,9 +54,7 @@ def _write_plan(plans_dir: Path, stem: str, blocked_by: list[str] | None = None)
 def _write_default_prd(plans_dir: Path) -> None:
     prds_dir = plans_dir.parent / "prds"
     prds_dir.mkdir(parents=True, exist_ok=True)
-    (prds_dir / "default.md").write_text(
-        "# Default PRD\n\n## Requirements\n- **R-1**: default\n", encoding="utf-8"
-    )
+    (prds_dir / "default.md").write_text("# Default PRD\n\n## Requirements\n- **R-1**: default\n", encoding="utf-8")
 
 
 def _git_init(root: Path) -> None:
@@ -90,17 +88,13 @@ def _seed_queue(root: Path, tasks: list[dict]) -> tuple[Path, Path]:
     queue_file = root / ".agents" / "aet-queue"
     history_file = root / ".agents" / "work-history.jsonl"
     queue_file.parent.mkdir(parents=True, exist_ok=True)
-    backend = GitRefsBackend(
-        queue_file=str(queue_file), history_file=str(history_file)
-    )
+    backend = GitRefsBackend(queue_file=str(queue_file), history_file=str(history_file))
     backend.save(tasks)
     return queue_file, history_file
 
 
 def _read_queue(queue_file: Path, history_file: Path) -> list[dict]:
-    return GitRefsBackend(
-        queue_file=str(queue_file), history_file=str(history_file)
-    ).load()["queue"]
+    return GitRefsBackend(queue_file=str(queue_file), history_file=str(history_file)).load()["queue"]
 
 
 def _completed(stdout: str = "", returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess:
@@ -165,9 +159,7 @@ class TestSprintIntakeAdmitsUnblockedCandidate(unittest.TestCase):
             _write_default_prd(plans_dir)
             _write_plan(plans_dir, "feat-001")
             _git_init(root)
-            config_path = _write_config(
-                root, projections=[{"type": "github", "repo": "owner/repo"}]
-            )
+            config_path = _write_config(root, projections=[{"type": "github", "repo": "owner/repo"}])
             history_file = root / ".agents" / "work-history.jsonl"
             queue_file, _ = _seed_queue(root, [])
 
@@ -259,9 +251,7 @@ class TestSprintIntakeRunsIntakeValidation(unittest.TestCase):
             _write_default_prd(plans_dir)
             self._invalid_plan(plans_dir, "feat-bad")
             _git_init(root)
-            config_path = _write_config(
-                root, projections=[{"type": "github", "repo": "owner/repo"}]
-            )
+            config_path = _write_config(root, projections=[{"type": "github", "repo": "owner/repo"}])
             history_file = root / ".agents" / "work-history.jsonl"
             queue_file, _ = _seed_queue(root, [])
 
@@ -274,9 +264,7 @@ class TestSprintIntakeRunsIntakeValidation(unittest.TestCase):
 
             stderr = io.StringIO()
             with mock.patch("aet.backends.github_backend.subprocess.run") as mock_run:
-                mock_run.side_effect = _gh_side_effect(
-                    _all_aet_labels(), json.dumps([issue])
-                )
+                mock_run.side_effect = _gh_side_effect(_all_aet_labels(), json.dumps([issue]))
                 with mock.patch.object(
                     sys,
                     "argv",
@@ -338,9 +326,7 @@ class TestSprintIntakeRunsIntakeValidation(unittest.TestCase):
                 encoding="utf-8",
             )
             _git_init(root)
-            config_path = _write_config(
-                root, projections=[{"type": "github", "repo": "owner/repo"}]
-            )
+            config_path = _write_config(root, projections=[{"type": "github", "repo": "owner/repo"}])
             queue_file, history_file = _seed_queue(root, [])
             issue = {
                 "number": 42,
@@ -349,12 +335,8 @@ class TestSprintIntakeRunsIntakeValidation(unittest.TestCase):
                 "labels": [{"name": "aet:sprint"}],
                 "state": "open",
             }
-            with mock.patch(
-                "aet.backends.github_backend.subprocess.run"
-            ) as mock_run:
-                mock_run.side_effect = _gh_side_effect(
-                    _all_aet_labels(), json.dumps([issue])
-                )
+            with mock.patch("aet.backends.github_backend.subprocess.run") as mock_run:
+                mock_run.side_effect = _gh_side_effect(_all_aet_labels(), json.dumps([issue]))
                 with mock.patch.object(
                     sys,
                     "argv",
@@ -390,9 +372,7 @@ class TestSprintIntakeRefusesBlockedCandidate(unittest.TestCase):
             _write_plan(plans_dir, "blocker-001")
             _write_plan(plans_dir, "feat-002", blocked_by=["blocker-001"])
             _git_init(root)
-            config_path = _write_config(
-                root, projections=[{"type": "github", "repo": "owner/repo"}]
-            )
+            config_path = _write_config(root, projections=[{"type": "github", "repo": "owner/repo"}])
             history_file = root / ".agents" / "work-history.jsonl"
             queue_file, _ = _seed_queue(
                 root,
@@ -456,9 +436,7 @@ class TestSprintIntakeHaltsOnForgeFailure(unittest.TestCase):
             _write_default_prd(plans_dir)
             _write_plan(plans_dir, "feat-003")
             _git_init(root)
-            config_path = _write_config(
-                root, projections=[{"type": "github", "repo": "owner/repo"}]
-            )
+            config_path = _write_config(root, projections=[{"type": "github", "repo": "owner/repo"}])
             history_file = root / ".agents" / "work-history.jsonl"
             queue_file, _ = _seed_queue(root, [])
 
@@ -471,9 +449,7 @@ class TestSprintIntakeHaltsOnForgeFailure(unittest.TestCase):
                     return _completed(stdout=_all_aet_labels())
                 if cmd[:3] == ["gh", "issue", "list"]:
                     attempts.append(cmd)
-                    return _completed(
-                        returncode=1, stderr="HTTP 403: Forbidden\n"
-                    )
+                    return _completed(returncode=1, stderr="HTTP 403: Forbidden\n")
                 raise AssertionError(f"unexpected gh command: {cmd}")
 
             with mock.patch("aet.backends.github_backend.subprocess.run") as mock_run:
@@ -514,9 +490,7 @@ class TestSprintIntakeSkipsKnownTasks(unittest.TestCase):
             _write_default_prd(plans_dir)
             _write_plan(plans_dir, "feat-004")
             _git_init(root)
-            config_path = _write_config(
-                root, projections=[{"type": "github", "repo": "owner/repo"}]
-            )
+            config_path = _write_config(root, projections=[{"type": "github", "repo": "owner/repo"}])
             history_file = root / ".agents" / "work-history.jsonl"
             queue_file, _ = _seed_queue(
                 root,
@@ -573,9 +547,7 @@ class TestSprintIntakeSkipsKnownTasks(unittest.TestCase):
             _write_default_prd(plans_dir)
             _write_plan(plans_dir, "feat-005")
             _git_init(root)
-            config_path = _write_config(
-                root, projections=[{"type": "github", "repo": "owner/repo"}]
-            )
+            config_path = _write_config(root, projections=[{"type": "github", "repo": "owner/repo"}])
             history_file = root / ".agents" / "work-history.jsonl"
             history_file.parent.mkdir(parents=True, exist_ok=True)
             history_file.write_text(
@@ -632,9 +604,7 @@ class TestSprintIntakeEnumeratesOnce(unittest.TestCase):
             _write_plan(plans_dir, "feat-006")
             _write_plan(plans_dir, "feat-007")
             _git_init(root)
-            config_path = _write_config(
-                root, projections=[{"type": "github", "repo": "owner/repo"}]
-            )
+            config_path = _write_config(root, projections=[{"type": "github", "repo": "owner/repo"}])
             history_file = root / ".agents" / "work-history.jsonl"
             queue_file, _ = _seed_queue(root, [])
 
