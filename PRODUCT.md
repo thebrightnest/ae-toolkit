@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.11.0
+## Current Version: 1.12.0
 
-Last updated: 2026-08-24
+Last updated: 2026-08-27
 
 ---
 
@@ -71,6 +71,7 @@ Carry context and lessons across runs.
 | Name                  | Description                                                                                                                          |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `make install-skills` | Symlinks all skills to `~/.agents/skills/` for local agent use.                                                                      |
+| Agent CLIs            | Claude Code, Kimi, and Antigravity (`agy`) all drive the pipeline. The toolkit reads each one's session logs and usage figures, so runs are comparable whichever you use; for Antigravity, model and reasoning effort are selectable per session. |
 | `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet setup link` installs the console script on `PATH`. |
 | `aet context`         | Session-start context loader that surfaces git state, plan stages, budgets, rules digest, and recent learnings. |
 | `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates. |
@@ -82,6 +83,17 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.12.0
+
+- **Antigravity joins the supported agent CLIs** — runs can be driven by `agy` alongside Claude Code and Kimi, producing the same telemetry, usage figures, and session traceability whichever you use. Model and reasoning effort are selectable per session.
+- **A run driven by Antigravity no longer stops after five minutes** — the CLI's own five-minute deadline was cutting every stage short well inside the toolkit's own supervision window. Stages now run to the toolkit's ceiling, and output streams as the work happens, so a session that is interrupted leaves its progress behind instead of returning nothing.
+- **Reports show real numbers again** — an archive-wide report reads the run summary it had been skipping, so tasks, cost, and wall-clock time are no longer reported as zero for runs that plainly happened.
+- **Finished tasks clean up after themselves** — a task's worktree is removed once its work is committed, rather than being left behind by every task that did anything. Uncommitted work still stops removal and is named.
+- **Both doors onto the board check a plan the same way** — a plan arriving from a GitHub issue is validated exactly as one added by hand, so which route a plan took no longer decides whether it was checked.
+- **A refusal you cannot satisfy now explains itself** — when a plan cites a requirement it is itself introducing, the refusal says the check compares against requirements that already exist and points at the line that records your judgement, instead of reporting the requirement as unknown.
+
+**Upgrading from 1.11.x:** `aet sprint intake` now refuses a plan that fails validation rather than admitting it; plans already on the board are unaffected. Antigravity sessions pick up the longer deadline and streamed output automatically.
 
 ### What's New in v1.11.0
 

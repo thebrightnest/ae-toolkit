@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.12.0] — 2026-08-27
+
+### Added
+
+- **Antigravity (`agy`) is a supported agent CLI** — a third adapter alongside `claude` and `kimi`, with its own session-log and transcript extraction so runs driven by it produce the same telemetry, usage figures, and session traceability as the others. Model and reasoning effort are selectable per session through `AET_AGY_MODEL` and `AET_AGY_EFFORT`.
+
+### Fixed
+
+- **`aet report` counted nothing** — the archive scan matched only `*.jsonl` and never read the run summary in `last-run.json`, so every archive-wide report showed `Runs: 0` and zero tasks, cost, and wall-clock time while `Runs observed` counted the run. The tell was the two numbers disagreeing; the cause was one reader not following the archive layout its own writer and two other readers already used.
+- **Every task that did any work stranded its worktree** — teardown refused whenever the branch had commits, which is true of every task that succeeded. Committed work lives on the branch ref and survives removal, so teardown now blocks only on uncommitted changes. The refresh path, which rebuilds a branch from its base, still refuses on committed work.
+- **`aet sprint intake` admitted plans without checking them** — the GitHub-issue door onto the board ran no validation at all, so a plan reachable from an `aet:sprint` issue was queued without its frontmatter contract, requirement citations, or coverage ever being checked, while the identical plan was refused by `aet sprint add`. Both doors now apply the same admission policy.
+- **`agy` sessions were killed at five minutes** — the CLI's own `--print-timeout` defaults to `5m0s` and was never set, so stage sessions were aborted at roughly 300 seconds regardless of the toolkit's own two-hour supervision ceiling. It is now derived from that ceiling rather than left to the CLI's default.
+- **An aborted `agy` session lost all of its work** — buffered output is printed only on completion, so a session that ran out of time returned nothing at all. Output is now streamed, leaving partial work behind and making progress visible while a stage runs.
+- **A CLI deadline was recorded as a flake** — a session killed by the agent CLI's own timeout is now classified as a timeout, so a run's telemetry no longer describes a deterministic limit as a transient fault.
+- **A refusal that could not be satisfied now says so** — when a plan cites a requirement it is itself introducing, intake explains that the check compares citations against requirements that already exist and points at the acknowledgement line, instead of reporting the requirement as unknown and inviting a fix that makes the plan wrong.
+
+### Changed
+
+- **`aet-plan`'s completion protocol agrees with the code again** — two instructions contradicted what intake enforces: one forbade the plan stage footer that `aet sprint add` requires, and another asked the agent to confirm an intake step a different instruction forbids it from taking, against a queue path the backend no longer writes. Intake is now stated to belong to the operator or to `aet-pipeline-plan`.
+
+### Documentation
+
+- **ADR-066 (Board Admission Has One Path)** and the `single-admission-path` PRD record why board admission is being consolidated into a single operation: it is implemented once per door today, which is how a plan-footer read forbidden by three accepted decisions survived all three.
+- Bug reports filed for the defects found alongside this release — worktree teardown, the report archive scan, the unsatisfiable requirement refusal, the ship gate reading the ambient checkout, the `agy` timeout, and `aet state reset` deriving `merged` from a branch with no commits.
+- An idea document records the open question of whether per-branch quality verdicts compose across a parallel batch.
+
+---
+
 ## [1.11.0] — 2026-08-24
 
 ### Added
