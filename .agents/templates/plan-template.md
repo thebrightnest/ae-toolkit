@@ -9,6 +9,8 @@ security_review: required
 security_review_reason: [one line]
 docs_sync: required
 docs_sync_reason: [one line]
+# verify: required
+# verify_reason: [one line if skipped]
 # Optional identity declarations for plans that conflate two identifiers for
 # the same entity. Required when the identity-conflation lens fires; omitted
 # otherwise. Each entry names the entity, the conflated identifiers, and which
@@ -34,13 +36,17 @@ unclassified tasks makes the per-class breakdown in `aet metrics` and
      for auth, data-model, API, dependency, or infrastructure changes.
      See docs/PIPELINE.md#pipeline-mode-selection. -->
 
-<!-- `security_review` / `docs_sync` route the aet-cso and aet-sync-docs
-pipeline gates at plan time: `required` (default) runs the stage; `skipped`
-skips it and must be paired with the one-line reason above. A missing key is
-treated as `required` (fail-safe — the stage runs). `required` and `skipped`
-are the *only* accepted values — a conditional or hedged value such as
-`conditional` fails `aet plan validate`. If a stage's need depends on the
-outcome of the work, declare `required` and say so in the reason. -->
+<!-- `security_review` / `docs_sync` / `verify` route the aet-cso,
+     aet-sync-docs, and aet-verify pipeline gates at plan time: `required` runs
+     the stage; `skipped` skips it and must be paired with the one-line reason
+     above. For `security_review` and `docs_sync`, a missing key is treated as
+     `required` (fail-safe — the stage runs). For `verify`, a missing key
+     defaults to `critical-only` derived from `work_class` (runs for critical,
+     skipped for normal/trivial/unclassified without needing a reason).
+     `required` and `skipped` are the *only* accepted values — a conditional
+     or hedged value such as `conditional` fails `aet plan validate`. If a
+     stage's need depends on the outcome of the work, declare `required` and
+     say so in the reason. -->
 
 # Plan: [Feature Name]
 

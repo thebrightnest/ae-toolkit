@@ -58,5 +58,67 @@ class TestWorkClassAttribute(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+class TestVerifyRoutingKey(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_verify_skip_requires_reason(self):
+        """verify: skipped without verify_reason fails intake validation."""
+        plan = self.root / "poh-02.md"
+        lines = [
+            "---",
+            "id: poh-02",
+            "size: S",
+            "verify: skipped",
+            "---",
+            "",
+            "# Title",
+            "",
+        ]
+        plan.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        errors = plan_parser.intake_validation_errors([plan])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("verify_reason is required when verify is skipped", errors[0][1])
+
+    def test_verify_skip_with_reason_passes(self):
+        """verify: skipped with verify_reason passes intake validation."""
+        plan = self.root / "poh-02.md"
+        lines = [
+            "---",
+            "id: poh-02",
+            "size: S",
+            "verify: skipped",
+            "verify_reason: unit tests cover all invariant changes",
+            "---",
+            "",
+            "# Title",
+            "",
+        ]
+        plan.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        errors = plan_parser.intake_validation_errors([plan])
+        self.assertEqual(errors, [])
+
+    def test_verify_required_passes(self):
+        """verify: required passes intake validation."""
+        plan = self.root / "poh-02.md"
+        lines = [
+            "---",
+            "id: poh-02",
+            "size: S",
+            "verify: required",
+            "---",
+            "",
+            "# Title",
+            "",
+        ]
+        plan.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        errors = plan_parser.intake_validation_errors([plan])
+        self.assertEqual(errors, [])
+
+
 if __name__ == "__main__":
     unittest.main()

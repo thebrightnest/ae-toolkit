@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from aet import evidence, telemetry
+from aet import evidence, gate, telemetry
 from aet.cli_adapter import CLIAdapter
 from aet.workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
 
@@ -448,6 +448,32 @@ class TestGateMessageIncludesPath(unittest.TestCase):
             reports_root=reports_dir,
         )
         self.assertIn(str(expected_path), buf.getvalue())
+
+
+class TestRequiredEvidenceFollowsWorkClass(unittest.TestCase):
+    """required_evidence resolves critical-only stages against work_class."""
+
+    def test_required_evidence_follows_work_class(self):
+        repo_root = Path(__file__).parents[2]
+        # Critical task includes verify
+        critical_fm = {"work_class": "critical"}
+        kinds = [k for _, k in gate.required_evidence(repo_root, critical_fm)]
+        self.assertIn("verify", kinds)
+
+        # Normal task omits verify
+        normal_fm = {"work_class": "normal"}
+        kinds_normal = [k for _, k in gate.required_evidence(repo_root, normal_fm)]
+        self.assertNotIn("verify", kinds_normal)
+
+        # Explicit verify: required on normal task includes verify
+        override_fm = {"work_class": "normal", "verify": "required"}
+        kinds_override = [k for _, k in gate.required_evidence(repo_root, override_fm)]
+        self.assertIn("verify", kinds_override)
+
+        # Explicit verify: skipped on critical task omits verify
+        skip_fm = {"work_class": "critical", "verify": "skipped"}
+        kinds_skip = [k for _, k in gate.required_evidence(repo_root, skip_fm)]
+        self.assertNotIn("verify", kinds_skip)
 
 
 if __name__ == "__main__":

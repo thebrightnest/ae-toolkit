@@ -115,7 +115,7 @@ class TestBoardReview(unittest.TestCase):
         """A task with an explicit pipeline stage maps via the workflow vocabulary."""
         queue = [
             _task("t1", "planned", stage="implemented"),
-            _task("t2", "planned", stage="synced"),
+            _task("t2", "planned", stage="verified"),
         ]
 
         rc, output = self._capture(queue)

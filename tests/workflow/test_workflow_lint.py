@@ -129,7 +129,7 @@ class TestSkillResolution(WorkflowLintTestCase):
         )
         # Only the first stage's bindings changed; the remaining aet-* skills
         # still need stubs for the file to lint clean.
-        for skill in ("aet-qa", "aet-review", "aet-cso", "aet-sync-docs"):
+        for skill in ("aet-qa", "aet-review", "aet-cso", "aet-sync-docs", "aet-verify"):
             stub = skills_dir / skill / "SKILL.md"
             stub.parent.mkdir(parents=True, exist_ok=True)
             stub.write_text(f"---\nname: {skill}\ndescription: stub\n---\n", encoding="utf-8")

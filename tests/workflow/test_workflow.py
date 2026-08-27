@@ -46,7 +46,7 @@ class TestPackagedDefault(unittest.TestCase):
         wf = load_workflow(REPO_ROOT)
         self.assertEqual(
             [s.name for s in wf.stages],
-            ["plan-approved", "implemented", "qa-complete", "reviewed", "secure", "synced"],
+            ["plan-approved", "implemented", "qa-complete", "reviewed", "secure", "synced", "verified"],
         )
 
 
@@ -60,7 +60,7 @@ class TestNextStage(unittest.TestCase):
             self.assertEqual(self.wf.next_stage(current), expected)
 
     def test_last_stage_advances_to_done_state(self):
-        self.assertEqual(self.wf.next_stage("synced"), "done")
+        self.assertEqual(self.wf.next_stage("verified"), "done")
 
     def test_done_state_has_no_successor(self):
         self.assertIsNone(self.wf.next_stage("done"))
@@ -80,19 +80,19 @@ class TestSessionGroups(unittest.TestCase):
     def test_standard_uses_declared_groups(self):
         self.assertEqual(
             self._names(self.wf.session_groups("standard")),
-            [["plan-approved", "implemented"], ["qa-complete"], ["reviewed", "secure"]],
+            [["plan-approved", "implemented"], ["qa-complete"], ["reviewed", "secure", "synced"]],
         )
 
     def test_minimal_is_single_session_of_skilled_stages(self):
         self.assertEqual(
             self._names(self.wf.session_groups("minimal")),
-            [["plan-approved", "implemented", "qa-complete", "reviewed", "secure"]],
+            [["plan-approved", "implemented", "qa-complete", "reviewed", "secure", "synced"]],
         )
 
     def test_full_is_one_session_per_skilled_stage(self):
         self.assertEqual(
             self._names(self.wf.session_groups("full")),
-            [["plan-approved"], ["implemented"], ["qa-complete"], ["reviewed"], ["secure"]],
+            [["plan-approved"], ["implemented"], ["qa-complete"], ["reviewed"], ["secure"], ["synced"]],
         )
 
     def test_default_isolation_is_standard(self):
@@ -153,7 +153,7 @@ class TestValidationRules(WorkflowFileTestCase):
 
     def test_group_containing_skill_less_stage_rejected(self):
         document = packaged_document()
-        document["execution_policy"]["session_groups"][0].append("synced")
+        document["execution_policy"]["session_groups"][0].append("verified")
         with self.assertRaisesRegex(WorkflowError, "skill-less stage"):
             self.load_document(document)
 
@@ -180,6 +180,20 @@ class TestValidationRules(WorkflowFileTestCase):
         document["routing"]["by_stage"] = {"ghost": {"harness": "claude", "model": None}}
         with self.assertRaisesRegex(WorkflowError, "unknown stage"):
             self.load_document(document)
+
+    def test_unknown_gate_default_is_rejected(self):
+        document = packaged_document()
+        document["stages"][3]["gate_default"] = "optional"
+        with self.assertRaisesRegex(WorkflowError, "unknown gate_default"):
+            self.load_document(document)
+
+    def test_valid_gate_defaults_accepted(self):
+        document = packaged_document()
+        document["stages"][3]["gate_default"] = "required"
+        document["stages"][4]["gate_default"] = "critical-only"
+        wf = self.load_document(document)
+        self.assertEqual(wf.stages[3].gate_default, "required")
+        self.assertEqual(wf.stages[4].gate_default, "critical-only")
 
     def test_unsupported_version_rejected(self):
         document = packaged_document()
@@ -235,14 +249,15 @@ class TestPackagedBaseline(unittest.TestCase):
     evidence, gate keys, and session groups stated literally here.
     """
 
-    # (name, skills, evidence, gate_key) — one row per stage, in list order.
+    # (name, skills, evidence, gate_key, gate_default) — one row per stage, in list order.
     EXPECTED_STAGES = [
-        ("plan-approved", ["aet-tdd", "aet-implement"], None, None),
-        ("implemented", ["aet-qa"], "qa", None),
-        ("qa-complete", ["aet-review"], "review", None),
-        ("reviewed", ["aet-cso"], "cso", "security_review"),
-        ("secure", ["aet-sync-docs"], "sync-docs", "docs_sync"),
-        ("synced", [], None, None),
+        ("plan-approved", ["aet-tdd", "aet-implement"], None, None, "required"),
+        ("implemented", ["aet-qa"], "qa", None, "required"),
+        ("qa-complete", ["aet-review"], "review", None, "required"),
+        ("reviewed", ["aet-cso"], "cso", "security_review", "required"),
+        ("secure", ["aet-sync-docs"], "sync-docs", "docs_sync", "required"),
+        ("synced", ["aet-verify"], "verify", "verify", "critical-only"),
+        ("verified", [], None, None, "required"),
     ]
 
     def setUp(self):
@@ -250,7 +265,7 @@ class TestPackagedBaseline(unittest.TestCase):
 
     def test_sequence_skills_evidence_and_gate_keys(self):
         self.assertEqual(
-            [(s.name, s.skills, s.evidence, s.gate_key) for s in self.wf.stages],
+            [(s.name, s.skills, s.evidence, s.gate_key, s.gate_default) for s in self.wf.stages],
             [tuple(row) for row in self.EXPECTED_STAGES],
         )
 
@@ -263,7 +278,7 @@ class TestPackagedBaseline(unittest.TestCase):
         self.assertEqual(self.wf.done_state, "done")
 
     def test_terminal_advancement_to_done_state(self):
-        self.assertEqual(self.wf.next_stage("synced"), "done")
+        self.assertEqual(self.wf.next_stage("verified"), "done")
         self.assertIsNone(self.wf.next_stage("done"))
 
     def test_next_stage_chain(self):
@@ -277,19 +292,19 @@ class TestPackagedBaseline(unittest.TestCase):
     def test_session_groups_standard(self):
         self.assertEqual(
             self._names(self.wf.session_groups("standard")),
-            [["plan-approved", "implemented"], ["qa-complete"], ["reviewed", "secure"]],
+            [["plan-approved", "implemented"], ["qa-complete"], ["reviewed", "secure", "synced"]],
         )
 
     def test_session_groups_minimal(self):
         self.assertEqual(
             self._names(self.wf.session_groups("minimal")),
-            [["plan-approved", "implemented", "qa-complete", "reviewed", "secure"]],
+            [["plan-approved", "implemented", "qa-complete", "reviewed", "secure", "synced"]],
         )
 
     def test_session_groups_full(self):
         self.assertEqual(
             self._names(self.wf.session_groups("full")),
-            [["plan-approved"], ["implemented"], ["qa-complete"], ["reviewed"], ["secure"]],
+            [["plan-approved"], ["implemented"], ["qa-complete"], ["reviewed"], ["secure"], ["synced"]],
         )
 
     def test_no_runtime_judgment_left_in_the_engine(self):

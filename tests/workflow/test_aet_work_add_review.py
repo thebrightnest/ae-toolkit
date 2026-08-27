@@ -633,10 +633,10 @@ class TestReviewBoardColumns(unittest.TestCase):
         )
 
     def test_terminal_skill_less_stage_maps_to_queued(self):
-        self.assertEqual(gate.category_for_stage("synced", self.workflow), "queued")
+        self.assertEqual(gate.category_for_stage("verified", self.workflow), "queued")
 
     def test_skilled_middle_stages_map_to_in_progress(self):
-        for stage in ("implemented", "qa-complete", "reviewed", "secure"):
+        for stage in ("implemented", "qa-complete", "reviewed", "secure", "synced"):
             self.assertEqual(
                 gate.category_for_stage(stage, self.workflow), "in-progress"
             )

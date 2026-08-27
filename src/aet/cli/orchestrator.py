@@ -1611,21 +1611,27 @@ def stage_enabled(stage: WorkflowStage, plan_fm: dict) -> bool:
     """Return True when ``stage`` should run for the given plan frontmatter.
 
     A stage without a ``gate_key`` always runs. A gated stage runs unless the
-    plan frontmatter sets its gate key to ``skipped``; a missing key defaults
-    to ``required`` (fail-safe — the stage runs). Routing is decided once at
-    plan time and enforced here as pure data (ADR-020).
+    plan frontmatter sets its gate key to ``skipped``. When the gate key is
+    absent from frontmatter, resolution falls back to ``stage.gate_default``:
+    ``"required"`` runs (fail-safe), while ``"critical-only"`` runs only when
+    ``work_class`` is ``"critical"``. An explicit frontmatter value is always
+    authoritative over the default.
     """
     if not stage.gate_key:
         return True
-    return plan_fm.get(stage.gate_key) != "skipped"
+    if stage.gate_key in plan_fm:
+        return plan_fm[stage.gate_key] != "skipped"
+    if stage.gate_default == "critical-only":
+        return plan_fm.get("work_class") == "critical"
+    return True
 
 
 def _report_gate_decision(stage: WorkflowStage, plan_fm: dict, enabled: bool) -> None:
     """Print how a gated stage's run/skip decision was resolved.
 
     The source is ``frontmatter`` when the plan sets the gate key and
-    ``default`` when the key is absent (fail-safe run). Ungated stages and
-    frontmatter-directed runs are silent.
+    ``default`` when the key is absent (fail-safe run or critical-only skip).
+    Ungated stages and frontmatter-directed runs are silent.
     """
     if not stage.gate_key:
         return
@@ -1635,10 +1641,17 @@ def _report_gate_decision(stage: WorkflowStage, plan_fm: dict, enabled: bool) ->
                 f"   🔒 Gate {stage.gate_key} unset; running {stage.name} (source: default)"
             )
         return
-    print(
-        f"   ⏭️  Skipping gated stage: {stage.name} "
-        f"({stage.gate_key}=skipped, source: frontmatter)"
-    )
+    if stage.gate_key in plan_fm:
+        print(
+            f"   ⏭️  Skipping gated stage: {stage.name} "
+            f"({stage.gate_key}=skipped, source: frontmatter)"
+        )
+    else:
+        work_class = plan_fm.get("work_class") or "unclassified"
+        print(
+            f"   ⏭️  Skipping gated stage: {stage.name} "
+            f"(work_class={work_class}, source: default)"
+        )
 
 
 def process_task(

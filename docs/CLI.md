@@ -251,7 +251,7 @@ from the supplied options. In that mode ``AET_TASK_ID`` must be set.
 
 ### Options
 
-- `--stage` *str* — Verdict stage: qa, review, cso, or sync-docs (required)
+- `--stage` *str* — Verdict stage: qa, review, cso, sync-docs, or verify (required)
 - `--verdict` *str* — Declared verdict; must match the payload's verdict field (required)
 - `--evidence` *str* — Path to the verdict JSON payload file
 - `--from-pytest` *str* — Path to a pytest JSON report (qa builder mode)
