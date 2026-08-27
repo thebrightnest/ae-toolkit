@@ -9,6 +9,33 @@ the git history is the archive.
 
 ## Tooling and project setup
 
+### Skills still name `.agents/work-queue.json` as the board
+
+*Recorded: 2026-08-27 — Source: aet-evolve retro, planning-pipeline contradictions*
+
+The `git-refs` backend stores the board in `refs/aet/tasks/*` with a
+`refs/aet/meta/queue` envelope. `.agents/work-queue.json` is a path the backend no
+longer writes, and `aet setup verify` already warns that `.gitignore` names it.
+Seventeen references survive across fifteen files in six skills — `aet-work`
+(7), `aet-pipeline-plan` (4), `aet-plan` (2), `aet-setup` (2),
+`aet-validate-scope` (1), `aet-evolve` (1), plus reference files, examples, and
+`aet-setup/checklist.md`.
+
+One of the seventeen was corrected in passing when `aet-plan`'s completion item 5
+was rewritten. The rest are untouched.
+
+**Why accepted:** the occurrences are not uniformly wrong.
+`aet-work/references/migration-aet-state.md` and `upgrading-existing-project.md`
+describe migrating *from* that layout, where naming the old path is the point. A
+blind replace would corrupt them, and the 2026-08-23 learning is specifically
+about sweeps reported complete while wrong copies survive in reference files and
+templates. The audit needs per-file judgment, which is more than the retro that
+found it should carry.
+
+**Trigger to fix:** the next skill edit in `aet-work` or `aet-setup`, or any
+session where an agent reads or writes `.agents/work-queue.json` because a skill
+told it to.
+
 ### No coverage tool is configured
 
 *Recorded: 2026-07-27 — Source: tap-02-shared-runner-registry, aet-qa stage*

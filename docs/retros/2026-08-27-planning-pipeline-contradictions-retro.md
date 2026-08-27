@@ -94,5 +94,9 @@ change.
 | --- | --- | --- |
 | Correct the two `aet-plan` instructions | this retro | ✅ applied |
 | `make install-skills` so the installed copy matches the repo | operator | open |
-| Per-file audit of `.agents/work-queue.json` references across `skills/` | queue | open |
-| Remove the footer read from `stage_from_plan`'s intake use, per ADR-055 | queue | open |
+| Per-file audit of `.agents/work-queue.json` references across `skills/` | `docs/TECHNICAL_DEBT.md` — "Skills still name `.agents/work-queue.json` as the board" | ✅ filed |
+| Remove the footer read from `stage_from_plan`'s intake use, per ADR-055 | `docs/bugs/20260827-intake-gates-on-plan-footer-prose.md` | ✅ filed |
+
+Both deferred items are filed rather than left as rows here. A learning records
+the failure mode so it is not repeated; it is not a work item, and neither of
+these was actionable while it existed only as retro prose.
