@@ -105,3 +105,4 @@ After `sync` completes:
 - **Minimal diffs** — only record meaningful divergences, not naming or refactor changes
 - **Commit docs alongside code** — the docs update is part of the delivery, not an afterthought
 - **No divergences = fast path** — skip the summary if plan matched; just advance the stage
+- **Narrative vs. mechanical divergence** — The narrative Divergence Summary in the PRD is this stage's obligation while the mechanical Divergence Record is closure's (recorded on the execution log at merge time independent of `docs_sync`).

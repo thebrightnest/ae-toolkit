@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aet import plan_size, track_record
+from aet import divergence, plan_size, track_record
 
 
 def _task_settled_at(task: dict[str, Any]) -> str | None:
@@ -376,6 +376,10 @@ def backfill_delivered_size(
 
         size_info = plan_size.delivered_size(repo_root, merge_commit)
         task["delivered_size"] = {**size_info, "declared_size": declared_size}
+        if "divergence" not in task:
+            task["divergence"] = divergence.compute_divergence(
+                repo_root, merge_commit, spec=task.get("spec"), task=task
+            )
         if size_info["status"] == "ok":
             measured += 1
         else:
@@ -391,3 +395,72 @@ def backfill_delivered_size(
         "unresolvable": len(tasks) - measured - skipped,
         "reasons": reasons,
     }
+
+
+def backfill_divergence(
+    history_file: str | Path,
+    repo_root: str | Path,
+) -> dict[str, Any]:
+    """Backfill ``divergence`` onto settled history records.
+
+    The routine is idempotent: records that already carry a ``divergence``
+    value are skipped, records with a resolvable ``merge_commit`` are measured
+    via ``divergence.compute_divergence``, and unresolvable records are counted with
+    a reason breakdown. A failed measurement is written back so the next run
+    does not re-attempt it.
+    """
+    repo_root = Path(repo_root)
+    tasks = track_record.read_history_tasks(history_file)
+    measured = 0
+    skipped = 0
+    reasons: dict[str, int] = {}
+
+    for task in tasks:
+        if "divergence" in task:
+            skipped += 1
+            continue
+
+        spec = task.get("spec")
+        if not isinstance(spec, dict):
+            reason = "no spec recorded"
+            task["divergence"] = {
+                "files": None,
+                "test_delta": None,
+                "status": "failed",
+                "reason": reason,
+            }
+            reasons[reason] = reasons.get(reason, 0) + 1
+            continue
+
+        merge_commit = task.get("merge_commit")
+        if not merge_commit:
+            reason = "no merge_commit recorded"
+            task["divergence"] = {
+                "files": None,
+                "test_delta": None,
+                "status": "failed",
+                "reason": reason,
+            }
+            reasons[reason] = reasons.get(reason, 0) + 1
+            continue
+
+        div_info = divergence.compute_divergence(
+            repo_root, merge_commit, spec=spec, task=task
+        )
+        task["divergence"] = div_info
+        if div_info["status"] == "ok":
+            measured += 1
+        else:
+            reason = div_info.get("reason") or "unknown"
+            reasons[reason] = reasons.get(reason, 0) + 1
+
+    if tasks:
+        _write_history_tasks(history_file, tasks)
+
+    return {
+        "measured": measured,
+        "skipped": skipped,
+        "unresolvable": len(tasks) - measured - skipped,
+        "reasons": reasons,
+    }
+

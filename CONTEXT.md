@@ -71,6 +71,10 @@ _Avoid_: treating a declared size as a measurement, or as a limit intake will en
 The _measured_ diff of a task, computed at closure over the first-parent range of its `merge_commit` and recorded on the Execution Log entry. The headline figure excludes planning artifacts (`docs/`, `.agents/`, `content/`, `reports/`); the total is retained alongside it.
 _Avoid_: calling this "size" unqualified — the whole point of recording it is that it is comparable to, and frequently diverges from, the **Declared Size**.
 
+**Divergence Record**:
+The mechanical record of unplanned work computed at terminal closure: the merged first-parent range's changed files minus the file list declared in the task's `spec` (under `Files to Modify`), plus any recoverable test-count delta. Stored on the **Execution Log** entry independently of the `docs_sync` routing key. Fails soft with a status and reason rather than blocking closure. Distinct from the narrative **Divergence Summary**, which remains the judgment and obligation of the `aet-sync-docs` stage when it runs.
+_Avoid_: expecting the divergence record to be written by `aet-sync-docs`; skipping the mechanical record when `docs_sync: skipped`.
+
 **Band**:
 The expected **Delivered Size** range attached to each **Declared Size** label. A band is a falsifiable claim about delivery, re-checkable against the recorded distribution — not an intake limit.
 
