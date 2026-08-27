@@ -66,11 +66,11 @@ def extract_declared_files(spec_or_body: dict[str, Any] | str | Path | None) -> 
         item = re.sub(r"^[\-\*\d]+\.?\s+", "", stripped)
         item = re.sub(r"^\[\s*[xX ]\s*\]\s*", "", item)
         item = item.strip()
-        if item.endswith("/"):
-            continue
         item = re.sub(r"`([^`]+)`", r"\1", item)
         item = re.sub(r"\s*\(new\)\s*$", "", item, flags=re.IGNORECASE)
         item = item.strip("- ")
+        if item.endswith("/"):
+            continue
         if item:
             files.add(item)
     return files
