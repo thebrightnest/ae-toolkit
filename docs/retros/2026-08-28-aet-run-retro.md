@@ -154,7 +154,9 @@ downstream, which then reported no findings for a $24 loop.
 ## Filed, Not Yet Done
 
 Everything this retro surfaced and did not fix has a home, so it is findable
-without reading the session that produced it:
+without reading the session that produced it. Backlog items live in
+`content/backlog/`, which is local and untracked — those rows name a path that
+resolves on the machine that filed them, not in a fresh clone:
 
 | Item | Filed as |
 | --- | --- |
