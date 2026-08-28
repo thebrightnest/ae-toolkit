@@ -33,7 +33,7 @@ The canonical workflow state stored in `tasks[].state` while a task is in the qu
 _Avoid_: using `state` for terminal truth.
 
 **Inert Task**:
-A task on the board that has not yet run: its state is one of `planned`, `ready`, or `blocked`, and it has no `branch`, `worktree`, or `merge_commit` assigned. An inert task's plan spec can be re-ingested from the plan file via `aet sprint add` without deleting refs on origin (ADR-067).
+A task on the board that has not yet run: its state is one of `planned`, `ready`, or `blocked`, and it has no `branch`, `worktree`, or `merge_commit` assigned. An inert task's plan spec can be re-ingested from the plan file via `aet sprint add` without deleting refs on origin (ADR-068).
 _Avoid_: re-ingesting a task that carries run state.
 
 **Status (plan lifecycle)**:
@@ -92,7 +92,7 @@ The repo-level configuration (`integration_mode: pr-per-task | single-pr`) contr
 **Shadow Config**:
 The project-local configuration layer that overrides the team config for one repo (ADR-048). The configuration used in anger pairs `single-pr` with a shadow config and a heavy dependency environment — distinct from the dogfooded configuration (trunk + team config + no dependencies).
 
-## Plan Lifecycle (ADR-061, ADR-067)
+## Plan Lifecycle (ADR-061, ADR-068)
 
 The source of truth for a task's spec changes at one explicit handoff:
 
