@@ -243,5 +243,24 @@ _Recorded: 2026-08-27 — Branch: poh-03-ship-resolves-verify-from-the-workflow_
 
 ---
 
+## Divergence Summary — poh-01-re-ingest-an-inert-task-spec
+
+_Recorded: 2026-08-28 — Branch: poh-01-re-ingest-an-inert-task-spec_
+
+### Changed from plan
+
+- **Task 5 (ADR numbering)**: Recorded as ADR-068 (`docs/adr/068-intake-is-repeatable-while-a-task-is-inert.md`) instead of ADR-066, because ADR-066 and ADR-067 were allocated to sibling branches.
+
+### Added (unplanned)
+
+- (none)
+
+### Deferred
+
+- **Task 6 (Merge branch to main and verify integration)**: deferred to the `aet-ship` closure stage, consistent with the standard pipeline.
+
+---
+
 *Stage: synced*
 *Next step: run `aet-ship`*
+
