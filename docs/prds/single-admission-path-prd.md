@@ -67,7 +67,7 @@ next ADR that changes admission policy has one edit site instead of three.
   a breadcrumb once the gating doors close, and its own docstring already says
   it is advisory. ADR-019 permits breadcrumb reads. All are out of scope.
 - **The stale `.agents/work-queue.json` reference audit.** Fifteen files across
-  six skills, already filed in `docs/TECHNICAL_DEBT.md`. It shares a *method*
+  six skills, already filed in `content/backlog/`. It shares a *method*
   with this PRD's footer sweep — per-file judgment across `skills/`, because
   some occurrences are correct where migration docs name the old path
   deliberately — but not a subject. Merging them produces one task verifiable

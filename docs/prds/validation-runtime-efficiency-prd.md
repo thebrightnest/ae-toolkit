@@ -55,7 +55,7 @@ verdict gate is untouched).
   / model concern blocked on turn-level telemetry the toolkit does not emit today (measured:
   the finest telemetry granularity is the stage record — no per-tool-call data). It is
   **carved out as a separate initiative**, parked at
-  `docs/ideas/cfg-01-session-efficiency.md`, and is not planned here.
+  `content/backlog/cfg-01-session-efficiency.md`, and is not planned here.
 - **Does not rewire the Makefile's `PYTEST_TARGETS` plumbing.** `make validate` already
   consumes `change_scope` stdout as `PYTEST_TARGETS` (Makefile:106-108); this initiative
   changes what `change_scope` emits, not how the Makefile consumes it.
@@ -100,7 +100,7 @@ queued: **deterministic QA-freshness re-run suppression** (originally R-6). It i
 efficiency-determinism gain — not a correctness fix; the fail-closed verdict gate
 (`_require_passing_verdict`) stays untouched (ADR-025 decision 4). The full analysis and what it
 would take to pick it up are parked at
-**`docs/ideas/deterministic-qa-freshness-suppression.md`**. No task traces R-6; `vre-04` is
+**`content/backlog/deterministic-qa-freshness-suppression.md`**. No task traces R-6; `vre-04` is
 neither written nor queued.
 
 ## User Stories
@@ -211,7 +211,7 @@ neither written nor queued.
    of suppression — but every ignore-path is safe. R-6 is therefore reframed to its ADR-consistent
    core: make the re-run **suppression deterministic**, never touching the verdict gate. This is
    efficiency hardening, not the correctness class the ship-merge bug fell into. **`vre-04` is
-   deferred and parked as an idea** (`docs/ideas/deterministic-qa-freshness-suppression.md`) — if
+   deferred and parked as an idea** (`content/backlog/deterministic-qa-freshness-suppression.md`) — if
    picked up it needs an ADR extending ADR-025 (freshness suppression becomes enforced, not
    observability-only) authored before `aet sprint add`.
 2. **R-3 tier reuses the existing vocabulary (refinement).** `change_scope` already shares
@@ -235,7 +235,7 @@ approval, in Step 1 create-stories/plan → Step 3 `aet sprint add`.)*
 | `vre-01-change-scope-targeted-validation` | R-1, R-2, R-3 | `change_scope` emits a code-derived minimal target list + conditional installer signal + change-set tier, conservative FULL fallback. Files: `src/aet/change_scope.py`, `tests/test_change_scope.py` (+ possible thin Makefile installer-line removal). | — |
 | `vre-02-orchestrator-xdist-subgroups` | R-4 | Split `xdist_group("orchestrator")` into resource-scoped subgroups across the 15 sites; keep the 3 proven-conflicting tests co-grouped. Files: 15 `tests/**` marker sites + taxonomy note. | — |
 | `vre-03-orchestrator-serial-pole-speedup` | R-5 | Replace fixed sleeps / heavy fixtures in the hottest orchestrator tests with event/poll waits. Files: hottest `tests/orchestrator/*.py`. | `vre-02` |
-| `vre-04-qa-freshness-deterministic-suppression` *(deferred — parked at `docs/ideas/deterministic-qa-freshness-suppression.md`)* | R-6 | Runtime deterministically suppresses the redundant re-run on `SKIP`/`LINT_ONLY`; verdict gate untouched (ADR-025 decision 4). Files: `src/aet/cli/orchestrator.py`, `tests/orchestrator/**`. | — |
+| `vre-04-qa-freshness-deterministic-suppression` *(deferred — parked at `content/backlog/deterministic-qa-freshness-suppression.md`)* | R-6 | Runtime deterministically suppresses the redundant re-run on `SKIP`/`LINT_ONLY`; verdict gate untouched (ADR-025 decision 4). Files: `src/aet/cli/orchestrator.py`, `tests/orchestrator/**`. | — |
 
 ## Intake Triage Record
 

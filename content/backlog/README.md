@@ -55,6 +55,7 @@ These cannot be planned until something is settled, usually in an ADR.
 | [Wrapper normalisation narrowed](debt-wrapper-normalisation-narrowed.md) | debt | Telemetry showing `yarn <runner>` shapes occur in tracked projects. |
 | [Superset-replay fixture is synthetic](debt-superset-replay-fixture-is-synthetic.md) | debt | The first detection miss the synthetic fixture did not predict. |
 | [Stale code anchors in the parity PRD](debt-parity-prd-code-anchors-are-stale.md) | debt | tap-06 landing, when the PRD is synced as a whole. |
+| [An impact-scoped gate reports green over a standing red](debt-impact-scope-can-hide-a-standing-red.md) | debt | The second pre-existing failure found by a scope widening rather than by the change that caused it. |
 | [Enrich CLI help at the source](enrich-cli-help-at-the-source.md) | idea | The next divergence between skill prose and `--help`. |
 | [Plain-text rendering for all non-TTY output](plain-text-all-non-tty-output.md) | idea | Measured token cost, or the next CLI rendering change. |
 

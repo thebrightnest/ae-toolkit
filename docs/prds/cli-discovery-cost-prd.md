@@ -45,7 +45,7 @@ hand-copied-CLI-reference failure mode from returning.
 - **Enriching help text with the semantics currently living in skill prose.**
   Deferred — see Deferred Work.
 - **Turn-count telemetry.** AET has no per-turn or per-tool-call telemetry
-  (`docs/ideas/cfg-01-session-efficiency.md`), and this PRD does not add it.
+  (`content/backlog/cfg-01-session-efficiency.md`), and this PRD does not add it.
 
 ## Requirements
 
