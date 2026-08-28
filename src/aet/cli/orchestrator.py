@@ -204,6 +204,42 @@ def _make_backend(queue_file: str):
     )
 
 
+def _save_task_record(backend, queue: list[dict]) -> None:
+    """Persist a direct task-record write and replicate it in the same breath.
+
+    Every ``aet state`` invocation fetches ``+refs/aet/*:refs/aet/*`` before it
+    does anything else (``cli/aet_state.py:113``), and the leading ``+`` makes
+    that a force-reset of each local task ref to origin's copy. The refspec is
+    coherent for a store whose only writer is ``aet state``, because ``aet
+    state`` pushes after saving; it discards the work of any other writer that
+    does not.
+
+    The orchestrator is that other writer. A record saved here and left
+    unreplicated is overwritten by the next transition, which is how a task
+    requeued 22 times while the per-task breaker never counted past one
+    (``docs/bugs/20260828-fetch-discards-unpushed-record-writes.md``). Pushing
+    is what makes the write survive, so every direct write goes through here.
+
+    The push is best-effort, as elsewhere: it is a no-op in shadow posture and
+    with no remote, both of which return success. A genuine push failure leaves
+    the write local, where the next fetch will drop it, so it is reported rather
+    than swallowed — silent loss is the defect this function exists to close.
+    """
+    backend.save(queue)
+    try:
+        replicated = backend.push()
+    except Exception as exc:  # noqa: BLE001 - a read-only remote must not fail a run
+        replicated = False
+        print(f"   ⚠️  Could not replicate the task record: {exc}")
+    # Only an explicit False is a failure: the interface returns bool, and a
+    # stub backend that returns nothing must not raise a false alarm.
+    if replicated is False:
+        print(
+            "   ⚠️  Task record saved locally but not pushed; the next "
+            "`aet state` fetch will discard it."
+        )
+
+
 def _runs_dir(repo_root: str) -> Path:
     """Return the canonical directory for detached-run metadata."""
     return Path(repo_root) / ".agents" / "runs"
@@ -628,7 +664,7 @@ def _attach_gap_analysis_to_task(
                 if qt.get("id") == task.get("id"):
                     qt["failure_signatures"] = task.get("failure_signatures", [])
                     break
-            backend.save(queue)
+            _save_task_record(backend, queue)
         except Exception:  # noqa: BLE001
             pass
 
@@ -2152,7 +2188,7 @@ def _mark_integration_failure(
                 "signature": sig,
                 "at": telemetry.iso_now(),
             }
-            backend.save(queue)
+            _save_task_record(backend, queue)
 
 
 def _integrate_single_pr_task(
@@ -2331,11 +2367,9 @@ def _integrate_single_pr_task(
             if t.get("id") == task_id:
                 t["merge_commit"] = merge_commit
                 break
-        backend.save(queue)
-        # Push the merge_commit ref immediately so that the aet-state transition
-        # below (which fetches origin first) does not overwrite our local write
-        # with a stale remote ref.
-        backend.push()
+        # The aet-state transition below fetches origin first, so this write is
+        # replicated in the same call that saves it.
+        _save_task_record(backend, queue)
 
     if backend is not None and _task_in_queue(backend, task_id):
         aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
@@ -2507,7 +2541,7 @@ def _record_failure_on_task(
             if qt.get("id") == task.get("id"):
                 qt["failure_signatures"] = task.get("failure_signatures", [])
                 break
-        backend.save(queue)
+        _save_task_record(backend, queue)
     return sig
 
 
@@ -2724,7 +2758,7 @@ def _write_task_cost(
     tokens, usd = _task_usage_aggregates(logger, task_id)
     if tokens is not None or usd is not None:
         task["cost"] = {"tokens": tokens, "usd": usd}
-        backend.save(queue)
+        _save_task_record(backend, queue)
 
 
 def _attach_delivered_size(task: dict, repo_root: str) -> bool:
@@ -2832,7 +2866,7 @@ def _finalize_task(
         # (e.g. auto-merge closure). Normal awaiting_merge closure defers the
         # measurement to terminal seal time in ``append_history_record``.
         if task and _attach_delivered_size(task, repo_root):
-            backend.save(queue)
+            _save_task_record(backend, queue)
         # Roll up per-task cost from this run's telemetry and write it to the
         # ledger record before transition.
         _write_task_cost(backend, queue_file, task_id, logger)
@@ -3842,7 +3876,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 tokens, usd = _task_usage_aggregates(logger, task_id)
                 if tokens is not None or usd is not None:
                     queue_task["cost"] = {"tokens": tokens, "usd": usd}
-                    backend.save(queue)
+                    _save_task_record(backend, queue)
 
         # For top-level run-one on a queued task, mirror run_batch and transition
         # the task to awaiting_merge on success so aet-state record-merge can run.
@@ -3870,7 +3904,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                                 tokens, usd = _task_usage_aggregates(logger, task_id)
                                 if tokens is not None or usd is not None:
                                     queue_task["cost"] = {"tokens": tokens, "usd": usd}
-                                    backend.save(queue)
+                                    _save_task_record(backend, queue)
                                 if _maybe_auto_merge(queue_task, queue_file, repo_root):
                                     pass  # perform_auto_merge prints success/failure.
                                 else:
