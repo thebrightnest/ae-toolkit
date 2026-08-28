@@ -16,6 +16,7 @@ from pathlib import Path
 import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
+from aet import plan_parser  # noqa: E402
 from aet.admission import (  # noqa: E402
     Admitted,
     RefusalReason,
@@ -23,6 +24,7 @@ from aet.admission import (  # noqa: E402
     Skipped,
     SkipReason,
     admit_plan,
+    unacked_intake_findings,
 )
 from aet.admission import resolve_plan as resolve_plan  # noqa: E402, F401
 from aet.admission import settled_ids_from as _settled_ids  # noqa: E402, F401
@@ -35,6 +37,7 @@ from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
 from aet.queue import (  # noqa: E402
     QueueIntegrityError,
+    append_history,
     build_blocks,
     lease_guard,
 )
@@ -54,9 +57,7 @@ def _add(args: argparse.Namespace) -> int:
         history_file=args.history_file,
     )
     backend.fetch()
-    projections = resolve_projections(
-        resolve_config(args.config), posture=backend.posture
-    )
+    projections = resolve_projections(resolve_config(args.config), posture=backend.posture)
 
     try:
         data = backend.load()
@@ -78,34 +79,120 @@ def _add(args: argparse.Namespace) -> int:
     )
 
     if isinstance(outcome, Skipped):
-        backend.close()
-        if outcome.reason == SkipReason.ALREADY_IN_QUEUE:
-            plan_name = (
-                outcome.plan_file.name if outcome.plan_file else args.target
-            )
-            state = (
-                outcome.existing_task.get("state", "planned")
-                if outcome.existing_task
-                else "planned"
-            )
-            print(f"✓ {plan_name} is already in the queue ({state}).")
-            return 0
         if outcome.reason == SkipReason.ALREADY_SETTLED:
-            plan_name = (
-                outcome.plan_file.name if outcome.plan_file else args.target
+            backend.close()
+            plan_name = outcome.plan_file.name if outcome.plan_file else args.target
+            return _fail(f"Refusing to promote {plan_name}: task is already settled in history.")
+        if outcome.reason == SkipReason.ALREADY_IN_QUEUE:
+            existing_task = outcome.existing_task or {}
+            plan_file = outcome.plan_file or resolve_plan(args.target, plans_dir)
+            if plan_file is None or not plan_file.is_file():
+                backend.close()
+                return _fail(f"No plan found for '{args.target}' in {plans_dir}")
+
+            plan_name = plan_file.name
+
+            # Check inertness predicate (R-3)
+            inert, blocking_field = plan_parser.is_task_inert(existing_task)
+            if not inert:
+                backend.close()
+                return _fail(f"Refusing to re-ingest {plan_name}: task carries run state ({blocking_field}).")
+
+            # Run intake validation on the updated plan file
+            unacked, record = unacked_intake_findings(
+                plan_file,
+                plans_dir,
+                backend,
+                history_file=args.history_file,
+                queue=queue,
+                history=history,
             )
-            return _fail(
-                f"Refusing to promote {plan_name}: task is already settled in history."
+            if unacked:
+                backend.close()
+                print(
+                    f"⛔ Refusing to promote {plan_name}: intake validation failed.",
+                    file=sys.stderr,
+                )
+                for finding in unacked:
+                    print(
+                        f"  - {finding.check_id}: {finding.message}",
+                        file=sys.stderr,
+                    )
+                return 1
+
+            # Re-run new_task_from_plan against the plan file and current board (R-1, R-4)
+            settled_ids = _settled_ids(backend=backend, history_file=args.history_file, history=history)
+            rebuilt_task = plan_parser.new_task_from_plan(
+                plan_file,
+                live_tasks=queue,
+                settled_ids=settled_ids,
             )
+
+            # Compare stored and rebuilt spec to choose outcome reporting (R-2)
+            old_spec = existing_task.get("spec")
+            new_spec = rebuilt_task.get("spec")
+            spec_changed = old_spec != new_spec
+
+            # Carry forward id, transition history, and run fields (R-4)
+            old_state = existing_task.get("state")
+            new_state = rebuilt_task.get("state")
+            history_list = list(existing_task.get("history", []))
+
+            updated_task = dict(existing_task)
+            updated_task["title"] = rebuilt_task["title"]
+            updated_task["plan_file"] = rebuilt_task["plan_file"]
+            updated_task["blocked_by"] = rebuilt_task["blocked_by"]
+            updated_task["pending_blockers"] = rebuilt_task["pending_blockers"]
+            updated_task["state"] = new_state
+            updated_task["work_class"] = rebuilt_task["work_class"]
+            updated_task["spec"] = new_spec
+            updated_task["history"] = history_list
+
+            if old_state != new_state:
+                append_history(updated_task, old_state, new_state, "sync")
+
+            # Update queue in place
+            for i, t in enumerate(queue):
+                if t.get("id") == existing_task.get("id"):
+                    queue[i] = updated_task
+                    break
+
+            build_blocks(queue)
+
+            if not lease_guard(args.queue_file, force=args.force):
+                backend.close()
+                return 1
+
+            backend.save(queue)
+            backend.push()
+
+            # Record cut event in ledger
+            ledger_path = resolve_ledger_path()
+            ledger = Ledger(ledger_path)
+            plan_hash = hashlib.sha256(plan_file.read_bytes()).hexdigest()
+            ledger.write_event(
+                source="sprint-add",
+                task=updated_task["id"],
+                kind="cut",
+                ref=plan_hash,
+                ref_kind="plan-hash",
+            )
+
+            projections.on_add(updated_task, is_new=False)
+            backend.close()
+
+            if spec_changed:
+                print(f"✓ {plan_file.name} spec re-ingested.")
+            else:
+                print(f"✓ {plan_file.name} spec unchanged.")
+            return 0
 
     if isinstance(outcome, Refused):
         backend.close()
         if outcome.reason == RefusalReason.PLAN_NOT_FOUND:
             return _fail(f"No plan found for '{args.target}' in {plans_dir}")
         if outcome.reason == RefusalReason.VALIDATION_FAILED:
-            plan_name = (
-                outcome.plan_file.name if outcome.plan_file else args.target
-            )
+            plan_name = outcome.plan_file.name if outcome.plan_file else args.target
             print(
                 f"⛔ Refusing to promote {plan_name}: intake validation failed.",
                 file=sys.stderr,
@@ -116,11 +203,7 @@ def _add(args: argparse.Namespace) -> int:
                     f"  - {finding.check_id}: {finding.message}",
                     file=sys.stderr,
                 )
-            if findings and all(
-                f.check_id == "rtrace"
-                and "cites unknown requirement" in f.message
-                for f in findings
-            ):
+            if findings and all(f.check_id == "rtrace" and "cites unknown requirement" in f.message for f in findings):
                 print(
                     "  note: this check compares citations against requirements that "
                     "already exist,\n"
@@ -130,8 +213,7 @@ def _add(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
             print(
-                "  Fix the plan, or override a check that does not apply by adding "
-                "a line to it:",
+                "  Fix the plan, or override a check that does not apply by adding a line to it:",
                 file=sys.stderr,
             )
             print("    ⚠️ VALIDATE ACK: <check-id> — <reason>", file=sys.stderr)
@@ -144,20 +226,13 @@ def _add(args: argparse.Namespace) -> int:
                     )
                 if outcome.coverage.source_error:
                     print(
-                        f"  note: no coverage read from the task record "
-                        f"({outcome.coverage.source_error})",
+                        f"  note: no coverage read from the task record ({outcome.coverage.source_error})",
                         file=sys.stderr,
                     )
             return 1
         if outcome.reason == RefusalReason.BLOCKED:
-            plan_name = (
-                outcome.plan_file.name if outcome.plan_file else args.target
-            )
-            blockers_str = (
-                f"blocked by {', '.join(outcome.blockers)}"
-                if outcome.blockers
-                else "blocked"
-            )
+            plan_name = outcome.plan_file.name if outcome.plan_file else args.target
+            blockers_str = f"blocked by {', '.join(outcome.blockers)}" if outcome.blockers else "blocked"
             return _fail(f"Refusing to promote {plan_name}: {blockers_str}")
 
     assert isinstance(outcome, Admitted)
@@ -189,10 +264,7 @@ def _add(args: argparse.Namespace) -> int:
     projections.on_add(task, is_new=True)
     backend.close()
 
-    print(
-        f"✓ {plan_file.name} queued without publishing "
-        f"(plan durability deferred to PR)."
-    )
+    print(f"✓ {plan_file.name} queued without publishing (plan durability deferred to PR).")
     return 0
 
 
@@ -205,9 +277,7 @@ def _intake(args: argparse.Namespace) -> int:
         history_file=args.history_file,
     )
     backend.fetch()
-    projections = resolve_projections(
-        resolve_config(args.config), posture=backend.posture
-    )
+    projections = resolve_projections(resolve_config(args.config), posture=backend.posture)
 
     try:
         data = backend.load()
@@ -267,9 +337,7 @@ def _intake(args: argparse.Namespace) -> int:
                 refused.append((task_id, issue_number, "plan file not found"))
             elif outcome.reason == RefusalReason.VALIDATION_FAILED:
                 findings = outcome.findings or []
-                detail = "; ".join(
-                    f"{f.check_id}: {f.message}" for f in findings[:3]
-                )
+                detail = "; ".join(f"{f.check_id}: {f.message}" for f in findings[:3])
                 if len(findings) > 3:
                     detail += f"; (+{len(findings) - 3} more)"
                 refused.append(
@@ -280,11 +348,7 @@ def _intake(args: argparse.Namespace) -> int:
                     )
                 )
             elif outcome.reason == RefusalReason.BLOCKED:
-                reason = (
-                    f"blocked by {', '.join(outcome.blockers)}"
-                    if outcome.blockers
-                    else "blocked"
-                )
+                reason = f"blocked by {', '.join(outcome.blockers)}" if outcome.blockers else "blocked"
                 refused.append((task_id, issue_number, reason))
             continue
 
@@ -344,18 +408,10 @@ app = typer.Typer()
 @app.command("add")
 def add(
     target: str = typer.Argument(..., help="Plan file path or task ID to promote"),
-    queue_file: str = typer.Option(
-        ".agents/aet-queue", "--queue-file", help="Path to queue anchor"
-    ),
-    history_file: str = typer.Option(
-        ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"
-    ),
-    plans_dir: str = typer.Option(
-        "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
-    ),
-    config: str = typer.Option(
-        ".agents/aet-config.json", "--config", help="Path to AET backend configuration"
-    ),
+    queue_file: str = typer.Option(".agents/aet-queue", "--queue-file", help="Path to queue anchor"),
+    history_file: str = typer.Option(".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"),
+    plans_dir: str = typer.Option("docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"),
+    config: str = typer.Option(".agents/aet-config.json", "--config", help="Path to AET backend configuration"),
     force: bool = typer.Option(
         False,
         "--force",
@@ -377,18 +433,10 @@ def add(
 
 @app.command("intake")
 def intake(
-    queue_file: str = typer.Option(
-        ".agents/aet-queue", "--queue-file", help="Path to aet-queue"
-    ),
-    history_file: str = typer.Option(
-        ".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"
-    ),
-    plans_dir: str = typer.Option(
-        "docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"
-    ),
-    config: str = typer.Option(
-        ".agents/aet-config.json", "--config", help="Path to AET backend configuration"
-    ),
+    queue_file: str = typer.Option(".agents/aet-queue", "--queue-file", help="Path to aet-queue"),
+    history_file: str = typer.Option(".agents/work-history.jsonl", "--history-file", help="Path to work-history.jsonl"),
+    plans_dir: str = typer.Option("docs/plans", "--plans-dir", help="Directory containing atomic plan markdown files"),
+    config: str = typer.Option(".agents/aet-config.json", "--config", help="Path to AET backend configuration"),
     force: bool = typer.Option(
         False,
         "--force",

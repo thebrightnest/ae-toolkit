@@ -45,14 +45,10 @@ def _yaml_scalar_needs_quoting(value: str) -> bool:
     if not value or value == "[]":
         return False
     # Already quoted.
-    if (value.startswith('"') and value.endswith('"')) or (
-        value.startswith("'") and value.endswith("'")
-    ):
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
         return False
     # Inline flow collections are parsed by PyYAML directly.
-    if (value.startswith("[") and value.endswith("]")) or (
-        value.startswith("{") and value.endswith("}")
-    ):
+    if (value.startswith("[") and value.endswith("]")) or (value.startswith("{") and value.endswith("}")):
         return False
     # Plain scalars cannot contain or start with these characters.
     if _SCALAR_SPECIAL_RE.search(value):
@@ -362,9 +358,7 @@ def _extract_task_items(body: str) -> list[str]:
     the next ``## `` heading.  Returns an empty list when no task list section
     exists.
     """
-    match = re.search(
-        r"(?m)^##\s+Task List\s*\n(.*?)(?=\n##\s+|\Z)", body, re.DOTALL
-    )
+    match = re.search(r"(?m)^##\s+Task List\s*\n(.*?)(?=\n##\s+|\Z)", body, re.DOTALL)
     if not match:
         return []
     items: list[str] = []
@@ -375,9 +369,7 @@ def _extract_task_items(body: str) -> list[str]:
     return items
 
 
-def extract_plan_spec_from_text(
-    content: str, stem: str, data: dict[str, Any] | None = None
-) -> dict[str, Any]:
+def extract_plan_spec_from_text(content: str, stem: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build the portable spec for a task record from plan *content*.
 
     The spec carries the frontmatter keys required for routing, the plan title,
@@ -539,6 +531,34 @@ def new_task_from_plan(
     return task
 
 
+INERT_STATES = {"planned", "ready", "blocked"}
+
+
+def is_task_inert(task: dict[str, Any]) -> tuple[bool, str | None]:
+    """Check if a task record is inert (pre-run, terminal-free, no execution state).
+
+    A task is inert when it has not yet run: its state is one of ``planned``,
+    ``ready``, or ``blocked``, and it has no ``branch``, ``worktree``, or
+    ``merge_commit`` assigned.
+
+    Returns ``(True, None)`` when inert, or ``(False, blocking_field)`` naming
+    the field that prevents re-ingestion (R-3).
+    """
+    state = task.get("state")
+    if state not in INERT_STATES:
+        return False, "state"
+    if task.get("branch") is not None:
+        return False, "branch"
+    if task.get("worktree") is not None:
+        return False, "worktree"
+    if task.get("merge_commit") is not None:
+        return False, "merge_commit"
+    return True, None
+
+
+is_inert = is_task_inert
+
+
 # Frontmatter keys that route gated pipeline stages at plan time. Each key is
 # optional (a missing key defaults to ``required`` at run time); when present
 # it must be ``required`` or ``skipped``, and ``skipped`` must carry a
@@ -649,12 +669,9 @@ def intake_validation_errors(
 
         work_class = data.get("work_class")
         if work_class is not None and (
-            not isinstance(work_class, str)
-            or work_class.lower() not in {"trivial", "normal", "critical"}
+            not isinstance(work_class, str) or work_class.lower() not in {"trivial", "normal", "critical"}
         ):
-            errors.append(
-                (pf, f"work_class must be one of trivial|normal|critical (got '{work_class}')")
-            )
+            errors.append((pf, f"work_class must be one of trivial|normal|critical (got '{work_class}')"))
             continue
 
         routing_error = _routing_key_error(data)
@@ -663,9 +680,7 @@ def intake_validation_errors(
             continue
 
         blocked_by = data.get("blocked_by", [])
-        if not isinstance(blocked_by, list) or not all(
-            isinstance(b, str) for b in blocked_by
-        ):
+        if not isinstance(blocked_by, list) or not all(isinstance(b, str) for b in blocked_by):
             errors.append((pf, "blocked_by must be a list of ids"))
             continue
 
@@ -675,9 +690,7 @@ def intake_validation_errors(
             continue
 
         if has_legacy_dependency_section(pf) and not has_explicit_frontmatter_blocked_by(pf):
-            errors.append(
-                (pf, "legacy dependency section found; move blocked_by to frontmatter")
-            )
+            errors.append((pf, "legacy dependency section found; move blocked_by to frontmatter"))
             continue
 
         if references_other_plans(pf):
@@ -710,6 +723,5 @@ def resolve_plan_arg(plan: str, plans_dir: Path = Path("docs/plans")) -> str:
     if candidate.is_file():
         return str(candidate)
     raise ValueError(
-        f"Plan not found: '{plan}' is not a .md path and "
-        f"{candidate} does not exist. Pass the full plan path."
+        f"Plan not found: '{plan}' is not a .md path and {candidate} does not exist. Pass the full plan path."
     )

@@ -85,6 +85,7 @@ Do **not** write an ADR for:
 - [065 — Throttling Is Not a Flake](065-throttling-is-not-a-flake.md)
 - [066 — Board Admission Has One Path](066-board-admission-has-one-path.md)
 - [067 — A Gate Default May Derive from Plan-Time Data](067-a-gate-default-may-derive-from-plan-time-data.md)
+- [068 — Intake Is Repeatable While a Task Is Inert](068-intake-is-repeatable-while-a-task-is-inert.md)
 
 ## Format
 

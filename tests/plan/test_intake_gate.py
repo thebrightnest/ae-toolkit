@@ -46,9 +46,7 @@ def _seed_queue(root: Path, tasks: list[dict]) -> tuple[Path, Path]:
     queue_file = root / ".agents" / "aet-queue"
     history_file = root / ".agents" / "work-history.jsonl"
     queue_file.parent.mkdir(parents=True, exist_ok=True)
-    GitRefsBackend(
-        queue_file=str(queue_file), history_file=str(history_file)
-    ).save(tasks)
+    GitRefsBackend(queue_file=str(queue_file), history_file=str(history_file)).save(tasks)
     return queue_file, history_file
 
 
@@ -152,14 +150,20 @@ class TestAddIntakeGate(unittest.TestCase):
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(bad),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(bad),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
 
             self.assertNotEqual(result.exit_code, 0)
             self.assertIn("intake validation failed", result.stderr.lower())
@@ -179,14 +183,20 @@ class TestAddIntakeGate(unittest.TestCase):
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(bad),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(bad),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
 
             self.assertNotEqual(result.exit_code, 0)
             self.assertIn("VALIDATE ACK: <check-id>", result.stderr)
@@ -229,14 +239,20 @@ class TestAddIntakeGate(unittest.TestCase):
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(plan),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
 
             self.assertNotEqual(result.exit_code, 0)
             self.assertIn("cites unknown requirement R-84", result.stderr)
@@ -255,14 +271,20 @@ class TestAddIntakeGate(unittest.TestCase):
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(plan),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
 
             self.assertEqual(result.exit_code, 0)
             queue = _read_queue(root)
@@ -284,21 +306,26 @@ class TestAddIntakeGate(unittest.TestCase):
                 prds_dir,
                 "acked.md",
                 extra_body=(
-                    "## Phase One\n\n## Phase Two\n\n"
-                    "⚠️ VALIDATE ACK: structural — intentional multi-phase spike\n"
+                    "## Phase One\n\n## Phase Two\n\n⚠️ VALIDATE ACK: structural — intentional multi-phase spike\n"
                 ),
             )
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(plan),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
 
             self.assertEqual(result.exit_code, 0)
             queue = _read_queue(root)
@@ -321,14 +348,20 @@ class TestAddIntakeGate(unittest.TestCase):
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(plan),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
 
             self.assertNotEqual(result.exit_code, 0)
             stderr_text = result.stderr.lower()
@@ -342,20 +375,24 @@ class TestAddIntakeGate(unittest.TestCase):
             root = Path(tmp)
             plans_dir = root / "docs" / "plans"
             plans_dir.mkdir(parents=True)
-            plan = _make_plan(
-                plans_dir, "bad-class.md", frontmatter={"work_class": "urgent"}
-            )
+            plan = _make_plan(plans_dir, "bad-class.md", frontmatter={"work_class": "urgent"})
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(plan),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
 
             self.assertNotEqual(result.exit_code, 0)
             self.assertIn("intake validation failed", result.stderr.lower())
@@ -396,14 +433,20 @@ class TestAddIntakeGate(unittest.TestCase):
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(plan),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
 
             self.assertEqual(result.exit_code, 0)
             queue = _read_queue(root)
@@ -439,14 +482,20 @@ class TestAddIntakeGate(unittest.TestCase):
             _git_init(root)
             queue_file, history_file = _seed_queue(root, [])
 
-            result_add = run_typer(aet.app, [
-                "sprint",
-                "add",
-                str(bad_plan),
-                "--queue-file", queue_file,
-                "--history-file", history_file,
-                "--plans-dir", str(plans_dir),
-            ])
+            result_add = run_typer(
+                aet.app,
+                [
+                    "sprint",
+                    "add",
+                    str(bad_plan),
+                    "--queue-file",
+                    queue_file,
+                    "--history-file",
+                    history_file,
+                    "--plans-dir",
+                    str(plans_dir),
+                ],
+            )
             self.assertNotEqual(result_add.exit_code, 0)
             self.assertIn("cites unknown requirement R-999", result_add.stderr)
 
