@@ -686,7 +686,7 @@
 
 ### Fixed
 
-- **aet-work**: Fixed orchestrator timeout on long-running `aet-pipeline-implement` tasks. The skill now explicitly specifies `timeout=7200` (2 hours) when spawning the orchestrator, and instructs agents to use `--afk` (or equivalent headless mode) instead of `--yolo` so approval gates auto-dismiss in unattended background jobs. Updated reference orchestrator template and generated script accordingly. ([Bug Report](docs/bugs/2026-06-01-orchestrator-timeout-bug-report.md))
+- **aet-work**: Fixed orchestrator timeout on long-running `aet-pipeline-implement` tasks. The skill now explicitly specifies `timeout=7200` (2 hours) when spawning the orchestrator, and instructs agents to use `--afk` (or equivalent headless mode) instead of `--yolo` so approval gates auto-dismiss in unattended background jobs. Updated reference orchestrator template and generated script accordingly.
 
 ## 0.2.0
 
@@ -719,4 +719,4 @@
 
 - **aet-work**: Runtime detection in `run` now uses agent self-identification instead of a hard-coded PATH/env-var priority list. The agent executing `aet-work run` reports its own CLI command and flags, eliminating mis-detection when multiple agents are installed. ([PRD](docs/prds/aet-work-runtime-self-detection-prd.md))
 
-- **aet-ship**: Added stacked branch detection to the `ship` procedure. When a branch was not branched directly from `main`, `aet-ship` now injects a `⚠️ STACKED PR` warning into the PR body and prints a terminal stop-note. Prevents the class of incident where a stacked PR is merged against a stale base after its parent lands in main. ([retro](docs/retros/2026-05-12-stacked-pr-base-not-updated.md))
+- **aet-ship**: Added stacked branch detection to the `ship` procedure. When a branch was not branched directly from `main`, `aet-ship` now injects a `⚠️ STACKED PR` warning into the PR body and prints a terminal stop-note. Prevents the class of incident where a stacked PR is merged against a stale base after its parent lands in main.
