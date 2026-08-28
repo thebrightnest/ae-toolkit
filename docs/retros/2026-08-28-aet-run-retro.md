@@ -144,14 +144,23 @@ downstream, which then reported no findings for a $24 loop.
 | Stop discarding unpushed task-record writes on fetch | `docs/bugs/20260828-fetch-discards-unpushed-record-writes.md` | ✅ fixed — `_save_task_record` replicates all eight direct writes; regression test runs in shared posture at the real threshold |
 | Make the throttle class visible to the remedy that reads it | `docs/bugs/20260828-throttle-remedy-cannot-see-its-own-class.md` | ✅ fixed — a throttle records as `countable: False`; the breaker and systemic tally skip it |
 | Widen `_THROTTLE_PATTERNS`, with the verbatim observed tails as regression cases | `docs/bugs/20260828-throttle-patterns-miss-the-harness-wording.md` | ✅ fixed — four patterns, verbatim tails, false-positive guards asserted |
-| Amend ADR-065: the 185-attempt outcome it calls unreachable was reached, and decisions 2 and 3 cancel | ADR amendment, alongside the two throttle fixes | open |
+| Amend ADR-065: the 185-attempt outcome it calls unreachable was reached, and decisions 2 and 3 cancel | `docs/adr/071-a-non-countable-failure-is-recorded.md` | ✅ recorded |
+| Decide what credits a stage whose session failed | `docs/adr/069-stage-credit-is-earned-by-verdict.md` | ✅ recorded and implemented |
+| Decide which artefact is verify evidence | `docs/adr/070-verify-evidence-is-the-verdict.md` | ✅ recorded and implemented |
 | Record each stage inside a group as it completes | `docs/bugs/20260828-group-stage-advance-is-all-or-nothing.md` | ✅ filed |
 | Derive `repeated_loops` from `stage` records | `docs/bugs/20260828-mine-learnings-cannot-see-a-requeue-loop.md` | ✅ fixed — counted per `(run, task, stage)` |
 | Have the ship gate read the verdict the stage writes | `docs/bugs/20260828-verify-evidence-has-three-contracts.md` | ✅ filed |
 
-Four of the six items are fixed in this repository. A run that meets a provider
-limit now stops on the first attempt and names the reset; a task that keeps
-failing for its own reasons quarantines at three. The two that remain — the
-group stage record and the verify-evidence contract — each need a decision
-recorded before code, and the `--on-failure halt` workaround stays useful in the
-consuming repository until its installed copy is upgraded.
+All six items are closed in this repository, three of them under new ADRs. A run
+that meets a provider limit now stops on the first attempt and names the reset; a
+task that keeps failing for its own reasons quarantines at three; a group that
+dies late keeps the stages it proved and tells the retry about the rest; and a
+critical task can satisfy the ship gate with the verdict its stage writes.
+
+One thing deliberately did not change: an interrupted stage with no evidence
+binding still re-runs. ADR-069 explains why crediting it from commits was
+rejected — in an unattended shift, a stage credited on partial work has its
+remainder skipped silently.
+
+The `--on-failure halt` workaround stays useful in the consuming repository until
+its installed copy is upgraded past 1.11.0.

@@ -86,6 +86,9 @@ Do **not** write an ADR for:
 - [066 — Board Admission Has One Path](066-board-admission-has-one-path.md)
 - [067 — A Gate Default May Derive from Plan-Time Data](067-a-gate-default-may-derive-from-plan-time-data.md)
 - [068 — Intake Is Repeatable While a Task Is Inert](068-intake-is-repeatable-while-a-task-is-inert.md)
+- [069 — A Failed Session's Progress Is Credited by Verdict, Not Inferred](069-stage-credit-is-earned-by-verdict.md)
+- [070 — Verify Evidence Is the Verdict the Stage Writes](070-verify-evidence-is-the-verdict.md)
+- [071 — A Failure Whose Remedy Reads the Record Is Recorded, Even When It Does Not Count](071-a-non-countable-failure-is-recorded.md)
 
 ## Format
 
