@@ -5,7 +5,6 @@ SKILLS_DIR ?= $(HOME)/.agents/skills
 BIN_DIR ?= $(HOME)/.local/bin
 REPO_DIR := $(shell pwd)
 SKILL_ROOT := skills
-SKILLS := $(wildcard $(SKILL_ROOT)/*)
 MARKDOWN_FILES := $(shell git ls-files '*.md' 2>/dev/null | while read -r f; do [ -f "$$f" ] && printf '%s ' "$$f"; done || find . -type f -name '*.md' ! -path './.git/*' ! -path './node_modules/*' ! -path './content/*')
 
 VENV := .venv
@@ -30,24 +29,19 @@ install-editable: $(PYTHON) ## Ensure the aet package is installed editable from
 		echo "✓ Editable install verified"; \
 	fi
 
+# Skill linking goes through `aet setup skills`, which reads each existing
+# symlink's target and repoints one that is stale. The loop this replaced tested
+# only whether a symlink existed and reported "already linked" whatever it
+# pointed at, so a link left behind by an older install was never corrected and
+# the drift was silent. AET_REPO_ROOT pins the source to this checkout, and the
+# venv interpreter runs this repo's code: a bare `aet` on PATH may belong to a
+# release clone and would relink from there.
 install-skills: install-editable ## Symlink all skills from this repo to ~/.agents/skills/ and put binaries on PATH
-	@for skill in $(SKILLS); do \
-		if [ -d "$$skill" ] && [ -f "$$skill/SKILL.md" ]; then \
-			skill_name=$$(basename "$$skill"); \
-			if [ -L "$(SKILLS_DIR)/$$skill_name" ]; then \
-				echo "✓ $$skill_name already linked"; \
-			elif [ -e "$(SKILLS_DIR)/$$skill_name" ]; then \
-				echo "⚠ $$skill_name exists in $(SKILLS_DIR) but is not a symlink. Skipping."; \
-			else \
-				ln -s "$(REPO_DIR)/$$skill" "$(SKILLS_DIR)/$$skill_name"; \
-				echo "✓ Linked $$skill_name"; \
-			fi; \
-		fi; \
-	done
-	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" aet setup link
+	@AET_REPO_ROOT="$(REPO_DIR)" $(PYTHON) -m aet.cli.main setup skills --skills-dir "$(SKILLS_DIR)"
+	@AET_REPO_ROOT="$(REPO_DIR)" AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" $(PYTHON) -m aet.cli.main setup link
 
 install-binaries: install-editable ## Symlink skill binaries from installed skill dirs onto PATH
-	@AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" aet setup link
+	@AET_REPO_ROOT="$(REPO_DIR)" AET_SKILLS_DIR="$(SKILLS_DIR)" AET_BIN_DIR="$(BIN_DIR)" $(PYTHON) -m aet.cli.main setup link
 
 add-skill: ## Scaffold a new skill. Usage: make add-skill NAME=my-skill
 	@if [ -z "$(NAME)" ]; then \

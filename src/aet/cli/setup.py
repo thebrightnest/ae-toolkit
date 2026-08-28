@@ -303,6 +303,52 @@ def setup_skills(
     typer.echo(f"✓ {summary} {len(skills)} skill(s) to {len(target_dirs)} director(y/ies)")
 
 
+def _report_skill_link_drift() -> None:
+    """Report skill symlinks that do not point at this repository's ``skills/``.
+
+    A stale skill link is invisible otherwise: the loaded skill loads, so nothing
+    fails, and the session simply follows instructions from whichever checkout
+    the link was made against. That is how a fix applied to a skill can never
+    reach a session — the symptom is a session behaving as though the fix does
+    not exist, which reads as a model problem rather than an install problem.
+
+    Read-only, like the rest of ``verify``: it names the drift and leaves
+    ``aet setup skills`` to correct it.
+    """
+    skill_root = _repo_root() / "skills"
+    if not skill_root.is_dir():
+        return
+    expected = {
+        p.name: p.resolve() for p in skill_root.iterdir()
+        if p.is_dir() and (p / "SKILL.md").is_file()
+    }
+    if not expected:
+        return
+
+    for target_dir in _agent_skills_dirs():
+        drifted: list[str] = []
+        for name, repo_skill in sorted(expected.items()):
+            link = target_dir / name
+            if not link.is_symlink():
+                continue
+            try:
+                if link.resolve() != repo_skill:
+                    drifted.append(f"{name} -> {os.readlink(link)}")
+            except OSError:
+                drifted.append(f"{name} -> <unresolvable>")
+        if drifted:
+            typer.echo(
+                f"  ⚠ {len(drifted)} skill link(s) in {target_dir} do not point at "
+                f"{skill_root}:",
+                err=True,
+            )
+            for entry in drifted:
+                typer.echo(f"      {entry}", err=True)
+            typer.echo("    Run `aet setup skills` to repoint them.", err=True)
+        else:
+            typer.echo(f"  = skill links in {target_dir} point at this repo")
+
+
 @app.command("verify")
 def setup_verify(
     bin_dir: str | None = typer.Option(None, "--bin-dir", envvar="AET_BIN_DIR", help="Target bin directory."),
@@ -320,6 +366,8 @@ def setup_verify(
     target_dir = Path(bin_dir) if bin_dir else _bin_dir()
     expected = _link_target()
     link = target_dir / "aet"
+
+    _report_skill_link_drift()
 
     if dry_run:
         typer.echo("  (dry run — would verify aet link against PATH)")
