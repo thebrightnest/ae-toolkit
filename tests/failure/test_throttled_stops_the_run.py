@@ -17,7 +17,7 @@ from unittest.mock import patch
 from aet import breaker
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.cli import orchestrator
-from aet.failure import FailureClass
+from aet.failure import FailureClass, classify
 
 
 def _repo(root: Path) -> tuple[GitRefsBackend, Path]:
@@ -41,12 +41,27 @@ class TestBreakerEvidence(unittest.TestCase):
     def test_a_throttled_failure_is_not_breaker_evidence(self):
         record: dict = {}
 
-        recorded = breaker.append_failure_if_countable(
+        countable = breaker.append_failure_if_countable(
             record, FailureClass.THROTTLED, "sig"
         )
 
-        self.assertFalse(recorded)
-        self.assertEqual(record.get("failure_signatures", []), [])
+        self.assertFalse(countable)
+        # Recorded, but marked so the breaker skips it: the finalize path reads
+        # the class off this list to stop the run, so hiding the entry hid the
+        # remedy (20260828-throttle-remedy-cannot-see-its-own-class).
+        self.assertEqual(len(record["failure_signatures"]), 1)
+        self.assertIs(record["failure_signatures"][0]["countable"], False)
+
+    def test_a_throttle_leaves_no_countable_evidence(self):
+        """Three throttles are visible to triage and invisible to the breaker."""
+        record: dict = {}
+        for _ in range(breaker.PER_TASK_BREAKER_THRESHOLD):
+            breaker.append_failure_if_countable(record, FailureClass.THROTTLED, "sig")
+
+        self.assertEqual(
+            len(record["failure_signatures"]), breaker.PER_TASK_BREAKER_THRESHOLD
+        )
+        self.assertFalse(breaker.should_quarantine_task(record))
 
     def test_a_canceled_failure_is_still_not_breaker_evidence(self):
         record: dict = {}
@@ -70,6 +85,61 @@ class TestBreakerEvidence(unittest.TestCase):
             breaker.append_failure_if_countable(record, FailureClass.THROTTLED, "sig")
 
         self.assertFalse(breaker.should_quarantine_task(record))
+
+
+class TestRunStopsFromARealFailure(unittest.TestCase):
+    """The stop fires for a session the classifier actually classified.
+
+    The fixture below hand-writes the record. That is how the throttle stop came
+    to be asserted while being unreachable: the only writer of that field
+    declined to produce the state the test assumed. This class starts one step
+    earlier, from the recording call a failing stage makes.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name).resolve()
+        self.backend, self.queue_file = _repo(self.root)
+        self.backend.save(
+            [{"id": "t1", "state": "in_progress", "plan_file": "docs/plans/t1.md"}]
+        )
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_recorded_throttle_stops_the_run(self):
+        task = next(t for t in self.backend.load()["queue"] if t["id"] == "t1")
+        tail = "You've hit your session limit \u00b7 resets 6pm (Europe/Lisbon)"
+        failure_class = classify(
+            exit_code=1,
+            tail=tail,
+            stage="implement",
+            verdict_recorded=False,
+            shutdown=False,
+            killed_by_timeout=False,
+        )
+        self.assertIs(failure_class, FailureClass.THROTTLED)
+
+        orchestrator._record_failure_on_task(
+            self.backend, task, failure_class, "implement", tail
+        )
+
+        with patch.object(orchestrator, "_mark_failed", return_value=True):
+            with patch.object(orchestrator, "_requeue_task", return_value=True):
+                with patch.object(orchestrator, "_consult_triage_session") as triage:
+                    result = orchestrator._finalize_task(
+                        self.backend,
+                        str(self.queue_file),
+                        "t1",
+                        ret=1,
+                        on_failure="triage",
+                        adapter=None,
+                        repo_root=str(self.root),
+                        worktree_dir=None,
+                    )
+
+        self.assertTrue(result["stop_spawn"])
+        triage.assert_not_called()
 
 
 class TestRunStops(unittest.TestCase):

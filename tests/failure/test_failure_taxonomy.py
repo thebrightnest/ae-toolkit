@@ -161,6 +161,13 @@ THROTTLE_TAILS = [
     "gRPC RESOURCE_EXHAUSTED",
     "quota exceeded for this project",
     "insufficient_quota",
+    # Verbatim from a Claude Code result envelope, 2026-08-27. Every one of
+    # these classified as flaky until the patterns admitted the wordings a
+    # harness emits rather than the ones a test author imagined.
+    '{"is_error":true,"terminal_reason":"api_error","api_error_status":429,'
+    '"result":"You\'ve hit your session limit \u00b7 resets 6pm (Europe/Lisbon)"}',
+    "API Error: 429 {\"type\":\"error\"}",
+    "You've hit your session limit \u00b7 resets 6pm (Europe/Lisbon)",
 ]
 
 

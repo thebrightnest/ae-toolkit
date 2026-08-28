@@ -63,6 +63,24 @@ _THROTTLE_PATTERNS = [
     re.compile(r"\brate[_\s-]?limit[_\s-]?error\b", re.IGNORECASE),
     re.compile(r"\bquota\s+(?:exceeded|exhausted)\b", re.IGNORECASE),
     re.compile(r"\b(?:usage|session|token|message)\s+limit\s+(?:reached|exceeded)\b", re.IGNORECASE),
+    # The wordings a Claude Code result envelope actually carries, all three
+    # observed on 2026-08-27 and none matched by the patterns above:
+    # ``"api_error_status":429`` — the qualifier ends in ``_``, which is a word
+    # character, so a ``\bstatus`` anchor cannot reach the number;
+    # ``API Error: 429`` — a qualifier the HTTP/status pattern does not name;
+    # ``You've hit your session limit · resets 6pm (Europe/Lisbon)`` — says
+    # "hit" and "resets" where the pattern above requires reached/exceeded.
+    re.compile(r"api_error_status\"?\s*[:=]\s*429\b", re.IGNORECASE),
+    re.compile(r"\bapi\s+error:?\s*429\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:hit|reached|exceeded)\s+(?:your|the|my)\s+"
+        r"(?:usage|session|token|message)\s+limit\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:usage|session|token|message)\s+limit\b[^\n]{0,40}?\bresets?\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\bretry[-_\s]after\b", re.IGNORECASE),
     re.compile(r"\boverloaded_error\b", re.IGNORECASE),
     re.compile(r"\bresource[_\s]exhausted\b", re.IGNORECASE),
