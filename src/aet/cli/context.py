@@ -105,10 +105,18 @@ def _parse_iso_timestamp(value: str) -> datetime | None:
 
 
 def _repo_relative(path: Path, repo_root: Path) -> str:
-    """Return a repo-relative path string for ``path``."""
+    """Return a repo-relative path string for ``path``.
+
+    Both sides are resolved before comparing: ``_git_root`` returns git's own
+    answer, which has symlinks resolved, while collected paths are built from
+    the working directory as given. Under a symlinked root — macOS `/var`, a
+    home directory on another volume — the two spellings differ and
+    ``relative_to`` raises, which used to fail open to an absolute path in the
+    digest (docs/bugs/20260828-context-digest-absolute-paths-under-symlink.md).
+    """
     try:
-        return str(path.relative_to(repo_root))
-    except ValueError:
+        return str(path.resolve().relative_to(repo_root.resolve()))
+    except (ValueError, OSError):
         return str(path)
 
 
