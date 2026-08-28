@@ -9,6 +9,80 @@ the git history is the archive.
 
 ## Tooling and project setup
 
+### A forced `refs/aet/*` fetch discards local state with no diagnostic
+
+*Recorded: 2026-08-28 — Source: docs/bugs/20260828-fetch-discards-unpushed-record-writes.md*
+
+`GitRefsBackend.fetch` fetches `+refs/aet/*:refs/aet/*`, so every `aet state`
+invocation force-resets each local task ref to origin's copy. That is now safe
+for the orchestrator's own writes, which replicate through
+`_save_task_record`, but the fetch itself still says nothing when it overwrites a
+local ref whose content differs from the remote's.
+
+**Why accepted:** the refs hold JSON blobs, not commits, so there is no ancestry
+to compare and no merge rule to apply — "the remote wins" is the only available
+semantics. Push-after-write is the guard, and it is in place. A diagnostic would
+have to diff blob content on every fetched ref, on a hot path that runs before
+every transition.
+
+**Trigger to fix:** a second writer appears that cannot push (a read-only clone,
+a CI checkout), or any report of a task record losing a field again.
+
+### The end-to-end rehearsal cannot observe posture-dependent defects
+
+*Recorded: 2026-08-28 — Source: docs/retros/2026-08-28-aet-run-retro.md*
+
+`tests/orchestrator/test_nightshift_rehearsal.py` runs a real unattended batch
+and asserts a breaker quarantine, which looks like coverage for the runaway-loop
+class. It cannot see that class: its temp repo has no in-tree
+`.agents/aet-config.json`, so the posture is `shadow`, pushes are suppressed, and
+origin never carries `refs/aet/*`; and it patches `should_quarantine_task` to
+`threshold=1`, so it never tests accumulation across attempts.
+
+**Why accepted:** the two focused tests added on 2026-08-28
+(`test_task_record_replication.py`, `test_stage_credit_on_failure.py`) cover the
+mechanisms in shared posture at real thresholds. Reshaping the rehearsal is a
+fixture change whose other assertions depend on the current single-run shape, and
+a second real batch run costs wall-clock in every `make validate`.
+
+**Trigger to fix:** the containment work in
+`docs/ideas/outcome-level-containment-testing.md`, which needs this fixture
+anyway.
+
+### The orchestrator writes task records directly instead of through `aet state`
+
+*Recorded: 2026-08-28 — Source: docs/bugs/20260828-fetch-discards-unpushed-record-writes.md*
+
+ADR-055 and `_record_stage`'s docstring both describe `aet state` as the sole
+writer of a task record. The orchestrator is a second writer at eight sites
+(failure signatures, gap analysis, integration failure, merge commit, delivered
+size, three cost roll-ups). They are correct now — each replicates — but the
+single-writer rule the fetch refspec assumes is still not true.
+
+**Why accepted:** routing them through `aet state` needs CLI surface for each
+field, which is a larger change than the defect required, and the helper makes
+the current arrangement honest.
+
+**Trigger to fix:** a third writer, or a field whose write needs validation the
+CLI already performs.
+
+### `aet-toolkit-defects.md` describes a 1.8.0 tree
+
+*Recorded: 2026-08-28*
+
+The root-level `aet-toolkit-defects.md` is the document an operator loads before
+`aet run`. It was written on 2026-08-12 against ae-toolkit 1.8.0 in a consuming
+project, and its line numbers, several statuses, and its operating checklist have
+drifted. D3 (`_record_stage` no-ops under `git-refs`) is fixed in the current
+source — `_record_stage` resolves the task ref and routes through
+`aet state set-stage` — and the checklist predates the 2026-08-28 fixes.
+
+**Why accepted:** re-verifying thirteen items against the current tree is its own
+task, and each one wrongly marked open is a false alarm rather than a hazard.
+
+**Trigger to fix:** the next operator session that follows the checklist, or the
+next release that changes any path it names.
+
 ### Skills still name `.agents/work-queue.json` as the board
 
 *Recorded: 2026-08-27 — Source: aet-evolve retro, planning-pipeline contradictions*
