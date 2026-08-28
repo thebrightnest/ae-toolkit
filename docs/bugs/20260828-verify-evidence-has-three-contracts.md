@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-08-28
 - **Severity:** high (blocks every `work_class: critical` merge without a manual artefact)
-- **Status:** open
+- **Status:** fixed 2026-08-28 (ADR-070)
 
 ## Symptoms
 
@@ -66,16 +66,30 @@ lands where the pipeline can no longer act on it — but that is a consequence o
 the mismatch, not an independent defect: a gate reading the verdict the stage
 already wrote would not refuse.
 
-## Fix Direction
+## Fix
 
-Have `aet ship gate` consult `gate.verdict_status(task_id, kind, repo_root)` for
-every pair `required_evidence` returns, which is the same derivation the
-orchestrator's gate uses and the path the stage actually writes. The `.agents/`
-file check then disappears rather than being duplicated.
+Three changes, one per component that disagreed:
 
-`aet-verify` writes captured artefacts (screenshots, response bodies, terminal
-output) that a JSON verdict does not carry. Those stay where the skill puts them;
-the verdict references them. The gate's business is the verdict.
+- `aet ship gate` satisfies the workflow's `verify` requirement with the `verify`
+  verdict at the canonical evidence path, via `gate.verdict_status`. The
+  `.agents/verify/*.md` check is gone, and the refusal now names the stage, the
+  reason, and the command that produces the artefact.
+- `skills/aet-verify/SKILL.md` submits the verdict — `aet gate submit --stage
+  verify` — and submits `--verdict fail` rather than leaving a stage without one.
+  The skill previously never mentioned a verdict at all, which is why its own
+  stage gate depended on the orchestrator's recovery session to invent one.
+- `skills/aet-ship/SKILL.md` documents the verdict contract instead of the file
+  path it used to promise.
 
-If a working-tree markdown artefact is wanted for review, the skill must write it
-and the workflow must declare it — one producer, one consumer, one path.
+**Scope deliberately not widened.** An earlier draft had the gate check every
+kind `required_evidence` returns. That broke every happy path, for a good reason:
+qa, review, cso and sync-docs verdicts live in `~/.aet/reports`, which is
+per-machine, outside the repository, and never pushed. Re-checking them at ship
+would refuse a task shipped from a different checkout than the one that ran it —
+trading one unsatisfiable gate for another. Those kinds are enforced in-run by
+their own stage gates, at the moment they are written. `verify` is re-checked
+because a critical task can reach `awaiting_merge` without walking the stage that
+produces it.
+
+The captured artefacts (screenshots, response bodies, terminal output) stay where
+`aet-verify` writes them; the verdict's summary references them.

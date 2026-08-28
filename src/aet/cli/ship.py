@@ -522,18 +522,24 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
 
     repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
     plan_fm = spec.get("frontmatter", {}) if isinstance(spec, dict) else {}
+    # The verdict is the evidence (ADR-070). The previous check read a
+    # working-tree markdown file that no producer wrote, so this gate could only
+    # be satisfied out of band
+    # (docs/bugs/20260828-verify-evidence-has-three-contracts.md).
+    #
+    # Only `verify` is checked here. The other kinds are enforced in-run by
+    # their own stage gates, at the moment they are written; re-checking them at
+    # ship would make merging depend on a per-machine reports archive that is
+    # not part of the repository. `verify` is checked because a critical task can
+    # reach `awaiting_merge` without having walked the stage that produces it,
+    # and this is the last gate before trunk.
     req_evidence = gate.required_evidence(repo_root, plan_fm)
     verify_stages = [
         stage_name for stage_name, evidence_kind in req_evidence if evidence_kind == "verify"
     ]
     if verify_stages:
-        verify_stage = verify_stages[0]
-        task_id = args.task_id
-        evidence_paths = [
-            Path(".agents/verify") / f"{task_id}-evidence.md",
-            Path(".agents/verify") / f"{task_id}-evidence",
-        ]
-        if not any(p.exists() for p in evidence_paths):
+        passed, detail = gate.verdict_status(args.task_id, "verify", repo_root)
+        if not passed:
             return GateResult(
                 ok=False,
                 pr_base=pr_base,
@@ -542,8 +548,10 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                 dry_run=args.dry_run,
                 message=(
                     "⛔ Pipeline paused at aet-ship.\n"
-                    f"Workflow stage '{verify_stage}' requires aet-verify evidence.\n"
-                    f"Attach evidence at .agents/verify/{task_id}-evidence.md before shipping."
+                    f"Workflow stage '{verify_stages[0]}' requires a passing "
+                    f"verify verdict — {detail}.\n"
+                    "aet-verify writes it: `aet gate submit --stage verify "
+                    "--verdict pass --summary <one-line>`."
                 ),
                 stack=stack,
             )

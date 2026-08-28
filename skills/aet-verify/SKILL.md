@@ -113,9 +113,21 @@ Exercise the changed flow in the running system and capture observed evidence.
    - If not, create the QA report at `/tmp/aet-reports/{task-id}/qa-report.md` with the evidence section
    - Include: what was exercised, what tool was used, pass/fail, path to saved artifact
 
-6. If evidence capture fails (flow does not work, crashes, or returns unexpected result):
+6. Submit the verdict. The captured artifacts are referenced by it, not read in
+   its place: the `verify` verdict is the evidence both the stage gate and
+   `aet ship gate` require (ADR-070), and a stage without it does not advance.
+
+   ```
+   aet gate submit --stage verify --verdict pass --summary "<what was exercised, one line>"
+   ```
+
+   The output path is in `$AET_EVIDENCE_PATH` (or `$AET_EVIDENCE_PATH_VERIFY` in
+   a grouped session). Point the summary at the artifact paths from step 4.
+
+7. If evidence capture fails (flow does not work, crashes, or returns unexpected result):
    - Treat as a bug — fix in source, add regression test, re-capture evidence
    - Do not proceed to review until evidence is clean
+   - Submit `--verdict fail` rather than leaving the stage without a verdict
 
 ### `reproduction`
 

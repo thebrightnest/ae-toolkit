@@ -24,6 +24,36 @@ sys.modules["aet_ship_gate"] = ship
 _spec.loader.exec_module(ship)
 
 
+def _write_passing_verdict(repo: Path, reports: Path, task_id: str, kind: str) -> Path:
+    """Write a schema-valid passing verdict for *kind*, as its skill would."""
+    from aet import evidence as evidence_lib
+    from aet import telemetry as telemetry_lib
+
+    filler = {str: "x", int: 0, float: 0.0, bool: True, list: []}
+    record = {
+        name: filler.get(typ, "x") for name, typ in evidence_lib.SCHEMAS[kind].items()
+    }
+    record.update(
+        {
+            "task_id": task_id,
+            "stage": "stage",
+            "skill": f"aet-{kind}",
+            "verdict": "pass",
+            "summary": f"{kind} passed",
+            "generated_at": "2026-08-28T00:00:00Z",
+        }
+    )
+    record.pop("tree_hash", None)
+    return evidence_lib.write_verdict(
+        task_id=task_id,
+        kind=kind,
+        record=record,
+        project_slug=telemetry_lib.derive_project_slug(str(repo)),
+        reports_root=str(reports),
+        worktree_dir=str(repo),
+    )
+
+
 class MockResult:
     def __init__(self, returncode, stdout="", stderr=""):
         self.returncode = returncode
@@ -277,7 +307,12 @@ class TestShipGateChecks(unittest.TestCase):
         self.test_verify_evidence_required_for_critical()
 
     def test_verify_evidence_required_for_critical(self):
-        """A critical task whose workflow declares a verify stage is refused without evidence and passes with it."""
+        """A critical task is refused without the verify verdict and passes with it.
+
+        The satisfying artifact is the verdict its stage writes, not a
+        working-tree file (ADR-070). Before that, nothing wrote the path the gate
+        checked, so this gate could only be satisfied out of band.
+        """
         content = (
             "---\n"
             "id: t1\n"
@@ -294,16 +329,26 @@ class TestShipGateChecks(unittest.TestCase):
         responses = self._base_responses()
         env = {"AET_SHIP_TEST_CMD": "true"}
 
-        # Without evidence -> refused
+        reports = self.repo / "reports-archive"
+        env["AET_REPORTS_DIR"] = str(reports)
+
+        # Without the verdict -> refused
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
                 rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
         self.assertNotEqual(rc, 0)
 
-        # With evidence -> passes
+        # A hand-written working-tree file is no longer read.
         evidence_dir = self.repo / ".agents" / "verify"
         evidence_dir.mkdir(parents=True, exist_ok=True)
         (evidence_dir / "t1-evidence.md").write_text("# Evidence\n", encoding="utf-8")
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            with patch.dict(os.environ, env):
+                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+        self.assertNotEqual(rc, 0)
+
+        # With the verify verdict recorded -> passes
+        _write_passing_verdict(self.repo, reports, "t1", "verify")
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
@@ -352,8 +397,8 @@ class TestShipGateChecks(unittest.TestCase):
 
         self.assertEqual(rc, 0)
 
-    def test_refusal_names_the_producing_stage(self):
-        """The refusal message names the workflow stage that produces verify evidence."""
+    def test_refusal_names_the_kind_the_stage_and_the_reason(self):
+        """A refusal is actionable: which verdict, which stage, and why."""
         content = (
             "---\n"
             "id: t1\n"
@@ -368,7 +413,12 @@ class TestShipGateChecks(unittest.TestCase):
         )
         self._save_task(self._spec(content))
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
+        # Point the archive at the temp repo: the gate reads a verdict now, and
+        # the developer's real ~/.aet/reports must not decide this test.
+        env = {
+            "AET_SHIP_TEST_CMD": "true",
+            "AET_REPORTS_DIR": str(self.repo / "reports-archive"),
+        }
 
         args = ship.parse_args(["gate", "t1"])
         args.task_id = "t1"
@@ -380,6 +430,9 @@ class TestShipGateChecks(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertIn("synced", result.message)
+        self.assertIn("verify", result.message)
+        self.assertIn("no verdict recorded at", result.message)
+        self.assertIn("aet gate submit", result.message)
 
     def test_gate_scope_audit_flags_other_prds(self):
         """A diff touching other PRD files is flagged but does not stop the gate."""

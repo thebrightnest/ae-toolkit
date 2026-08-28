@@ -4,7 +4,7 @@
 
 - **Reported:** 2026-08-28
 - **Severity:** medium (repeats completed work on every retry of a grouped stage)
-- **Status:** open
+- **Status:** fixed 2026-08-28 (ADR-069)
 
 ## Symptoms
 
@@ -62,21 +62,40 @@ is handed a worktree whose state contradicts its instructions — implement is
 complete, and the prompt asks for it. Where a retry loop is also in play, every
 iteration pays for the completed stages again.
 
-## Fix Direction
+## What The Record Actually Showed
 
-Record each stage inside a group as it completes, rather than once at the group
-boundary. The per-stage evidence gate already runs in the loop at
-`orchestrator.py:1876`, which is the point where a stage is known to be
-finished; advancing there makes group execution resumable at stage granularity
-and leaves `expected_final` as an assertion rather than the only write.
+The stage is not written late — it is never reached. The group's record step sits
+after `if exit_code != 0: return False`, so a failed session skips it entirely.
+The question is therefore not *when* to write the stage but **what may credit a
+stage whose session failed**, which ADR-069 decides.
 
-Recomputing the stage from git on requeue is the weaker alternative: it infers
-from commits what the evidence gates already know exactly, and it has no answer
-for a stage that produces no commit.
+## Fix
 
-`verify_stage_advancement` (`orchestrator.py:1902`) compares against
-`expected_final` and needs the same treatment, or it will refuse the
-intermediate writes.
+`_credit_proven_stages` runs on the group's failure path. It walks the group's
+span in order and credits each stage whose own evidence verdict passes, stopping
+at the first stage it cannot prove. Nothing is inferred:
+
+- A stage with no evidence binding — `plan-approved`, the one in the field case —
+  is never credited. Its artifact is commits, and a commit does not distinguish
+  finished from interrupted.
+- What the branch does carry goes to the run's handoff note via
+  `_note_branch_state`: the commits since `base_commit`, the verdicts already
+  recorded, and the stage if one was credited. The retry's prompt already renders
+  that note, so the next session is told what exists instead of the record
+  claiming a stage it cannot prove.
+- Crediting reads verdicts and never spawns a session. Asking an agent for a
+  missing verdict stays on the success path.
+
+The success-path record at the group boundary is unchanged, so
+`verify_stage_advancement` still asserts what it always did.
+
+## Consequence For The Field Case
+
+A group of `[reviewed, secure, synced]` that dies in `sync-docs` now keeps its
+security review. The measured case — `plan-approved` dying after the implement
+commit — is *not* fixed by advancing the record, deliberately: the retry is told
+the commit exists rather than being credited with a stage nothing proved. See
+ADR-069's Alternatives Considered for why crediting from commits was rejected.
 
 ## Prior Art
 
