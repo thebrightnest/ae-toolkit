@@ -2483,15 +2483,20 @@ def _record_failure_on_task(
     Stores the signature together with the deterministic class, stage, and a
     bounded tail preview so the finalize path can consult a triage session
     without re-running the failed stage (nsr-04). ``canceled`` failures are
-    skipped (ADR-030). Returns the computed signature when recorded, otherwise
-    ``None``.
+    skipped (ADR-030); ``throttled`` ones are recorded as non-countable, because
+    the finalize path reads the class off this record to stop the run. Returns
+    the computed signature when an entry was recorded, otherwise ``None``.
     """
     sig = failure_lib.signature(stage=stage, tail=tail)
-    if not breaker.append_failure_if_countable(task, failure_class, sig, timestamp=timestamp):
+    before = len(task.get("failure_signatures") or [])
+    breaker.append_failure_if_countable(task, failure_class, sig, timestamp=timestamp)
+    entries = task.get("failure_signatures") or []
+    if len(entries) == before:
+        # Nothing was recorded (``canceled``): there is no entry to enrich.
         return None
     # Enrich the latest signature entry with triage inputs. The breaker only
-    # cares about ``signature``; extra keys are ignored for counting.
-    entry = task.get("failure_signatures", [])[-1]
+    # cares about ``signature`` and ``countable``; extra keys are ignored.
+    entry = entries[-1]
     entry["class"] = failure_class.value
     entry["stage"] = stage
     entry["tail_preview"] = tail[-1500:] if tail else ""
@@ -3203,7 +3208,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 seen_sigs = {
                     entry.get("signature")
                     for entry in task.get("failure_signatures", [])
-                    if entry.get("signature")
+                    if entry.get("signature") and entry.get("countable") is not False
                 }
                 for sig in seen_sigs:
                     systemic_tally = breaker.update_systemic_tally(

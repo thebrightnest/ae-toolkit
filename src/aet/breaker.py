@@ -38,13 +38,25 @@ def append_failure_if_countable(
     signature: str,
     timestamp: str | None = None,
 ) -> bool:
-    """Append *signature* to *record* unless the class is not the task's fault.
+    """Append *signature* to *record*, marking whether it counts for the breaker.
 
-    Returns ``True`` when the signature was recorded, ``False`` when it was
-    skipped. ``canceled`` failures are not breaker evidence (ADR-030), and
-    neither are ``throttled`` ones: the breaker exists to stop a task that
+    Returns ``True`` when the signature counts as breaker evidence and ``False``
+    when it does not. ``canceled`` failures are not breaker evidence (ADR-030),
+    and neither are ``throttled`` ones: the breaker exists to stop a task that
     keeps failing for its own reasons, and three attempts against a closed
     provider window say nothing about the task.
+
+    A ``throttled`` failure is still recorded, carrying ``countable: False``.
+    Not recording it hid the class from the only remedy that acts on it —
+    ``_finalize_task`` reads the class off this list to stop the run (ADR-065
+    decision 3) — so the two decisions cancelled and a closed window requeued
+    without limit
+    (``docs/bugs/20260828-throttle-remedy-cannot-see-its-own-class.md``).
+    ``should_quarantine_task`` and the systemic tally skip non-countable
+    entries, which is what keeps decision 2 intact.
+
+    A ``canceled`` failure is still not recorded at all: an operator stopping a
+    shift is not evidence of anything, and no remedy reads it back.
     """
     # Import here to avoid a hard dependency on failure.py for pure tests.
     try:
@@ -53,11 +65,12 @@ def append_failure_if_countable(
         FailureClass = None
 
     if FailureClass is not None:
-        not_the_task_s_fault = {
-            FailureClass.CANCELED.value,
-            FailureClass.THROTTLED.value,
-        }
-        if getattr(failure_class, "value", failure_class) in not_the_task_s_fault:
+        class_value = getattr(failure_class, "value", failure_class)
+        if class_value == FailureClass.CANCELED.value:
+            return False
+        if class_value == FailureClass.THROTTLED.value:
+            record_failure_signature(record, signature, timestamp=timestamp)
+            record["failure_signatures"][-1]["countable"] = False
             return False
     record_failure_signature(record, signature, timestamp=timestamp)
     return True
@@ -67,9 +80,15 @@ def should_quarantine_task(
     record: dict[str, Any],
     threshold: int = PER_TASK_BREAKER_THRESHOLD,
 ) -> bool:
-    """Return True when any signature on *record* has reached *threshold*."""
+    """Return True when any countable signature on *record* has reached *threshold*.
+
+    Entries marked ``countable: False`` are evidence for triage, not for the
+    breaker: they record a failure that was not the task's fault.
+    """
     counts: dict[str, int] = {}
     for entry in record.get("failure_signatures", []):
+        if entry.get("countable") is False:
+            continue
         sig = entry.get("signature")
         if sig:
             counts[sig] = counts.get(sig, 0) + 1
