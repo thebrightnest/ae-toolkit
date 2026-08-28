@@ -112,8 +112,8 @@ Use this checklist during every `/aet-setup` invocation. Every topic must be exp
 
 ## 15. Task Backend Configuration
 
-- [ ] `.agents/aet-config.json` (team mode) or `~/.aet/{config-slug}/config.json` (shadow mode) exists with a valid `task_backend` (`git-refs` (default) or `json`)?
-- [ ] No `task_backend` value selects a forge as storage (`github`/`both` are rejected)?
+- [ ] `.agents/aet-config.json` (team mode) or `~/.aet/{config-slug}/config.json` (shadow mode) exists with a valid `integration_mode` (`pr-per-task` (default) or `single-pr`)?
+- [ ] Neither config carries the `task_backend` key removed in 1.10? A stale key is ignored with a warning, but it means the file predates the upgrade.
 - [ ] Projections are configured on the orthogonal `projections` axis when a forge mirror is desired?
 - [ ] `gh` availability and authentication are verified before label creation (projection setup)?
 - [ ] Switching backends is documented as forward-only (no history migration)?

@@ -11,12 +11,11 @@ projection is a one-way mirror.
 ## Configuration
 
 Add a `projections` entry to `.agents/aet-config.json` (team mode) or
-`~/.aet/{config-slug}/config.json` (shadow mode). The `task_backend` key selects
-storage (`git-refs` or `json`), not GitHub:
+`~/.aet/{config-slug}/config.json` (shadow mode). A forge is a projection, never
+a task store: `git-refs` is the only store, and there is no key to select one.
 
 ```json
 {
-  "task_backend": "git-refs",
   "integration_mode": "pr-per-task",
   "projections": [
     {
