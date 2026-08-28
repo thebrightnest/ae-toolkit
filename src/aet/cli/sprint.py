@@ -21,8 +21,8 @@ from aet.admission import (  # noqa: E402
     Admitted,
     RefusalReason,
     Refused,
-    SkipReason,
     Skipped,
+    SkipReason,
     admit_plan,
     unacked_intake_findings,
 )
