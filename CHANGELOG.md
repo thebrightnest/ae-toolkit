@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.13.0] — 2026-08-28
+
+### Added
+
+- **A queued plan can be corrected without touching shared state** — `aet sprint add` re-ingests the spec of a task that is still inert (`planned`, `ready` or `blocked`), so a plan invalidated by a sibling merging ahead of it is fixed by editing the file and re-adding. Previously the only route was deleting the task ref on `origin` and re-adding, which is an irreversible operation on state every other clone reads. A task carrying run state is refused by name rather than silently reshaped (ADR-068).
+- **Board admission is one operation** — every door onto the board (`aet sprint add`, `aet sprint intake`, `aet backlog add`) runs the same admission policy from a single domain module, instead of each implementing its own. It was implemented once per door before, which is how a plan-footer read that three accepted decisions forbade survived all three (ADR-066).
+- **A stage's evidence requirement comes from the workflow** — `aet ship` resolves which verdict a stage needs by reading the workflow definition rather than carrying its own list, and a gate's default routing derives from the plan's work class (ADR-067).
+- **Divergence is recorded at closure** — the mechanical difference between what a plan described and what landed is written onto settled history when a task closes, so it survives without depending on a documentation stage having run.
+
+### Fixed
+
+- **A runaway requeue loop could not be stopped** — one task requeued 22 times against a single closed provider window at a recorded $23.77, and four independent stops were inert at once. Each is fixed: a throttle is recorded as a non-countable failure so the run can halt on it, the provider-limit wordings a harness actually emits are classified as throttles rather than as unknown faults, direct task-record writes replicate so a later fetch cannot discard them, and the loop miner counts a requeue loop from stage records instead of from prose (ADR-065 as amended, ADR-071).
+- **A failed stage group discarded the stages it had proved** — a group session that died partway returned before recording anything, leaving the task at the group's entry stage no matter how many stages had finished. The retry was then prompted with a stage that contradicted its own worktree, and re-ran finished work. Stages backed by a passing verdict are now kept (ADR-069).
+- **The verify gate could not be satisfied in the pipeline** — it read a working-tree markdown file that no producer writes, so the only way past it was out of band. It now reads the `verify` verdict that the verify stage itself writes (ADR-070).
+- **A context digest under a symlinked repository root produced absolute paths** — the digest now relativises through the resolved root, so a checkout reached by a symlink yields the same digest as one reached directly.
+- **Liveness supervision on Linux scanned indirectly** — the check now reads `/proc` directly rather than inferring liveness through a shell.
+- **A trailing-slash check read markdown formatting as content** — backticks are stripped before the check, so a path written in code formatting is no longer misjudged.
+- **`make install-skills` reported success without correcting a stale link** — the target tested only whether a symlink existed and printed `✓ already linked` whatever it pointed at, so a link made against an older checkout was never repointed and the drift was silent: the skill loads, nothing fails, and the session follows instructions from the other checkout. It now routes through `aet setup skills`, which reads each link's target, and runs this repository's own code rather than whichever `aet` is on `PATH` — a release install would otherwise relink from its own clone. `aet setup verify` reports any skill link that points elsewhere.
+- **`aet ship` could not run without an `origin` remote** — the pre-merge gate fetches first and the fetch was unguarded, so on a repository with no remote every subcommand in the family — `gate`, `open`, `merge`, `split`, `close` — died before doing any work. The fetch is now skipped when no `origin` is configured, mirroring the guard the task store already applies for the same reason. A fetch that fails against a remote that does exist still fails loudly.
+
+### Changed
+
+- **Plan stage footers are no longer emitted or read at intake** — a plan's `*Stage:*` line is a human breadcrumb. The stage of record lives on the task record (ADR-061), and no admission path consults the footer. Existing footers are tolerated and ignored.
+
+### Documentation
+
+- **The skills documented a config key removed in 1.10** — `aet-work` and `aet-setup` still presented `task_backend` as a live setting with `git-refs` and `json` values, and `aet-setup` claimed its writer sets it by default, when `aet configure` rejects the flag and the JSON store no longer exists. Following the instructions produced a config the CLI refuses. Fifteen references across eight files now state that `git-refs` is the only task store and that the key was removed.
+- **The bug, retro, audit, product-brief and report corpora were retired** — `docs/bugs/`, `docs/retros/`, `docs/audits/`, `docs/product-briefs/`, `reports/` and the root-level `aet-toolkit-defects.md` were removed after every document in them was verified against the tree. Nine of the thirteen defects in `aet-toolkit-defects.md` were already fixed, five of them while still marked open, and all four it described as patched only in an installed tree were upstream. `docs/CONVENTIONS.md` records that citations to those paths resolve in git history, and distinguishes them from `~/.aet/reports/`, the live verdict archive.
+
+**Upgrading from 1.12.x:** upgrade the skills alongside the CLI. `aet ship gate` now requires a passing `verify` verdict for any stage whose workflow declares one, and the `aet-verify` skill that writes it gained that step in this release — so a CLI upgraded past a skill set from 1.12 or earlier can refuse work at ship that a matching pair would pass. `npx skills add ... --all` (or `aet setup skills` from a working tree) brings them level. Plans already on the board are unaffected, and plan footers already written are ignored rather than rejected.
+
+---
+
 ## [1.12.0] — 2026-08-27
 
 ### Added

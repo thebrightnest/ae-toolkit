@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.12.0
+## Current Version: 1.13.0
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
 
 ---
 
@@ -24,7 +24,7 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, and a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, a single admission policy shared by every route onto the board, correction of a queued plan by editing the file and re-adding it, and a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
 
@@ -35,13 +35,13 @@ Verify code before it ships.
 - **aet-review** — Staff-level code review with multi-lens checks, supported by mechanical identity-conflation and boundary-contract lenses at `aet gate submit --stage review`.
 - **aet-cso** — Diff-focused security audit. Verdicts are submitted via `aet gate submit` with built-in evidence builders.
 - **aet-qa** — Automated QA with tiered validation. Runs the full suite unconditionally, and when it fails, compares the failures against the targeted set implement already ran so a gap in coverage is named rather than guessed at. Verdicts are submitted via `aet gate submit` with built-in pytest, summary, and divergence builders.
-- **aet-verify** — Conditional live verification with evidence capture.
+- **aet-verify** — Conditional live verification with evidence capture. Submits the `verify` verdict that the pre-merge gate reads, so a critical task cannot reach trunk without live verification having run.
 
 ### Shipping and Release Skills
 
 Land code cleanly and document releases.
 
-- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, provider-specific merge-guard harness detection, squash-merge verification fallback, stacked PR split and trunk substitution, and optional branch deletion on close. Resolves a task id against the record across open, gate, close, merge, split, and verify; plan paths are no longer accepted.
+- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, provider-specific merge-guard harness detection, squash-merge verification fallback, stacked PR split and trunk substitution, and optional branch deletion on close. Resolves a task id against the record across open, gate, close, merge, split, and verify; plan paths are no longer accepted. Which verdict a stage must show is read from the workflow definition rather than kept as a separate list, and a gate's default routing derives from the plan's work class.
 - **aet-release-prep** — Release preparation: commit analysis, changelog updates, and version bump suggestions.
 - **aet-sync-docs** — Sync the PRD to reflect what was actually built.
 
@@ -83,6 +83,19 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.13.0
+
+- **A queued plan can be corrected by editing it** — when a plan waiting on the board is invalidated by another task merging ahead of it, fixing it means editing the file and adding it again. Correcting one previously required deleting state on the shared remote that every other clone reads.
+- **A runaway loop stops itself** — a task that kept relaunching against a closed provider rate limit, 22 times in the case that prompted this, is now halted by the run. The limit is recognised from the wording providers actually use, and the counters that decide when to stop survive the state being refreshed.
+- **An interrupted stage keeps the work it finished** — when a session running several stages dies partway, the stages it completed and proved are kept, so the retry resumes rather than re-running finished work against a plan that no longer matches its own worktree.
+- **Live verification is enforceable again** — the pre-merge gate reads the verdict the verify step writes, instead of a file nothing produced. Critical work can no longer reach trunk with the verification stage skipped.
+- **Every route onto the board checks a plan the same way** — adding by hand, arriving from a GitHub issue, or going through the backlog all apply one admission policy.
+- **What a task actually changed is recorded when it closes** — the difference between the plan and what landed is captured at closure rather than depending on a later documentation step.
+- **Installing skills over an older install actually updates them** — linking skills now checks where each existing link points and repoints a stale one, instead of reporting success and leaving it. `aet setup verify` names any skill still loading from another checkout, so a fix that has not reached your sessions is visible rather than silent.
+- **Shipping works on a project with no remote** — the pre-merge gate no longer requires an `origin` to fetch from, so a local-only repository can use the whole `aet ship` family.
+
+**Upgrading from 1.12.x:** upgrade the skills alongside the CLI. The pre-merge gate now requires the verify verdict, and the skill that writes it gained that step in this release, so a CLI running ahead of skills from 1.12 or earlier can stop work at ship. `npx skills add ... --all` brings them level. Work already on the board is unaffected.
 
 ### What's New in v1.12.0
 
