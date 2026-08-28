@@ -1153,6 +1153,114 @@ def _run_verdict_recovery(
     )
 
 
+def _credit_proven_stages(
+    task: dict,
+    runnable: list[WorkflowStage],
+    workflow: Workflow,
+    *,
+    task_id: str,
+    repo_root: str,
+    worktree_dir: str,
+    run_id: str | None,
+) -> str | None:
+    """Record the stages a failed group session proved it finished (ADR-069).
+
+    A stage is credited only by its own schema-valid passing verdict, walking
+    the group's span in order and stopping at the first stage that cannot be
+    credited. A stage with no evidence binding is never credited: its artifact
+    is commits, and a commit proves work happened, not that the stage finished.
+
+    Without this, a group that dies late leaves the record at the group's entry
+    stage and the retry re-runs stages that were complete — 21 times over, on
+    2026-08-27 (``docs/bugs/20260828-group-stage-advance-is-all-or-nothing.md``).
+
+    What the session did leave behind goes to the run's handoff note instead, so
+    the retry is told rather than the record overstating. Returns the last stage
+    credited, or ``None``. Never raises: this runs on a failure path that must
+    stay a failure.
+    """
+    credited: str | None = None
+    for stage in runnable:
+        if stage.evidence is None:
+            break
+        state, _record, _detail = _verdict_state(task_id, stage.evidence, repo_root)
+        if state != "pass":
+            break
+        target = workflow.next_stage(stage.name) or stage.name
+        if not _record_stage(task, target, repo_root):
+            print(f"   ⚠️  Could not credit stage {target} for {task_id}")
+            break
+        credited = target
+    if credited:
+        print(f"   ↩️  {task_id} keeps its proven progress; resumes at {credited}")
+    _note_branch_state(
+        repo_root,
+        run_id,
+        task=task,
+        task_id=task_id,
+        runnable=runnable,
+        worktree_dir=worktree_dir,
+        credited=credited,
+    )
+    return credited
+
+
+def _note_branch_state(
+    repo_root: str,
+    run_id: str | None,
+    *,
+    task: dict,
+    task_id: str,
+    runnable: list[WorkflowStage],
+    worktree_dir: str,
+    credited: str | None,
+) -> None:
+    """Tell the retry what this branch already carries (ADR-069 decision 3).
+
+    The handoff note is the only channel that reaches the next session's prompt
+    without claiming a stage finished. Best-effort by construction: a note that
+    cannot be written must not turn a stage failure into something else.
+    """
+    if not run_id:
+        return
+    try:
+        base = task.get("base_commit") or "HEAD~1"
+        result = subprocess.run(
+            ["git", "-C", worktree_dir, "log", "--oneline", f"{base}..HEAD"],
+            capture_output=True,
+            text=True,
+        )
+        commits = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+        decisions: list[str] = []
+        if commits:
+            decisions.append(
+                f"This branch already carries {len(commits)} commit(s) from an "
+                f"earlier attempt of this task; do not redo that work: "
+                + "; ".join(commits[:10])
+            )
+        for stage in runnable:
+            if stage.evidence is None:
+                continue
+            state, _record, _detail = _verdict_state(task_id, stage.evidence, repo_root)
+            if state == "pass":
+                decisions.append(
+                    f"The '{stage.evidence}' verdict for stage '{stage.name}' is "
+                    "already recorded and passing."
+                )
+        if credited:
+            decisions.append(f"The pipeline stage was advanced to '{credited}'.")
+        if not decisions:
+            return
+        handoff.append_entry(
+            repo_root,
+            run_id,
+            stage=runnable[0].name,
+            decisions=decisions,
+        )
+    except Exception:  # noqa: BLE001 - working memory is never load-bearing
+        return
+
+
 def _require_passing_verdict(
     task_id: str,
     kind: str,
@@ -1898,6 +2006,15 @@ def process_task(
                 agent_invoked = True
                 if exit_code != 0:
                     print(f"   ❌ Stage group failed with exit code {exit_code}")
+                    _credit_proven_stages(
+                        task,
+                        runnable,
+                        workflow,
+                        task_id=task_id,
+                        repo_root=repo_root,
+                        worktree_dir=worktree_dir,
+                        run_id=logger.run_id,
+                    )
                     return False
 
                 # Verify the group session produced commits.

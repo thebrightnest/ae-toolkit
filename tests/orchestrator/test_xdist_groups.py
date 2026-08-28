@@ -45,6 +45,7 @@ EXPECTED_SUBGROUPS: dict[str, list[str]] = {
         "tests/orchestrator/test_integration_serialization.py",
         "tests/orchestrator/test_missing_plan_halts.py",
         "tests/orchestrator/test_task_record_replication.py",
+        "tests/orchestrator/test_stage_credit_on_failure.py",
     ],
 }
 
