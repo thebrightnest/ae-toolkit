@@ -378,7 +378,26 @@ def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=check)
 
 
+def _has_origin() -> bool:
+    """Return True when an ``origin`` remote is configured."""
+    result = _run_git("remote", check=False)
+    return result.returncode == 0 and "origin" in result.stdout.split()
+
+
 def _fetch_origin() -> None:
+    """Fetch ``origin``, skipping when no such remote exists.
+
+    ``_run_git`` raises on a non-zero exit, and ``git fetch origin`` fails in a
+    repository with no remote, so an unguarded call took the whole ``ship``
+    family down on a local-only project: every subcommand runs the pre-merge
+    gate, and the gate fetches first. The guard mirrors the backend's, which
+    made the same read best-effort for the same reason
+    (``GitRefsBackend.fetch``). ``check=False`` is deliberately not the fix: it
+    would also swallow a real fetch failure on a project that does have a
+    remote.
+    """
+    if not _has_origin():
+        return
     _run_git("fetch", "origin")
 
 

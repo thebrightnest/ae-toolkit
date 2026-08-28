@@ -90,21 +90,18 @@ to create the file in the right place:
 aet configure --guided --scope team --integration-mode pr-per-task
 ```
 
-Valid values for `task_backend` are `git-refs` (default) and `json`. Run
-`aet-setup` (or `aet configure`) to write this file.
+Run `aet-setup` (or `aet configure`) to write this file.
 
-### git-refs backend
+### The task store
 
-The default backend stores queue state and the ledger in git refs under
-`refs/aet/*`. Reads and writes push to and fetch from origin best-effort except
-at closure, where the push is required. No GitHub access is required beyond the
-git remote.
+`git-refs` is the only task store. It keeps queue state and the ledger in git
+refs under `refs/aet/*`. Reads and writes push to and fetch from origin
+best-effort except at closure, where the push is required. No GitHub access is
+required beyond the git remote.
 
-### json backend
-
-The local JSON backend stores the active queue in `.agents/work-queue.json` and
-the optional execution log in `.agents/work-history.jsonl`. Use this for
-non-git projects or while debugging the git-refs backend.
+There is no backend to select, and no `task_backend` key: it was removed in 1.10
+along with the JSON store it chose between. A config still carrying the key is
+reported and ignored.
 
 ### Multi-machine posture
 
@@ -120,12 +117,11 @@ closure is the syncing boundary.
 
 ### GitHub Issues projection
 
-GitHub Issues mirroring is configured on the orthogonal `projections` axis, not
-as a `task_backend` value. Add a projection entry to the same config file:
+GitHub Issues mirroring is configured on the `projections` axis. A forge is a
+projection, never a task store. Add a projection entry to the same config file:
 
 ```json
 {
-  "task_backend": "git-refs",
   "integration_mode": "pr-per-task",
   "projections": [
     { "type": "github", "repo": "owner/repo", "label_prefix": "aet" }

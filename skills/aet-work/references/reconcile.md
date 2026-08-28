@@ -76,7 +76,6 @@ Reconcile uses the same `projections` config axis as the rest of AET:
 
 ```json
 {
-  "task_backend": "git-refs",
   "projections": [
     { "type": "github", "repo": "owner/repo", "label_prefix": "aet" }
   ]

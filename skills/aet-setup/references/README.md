@@ -55,28 +55,26 @@ Ensure `.gitignore` excludes generated agent workflow artifacts:
 .worktrees/
 ```
 
-### 4. `.agents/aet-config.json` (task backend config)
+### 4. `.agents/aet-config.json` (queue config)
 
-Created by `aet configure --guided` during `aet-setup` Step 6. Chooses the storage backend and integration mode used by aet-work:
+Created by `aet configure --guided` during `aet-setup` Step 6. Sets the integration mode used by aet-work:
 
 ```json
 {
-  "task_backend": "git-refs",
   "integration_mode": "pr-per-task"
 }
 ```
 
-- `task_backend`: `git-refs` (default) or `json`. A forge is never a valid storage backend.
 - `integration_mode`: `pr-per-task` (default) or `single-pr`.
-- `switch_warning`: recorded when switching from one backend to another; switches are forward-only and do not migrate history.
+
+There is no store to choose: `git-refs` is the only one. The `task_backend` key was removed in 1.10 and a config still carrying it is reported and ignored.
 
 Use `--scope team` to write the config into `.agents/aet-config.json` (committed with the repo) or `--scope shadow` to write it to `~/.aet/{slug}/config.json` (nothing committed). The guided flow asks these two questions interactively.
 
-GitHub Issues mirroring is configured on the orthogonal `projections` axis:
+GitHub Issues mirroring is configured on the `projections` axis. A forge is a projection, never a task store:
 
 ```json
 {
-  "task_backend": "git-refs",
   "integration_mode": "pr-per-task",
   "projections": [
     { "type": "github", "repo": "owner/name", "label_prefix": "aet" }

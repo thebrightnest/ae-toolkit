@@ -15,22 +15,19 @@
 
 ## Agent-Neutral Workflow State
 
-`.agents/aet-config.json` configures the task backend and integration mode for
-the work queue:
+`.agents/aet-config.json` configures the integration mode for the work queue:
 
 ```json
 {
-  "task_backend": "git-refs",
   "integration_mode": "pr-per-task"
 }
 ```
 
-Valid `task_backend` values are `git-refs` (default) and `json`. GitHub Issues
-mirroring is configured on the orthogonal `projections` axis, not as a
-`task_backend` value. Use `aet configure --guided` during `/aet-setup` to choose
-team mode (committed `.agents/aet-config.json`) or shadow mode (external
-`~/.aet/{config-slug}/config.json`, nothing committed). Switching backends is
-forward-only and does not migrate active tasks or settled history.
+`git-refs` is the only task store, so there is nothing to select and no
+`task_backend` key. GitHub Issues mirroring is configured on the `projections`
+axis: a forge is a projection, never a store. Use `aet configure --guided` during
+`/aet-setup` to choose team mode (committed `.agents/aet-config.json`) or shadow
+mode (external `~/.aet/{config-slug}/config.json`, nothing committed).
 
 ## Layer Rules
 

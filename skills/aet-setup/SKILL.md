@@ -158,7 +158,7 @@ Run `aet configure --guided` to write the AET config in two questions:
 1. **Scope** — `team` writes `.agents/aet-config.json` (committed with the repo); `shadow` writes `~/.aet/{slug}/config.json` (nothing committed).
 2. **Integration mode** — `pr-per-task` or `single-pr`.
 
-The guided flow detects existing config, shows current values, and asks before overwriting. In unattended contexts (`AET_EXECUTION_MODE=unattended` or `--scope`/`--integration-mode` flags), it skips prompts and writes directly. The writer sets `task_backend: git-refs` by default; projections are configured on the orthogonal `projections` axis. See `aet-work/references/github-backend.md` for the label contract and sync behavior.
+The guided flow detects existing config, shows current values, and asks before overwriting. In unattended contexts (`AET_EXECUTION_MODE=unattended` or `--scope`/`--integration-mode` flags), it skips prompts and writes directly. There is no store to select — `git-refs` is the only one — and the removed `task_backend` key is not written; projections are configured on the `projections` axis. See `aet-work/references/github-backend.md` for the label contract and sync behavior.
 
 ### Step 7: Validate
 
