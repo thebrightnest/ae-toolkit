@@ -1,3 +1,15 @@
+---
+type: roadmap
+status: active
+recorded: 2026-07-19
+source: agreed 2026-07-19
+trigger: >-
+  Track A is in planning; Track B is deferred pending Track A landing.
+depends_on: []
+blocks: 
+  - docs/prds/namespace-consolidation-prd.md R-8
+---
+
 # Roadmap: AET Package Extraction & Repository Reorganization
 
 **Status:** Active — Track A in planning, Track B deferred

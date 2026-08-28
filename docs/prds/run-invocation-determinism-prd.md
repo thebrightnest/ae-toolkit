@@ -32,7 +32,7 @@ agent is left with one literal command and no parameters to select.
 
 - **An `aet run logs` escalation command.** Deferred until the bounded report proves
   insufficient in practice; designing the escape hatch before observing what is missing
-  would guess at the wrong shape. Parked in `docs/ideas/`.
+  would guess at the wrong shape. Parked in `content/backlog/`.
 - **Parallel-run aggregation.** Per-child status tables for spawned agents are additive to
   the same code path and can follow.
 - **Auto-resume of interrupted runs.** This mitigates the consequence of hangs; this PRD

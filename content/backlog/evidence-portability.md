@@ -1,3 +1,15 @@
+---
+type: idea
+status: undecided
+recorded: 2026-08-28
+source: docs/adr/070-verify-evidence-is-the-verdict.md
+trigger: >-
+  A request to ship or audit from a machine that did not run the pipeline; a projection that wants to publish verdicts; a second attempt to widen a gate to check evidence it cannot see.
+depends_on: []
+blocks: 
+  - widening any gate to check evidence written elsewhere
+---
+
 # Idea: Gate Evidence Does Not Travel With the Task
 
 - **Status:** Undecided (2026-08-28). Needs a decision before it needs code.

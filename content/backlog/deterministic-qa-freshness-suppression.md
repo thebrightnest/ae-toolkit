@@ -1,3 +1,15 @@
+---
+type: idea
+status: parked
+recorded: 2026-07-24
+source: docs/prds/validation-runtime-efficiency-prd.md
+trigger: >-
+  A concrete run demonstrates the redundant QA re-run cost, or turn-level telemetry makes it measurable.
+depends_on: 
+  - cfg-01-session-efficiency
+blocks: []
+---
+
 # Idea: Deterministic QA-Freshness Re-Run Suppression
 
 - **Status:** Parked (2026-07-24). Deferred — efficiency-only and currently unmeasured.
@@ -35,7 +47,7 @@ the prose.
   redundant re-run actually fires or what it costs in aggregate. Committing runtime + ADR effort
   to an unquantified win is premature — **ADR-031: enforce on evidence, never on a guess.**
   (This is the same telemetry gap that parks the cfg-01 session-efficiency idea —
-  `docs/ideas/cfg-01-session-efficiency.md`.)
+  `content/backlog/cfg-01-session-efficiency.md`.)
 - **It reopens a deliberate decision.** Making suppression *enforced* rather than advisory
   changes ADR-025 decision 4, which was chosen on purpose. That reversal wants evidence behind
   it, not principle alone.

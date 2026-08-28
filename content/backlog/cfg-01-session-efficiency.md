@@ -1,3 +1,15 @@
+---
+type: idea
+status: parked
+recorded: 2026-07-24
+source: reports/2026-07-24-validation-runtime-review.md
+trigger: >-
+  Turn-level telemetry lands; until then the lever cannot be measured, so it cannot be planned into tasks.
+depends_on: 
+  - idea-turn-level-telemetry (not filed; see the blocker note in this item)
+blocks: []
+---
+
 # Idea: Shorten the Long Implement/QA Session (the real 72%)
 
 - **Status:** Parked (2026-07-24). Blocked on telemetry — cannot be planned into tasks yet.
@@ -40,7 +52,7 @@ per-tool-call or per-turn data**. So Recommendation 1 / Suggested Action 1 — "
 session's tool calls to find where the ~27 non-validation minutes went" — **is not possible from
 telemetry as it stands**. Without that attribution you cannot tell context re-reads from genuine
 work, so there is nothing concrete to plan against. This is the same telemetry gap that parks the
-freshness idea (`docs/ideas/deterministic-qa-freshness-suppression.md`).
+freshness idea (`content/backlog/deterministic-qa-freshness-suppression.md`).
 
 ## The one lever available today
 
@@ -72,4 +84,4 @@ clock badly enough to force the task-sizing conversation sooner.
   Suggested Immediate Actions #1
 - `docs/prds/validation-runtime-efficiency-prd.md` — Non-Goals (the carve-out)
 - ADR-046 — Plan size is measured after implementation, not gated before it
-- `docs/ideas/deterministic-qa-freshness-suppression.md` — sibling idea, same telemetry gap
+- `content/backlog/deterministic-qa-freshness-suppression.md` — sibling idea, same telemetry gap

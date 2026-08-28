@@ -158,13 +158,13 @@ without reading the session that produced it:
 
 | Item | Filed as |
 | --- | --- |
-| Assert containment at the outcome, not per mechanism — the one test that would have caught all four inert stops at once | `docs/ideas/outcome-level-containment-testing.md` |
-| Gate evidence does not travel with the task, which is why ADR-070 bounded its own fix | `docs/ideas/evidence-portability.md` |
+| Assert containment at the outcome, not per mechanism — the one test that would have caught all four inert stops at once | `content/backlog/outcome-level-containment-testing.md` |
+| Gate evidence does not travel with the task, which is why ADR-070 bounded its own fix | `content/backlog/evidence-portability.md` |
 | Concurrent task-ref writes lose a compare-and-swap under `--dist=loadgroup` — a tolerated red that hid a real one on 2026-08-28 | `docs/bugs/20260828-loadgroup-flake-on-concurrent-task-refs.md` |
-| A forced `refs/aet/*` fetch discards local state with no diagnostic | `docs/TECHNICAL_DEBT.md` |
-| The end-to-end rehearsal cannot observe posture-dependent defects | `docs/TECHNICAL_DEBT.md` |
-| The orchestrator writes task records directly instead of through `aet state` | `docs/TECHNICAL_DEBT.md` |
-| `aet-toolkit-defects.md` describes a 1.8.0 tree | `docs/TECHNICAL_DEBT.md` |
+| A forced `refs/aet/*` fetch discards local state with no diagnostic | `content/backlog/debt-forced-fetch-has-no-diagnostic.md` |
+| The end-to-end rehearsal cannot observe posture-dependent defects | `content/backlog/debt-rehearsal-cannot-observe-posture.md` |
+| The orchestrator writes task records directly instead of through `aet state` | `content/backlog/debt-orchestrator-is-a-second-writer.md` |
+| `aet-toolkit-defects.md` describes a 1.8.0 tree | `content/backlog/debt-toolkit-defects-doc-is-stale.md` |
 | Release the toolkit: none of these fixes reach a consuming project until its install moves past 1.11.0 | this table, until `aet-release-prep` runs |
 
 ## Outcome

@@ -1,5 +1,6 @@
 .claude
-content/
+content/*
+!content/backlog/
 node_modules/
 .venv/
 .lycheecache

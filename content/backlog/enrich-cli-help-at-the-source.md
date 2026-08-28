@@ -1,3 +1,14 @@
+---
+type: idea
+status: parked
+recorded: 2026-08-21
+source: docs/prds/cli-discovery-cost-prd.md
+trigger: >-
+  The next divergence found between skill prose and `--help` semantics.
+depends_on: []
+blocks: []
+---
+
 # Idea: Enrich CLI Help at the Source
 
 - **Status:** Parked (2026-08-21). Deferred from `docs/prds/cli-discovery-cost-prd.md` Non-Goals.

@@ -7,7 +7,7 @@ fragmented across four skills (`aet-work/bin` + `lib` + `panel`, `aet-ship/bin`,
 `aet-evolve/bin`, `aet-setup/bin` + `lib`) plus root `tests/` and `scripts/`,
 held together by `sys.path` hacks and an exec-based multicall dispatcher. This
 PRD covers **Track A** of
-[docs/roadmaps/aet-package-extraction-roadmap.md](../roadmaps/aet-package-extraction-roadmap.md):
+[content/backlog/aet-package-extraction-roadmap.md](../../content/backlog/aet-package-extraction-roadmap.md):
 extract the tool into a real Python package (`src/aet/`), move skills to
 `skills/` as pure content, and adopt real dependencies where they replace
 hand-rolled machinery — all behavior-preserving until the dependency-adoption

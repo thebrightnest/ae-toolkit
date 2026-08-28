@@ -1,3 +1,14 @@
+---
+type: idea
+status: parked
+recorded: 2026-08-27
+source: docs/bugs/20260827-ship-checks-the-ambient-checkout.md
+trigger: >-
+  A cross-branch semantic break that per-branch verdicts passed and the union did not.
+depends_on: []
+blocks: []
+---
+
 # Idea: Do Per-Branch Verdicts Compose Across a Parallel Batch?
 
 - **Status:** Parked (2026-08-27). Undecided by any accepted ADR, and it

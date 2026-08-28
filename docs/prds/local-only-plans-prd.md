@@ -273,7 +273,7 @@ toggle spans 13 files: 4 source, 9 test).
   `worktree.py:76` without forwarding its `base_branch`, so the emptiness
   predicate is evaluated against `origin/main` under a non-trunk integration
   branch.
-- **`docs/ideas/` and `docs/bugs/`** — resolved: out of scope, no change.
+- **`content/backlog/` and `docs/bugs/`** — resolved: out of scope, no change.
   `copy_untracked_files`' six-directory mirror is untouched by this PRD, per
   the Non-Goals. The omission is pre-existing and stays as it is.
 

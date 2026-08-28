@@ -1,3 +1,14 @@
+---
+type: idea
+status: parked
+recorded: 2026-08-21
+source: docs/prds/cli-discovery-cost-prd.md
+trigger: >-
+  Measured token cost of box-drawing output, or the next change to CLI rendering.
+depends_on: []
+blocks: []
+---
+
 # Idea: Plain-Text Rendering for All Non-TTY Output
 
 - **Status:** Parked (2026-08-21). Deferred from `docs/prds/cli-discovery-cost-prd.md` Non-Goals.

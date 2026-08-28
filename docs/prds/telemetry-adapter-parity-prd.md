@@ -45,10 +45,10 @@ embedded defect remediation** and planned as one sequence.
 - Adding support for agent CLIs beyond `kimi` and `claude`. The dispatch seam makes a third
   reader cheap; this PRD does not write one.
 - Harvesting non-test telemetry from session logs (per-tool call/second aggregates, turn and
-  step counts). That remains the parked `docs/ideas/cfg-01-session-efficiency.md` idea; this PRD
+  step counts). That remains the parked `content/backlog/cfg-01-session-efficiency.md` idea; this PRD
   only builds the seam it would use.
 - Changing validation **behaviour**. No freshness suppression, no stage-based skipping, no
-  change to what gets run or when. `docs/ideas/deterministic-qa-freshness-suppression.md`
+  change to what gets run or when. `content/backlog/deterministic-qa-freshness-suppression.md`
   (`vre-04`) stays deferred; this PRD is a precondition for evaluating it, not a substitute.
 - Backfilling or reconciling the ~425 historical `test_run` records already on disk. Records
   written before this change carry no `source` field and are read as provenance-unknown.

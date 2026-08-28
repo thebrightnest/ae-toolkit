@@ -1,3 +1,15 @@
+---
+type: idea
+status: proposed
+recorded: 2026-08-28
+source: docs/retros/2026-08-28-aet-run-retro.md
+trigger: >-
+  Ready to plan; nothing blocks it.
+depends_on: 
+  - debt-rehearsal-cannot-observe-posture
+blocks: []
+---
+
 # Idea: Assert Runaway Containment at the Outcome, Not per Mechanism
 
 - **Status:** Proposed (2026-08-28). Not blocked by any decision; blocked only on

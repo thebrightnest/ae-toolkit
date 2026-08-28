@@ -235,11 +235,13 @@ The `docs/` directory has strict boundaries for planning documents. Only atomic,
 | `docs/prds/`          | Product Requirements Documents                                                 | No                                                        |
 | `docs/roadmaps/`      | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
 | `docs/audits/`        | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
+| `content/backlog/`    | Known-but-unstarted items: accepted debt, undecided ideas, multi-phase roadmaps. One file per item, indexed by `content/backlog/README.md` | No                                                        |
 
 Rules:
 
 - A document in `docs/plans/` that references other plan files or contains multiple "Phase" sections is non-atomic and must be moved to `docs/roadmaps/` or `docs/audits/`.
 - The task-list-length check is no longer an intake filter; plan size is measured after implementation, not gated before it (see ADR-046). A plan that is genuinely non-atomic belongs in `docs/roadmaps/` or `docs/audits/` by the ADR-006 atomicity boundary, not because a proxy count rejected it.
+- An item that is known but not started — accepted debt, an idea nobody has decided on, a roadmap whose tracks are unplanned — belongs in `content/backlog/`, one file per item with a `trigger` in its frontmatter. It leaves that folder by becoming a PRD or by being deleted. `docs/roadmaps/` remains the ADR-006 destination for non-atomic planning _output_; the two are not the same thing.
 - Directory creation is the user's responsibility; skills document the convention but do not auto-create directories.
 
 ## Plan Frontmatter Contract
