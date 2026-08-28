@@ -505,6 +505,22 @@ Runs the AE Toolkit quality checks:
 
 If the `pre-commit` framework is not installed, the hook falls back to `make lint`.
 
+## Retired Document Paths
+
+`docs/bugs/`, `docs/retros/`, `docs/audits/`, `docs/product-briefs/` and
+`reports/` were removed on 2026-08-28, along with the root-level
+`aet-toolkit-defects.md`. Every document in them was triaged first; what survived
+is recorded as backlog items, and the documents themselves remain in git history.
+
+Citations to those paths written before that date are historical provenance and
+resolve in history rather than in a checkout. They are correct as records of what
+motivated a decision and are not to be rewritten: an ADR is immutable once
+accepted, and a stale path in a Status line is a weaker defect than an edited
+decision record. Roughly eighty such citations exist, the ADR corpus included.
+
+`~/.aet/reports/` is unrelated and live: it is the per-machine verdict archive
+(`evidence.DEFAULT_REPORTS_DIR`), not the removed `reports/` directory.
+
 ## Cross-Project Feedback Channel
 
 Projects that use the AE Toolkit may produce retros with findings relevant to the toolkit itself. These are surfaced through a defined `reports/` convention.

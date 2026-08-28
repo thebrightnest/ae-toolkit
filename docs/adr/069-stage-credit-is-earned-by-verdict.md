@@ -23,8 +23,10 @@ The retry is then prompted with a stage that contradicts the worktree. On
 2026-08-27 an implement commit — 22 files, +1389/−222 — was already on the
 branch when 21 subsequent attempts were each told `Current stage: plan-approved.
 Target stage: implemented`, and each re-ran `aet-tdd → aet-implement` over
-finished work. The same symptom, reached by two other mechanisms, was measured at
-roughly $24 on 2026-08-12 (`aet-toolkit-defects.md` D2 and D3).
+finished work. The same symptom, reached by two other mechanisms — a plan overlay
+that regressed an advanced worktree plan to the workflow entry stage, and a
+`_record_stage` that no-opped under the `git-refs` backend — was measured at
+roughly $24 on 2026-08-12.
 
 The tempting remedy is to credit a stage from the commits it left behind, which
 is what the operator did by hand to recover the task. ADR-011 forbids that
