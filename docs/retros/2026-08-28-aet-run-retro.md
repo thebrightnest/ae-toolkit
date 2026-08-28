@@ -151,6 +151,24 @@ downstream, which then reported no findings for a $24 loop.
 | Derive `repeated_loops` from `stage` records | `docs/bugs/20260828-mine-learnings-cannot-see-a-requeue-loop.md` | ✅ fixed — counted per `(run, task, stage)` |
 | Have the ship gate read the verdict the stage writes | `docs/bugs/20260828-verify-evidence-has-three-contracts.md` | ✅ filed |
 
+## Filed, Not Yet Done
+
+Everything this retro surfaced and did not fix has a home, so it is findable
+without reading the session that produced it:
+
+| Item | Filed as |
+| --- | --- |
+| Assert containment at the outcome, not per mechanism — the one test that would have caught all four inert stops at once | `docs/ideas/outcome-level-containment-testing.md` |
+| Gate evidence does not travel with the task, which is why ADR-070 bounded its own fix | `docs/ideas/evidence-portability.md` |
+| Concurrent task-ref writes lose a compare-and-swap under `--dist=loadgroup` — a tolerated red that hid a real one on 2026-08-28 | `docs/bugs/20260828-loadgroup-flake-on-concurrent-task-refs.md` |
+| A forced `refs/aet/*` fetch discards local state with no diagnostic | `docs/TECHNICAL_DEBT.md` |
+| The end-to-end rehearsal cannot observe posture-dependent defects | `docs/TECHNICAL_DEBT.md` |
+| The orchestrator writes task records directly instead of through `aet state` | `docs/TECHNICAL_DEBT.md` |
+| `aet-toolkit-defects.md` describes a 1.8.0 tree | `docs/TECHNICAL_DEBT.md` |
+| Release the toolkit: none of these fixes reach a consuming project until its install moves past 1.11.0 | this table, until `aet-release-prep` runs |
+
+## Outcome
+
 All six items are closed in this repository, three of them under new ADRs. A run
 that meets a provider limit now stops on the first attempt and names the reset; a
 task that keeps failing for its own reasons quarantines at three; a group that
