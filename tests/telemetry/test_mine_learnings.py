@@ -200,6 +200,67 @@ class TestStageAnomalyDetection(unittest.TestCase):
         self.assertEqual(patterns["token_burn"], 0)
 
 
+class TestRepeatedLoops(unittest.TestCase):
+    """A requeue loop is counted from stage records, not from prose."""
+
+    def test_repeated_failures_of_one_stage_count_as_a_loop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            _write_run(
+                archive,
+                "myrepo/main",
+                _today(),
+                "run-1",
+                [
+                    {"type": "stage", "task_id": "t1", "stage": "qa", "exit_code": 1},
+                    {"type": "stage", "task_id": "t1", "stage": "qa", "exit_code": 1},
+                    {"type": "stage", "task_id": "t1", "stage": "qa", "exit_code": 1},
+                ],
+            )
+            patterns = mine_learnings.mine_archive(archive)
+
+        # Three failures of one stage are two repeats, the same derivation the
+        # repeated-test-invocation count uses. No report was written, which is
+        # the condition under which this signal used to read zero.
+        self.assertEqual(patterns["repeated_loops"], 2)
+        self.assertEqual(patterns["reports_scanned"], 0)
+
+    def test_distinct_stages_and_tasks_are_not_a_loop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            _write_run(
+                archive,
+                "myrepo/main",
+                _today(),
+                "run-1",
+                [
+                    {"type": "stage", "task_id": "t1", "stage": "qa", "exit_code": 1},
+                    {"type": "stage", "task_id": "t1", "stage": "review", "exit_code": 1},
+                    {"type": "stage", "task_id": "t2", "stage": "qa", "exit_code": 1},
+                ],
+            )
+            patterns = mine_learnings.mine_archive(archive)
+
+        self.assertEqual(patterns["repeated_loops"], 0)
+        self.assertEqual(patterns["stage_failures"], 3)
+
+    def test_one_stage_failing_in_two_runs_is_not_one_loop(self):
+        """Each run is its own attempt sequence; a retry next run is not a loop."""
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            for run_id in ("run-1", "run-2"):
+                _write_run(
+                    archive,
+                    "myrepo/main",
+                    _today(),
+                    run_id,
+                    [{"type": "stage", "task_id": "t1", "stage": "qa", "exit_code": 1}],
+                )
+            patterns = mine_learnings.mine_archive(archive)
+
+        self.assertEqual(patterns["repeated_loops"], 0)
+
+
 class TestRetiredNarrativeKeyword(unittest.TestCase):
     """The stale 'full_suite_runs' keyword list is no longer used."""
 

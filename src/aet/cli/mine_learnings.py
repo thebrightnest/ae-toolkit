@@ -202,6 +202,12 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
     runs_scanned = 0
     reports_scanned = 0
     task_full_suite_counts: Counter = Counter()
+    # A loop is the same (task, stage) failing again inside one run. Counted
+    # from the stage records the walk already reads, because the narrative
+    # bucket below only sees loops a human wrote a report about — and the most
+    # expensive loop on record produced no report at all
+    # (docs/bugs/20260828-mine-learnings-cannot-see-a-requeue-loop.md).
+    stage_failure_counts: Counter = Counter()
 
     for project_dir in sorted(archive_dir.glob("*")):
         if not project_dir.is_dir():
@@ -228,6 +234,13 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
                             elif rtype == "stage":
                                 if record.get("exit_code", 0) != 0:
                                     counts["stage_failures"] += 1
+                                    stage_failure_counts[
+                                        (
+                                            str(run_dir),
+                                            record.get("task_id", "unknown"),
+                                            record.get("stage", ""),
+                                        )
+                                    ] += 1
                                 if record.get("stage") == "review":
                                     counts["review_noise"] += 1
                                 duration_seconds = record.get("duration_seconds")
@@ -269,10 +282,13 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
                             examples[category].extend(bucket.examples)
 
     repeated_test_invocations = sum(max(0, count - 1) for count in task_full_suite_counts.values())
+    repeated_stage_failures = sum(max(0, count - 1) for count in stage_failure_counts.values())
 
     return {
         "dependency_issues": counts.get("dependency_issues", 0),
-        "repeated_loops": counts.get("repeated_loops", 0),
+        # Structured signal plus whatever the narrative scan found; the two
+        # sources describe the same pattern from different evidence.
+        "repeated_loops": counts.get("repeated_loops", 0) + repeated_stage_failures,
         "full_suite_runs": counts.get("full_suite_runs", 0),
         "impact_runs": counts.get("impact_runs", 0),
         "repeated_test_invocations": repeated_test_invocations,
