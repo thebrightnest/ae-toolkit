@@ -1,11 +1,9 @@
 ---
-id: feat-002
+id: feat-003
 size: S
-blocked_by:
-  - blocker-001
 ---
 
-# feat-002
+# feat-003
 
 ## Context
 PRD: docs/prds/default.md
