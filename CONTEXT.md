@@ -191,6 +191,14 @@ _Avoid_: treating it as a duration limit — a session with active descendants o
 **Wall Backstop**:
 The coarse wall-clock ceiling (`--task-timeout`), retained as a last-resort ceiling even when hybrid liveness reports activity. Defaults to 7200 s and remains overridable.
 
+**Run Liveness**:
+Whether a _recorded run_ is still executing — a different question from **Stall Timeout**'s hybrid session liveness, which asks whether a running agent session is doing work. Run liveness is answered from evidence: a recorded `returncode` settles it, and otherwise the run's recorded `pid` must be held by a process whose own start time is not later than the run's recorded `started`. A PID number alone is not the answer, because PIDs are recycled — on 2026-08-29 `aet status` reported two unrelated desktop processes as active runs. Consumed by the active-run listing, the `--follow` wait, and the reclaimability of the **Run Lease**. (ADR-072)
+_Avoid_: calling `os.kill(pid, 0)` a liveness check; conflating it with the stall watchdog's session liveness, which shares the module but not the definition.
+
+**Proxy**:
+A signal that correlates with a fact and is cheaper to read than evidence of it — a branch existing, a PID being held, the ambient checkout, a field's type, a count of zero. ADR-072 states that a decision depending on a fact reads evidence of that fact, not a proxy for it, and that a change reading a proxy where evidence is reachable is refusable at review. Where a proxy is unavoidable, the call site says so and names the divergence it accepts.
+_Avoid_: reading a proxy's confident answer as an evidenced one; demonstrating conformance with a test that constructs proxy and fact together, which cannot show them diverging.
+
 **History**:
 Append-only log of transition entries and closure events written to the optional, gitignored `.agents/work-history.jsonl`. It is used for reporting, not for scheduling or closure determination.
 
