@@ -1,9 +1,9 @@
 ---
-id: feat-001
+id: feat-clean
 size: S
 ---
 
-# feat-001
+# feat-clean
 
 ## Context
 PRD: docs/prds/default.md
@@ -15,8 +15,4 @@ PRD: docs/prds/default.md
 - `src/widget.py` (new)
 
 ## Validation Steps
-- [ ] test_widget_creation verifies widget.py
-
----
-
-*Stage: plan-approved*
+- [ ] test_widget verifies widget.py
