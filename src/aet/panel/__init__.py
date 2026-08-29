@@ -1,1 +1,0 @@
-"""AET telemetry panel package."""
