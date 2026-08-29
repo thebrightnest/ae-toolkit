@@ -14,5 +14,5 @@ PRD: docs/prds/default-prd.md
 
 ---
 
-_Stage: implemented_
+_Stage: plan-approved_
 _Next step: run `aet-work`_
