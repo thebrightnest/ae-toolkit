@@ -1,9 +1,9 @@
 ---
-id: feat-004
+id: feat-005
 size: M
 ---
 
-# Plan: feat-004.md
+# Plan: feat-005.md
 
 ## Context
 
