@@ -1,9 +1,9 @@
 ---
-id: feat-001
+id: feat-002
 size: M
 ---
 
-# Plan: feat-001.md
+# Plan: feat-002.md
 
 ## Context
 PRD: docs/prds/default-prd.md
@@ -14,5 +14,5 @@ PRD: docs/prds/default-prd.md
 
 ---
 
-_Stage: implemented_
+_Stage: plan-approved_
 _Next step: run `aet-work`_
