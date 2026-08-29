@@ -32,13 +32,14 @@ A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet sh
 
 ## Pre-Merge Gate
 
-`aet ship gate` (and pre-merge commands including `aet ship open` and `aet ship merge`) runs the gate verification checks:
-1. Rebase verification against trunk.
-2. Clean working tree check.
-3. Test suite execution (`AET_SHIP_TEST_CMD`, defaulting to `make validate`).
-4. Optional coverage check (`AET_SHIP_COVERAGE_CMD`).
-5. **Evidence resolution**: Resolves required evidence from the workflow definition via `gate.required_evidence`, then checks each required kind's verdict via `gate.check_task_evidence` — the same derivation the in-run stage gates use (ADR-070). A verdict that is missing, unreadable, or not `pass` pauses the gate, and the refusal names the kind, the producing stage, and the reason. Verify evidence for a `critical` task is the `verify` verdict written by `aet-verify`; no working-tree file is read.
-6. Scope audit against declared files in the plan spec.
+`aet ship gate` (and pre-merge commands including `aet ship open` and `aet ship merge`) runs against the task's resolved feature branch and dedicated workspace, independent of the ambient checkout:
+1. **Workspace and branch resolution**: Resolves the feature branch from the task record, locating its existing worktree or allocating a dedicated temporary worktree.
+2. Rebase verification of the resolved feature branch against trunk.
+3. Clean working tree check in the resolved workspace.
+4. Test suite execution (`AET_SHIP_TEST_CMD`, defaulting to `make validate`) inside the resolved workspace, explicitly reporting the validated branch.
+5. Optional coverage check (`AET_SHIP_COVERAGE_CMD`).
+6. **Evidence resolution**: Resolves required evidence from the workflow definition via `gate.required_evidence`, then checks each required kind's verdict via `gate.check_task_evidence` — the same derivation the in-run stage gates use (ADR-070). A verdict that is missing, unreadable, or not `pass` pauses the gate, and the refusal names the kind, the producing stage, and the reason. Verify evidence for a `critical` task is the `verify` verdict written by `aet-verify`; no working-tree file is read.
+7. Scope audit and commit count checks against the resolved feature branch and declared files in the plan spec.
 
 ## Integration Modes
 

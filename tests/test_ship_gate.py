@@ -81,6 +81,34 @@ def _subprocess_mock(responses, record=None):
         args = tuple(cmd)
         if args in responses:
             return responses[args]
+        # Strip optional -C <path> for matching if not found directly
+        if len(args) >= 3 and args[0] == "git" and args[1] == "-C":
+            stripped = ("git", *args[3:])
+            if stripped in responses:
+                return responses[stripped]
+            # Match diff origin/main..branch -> diff origin/main
+            if len(stripped) >= 3 and stripped[1] == "diff" and ".." in stripped[2]:
+                base_diff = ("git", "diff", stripped[2].split("..")[0], *stripped[3:])
+                if base_diff in responses:
+                    return responses[base_diff]
+            # Match merge-base branch trunk -> merge-base HEAD trunk
+            if len(stripped) >= 4 and stripped[1] == "merge-base":
+                mb = ("git", "merge-base", "HEAD", stripped[3])
+                if mb in responses:
+                    return responses[mb]
+            # Match log ..branch -> log ..HEAD
+            if len(stripped) >= 3 and stripped[1] == "log" and ".." in stripped[2]:
+                base_log = ("git", "log", f"{stripped[2].split('..')[0]}..HEAD", *stripped[3:])
+                if base_log in responses:
+                    return responses[base_log]
+        elif len(args) >= 4 and args[0] == "git" and args[1] == "merge-base":
+            mb = ("git", "merge-base", "HEAD", args[3])
+            if mb in responses:
+                return responses[mb]
+        elif len(args) >= 3 and args[0] == "git" and args[1] == "diff" and ".." in args[2]:
+            base_diff = ("git", "diff", args[2].split("..")[0], *args[3:])
+            if base_diff in responses:
+                return responses[base_diff]
         # Shell command lookup: match the -c payload.
         if len(args) >= 3 and args[1] == "-c":
             for key, value in responses.items():
@@ -177,11 +205,20 @@ class TestShipGateChecks(unittest.TestCase):
         return {
             ("git", "rev-parse", "--show-toplevel"): (0, f"{self.repo}\n", ""),
             ("git", "fetch", "origin"): (0, "", ""),
+            ("git", "rev-parse", "--verify", "--quiet", branch): (0, "", ""),
+            ("git", "rev-parse", "--verify", "--quiet", f"origin/{branch}"): (0, "", ""),
+            ("git", "rev-parse", "--verify", "--quiet", "t1"): (0, "", ""),
+            ("git", "rev-parse", "--verify", "--quiet", "origin/t1"): (0, "", ""),
+            ("git", "worktree", "list", "--porcelain"): (0, f"worktree {self.repo}\nbranch refs/heads/{branch}\n", ""),
             ("git", "merge-base", "HEAD", "origin/main"): (0, f"{origin_main}\n", ""),
+            ("git", "merge-base", branch, "origin/main"): (0, f"{origin_main}\n", ""),
             ("git", "rev-parse", "origin/main"): (0, f"{origin_main}\n", ""),
             ("git", "branch", "--show-current"): (0, f"{branch}\n", ""),
             ("git", "status", "--short"): (0, "", ""),
             ("git", "diff", "origin/main", "--name-only"): (0, "src/aet/cli/ship.py\n", ""),
+            ("git", "diff", f"origin/main..{branch}", "--name-only"): (0, "src/aet/cli/ship.py\n", ""),
+            ("git", "rev-list", "--count", f"origin/main..{branch}"): (0, "1\n", ""),
+            ("git", "log", f"origin/main..{branch}", "--pretty=format:%s"): (0, "feat: thing\n", ""),
             ("true",): (0, "", ""),
         }
 

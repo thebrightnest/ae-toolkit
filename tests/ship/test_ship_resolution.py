@@ -32,7 +32,7 @@ class MockResult:
         self.stderr = stderr
 
 
-def _subprocess_mock(responses, record=None):
+def _subprocess_mock(responses, record=None, branch="feat-001"):
     """Return a mock subprocess.run that answers named commands.
 
     Unknown commands are delegated to the real subprocess so the git-refs backend
@@ -40,12 +40,52 @@ def _subprocess_mock(responses, record=None):
     """
     real_run = subprocess.run
 
+    def _lookup(cmd):
+        if isinstance(cmd, str):
+            if cmd in responses:
+                return responses[cmd]
+            return None
+        args = list(cmd)
+        if len(args) >= 3 and args[0] == "git" and args[1] == "-C":
+            args = ["git"] + args[3:]
+        t_args = tuple(args)
+        if t_args in responses:
+            return responses[t_args]
+
+        for key in responses:
+            if not isinstance(key, tuple):
+                continue
+            if len(key) == len(args):
+                match = True
+                for a, k in zip(args, key):
+                    if a == k:
+                        continue
+                    if ".." in a and ".." in k and a.split("..")[0] == k.split("..")[0]:
+                        continue
+                    branch_aliases = ("HEAD", branch, f"origin/{branch}", "t1", "origin/t1")
+                    if a in branch_aliases and k in branch_aliases:
+                        continue
+                    match = False
+                    break
+                if match:
+                    return responses[key]
+            if len(args) == len(key) and len(args) >= 3 and args[1] == "diff" and ".." in args[2]:
+                normalized = [args[0], args[1], args[2].split("..")[0]] + args[3:]
+                if tuple(normalized) == key:
+                    return responses[key]
+
+        if len(args) >= 3 and args[1] == "-c":
+            for key, value in responses.items():
+                if isinstance(key, tuple) and len(key) >= 3 and key[1] == "-c" and key[2] == args[2]:
+                    return value
+        return None
+
     def mock_run(cmd, **kwargs):
         if record is not None:
             record.append(cmd if isinstance(cmd, str) else tuple(cmd))
-        args = tuple(cmd)
-        if args in responses:
-            rc, out, err = responses[args]
+        hit = _lookup(cmd)
+        if hit is not None:
+            rc, out, err = hit
             return MockResult(rc, out, err)
         return real_run(cmd, **kwargs)
 
@@ -117,14 +157,19 @@ class TestShipResolution(unittest.TestCase):
         else:
             backend.save([task])
 
-    def _gate_success_responses(self):
+    def _gate_success_responses(self, branch="feat-001"):
         origin_main = "origin-main-sha"
         return {
             ("git", "fetch", "origin"): (0, "", ""),
             ("git", "rev-parse", "--show-toplevel"): (0, f"{self.repo}\n", ""),
+            ("git", "rev-parse", "--verify", "--quiet", branch): (0, "", ""),
+            ("git", "rev-parse", "--verify", "--quiet", f"origin/{branch}"): (0, "", ""),
+            ("git", "rev-parse", "--verify", "--quiet", "t1"): (0, "", ""),
+            ("git", "rev-parse", "--verify", "--quiet", "origin/t1"): (0, "", ""),
+            ("git", "worktree", "list", "--porcelain"): (0, f"worktree {self.repo}\nbranch refs/heads/{branch}\n", ""),
             ("git", "merge-base", "HEAD", "origin/main"): (0, f"{origin_main}\n", ""),
             ("git", "rev-parse", "origin/main"): (0, f"{origin_main}\n", ""),
-            ("git", "branch", "--show-current"): (0, "feat-001\n", ""),
+            ("git", "branch", "--show-current"): (0, f"{branch}\n", ""),
             ("git", "status", "--short"): (0, "", ""),
             ("git", "diff", "origin/main", "--name-only"): (0, "src/thing.py\n", ""),
             ("true",): (0, "", ""),

@@ -99,7 +99,7 @@ class GateResult:
         self.stack = stack
 
 
-def _resolve_feature_branch(task_id: str) -> Optional[str]:
+def _resolve_feature_branch(task_id: str, queue: str = ".agents/aet-queue") -> Optional[str]:
     """Resolve a task's feature branch by name.
 
     The orchestrator names each task's branch after its task id (it sets
@@ -109,7 +109,17 @@ def _resolve_feature_branch(task_id: str) -> Optional[str]:
     ``None`` when neither exists so callers fail closed instead of merging a
     branch into itself and recording a merge that never happened.
     """
-    for ref in (task_id, f"origin/{task_id}"):
+    candidates: list[str] = []
+    task_branch = _resolve_task_branch(task_id, queue)
+    if task_branch:
+        candidates.extend([task_branch, f"origin/{task_branch}"])
+    candidates.extend([task_id, f"origin/{task_id}"])
+
+    seen: set[str] = set()
+    for ref in candidates:
+        if ref in seen:
+            continue
+        seen.add(ref)
         if _run_git("rev-parse", "--verify", "--quiet", ref, check=False).returncode == 0:
             return ref
     return None
@@ -413,21 +423,28 @@ def _resolve_trunk_ref() -> str:
     return f"origin/{trunk.ref}"
 
 
-def _determine_pr_base() -> StackInfo:
+def _determine_pr_base(feature_branch: Optional[str] = None) -> StackInfo:
     """Resolve the PR base ref and stack position.
 
     Returns a :class:`StackInfo` where ``base_ref`` is the trunk for independent
     branches or the nearest named ancestor for stacked branches.
     """
     trunk_ref = _resolve_trunk_ref()
-    merge_base = _run_git("merge-base", "HEAD", trunk_ref).stdout.strip()
+    target_ref = feature_branch or "HEAD"
+    base_res = _run_git("merge-base", target_ref, trunk_ref, check=False)
+    if base_res.returncode != 0:
+        return StackInfo(trunk_ref=trunk_ref, base_ref=trunk_ref, parent=None, position=None)
+    merge_base = base_res.stdout.strip()
     trunk_sha = _run_git("rev-parse", trunk_ref).stdout.strip()
     if merge_base == trunk_sha:
         return StackInfo(trunk_ref=trunk_ref, base_ref=trunk_ref, parent=None, position=None)
 
-    log = _run_git("log", "--oneline", "--decorate", "--ancestry-path", f"{merge_base}..HEAD").stdout
+    log = _run_git(
+        "log", "--oneline", "--decorate", "--ancestry-path", f"{merge_base}..{target_ref}", check=False
+    ).stdout
     parent: Optional[str] = None
     ancestor_count = 0
+    local_target = target_ref.removeprefix("origin/")
     for line in log.splitlines():
         match = re.match(r"^[0-9a-f]+ \((.*?)\) ", line)
         if not match:
@@ -439,6 +456,8 @@ def _determine_pr_base() -> StackInfo:
                 continue  # current branch — the one being shipped, never its own parent
             r = r.strip()
             if r in ("HEAD",) or r.startswith("origin/") or r.startswith("tag:"):
+                continue
+            if r == local_target or r == target_ref:
                 continue
             local_refs.append(r)
         if local_refs:
@@ -453,22 +472,32 @@ def _determine_pr_base() -> StackInfo:
     return StackInfo(trunk_ref=trunk_ref, base_ref=parent, parent=parent, position=position)
 
 
-def _rebase_independent_branch(stack: StackInfo, dry_run: bool) -> tuple[bool, str, bool]:
+def _rebase_independent_branch(
+    stack: StackInfo,
+    dry_run: bool,
+    feature_branch: Optional[str] = None,
+    workspace: Optional[Path] = None,
+) -> tuple[bool, str, bool]:
     """Rebase independent branches onto the trunk; return (ok, message, rebased)."""
     if stack.base_ref != stack.trunk_ref:
         return True, "Stacked branch; keeping parent base.", False
-    merge_base = _run_git("merge-base", "HEAD", stack.trunk_ref).stdout.strip()
-    trunk_sha = _run_git("rev-parse", stack.trunk_ref).stdout.strip()
+    target_ref = feature_branch or "HEAD"
+    git_args = ["-C", str(workspace)] if workspace else []
+    merge_base_res = _run_git(*git_args, "merge-base", target_ref, stack.trunk_ref, check=False)
+    if merge_base_res.returncode != 0:
+        return False, f"⛔ Could not determine merge base between {target_ref} and {stack.trunk_ref}.", False
+    merge_base = merge_base_res.stdout.strip()
+    trunk_sha = _run_git(*git_args, "rev-parse", stack.trunk_ref).stdout.strip()
     if merge_base == trunk_sha:
         return True, f"Already based on {stack.trunk_ref}.", False
-    branch = _run_git("branch", "--show-current").stdout.strip()
+    branch = feature_branch or _run_git(*git_args, "branch", "--show-current").stdout.strip()
     if dry_run:
         return (
             True,
             f"Would rebase --onto {stack.trunk_ref} {merge_base} {branch}",
             False,
         )
-    result = _run_git("rebase", "--onto", stack.trunk_ref, merge_base, branch, check=False)
+    result = _run_git(*git_args, "rebase", "--onto", stack.trunk_ref, merge_base, branch, check=False)
     if result.returncode != 0:
         return (
             False,
@@ -481,110 +510,175 @@ def _rebase_independent_branch(stack: StackInfo, dry_run: bool) -> tuple[bool, s
     return True, f"Rebased onto {stack.trunk_ref}.", True
 
 
-def _is_working_tree_clean() -> bool:
-    result = _run_git("status", "--short", check=False)
+def _is_working_tree_clean(workspace: Optional[Path] = None) -> bool:
+    git_args = ["-C", str(workspace)] if workspace else []
+    result = _run_git(*git_args, "status", "--short", check=False)
     return result.returncode == 0 and not result.stdout.strip()
+
+
+def _create_gate_worktree(branch: str) -> Path:
+    """Create a temporary worktree for *branch* and return its path."""
+    repo_root = Path(_run_git("rev-parse", "--show-toplevel").stdout.strip())
+    sanitized = branch.replace("/", "-")
+    worktree_dir = repo_root / ".worktrees" / f".gate-{sanitized}-{os.getpid()}"
+    worktree_dir.parent.mkdir(parents=True, exist_ok=True)
+    result = _run_git(
+        "worktree",
+        "add",
+        "--checkout",
+        str(worktree_dir),
+        branch,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Could not create worktree for {branch}: {result.stderr.strip()}")
+    return worktree_dir
 
 
 def _run_gate(args: argparse.Namespace) -> GateResult:
     """Execute gate checks and return a structured result for reuse."""
     spec = args.spec
+    task_id = getattr(args, "task_id", getattr(args, "plan", None))
+    feature_branch = _resolve_feature_branch(task_id) if task_id else None
 
-    _fetch_origin()
-    trunk_ref = _resolve_trunk_ref()
-    if args.base:
-        stack = StackInfo(trunk_ref=trunk_ref, base_ref=args.base, parent=None, position=None)
-        pr_base = args.base
-    else:
-        stack = _determine_pr_base()
-        pr_base = stack.base_ref
-
-    ok, message, rebased = _rebase_independent_branch(stack, args.dry_run)
-    if not ok:
+    if not feature_branch:
         return GateResult(
             ok=False,
-            pr_base=pr_base,
+            pr_base=getattr(args, "base", "") or "",
             rebased=False,
             scope_audit=[],
             dry_run=args.dry_run,
-            message=message,
-            stack=stack,
+            message=(
+                f"Cannot resolve a feature branch for task {task_id!r}: "
+                f"neither {task_id!r} nor origin/{task_id} exists."
+                if task_id
+                else "Cannot resolve a feature branch for gate validation."
+            ),
+            stack=None,
         )
 
-    if not _is_working_tree_clean():
-        return GateResult(
-            ok=False,
-            pr_base=pr_base,
-            rebased=rebased,
-            scope_audit=[],
-            dry_run=args.dry_run,
-            message="Working tree is dirty. Stash, commit, or abort before shipping.",
-            stack=stack,
+    workspace = _find_target_worktree(feature_branch)
+    created_temp_worktree = False
+    if workspace is None:
+        try:
+            workspace = _create_gate_worktree(feature_branch)
+            created_temp_worktree = True
+        except RuntimeError as exc:
+            return GateResult(
+                ok=False,
+                pr_base=getattr(args, "base", "") or "",
+                rebased=False,
+                scope_audit=[],
+                dry_run=args.dry_run,
+                message=f"Cannot resolve a workspace for branch {feature_branch!r}: {exc}",
+                stack=None,
+            )
+
+    try:
+        _fetch_origin()
+        trunk_ref = _resolve_trunk_ref()
+        if args.base:
+            stack = StackInfo(trunk_ref=trunk_ref, base_ref=args.base, parent=None, position=None)
+            pr_base = args.base
+        else:
+            stack = _determine_pr_base(feature_branch=feature_branch)
+            pr_base = stack.base_ref
+
+        ok, message, rebased = _rebase_independent_branch(
+            stack, args.dry_run, feature_branch=feature_branch, workspace=workspace
         )
+        if not ok:
+            return GateResult(
+                ok=False,
+                pr_base=pr_base,
+                rebased=False,
+                scope_audit=[],
+                dry_run=args.dry_run,
+                message=message,
+                stack=stack,
+            )
 
-    test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
-    test_result = subprocess.run(shlex.split(test_cmd), capture_output=True, text=True)
-    if test_result.returncode != 0:
-        return GateResult(
-            ok=False,
-            pr_base=pr_base,
-            rebased=rebased,
-            scope_audit=[],
-            dry_run=args.dry_run,
-            message=f"Test suite failed:\n{test_result.stdout}\n{test_result.stderr}",
-            stack=stack,
-        )
-
-    coverage_cmd = os.environ.get("AET_SHIP_COVERAGE_CMD")
-    if coverage_cmd:
-        subprocess.run(shlex.split(coverage_cmd), capture_output=True, text=True)
-
-    repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
-    plan_fm = spec.get("frontmatter", {}) if isinstance(spec, dict) else {}
-    # The verdict is the evidence (ADR-070). The previous check read a
-    # working-tree markdown file that no producer wrote, so this gate could only
-    # be satisfied out of band
-    # (docs/bugs/20260828-verify-evidence-has-three-contracts.md).
-    #
-    # Only `verify` is checked here. The other kinds are enforced in-run by
-    # their own stage gates, at the moment they are written; re-checking them at
-    # ship would make merging depend on a per-machine reports archive that is
-    # not part of the repository. `verify` is checked because a critical task can
-    # reach `awaiting_merge` without having walked the stage that produces it,
-    # and this is the last gate before trunk.
-    req_evidence = gate.required_evidence(repo_root, plan_fm)
-    verify_stages = [
-        stage_name for stage_name, evidence_kind in req_evidence if evidence_kind == "verify"
-    ]
-    if verify_stages:
-        passed, detail = gate.verdict_status(args.task_id, "verify", repo_root)
-        if not passed:
+        if not _is_working_tree_clean(workspace=workspace):
             return GateResult(
                 ok=False,
                 pr_base=pr_base,
                 rebased=rebased,
                 scope_audit=[],
                 dry_run=args.dry_run,
-                message=(
-                    "⛔ Pipeline paused at aet-ship.\n"
-                    f"Workflow stage '{verify_stages[0]}' requires a passing "
-                    f"verify verdict — {detail}.\n"
-                    "aet-verify writes it: `aet gate submit --stage verify "
-                    "--verdict pass --summary <one-line>`."
-                ),
+                message="Working tree is dirty. Stash, commit, or abort before shipping.",
                 stack=stack,
             )
 
-    flagged = _scope_audit(spec, pr_base)
-    return GateResult(
-        ok=True,
-        pr_base=pr_base,
-        rebased=rebased,
-        scope_audit=flagged,
-        dry_run=args.dry_run,
-        message="Pre-merge gate passed.",
-        stack=stack,
-    )
+        test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
+        test_result = subprocess.run(
+            shlex.split(test_cmd), cwd=str(workspace), capture_output=True, text=True
+        )
+        if test_result.returncode != 0:
+            return GateResult(
+                ok=False,
+                pr_base=pr_base,
+                rebased=rebased,
+                scope_audit=[],
+                dry_run=args.dry_run,
+                message=f"Test suite failed:\n{test_result.stdout}\n{test_result.stderr}",
+                stack=stack,
+            )
+
+        coverage_cmd = os.environ.get("AET_SHIP_COVERAGE_CMD")
+        if coverage_cmd:
+            subprocess.run(
+                shlex.split(coverage_cmd), cwd=str(workspace), capture_output=True, text=True
+            )
+
+        repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
+        plan_fm = spec.get("frontmatter", {}) if isinstance(spec, dict) else {}
+        # The verdict is the evidence (ADR-070). The previous check read a
+        # working-tree markdown file that no producer wrote, so this gate could only
+        # be satisfied out of band
+        # (docs/bugs/20260828-verify-evidence-has-three-contracts.md).
+        #
+        # Only `verify` is checked here. The other kinds are enforced in-run by
+        # their own stage gates, at the moment they are written; re-checking them at
+        # ship would make merging depend on a per-machine reports archive that is
+        # not part of the repository. `verify` is checked because a critical task can
+        # reach `awaiting_merge` without having walked the stage that produces it,
+        # and this is the last gate before trunk.
+        req_evidence = gate.required_evidence(repo_root, plan_fm)
+        verify_stages = [
+            stage_name for stage_name, evidence_kind in req_evidence if evidence_kind == "verify"
+        ]
+        if verify_stages:
+            passed, detail = gate.verdict_status(args.task_id, "verify", repo_root)
+            if not passed:
+                return GateResult(
+                    ok=False,
+                    pr_base=pr_base,
+                    rebased=rebased,
+                    scope_audit=[],
+                    dry_run=args.dry_run,
+                    message=(
+                        "⛔ Pipeline paused at aet-ship.\n"
+                        f"Workflow stage '{verify_stages[0]}' requires a passing "
+                        f"verify verdict — {detail}.\n"
+                        "aet-verify writes it: `aet gate submit --stage verify "
+                        "--verdict pass --summary <one-line>`."
+                    ),
+                    stack=stack,
+                )
+
+        flagged = _scope_audit(spec, pr_base, feature_branch=feature_branch, workspace=workspace)
+        return GateResult(
+            ok=True,
+            pr_base=pr_base,
+            rebased=rebased,
+            scope_audit=flagged,
+            dry_run=args.dry_run,
+            message=f"Pre-merge gate passed for {feature_branch}.",
+            stack=stack,
+        )
+    finally:
+        if created_temp_worktree and workspace:
+            _remove_worktree(workspace)
 
 
 def cmd_gate(args: argparse.Namespace) -> int:
@@ -596,7 +690,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
     print(f"Running pre-merge gate for {args.task_id}")
     result = _run_gate(args)
     if result.ok:
-        print("✅ Pre-merge gate passed.")
+        print(f"✅ {result.message}")
         return 0
     return _fail(result.message)
 
@@ -609,9 +703,16 @@ def _work_class_from_spec(spec: dict[str, Any]) -> str:
     return "normal"
 
 
-def _scope_audit(spec: dict[str, Any], pr_base: str) -> list[str]:
+def _scope_audit(
+    spec: dict[str, Any],
+    pr_base: str,
+    feature_branch: Optional[str] = None,
+    workspace: Optional[Path] = None,
+) -> list[str]:
     """Return a list of out-of-scope files changed against pr_base."""
-    result = _run_git("diff", pr_base, "--name-only", check=False)
+    target_ref = feature_branch or "HEAD"
+    git_args = ["-C", str(workspace)] if workspace else []
+    result = _run_git(*git_args, "diff", f"{pr_base}..{target_ref}", "--name-only", check=False)
     if result.returncode != 0:
         return []
     changed = [line.strip() for line in result.stdout.splitlines() if line.strip()]
@@ -657,9 +758,15 @@ def _plan_task_count(spec: dict[str, Any]) -> int:
     return count
 
 
-def _commit_count(pr_base: str) -> int:
-    """Return the number of commits between pr_base and HEAD."""
-    result = _run_git("rev-list", "--count", f"{pr_base}..HEAD", check=False)
+def _commit_count(
+    pr_base: str,
+    feature_branch: Optional[str] = None,
+    workspace: Optional[Path] = None,
+) -> int:
+    """Return the number of commits between pr_base and feature_branch."""
+    target_ref = feature_branch or "HEAD"
+    git_args = ["-C", str(workspace)] if workspace else []
+    result = _run_git(*git_args, "rev-list", "--count", f"{pr_base}..{target_ref}", check=False)
     if result.returncode != 0:
         return 0
     try:
@@ -668,17 +775,29 @@ def _commit_count(pr_base: str) -> int:
         return 0
 
 
-def _commit_subjects(pr_base: str) -> list[str]:
-    """Return commit subjects in the pr_base..HEAD range."""
-    result = _run_git("log", f"{pr_base}..HEAD", "--pretty=format:%s", check=False)
+def _commit_subjects(
+    pr_base: str,
+    feature_branch: Optional[str] = None,
+    workspace: Optional[Path] = None,
+) -> list[str]:
+    """Return commit subjects in the pr_base..feature_branch range."""
+    target_ref = feature_branch or "HEAD"
+    git_args = ["-C", str(workspace)] if workspace else []
+    result = _run_git(*git_args, "log", f"{pr_base}..{target_ref}", "--pretty=format:%s", check=False)
     if result.returncode != 0:
         return []
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _is_monolithic_commit(pr_base: str, spec: dict[str, Any]) -> bool:
+def _is_monolithic_commit(
+    pr_base: str,
+    spec: dict[str, Any],
+    feature_branch: Optional[str] = None,
+    workspace: Optional[Path] = None,
+) -> bool:
     """True when one commit covers the whole range while the plan has >1 task."""
-    return _commit_count(pr_base) == 1 and _plan_task_count(spec) > 1
+    count = _commit_count(pr_base, feature_branch=feature_branch, workspace=workspace)
+    return count == 1 and _plan_task_count(spec) > 1
 
 
 def _extract_prd_link(spec: dict[str, Any]) -> str | None:
@@ -748,22 +867,31 @@ def _build_pr_body(
     return "\n".join(parts)
 
 
-def _push_branch(rebased: bool, dry_run: bool) -> tuple[bool, str]:
+def _push_branch(
+    rebased: bool,
+    dry_run: bool,
+    feature_branch: Optional[str] = None,
+    workspace: Optional[Path] = None,
+) -> tuple[bool, str]:
     """Push the current branch to a same-named remote branch.
 
     Worktree branches are often tracked against ``origin/main``, so a bare
     ``git push`` is rejected. Always push ``HEAD:<branch>`` explicitly.
     """
-    branch_result = _run_git("branch", "--show-current", check=False)
-    branch = branch_result.stdout.strip()
+    git_args = ["-C", str(workspace)] if workspace else []
+    if feature_branch:
+        branch = feature_branch.removeprefix("origin/")
+    else:
+        branch_result = _run_git(*git_args, "branch", "--show-current", check=False)
+        branch = branch_result.stdout.strip()
     if not branch:
         return False, "Cannot push: HEAD is detached."
 
-    push_spec = f"HEAD:{branch}"
+    push_spec = f"HEAD:{branch}" if workspace else f"{branch}:{branch}"
     if rebased:
-        cmd = ["git", "push", "--force-with-lease", "origin", push_spec]
+        cmd = ["git", *git_args, "push", "--force-with-lease", "origin", push_spec]
     else:
-        cmd = ["git", "push", "-u", "origin", push_spec]
+        cmd = ["git", *git_args, "push", "-u", "origin", push_spec]
     if dry_run:
         return True, f"Would run: {' '.join(cmd)}"
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -800,12 +928,18 @@ def _create_pr(pr_base: str, title: str, body: str, dry_run: bool) -> tuple[bool
         os.unlink(body_path)
 
 
-def _check_release_guard(pr_base: str) -> str | None:
+def _check_release_guard(
+    pr_base: str,
+    feature_branch: Optional[str] = None,
+    workspace: Optional[Path] = None,
+) -> str | None:
     """Block ``chore(release)`` commits and VERSION changes on feature branches."""
-    for subject in _commit_subjects(pr_base):
+    for subject in _commit_subjects(pr_base, feature_branch=feature_branch, workspace=workspace):
         if re.match(r"^chore\(release\)", subject):
             return f"Release guard: commit '{subject}' is a chore(release) on a feature branch."
-    diff = _run_git("diff", pr_base, "--name-only", check=False)
+    target_ref = feature_branch or "HEAD"
+    git_args = ["-C", str(workspace)] if workspace else []
+    diff = _run_git(*git_args, "diff", f"{pr_base}..{target_ref}", "--name-only", check=False)
     if diff.returncode == 0:
         for line in diff.stdout.splitlines():
             if line.strip() == "VERSION":
@@ -820,28 +954,30 @@ def cmd_open(args: argparse.Namespace) -> int:
         return rc
 
     spec = args.spec
-    print(f"Running aet ship open for {args.task_id}")
+    task_id = args.task_id
+    feature_branch = _resolve_feature_branch(task_id)
+    print(f"Running aet ship open for {task_id}")
 
     result = _run_gate(args)
     if not result.ok:
         return _fail(f"Gate failed: {result.message}")
-    print("   Gate passed.")
+    print(f"   {result.message}")
 
-    guard_error = _check_release_guard(result.pr_base)
+    guard_error = _check_release_guard(result.pr_base, feature_branch=feature_branch)
     if guard_error:
         return _fail(guard_error)
 
-    if _is_monolithic_commit(result.pr_base, spec):
+    if _is_monolithic_commit(result.pr_base, spec, feature_branch=feature_branch):
         return _fail(
             "Monolithic commit detected: one commit spans the entire PR range "
             "while the plan lists multiple tasks.\n"
             "Run `aet ship split` to split it into logical pieces before opening the PR."
         )
 
-    changelog_entry = _generate_changelog_entry(_commit_subjects(result.pr_base), spec)
+    changelog_entry = _generate_changelog_entry(_commit_subjects(result.pr_base, feature_branch=feature_branch), spec)
 
     print("Pushing branch...")
-    ok, output = _push_branch(result.rebased, args.dry_run)
+    ok, output = _push_branch(result.rebased, args.dry_run, feature_branch=feature_branch)
     if not ok:
         return _fail(f"Push failed:\n{output}")
     if output.strip():
@@ -959,20 +1095,26 @@ def cmd_split(args: argparse.Namespace) -> int:
     return 0
 
 
-def _has_merge_conflicts(target_branch: str) -> tuple[bool, str]:
-    """Return (has_conflicts, message) for merging HEAD into origin/<target_branch>."""
+def _has_merge_conflicts(
+    target_branch: str,
+    feature_branch: Optional[str] = None,
+    workspace: Optional[Path] = None,
+) -> tuple[bool, str]:
+    """Return (has_conflicts, message) for merging feature_branch into origin/<target_branch>."""
     target_ref = f"origin/{target_branch}"
-    base_result = _run_git("merge-base", "HEAD", target_ref, check=False)
+    source_ref = feature_branch or "HEAD"
+    git_args = ["-C", str(workspace)] if workspace else []
+    base_result = _run_git(*git_args, "merge-base", source_ref, target_ref, check=False)
     if base_result.returncode != 0:
-        return True, f"Could not find merge base between HEAD and {target_ref}."
+        return True, f"Could not find merge base between {source_ref} and {target_ref}."
     merge_base = base_result.stdout.strip()
-    tree_result = _run_git("merge-tree", merge_base, "HEAD", target_ref, check=False)
+    tree_result = _run_git(*git_args, "merge-tree", merge_base, source_ref, target_ref, check=False)
     if tree_result.returncode != 0:
         return True, f"Merge-tree failed for {target_ref}: {tree_result.stderr}"
     if any(line.startswith("<<<<<<< ") for line in tree_result.stdout.splitlines()):
         return (
             True,
-            f"Merging HEAD into {target_ref} would produce conflicts. "
+            f"Merging {source_ref} into {target_ref} would produce conflicts. "
             "Rebase onto the target branch or resolve the conflicts first.",
         )
     return False, ""
@@ -1152,7 +1294,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
     result = _run_gate(args)
     if not result.ok:
         return _fail(f"Gate failed: {result.message}")
-    print("   Gate passed.")
+    print(f"   {result.message}")
 
     # Stacked merge guard: if detection found a parent that is not the trunk and
     # the user asked to merge into the trunk without explicitly overriding the
@@ -1168,11 +1310,11 @@ def cmd_merge(args: argparse.Namespace) -> int:
             f"Stacked branch detected: merge into `{result.stack.base_ref}` or rebase onto `{trunk_ref}` first."
         )
 
-    guard_error = _check_release_guard(result.pr_base)
+    guard_error = _check_release_guard(result.pr_base, feature_branch=feature_branch)
     if guard_error:
         return _fail(guard_error)
 
-    if _is_monolithic_commit(result.pr_base, spec):
+    if _is_monolithic_commit(result.pr_base, spec, feature_branch=feature_branch):
         return _fail(
             "Monolithic commit detected: one commit spans the entire merge range "
             "while the plan lists multiple tasks.\n"
@@ -1180,7 +1322,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         )
 
     print(f"Checking for merge conflicts against origin/{target_branch}...")
-    has_conflicts, conflict_msg = _has_merge_conflicts(target_branch)
+    has_conflicts, conflict_msg = _has_merge_conflicts(target_branch, feature_branch=feature_branch)
     if has_conflicts:
         return _fail(conflict_msg)
     print("   No conflicts detected.")
