@@ -1,9 +1,9 @@
 ---
-id: feat-006
+id: feat-002
 size: M
 ---
 
-# Plan: feat-006.md
+# Plan: feat-002.md
 
 ## Context
 
@@ -21,3 +21,7 @@ PRD: docs/prds/default-prd.md
 
 - [ ] test_thing verifies thing.py
 
+---
+
+_Stage: plan-approved_
+_Next step: run `aet-backlog-add`_
