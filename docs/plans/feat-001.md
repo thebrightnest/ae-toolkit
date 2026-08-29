@@ -2,7 +2,6 @@
 id: feat-001
 size: M
 blocked_by:
-  - feat-000
 ---
 
 # Plan: feat-001.md
