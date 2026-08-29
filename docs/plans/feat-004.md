@@ -1,9 +1,9 @@
 ---
-id: feat-002
+id: feat-004
 size: M
 ---
 
-# Plan: feat-002.md
+# Plan: feat-004.md
 
 ## Context
 
@@ -23,5 +23,5 @@ PRD: docs/prds/default-prd.md
 
 ---
 
-_Stage: plan-approved_
+_Stage: plan-draft_
 _Next step: run `aet-backlog-add`_
