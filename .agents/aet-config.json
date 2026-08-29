@@ -1,1 +1,4 @@
-{}
+{
+  "trunk_branch": "main",
+  "integration_branch": "main"
+}
