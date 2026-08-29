@@ -123,6 +123,9 @@ Exercise the changed flow in the running system and capture observed evidence.
 
    The output path is in `$AET_EVIDENCE_PATH` (or `$AET_EVIDENCE_PATH_VERIFY` in
    a grouped session). Point the summary at the artifact paths from step 4.
+   The summary must be a substantive attestation of what was exercised; empty
+   strings, whitespace, and placeholder values (e.g. `pending`, `todo`, `tbd`,
+   `placeholder`, `n/a`, `none`, `null`, `wip`) are refused by `validate_verdict`.
 
 7. If evidence capture fails (flow does not work, crashes, or returns unexpected result):
    - Treat as a bug — fix in source, add regression test, re-capture evidence

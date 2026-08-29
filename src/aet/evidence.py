@@ -74,6 +74,24 @@ SCHEMAS: dict[str, dict[str, type]] = {
 
 VALID_VERDICTS = {"pass", "fail"}
 
+PLACEHOLDER_SUMMARIES: frozenset[str] = frozenset(
+    {
+        "pending",
+        "todo",
+        "tbd",
+        "placeholder",
+        "n/a",
+        "na",
+        "none",
+        "null",
+        "wip",
+        "...",
+        "<one-line>",
+        "<one line>",
+        "<summary>",
+    }
+)
+
 
 class VerdictValidationError(ValueError):
     """Raised when a verdict record does not match its schema."""
@@ -209,6 +227,16 @@ def validate_verdict(record: dict[str, Any], kind: str) -> None:
         raise VerdictValueError(
             f"verdict must be one of {VALID_VERDICTS}, got {record.get('verdict')!r}"
         )
+
+    summary = record.get("summary")
+    if isinstance(summary, str):
+        cleaned = summary.strip()
+        if not cleaned:
+            raise VerdictValueError("summary must not be empty or whitespace-only")
+        if cleaned.lower() in PLACEHOLDER_SUMMARIES:
+            raise VerdictValueError(
+                f"summary must be a real attestation, got placeholder {summary!r}"
+            )
 
 
 def write_verdict(

@@ -105,6 +105,8 @@ aet gate submit --stage qa --verdict <pass|fail> \
 
 `--from-pytest` accepts a `pytest-json-report` file, or a scratch JSON object you write yourself with four keys — `test_command`, `tests_total`, `tests_passed`, `tests_failed`. Builder mode stamps every other schema field itself, so nothing here has to track the `qa` schema. It needs `AET_TASK_ID`, which orchestrated sessions already have.
 
+The `--summary` must be a substantive one-line attestation of what was verified; empty strings, whitespace, and placeholder values (e.g. `pending`, `todo`, `tbd`, `placeholder`, `n/a`, `none`, `null`, `wip`) are refused by `validate_verdict`.
+
 Hand-authoring the full payload and passing `--evidence <payload-file>` still works, but you would be reproducing schema fields you cannot see — the cause of past rejected verdicts. Prefer builder mode; `docs/CLI.md` carries the generated option reference.
 
 After submitting the verdict, if `AET_RUN_ID` is set, append the QA handoff
