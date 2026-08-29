@@ -86,7 +86,7 @@ class TestMergeEvidence(unittest.TestCase):
             {"id": "t", "branch": "empty-task", "base_commit": self.repo.base}
         )
         self.assertFalse(derived["on_trunk"])
-        self.assertEqual(derived["derived_status"], "in_progress")
+        self.assertEqual(derived["derived_status"], "ready")
 
     def test_merged_branch_still_derives_merged(self):
         """The fix must not reclassify genuinely merged work."""

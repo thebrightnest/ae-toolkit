@@ -103,6 +103,8 @@ class TestDeriveStatusNonMainTrunk(unittest.TestCase):
 
         responses = {
             ("show-ref", "--verify", "--quiet", "refs/heads/feat-001"): (0, "", ""),
+            ("rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             # Ancestor of origin/main but not origin/dev.
             ("merge-base", "--is-ancestor", "feat-001", "origin/dev"): (1, "", ""),
         }

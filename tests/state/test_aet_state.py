@@ -771,6 +771,8 @@ class TestDeriveStatus(unittest.TestCase):
 
         responses = {
             ("show-ref", "--verify", "--quiet", "refs/heads/feat-001"): (0, "", ""),
+            ("rev-parse", "feat-001"): (0, "abc1234\n", ""),
+            ("rev-parse", "base0000"): (0, "base0000\n", ""),
             ("merge-base", "--is-ancestor", "feat-001", "origin/main"): (1, "", ""),
         }
 
