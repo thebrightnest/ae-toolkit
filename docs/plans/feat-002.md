@@ -1,10 +1,10 @@
 ---
-id: feat-001
+id: feat-002
 size: M
 blocked_by:
 ---
 
-# Plan: feat-001.md
+# Plan: feat-002.md
 
 ## Context
 PRD: docs/prds/default-prd.md
