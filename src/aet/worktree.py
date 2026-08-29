@@ -647,6 +647,7 @@ AET_RETIRED_IGNORED_PATHS = {
     ".agents/work-queue.json",
     ".agents/work-queue.json.lock",
     ".agents/work-archive.json",
+    "scripts/.aet-work-orchestrator.log",
 }
 
 

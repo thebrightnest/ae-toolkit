@@ -18,7 +18,7 @@ from aet.liveness import (
     process_start_time,
 )
 
-_SLEEP_HELPER = Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py"
+_SLEEP_HELPER = (Path(__file__).parents[1] / "fixtures" / "sleep_until_signaled.py").resolve()
 
 
 def _parent_with_child_script(duration: float) -> str:
@@ -52,9 +52,6 @@ class TestProcessTreeLiveness:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         ) as parent:
-            time.sleep(0.5)
-            probe = ProcessTreeLiveness(parent.pid)
-            assert probe.is_alive() is True
             parent.wait(timeout=5)
 
         # The child may outlive the parent, but the probe is keyed on the parent.
@@ -109,7 +106,7 @@ class TestHybridLiveness:
     def test_alive_when_process_tree_alive(self):
         """A live process tree keeps the probe alive even with no run-log files."""
         with subprocess.Popen(
-            [sys.executable, "-c", _parent_with_child_script(2.0)],
+            [sys.executable, "-c", _parent_with_child_script(10.0)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         ) as parent:

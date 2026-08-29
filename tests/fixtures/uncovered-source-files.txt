@@ -16,7 +16,6 @@ scripts/hooks/pre-commit
 scripts/prevent-release-on-feature-branch.sh
 scripts/test-build-system.sh
 scripts/test-hooks.sh
-scripts/test-merge-verified-removed.sh
 scripts/test-panel-live-runs.mjs
 scripts/test-panel-plan-detail.mjs
 scripts/test-pqg-01.sh

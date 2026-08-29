@@ -322,6 +322,11 @@ class TestNightShiftExitGateRehearsal(unittest.TestCase):
             by_id["nightshift-deterministic-failure"]["state"], "quarantined"
         )
 
+    @pytest.mark.xfail(
+        strict=False,
+        reason="13–27% flake across 30 runs in August 2026; "
+        "docs/bugs/20260824-nightshift-stall-timeout-flake.md",
+    )
     def test_stall_killed_and_classified_timeout(self):
         """The stall fixture is killed and its failure class is timeout.
 
