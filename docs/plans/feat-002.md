@@ -1,16 +1,17 @@
 ---
-id: feat-bad
+id: feat-002
 size: S
+blocked_by:
+  - blocker-001
 ---
 
-# feat-bad
+# feat-002
 
 ## Context
 PRD: docs/prds/default.md
 
 ## Task List
 1. Do something (traces: R-1).
-2. Cite a requirement that does not exist (traces: R-99).
 
 ## Files to Modify
 - `src/widget.py` (new)
