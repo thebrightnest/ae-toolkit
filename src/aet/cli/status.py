@@ -7,7 +7,6 @@ worktree health.
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -15,6 +14,7 @@ import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet.backends.factory import create_backend  # noqa: E402
+from aet.liveness import is_run_alive  # noqa: E402
 from aet.plan_parser import parse_frontmatter  # noqa: E402
 from aet.queue import (  # noqa: E402
     QueueIntegrityError,
@@ -60,24 +60,15 @@ def _render_table(headers: list[str], rows: list[list[str]]) -> list[str]:
     return [fmt(headers), separator, *(fmt(row) for row in rows)]
 
 
-def _is_process_alive(pid: int) -> bool:
-    """Return True if ``pid`` is still running."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        pass
-    return True
-
-
 def _active_runs(runs_dir: Path) -> list[dict]:
-    """List detached runs under ``runs_dir`` whose pid is still alive."""
+    """List detached runs under ``runs_dir`` whose process is still alive."""
     runs: list[dict] = []
     if not runs_dir.is_dir():
         return runs
     for entry in sorted(runs_dir.iterdir()):
         if not entry.is_dir():
+            continue
+        if not is_run_alive(entry):
             continue
         pid_file = entry / "pid"
         started_file = entry / "started"
@@ -87,11 +78,12 @@ def _active_runs(runs_dir: Path) -> list[dict]:
             pid = int(pid_file.read_text(encoding="utf-8").strip())
         except ValueError:
             continue
-        if not _is_process_alive(pid):
-            continue
         started = ""
         if started_file.is_file():
-            started = started_file.read_text(encoding="utf-8").strip()
+            try:
+                started = started_file.read_text(encoding="utf-8").strip()
+            except OSError:
+                started = ""
         runs.append({"id": entry.name, "pid": pid, "started": started})
     return runs
 

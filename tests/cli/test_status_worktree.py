@@ -75,5 +75,36 @@ class TestStatusWorktreeResolution(unittest.TestCase):
         self.assertIn("t1", output)
 
 
+class TestStatusActiveRuns(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.runs_dir = Path(self._tmp.name) / ".agents" / "runs"
+        self.runs_dir.mkdir(parents=True)
+
+    def test_active_runs_omits_recycled_pid(self):
+        """aet status omits runs whose PID belongs to a later-started process."""
+        run_entry = self.runs_dir / "run-old"
+        run_entry.mkdir()
+        (run_entry / "pid").write_text(str(os.getpid()), encoding="utf-8")
+        (run_entry / "started").write_text("2020-01-01T00:00:00Z", encoding="utf-8")
+
+        active = status._active_runs(self.runs_dir)
+        self.assertEqual(active, [])
+
+    def test_active_runs_includes_live_process(self):
+        """aet status includes runs whose process is genuinely live."""
+        from aet import telemetry
+
+        run_entry = self.runs_dir / "run-current"
+        run_entry.mkdir()
+        (run_entry / "pid").write_text(str(os.getpid()), encoding="utf-8")
+        (run_entry / "started").write_text(telemetry.iso_now(), encoding="utf-8")
+
+        active = status._active_runs(self.runs_dir)
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0]["id"], "run-current")
+
+
 if __name__ == "__main__":
     unittest.main()

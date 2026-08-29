@@ -107,6 +107,8 @@ def _isolate_aet_repo_root(monkeypatch):
     developer's in-tree config.
     """
     monkeypatch.delenv("AET_REPO_ROOT", raising=False)
+    monkeypatch.delenv("AET_TASK_ID", raising=False)
+    monkeypatch.delenv("AET_RUN_ID", raising=False)
 
 
 @pytest.fixture(autouse=True)

@@ -1,24 +1,170 @@
-"""Hybrid liveness probes for the orchestrator's session watchdog.
+"""Hybrid liveness probes and run-liveness predicate (R-1, R-2, R-3).
 
-The watchdog distinguishes a slow-but-alive session from a genuinely wedged
-one by combining two signals:
-
-- Process-tree activity: the session's main process has active descendants
-  (background tasks, subagents, long-running validations).
-- Run-log/file writes: watched log or telemetry files are still growing.
-
-Either signal resets the stall timer. A hard wall-clock backstop remains the
-ultimate ceiling for truly stuck sessions (R-3).
+The module provides:
+1. Run-liveness predicate (`is_run_alive`): verifies whether a recorded run is
+   actively alive by checking returncode, PID existence, and process start time
+   against recorded run start time to detect PID reuse (R-1, R-2).
+2. Process start-time reader (`process_start_time`): extracts start timestamp
+   via `/proc/<pid>/stat` or `ps -p <pid> -o lstart=`.
+3. Orchestrator session watchdog probes (`HybridLiveness`, `ProcessTreeLiveness`,
+   `RunLogLiveness`, `LivenessMonitor`): distinguishes slow-but-alive sessions
+   from wedged ones (R-3).
 """
 
 from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
+
+
+def process_start_time(pid: int) -> float | None:
+    """Return the process start time as UTC epoch seconds, or None if unreadable.
+
+    Follows ``_all_processes``'s fallback shape: reads ``/proc/<pid>/stat`` field 22
+    against system boot time (from ``/proc/stat``) when available, falls back to
+    ``ps -p <pid> -o lstart=`` otherwise, and returns None when neither answers.
+    """
+    if not isinstance(pid, int) or pid <= 0:
+        return None
+
+    if os.path.isdir("/proc"):
+        try:
+            btime: int | None = None
+            if os.path.isfile("/proc/stat"):
+                with open("/proc/stat", "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("btime "):
+                            btime = int(line.split()[1])
+                            break
+            if btime is not None:
+                with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as f:
+                    content = f.read()
+                rparen = content.rfind(")")
+                if rparen != -1:
+                    fields = content[rparen + 1 :].split()
+                    starttime_ticks = int(fields[19])
+                    clk_tck = (
+                        os.sysconf("SC_CLK_TCK")
+                        if hasattr(os, "sysconf") and "SC_CLK_TCK" in os.sysconf_names
+                        else 100
+                    )
+                    return btime + (starttime_ticks / clk_tck)
+        except (OSError, ValueError, IndexError, ZeroDivisionError):
+            pass
+
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "lstart="],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            raw = " ".join(result.stdout.strip().split())
+            dt = datetime.strptime(raw, "%a %b %d %H:%M:%S %Y")
+            return dt.astimezone().timestamp()
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+
+    return None
+
+
+def is_run_alive(
+    run_dir: str | Path | None = None,
+    *,
+    pid: int | None = None,
+    started: str | datetime | float | int | None = None,
+    returncode: int | None = None,
+) -> bool:
+    """Return True if a run is actively alive (R-1, R-2).
+
+    Rules:
+      1. If a returncode is recorded (either passed or in run_dir/returncode),
+         the run has terminated -> return False.
+      2. If pid is absent or not alive (process gone) -> return False.
+      3. If the process is alive and a started timestamp is available:
+         - If process start time is later than the recorded started timestamp,
+           the PID has been recycled by an unrelated process -> return False.
+         - If process start time is <= recorded started timestamp, the PID is
+           held by the original process -> return True.
+      4. If process start time is unreadable, resolve live (True) and emit a diagnostic.
+    """
+    if run_dir is not None:
+        rdir = Path(run_dir)
+        if rdir.is_dir():
+            rc_file = rdir / "returncode"
+            if returncode is None and rc_file.is_file():
+                try:
+                    returncode = int(rc_file.read_text(encoding="utf-8").strip() or "0")
+                except (ValueError, OSError):
+                    returncode = 0
+            if pid is None:
+                pid_file = rdir / "pid"
+                if pid_file.is_file():
+                    try:
+                        pid = int(pid_file.read_text(encoding="utf-8").strip())
+                    except (ValueError, OSError):
+                        pid = None
+            if started is None:
+                started_file = rdir / "started"
+                if started_file.is_file():
+                    try:
+                        started = started_file.read_text(encoding="utf-8").strip()
+                    except OSError:
+                        started = None
+
+    if returncode is not None:
+        return False
+
+    if pid is None or not isinstance(pid, int) or pid <= 0:
+        return False
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+
+    started_ts: float | None = None
+    if started is not None and started != "":
+        if isinstance(started, (int, float)):
+            started_ts = float(started)
+        elif isinstance(started, datetime):
+            dt = started if started.tzinfo is not None else started.replace(tzinfo=timezone.utc)
+            started_ts = dt.timestamp()
+        elif isinstance(started, str):
+            try:
+                raw_ts = started.strip().replace("Z", "+00:00")
+                dt = datetime.fromisoformat(raw_ts)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                started_ts = dt.timestamp()
+            except (ValueError, TypeError):
+                started_ts = None
+
+    if started_ts is None:
+        return True
+
+    proc_start = process_start_time(pid)
+    if proc_start is None:
+        print(
+            f"⚠️  Could not read start time for PID {pid}; assuming process is live.",
+            file=sys.stderr,
+        )
+        return True
+
+    if proc_start > started_ts:
+        return False
+
+    return True
 
 
 def _all_processes() -> dict[int, int]:

@@ -16,6 +16,7 @@ from typing import Any, Iterator
 from filelock import FileLock
 
 from aet import plan_size
+from aet.liveness import is_run_alive
 
 # Tracks whether a queue file was read as a dict wrapper and, if so, its
 # non-task metadata so write_queue can preserve the envelope.
@@ -125,19 +126,6 @@ def lease_path(queue_file: str) -> str:
     return os.path.join(os.path.dirname(queue_abs), LEASE_FILENAME)
 
 
-def _pid_alive(pid: Any) -> bool:
-    """Return True if ``pid`` refers to a live process."""
-    if not isinstance(pid, int):
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 def read_lease(queue_file: str) -> dict[str, Any] | None:
     """Read the lease JSON, or ``None`` if it is missing or malformed."""
     path = lease_path(queue_file)
@@ -221,7 +209,7 @@ def check_lease(queue_file: str) -> None:
 
     Rules:
       - no lease                         -> allowed
-      - lease whose PID is dead          -> stale: reclaim with a warning, allowed
+      - lease whose owning run is not live -> stale: reclaim with a warning, allowed
       - live lease, caller's AET_RUN_ID matches ``run_id`` -> allowed
       - live lease, otherwise            -> raise ``LeaseHeldError``
     """
@@ -231,8 +219,12 @@ def check_lease(queue_file: str) -> None:
 
     run_id = lease.get("run_id")
     pid = lease.get("pid")
+    started_at = lease.get("started_at")
 
-    if not _pid_alive(pid):
+    queue_dir = os.path.dirname(os.path.abspath(queue_file))
+    run_dir = os.path.join(queue_dir, "runs", str(run_id)) if run_id else None
+
+    if not is_run_alive(run_dir=run_dir, pid=pid, started=started_at):
         print(
             f"⚠️  Reclaiming stale run lease left by run {run_id!r} "
             f"(pid {pid} is no longer alive).",

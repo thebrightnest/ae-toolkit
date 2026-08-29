@@ -66,6 +66,7 @@ from aet.backends.factory import (
     QueueOutsideRepositoryError,
 )
 from aet.ledger import LedgerCorruptionError
+from aet.liveness import is_run_alive
 from aet.plan_parser import resolve_plan_arg
 
 # Cache populated on first usage error; keys are full command path tuples.
@@ -285,17 +286,6 @@ def _run_log_file(run_id: str) -> Path:
     return _run_dir(run_id) / "output.log"
 
 
-def _is_process_alive(pid: int) -> bool:
-    """Return True if ``pid`` is still running."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        pass
-    return True
-
-
 def _wait_for_run(run_id: str) -> int:
     """Wait silently for ``run_id`` to finish and return its exit code.
 
@@ -331,7 +321,7 @@ def _wait_for_run(run_id: str) -> int:
     while True:
         if rc_file.is_file():
             return int(rc_file.read_text(encoding="utf-8").strip() or "0")
-        if not _is_process_alive(pid):
+        if not is_run_alive(rdir):
             for _ in range(20):
                 if rc_file.is_file():
                     return int(rc_file.read_text(encoding="utf-8").strip() or "0")
