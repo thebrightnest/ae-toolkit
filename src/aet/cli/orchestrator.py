@@ -2714,9 +2714,12 @@ def _consult_triage_session(
 ) -> dict | None:
     """Spawn a triage session and return its parsed verdict, or ``None``.
 
-    A ``None`` result (spawn error, non-zero exit, or unparseable output) tells
-    the caller to fall back to the deterministic classifier default.
+    A ``None`` result (insufficient evidence, spawn error, non-zero exit, or
+    unparseable output) tells the caller to fall back to the deterministic
+    classifier default.
     """
+    if not triage.has_sufficient_evidence(tail=tail, signature=signature):
+        return None
     prompt = triage.build_triage_prompt(
         task_id=task_id,
         stage=stage,
@@ -3106,7 +3109,11 @@ def _finalize_task(
     signature = entry.get("signature", "")
 
     verdict = None
-    if adapter is not None and worktree_dir is not None:
+    triage_skipped = False
+    if not triage.has_sufficient_evidence(tail=tail, signature=signature):
+        triage_skipped = True
+        print(f"   ⚠️  Triage for {task_id} skipped: insufficient evidence (no tail or signature)")
+    elif adapter is not None and worktree_dir is not None:
         try:
             failure_class = failure_lib.FailureClass(failure_class_name)
         except ValueError:
@@ -3127,18 +3134,34 @@ def _finalize_task(
         # Fail-closed: unparseable or errored triage falls back to the
         # deterministic classifier default (nsr-01).
         action = _TRIAGE_DEFAULT_ACTIONS.get(failure_class_name, "requeue")
-        print(f"   ⚠️  Triage for {task_id} failed closed; using {action} ({failure_class_name})")
+        if not triage_skipped:
+            print(f"   ⚠️  Triage for {task_id} failed closed; using {action} ({failure_class_name})")
+
+    triage_outcome = "skipped" if triage_skipped else ("triaged" if verdict else "failed_closed")
+    if logger is not None:
+        logger.append_record(
+            telemetry.triage_record(
+                run_id=logger.run_id,
+                task_id=task_id,
+                plan_file=task.get("plan_file") if task else None,
+                outcome=triage_outcome,
+                action=action,
+                failure_class=failure_class_name,
+                reason="insufficient_evidence" if triage_skipped else None,
+            ),
+            task_id=task_id,
+        )
 
     if action == "quarantine":
         if _mark_quarantined(backend, queue_file, task_id, failed_state):
-            return {"successes": 0, "failures": 1, "stop_spawn": True}
+            return {"successes": 0, "failures": 1, "stop_spawn": True, "triage_outcome": triage_outcome}
         # If quarantine transition fails, fall through to requeue/failed.
 
     # action == "requeue" (or quarantine transition failed): failed -> ready.
     if _requeue_task(backend, queue_file, task_id, failed_state, aet_state_bin):
         print(f"   🔄 {task_id} requeued")
-        return {"successes": 0, "failures": 0, "stop_spawn": False}
-    return {"successes": 0, "failures": 1, "stop_spawn": False}
+        return {"successes": 0, "failures": 0, "stop_spawn": False, "triage_outcome": triage_outcome}
+    return {"successes": 0, "failures": 1, "stop_spawn": False, "triage_outcome": triage_outcome}
 
 
 def run_batch(args: argparse.Namespace, adapter) -> int:

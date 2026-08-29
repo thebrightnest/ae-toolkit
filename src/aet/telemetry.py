@@ -474,6 +474,30 @@ def learning_candidate_record(
     }
 
 
+def triage_record(
+    run_id: str,
+    task_id: str,
+    outcome: str,
+    action: str,
+    failure_class: str | None = None,
+    reason: str | None = None,
+    plan_file: str | None = None,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    """Build a failure-triage telemetry record."""
+    return {
+        "type": "triage",
+        "run_id": run_id,
+        "task_id": task_id,
+        "plan_file": plan_file,
+        "timestamp": timestamp or iso_now(),
+        "outcome": outcome,
+        "action": action,
+        "failure_class": failure_class,
+        "reason": reason,
+    }
+
+
 _LEGACY_RUN_DIR_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(.+)$")
 
 

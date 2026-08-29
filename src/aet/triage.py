@@ -12,6 +12,20 @@ import re
 TRIAGE_ACTIONS = frozenset({"requeue", "quarantine"})
 
 
+def has_sufficient_evidence(
+    tail: str | None = None,
+    signature: str | None = None,
+) -> bool:
+    """Return True when *tail* or *signature* carries enough evidence to triage.
+
+    A triage decision requires at least one non-empty evidence signal: either a
+    non-empty failure tail or a failure signature. When neither is present,
+    spawning a triage session is skipped and the caller falls back to the
+    deterministic classifier default.
+    """
+    return bool((tail and tail.strip()) or (signature and signature.strip()))
+
+
 def build_triage_prompt(
     *,
     task_id: str,

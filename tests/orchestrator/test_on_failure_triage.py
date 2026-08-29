@@ -85,19 +85,42 @@ class TestTriagePrompt(unittest.TestCase):
         self.assertIn("quarantine", prompt)
 
 
+class TestHasSufficientEvidence(unittest.TestCase):
+    def test_returns_true_for_tail_only(self):
+        self.assertTrue(triage.has_sufficient_evidence(tail="pytest error"))
+        self.assertTrue(triage.has_sufficient_evidence(tail="pytest error", signature=""))
+
+    def test_returns_true_for_signature_only(self):
+        self.assertTrue(triage.has_sufficient_evidence(signature="sig-123"))
+        self.assertTrue(triage.has_sufficient_evidence(tail="", signature="sig-123"))
+
+    def test_returns_true_for_both_tail_and_signature(self):
+        self.assertTrue(triage.has_sufficient_evidence(tail="pytest error", signature="sig-123"))
+
+    def test_returns_false_when_both_empty(self):
+        self.assertFalse(triage.has_sufficient_evidence(tail="", signature=""))
+
+    def test_returns_false_when_whitespace_only(self):
+        self.assertFalse(triage.has_sufficient_evidence(tail="  \n  ", signature="   "))
+
+    def test_returns_false_when_none(self):
+        self.assertFalse(triage.has_sufficient_evidence(tail=None, signature=None))
+        self.assertFalse(triage.has_sufficient_evidence())
+
+
 class TestTriageVerdictParser(unittest.TestCase):
     def test_parses_plain_json_line(self):
         output = '{"class": "environment", "action": "requeue"}\n'
         self.assertEqual(triage.parse_triage_verdict(output), {"action": "requeue"})
 
     def test_parses_json_inside_markdown_block(self):
-        output = "```json\n{\"class\": \"design\", \"action\": \"quarantine\"}\n```\n"
+        output = '```json\n{"class": "design", "action": "quarantine"}\n```\n'
         self.assertEqual(triage.parse_triage_verdict(output), {"action": "quarantine"})
 
     def test_parses_last_json_line_when_agent_adds_chatter(self):
         output = (
             "Looking at this failure, I see an assertion error.\n"
-            "{\"class\": \"design\", \"action\": \"quarantine\"}\n"
+            '{"class": "design", "action": "quarantine"}\n'
         )
         self.assertEqual(triage.parse_triage_verdict(output), {"action": "quarantine"})
 
@@ -105,7 +128,7 @@ class TestTriageVerdictParser(unittest.TestCase):
         self.assertIsNone(triage.parse_triage_verdict("I think we should retry"))
 
     def test_returns_none_for_unknown_action(self):
-        self.assertIsNone(triage.parse_triage_verdict('{\"class\": \"design\", \"action\": \"investigate\"}'))
+        self.assertIsNone(triage.parse_triage_verdict('{"class": "design", "action": "investigate"}'))
 
 
 class TestFinalizeOnFailureTriage(unittest.TestCase):
@@ -234,6 +257,124 @@ class TestFinalizeOnFailureTriage(unittest.TestCase):
             )
             self.assertEqual(deltas["failures"], 1)
             self.assertEqual(task_after["state"], "quarantined")
+
+    def test_triage_skipped_when_evidence_empty_requeues_environment(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            task = {
+                "id": "demo",
+                "title": "Demo",
+                "state": "in_progress",
+                "failure_signatures": [
+                    _failure_entry(
+                        cls=failure.FailureClass.ENVIRONMENT,
+                        tail="",
+                        signature="",
+                    )
+                ],
+            }
+            consult_mock = unittest.mock.MagicMock()
+            with patch.object(orchestrator, "_consult_triage_session", consult_mock):
+                queue_file = _write_queue(repo_root, [task])
+                backend = orchestrator._make_backend(queue_file)
+                deltas = orchestrator._finalize_task(
+                    backend,
+                    queue_file,
+                    task["id"],
+                    1,
+                    repo_root=repo_root,
+                    on_failure="triage",
+                )
+            consult_mock.assert_not_called()
+            self.assertEqual(deltas["failures"], 0)
+            self.assertEqual(deltas["successes"], 0)
+            self.assertFalse(deltas["stop_spawn"])
+            data = backend.load()
+            task_after = next(t for t in data["queue"] if t["id"] == task["id"])
+            self.assertEqual(task_after["state"], "ready")
+
+    def test_triage_skipped_when_evidence_empty_quarantines_design(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            task = {
+                "id": "demo",
+                "title": "Demo",
+                "state": "in_progress",
+                "failure_signatures": [
+                    _failure_entry(
+                        cls=failure.FailureClass.DESIGN,
+                        tail="   ",
+                        signature="",
+                    )
+                ],
+            }
+            consult_mock = unittest.mock.MagicMock()
+            with patch.object(orchestrator, "_consult_triage_session", consult_mock):
+                queue_file = _write_queue(repo_root, [task])
+                backend = orchestrator._make_backend(queue_file)
+                deltas = orchestrator._finalize_task(
+                    backend,
+                    queue_file,
+                    task["id"],
+                    1,
+                    repo_root=repo_root,
+                    on_failure="triage",
+                )
+            consult_mock.assert_not_called()
+            self.assertEqual(deltas["failures"], 1)
+            data = backend.load()
+            task_after = next(t for t in data["queue"] if t["id"] == task["id"])
+            self.assertEqual(task_after["state"], "quarantined")
+
+    def test_triage_skipped_records_telemetry(self):
+        from aet import telemetry
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            task = {
+                "id": "demo",
+                "title": "Demo",
+                "state": "in_progress",
+                "failure_signatures": [
+                    _failure_entry(
+                        cls=failure.FailureClass.ENVIRONMENT,
+                        tail="",
+                        signature="",
+                    )
+                ],
+            }
+            logger = telemetry.RunLogger(repo_root, run_id="run-triage-skip")
+            queue_file = _write_queue(repo_root, [task])
+            backend = orchestrator._make_backend(queue_file)
+            orchestrator._finalize_task(
+                backend,
+                queue_file,
+                task["id"],
+                1,
+                repo_root=repo_root,
+                logger=logger,
+                on_failure="triage",
+            )
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+            triage_records = [r for r in records if r.get("type") == "triage"]
+            self.assertEqual(len(triage_records), 1)
+            self.assertEqual(triage_records[0]["outcome"], "skipped")
+            self.assertEqual(triage_records[0]["action"], "requeue")
+            self.assertEqual(triage_records[0]["reason"], "insufficient_evidence")
+
+    def test_consult_triage_session_returns_none_when_insufficient_evidence(self):
+        adapter = unittest.mock.MagicMock()
+        result = orchestrator._consult_triage_session(
+            adapter,
+            repo_root="/fake/repo",
+            worktree_dir="/fake/worktree",
+            task_id="demo",
+            stage="implement",
+            failure_class=failure.FailureClass.ENVIRONMENT,
+            tail="",
+            signature="",
+        )
+        self.assertIsNone(result)
+        adapter.build_cmd.assert_not_called()
 
     def test_on_failure_continue_matches_legacy(self):
         with tempfile.TemporaryDirectory() as repo_root:
