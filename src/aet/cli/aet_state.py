@@ -412,10 +412,12 @@ def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main", i
                    a recorded merge_commit, or a branch that has moved past
                    its base_commit, that is an ancestor of the target
                    (ADR-064; ancestry alone is not evidence).
-      2. in_progress — local branch exists.
-      3. ready    — plan exists, no branch, and all blockers are terminal
-                   (including the case of no blockers).
-      4. blocked  — plan exists, no branch, and some blocker is not terminal.
+      2. in_progress — local branch exists and carries own commits (has moved
+                   past its base_commit; ADR-072 / eop-02).
+      3. ready    — plan exists, no branch or branch sitting at base, and all
+                   blockers are terminal (including the case of no blockers).
+      4. blocked  — plan exists, no branch or branch sitting at base, and some
+                   blocker is not terminal.
       5. drift    — plan file is missing and the record carries no spec.
       6. planned  — plan exists, no branch, no blockers.
 
@@ -470,11 +472,18 @@ def derive_status(task, blocker_status_fn=None, cwd=None, trunk_branch="main", i
     else:
         derived["merge_verified"] = False
 
+    # In-progress evidence (ADR-072 / eop-02): a branch sitting at its base
+    # commit has authored nothing and is not evidence of active work.
+    has_own_commits = (
+        derived["branch_exists"]
+        and branch_has_own_commits(branch, task.get("base_commit"), cwd=cwd)
+    )
+
     # Determine actionable canonical state.
     status = "unknown"
     if on_trunk:
         status = "merged"
-    elif derived["branch_exists"]:
+    elif has_own_commits:
         status = "in_progress"
     elif derived["plan_exists"]:
         blockers = task.get("blocked_by", [])
