@@ -43,6 +43,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import gate, plan_parser  # noqa: E402
 from aet.backends.factory import resolve_config  # noqa: E402
 from aet.branch_ref import resolve_trunk_branch  # noqa: E402
+from aet.closure import archive_plan_file  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 
 # Load aet-state as a module so we can reuse its merge-resolution and
@@ -353,6 +354,9 @@ def cmd_ship(args):
     rc = aet_state.cmd_record_merge(ns)
     if rc != 0:
         return EXIT_DELETE_BEFORE_RECORD if delete_branch else rc
+
+    if not args.dry_run:
+        archive_plan_file(task_id)
 
     if delete_branch:
         if args.dry_run:
@@ -1351,6 +1355,8 @@ def cmd_merge(args: argparse.Namespace) -> int:
     )
     if rc != 0:
         return _fail("Merge succeeded, but recording closure failed. Run `aet ship close` manually to finish.")
+
+    archive_plan_file(task_id)
 
     print("✅ aet ship merge complete.")
     return 0

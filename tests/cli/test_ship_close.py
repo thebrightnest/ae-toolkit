@@ -168,10 +168,11 @@ class TestShipCloseTransaction(unittest.TestCase):
             rc = ship.cmd_ship(args)
         self.assertEqual(rc, 0)
 
-        # The plan file is untouched: no footer rewrite, no archive move (R-4).
-        self.assertTrue(plan_path.exists())
-        self.assertEqual(plan_path.read_text(encoding="utf-8"), original_content)
-        self.assertFalse((plan_path.parent / "archive" / plan_path.name).exists())
+        # The plan file is archived to docs/plans/archive/<task_id>.md (R-3).
+        self.assertFalse(plan_path.exists())
+        archived_plan = plan_path.parent / "archive" / plan_path.name
+        self.assertTrue(archived_plan.exists())
+        self.assertEqual(archived_plan.read_text(encoding="utf-8"), original_content)
 
         # Live queue no longer contains the task.
         backend = GitRefsBackend(queue_file=queue_file, history_file=history_file)
