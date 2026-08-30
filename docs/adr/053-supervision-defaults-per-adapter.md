@@ -1,3 +1,7 @@
+---
+subject: supervision-uniformity
+---
+
 # Supervision Defaults Live on the CLI Adapter
 
 ## Status

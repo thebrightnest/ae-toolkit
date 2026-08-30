@@ -1,14 +1,14 @@
 ---
 subject: partitioned-plan-directory-layout
-relates: [54, 61]
+relates: [55, 61]
 ---
 
 # Partitioned Plan Directory Layout & Resilient Closure Archival
 
 ## Status
 
-Accepted (2026-08-30). Relates to ADR-054 (Plan Documents Are Outside the
-Durability Gate) and ADR-061 (The Record Is the Plan After Intake). Implements the
+Accepted (2026-08-30). Relates to ADR-055 (Closure Durability), which supersedes
+ADR-054 (Plan Documents Are Outside the Durability Gate) and carries its rule forward and ADR-061 (The Record Is the Plan After Intake). Implements the
 `partitioned-plan-directory-layout` PRD
 (`docs/prds/partitioned-plan-directory-layout-prd.md`).
 

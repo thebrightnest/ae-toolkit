@@ -1061,9 +1061,25 @@ def cmd_split(args: argparse.Namespace) -> int:
         stack = _determine_pr_base()
         pr_base = stack.base_ref
 
-    commit_count = _commit_count(pr_base)
+    # `split` is the last _commit_count caller reading ambient HEAD. It cannot
+    # simply be handed the resolved branch: the reset below rewrites the checkout
+    # it runs in, so the range counted and the branch rewritten have to be the
+    # same one. Resolve the branch, refuse when the checkout is not on it, and
+    # count against it.
+    feature_branch = _resolve_feature_branch(args.task_id)
+    if feature_branch:
+        checked_out = _run_git("rev-parse", "--abbrev-ref", "HEAD", check=False).stdout.strip()
+        if checked_out != feature_branch.removeprefix("origin/"):
+            return _fail(
+                f"`aet ship split` rewrites history in the current checkout, which is on "
+                f"'{checked_out}', not task {args.task_id}'s branch "
+                f"'{feature_branch.removeprefix('origin/')}'. Check that branch out, or run "
+                f"from its worktree, and retry."
+            )
+
+    commit_count = _commit_count(pr_base, feature_branch=feature_branch)
     if commit_count == 0:
-        return _fail(f"No commits between {pr_base} and HEAD.")
+        return _fail(f"No commits between {pr_base} and {feature_branch or 'HEAD'}.")
 
     original_head = _run_git("rev-parse", "HEAD").stdout.strip()
     print(f"Original HEAD: {original_head}")

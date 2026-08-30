@@ -169,14 +169,24 @@ embedded defect remediation** and planned as one sequence.
 
 ## Technical Notes
 
-**Code anchors.** `src/aet/wirelog.py` (kimi-only schema, anchored regexes at `_TEST_RUNNER_RES`
-lines 29-38); `src/aet/cli/orchestrator.py:901-903` (`session_dir` gated on
-`adapter.name == "kimi"`), `:603` (`_emit_wire_test_runs`), `:711`
-(`_emit_test_run_from_verdict`, which passes `start_time=None, end_time=None, exit_code=0`
-literally); `src/aet/telemetry.py:40` (`classify_test_scope`), `:62` (`_test_runner_args`, whose
-docstring already notes it "mirrors the wire-extraction match list" — the duplication R-3
-removes), `:192` (`stage_record`), `:328` (`test_run_record`); `src/aet/cli_adapter.py:57`
-(`ADAPTERS`); `src/aet/usage.py:43` (`parse_usage`, the dispatch pattern R-4 mirrors).
+**Code anchors.** Anchored on symbol names, not line numbers: this PRD spanned seven plans and
+every line anchor it originally carried had drifted by the time the initiative closed, four of
+them onto unrelated code. `aet-sync-docs` reads these, so a name that no longer resolves is worse
+than no anchor at all.
+
+*As delivered (re-anchored 2026-08-30, after tap-01…tap-07):*
+
+| Symbol | Module | Note |
+| --- | --- | --- |
+| `is_test_command`, `extract_test_invocations` | `src/aet/wirelog.py` | The kimi reader. `is_test_command` now delegates to `test_runners.resolve_test_command`; the anchored per-runner regex table (`_TEST_RUNNER_RES`) that R-3 set out to remove is **gone**, which is R-3 delivered. |
+| `resolve_test_command` | `src/aet/test_runners.py` | The shared registry R-3 created. Sole owner of runner matching; `telemetry._test_runner_args` no longer exists. |
+| `extract_test_invocations` | `src/aet/session_log.py` | The per-adapter dispatch R-1/R-2 built, called from `_emit_session_test_runs`. Replaces the `adapter.name == "kimi"` gate this PRD was written against. |
+| `_emit_session_test_runs` | `src/aet/cli/orchestrator.py` | Renamed from `_emit_wire_test_runs` once extraction stopped being wire-specific. |
+| `_emit_test_run_from_verdict` | `src/aet/cli/orchestrator.py` | The claimed-record path; ADR-051's `source: "verdict"`. |
+| `classify_test_scope`, `stage_record`, `test_run_record` | `src/aet/telemetry.py` | `test_run_record` carries `source` per ADR-051. `classify_test_scope` still reports `make validate` as `full-suite` — see `content/backlog/debt-test-command-detector-is-broken.md`. |
+| `ADAPTERS` | `src/aet/cli_adapter.py` | |
+| `parse_usage` | `src/aet/usage.py` | The dispatch pattern R-4 mirrors. |
+| `iter_telemetry_task_records`, `_repeated_stage_count` | `src/aet/track_record.py` | The rework-counting defect below. |
 
 **Claude Code schema, verified 2026-07-26.** Transcripts live at
 `~/.claude/projects/<cwd-slug>/<sessionId>.jsonl`. Assistant records carry
@@ -207,8 +217,8 @@ that intake refuses plans citing unresolvable ADRs):
 **First-Pass Merge** as requiring no failed `stage`/`test_run` record and no **Rework**, where
 rework is "repeated stage runs (stage telemetry records beyond the first for any stage name)".
 Both clauses read `track_record.iter_telemetry_task_records`, which yields `stage` **and**
-`test_run` records (`track_record.py:74`). For the failure clause that is intentional. For rework
-it is not: `_repeated_stage_count` (`:103`) groups every yielded record by its `stage` field, and
+`test_run` records. For the failure clause that is intentional. For rework
+it is not: `_repeated_stage_count` groups every yielded record by its `stage` field, and
 `test_run` records carry one — so each extra `make validate` in a stage scores +1 rework, against
 ADR-035's own written definition.
 
