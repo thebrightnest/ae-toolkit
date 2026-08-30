@@ -35,6 +35,7 @@ TOKEN_BURN_THRESHOLD = 5_000_000
 @dataclass
 class PatternBucket:
     count: int = 0
+    scanned: bool = False
     examples: list[str] = field(default_factory=list)
 
     def add(self, example: str) -> None:
@@ -284,6 +285,19 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
     repeated_test_invocations = sum(max(0, count - 1) for count in task_full_suite_counts.values())
     repeated_stage_failures = sum(max(0, count - 1) for count in stage_failure_counts.values())
 
+    bucket_scanned = {
+        "dependency_issues": files_scanned > 0 or reports_scanned > 0,
+        "repeated_loops": files_scanned > 0 or reports_scanned > 0,
+        "full_suite_runs": files_scanned > 0,
+        "impact_runs": files_scanned > 0,
+        "repeated_test_invocations": files_scanned > 0,
+        "stage_failures": files_scanned > 0 or reports_scanned > 0,
+        "review_noise": files_scanned > 0 or reports_scanned > 0,
+        "learning_candidates": files_scanned > 0,
+        "slow_stage": files_scanned > 0,
+        "token_burn": files_scanned > 0,
+    }
+
     return {
         "dependency_issues": counts.get("dependency_issues", 0),
         # Structured signal plus whatever the narrative scan found; the two
@@ -300,8 +314,16 @@ def mine_archive(archive_dir: Path) -> dict[str, Any]:
         "runs_scanned": runs_scanned,
         "files_scanned": files_scanned,
         "reports_scanned": reports_scanned,
+        "scanned": bucket_scanned,
         "examples": {k: v[:5] for k, v in examples.items()},
     }
+
+
+def _render_bucket(patterns: dict[str, Any], key: str) -> str:
+    scanned = patterns.get("scanned", {}).get(key, True)
+    if not scanned:
+        return "unscanned"
+    return str(patterns.get(key, 0))
 
 
 def format_report(patterns: dict[str, Any]) -> str:
@@ -315,36 +337,42 @@ def format_report(patterns: dict[str, Any]) -> str:
         "",
         "## Recurring Patterns",
         "",
-        f"- Dependency issues: {patterns['dependency_issues']}",
-        f"- Repeated loops: {patterns['repeated_loops']}",
-        f"- Full-suite runs (observed): {patterns['full_suite_runs']}",
-        f"- Impact-scoped runs (observed): {patterns['impact_runs']}",
+        f"- Dependency issues: {_render_bucket(patterns, 'dependency_issues')}",
+        f"- Repeated loops: {_render_bucket(patterns, 'repeated_loops')}",
+        f"- Full-suite runs (observed): {_render_bucket(patterns, 'full_suite_runs')}",
+        f"- Impact-scoped runs (observed): {_render_bucket(patterns, 'impact_runs')}",
         "  (before tap-06, every `make` run counted as full-suite regardless of "
         "how much of the suite it ran; records written since carry the scope "
         "`change_scope` actually resolved, so this split shifts toward "
         "impact over time and is not comparable across that boundary)",
-        f"- Repeated test invocations (observed): {patterns['repeated_test_invocations']}",
-        f"- Slow stages (> {SLOW_STAGE_THRESHOLD_S}s): {patterns['slow_stage']}",
-        f"- Token-burn stages (> {TOKEN_BURN_THRESHOLD:,} tokens): {patterns['token_burn']}",
-        f"- Stage failures: {patterns['stage_failures']}",
-        f"- Review noise: {patterns['review_noise']}",
+        f"- Repeated test invocations (observed): {_render_bucket(patterns, 'repeated_test_invocations')}",
+        f"- Slow stages (> {SLOW_STAGE_THRESHOLD_S}s): {_render_bucket(patterns, 'slow_stage')}",
+        f"- Token-burn stages (> {TOKEN_BURN_THRESHOLD:,} tokens): {_render_bucket(patterns, 'token_burn')}",
+        f"- Stage failures: {_render_bucket(patterns, 'stage_failures')}",
+        f"- Review noise: {_render_bucket(patterns, 'review_noise')}",
         "",
         "## Ranked by Frequency",
         "",
     ]
 
-    ranked = sorted(
-        (
+    any_scanned = patterns.get("files_scanned", 0) > 0 or patterns.get("reports_scanned", 0) > 0
+    if not any_scanned:
+        lines.append("- No telemetry scanned.")
+    else:
+        ranked = [
             (k, v)
             for k, v in patterns.items()
-            if k not in ("runs_scanned", "files_scanned", "reports_scanned", "examples")
-        ),
-        key=lambda item: item[1],
-        reverse=True,
-    )
-    for name, count in ranked:
-        label = name.replace("_", " ").title()
-        lines.append(f"1. {label}: {count}")
+            if k not in ("runs_scanned", "files_scanned", "reports_scanned", "examples", "scanned")
+            and isinstance(v, (int, float))
+            and v > 0
+        ]
+        ranked.sort(key=lambda item: item[1], reverse=True)
+        if not ranked:
+            lines.append("- No recurring patterns detected.")
+        else:
+            for rank, (name, count) in enumerate(ranked, 1):
+                label = name.replace("_", " ").title()
+                lines.append(f"{rank}. {label}: {count}")
 
     examples = patterns.get("examples", {})
     if examples:

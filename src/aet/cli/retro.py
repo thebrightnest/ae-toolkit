@@ -101,9 +101,10 @@ def archive_task_log_path(
     project_slug: str,
     run_id: str,
     task_id: str,
+    date_str: str | None = None,
 ) -> Path:
-    """Return the task JSONL path for the current date, creating parents."""
-    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    """Return the task JSONL path for the given/current date, creating parents."""
+    date = date_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     path = archive_dir.expanduser() / project_slug / date / run_id / f"{task_id}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
@@ -183,9 +184,7 @@ def recent_project_records(
         if not date_dir.is_dir():
             continue
         try:
-            date = datetime.strptime(date_dir.name, "%Y-%m-%d").replace(
-                tzinfo=timezone.utc
-            )
+            date = datetime.strptime(date_dir.name, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except ValueError:
             continue
         if date < cutoff:
@@ -240,32 +239,47 @@ def extract_message(record: dict) -> str | None:
     return None
 
 
-def categorize_records(records: list[dict]) -> tuple[list[str], list[str]]:
+def categorize_records(records: list[dict]) -> tuple[list[str], list[str], int]:
     """Split telemetry records into AET-level and project-level findings.
 
     Only records with usable finding text (see ``extract_message``) are
-    considered; everything else is skipped, never rendered.
+    considered; records without usable text are counted as dropped.
     """
     aet: list[str] = []
     project: list[str] = []
     seen: set[str] = set()
+    dropped_count = 0
     for record in records:
         msg = extract_message(record)
-        if not msg or msg in seen:
+        if not msg:
+            dropped_count += 1
+            continue
+        if msg in seen:
             continue
         seen.add(msg)
         if is_aet_level(msg):
             aet.append(msg)
         else:
             project.append(msg)
-    return aet, project
+    return aet, project, dropped_count
 
 
-def format_section(title: str, items: list[str]) -> list[str]:
+def format_section(
+    title: str,
+    items: list[str],
+    total_records: int = 0,
+    dropped_count: int = 0,
+) -> list[str]:
     """Format a retro subsection with deduplicated bullets."""
     lines = [f"### {title}", ""]
     if not items:
-        lines.append("- No findings.")
+        if total_records == 0:
+            lines.append("- No telemetry records.")
+        elif dropped_count > 0:
+            suffix = "s" if dropped_count != 1 else ""
+            lines.append(f"- No findings ({dropped_count} record{suffix} dropped lacking usable finding text).")
+        else:
+            lines.append("- No findings.")
     else:
         for item in items[:20]:
             lines.append(f"- {item}")
@@ -278,6 +292,8 @@ def generate_retro(
     project_findings: list[str],
     aet_findings: list[str],
     telemetry_report: str,
+    total_records: int = 0,
+    dropped_count: int = 0,
 ) -> str:
     """Render the retro markdown."""
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -300,8 +316,22 @@ def generate_retro(
         "- **AET-level** — fix in the AET toolkit (skills, orchestrator, commands, templates).",
         "",
     ]
-    lines.extend(format_section("Project-level findings", project_findings))
-    lines.extend(format_section("AET-level findings", aet_findings))
+    lines.extend(
+        format_section(
+            "Project-level findings",
+            project_findings,
+            total_records=total_records,
+            dropped_count=dropped_count,
+        )
+    )
+    lines.extend(
+        format_section(
+            "AET-level findings",
+            aet_findings,
+            total_records=total_records,
+            dropped_count=dropped_count,
+        )
+    )
     lines.extend(
         [
             "## Action Items",
@@ -333,10 +363,8 @@ def _run(
         return 1
     else:
         resolved_slug = derive_project_slug()
-    local_records = recent_project_records(
-        archive_dir, resolved_slug, lookback_days=lookback_days
-    )
-    aet_findings, project_findings = categorize_records(local_records)
+    local_records = recent_project_records(archive_dir, resolved_slug, lookback_days=lookback_days)
+    aet_findings, project_findings, dropped_count = categorize_records(local_records)
 
     telemetry_report = "Skipped mine-learnings (--no-mine)."
     if not no_mine:
@@ -349,7 +377,12 @@ def _run(
         output = output_dir / f"{date}-aet-retro.md"
 
     retro = generate_retro(
-        resolved_slug, project_findings, aet_findings, telemetry_report
+        resolved_slug,
+        project_findings,
+        aet_findings,
+        telemetry_report,
+        total_records=len(local_records),
+        dropped_count=dropped_count,
     )
     output.write_text(retro, encoding="utf-8")
 

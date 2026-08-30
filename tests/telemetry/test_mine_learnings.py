@@ -31,9 +31,7 @@ def _write_run(archive: Path, slug: str, date: str, run_id: str, records: list[d
     """Write a task JSONL log in the writer layout: {archive}/{slug}/{date}/{run-id}/."""
     run_dir = archive / slug / date / run_id
     run_dir.mkdir(parents=True)
-    (run_dir / "task-1.jsonl").write_text(
-        "\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8"
-    )
+    (run_dir / "task-1.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
     return run_dir
 
 
@@ -55,9 +53,7 @@ class TestMineArchiveWriterLayout(unittest.TestCase):
             _write_run(archive, "myrepo/main", _today(), "run-1", [{"type": "stage", "exit_code": 0}])
             stray = archive / "myrepo" / "main" / "not-a-date" / "run-x"
             stray.mkdir(parents=True)
-            (stray / "task-1.jsonl").write_text(
-                json.dumps({"type": "stage", "exit_code": 1}) + "\n", encoding="utf-8"
-            )
+            (stray / "task-1.jsonl").write_text(json.dumps({"type": "stage", "exit_code": 1}) + "\n", encoding="utf-8")
             patterns = mine_learnings.mine_archive(archive)
         self.assertEqual(patterns["runs_scanned"], 1)
         self.assertEqual(patterns["files_scanned"], 1)
@@ -155,9 +151,7 @@ class TestStructuralScopeCounting(unittest.TestCase):
 
     def test_report_labels_scope_counts_as_observed(self):
         """The report states the provenance the figures are computed over."""
-        report = mine_learnings.format_report(
-            mine_learnings.mine_archive(Path(tempfile.mkdtemp()))
-        )
+        report = mine_learnings.format_report(mine_learnings.mine_archive(Path(tempfile.mkdtemp())))
         self.assertIn("Full-suite runs (observed)", report)
         self.assertIn("Impact-scoped runs (observed)", report)
 
@@ -269,12 +263,85 @@ class TestRetiredNarrativeKeyword(unittest.TestCase):
             archive = Path(tmp)
             _write_run(archive, "myrepo/main", _today(), "run-1", [])
             run_dir = archive / "myrepo" / "main" / _today() / "run-1"
-            (run_dir / "report.md").write_text(
-                "The agent ran the 488-test suite five times.\n", encoding="utf-8"
-            )
+            (run_dir / "report.md").write_text("The agent ran the 488-test suite five times.\n", encoding="utf-8")
             patterns = mine_learnings.mine_archive(archive)
         self.assertEqual(patterns["full_suite_runs"], 0)
         self.assertEqual(patterns["reports_scanned"], 1)
+
+
+class TestDistinguishZeroFromUnscanned(unittest.TestCase):
+    """An unscanned bucket and a count of zero render differently (ADR-072 / eop-07)."""
+
+    def test_empty_archive_buckets_marked_unscanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            patterns = mine_learnings.mine_archive(archive)
+            report = mine_learnings.format_report(patterns)
+
+        self.assertFalse(patterns["scanned"]["dependency_issues"])
+        self.assertFalse(patterns["scanned"]["repeated_loops"])
+        self.assertFalse(patterns["scanned"]["full_suite_runs"])
+        self.assertIn("Dependency issues: unscanned", report)
+        self.assertIn("Repeated loops: unscanned", report)
+        self.assertIn("Full-suite runs (observed): unscanned", report)
+        self.assertIn("No telemetry scanned.", report)
+
+    def test_scanned_archive_with_no_matches_renders_zeros(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            _write_run(archive, "myrepo/main", _today(), "run-1", [{"type": "stage", "exit_code": 0}])
+            patterns = mine_learnings.mine_archive(archive)
+            report = mine_learnings.format_report(patterns)
+
+        self.assertTrue(patterns["scanned"]["dependency_issues"])
+        self.assertTrue(patterns["scanned"]["repeated_loops"])
+        self.assertTrue(patterns["scanned"]["full_suite_runs"])
+        self.assertEqual(patterns["dependency_issues"], 0)
+        self.assertIn("Dependency issues: 0", report)
+        self.assertIn("Repeated loops: 0", report)
+        self.assertIn("Full-suite runs (observed): 0", report)
+        self.assertIn("No recurring patterns detected.", report)
+
+    def test_empty_and_scanned_zero_reports_differ(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            empty_archive = Path(tmp) / "empty"
+            empty_archive.mkdir()
+            scanned_archive = Path(tmp) / "scanned"
+            _write_run(scanned_archive, "myrepo/main", _today(), "run-1", [{"type": "stage", "exit_code": 0}])
+
+            empty_report = mine_learnings.format_report(mine_learnings.mine_archive(empty_archive))
+            scanned_report = mine_learnings.format_report(mine_learnings.mine_archive(scanned_archive))
+
+        self.assertNotEqual(empty_report, scanned_report)
+
+    def test_ranking_has_no_duplicate_rank_numbers_and_excludes_zeros(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            _write_run(
+                archive,
+                "myrepo/main",
+                _today(),
+                "run-1",
+                [
+                    {"type": "environment_issue", "dependency": "npm"},
+                    {"type": "environment_issue", "dependency": "pip"},
+                    {"type": "stage", "stage": "qa", "exit_code": 1},
+                ],
+            )
+            patterns = mine_learnings.mine_archive(archive)
+            report = mine_learnings.format_report(patterns)
+
+        ranking_section = report.split("## Ranked by Frequency\n\n", 1)[1]
+        if "## Example Snippets" in ranking_section:
+            ranking_section = ranking_section.split("## Example Snippets", 1)[0]
+        ranking_lines = [line for line in ranking_section.strip().splitlines() if line.strip()]
+
+        self.assertEqual(len(ranking_lines), 2)
+        self.assertTrue(ranking_lines[0].startswith("1. Dependency Issues: 2"))
+        self.assertTrue(ranking_lines[1].startswith("2. Stage Failures: 1"))
+        # Zero-count buckets are not present in ranking
+        self.assertNotIn("Slow Stage", ranking_section)
+        self.assertNotIn("Token Burn", ranking_section)
 
 
 if __name__ == "__main__":

@@ -54,9 +54,7 @@ def _make_writer_archive() -> Path:
         # ...and a queue snapshot must never render as a dict repr.
         {"type": "queue_snapshot", "tasks": [{"id": "abc-123", "status": "ready"}]},
     ]
-    (run_dir / "task-1.jsonl").write_text(
-        "\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8"
-    )
+    (run_dir / "task-1.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
     return tmp
 
 
@@ -80,9 +78,7 @@ class TestRetroFindingsAreTypedNotGuessed(unittest.TestCase):
         # Real findings render, split by where the fix should land.
         self.assertIn("### Project-level findings", text)
         self.assertIn("### AET-level findings", text)
-        project_section = text.split("### Project-level findings", 1)[1].split(
-            "### AET-level findings", 1
-        )[0]
+        project_section = text.split("### Project-level findings", 1)[1].split("### AET-level findings", 1)[0]
         aet_section = text.split("### AET-level findings", 1)[1]
         self.assertIn("API contract drift between frontend cart and backend checkout", project_section)
         self.assertIn("aet-review flagged mock-boundary violation in aet-work lib", aet_section)
@@ -95,9 +91,7 @@ class TestRetroFindingsAreTypedNotGuessed(unittest.TestCase):
 
 class TestExtractMessage(unittest.TestCase):
     def test_learning_candidate_uses_description(self):
-        msg = aet_retro.extract_message(
-            {"type": "learning_candidate", "description": "real finding"}
-        )
+        msg = aet_retro.extract_message({"type": "learning_candidate", "description": "real finding"})
         self.assertEqual(msg, "real finding")
 
     def test_explicit_text_fields_are_findings(self):
@@ -112,7 +106,7 @@ class TestExtractMessage(unittest.TestCase):
         self.assertIsNone(aet_retro.extract_message("not a dict"))
 
     def test_records_without_text_are_not_findings(self):
-        aet, project = aet_retro.categorize_records(
+        aet, project, dropped = aet_retro.categorize_records(
             [
                 {"type": "stage", "stage": "secure"},
                 {"type": "queue_snapshot", "tasks": [{"id": "x"}]},
@@ -120,6 +114,64 @@ class TestExtractMessage(unittest.TestCase):
         )
         self.assertEqual(aet, [])
         self.assertEqual(project, [])
+        self.assertEqual(dropped, 2)
+
+
+class TestDistinguishAbsentFromDroppedRecords(unittest.TestCase):
+    """Absent records and dropped records render differently in aet-retro (ADR-072 / eop-07)."""
+
+    def test_empty_archive_renders_no_telemetry_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            output = archive / "retro.md"
+            with patch.dict(os.environ, {"AET_PROJECT_ID": "myrepo/main"}, clear=False):
+                rc = aet_retro.main(["--archive-dir", str(archive), "--no-mine", "--output", str(output)])
+            self.assertEqual(rc, 0)
+            text = output.read_text(encoding="utf-8")
+
+        self.assertIn("- No telemetry records.", text)
+
+    def test_archive_with_dropped_records_reports_drop_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp)
+            run_dir = archive / "myrepo" / "main" / datetime.now(timezone.utc).strftime("%Y-%m-%d") / "run-1"
+            run_dir.mkdir(parents=True)
+            records = [
+                {"type": "stage", "stage": "qa-complete", "exit_code": 0},
+                {"type": "queue_snapshot", "tasks": []},
+            ]
+            (run_dir / "task-1.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
+            output = archive / "retro.md"
+            with patch.dict(os.environ, {"AET_PROJECT_ID": "myrepo/main"}, clear=False):
+                rc = aet_retro.main(["--archive-dir", str(archive), "--no-mine", "--output", str(output)])
+            self.assertEqual(rc, 0)
+            text = output.read_text(encoding="utf-8")
+
+        self.assertIn("- No findings (2 records dropped lacking usable finding text).", text)
+
+    def test_absent_and_dropped_outputs_differ(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            empty_archive = Path(tmp) / "empty"
+            empty_archive.mkdir()
+            empty_output = empty_archive / "retro.md"
+
+            dropped_archive = Path(tmp) / "dropped"
+            run_dir = dropped_archive / "myrepo" / "main" / datetime.now(timezone.utc).strftime("%Y-%m-%d") / "run-1"
+            run_dir.mkdir(parents=True)
+            (run_dir / "task-1.jsonl").write_text(
+                json.dumps({"type": "stage", "stage": "qa-complete", "exit_code": 0}) + "\n",
+                encoding="utf-8",
+            )
+            dropped_output = dropped_archive / "retro.md"
+
+            with patch.dict(os.environ, {"AET_PROJECT_ID": "myrepo/main"}, clear=False):
+                aet_retro.main(["--archive-dir", str(empty_archive), "--no-mine", "--output", str(empty_output)])
+                aet_retro.main(["--archive-dir", str(dropped_archive), "--no-mine", "--output", str(dropped_output)])
+
+            empty_text = empty_output.read_text(encoding="utf-8")
+            dropped_text = dropped_output.read_text(encoding="utf-8")
+
+        self.assertNotEqual(empty_text, dropped_text)
 
 
 class TestProjectSlugContract(unittest.TestCase):
@@ -152,9 +204,7 @@ class TestProjectSlugContract(unittest.TestCase):
             stderr = io.StringIO()
             with patch.object(aet_retro, "derive_project_slug", None):
                 with contextlib.redirect_stderr(stderr):
-                    rc = aet_retro.main(
-                        ["--archive-dir", tmp, "--no-mine", "--output", str(output)]
-                    )
+                    rc = aet_retro.main(["--archive-dir", tmp, "--no-mine", "--output", str(output)])
         self.assertEqual(rc, 1)
         self.assertIn("aet", stderr.getvalue())
         self.assertFalse(output.exists())
@@ -167,9 +217,7 @@ class TestTelemetrySummaryEmbedsMineLearnings(unittest.TestCase):
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         run_dir = archive / slug / date / "run-1"
         run_dir.mkdir(parents=True)
-        (run_dir / "task-1.jsonl").write_text(
-            "\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8"
-        )
+        (run_dir / "task-1.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
         return run_dir
 
     def test_telemetry_summary_renders_new_counts_and_propose(self):
@@ -185,9 +233,7 @@ class TestTelemetrySummaryEmbedsMineLearnings(unittest.TestCase):
             ]
             self._write_run(archive, "myrepo/main", records)
             with patch.dict(os.environ, {"AET_PROJECT_ID": "myrepo/main"}, clear=False):
-                rc = aet_retro.main(
-                    ["--archive-dir", str(archive), "--output", str(output)]
-                )
+                rc = aet_retro.main(["--archive-dir", str(archive), "--output", str(output)])
             self.assertEqual(rc, 0)
             text = output.read_text(encoding="utf-8")
 
