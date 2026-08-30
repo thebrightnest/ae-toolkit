@@ -15,6 +15,11 @@ repos:
     hooks:
       - id: markdownlint-cli2
         args: ["--config", ".markdownlint.yaml"]
+        # Archived plans are frozen historical records, not live documents:
+        # they carry the `_Stage:_` footers and list styles of the era they were
+        # written in. `plans_lint` already exempts this directory for the same
+        # reason; restyling them would rewrite history to satisfy a linter.
+        exclude: ^docs/plans/archive/
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.12
