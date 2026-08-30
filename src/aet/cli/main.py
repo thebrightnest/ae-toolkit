@@ -431,6 +431,54 @@ def _ensure_aet_importable() -> None:
             os.environ["PYTHONPATH"] = str(src_dir)
 
 
+def _ensure_git_is_noninteractive() -> None:
+    """Stop git from waiting on a prompt nobody can answer.
+
+    Every git call the toolkit makes is a subprocess of this process, so the
+    environment set here reaches all of them — including the ones that talk to a
+    remote (``fetch``, ``push``, ``ls-remote``). Without it, an SSH remote with
+    no key loaded and no TTY leaves git blocked on a passphrase or host-key
+    prompt until something above the toolkit gives up. Observed as a 180s hang
+    on `aet state transition` and `aet gate submit` in an agent container, where
+    the deadline that eventually fired belonged to the harness, not to us.
+
+    Two rules keep this from changing anything for an operator at a terminal:
+
+    1. ``GIT_TERMINAL_PROMPT`` is always set, because it has no config
+       equivalent to override and a value of ``0`` only turns a prompt into an
+       error. Both use ``setdefault``, so an explicit value from the caller wins.
+    2. ``GIT_SSH_COMMAND`` is set **only when stdin is not a TTY**. With a
+       terminal attached there is someone to answer, and forcing ``BatchMode``
+       would break an ordinary passphrase or host-key confirmation. With no
+       terminal there is nobody, so the only thing ``BatchMode`` can change is
+       how long the failure takes.
+
+    The ``core.sshCommand`` check is what makes rule 2 safe to apply. The
+    environment variable outranks that config key, so setting it unconditionally
+    would silently discard a custom ssh invocation — a deploy key on a CI runner
+    is the case that matters. Reading the key costs one subprocess, and only on
+    the non-TTY path that is currently the one hanging.
+    """
+    os.environ.setdefault("GIT_TERMINAL_PROMPT", "0")
+
+    if sys.stdin.isatty() or "GIT_SSH_COMMAND" in os.environ:
+        return
+
+    try:
+        configured = subprocess.run(
+            ["git", "config", "--get", "core.sshCommand"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return
+    if configured.returncode == 0 and configured.stdout.strip():
+        return
+
+    os.environ["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes -o ConnectTimeout=5"
+
+
 def _orchestrator_path() -> Path:
     """Return the path to the orchestrator module."""
     return Path(__file__).resolve().parent / "orchestrator.py"
@@ -557,6 +605,7 @@ def run_one(
 
 def main() -> int:
     _ensure_aet_importable()
+    _ensure_git_is_noninteractive()
     try:
         app()
     except SystemExit as exc:
