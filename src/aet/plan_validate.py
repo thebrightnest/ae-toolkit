@@ -125,7 +125,9 @@ def _repo_root_for(plan: Path) -> Path:
         )
         return Path(result.stdout.strip())
     except (OSError, subprocess.CalledProcessError):
-        # Fall back to the canonical layout ``docs/plans/<plan>.md``.
+        # Fall back to the canonical layout ``docs/plans/active/<plan>.md`` or ``docs/plans/<plan>.md``.
+        if plan.parent.name in ("active", "archive") and plan.parent.parent.name == "plans" and plan.parent.parent.parent.name == "docs":
+            return plan.parent.parent.parent.parent
         if plan.parent.name == "plans" and plan.parent.parent.name == "docs":
             return plan.parent.parent.parent
         return plan.parent.parent
@@ -511,9 +513,14 @@ def validate(
     # references and duplicate-id detection remain accurate.
     corpus = corpus_dir(repo_root)
     if corpus is not None:
-        all_plans = sorted(
-            p for p in corpus.glob("*.md") if not plan_parser.is_settled_plan(p)
+        active_dir = corpus / "active"
+        active_plans = (
+            [p for p in active_dir.glob("*.md") if not plan_parser.is_settled_plan(p)]
+            if active_dir.is_dir()
+            else []
         )
+        root_plans = [p for p in corpus.glob("*.md") if not plan_parser.is_settled_plan(p)]
+        all_plans = sorted(set(active_plans + root_plans))
     else:
         all_plans = live_plans
     findings.extend(

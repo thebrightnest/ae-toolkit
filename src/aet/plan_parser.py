@@ -714,14 +714,18 @@ def resolve_plan_arg(plan: str, plans_dir: Path = Path("docs/plans")) -> str:
 
     A value ending in ``.md`` is treated as a plan path and returned as-is.
     Anything else is treated as a task id and resolved to
-    ``<plans_dir>/<id>.md``. Raises ``ValueError`` when the id does not
-    resolve, so the error names both interpretations.
+    ``<plans_dir>/active/<id>.md`` or ``<plans_dir>/<id>.md``. Raises
+    ``ValueError`` when the id does not resolve, so the error names both
+    interpretations.
     """
     if plan.lower().endswith(".md"):
         return plan
-    candidate = plans_dir / f"{plan}.md"
-    if candidate.is_file():
-        return str(candidate)
+    candidate_active = plans_dir / "active" / f"{plan}.md"
+    if candidate_active.is_file():
+        return str(candidate_active)
+    candidate_root = plans_dir / f"{plan}.md"
+    if candidate_root.is_file():
+        return str(candidate_root)
     raise ValueError(
-        f"Plan not found: '{plan}' is not a .md path and {candidate} does not exist. Pass the full plan path."
+        f"Plan not found: '{plan}' is not a .md path and {candidate_active} (or legacy {candidate_root}) does not exist. Pass the full plan path."
     )

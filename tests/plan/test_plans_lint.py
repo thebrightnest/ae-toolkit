@@ -139,10 +139,25 @@ class TestCorpusLint(unittest.TestCase):
         archive_dir = self.plans_dir / "archive"
         archive_dir.mkdir()
         make_plan(archive_dir / "settled.md", status="merged")
+        # Even with an illegal live status, archived plans are excluded
+        make_plan(archive_dir / "bad_archived.md", status="queued")
 
         violations = plans_lint.lint_corpus(self.plans_dir)
 
         self.assertEqual(violations, [])
+
+    def test_active_directory_plans_are_discovered_and_linted(self):
+        """Plans under docs/plans/active/ are discovered and checked."""
+        active_dir = self.plans_dir / "active"
+        active_dir.mkdir()
+        make_plan(active_dir / "good_active.md")
+        make_plan(active_dir / "bad_active.md", status="in_progress")
+
+        violations = plans_lint.lint_corpus(self.plans_dir)
+
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0][0].name, "bad_active.md")
+        self.assertIn("live status field is present", violations[0][1])
 
 
 class TestFloorLint(unittest.TestCase):
@@ -508,6 +523,20 @@ class TestPlansLintCli(unittest.TestCase):
         self.assertIn("child.md", result.stdout)
         self.assertIn("floor:", result.stdout)
         self.assertIn("floor warning", result.stdout)
+
+    def test_plans_lint_discovers_active_plans_cli(self):
+        """``aet plans lint`` finds plans under docs/plans/active/."""
+        repo = self.root / "repo"
+        plans_dir = repo / "docs" / "plans"
+        active_dir = plans_dir / "active"
+        active_dir.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q"], cwd=str(repo), check=True)
+        make_plan(active_dir / "active_one.md")
+
+        result = self._run_aet(repo, "plans", "lint")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("all 1 plans passed lint", result.stdout)
 
 
 if __name__ == "__main__":

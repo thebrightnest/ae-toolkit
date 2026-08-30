@@ -14,7 +14,7 @@ from pathlib import Path
 import typer
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import plan_parser  # noqa: E402
+from aet import admission, plan_parser  # noqa: E402
 from aet.backends.factory import create_backend, resolve_config  # noqa: E402
 from aet.projections.dispatcher import resolve_projections  # noqa: E402
 from aet.queue import QueueIntegrityError  # noqa: E402
@@ -26,10 +26,7 @@ def resolve_plan(target: str, plans_dir: Path) -> Path | None:
     Wraps the shared resolver and converts its ``ValueError`` into ``None``,
     preserving ``aet backlog add``'s existing contract.
     """
-    try:
-        return Path(plan_parser.resolve_plan_arg(target, plans_dir=plans_dir))
-    except ValueError:
-        return None
+    return admission.resolve_plan(target, plans_dir)
 
 
 def _fail(message: str) -> int:

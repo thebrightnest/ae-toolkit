@@ -48,6 +48,35 @@ class TestResolvePlanArg:
         assert ".md" in message
         assert "docs/plans/no-such-id.md" in message
 
+    def test_resolves_bare_id_to_active_path(self, tmp_cwd: Path) -> None:
+        plan = tmp_cwd / "docs" / "plans" / "active" / "rid-01.md"
+        plan.parent.mkdir(parents=True)
+        plan.write_text("---\nid: rid-01\n---\n", encoding="utf-8")
+
+        result = resolve_plan_arg("rid-01")
+
+        assert result == "docs/plans/active/rid-01.md"
+
+    def test_active_takes_precedence_over_legacy(self, tmp_cwd: Path) -> None:
+        active_plan = tmp_cwd / "docs" / "plans" / "active" / "rid-01.md"
+        active_plan.parent.mkdir(parents=True)
+        active_plan.write_text("---\nid: rid-01\n---\n", encoding="utf-8")
+
+        legacy_plan = tmp_cwd / "docs" / "plans" / "rid-01.md"
+        legacy_plan.write_text("---\nid: rid-01\n---\n", encoding="utf-8")
+
+        result = resolve_plan_arg("rid-01")
+
+        assert result == "docs/plans/active/rid-01.md"
+
+    def test_archived_plan_not_resolved_by_bare_id(self, tmp_cwd: Path) -> None:
+        archive_plan = tmp_cwd / "docs" / "plans" / "archive" / "archived-01.md"
+        archive_plan.parent.mkdir(parents=True)
+        archive_plan.write_text("---\nid: archived-01\n---\n", encoding="utf-8")
+
+        with pytest.raises(ValueError):
+            resolve_plan_arg("archived-01")
+
     def test_md_path_passthrough_even_when_missing(self, tmp_cwd: Path) -> None:
         result = resolve_plan_arg("docs/plans/missing.md")
 
@@ -59,6 +88,16 @@ class TestResolvePlanArg:
         result = resolve_plan_arg(path)
 
         assert result == path
+
+    def test_custom_plans_dir_with_active(self, tmp_cwd: Path) -> None:
+        plans_dir = tmp_cwd / "custom" / "plans"
+        plan = plans_dir / "active" / "task-01.md"
+        plan.parent.mkdir(parents=True)
+        plan.write_text("---\nid: task-01\n---\n", encoding="utf-8")
+
+        result = resolve_plan_arg("task-01", plans_dir=plans_dir)
+
+        assert result == str(plans_dir / "active" / "task-01.md")
 
 
 class TestResolvePlanArgDefaultPlansDir:

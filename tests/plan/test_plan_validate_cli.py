@@ -100,6 +100,26 @@ class TestPlanValidateArgumentShapes(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("2 plans passed validation", out)
 
+    def test_discovery_includes_active_and_excludes_archive(self):
+        """Active plans are validated and archive plans are excluded."""
+        active_dir = self.plans_dir / "active"
+        active_dir.mkdir()
+        archive_dir = self.plans_dir / "archive"
+        archive_dir.mkdir()
+        _write_plan(active_dir / "gamma.md", "gamma")
+        _write_plan(archive_dir / "archived.md", "archived", rid="R-UNKNOWN")
+
+        cwd = os.getcwd()
+        os.chdir(self.root)
+        try:
+            rc, out, _ = _run([])
+        finally:
+            os.chdir(cwd)
+
+        self.assertEqual(rc, 0)
+        # alpha.md in docs/plans/ and gamma.md in docs/plans/active/ (archived is ignored)
+        self.assertIn("2 plans passed validation", out)
+
 
 class TestPlanValidateNamesItsMode(unittest.TestCase):
     """Output states which r-trace mode ran, so counts are comparable."""

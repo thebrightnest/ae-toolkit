@@ -259,6 +259,77 @@ class TestAdmitPlanOperation(unittest.TestCase):
         self.assertEqual(outcome.task["id"], "feat-002")
         self.assertEqual(outcome.task["state"], "blocked")
 
+    def test_admit_plan_from_active_directory(self):
+        """Plans in docs/plans/active/ are admitted via bare ID, path, or prefix."""
+        active_dir = self.plans_dir / "active"
+        active_dir.mkdir(parents=True, exist_ok=True)
+        plan = _make_clean_plan(active_dir, self.prds_dir, "feat-active.md")
+
+        # 1. Via bare ID
+        outcome_bare = admit_plan(
+            "feat-active",
+            plans_dir=self.plans_dir,
+            backend=self.backend,
+            history_file=str(self.history_file),
+            queue=[],
+            history=[],
+        )
+        self.assertIsInstance(outcome_bare, Admitted)
+        self.assertEqual(outcome_bare.plan_file, plan)
+        self.assertEqual(outcome_bare.task["id"], "feat-active")
+
+        # 2. Via explicit path
+        outcome_path = admit_plan(
+            str(plan),
+            plans_dir=self.plans_dir,
+            backend=self.backend,
+            history_file=str(self.history_file),
+            queue=[],
+            history=[],
+        )
+        self.assertIsInstance(outcome_path, Admitted)
+        self.assertEqual(outcome_path.plan_file, plan)
+
+        # 3. Via prefix
+        outcome_prefix = admit_plan(
+            "feat",
+            plans_dir=self.plans_dir,
+            backend=self.backend,
+            history_file=str(self.history_file),
+            queue=[],
+            history=[],
+        )
+        self.assertIsInstance(outcome_prefix, Admitted)
+        self.assertEqual(outcome_prefix.plan_file, plan)
+
+    def test_archived_plan_is_not_discovered_by_bare_id_or_prefix(self):
+        """Plans in docs/plans/archive/ are not auto-discovered by bare ID or prefix."""
+        archive_dir = self.plans_dir / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        _make_clean_plan(archive_dir, self.prds_dir, "feat-archived.md")
+
+        outcome = admit_plan(
+            "feat-archived",
+            plans_dir=self.plans_dir,
+            backend=self.backend,
+            history_file=str(self.history_file),
+            queue=[],
+            history=[],
+        )
+        self.assertIsInstance(outcome, Refused)
+        self.assertEqual(outcome.reason, RefusalReason.PLAN_NOT_FOUND)
+
+        outcome_prefix = admit_plan(
+            "feat",
+            plans_dir=self.plans_dir,
+            backend=self.backend,
+            history_file=str(self.history_file),
+            queue=[],
+            history=[],
+        )
+        self.assertIsInstance(outcome_prefix, Refused)
+        self.assertEqual(outcome_prefix.reason, RefusalReason.PLAN_NOT_FOUND)
+
 
 class TestLedgerSourceDistinctness(unittest.TestCase):
     """Assert sprint-add and sprint-intake write distinct event IDs (Task 5, R-11)."""

@@ -42,6 +42,8 @@ def _repo_root_from(path: Path) -> Path:
         )
         return Path(result.stdout.strip())
     except (OSError, subprocess.CalledProcessError):
+        if start.name in ("active", "archive") and start.parent.name == "plans" and start.parent.parent.name == "docs":
+            return start.parent.parent.parent
         if start.name == "plans" and start.parent.name == "docs":
             return start.parent.parent
         return start.parent
@@ -50,14 +52,20 @@ def _repo_root_from(path: Path) -> Path:
 def _expand_plan_args(plans: list[str]) -> list[Path]:
     """Resolve plan arguments, expanding a directory to its ``*.md`` children.
 
-    ``docs/plans/*.md`` is the documented default, so naming the directory is
-    the first shape a caller tries. Unexpanded it reaches ``read_text`` as a
-    directory. Order follows the arguments; duplicates collapse.
+    ``docs/plans/*.md`` and ``docs/plans/active/*.md`` are the canonical locations.
+    If a directory is named, its active and root markdown children are included
+    (excluding archive). Order follows the arguments; duplicates collapse.
     """
     paths: list[Path] = []
     for raw in plans:
         path = Path(raw).resolve()
-        candidates = sorted(path.glob("*.md")) if path.is_dir() else [path]
+        if path.is_dir():
+            active_dir = path / "active"
+            active_candidates = sorted(active_dir.glob("*.md")) if active_dir.is_dir() else []
+            root_candidates = [p for p in sorted(path.glob("*.md")) if p.parent.name != "archive"]
+            candidates = sorted(set(active_candidates + root_candidates))
+        else:
+            candidates = [path]
         for candidate in candidates:
             if candidate not in paths:
                 paths.append(candidate)
@@ -139,7 +147,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
     else:
         repo_root = _repo_root_from(Path.cwd())
         plans_dir = repo_root / "docs" / "plans"
-        plan_paths = sorted(plans_dir.glob("*.md")) if plans_dir.is_dir() else []
+        active_dir = plans_dir / "active"
+        active_plans = sorted(active_dir.glob("*.md")) if active_dir.is_dir() else []
+        root_plans = sorted(plans_dir.glob("*.md")) if plans_dir.is_dir() else []
+        plan_paths = sorted(set(active_plans + root_plans))
 
     live_paths = [p for p in plan_paths if not plan_parser.is_settled_plan(p)]
 

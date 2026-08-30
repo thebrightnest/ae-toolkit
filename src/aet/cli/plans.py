@@ -50,7 +50,9 @@ def cmd_lint(args: argparse.Namespace) -> int:
 
     plan_files = (
         sorted(
-            p for p in plans_dir.glob("*.md") if not plan_parser.is_settled_plan(p)
+            p
+            for p in plans_lint._corpus_plan_files(plans_dir)
+            if not plan_parser.is_settled_plan(p)
         )
         if plans_dir.exists()
         else []

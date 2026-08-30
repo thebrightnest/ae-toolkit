@@ -147,6 +147,22 @@ def _substantial_overlap(
     return (len(overlap) / len(plan_files)) > _FLOOR_OVERLAP_THRESHOLD, overlap
 
 
+def _corpus_plan_files(plans_dir: Path) -> list[Path]:
+    """Discover all candidate plan files under ``plans_dir``.
+
+    Includes plans directly under ``plans_dir/active/`` and legacy plans
+    directly under ``plans_dir/``, while explicitly excluding any plans
+    under ``plans_dir/archive/``.
+    """
+    if not plans_dir.exists() or not plans_dir.is_dir():
+        return []
+    active_dir = plans_dir / "active"
+    active_files = [p for p in active_dir.glob("*.md") if p.is_file()] if active_dir.is_dir() else []
+    root_files = [p for p in plans_dir.glob("*.md") if p.is_file()]
+    combined = [p for p in set(active_files + root_files) if p.parent.name != "archive"]
+    return sorted(combined, key=lambda p: (p.name, str(p)))
+
+
 def lint_floor(plans_dir: Path) -> list[tuple[Path, str]]:
     """Return floor-signal warnings for the plan corpus under ``plans_dir``.
 
@@ -158,7 +174,7 @@ def lint_floor(plans_dir: Path) -> list[tuple[Path, str]]:
         return warnings
 
     plan_files = sorted(
-        p for p in plans_dir.glob("*.md") if not plan_parser.is_settled_plan(p)
+        p for p in _corpus_plan_files(plans_dir) if not plan_parser.is_settled_plan(p)
     )
     if not plan_files:
         return warnings
@@ -224,7 +240,8 @@ def lint_corpus(plans_dir: Path) -> list[tuple[Path, str]]:
     """Return violations for the live plan corpus under ``plans_dir``.
 
     Settled plans (terminal ``status`` frontmatter or terminal footer stage)
-    are ignored so the linter does not degrade as finished work accumulates.
+    and plans under ``docs/plans/archive/`` are ignored so the linter does not
+    degrade as finished work accumulates.
 
     Each violation is a ``(plan_path, message)`` tuple naming the offending
     file and why it failed. An empty list means no live plan in the corpus
@@ -234,7 +251,7 @@ def lint_corpus(plans_dir: Path) -> list[tuple[Path, str]]:
     if not plans_dir.exists():
         return violations
 
-    for plan in sorted(plans_dir.glob("*.md")):
+    for plan in _corpus_plan_files(plans_dir):
         if plan_parser.is_settled_plan(plan):
             continue
         data = plan_parser.parse_frontmatter(plan)

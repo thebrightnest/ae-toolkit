@@ -65,15 +65,52 @@ AdmissionOutcome = Admitted | Skipped | Refused
 
 
 def resolve_plan(target: str | Path, plans_dir: Path) -> Path | None:
-    """Resolve a target identifier or file path to a plan file in ``plans_dir``."""
+    """Resolve a target identifier or file path to a plan file in ``plans_dir``.
+
+    Resolution order:
+    1. Exact path provided (if existing on disk).
+    2. Relative lookup in ``<plans_dir>/active/<target>`` or ``<plans_dir>/<target>``.
+    3. If target ends with ``.md``, return it as a Path (passthrough).
+    4. Relative lookup in ``<plans_dir>/active/<id>.md`` or ``<plans_dir>/<id>.md``
+       (via :func:`plan_parser.resolve_plan_arg`).
+    5. Prefix or stem match in ``<plans_dir>/active/``.
+    6. Legacy prefix or stem match in ``<plans_dir>/``.
+    """
+    target_path = Path(target)
+    if target_path.is_file():
+        return target_path
+
     target_str = str(target)
+    if (plans_dir / "active" / target_str).is_file():
+        return plans_dir / "active" / target_str
+    if (plans_dir / target_str).is_file():
+        return plans_dir / target_str
+
+    if target_str.lower().endswith(".md"):
+        return target_path
+
     try:
-        return Path(plan_parser.resolve_plan_arg(target_str, plans_dir=plans_dir))
+        resolved = plan_parser.resolve_plan_arg(target_str, plans_dir=plans_dir)
+        return Path(resolved)
     except ValueError:
         pass
 
     prefix = f"{target_str}-"
-    matches = [p for p in plans_dir.glob("*.md") if p.name.startswith(prefix) or p.stem == target_str]
+    active_dir = plans_dir / "active"
+    if active_dir.is_dir():
+        matches = [
+            p
+            for p in active_dir.glob("*.md")
+            if p.is_file() and (p.name.startswith(prefix) or p.stem == target_str)
+        ]
+        if len(matches) == 1:
+            return matches[0]
+
+    matches = [
+        p
+        for p in plans_dir.glob("*.md")
+        if p.is_file() and (p.name.startswith(prefix) or p.stem == target_str)
+    ]
     if len(matches) == 1:
         return matches[0]
     return None
@@ -127,7 +164,10 @@ def unacked_intake_findings(
     history: list[dict[str, Any]] | None = None,
 ) -> tuple[list[plan_validate.Finding], plan_validate.RecordCoverage | None]:
     """Return ``plan_file``'s unacked intake findings and coverage record."""
-    all_plan_files = sorted(plans_dir.glob("*.md"))
+    active_dir = plans_dir / "active"
+    active_files = [p for p in active_dir.glob("*.md") if p.is_file()] if active_dir.is_dir() else []
+    root_files = [p for p in plans_dir.glob("*.md") if p.is_file()]
+    all_plan_files = sorted(set(active_files + root_files))
     if plan_file not in all_plan_files:
         all_plan_files.append(plan_file)
 
