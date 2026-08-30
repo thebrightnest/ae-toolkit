@@ -166,12 +166,14 @@ class TestShipClosure(unittest.TestCase):
                 return ship.main()
 
     def test_ship_records_merge_seals_task_without_touching_plan(self):
-        """aet ship close seals the queue entry without rewriting the plan (R-4)."""
+        """aet ship close seals the queue entry and archives the plan (R-4/ADR-072)."""
         original_content = self.plan_path.read_text(encoding="utf-8")
         rc = self._run_ship_close(["ship", "close", "t1"])
 
         self.assertEqual(rc, 0)
-        self.assertEqual(self.plan_path.read_text(encoding="utf-8"), original_content)
+        archived_plan = self.repo / "docs" / "plans" / "archive" / "t1.md"
+        self.assertEqual(archived_plan.read_text(encoding="utf-8"), original_content)
+        self.assertFalse(self.plan_path.exists())
 
         backend = GitRefsBackend(
             queue_file=str(self.queue_path),
@@ -227,7 +229,8 @@ class TestShipClosure(unittest.TestCase):
         rc = self._run_ship_close(["ship", "close", "t1"])
 
         self.assertEqual(rc, 0)
-        content = self.plan_path.read_text(encoding="utf-8")
+        archived_plan = self.repo / "docs" / "plans" / "archive" / "t1.md"
+        content = archived_plan.read_text(encoding="utf-8")
         self.assertNotIn("status:", content)
 
         backend = GitRefsBackend(
@@ -241,7 +244,8 @@ class TestShipClosure(unittest.TestCase):
         rc = self._run_ship_close(["ship", "close", "t1"])
 
         self.assertEqual(rc, 0)
-        content = self.plan_path.read_text(encoding="utf-8")
+        archived_plan = self.repo / "docs" / "plans" / "archive" / "t1.md"
+        content = archived_plan.read_text(encoding="utf-8")
         self.assertNotIn("status:", content)
 
         backend = GitRefsBackend(

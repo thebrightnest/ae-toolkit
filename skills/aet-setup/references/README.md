@@ -47,6 +47,8 @@ Agent-neutral home for workflows, templates, and persistent state:
 Ensure `.gitignore` excludes generated agent workflow artifacts:
 
 ```gitignore
+# Active/draft plan scratch
+docs/plans/active/
 .agents/work-queue.json
 .agents/work-queue.json.lock
 .agents/work-queue.lease

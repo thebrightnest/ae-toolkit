@@ -92,8 +92,17 @@ state transition and records the `land` event in the content-addressed ledger
 (including the plan content hash, PRD requirement ids, and merge ref). The
 queue-ref update is atomic under a single `git update-ref --stdin`
 transaction; the mandatory push of `refs/aet/*` must succeed before closure
-reports success. Plan files are transient working copies — closure no longer
-touches them (R-4/R-19).
+reports success.
+
+At terminal closure (`aet ship close` and `aet ship merge`), resilient plan
+archival checks for a local plan file:
+- If `docs/plans/active/<id>.md` (or legacy `docs/plans/<id>.md`) is present on
+  disk, it is moved to `docs/plans/archive/<id>.md` and staged into git if
+  `docs/plans/archive/` is tracked. Repositories can track `docs/plans/archive/`
+  to retain historical settled plans or ignore it for 100% ephemeral plan files.
+- If absent (e.g. in distributed execution where the spec lives only in the task
+  record per ADR-061), an informational notice is logged and closure proceeds
+  cleanly without error.
 
 Do not ask an agent to update the plan footer, queue state, or ledger. Those
 writes are owned by `aet ship close` and `aet gate submit`. In particular, never

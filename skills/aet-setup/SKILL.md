@@ -353,6 +353,8 @@ See `aet-setup/references/README.md` for the full artifact list. Key outputs inc
 When creating `.agents/`, ensure `.gitignore` excludes generated workflow artifacts:
 
 ```gitignore
+# Active/draft plan scratch
+docs/plans/active/
 .agents/work-queue.json
 .agents/work-queue.json.lock
 .agents/work-queue.lease

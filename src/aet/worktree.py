@@ -635,6 +635,7 @@ AET_IGNORED_PATHS = {
     ".agents/learnings.jsonl.lock",
     ".agents/runs/",
     ".worktrees/",
+    "docs/plans/active/",
 }
 
 

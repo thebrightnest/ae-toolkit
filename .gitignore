@@ -20,8 +20,8 @@ aet-work-*.log
 *.skill
 .venv
 .coverage
-# Live plans are transient working copies; durable state is in the provenance ledger.
-docs/plans/*.md
+# Active/draft plan scratch
+docs/plans/active/
 .agents/aet-queue
 .agents/aet-queue.lease
 .agents/ledger.jsonl

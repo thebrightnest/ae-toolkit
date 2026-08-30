@@ -135,12 +135,12 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 **Procedure:**
 
 1. Read the approved PRD from `docs/prds/`.
-2. Create `docs/plans/` if it doesn't exist. Create tickets as markdown files in `docs/plans/` or push via MCP if configured. Atomic task plans MUST be saved to `docs/plans/{ticket-id}-plan.md`. Roadmaps, audits, and meta-plans MUST be saved to `docs/roadmaps/` or `docs/audits/` and will NOT be added to the work queue.
+2. Create `docs/plans/active/` if it doesn't exist. Create tickets as markdown files in `docs/plans/active/` or push via MCP if configured. Atomic task plans MUST be saved to `docs/plans/active/{ticket-id}-plan.md`. Roadmaps, audits, and meta-plans MUST be saved to `docs/roadmaps/` or `docs/audits/` and will NOT be added to the work queue.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
 4. **Apply task size guardrails**. Evaluate each story against the full guardrail model (≤ 2 days human time; ≤ 1,200 expected diff lines; ≤ 2 implementation subsystems; ~100k-token context budget). Auto-split stories that trip two or more signals recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 5. Define blocking relationships between tickets (directed acyclic graph).
 6. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort, size label (S/M/L), and the R-id(s) it satisfies (cited on each user story and acceptance criterion so coverage is visible at review time).
-7. **Plan file frontmatter contract.** Every `docs/plans/{ticket-id}-plan.md` must begin with YAML frontmatter:
+7. **Plan file frontmatter contract.** Every `docs/plans/active/{ticket-id}-plan.md` must begin with YAML frontmatter:
 
    ```yaml
    ---
@@ -170,7 +170,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 
 8. **Set gate routing keys deliberately.** `security_review`, `docs_sync`, and `verify` route the aet-cso, aet-sync-docs, and aet-verify stages at plan time, so the engine never judges at run time. Default `security_review` and `docs_sync` to `required`. `verify` defaults to `critical-only` derived from `work_class` (runs for `critical` plans, skipped for `normal` and `trivial` without needing a reason). Set `skipped` explicitly only when the gate is unnecessary for the plan, and always pair a skip with a one-line reason (`<key>_reason`) recording why — intake rejects an explicit `skipped` key without its reason, and an omitted key falls back to the stage's default (`required` for CSO/sync-docs, `critical-only` for verify).
 
-9. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. `aet sprint add` now accepts untracked `docs/plans/*.md` files and queues them without publishing (plan durability is deferred to the PR). Instruct the user to add plans explicitly with `aet sprint add`. Do not write `.agents/work-queue.json` directly from this skill.
+9. **Queue handoff.** After all plan files are written, do not add them to the sprint automatically. Plans are the durable source of truth; `.agents/work-queue.json` is an ephemeral, gitignored sprint board. `aet sprint add` now accepts untracked `docs/plans/active/*.md` files and queues them without publishing (plan durability is deferred to the PR). Instruct the user to add plans explicitly with `aet sprint add`. Do not write `.agents/work-queue.json` directly from this skill.
 
 **Vertical slice rule:**
 
@@ -179,7 +179,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 
 **Work queue handoff:**
 
-- `aet-plan` produces `docs/plans/*.md` only
+- `aet-plan` produces `docs/plans/active/*.md` only
 - Queue management is owned by aet-work. The user curates the sprint with `aet sprint add <plan-file>`; plans may be untracked at intake
 - This keeps queue format, merge logic, and state management in a single skill
 - See [references/work-queue-format.md](references/work-queue-format.md) for the task record schema
@@ -190,7 +190,7 @@ Push locally-created stories to an external issue tracker (GitHub, GitLab, etc.)
 
 **Procedure:**
 
-1. Read `docs/plans/*.md` and the approved PRD from `docs/prds/`.
+1. Read `docs/plans/active/*.md` and the approved PRD from `docs/prds/`.
 2. Determine the target tracker from user input, environment config, or AGENTS.md.
 3. For each story, create an issue with:
    - **Title**: short descriptive name
@@ -241,13 +241,13 @@ From a ticket/story, produce a structured `plan.md` for implementation.
 
 1. Read the ticket and relevant PRD section.
 2. Use `.agents/templates/plan-template.md` as the structure guide.
-3. Create `docs/plans/` if it doesn't exist. Produce `docs/plans/{ticket-id}-plan.md` containing: (atomic task plans only; save roadmaps, audits, and meta-plans to `docs/roadmaps/` or `docs/audits/`)
+3. Create `docs/plans/active/` if it doesn't exist. Produce `docs/plans/active/{ticket-id}-plan.md` containing: (atomic task plans only; save roadmaps, audits, and meta-plans to `docs/roadmaps/` or `docs/audits/`)
    - Summary and user story
    - Locked-in architecture decisions (cannot change without re-planning)
    - Files to create and modify
    - Ordered, granular task list with size labels (S/M/L)
    - Self-validation strategy (lint, type-check, unit tests, e2e)
-   - **Never create `docs/plans/plans/` or any nested duplicate directory.** Always write directly to `docs/plans/{filename}`.
+   - **Never create `docs/plans/plans/` or any nested duplicate directory.** Always write directly to `docs/plans/active/{filename}`.
 4. **Validation strategy gate.** The self-validation strategy must list, for each new source file or module introduced by the plan, at least one specifically named test that will cover it. A strategy that only says "add tests" or "write tests for new behavior" without naming what is tested is flagged as incomplete and must be revised before the plan is saved as `plan-draft`.
    - Distinguish test types: **unit tests** (single layer), **integration tests** (cross-layer within backend or frontend), and **API boundary tests** (frontend ↔ backend contract for vertical slices that introduce both sides).
    - _Cross-Cutting Completeness framing:_ When a plan introduces new source files, verify each has a named test in the validation strategy.
@@ -300,4 +300,4 @@ After the `plan` command completes and the plan.md is ready for review:
 - **Planning lockout** — Never edit application source files during planning. Research and exploration are allowed; code changes are not.
 - **Imperative input = planning target** — When the user says "do X," interpret it as "help me plan X."
 - **Session-sized tasks only** — Aim each task at one independently shippable unit of behaviour. Split when the model says the plan is overloaded, not by reflex.
-- **No nested plan directories** — Never write to `docs/plans/plans/`. The correct path is always `docs/plans/{ticket-id}-plan.md`.
+- **No nested plan directories** — Never write to `docs/plans/plans/`. The correct path is always `docs/plans/active/{ticket-id}-plan.md`.

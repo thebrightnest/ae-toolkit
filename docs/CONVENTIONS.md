@@ -227,26 +227,28 @@ through a single PR, while still using AET's queue and state machine locally.
 
 ## Planning Artifact Directories
 
-The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/`; all other planning artifacts belong in their designated directories.
+The `docs/` directory has strict boundaries for planning documents. Only atomic, implementable task plans may live in `docs/plans/active/` (or legacy `docs/plans/`); all other planning artifacts belong in their designated directories.
 
-| Directory             | Purpose                                                                        | Queue Ingestion                                           |
-| --------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `docs/plans/`         | Atomic, implementable task plans (single session, one coherent behaviour change) | Yes — plans are admitted to the board via `aet sprint add` and `aet backlog add` |
-| `docs/prds/`          | Product Requirements Documents                                                 | No                                                        |
-| `docs/roadmaps/`      | Multi-phase roadmaps, completion trackers, meta-plans                          | No                                                        |
-| `docs/audits/`        | Testing audits, strategy reviews, gap analyses                                 | No                                                        |
+| Directory             | Purpose                                                                          | Queue Ingestion                                           |
+| --------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `docs/plans/active/`  | Active, in-progress task plans (single session). Untracked / gitignored by default. | Yes — admitted to the board via `aet sprint add` / `backlog add` |
+| `docs/plans/archive/` | Settled plans moved at closure. Versioned by default (or optionally ignored).    | No                                                        |
+| `docs/prds/`          | Product Requirements Documents                                                   | No                                                        |
+| `docs/roadmaps/`      | Multi-phase roadmaps, completion trackers, meta-plans                            | No                                                        |
+| `docs/audits/`        | Testing audits, strategy reviews, gap analyses                                   | No                                                        |
 | `content/backlog/`    | Known-but-unstarted items: accepted debt, undecided ideas, multi-phase roadmaps. One file per item, indexed by `content/backlog/README.md`. **Local and untracked** — `content/` is gitignored | No                                                        |
 
 Rules:
 
-- A document in `docs/plans/` that references other plan files or contains multiple "Phase" sections is non-atomic and must be moved to `docs/roadmaps/` or `docs/audits/`.
+- Plans are authored in `docs/plans/active/<id>.md`. At terminal closure (`aet ship close` and `aet ship merge`), if present locally, they are archived to `docs/plans/archive/<id>.md` and staged into git if `docs/plans/archive/` is tracked. If absent (e.g. multi-agent/worker environments), closure logs an informational notice and succeeds without error.
+- A document in `docs/plans/active/` or `docs/plans/` that references other plan files or contains multiple "Phase" sections is non-atomic and must be moved to `docs/roadmaps/` or `docs/audits/`.
 - The task-list-length check is no longer an intake filter; plan size is measured after implementation, not gated before it (see ADR-046). A plan that is genuinely non-atomic belongs in `docs/roadmaps/` or `docs/audits/` by the ADR-006 atomicity boundary, not because a proxy count rejected it.
 - An item that is known but not started — accepted debt, an idea nobody has decided on, a roadmap whose tracks are unplanned — belongs in `content/backlog/`, one file per item with a `trigger` in its frontmatter. That folder lives under gitignored `content/`, so it is working state on one machine rather than a repository artifact; a reference to it from a tracked document will not resolve in a fresh clone. An item leaves the folder by becoming a PRD or by being deleted. `docs/roadmaps/` remains the ADR-006 destination for non-atomic planning _output_; the two are not the same thing.
 - Directory creation is the user's responsibility; skills document the convention but do not auto-create directories.
 
 ## Plan Frontmatter Contract
 
-Every atomic plan file in `docs/plans/` must begin with YAML frontmatter:
+Every atomic plan file in `docs/plans/active/` (or legacy `docs/plans/`) must begin with YAML frontmatter:
 
 ```yaml
 ---
@@ -408,11 +410,11 @@ The orchestrator's pre-run hygiene check protects against building worktrees fro
 
 Rules:
 
-- Untracked or modified files under `docs/plans/` are ignored by the dirty check and by the ahead-of-origin check. A local branch may be ahead of `origin/main` when every diverging path is in `docs/plans/`.
+- Untracked or modified files under `docs/plans/` (including `docs/plans/active/`) are ignored by the dirty check and by the ahead-of-origin check. A local branch may be ahead of `origin/main` when every diverging path is in `docs/plans/`.
 - Non-plan dirty paths still halt the run.
 - A branch that is behind `origin/main` still halts.
 - A mixed commit containing both `docs/plans/` and non-plan paths still halts.
-- `aet sprint add` no longer has an `--allow-untracked` flag. Untracked plans are the normal intake state; the durability write happens only at terminal closure (`merged`/`abandoned`).
+- `aet sprint add` no longer has an `--allow-untracked` flag. Untracked plans in `docs/plans/active/` are the normal intake state; the durability write happens only at terminal closure (`merged`/`abandoned`).
 - Untracked plans are load-bearing work in progress. `git clean -fdx`, git-following backups, or any process that discards untracked files can destroy queued/in-progress plans.
 
 ### Multi-machine state
