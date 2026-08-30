@@ -126,7 +126,11 @@ def _repo_root_for(plan: Path) -> Path:
         return Path(result.stdout.strip())
     except (OSError, subprocess.CalledProcessError):
         # Fall back to the canonical layout ``docs/plans/active/<plan>.md`` or ``docs/plans/<plan>.md``.
-        if plan.parent.name in ("active", "archive") and plan.parent.parent.name == "plans" and plan.parent.parent.parent.name == "docs":
+        if (
+            plan.parent.name in ("active", "archive")
+            and plan.parent.parent.name == "plans"
+            and plan.parent.parent.parent.name == "docs"
+        ):
             return plan.parent.parent.parent.parent
         if plan.parent.name == "plans" and plan.parent.parent.name == "docs":
             return plan.parent.parent.parent

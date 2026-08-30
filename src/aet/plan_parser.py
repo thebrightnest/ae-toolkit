@@ -727,5 +727,6 @@ def resolve_plan_arg(plan: str, plans_dir: Path = Path("docs/plans")) -> str:
     if candidate_root.is_file():
         return str(candidate_root)
     raise ValueError(
-        f"Plan not found: '{plan}' is not a .md path and {candidate_active} (or legacy {candidate_root}) does not exist. Pass the full plan path."
+        f"Plan not found: '{plan}' is not a .md path and {candidate_active} "
+        f"(or legacy {candidate_root}) does not exist. Pass the full plan path."
     )
