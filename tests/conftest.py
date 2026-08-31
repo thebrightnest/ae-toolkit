@@ -97,6 +97,62 @@ def _isolate_ledger(request, monkeypatch, tmp_path):
     monkeypatch.setattr(ledger, "_resolve_ledger_repo_root", lambda: root)
 
 
+@pytest.fixture(scope="class", autouse=True)
+def _isolate_class_scoped_setup(request, tmp_path_factory):
+    """Extend the isolation above over ``unittest``'s ``setUpClass``.
+
+    Every fixture in this file depends on ``monkeypatch``/``tmp_path``, which
+    are function-scoped, so pytest establishes them only once unittest has
+    already run ``setUpClass``. A class that does real work there does it
+    against the developer's own stores: both orchestrator rehearsals run a
+    full ``run_batch`` in ``setUpClass``, which is how 384 ``nsr-*``
+    directories reached the real ``~/.aet/telemetry`` and 317 fixture events
+    reached the real ``.agents/ledger.jsonl`` — including 115 written *after*
+    ``3ad3c4cd`` added ``_isolate_ledger`` to prevent exactly that.
+
+    This runs one scope earlier and re-establishes the same redirections, so
+    the window is closed by construction rather than per test class. The
+    function-scoped fixtures still run afterwards and narrow each test to its
+    own ``tmp_path``; this one only has to cover class setup.
+
+    Scoped to classes on purpose. A bare test function is already covered by
+    the fixtures above, and the ledger resolver's own tests
+    (``@pytest.mark.real_ledger_resolution``) are bare functions that assert
+    on the unset-env path — ``request.cls is None`` leaves them untouched.
+    """
+    if request.cls is None:
+        yield
+        return
+
+    from aet import ledger, telemetry
+    from aet.backends import git_refs_backend
+
+    root = tmp_path_factory.mktemp("class-isolation")
+    archive = root / "telemetry-archive"
+    ledger_root = root / "ledger-root"
+    (ledger_root / ".agents").mkdir(parents=True, exist_ok=True)
+
+    real_has_remote = git_refs_backend._has_remote
+
+    def guarded(repo_root):
+        if Path(repo_root).resolve() == _REPO_ROOT.resolve():
+            return False
+        return real_has_remote(repo_root)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("AET_TELEMETRY_ARCHIVE_DIR", str(archive))
+        mp.setenv("AET_PLANS_ARCHIVE_DIR", str(root / "plans-archive"))
+        mp.setenv("AET_BIN_DIR", str(root / "aet-bin"))
+        mp.setenv("AET_LEDGER_PATH", str(ledger_root / ".agents" / "ledger.jsonl"))
+        mp.delenv("AET_REPO_ROOT", raising=False)
+        mp.delenv("AET_TASK_ID", raising=False)
+        mp.delenv("AET_RUN_ID", raising=False)
+        mp.setattr(telemetry, "DEFAULT_ARCHIVE_DIR", archive)
+        mp.setattr(ledger, "_resolve_ledger_repo_root", lambda: ledger_root)
+        mp.setattr(git_refs_backend, "_has_remote", guarded)
+        yield
+
+
 @pytest.fixture(autouse=True)
 def _isolate_aet_repo_root(monkeypatch):
     """Remove ``AET_REPO_ROOT`` from the inherited environment.

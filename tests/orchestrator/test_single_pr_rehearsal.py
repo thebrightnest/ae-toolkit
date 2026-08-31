@@ -341,7 +341,14 @@ class TestSinglePrRehearsal(unittest.TestCase):
             "AET_PROJECT_ID": PROJECT_SLUG,
             "AET_INTEGRATION_VALIDATE_CMD": ".agents/validate-rehearsal.sh",
         }
-        cls.enterClassContext(patch.dict(os.environ, env, clear=True))
+        # Add to the environment rather than replacing it. ``clear=True`` here
+        # discarded the isolation ``_isolate_class_scoped_setup`` establishes,
+        # so this rehearsal wrote its telemetry and ledger events into the
+        # developer's real stores. The variables this rehearsal must not
+        # inherit are removed by name instead.
+        for leaked in ("AET_TASK_ID", "AET_RUN_ID", "AET_REPO_ROOT"):
+            os.environ.pop(leaked, None)
+        cls.enterClassContext(patch.dict(os.environ, env))
 
         adapter = orchestrator.resolve_cli_adapter("claude")
         args = argparse.Namespace(

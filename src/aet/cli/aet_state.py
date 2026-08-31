@@ -926,6 +926,8 @@ def cmd_audit(args):
         integration_mode=integration_mode,
     )
 
+    missing_spec = set(spec_backfill.records_missing_spec(queue))
+
     results = {}
     for task in queue:
         task_id = task["id"]
@@ -935,9 +937,26 @@ def cmd_audit(args):
             "stored": stored_state,
             "derived": derived[task_id]["derived_status"],
             "discrepancy": stored_state != derived_state,
+            "missing_spec": task_id in missing_spec,
         }
 
     print(json.dumps(results, indent=2))
+    if missing_spec:
+        # R-19 moved a task's spec onto the record so a task planned on one
+        # machine is executable on another; a record carrying only
+        # ``plan_file`` points at a path that may not exist in any other
+        # clone, which is how the board became unrunnable when the plan
+        # files were deleted. This check used to live in the test suite,
+        # asserted over whatever board the developer happened to have
+        # checked out, so real debris failed `make validate` for everyone
+        # and the property was only ever verified by accident. The audit is
+        # where debris is the subject rather than a spurious red.
+        print(
+            "⚠️  These live task records carry no plan spec and are not "
+            f"executable in another clone: {', '.join(missing_spec)}. "
+            "Run `aet state backfill-specs --apply` to recover them from git.",
+            file=sys.stderr,
+        )
     return 0
 
 

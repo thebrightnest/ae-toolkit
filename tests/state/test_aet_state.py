@@ -1,7 +1,9 @@
 """Tests for aet-state derive_status."""
 
+import contextlib
 import importlib.machinery
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -204,6 +206,62 @@ class TestAuditCommand(unittest.TestCase):
 
             task = load_git_queue(queue_path)[0]
             self.assertEqual(task["state"], "ready")
+
+
+    def test_audit_reports_a_record_carrying_no_plan_spec(self):
+        """A spec-less record is named on stderr and flagged in the JSON.
+
+        This property used to be asserted by the test suite over whatever board
+        the developer had checked out, which made `make validate` a function of
+        runtime state. It belongs here, where a record with no spec is
+        constructed rather than waited for.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            init_git_repo(repo_root)
+            queue_path, _history_path = seed_git_queue(
+                repo_root,
+                [
+                    {
+                        "id": "t1",
+                        "state": "planned",
+                        "plan_file": "docs/plans/t1.md",
+                        "branch": None,
+                        "spec": {"frontmatter": {"id": "t1", "size": "S"}, "tasks": []},
+                    },
+                    {
+                        "id": "t2",
+                        "state": "planned",
+                        "plan_file": "docs/plans/t2.md",
+                        "branch": None,
+                    },
+                ],
+            )
+
+            responses = {
+                ("show-ref", "--verify", "--quiet", "refs/heads/None"): (1, "", ""),
+            }
+
+            args = aet_state.argparse.Namespace(
+                command="audit",
+                queue=str(queue_path),
+                dry_run=False,
+            )
+
+            err = io.StringIO()
+            out = io.StringIO()
+            with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
+                with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+                    rc = aet_state.cmd_audit(args)
+
+            self.assertEqual(rc, 0)
+            self.assertIn("t2", err.getvalue())
+            self.assertIn("carry no plan spec", err.getvalue())
+            self.assertNotIn("t1", err.getvalue())
+
+            reported = json.loads(out.getvalue())
+            self.assertTrue(reported["t2"]["missing_spec"])
+            self.assertFalse(reported["t1"]["missing_spec"])
 
 
 class TestRecordMerge(unittest.TestCase):
