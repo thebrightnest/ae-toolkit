@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.15.0
+## Current Version: 1.16.0
 
-Last updated: 2026-09-10
+Last updated: 2026-09-13
 
 ---
 
@@ -42,7 +42,7 @@ Verify code before it ships.
 Land code cleanly and document releases.
 
 - **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, provider-specific merge-guard harness detection, squash-merge verification fallback, stacked PR split and trunk substitution, and optional branch deletion on close. Resolves a task id against the record across open, gate, close, merge, split, and verify; plan paths are no longer accepted. Which verdict a stage must show is read from the workflow definition rather than kept as a separate list, and a gate's default routing derives from the plan's work class. `aet ship open-epic` runs the gate and opens the pull request for an epic branch. The gate, the conflict detection and the commit count all run against the branch being merged rather than against whichever branch the checkout happens to be on.
-- **aet-release-prep** — Release preparation: commit analysis, changelog updates, and version bump suggestions.
+- **aet-release-prep** — Release preparation: commit analysis, changelog and product-documentation updates, and version bump suggestions. How each release is resolved — where the window starts, which scheme the project versions by, which manifest holds the version, and where the two documents live — is detected from the repository and can be pinned in configuration where detection would be ambiguous. Projects that deploy continuously and carry no version numbers are supported alongside those that tag or bump a manifest, and a release run follows the conventions of the changelog it is writing into rather than imposing its own.
 - **aet-sync-docs** — Sync the PRD to reflect what was actually built.
 
 ### Maintenance Skills
@@ -88,6 +88,17 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.16.0
+
+- **A release no longer guesses what it is releasing** — where the window starts, which scheme the project versions by, which file holds the version, and where the changelog and product documentation live are all detected from the repository and reported with the reason each one resolved that way. Where detection would be ambiguous, any of them can be pinned in configuration. Nothing needs configuring for a release to work.
+- **A release stopped quietly including every commit ever made** — a repository seeded from an imported project carries that project's tags, and they sit outside its own history. Asking git for the last tag fails on that shape, which was read as having no tags at all, so the release window became the entire history. On a repository in this state, a release that should have covered 30 commits covered 195. Tags that cannot mark a release are now named in the output rather than ignored, so you are asked about them instead of releasing past them.
+- **Projects that deploy continuously are supported** — a project that has no version numbers and dates its entries instead is recognised from its own changelog. It is no longer offered a version bump, and no file is edited to record a release that has no version.
+- **The right file gets bumped in a mixed-language project** — a Python project that also carries a JavaScript package file was being told to bump the JavaScript one, whose version nothing releases. The file that actually holds the release version is now found first.
+- **An existing changelog keeps its own style** — a release run reads both documents before writing and follows the conventions already there: how entries are headed, how they are grouped, and what the file says belongs in it. Documents kept somewhere other than the project root are found and updated in place rather than duplicated at the root.
+- **A first release on a project that has never had one is handled as a first release** — the documents are created, and the whole history is summarised once rather than turned into hundreds of entries.
+
+**Upgrading from 1.15.x:** upgrade the skills alongside the CLI. Nothing needs configuring and no project changes behaviour without it. Add a `release_prep` section to `.agents/aet-config.json` only where you want a resolution pinned. If you read the command's JSON output directly anywhere outside the skill, two fields were renamed: `lastTag` is now `baselineRef` and `allTags` is now `reachableTags`.
 
 ### What's New in v1.15.0
 

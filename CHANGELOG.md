@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.16.0] — 2026-09-13
+
+### Added
+
+- **A release resolves its inputs from a declaration instead of a guess** — the `release_prep` section of `.agents/aet-config.json` accepts `changelog_path`, `product_path`, `version_scheme`, `version_file` and `baseline_ref`. Every key is optional: a key that is present wins outright, a key that is absent is detected, and `aet release-prep` reports the reason each resolution landed where it did through `baselineReason`, `versionSchemeReason` and a document `origin`. The command still runs with no configuration at all, so the section exists to make a repository exact rather than to make it work (ADR-077).
+- **`dated` joins the version schemes** — a project that deploys continuously has no version to bump, and the absence of one is a decision rather than a missing manifest. Under `dated` the changelog entry is headed with the date, `suggestedBump` and `nextVersion` are null, and no manifest is touched. The scheme is inferred from the changelog's own shape — dated headings carrying no version headings — so a project that already made the choice needs no configuration to have it honoured.
+- **`aet release-prep --since <ref>`** — the release window can be started at any ref, overriding both tag resolution and the configured baseline.
+- **Version detection reads four more sources** — `setuptools-scm` is recognised ahead of every manifest, because a `[project] dynamic = ["version"]` declaration beside a `[tool.setuptools_scm]` table means there is no version string in the tree to edit. `pyproject.toml` and `composer.json` are read alongside `package.json` and `VERSION`.
+- **A first run is named as one** — `bootstrap` is reported when there is no baseline to append to or when either document is missing, separating "seed these documents" from "append one entry", two jobs the command previously conflated. The skill summarises the whole window as a single entry instead of inventing a release history.
+
+### Fixed
+
+- **A release window silently widened to the entire history** — tags that are not ancestors of HEAD, as happens when a repository is seeded from a vendored import or a line of history is abandoned, make `git describe --tags` fail outright. That failure was read as "no tags exist", so the window became every commit ever made while the same output listed five tags beside it. Measured on a repository in this shape, the window was 195 commits where 30 were correct. Baseline resolution now filters by ancestry through `git tag --merged HEAD`, and a tag that cannot be a baseline is reported in `unreachableTags` rather than discarded, because its presence is exactly the signal that a human should confirm the window. The chain is explicit: `--since`, config, newest reachable tag, last commit that touched the changelog, then nothing.
+- **A polyglot repository was told to bump a manifest no release reads** — a Python project whose version is derived from git tags also carried a frontend `package.json`, and detection returned that file and its unrelated `1.0.0`. Detection order now puts `setuptools-scm` first, so a dynamic version is never mistaken for an editable one.
+- **A project that states it has no version numbers was handed one** — a fleet repository whose changelog records that it is deployed continuously and dates its entries was offered a semantic bump sourced from a vestigial `version = "0.1.0"` that nothing consumes. The `dated` scheme now suppresses the bump, and the skill is forbidden from editing a manifest the scheme does not own.
+- **A second changelog would have been created beside the real one** — document paths were assumed to be at the repository root, so a project keeping them under `content/` or `docs/` would have gained an empty duplicate. Paths now probe for an existing file before falling back to a default, and an established layout is never relocated by a release run.
+- **A mistyped ref quietly released everything** — an unresolvable `--since` or `baseline_ref`, and an unrecognised `version_scheme`, are now errors that exit non-zero with a JSON reason. Each previously fell back to a default, which for a baseline meant the whole history.
+- **The skill imposed its own house style on a changelog that had one** — a release run now reads both documents before editing either and matches the existing file's convention, heading style and inclusion policy. The format templates in the skill are defaults for a file that has no convention yet, not a target to migrate toward.
+
+**Upgrading from 1.15.x:** upgrade the skills alongside the CLI. No configuration is required and no repository changes behaviour without one — detection covers what inference covered before, and covers the four cases above correctly. Add a `release_prep` section only where you want a resolution pinned. Two output fields were renamed: `lastTag` is now `baselineRef` and `allTags` is now `reachableTags`, alongside the new `unreachableTags`, `bootstrap`, `versionScheme` and `documents` fields; anything parsing that JSON outside the skill needs updating. `tomllib` is imported under a guard, so `pyproject.toml` detection is inert on Python 3.10 and the next source in the chain is used instead.
+
+---
+
 ## [1.15.0] — 2026-09-10
 
 ### Added
