@@ -1,11 +1,11 @@
 ---
 name: aet-release-prep
-description: Automate release preparation by analyzing commits since the last tag, detecting the project's versioning scheme, suggesting semantic version bumps, and updating CHANGELOG.md and PRODUCT.md. Use when preparing a release, updating changelogs, bumping versions, or keeping product documentation current. Triggers on "prepare release," "update changelog," "release prep," "version bump," or "what's new in this release."
+description: Automate release preparation by analyzing commits since the last release, detecting the project's versioning scheme, suggesting semantic version bumps, and updating CHANGELOG.md and PRODUCT.md. Use when preparing a release, updating changelogs, bumping versions, or keeping product documentation current. Triggers on "prepare release," "update changelog," "release prep," "version bump," or "what's new in this release."
 ---
 
 # aet-release-prep
 
-Automate release preparation by analyzing git commits since the last tag and generating documentation updates.
+Automate release preparation by analyzing git commits since the last release and generating documentation updates.
 
 **Use this for:** Preparing releases, updating changelogs, bumping versions, keeping product documentation current.
 
@@ -27,44 +27,81 @@ Automate release preparation by analyzing git commits since the last tag and gen
 
 ---
 
-## Step 1: Analyze Commits Since Last Tag
-
-Run the release-prep subcommand to get all commits since the last git tag:
+## Step 1: Analyze the Release Window
 
 ```bash
 aet release-prep
 ```
 
-The command outputs JSON with:
+Add `--since <ref>` to override where the window starts. The command reads the
+optional `release_prep` section of `.agents/aet-config.json` and auto-detects
+everything it does not find there — see `references/CONFIG.md`.
 
-- `lastTag` — The most recent git tag
-- `currentVersion` — Version from detected source (package.json, VERSION file, or latest tag)
-- `versionSource` — Which source was used (`package.json`, `VERSION`, or `git-tag`)
-- `commits` — Array of commits with hash, subject, body, and type classification
-- `suggestedBump` — Recommended version bump (`major` / `minor` / `patch`)
-- `nextVersion` — Calculated next version
+Key fields in the JSON output:
 
-**Confirm with the user:**
+| Field | Meaning |
+| --- | --- |
+| `baselineRef` / `baselineReason` | Where the window starts, and how that was decided |
+| `bootstrap` | `true` when there is no prior release to append to — see Step 2 |
+| `versionScheme` | `semver-tag`, `semver-file`, or `dated` — drives Steps 4 and 6 |
+| `versionSource` / `currentVersion` | Which manifest holds the version, and its value |
+| `documents.changelog.path` / `documents.product.path` | Where each document lives |
+| `unreachableTags` | Tags that exist but are **not** ancestors of HEAD |
+| `commits` / `summary` | Classified commits and per-type counts |
+| `suggestedBump` / `nextVersion` | `null` under the `dated` scheme |
 
-- Does the suggested version bump look correct?
-- Are there any commits that should be classified differently?
+**Stop and confirm with the user when any of these hold:**
+
+- `unreachableTags` is non-empty — tags exist that the window ignored. They
+  usually arrived with a vendored import or sit on an abandoned line of
+  history. Say which ones, and ask whether the baseline is right.
+- `baselineReason` is `no-baseline` — the window is the entire history.
+- `commitCount` is implausibly large for one release.
+- The suggested bump looks wrong for what the commits actually did.
 
 ---
 
-## Step 2: Update CHANGELOG.md
+## Step 2: Read Before Writing
 
-Update `CHANGELOG.md` at the repository root with the new release.
+Read both documents in full before editing either one — `documents.changelog.path`
+and `documents.product.path` from Step 1. This is not a formality:
+
+**Match the existing document's convention.** If the changelog groups by
+`### Added / ### Changed / ### Fixed`, keep doing that. If it writes a paragraph
+per change with the reasoning inline, keep doing that. If it opens with a
+"what belongs here" policy section, obey that policy. A release run must never
+convert a project's changelog to a different house style — the format templates
+below are defaults for a file that has no convention yet, not a target to
+migrate toward.
+
+**If `bootstrap` is true**, this is a first run. Do not invent a release
+history. Instead:
+
+1. Seed the missing document(s) — `references/PRODUCT-TEMPLATE.md` has the
+   PRODUCT.md skeleton.
+2. Write **one** entry covering the window, described at the level the window
+   deserves. Hundreds of commits with no prior release summarize to a short
+   "current state" entry, not a hundred bullets.
+3. Tell the user to set `baseline_ref` in `.agents/aet-config.json` (or tag the
+   release) so the next run is incremental.
+
+---
+
+## Step 3: Update the Changelog
 
 ### CRITICAL: Append-Only Rule
 
-**NEVER replace or modify existing version sections.** CHANGELOG.md is an append-only document.
+**NEVER replace or modify existing entries.** The changelog is append-only.
 
 1. **Read the entire file first** to understand the existing structure
-2. **Insert the new version section** between the file header and the first existing `## [x.y.z]` entry
-3. **Do NOT touch any existing version sections** — they are historical records
-4. If a version section already exists for the target version, UPDATE only that section (do not duplicate)
+2. **Insert the new section** between the file header and the first existing entry
+3. **Do NOT touch any existing sections** — they are historical records
+4. If a section already exists for the target release, UPDATE only that section (do not duplicate)
+5. Use the Edit tool for a targeted insert — never rewrite the whole file
 
 ### Format
+
+Under `semver-tag` / `semver-file`, head the section with the version:
 
 ```markdown
 ## [X.Y.Z] — YYYY-MM-DD
@@ -84,6 +121,16 @@ Update `CHANGELOG.md` at the repository root with the new release.
 ---
 ```
 
+Under `dated`, there is no version to head it with. Use `releaseDate`:
+
+```markdown
+## YYYY-MM-DD
+
+**What shipped.** What changed and why it was worth doing.
+
+---
+```
+
 ### Guidelines
 
 1. **Group commits by type** (Added, Changed, Fixed, Documentation)
@@ -91,27 +138,28 @@ Update `CHANGELOG.md` at the repository root with the new release.
 3. **Include PR/issue references** if mentioned in commit body
 4. **Skip internal commits** (CI, build tooling) unless significant
 5. **Combine related commits** into single entries when they address the same feature
-6. **Verify after editing** — read the file again to confirm all previous versions are still present
+6. **Verify after editing** — read the file again to confirm all previous entries are still present
 
 ---
 
-## Step 3: Update PRODUCT.md
+## Step 4: Update PRODUCT.md
 
-Update `PRODUCT.md` at the repository root with current product capabilities.
+Update the file at `documents.product.path`.
 
 PRODUCT.md is a **product snapshot** for cross-functional teams (Marketing, Sales, Support). It documents features at a user level — not implementation details. Every line should read as **product documentation**, never as a developer changelog.
 
 ### CRITICAL: Preserve Existing "What's New" Sections
 
-PRODUCT.md contains a **"What's New in vX.Y.Z"** section for each release. These are **historical records** — treat them the same as CHANGELOG entries.
+PRODUCT.md contains a **"What's New"** section per release. These are
+**historical records** — treat them exactly like changelog entries.
 
 1. **Read the entire file first** to understand the existing structure
-2. **Do NOT delete or modify** any previous "What's New in vX.Y.Z" sections
-3. **Verify after editing** — read the file again to confirm all previous "What's New" sections are still present
+2. **Do NOT delete or modify** any previous "What's New" section
+3. **Verify after editing** — read the file again to confirm they are all still present
 
-### Step 3a: Triage Commits — User-Facing vs Internal
+### Step 4a: Triage Commits — User-Facing vs Internal
 
-Before writing anything, categorize **every commit** from the release into one of two buckets:
+Before writing anything, categorize **every commit** from the window into one of two buckets:
 
 | Category        | What belongs here                                                                                                             | Examples                                                                                       |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -120,7 +168,7 @@ Before writing anything, categorize **every commit** from the release into one o
 
 **Rule of thumb:** If a user wouldn't notice the change while using the app, it's INTERNAL.
 
-### Step 3b: Update Core Feature Sections (Primary Output)
+### Step 4b: Update Core Feature Sections (Primary Output)
 
 This is the most important part. PRODUCT.md's core feature sections are the **evergreen product documentation** — they describe what the product does today.
 
@@ -160,13 +208,15 @@ Now includes chat starter suggestions for easier onboarding...
 **For new integrations or skills:**
 Add entries to the relevant tables (Integrations, Skills) following the existing format.
 
-### Step 3c: Update "What's New" Section (Brief Marketing Summary)
+### Step 4c: Update "What's New" Section (Brief Marketing Summary)
 
-Insert a new "What's New in vX.Y.Z" section at the TOP of the "What's New" area (before existing ones).
+Insert a new "What's New" section at the TOP of the "What's New" area (before
+existing ones). Head it with `vX.Y.Z` under a semver scheme, or with the
+`releaseDate` under `dated`.
 
 **Rules:**
 
-- **Only user-facing changes** from the Step 3a triage — zero internal items
+- **Only user-facing changes** from the Step 4a triage — zero internal items
 - **3–8 bullets max** — combine related changes, cut ruthlessly
 - **Write benefit statements**, not technical descriptions
 - **No "plus technical improvements" catch-all** — if it's not user-facing, it doesn't belong
@@ -178,7 +228,7 @@ Insert a new "What's New in vX.Y.Z" section at the TOP of the "What's New" area 
 | Project Assistant skill for AI-guided project setup             | Added SessionStart hook for context injection |
 | Chat starter suggestions to help you begin conversations faster | 173 E2E tests across 6 test suites            |
 
-### Step 3d: Verify
+### Step 4d: Verify
 
 1. **Read the file again** after editing to confirm:
    - All previous "What's New" sections are still present
@@ -189,40 +239,41 @@ Insert a new "What's New in vX.Y.Z" section at the TOP of the "What's New" area 
 
 ---
 
-## Step 4: Bump Version
+## Step 5: Bump the Version
 
-Update version in the detected source:
+What to edit depends entirely on `versionScheme`. Do not edit a version string
+the scheme does not own.
 
-1. **Read current version** from script output (includes `versionSource`)
-2. **Confirm suggested bump** with user (major/minor/patch)
-3. **Edit the appropriate file:**
-   - Git tags only — for this project the version is derived from the git tag, so there is no file to edit. Note the next version for the user to tag manually
+| `versionScheme` | Action |
+| --- | --- |
+| `dated` | **Nothing.** The project has no version numbers; the dated entry is the release. Skip to Step 6. |
+| `semver-tag` | No file to edit — the git tag _is_ the version (`versionSource` is `git-tag` or `setuptools-scm`). Report `nextVersion` for the user to tag. |
+| `semver-file` | Edit the version field in the file named by `versionSource` to `nextVersion`. |
+
+Confirm the bump with the user before applying it. **Always** confirm a major bump.
 
 ---
 
-## Step 5: Summary
-
-After completing all updates, provide a summary:
+## Step 6: Summary
 
 ```markdown
 ## Release Prep Complete
 
-**Version bump:** X.Y.Z → A.B.C (patch/minor/major)
-**Version source:** {package.json | VERSION | git-tag}
+**Release:** {vA.B.C (patch/minor/major) | YYYY-MM-DD}
+**Version scheme:** {semver-tag | semver-file | dated}
+**Window:** [N] commits since [baselineRef] ([baselineReason])
 
 **Files updated:**
 
-- `CHANGELOG.md` — Added [N] entries
-- `PRODUCT.md` — Updated [sections]
-- `{package.json | VERSION}` — Version bumped
-
-**Commits analyzed:** [N] commits since [last-tag]
+- `{changelog path}` — added [N] entries
+- `{product path}` — updated [sections]
+- `{version file}` — version bumped (omit under semver-tag / dated)
 
 **Next steps:**
 
 1. Review the changes in each file
 2. Commit: `git add -A && git commit -m "chore(release): prepare vA.B.C"`
-3. Tag: `git tag vA.B.C`
+3. Tag: `git tag vA.B.C` (semver schemes only)
 4. Push: `git push && git push --tags`
 ```
 
@@ -235,20 +286,19 @@ See `examples/` directory for full walkthroughs:
 - `examples/minor-release.md` — Feature release with new capabilities
 - `examples/patch-release.md` — Bug-fix-only release
 
-## Edge Cases
+## References
 
-See `references/edge-cases.md` for handling:
-
-- No tags exist
-- No commits since last tag
-- Missing CHANGELOG.md or PRODUCT.md
-- Only internal commits (no user-facing changes)
+- `references/CONFIG.md` — the `release_prep` config section and what each key overrides
+- `references/EDGE-CASES.md` — unreachable tags, dated projects, bootstrap runs, missing files
+- `references/PRODUCT-TEMPLATE.md` — PRODUCT.md skeleton for a first run
 
 ---
 
 ## Rules
 
-- **Append-only:** Never rewrite existing CHANGELOG or PRODUCT.md sections
+- **Append-only:** Never rewrite existing changelog or PRODUCT.md sections
+- **Follow the file:** Match the existing document's convention; never migrate it to a new style
+- **Respect the scheme:** Never bump a version under `dated`; never edit a manifest under `semver-tag`
 - **User-facing only:** Internal commits never appear in "What's New"
 - **Confirm bumps:** Always ask the user before bumping major versions
 - **Preserve history:** Re-read files after editing to verify no data loss
@@ -257,12 +307,12 @@ See `references/edge-cases.md` for handling:
 
 ## Success Criteria
 
-- [ ] All commits since last tag are analyzed
-- [ ] Version bump follows semantic versioning correctly
-- [ ] CHANGELOG.md has user-friendly descriptions grouped by type
-- [ ] CHANGELOG.md preserves ALL previous version sections (re-read to verify)
+- [ ] Baseline was reviewed — unreachable tags and `no-baseline` windows raised with the user
+- [ ] All commits in the window are analyzed
+- [ ] The changelog entry matches the existing file's convention and heading style
+- [ ] Changelog preserves ALL previous entries (re-read to verify)
 - [ ] PRODUCT.md contains no internal/technical changes (tests, refactors, SDK upgrades)
 - [ ] PRODUCT.md core feature sections updated for any new user-facing capabilities
 - [ ] PRODUCT.md preserves ALL previous "What's New" sections (re-read to verify)
-- [ ] Version source updated (package.json, VERSION, or noted for git tags)
+- [ ] Version handled per `versionScheme` — bumped, tagged, or deliberately untouched
 - [ ] Summary provided with next steps

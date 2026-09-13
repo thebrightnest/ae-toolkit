@@ -805,11 +805,12 @@ Reconcile live plans with their GitHub issue mirrors.
 
 ## `aet release-prep`
 
-Analyze commits since the last tag and suggest a version bump.
+Analyze commits since the last release and suggest a version bump.
 
 ### Options
 
 - `--repo-root` *path* — Repository root (default: current working directory).
+- `--since` *str* — Start the release window at this git ref, overriding tag and config resolution.
 
 ## `aet report`
 

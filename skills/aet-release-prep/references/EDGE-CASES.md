@@ -1,26 +1,68 @@
 # Edge Cases
 
-## No Tags Exist
+## Tags Exist But None Are Reachable
 
-If the script reports `lastTag: "(no tags)"`:
+`unreachableTags` is non-empty while `reachableTags` is empty. The tags arrived
+with a vendored import, or sit on a line of history that was abandoned by a
+rebase or an orphan branch. `git describe` fails outright on this shape.
 
-1. Ask the user: "No git tags found. What version should this first release be?"
-2. Default suggestion: `1.0.0` for initial release, or use the detected `currentVersion`
-3. All commits in the repository history are analyzed
+1. **Do not** use an unreachable tag as the baseline — it is not an ancestor, so
+   the diff against it is meaningless.
+2. Tell the user which tags were skipped and why, and state the baseline that
+   was used instead.
+3. Confirm the version to start from. A repo whose own release history begins at
+   the import usually starts fresh at `1.0.0`, not at the imported tag.
+4. After the release, tag it so the next run resolves cleanly.
 
-## No Commits Since Tag
+## No Baseline At All
 
-If no commits exist since the last tag:
+`baselineReason` is `no-baseline`: no reachable tag, and no changelog to date
+from. The window is the entire history.
 
-1. Inform the user: "There are no commits since vX.Y.Z. Nothing to release."
-2. Ask if they want to create the documentation files anyway (e.g., to fix a prior release)
-3. If yes, proceed with the current version or a user-specified version
+1. Say so explicitly before writing anything — `commitCount` is the whole repo.
+2. Treat it as a bootstrap run (see below).
+3. Set `baseline_ref` in `.agents/aet-config.json` or tag the release afterwards.
 
-## Missing CHANGELOG.md
+## Bootstrap Runs
 
-If `CHANGELOG.md` does not exist at the repo root:
+`bootstrap` is `true` when there is no prior release to append to — no baseline,
+or one of the two documents does not exist yet.
 
-1. Create it with a header:
+1. Seed the missing document(s); `PRODUCT-TEMPLATE.md` has the PRODUCT.md skeleton.
+2. Write **one** entry for the whole window, at the altitude the window
+   deserves. Three hundred commits with no prior release become a short
+   "current state" summary, never three hundred bullets.
+3. For PRODUCT.md, describe what the product **does today** — read the codebase
+   and README, not just the commit subjects. The commit log of a bootstrap
+   window is a poor description of a product.
+4. Finish by telling the user to set `baseline_ref` or tag, so run two is
+   incremental.
+
+## Dated Projects
+
+`versionScheme` is `dated`. The project deploys continuously and has no version
+numbers — `suggestedBump` and `nextVersion` are `null`.
+
+1. Head the changelog entry with `releaseDate`, not a version.
+2. **Do not** edit any manifest version, even if one exists. A vestigial
+   `version = "0.1.0"` in `pyproject.toml` is not the release version.
+3. **Do not** suggest tagging in the summary.
+4. If the changelog documents its own inclusion policy, obey it — dated
+   changelogs usually carry one.
+
+## No Commits Since the Baseline
+
+`commitCount` is 0.
+
+1. Inform the user: "There are no commits since [baselineRef]. Nothing to release."
+2. Ask if they want to update the documents anyway (e.g., to fix a prior release).
+3. If yes, proceed with the current version or a user-specified version.
+
+## Missing Changelog
+
+The file at `documents.changelog.path` does not exist (`exists: false`).
+
+1. Create it at that path with a header:
 
    ```markdown
    # Changelog
@@ -30,35 +72,37 @@ If `CHANGELOG.md` does not exist at the repo root:
    ---
    ```
 
-2. Add the first release section after the header
+2. Add the first entry after the header.
 
 ## Missing PRODUCT.md
 
-If `PRODUCT.md` does not exist at the repo root:
+The file at `documents.product.path` does not exist.
 
-1. Use the template in `references/PRODUCT-TEMPLATE.md`
-2. Populate it based on:
-   - The codebase structure
-   - Recent commit history (user-facing commits only)
-   - Any existing documentation (README, docs/, etc.)
-3. Ask the user to review and fill gaps
+1. Use the template in `PRODUCT-TEMPLATE.md`.
+2. Populate it based on the codebase structure, user-facing commits, and
+   existing documentation (README, `docs/`).
+3. Ask the user to review and fill gaps.
 
 ## Only Internal Commits
 
-If all commits since the last tag are internal (tests, refactors, CI):
+Every commit in the window is internal (tests, refactors, CI).
 
-1. Suggest a **patch** bump (or skip if the user prefers)
-2. In `PRODUCT.md`:
-   - Do NOT create a "What's New" section (no user-facing changes)
-   - Update any core feature sections only if internal changes altered behavior
-3. In `CHANGELOG.md`:
+1. Suggest a **patch** bump (or skip the release if the user prefers).
+2. In PRODUCT.md:
+   - Do NOT create a "What's New" section — there is nothing user-facing
+   - Update core feature sections only if internal changes altered behavior
+3. In the changelog:
    - Still document the release
    - Group under "Changed" or "Chores" as appropriate
 
 ## Merge Commits
 
-Merge commits (subjects starting with `Merge pull request` or `Merge branch`) are classified as `other` by default. The individual commits within the merge are what matter — those are already in the history.
+Merge commits (`Merge pull request`, `Merge branch`) classify as `other`. The
+individual commits within the merge are what matter, and they are already in the
+window.
 
 ## Reverts
 
-Commits starting with `Revert` or `revert:` are classified based on what is being reverted. A revert of a feature may effectively be a fix. Use judgment and confirm with the user.
+Commits starting with `Revert` or `revert:` are classified from what is being
+reverted. A revert of a feature may effectively be a fix. Use judgment and
+confirm with the user.
