@@ -37,21 +37,22 @@ This is the source-of-truth repo for the **Agentic Engineering Toolkit (AE Toolk
 
 ## Tooling Reference
 
-| Command                 | What it runs                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| `make help`             | Show all available targets                                                           |
-| `make install-skills`   | Symlink all skills to `~/.agents/skills/`                                            |
-| `make add-skill NAME=x` | Scaffold a new skill directory                                                       |
-| `make install-editable` | Ensure the `aet` package is installed editable in the local venv                     |
-| `make lint`             | Run markdownlint on all markdown files (manual / staged-only)                        |
-| `make lint-py`          | Run ruff on Python files                                                             |
-| `make test`             | Run pytest suite                                                                     |
+| Command                 | What it runs                                                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make help`             | Show all available targets                                                                                                                                |
+| `make install-skills`   | Symlink all skills to `~/.agents/skills/`                                                                                                                 |
+| `make add-skill NAME=x` | Scaffold a new skill directory                                                                                                                            |
+| `make install-editable` | Ensure the `aet` package is installed editable in the local venv                                                                                          |
+| `make lint`             | Run markdownlint on all markdown files (manual / staged-only)                                                                                             |
+| `make lint-py`          | Run ruff on Python files                                                                                                                                  |
+| `make test`             | Run pytest suite                                                                                                                                          |
 | `make validate`         | Run lint-py + workflow lint + skills-lint + skill-structure validator + `aet plans lint` + `aet docs lint` + test (pytest skipped for prose-only changes) |
-| `aet status`            | Show queue health and plan drift; use after queue/state edits                        |
-| `aet plans lint`        | Lint the live `docs/plans/` corpus; settled-ness is recorded in the provenance ledger (ADR-055) |
-| `aet docs lint`         | Lint documentation against the declarative rules in `.agents/doc-rules.yaml`          |
-| `aet docs generate`     | Regenerate `docs/CLI.md` from the Typer command tree                                 |
-| `make install-hooks`    | Install pre-commit hooks                                                             |
+| `aet status`            | Show queue health and plan drift; use after queue/state edits                                                                                             |
+| `aet plans lint`        | Lint the live `docs/plans/` corpus; settled-ness is recorded in the provenance ledger (ADR-055)                                                           |
+| `aet docs lint`         | Lint documentation against the declarative rules in `.agents/doc-rules.yaml`                                                                              |
+| `aet docs generate`     | Regenerate `docs/CLI.md` from the Typer command tree                                                                                                      |
+| `/aet-drive`            | Autonomous epic completion loop: `aet run` + auto-merge + conflict resolution                                                                             |
+| `make install-hooks`    | Install pre-commit hooks                                                                                                                                  |
 
 ## Skill Structure Validator
 

@@ -12,7 +12,7 @@ Queue management for agentic engineering. The single job of this skill is to man
 - You have multiple `docs/plans/*.md` files from a PRD breakdown
 - You want to run tasks sequentially without manual intervention
 - You want to check what's blocked, what's unblocked, what's done
-- You want the "night shift" AFK loop
+- You want the "night shift" AFK loop (for driving an entire epic to completion with automated shipping and conflict resolution, use [`aet-drive`](../aet-drive/SKILL.md))
 
 ## Context
 
@@ -43,12 +43,12 @@ This means:
 
 ### File roles
 
-| File                         | Role                                                    | Tracked         |
-| ---------------------------- | ------------------------------------------------------- | --------------- |
+| File                         | Role                                                          | Tracked         |
+| ---------------------------- | ------------------------------------------------------------- | --------------- |
 | `docs/plans/{id}.md`         | Authoring artifact; rendered into worktrees as a working copy | Yes             |
-| `refs/aet/tasks/*`           | Ephemeral sprint board: active tasks only               | No (git refs)   |
-| `.agents/work-history.jsonl` | Optional execution log for transitions and timing       | No (gitignored) |
-| `.agents/ledger.jsonl`       | Content-addressed provenance ledger                     | No (gitignored) |
+| `refs/aet/tasks/*`           | Ephemeral sprint board: active tasks only                     | No (git refs)   |
+| `.agents/work-history.jsonl` | Optional execution log for transitions and timing             | No (gitignored) |
+| `.agents/ledger.jsonl`       | Content-addressed provenance ledger                           | No (gitignored) |
 
 The ledger is an append-only, content-addressed event store. Do not edit it by hand: each event id is a SHA256 over its canonical fields, so any manual change leaves the id disagreeing with the body. The next load verifies every line and refuses the whole file, so every command that records provenance fails until the ledger is restored — and there is no rebuild path for it.
 

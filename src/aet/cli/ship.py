@@ -217,6 +217,7 @@ def _resolve_ship_task(args: argparse.Namespace) -> int | None:
 
     args.task_id = task.get("id", plan_arg)
     args.spec = spec
+    args.task = task
     return None
 
 
@@ -531,6 +532,11 @@ def _create_gate_worktree(branch: str) -> Path:
     )
     if result.returncode != 0:
         raise RuntimeError(f"Could not create worktree for {branch}: {result.stderr.strip()}")
+    try:
+        from aet.worktree import prepare_worktree_dependencies
+        prepare_worktree_dependencies(str(repo_root), str(worktree_dir))
+    except Exception:
+        pass
     return worktree_dir
 
 
@@ -607,6 +613,14 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                 message="Working tree is dirty. Stash, commit, or abort before shipping.",
                 stack=stack,
             )
+
+        if created_temp_worktree:
+            try:
+                from aet.worktree import prepare_worktree_dependencies
+                repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
+                prepare_worktree_dependencies(str(repo_root), str(workspace))
+            except Exception:
+                pass
 
         test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
         test_result = subprocess.run(shlex.split(test_cmd), cwd=str(workspace), capture_output=True, text=True)
@@ -1252,6 +1266,22 @@ def _has_merge_conflicts(
     if tree_result.returncode != 0:
         return True, f"Merge-tree failed for {target_ref}: {tree_result.stderr}"
     if any(line.startswith("<<<<<<< ") for line in tree_result.stdout.splitlines()):
+        conflicted_files: list[str] = []
+        for line in tree_result.stdout.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("our ") or stripped.startswith("their "):
+                parts = stripped.split(maxsplit=3)
+                if len(parts) >= 4:
+                    conflicted_files.append(parts[3])
+            elif "Merge conflict in " in stripped:
+                conflicted_files.append(stripped.split("Merge conflict in ", 1)[1].strip())
+        if conflicted_files:
+            file_list = "\n".join(f"  - {f}" for f in sorted(set(conflicted_files)))
+            return (
+                True,
+                f"Merging {source_ref} into {target_ref} produced conflicts in:\n{file_list}\n"
+                "Rebase onto the target branch or resolve the conflicts first.",
+            )
         return (
             True,
             f"Merging {source_ref} into {target_ref} would produce conflicts. "
@@ -1410,7 +1440,13 @@ def cmd_merge(args: argparse.Namespace) -> int:
 
     spec = args.spec
     trunk_ref = _resolve_trunk_ref()
-    target_branch = args.branch or trunk_ref.removeprefix("origin/")
+    task = getattr(args, "task", None)
+    task_integration = None
+    if isinstance(task, dict):
+        task_integration = task.get("integration_branch")
+        if not task_integration and isinstance(task.get("stamp"), dict):
+            task_integration = task["stamp"].get("branch")
+    target_branch = args.branch or task_integration or trunk_ref.removeprefix("origin/")
     task_id = args.task_id
     feature_branch = _resolve_feature_branch(task_id)
     if not feature_branch:

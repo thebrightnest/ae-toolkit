@@ -216,6 +216,7 @@ These are the components of the AE Toolkit system. They are installed together; 
 | [aet-release-prep](./skills/aet-release-prep)                     | Release preparation: analyze commits, suggest version bumps, and update CHANGELOG.md and PRODUCT.md.                                                                                      |
 | [aet-sync-docs](./skills/aet-sync-docs)                           | Sync PRD and plan.md to reflect what was actually built. Appends a divergence summary when implementation drifts from the plan.                                                           |
 | [aet-work](./skills/aet-work)                                     | Work queue management and AFK task orchestration. Curated intake, evidence-gated completion, and a local telemetry panel. Backed by local JSON, git-refs, or GitHub Issues.               |
+| [aet-drive](./skills/aet-drive)                                   | Autonomous end-to-end epic completion loop: orchestrates task execution, automatic shipping, and conflict resolution.                                                                     |
 
 ### Pipelines
 
@@ -225,6 +226,7 @@ These skills orchestrate the full toolkit workflow:
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | [aet-pipeline-plan](./skills/aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → plan → validate-scope with hard human gates.                  |
 | [aet-work](./skills/aet-work)                   | Work queue management with unified orchestrator. Runs plans with session-isolated, evidence-gated stages. |
+| [aet-drive](./skills/aet-drive)                 | Autonomous epic completion loop: runs queue, merges tasks into epic branch, and resolves conflicts.       |
 
 ---
 
@@ -294,9 +296,9 @@ Edit `SKILL.md` following the [skill creator guide](https://docs.kimi.ai/skills)
 
 See [docs/upgrades/README.md](./docs/upgrades/README.md) for version-specific upgrade guides.
 
-| From   | To     | Guide                                    |
-| ------ | ------ | ---------------------------------------- |
-| v1.5.0 | v1.6.0 | [v1.5.0-to-v1.6.0.md](./docs/upgrades/v1.5.0-to-v1.6.0.md) |
+| From   | To     | Guide                                                        |
+| ------ | ------ | ------------------------------------------------------------ |
+| v1.5.0 | v1.6.0 | [v1.5.0-to-v1.6.0.md](./docs/upgrades/v1.5.0-to-v1.6.0.md)   |
 
 ## License
 
