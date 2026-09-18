@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.17.0] — 2026-09-18
+
+### Added
+
+- **Universal `/aet-drive` shortcut for autonomous epic completion** — a single slash command and skill (`/aet-drive`) that drives an active epic through to completion across any AI coding agent (Antigravity, Claude Code, Cursor, Windsurf, Kimi). It runs the orchestrator pipeline (`aet run`), automatically merges finished tasks into the active epic branch (`aet ship merge`), intelligently resolves merge conflicts, and loops until all tasks belonging to the epic are closed.
+- **Natural host CLI adapter auto-detection** — `aet-drive` and `aet run` automatically inspect parent process ancestry to identify host agent CLIs (`agy`, `claude`, `kimi`), eliminating the need to pass manual `--cli-bin` flags in interactive sessions.
+- **Automatic epic branch targeting in `aet ship merge`** — when `--branch` is omitted, `aet ship merge` automatically resolves the target branch to the task's stamped `integration_branch`, so tasks within an epic integrate directly into their shared epic branch without manual argument passing.
+- **Actionable merge conflict diagnostics** — when integration conflicts occur, `aet ship merge` extracts and lists the conflicting file paths in its error output so agents and developers know immediately which files require inspection and resolution.
+
+**Upgrading from 1.16.x:** run `make install-skills` (or `npx skills add ... --all`) to link the new `aet-drive` skill into `~/.agents/skills/`. No configuration changes are required; host CLI adapters and task epic branches are resolved automatically.
+
+---
+
 ## [1.16.0] — 2026-09-13
 
 ### Added

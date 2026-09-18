@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.16.0
+## Current Version: 1.17.0
 
-Last updated: 2026-09-13
+Last updated: 2026-09-18
 
 ---
 
@@ -27,6 +27,7 @@ Run plans with isolation, quality gates, and traceability.
 - **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, a single admission policy shared by every route onto the board, correction of a queued plan by editing the file and re-adding it, a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall, an epic declared once in the queue envelope rather than inferred on every invocation, preflight checks that refuse in the foreground before a run detaches, and a liveness check that reads process start time so a recycled process id is never reported as an active run.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
+- **aet-drive** — Autonomous execution loop that drives an entire declared epic to completion. Coordinates `aet run` with natural CLI adapter auto-detection, automatically integrates finished tasks into the active epic branch via `aet ship merge`, and intelligently resolves integration conflicts.
 
 ### Quality and Security Skills
 
@@ -73,21 +74,30 @@ Carry context and lessons across runs.
 
 ## Integrations
 
-| Name                  | Description                                                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `make install-skills` | Symlinks all skills to `~/.agents/skills/` for local agent use.                                                                      |
-| Agent CLIs            | Claude Code, Kimi, and Antigravity (`agy`) all drive the pipeline. The toolkit reads each one's session logs and usage figures, so runs are comparable whichever you use; for Antigravity, model and reasoning effort are selectable per session. |
-| `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet setup link` installs the console script on `PATH`. |
-| `aet context`         | Session-start context loader that surfaces git state, plan stages, budgets, rules digest, and recent learnings. |
-| `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates. |
+| Name                  | Description                                                                                                                                                                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make install-skills` | Symlinks all skills to `~/.agents/skills/` for local agent use.                                                                                                                                                                                          |
+| Agent CLIs            | Claude Code, Kimi, and Antigravity (`agy`) all drive the pipeline. The toolkit reads each one's session logs and usage figures, so runs are comparable whichever you use; for Antigravity, model and reasoning effort are selectable per session.        |
+| `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet setup link` installs the console script on `PATH`.                                                                                                                           |
+| `aet context`         | Session-start context loader that surfaces git state, plan stages, budgets, rules digest, and recent learnings.                                                                                                                                          |
+| `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates.                                                                                                                                                     |
 | Telemetry panel       | A local, stdlib-launched viewer for the telemetry archive, with a Plans lens for browsing plans, pipeline progress, run history, test-run provenance badges, session-log traceability, and total cost and token figures for whatever the filters select. |
-| GitHub Issues         | One-way projection of the board, plus `aet sprint intake` for reading `aet:sprint` issues as declared intent. Not a task store.       |
-| git-refs backend      | The task store. Queue state lives in tracked git refs and travels with the repository; in shadow posture it stays entirely local and is never pushed.              |
-| Git                   | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required.                             |
+| GitHub Issues         | One-way projection of the board, plus `aet sprint intake` for reading `aet:sprint` issues as declared intent. Not a task store.                                                                                                                          |
+| git-refs backend      | The task store. Queue state lives in tracked git refs and travels with the repository; in shadow posture it stays entirely local and is never pushed.                                                                                                    |
+| Git                   | All skills use git commands for branch, worktree, and merge operations; no agent-specific APIs required.                                                                                                                                                 |
 
 ---
 
 ## What's New
+
+### What's New in v1.17.0
+
+- **Universal `/aet-drive` shortcut to drive epics hands-free to completion** — you can invoke `/aet-drive` across Antigravity, Claude Code, Cursor, Windsurf, or any AI coding agent to execute all tasks in an active epic without manual step-by-step coordination. The skill continuously runs the pipeline, ships completed tasks, and loops until the epic is complete.
+- **Host CLI adapters are auto-detected naturally** — `aet run` and `/aet-drive` automatically detect host agents (`agy`, `claude`, `kimi`) from the process hierarchy, eliminating the need to pass manual `--cli-bin` flags in ordinary agent sessions.
+- **Tasks in an epic merge into their epic branch automatically** — `aet ship merge` now automatically targets the task's stamped epic integration branch when `--branch` is omitted, keeping internal epic integration seamless without manual argument passing.
+- **Actionable merge conflict diagnostics** — when integration conflicts occur, `aet ship merge` explicitly lists the conflicting file paths so the agent or developer knows immediately which files require conflict resolution.
+
+**Upgrading from 1.16.x:** run `make install-skills` (or `npx skills add ... --all`) to link the new `aet-drive` skill into `~/.agents/skills/`. No configuration changes are required.
 
 ### What's New in v1.16.0
 
