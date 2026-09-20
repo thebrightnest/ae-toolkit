@@ -63,7 +63,7 @@ Produce a risk-mapped upgrade plan by analyzing the changelog and grepping the c
 
 5. **Produce the upgrade plan**
 
-   - Write a markdown plan file: `docs/plans/{ticket}-upgrade-{dependency}.md`
+   - Write a markdown plan file: `docs/plans/active/{ticket}-upgrade-{dependency}.md`
    - Include: dependency name, version range, breaking change checklist with risk ratings, grep evidence, mitigation steps for high-risk items, and smoke test requirements
    - Follow the format in [references/breaking-change-template.md](references/breaking-change-template.md)
 

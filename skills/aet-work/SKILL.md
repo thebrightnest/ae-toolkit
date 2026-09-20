@@ -9,7 +9,7 @@ Queue management for agentic engineering. The single job of this skill is to man
 
 ## When to Use
 
-- You have multiple `docs/plans/*.md` files from a PRD breakdown
+- You have multiple `docs/plans/active/*.md` files from a PRD breakdown
 - You want to run tasks sequentially without manual intervention
 - You want to check what's blocked, what's unblocked, what's done
 - You want the "night shift" AFK loop (for driving an entire epic to completion with automated shipping and conflict resolution, use [`aet-drive`](../aet-drive/SKILL.md))
@@ -28,7 +28,7 @@ This skill invokes AET helpers through the `aet` dispatcher (`aet state`, `aet s
 
 The lifecycle has one source of truth per phase and one explicit handoff (ADR-061):
 
-1. **Author** — `aet-plan` writes `docs/plans/{id}.md`. The file is the artifact.
+1. **Author** — `aet-plan` writes `docs/plans/active/{id}.md`. The file is the artifact.
 2. **Intake** — `aet sprint add` ingests the file into the task record's `spec`. This is the handoff.
 3. **Post-intake** — the task record's `spec` is the source of intent, stage, and terminal closure. The plan file may be rendered into a worktree as an ephemeral working copy; nothing writes back to it (R-4/R-19), so its contents are never authoritative.
 
@@ -45,7 +45,8 @@ This means:
 
 | File                         | Role                                                          | Tracked         |
 | ---------------------------- | ------------------------------------------------------------- | --------------- |
-| `docs/plans/{id}.md`         | Authoring artifact; rendered into worktrees as a working copy | Yes             |
+| `docs/plans/active/{id}.md`  | Authoring artifact; transient scratch                         | No (gitignored) |
+| `docs/plans/archive/{id}.md` | Settled plan moved at closure                                 | Optional / Yes  |
 | `refs/aet/tasks/*`           | Ephemeral sprint board: active tasks only                     | No (git refs)   |
 | `.agents/work-history.jsonl` | Optional execution log for transitions and timing             | No (gitignored) |
 | `.agents/ledger.jsonl`       | Content-addressed provenance ledger                           | No (gitignored) |
@@ -67,12 +68,12 @@ The `git-refs` backend is `schema_version`-stamped (ADR-055) and treats the live
 ### Queue lifecycle
 
 1. Plan reaches footer stage `plan-approved`.
-2. User runs `aet sprint add docs/plans/FEAT-001.md` → task appears in queue as `ready` (or `blocked` if it has pending blockers).
+2. User runs `aet sprint add docs/plans/active/FEAT-001.md` → task appears in queue as `ready` (or `blocked` if it has pending blockers).
 3. `aet next` or `aet run` transitions it through `in_progress` and its stage sub-states.
 4. Task reaches `awaiting_merge`.
 5. PR is opened and merged into the resolved trunk branch.
 6. `aet-ship` verifies the merge commit is on the resolved trunk branch.
-7. `aet-ship` records the terminal ledger event, appends closure to `.agents/work-history.jsonl`, and removes the task from the active sprint board. Plan files are transient working copies — closure no longer touches them (R-4/R-19).
+7. `aet-ship` records the terminal ledger event, appends closure to `.agents/work-history.jsonl`, archives `docs/plans/active/<id>.md` to `docs/plans/archive/<id>.md` (if present locally), and removes the task from the active sprint board.
 
 ## Task Backends
 
@@ -172,7 +173,7 @@ aet run-one --base feat/epic-name FEAT-001
 Promote a single approved plan into the runnable sprint.
 
 ```bash
-aet sprint add docs/plans/FEAT-001.md
+aet sprint add docs/plans/active/FEAT-001.md
 aet sprint add FEAT-001
 ```
 
@@ -184,7 +185,7 @@ Scaffolded for gib-07; full backlog intake is not yet implemented.
 
 ### `review`
 
-Scan all `docs/plans/*.md` files and print a human-readable status summary. Board columns derive positionally from the loaded workflow — entry stage → approved, terminal skill-less stage → queued, every other stage → in-progress — so variant workflow vocabularies render a sensible board without a per-workflow mapping table; queue states keep fixed columns. For the packaged `software` workflow:
+Scan all `docs/plans/active/*.md` (and legacy `docs/plans/*.md`) files and print a human-readable status summary. Board columns derive positionally from the loaded workflow — entry stage → approved, terminal skill-less stage → queued, every other stage → in-progress — so variant workflow vocabularies render a sensible board without a per-workflow mapping table; queue states keep fixed columns. For the packaged `software` workflow:
 
 - **Approved:** `plan-approved` (workflow entry stage)
 - **Queued:** `synced` (terminal skill-less stage)

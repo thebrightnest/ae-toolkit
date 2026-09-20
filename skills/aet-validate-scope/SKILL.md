@@ -53,7 +53,7 @@ Check the current plan/PRD against existing documentation and code. Surface cont
    - Architectural decisions that contradict existing ADRs
 6. **Pipeline field validation** — if a plan frontmatter contains `pipeline`, verify the value is one of `minimal`, `standard`, or `full`. Any other value is a validation failure. Warn if a high-risk change (auth, data models, API, dependencies) uses `minimal`.
 7. **Closure Check** — before declaring scope validated, verify the handoff artifact exists:
-   - At least one `docs/plans/*.md` file references the PRD (via Context or frontmatter).
+   - At least one `docs/plans/active/*.md` (or legacy `docs/plans/*.md`) file references the PRD (via Context or frontmatter).
    - If the check fails, stop and redirect: do not update the PRD footer to `scope-validated`.
    - Do **not** check the queue here. Queue intake happens after this skill runs via `aet sprint add`; plans may be untracked at intake.
 8. Present findings as a concise list (not a 20-question interview)
@@ -160,7 +160,7 @@ When multiple contexts exist, infer which one the current topic relates to. If u
 If the closure check fails, print the following and stop:
 
 - **No plan files:**
-  > "Scope validation cannot complete: no plan files reference this PRD. Break the PRD into `docs/plans/*.md` files (e.g., via `aet-plan`), then re-run `aet-validate-scope`."
+  > "Scope validation cannot complete: no plan files reference this PRD. Break the PRD into `docs/plans/active/*.md` files (e.g., via `aet-plan`), then re-run `aet-validate-scope`."
 
 ## Completion Protocol
 

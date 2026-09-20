@@ -85,7 +85,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 1. Follow the `aet-plan` → `clarify-goal` + `create-prd` + `create-stories` + `plan` procedures
    - `create-stories` and `plan` enforce task size guardrails automatically (2-of-N signal model, context-budget + coherence, auto-split, `⚠️ ATOMIC OVERSIZED` marking). See `docs/CONVENTIONS.md` for the current model; size is measured after implementation, not gated at intake (ADR-046).
    - R-trace discipline (numbered R-ids carried brief → PRD → plan task, with a coverage lint) is enforced by `aet-plan` here and demonstrated at the P0 exit gate, ahead of Phase 4's mechanized <!-- aet-lint: off -->`aet plan validate`<!-- aet-lint: on -->
-2. Produce: `docs/prds/{feature}-prd.md`, `docs/plans/*.md` files
+2. Produce: `docs/prds/{feature}-prd.md`, `docs/plans/active/*.md` files (atomic task plans MUST be saved to `docs/plans/active/{ticket-id}-plan.md`)
 3. **Queue preservation guardrail:** When plans are admitted to the sprint, new tickets must be merged into the existing queue rather than replacing it. Existing tasks must survive the planning session unchanged.
 4. **HARD GATE:** Present PRD to user for review. Ask:
 
@@ -110,7 +110,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
 **Step 3 — aet sprint add + sync:**
 
-1. Run `aet sprint add <plan-file>` for each newly created atomic `docs/plans/*.md` file to add it to the sprint. `aet sprint add` accepts untracked plans; it does not set a `status` key in frontmatter, and it does not commit or push at intake. Plan durability is deferred to terminal closure (`merged`/`abandoned`). Only explicitly added plans enter the queue; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
+1. Run `aet sprint add <plan-file>` for each newly created atomic `docs/plans/active/*.md` file to add it to the sprint. `aet sprint add` accepts untracked plans; it does not set a `status` key in frontmatter, and it does not commit or push at intake. Plan durability is deferred to terminal closure (`merged`/`abandoned`). Only explicitly added plans enter the queue; non-atomic documents stored in `docs/roadmaps/` or `docs/audits/` are ignored.
 2. Run `aet queue sync` to reconcile existing queue entries, recompute reverse `blocks` edges, and report plan drift. Sync never auto-adds new plans.
 3. Preserve all existing queue entries and their states
 4. Run `aet status` and verify:
@@ -121,7 +121,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 **Output:**
 
 - `docs/prds/{feature}-prd.md` — stage: `scope-validated`
-- `docs/plans/*.md` — stage: `plan-approved`
+- `docs/plans/active/*.md` — stage: `plan-approved`
 - Task records — curated via `aet sprint add` and reconciled via `aet queue sync`, ready for aet-work
 
 ## Completion Protocol
@@ -136,7 +136,7 @@ After the pipeline completes all steps:
 
    Artifacts:
    - PRD:       docs/prds/{feature}-prd.md (scope-validated)
-   - Plans:     docs/plans/*.md (plan-approved)
+   - Plans:     docs/plans/active/*.md (plan-approved)
    - Queue:     Sprint board (sync verified, no drift)
 
    Next step:
