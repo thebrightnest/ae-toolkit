@@ -71,6 +71,7 @@ LEGAL_CONFIG_KEYS = frozenset({
     "github",  # legacy top-level fallback read by resolve_projections
     "boundary_contract",  # read by aet.boundary
     "symlink_dependencies",  # read by aet.worktree
+    "release_prep",  # read by aet.cli.release_prep
 })
 
 # Removed-key migration message reused by config resolution and CLI.

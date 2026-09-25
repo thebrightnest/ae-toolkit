@@ -123,7 +123,7 @@ Transform the grilled conversation into a structured Product Requirements Docume
 
 1. Read the clarify-goal conversation history as input.
 2. Use `.agents/templates/prd-template.md` as the structure guide.
-3. Create `docs/prds/` if it doesn't exist. Produce a PRD saved to `docs/prds/{feature-name}-prd.md`.
+3. Create `docs/prds/` if it doesn't exist. Produce a PRD saved to `docs/prds/{seq}-{feature-name}-prd.md`, where `{seq}` is a 4-digit zero-padded sequence number (e.g. `0016`) determined by incrementing the highest existing PRD number in `docs/prds/`.
 4. Include: executive summary, mission, target users, scope (in/out), a numbered **Requirements** section (R-1…, each independently testable — carried from the brief when one exists, minted here otherwise), user stories with acceptance criteria (each citing the R-ids it satisfies), technical notes, architecture decisions, open questions, risks.
 5. **Explicitly list out-of-scope items** — crucial for defining "done."
 6. Ask the user to review before proceeding. Do not auto-generate stories from an unreviewed PRD.
