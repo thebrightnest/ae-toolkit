@@ -1,17 +1,17 @@
 ---
 name: aet-drive
-description: Autonomous end-to-end epic completion loop with natural CLI adapter auto-detection, pipelined task execution (aet run), automatic task integration (aet ship merge), and intelligent merge conflict resolution. Triggers on "/aet-drive", "drive epic", "run epic", "complete epic", "finish epic", "autonomous epic", "drive the epic to completion".
+description: Autonomous end-to-end task and epic completion loop with natural CLI adapter auto-detection, pipelined task execution (aet run), automatic task integration (aet ship merge), and intelligent merge conflict resolution. Triggers on "/aet-drive", "run aet-drive", "aet-drive", "drive epic", "run epic", "drive sprint", "run sprint", "complete epic", "finish epic", "autonomous epic", "drive the epic to completion".
 ---
 
 # aet-drive
 
-Autonomous execution loop that drives an entire declared epic to completion. The skill orchestrates task execution through `aet run`, automatically merges finished tasks into the active epic branch via `aet ship merge`, intelligently resolves any merge conflicts encountered along the way, and loops until every task in the epic is closed.
+Autonomous execution loop that drives an entire declared epic or sprint queue to completion. The skill orchestrates task execution through `aet run`, automatically merges finished tasks into the active epic branch via `aet ship merge`, intelligently resolves any merge conflicts encountered along the way, and loops until every task is closed.
 
 ## When to Use
 
-- You have an active epic with tasks in the sprint queue and want hands-free execution to completion.
+- You have tasks in the sprint queue (with or without an active epic) and want hands-free execution to completion.
 - You want the agent to automatically run pipeline stages, ship ready tasks, and resolve any integration conflicts without pausing for user intervention.
-- Invoked anywhere via `/aet-drive` (or natural triggers: "drive epic", "complete epic", "run epic").
+- Invoked anywhere via `/aet-drive` (or natural triggers: "run aet-drive", "drive epic", "complete epic", "run epic", "drive sprint").
 
 ## Context
 
@@ -28,15 +28,17 @@ In accordance with ADR-039, ADR-029, and ADR-076:
 ## Prerequisites
 
 1. `aet` is installed and on `PATH` (run `aet setup link` if needed).
-2. An active epic is set (`aet epic show`). If no epic is set, set one or confirm standalone sprint operation.
-3. Tasks are intaken into the sprint queue (`aet status` shows queued tasks).
+2. Tasks are intaken into the sprint queue (`aet status` shows queued tasks).
+3. If an active epic is set (`aet epic show`), tasks integrate into its branch. If `aet epic show` reports no active epic, proceed directly in standalone sprint mode without prompting or stopping.
 4. Working tree is clean.
 
 ---
 
 ## Autonomous Execution Procedure
 
-Execute this loop continuously until all tasks in the epic are closed.
+> **Zero-Hesitation Execution Rule**: Immediately launch `aet run`. Do not pause to audit plans, PRDs, queue history, or epic envelopes unless `aet run` fails or halts with an error. If no epic is set, proceed directly in standalone sprint mode without asking the user or stopping.
+
+Execute this loop continuously until all tasks are closed.
 
 ### 1. Natural CLI Adapter Adaptation
 
@@ -59,7 +61,7 @@ aet epic show
 aet status
 ```
 
-- Verify the active epic integration branch (e.g. `feat/<epic-name>`).
+- Note the active epic integration branch if present; if `aet epic show` outputs `No active epic.`, continue immediately in standalone sprint mode without pausing.
 - Confirm tasks are ready to run on the sprint board.
 - If no tasks are ready or queue is empty, report status to the user and halt.
 

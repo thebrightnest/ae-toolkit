@@ -138,6 +138,7 @@ def _agent_skills_dirs() -> list[Path]:
         home / ".claude" / "skills",
         home / ".kimi" / "skills",
         home / ".cursor" / "skills",
+        home / ".gemini" / "config" / "skills",
         home / ".agents" / "skills",
     ]
     return [p for p in candidates if p.is_dir()]
@@ -157,6 +158,9 @@ def _resolve_target_dirs(
             "claude-code": home / ".claude" / "skills",
             "kimi": home / ".kimi" / "skills",
             "cursor": home / ".cursor" / "skills",
+            "antigravity": home / ".gemini" / "config" / "skills",
+            "gemini": home / ".gemini" / "config" / "skills",
+            "agy": home / ".gemini" / "config" / "skills",
             "generic": home / ".agents" / "skills",
         }
         if agent not in mapping:
@@ -277,7 +281,7 @@ def setup_skills(
         None, "--skills-dir", envvar="AET_SKILLS_DIR", help="Target skills directory."
     ),
     agent: str | None = typer.Option(
-        None, "--agent", envvar="AGENT", help="Target agent: claude-code, kimi, cursor, generic."
+        None, "--agent", envvar="AGENT", help="Target agent: claude-code, kimi, cursor, antigravity, generic."
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without executing."),
     force: bool = typer.Option(False, "--force", help="Replace non-symlink collisions with symlinks."),
