@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.18.0] — 2026-10-04
+
+### Added
+
+- **Zero-hesitation standalone sprint driving in `/aet-drive`** — `aet-drive` no longer requires an active epic declaration to execute. When `aet epic show` reports no active epic, the skill automatically executes in standalone sprint mode without pausing to audit PRDs, backlogs, or epic envelopes. An explicit Zero-Hesitation Execution Rule instructs agents to launch `aet run` immediately upon invocation.
+- **Natural trigger aliases for `/aet-drive`** — added `"run aet-drive"`, `"aet-drive"`, `"drive sprint"`, and `"run sprint"` to trigger phrases so natural language requests activate the skill reliably across all agent platforms.
+- **Antigravity / Gemini discovery in `aet setup skills`** — `aet setup skills` now auto-detects Google Antigravity's global skills directory (`~/.gemini/config/skills`) and supports `--agent antigravity` (aliases `gemini`, `agy`), automatically linking all AE Toolkit skills into Antigravity for turn-0 availability.
+- **4-digit sequential numbering for PRD filenames** — `aet-plan` and `aet-pipeline-plan` now enforce `{seq}-{feature}-prd.md` with 4-digit zero-padded numbering (e.g. `0001-...`, `0012-...`), incremented from the highest existing PRD number, ensuring clean lexicographical sorting across long-running repositories.
+
+### Changed
+
+- **Partitioned plan routing aligned with ADR-073** — `aet-pipeline-plan`, `aet-validate-scope`, `aet-work`, `aet-upgrade`, and `AGENTS.md` now route plan creation and queue intake through `docs/plans/active/` rather than the flat `docs/plans/` directory.
+
+**Upgrading from 1.17.x:** run `aet setup skills` to link skills into your agent directories (including Antigravity at `~/.gemini/config/skills/`). No configuration migrations are required.
+
+---
+
 ## [1.17.0] — 2026-09-18
 
 ### Added

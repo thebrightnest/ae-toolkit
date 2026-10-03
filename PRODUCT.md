@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.17.0
+## Current Version: 1.18.0
 
-Last updated: 2026-09-18
+Last updated: 2026-10-04
 
 ---
 
@@ -16,8 +16,8 @@ Last updated: 2026-09-18
 
 Turn ideas into actionable, validated plans.
 
-- **aet-plan** — PRD creation, goal clarification, atomic `plan.md` generation, and a `validate` command that checks plans against structure, scope, dependency, and traceability rules. Requirement coverage counts the work already finished for the same PRD, so a plan is only asked to trace what nobody has delivered yet, and each result names how many plans it checked and against what.
-- **aet-pipeline-plan** — End-to-end planning pipeline that runs discovery, planning, and scope validation in sequence.
+- **aet-plan** — PRD creation with 4-digit zero-padded sequential numbering (`{seq}-{feature}-prd.md`), goal clarification, atomic `plan.md` generation, and a `validate` command that checks plans against structure, scope, dependency, and traceability rules. Requirement coverage counts the work already finished for the same PRD, so a plan is only asked to trace what nobody has delivered yet, and each result names how many plans it checked and against what.
+- **aet-pipeline-plan** — End-to-end planning pipeline that runs discovery, planning, and scope validation in sequence, routing newly authored plans directly through `docs/plans/active/`.
 - **aet-validate-scope** — Stress-test plans against the existing domain model, terminology, and documented decisions.
 
 ### Execution Skills
@@ -27,7 +27,7 @@ Run plans with isolation, quality gates, and traceability.
 - **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, a single admission policy shared by every route onto the board, correction of a queued plan by editing the file and re-adding it, a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall, an epic declared once in the queue envelope rather than inferred on every invocation, preflight checks that refuse in the foreground before a run detaches, and a liveness check that reads process start time so a recycled process id is never reported as an active run.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
-- **aet-drive** — Autonomous execution loop that drives an entire declared epic to completion. Coordinates `aet run` with natural CLI adapter auto-detection, automatically integrates finished tasks into the active epic branch via `aet ship merge`, and intelligently resolves integration conflicts.
+- **aet-drive** — Autonomous execution loop that drives an entire declared epic or sprint queue to completion. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, standalone sprint mode when no active epic is set, automatic integration of finished tasks into the active epic branch via `aet ship merge`, and intelligent resolution of integration conflicts.
 
 ### Quality and Security Skills
 
@@ -50,7 +50,7 @@ Land code cleanly and document releases.
 
 Keep projects and the toolkit itself healthy.
 
-- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the active epic declaration beside the resolved trunk and integration branch.
+- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, `aet setup skills` with native auto-detection for Antigravity (`~/.gemini/config/skills`) alongside Claude, Kimi, and Cursor, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the active epic declaration beside the resolved trunk and integration branch.
 - **aet-upgrade** — Dependency and framework upgrade planning with breaking-change analysis.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
@@ -76,7 +76,7 @@ Carry context and lessons across runs.
 
 | Name                  | Description                                                                                                                                                                                                                                              |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make install-skills` | Symlinks all skills to `~/.agents/skills/` for local agent use.                                                                                                                                                                                          |
+| `aet setup skills` / `make install-skills` | Symlinks all skills to agent skills directories: `~/.gemini/config/skills/` (Antigravity), `~/.claude/skills/`, `~/.kimi/skills/`, and `~/.agents/skills/`. |
 | Agent CLIs            | Claude Code, Kimi, and Antigravity (`agy`) all drive the pipeline. The toolkit reads each one's session logs and usage figures, so runs are comparable whichever you use; for Antigravity, model and reasoning effort are selectable per session.        |
 | `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet setup link` installs the console script on `PATH`.                                                                                                                           |
 | `aet context`         | Session-start context loader that surfaces git state, plan stages, budgets, rules digest, and recent learnings.                                                                                                                                          |
@@ -89,6 +89,15 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.18.0
+
+- **Zero-hesitation standalone sprint driving in `/aet-drive`** — `/aet-drive` now operates seamlessly with or without an active epic declaration. When no epic is declared, it proceeds directly in standalone sprint mode with an explicit Zero-Hesitation Execution Rule that launches `aet run` immediately without pausing for PRD or backlog audits.
+- **Native Antigravity / Gemini skill detection in `aet setup skills`** — `aet setup skills` now auto-detects Antigravity's global skills directory (`~/.gemini/config/skills`) and supports `--agent antigravity` (aliases `gemini`, `agy`), automatically making all 21 skills available on turn 0 in Antigravity sessions.
+- **4-digit sequential PRD numbering** — `aet-plan` and `aet-pipeline-plan` enforce `{seq}-{feature}-prd.md` with 4-digit zero-padded numbering (e.g. `0001-...`), incrementing from the highest existing PRD number to ensure reliable chronological ordering.
+- **Partitioned plan routing in active directory** — planning and execution skills consistently author and intake in-flight plans through `docs/plans/active/` in alignment with ADR-073.
+
+**Upgrading from 1.17.x:** run `aet setup skills` to link skills into your agent directories (including Antigravity at `~/.gemini/config/skills/`). No configuration changes are required.
 
 ### What's New in v1.17.0
 
