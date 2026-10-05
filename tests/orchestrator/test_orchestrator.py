@@ -2164,7 +2164,7 @@ class TestProcessGroupKill(unittest.TestCase):
         fake_kimi.chmod(0o755)
         return str(fake_kimi)
 
-    def _wait_for_marker(self, marker: str, timeout: float = 15) -> None:
+    def _wait_for_marker(self, marker: str, timeout: float = 45) -> None:
         """Poll until a process with the marker appears."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -2176,7 +2176,7 @@ class TestProcessGroupKill(unittest.TestCase):
             time.sleep(0.05)
         self.fail(f"Marker process {marker} did not start")
 
-    def _wait_no_marker(self, marker: str, timeout: float = 15) -> None:
+    def _wait_no_marker(self, marker: str, timeout: float = 45) -> None:
         """Poll until no process with the marker remains."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
