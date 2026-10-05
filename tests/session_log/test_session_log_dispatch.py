@@ -145,14 +145,10 @@ class TestClaudeReader:
 
     def _install_claude_fixture(self, home: Path) -> Path:
         """Copy the fixture transcript into the location the reader expects."""
-        transcript_dir = (
-            home
-            / ".claude"
-            / "projects"
-            / session_log_claude.cwd_slug(self._FIXTURE_CWD)
+        transcript = session_log_claude.transcript_path_for(
+            self._FIXTURE_CWD, self._FIXTURE_SESSION_ID, home=home / ".claude"
         )
-        transcript_dir.mkdir(parents=True, exist_ok=True)
-        transcript = transcript_dir / f"{self._FIXTURE_SESSION_ID}.jsonl"
+        transcript.parent.mkdir(parents=True, exist_ok=True)
         transcript.write_bytes(CLAUDE_TRANSCRIPT.read_bytes())
         return transcript
 
@@ -243,13 +239,10 @@ class TestResultOutputExposure:
         # claude: install the fixture transcript under the expected cwd slug.
         cwd = "/Users/pedrorocha/Sites/aiskills"
         claude_home = tmp_path / ".claude"
-        transcript_dir = (
-            claude_home
-            / "projects"
-            / session_log_claude.cwd_slug(cwd)
+        transcript = session_log_claude.transcript_path_for(
+            cwd, session_id, home=claude_home
         )
-        transcript_dir.mkdir(parents=True)
-        transcript = transcript_dir / f"{session_id}.jsonl"
+        transcript.parent.mkdir(parents=True, exist_ok=True)
         transcript.write_bytes(CLAUDE_TRANSCRIPT.read_bytes())
         invocations = session_log.extract_test_invocations(
             "claude", session_id, worktree_dir=cwd, home=claude_home
@@ -267,14 +260,10 @@ class TestResultOutputExposure:
         """Claude's tool_result content may be text blocks rather than a string."""
         session_id = "session_claude_structured"
         cwd = "/Users/pedrorocha/Sites/aiskills"
-        transcript_dir = (
-            tmp_path
-            / ".claude"
-            / "projects"
-            / session_log_claude.cwd_slug(cwd)
+        transcript = session_log_claude.transcript_path_for(
+            cwd, session_id, home=tmp_path / ".claude"
         )
-        transcript_dir.mkdir(parents=True)
-        transcript = transcript_dir / f"{session_id}.jsonl"
+        transcript.parent.mkdir(parents=True, exist_ok=True)
         result = _claude_result_line("c1", "2026-07-14T17:24:05Z")
         result["message"]["content"][0]["content"] = [
             {"type": "text", "text": "AET_TEST_SCOPE_TARGETS: tests/queue"},
