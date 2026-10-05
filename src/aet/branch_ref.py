@@ -254,7 +254,7 @@ def check_task_epic_mismatch(
         backend=backend,
         ignore_stamp=True,
     )
-    if active_ref.ref != str(stamp):
+    if active_ref.ref.removeprefix("origin/") != str(stamp).removeprefix("origin/"):
         return True, str(stamp), active_ref.ref
     return False, None, None
 

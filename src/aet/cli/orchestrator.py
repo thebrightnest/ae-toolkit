@@ -3967,7 +3967,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 config,
                 queued_task,
                 integration_mode,
-                cli_base=base_branch,
+                cli_base=getattr(args, "base", None),
                 backend=backend,
             )
             if has_mismatch:
@@ -4118,6 +4118,15 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                     from_state = current_state(queue_task) or "in_progress"
                     if from_state == "merged":
                         print(f"   ✅ Task {task_id} merged locally (single-pr)")
+                    elif from_state == "awaiting_merge":
+                        tokens, usd = _task_usage_aggregates(logger, task_id)
+                        if tokens is not None or usd is not None:
+                            queue_task["cost"] = {"tokens": tokens, "usd": usd}
+                            _save_task_record(backend, queue)
+                        if _maybe_auto_merge(queue_task, queue_file, repo_root):
+                            pass
+                        else:
+                            print(f"   ✅ Task {task_id} awaiting merge")
                     else:
                         worktree_rel = queue_task.get("worktree")
                         if worktree_rel:
