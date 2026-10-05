@@ -211,3 +211,31 @@ class BreakerStore:
     def reset(self) -> bool:
         """Alias for :meth:`clear`."""
         return self.clear()
+
+    def remove_task(self, task_id: str) -> bool:
+        """Remove *task_id* from all signatures in the systemic tally.
+
+        Prunes empty signatures and saves the updated tally to refs/aet/breaker.
+        If no signatures remain, the ref is cleared.
+        Returns True if *task_id* was present and removed, False otherwise.
+        """
+        tally = self.load()
+        if not tally:
+            return False
+        removed = False
+        new_tally: dict[str, set[str]] = {}
+        for sig, task_ids in tally.items():
+            if task_id in task_ids:
+                removed = True
+                remaining = task_ids - {task_id}
+            else:
+                remaining = set(task_ids)
+            if remaining:
+                new_tally[sig] = remaining
+        if not removed:
+            return False
+        if new_tally:
+            self.save(new_tally)
+        else:
+            self.clear()
+        return True
