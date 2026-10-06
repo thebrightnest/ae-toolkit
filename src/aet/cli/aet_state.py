@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -36,6 +37,7 @@ from aet.branch_ref import (  # noqa: E402
     resolve_integration_branch_for_task,
     resolve_trunk_branch,
 )
+from aet.breaker import BreakerStore  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 
 _INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
@@ -1234,10 +1236,15 @@ def cmd_validate(args):
 def cmd_reset(args):
     """Recompute a single task from git + blockers and reset it to ready/blocked.
 
-    This is the pointed, single-task form of ``heal``: it clears stale runtime
-    fields and moves the task to the state derived from ground truth. It is the
-    supported way to un-start a task whose branch/worktree has disappeared.
+    Clears failure signatures, prunes circuit breaker trips, and recovers workspace:
+    - Soft reset (default): preserves worktree and branch, transitions to ready/blocked.
+    - Hard reset (--hard / --clean): deletes worktree and branch, clears runtime fields.
     """
+    dry_run = getattr(args, "dry_run", False)
+    is_hard = getattr(args, "hard", False) or getattr(args, "clean", False)
+    stage = getattr(args, "stage", None)
+    force = getattr(args, "force", False)
+
     backend = make_backend(args.queue)
     backend.fetch()
     try:
@@ -1262,7 +1269,8 @@ def cmd_reset(args):
         print(f"Task not found: {args.task_id}", file=sys.stderr)
         return 1
 
-    _, derived = _derive_all_states(
+    stored_state = queue_lib.current_state(task)
+    task_by_id, derived = _derive_all_states(
         queue,
         cwd,
         trunk_branch=trunk_branch,
@@ -1270,18 +1278,69 @@ def cmd_reset(args):
         config=config,
         integration_mode=integration_mode,
     )
-    derived_state = derived[args.task_id]["derived_status"].split(" (warning")[0]
-    stored_state = queue_lib.current_state(task)
 
-    if not args.apply:
-        print(f"[dry-run] Would reset {args.task_id}: {stored_state} -> {derived_state}")
+    blockers = task.get("blocked_by", [])
+    target_state = "ready"
+    terminal = {"merged", "abandoned"}
+    if blockers:
+        for b in blockers:
+            if b in derived:
+                b_status = derived[b]["derived_status"].split(" (warning")[0]
+            elif b in task_by_id:
+                b_status = queue_lib.current_state(task_by_id[b])
+            else:
+                b_status = "merged"
+            if b_status not in terminal:
+                target_state = "blocked"
+                break
+
+    mode_str = "hard" if is_hard else "soft"
+    has_failure_signatures = bool(task.get("failure_signatures"))
+    branch_name = task.get("branch")
+    worktree_path = task.get("worktree") or os.path.join(repo_root, ".worktrees", args.task_id)
+
+    if dry_run:
+        print(f"[dry-run] Would reset {args.task_id}: {stored_state} -> {target_state} ({mode_str} reset)")
+        print(f"  Mode: {mode_str}")
+        if is_hard:
+            wt_action = (
+                f"would remove ({worktree_path})"
+                if os.path.exists(worktree_path)
+                else "none"
+            )
+            br_action = (
+                f"would delete ({branch_name})"
+                if (branch_name and branch_exists(branch_name, cwd=cwd))
+                else "none"
+            )
+            print(f"  Worktree: {wt_action}")
+            print(f"  Branch: {br_action}")
+            print("  Stage: would clear")
+        else:
+            wt_action = (
+                f"preserved ({worktree_path})"
+                if os.path.exists(worktree_path)
+                else "none"
+            )
+            br_action = (
+                f"preserved ({branch_name})"
+                if (branch_name and branch_exists(branch_name, cwd=cwd))
+                else "none"
+            )
+            print(f"  Worktree: {wt_action}")
+            print(f"  Branch: {br_action}")
+            if stage:
+                print(f"  Stage: would set to '{stage}'")
+            else:
+                print(f"  Stage: preserved ({task.get('stage') or 'none'})")
+        sig_action = "would clear" if has_failure_signatures else "none"
+        print(f"  Failure signatures: {sig_action}")
         return 0
 
-    if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
+    if not queue_lib.lease_guard(args.queue, force=force):
         return queue_lib.LEASE_HELD_EXIT_CODE
 
     with queue_lib.queue_lock(args.queue):
-        # Re-load under the lock in case another process changed the queue.
         data = backend.load(verify=False)
         queue = data["queue"]
         task = find_task(queue, args.task_id)
@@ -1290,7 +1349,7 @@ def cmd_reset(args):
             return 1
 
         stored_state = queue_lib.current_state(task)
-        _, derived = _derive_all_states(
+        task_by_id, derived = _derive_all_states(
             queue,
             cwd,
             trunk_branch=trunk_branch,
@@ -1298,43 +1357,106 @@ def cmd_reset(args):
             config=config,
             integration_mode=integration_mode,
         )
-        derived_state = derived[args.task_id]["derived_status"].split(" (warning")[0]
+        blockers = task.get("blocked_by", [])
+        target_state = "ready"
+        terminal = {"merged", "abandoned"}
+        if blockers:
+            for b in blockers:
+                if b in derived:
+                    b_status = derived[b]["derived_status"].split(" (warning")[0]
+                elif b in task_by_id:
+                    b_status = queue_lib.current_state(task_by_id[b])
+                else:
+                    b_status = "merged"
+                if b_status not in terminal:
+                    target_state = "blocked"
+                    break
 
-        if derived_state not in ("ready", "blocked"):
-            if stored_state == derived_state:
-                cleared = _clear_stale_runtime_fields(task, cwd=cwd)
-                if cleared:
-                    backend.save(queue)
-                    backend.push()
-                print(f"Reset {args.task_id}: already {stored_state}")
-                return 0
-            print(
-                f"Cannot reset {args.task_id}: derived state is {derived_state}, "
-                "not ready/blocked.",
-                file=sys.stderr,
+        computed_pb = sum(
+            1 for b in task.get("blocked_by", [])
+            if b in task_by_id and (
+                (derived.get(b, {}).get("derived_status", "").split(" (warning")[0] not in terminal)
+                if b in derived else (queue_lib.current_state(task_by_id[b]) not in terminal)
             )
-            return 1
+        )
+        task["pending_blockers"] = computed_pb
 
-        if stored_state == derived_state:
-            cleared = _clear_stale_runtime_fields(task, cwd=cwd)
-            if cleared:
-                backend.save(queue)
-                backend.push()
-            print(f"Reset {args.task_id}: {stored_state} (runtime fields cleared)")
-            return 0
+        wt_status = "none"
+        br_status = "none"
+        sig_status = "cleared" if task.get("failure_signatures") else "none"
+
+        # Circuit breaker pruning
+        BreakerStore(repo_root).remove_task(args.task_id)
+
+        # Clear failure signatures
+        task.pop("failure_signatures", None)
+
+        if is_hard:
+            candidate_wts = []
+            if task.get("worktree"):
+                candidate_wts.append(task["worktree"])
+            default_wt = os.path.join(repo_root, ".worktrees", args.task_id)
+            if default_wt not in candidate_wts:
+                candidate_wts.append(default_wt)
+
+            wt_removed = False
+            for c_wt in candidate_wts:
+                if os.path.exists(c_wt):
+                    run_git("worktree", "remove", "--force", str(c_wt), cwd=repo_root)
+                    run_git("worktree", "prune", cwd=repo_root)
+                    if os.path.exists(c_wt):
+                        shutil.rmtree(c_wt, ignore_errors=True)
+                    wt_removed = True
+            wt_status = "removed" if wt_removed else "none"
+
+            branch_name = task.get("branch")
+            if branch_name and branch_exists(branch_name, cwd=cwd):
+                run_git("branch", "-D", branch_name, cwd=repo_root)
+                br_status = "deleted"
+            elif branch_name:
+                br_status = "none (already gone)"
+
+            for field in ("branch", "worktree", "run_id", "stage"):
+                task.pop(field, None)
+            stage_status = "cleared"
+        else:
+            branch_name = task.get("branch")
+            if branch_name and branch_exists(branch_name, cwd=cwd):
+                br_status = f"preserved ({branch_name})"
+            worktree_dir = task.get("worktree") or os.path.join(repo_root, ".worktrees", args.task_id)
+            if os.path.exists(worktree_dir):
+                wt_status = f"preserved ({worktree_dir})"
+
+            if stage is not None:
+                task["stage"] = stage
+                stage_status = f"set to '{stage}'"
+            else:
+                stage_status = f"preserved ({task.get('stage') or 'none'})"
 
         try:
             _apply_transition(
-                backend, queue, task, stored_state, derived_state,
-                by="reset", evidence={"reason": "reset to derived state"}, cwd=cwd,
-                trunk_branch=trunk_branch, repair=True,
+                backend,
+                queue,
+                task,
+                stored_state,
+                target_state,
+                by="reset",
+                evidence={"reason": f"{mode_str} reset to {target_state}"},
+                cwd=cwd,
+                trunk_branch=trunk_branch,
+                repair=True,
             )
             backend.push()
         except RuntimeError as e:
             print(str(e), file=sys.stderr)
             return 1
 
-    print(f"Reset {args.task_id}: {stored_state} -> {derived_state}")
+    print(f"Reset {args.task_id}: {stored_state} -> {target_state} ({mode_str} reset)")
+    print(f"  Mode: {mode_str}")
+    print(f"  Worktree: {wt_status}")
+    print(f"  Branch: {br_status}")
+    print(f"  Failure signatures: {sig_status}")
+    print(f"  Stage: {stage_status}")
     return 0
 
 
@@ -1815,8 +1937,22 @@ def reset(
     queue: Optional[str] = typer.Argument(
         ".agents/aet-queue", help="Path to queue anchor."
     ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview reset actions without mutating queue or git state."
+    ),
     apply: bool = typer.Option(
-        False, "--apply", help="Apply the reset; otherwise dry-run."
+        False, "--apply", help="Legacy compatibility flag (ignored; reset is now live by default)."
+    ),
+    hard: bool = typer.Option(
+        False,
+        "--hard",
+        "--clean",
+        help="Hard reset: remove worktree, delete local branch, and clear runtime fields.",
+    ),
+    stage: Optional[str] = typer.Option(
+        None,
+        "--stage",
+        help="Target stage to set on soft reset (e.g. tdd, implement).",
     ),
     force: bool = typer.Option(
         False,
@@ -1824,9 +1960,16 @@ def reset(
         help="Override a live run lease and mutate the queue anyway (with a warning).",
     ),
 ) -> None:
-    """Recompute a task from git and blockers, reset to ready/blocked, clear stale runtime fields."""
+    """Reset a task to ready/blocked, clear breaker signatures, and recover workspace."""
     args = argparse.Namespace(
-        command="reset", task_id=task_id, queue=queue, apply=apply, force=force
+        command="reset",
+        task_id=task_id,
+        queue=queue,
+        dry_run=dry_run,
+        apply=apply,
+        hard=hard,
+        stage=stage,
+        force=force,
     )
     try:
         rc = cmd_reset(args)

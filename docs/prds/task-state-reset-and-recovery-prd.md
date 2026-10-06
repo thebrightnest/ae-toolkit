@@ -50,14 +50,14 @@ Execution runs live by default without requiring `--apply`, with `--dry-run` ava
 
 ## Acceptance Criteria
 
-- [ ] `aet state reset <task_id>` executes live mutations without requiring `--apply`. (satisfies: R-1)
-- [ ] `aet state reset <task_id> --dry-run` prints the planned actions without mutating the queue, git branches, worktrees, or breaker refs. (satisfies: R-1)
-- [ ] Soft reset retains `.worktrees/<task_id>` and the task branch, clears `failure_signatures`, updates state to `ready` (or `blocked`), and reports success even when derived status is `in_progress`. (satisfies: R-2, R-5, R-7)
-- [ ] Hard reset (`--hard` or `--clean`) removes `.worktrees/<task_id>`, deletes the local branch, clears `branch`, `worktree`, `run_id`, `stage`, and `failure_signatures`, and updates state to `ready` (or `blocked`). (satisfies: R-3, R-5, R-7)
-- [ ] Specifying `--stage <stage>` updates the stored stage in the task record during soft reset, while hard reset resets the stage to None. (satisfies: R-4)
-- [ ] Resetting a task removes its ID from `refs/aet/breaker` entries in `BreakerStore`. (satisfies: R-5)
-- [ ] If an active run lease is held by a live process, `aet state reset` halts with exit code unless `--force` is provided. Stale leases from dead processes are automatically reclaimed. (satisfies: R-6)
-- [ ] Console output clearly distinguishes between soft and hard reset actions and displays the resulting state. (satisfies: R-7)
+- [x] `aet state reset <task_id>` executes live mutations without requiring `--apply`. (satisfies: R-1)
+- [x] `aet state reset <task_id> --dry-run` prints the planned actions without mutating the queue, git branches, worktrees, or breaker refs. (satisfies: R-1)
+- [x] Soft reset retains `.worktrees/<task_id>` and the task branch, clears `failure_signatures`, updates state to `ready` (or `blocked`), and reports success even when derived status is `in_progress`. (satisfies: R-2, R-5, R-7)
+- [x] Hard reset (`--hard` or `--clean`) removes `.worktrees/<task_id>`, deletes the local branch, clears `branch`, `worktree`, `run_id`, `stage`, and `failure_signatures`, and updates state to `ready` (or `blocked`). (satisfies: R-3, R-5, R-7)
+- [x] Specifying `--stage <stage>` updates the stored stage in the task record during soft reset, while hard reset resets the stage to None. (satisfies: R-4)
+- [x] Resetting a task removes its ID from `refs/aet/breaker` entries in `BreakerStore`. (satisfies: R-5)
+- [x] If an active run lease is held by a live process, `aet state reset` halts with exit code unless `--force` is provided. Stale leases from dead processes are automatically reclaimed. (satisfies: R-6)
+- [x] Console output clearly distinguishes between soft and hard reset actions and displays the resulting state. (satisfies: R-7)
 
 ## Technical Notes
 
@@ -88,5 +88,6 @@ Execution runs live by default without requiring `--apply`, with `--dry-run` ava
 - None. Both soft reset and hard reset modes were clarified and confirmed during intake triage.
 
 ---
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+
+*Stage: synced*
+*Next step: run `aet-ship`*

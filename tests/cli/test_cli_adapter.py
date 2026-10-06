@@ -2,6 +2,7 @@
 
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,24 +61,27 @@ class TestCLIAdapter(unittest.TestCase):
         completion, so an aborted session discards every token it produced.
         """
         adapter = resolve_cli_adapter("agy")
-        cmd = adapter.build_cmd("run tests", headless=True)
-        self.assertEqual(
-            cmd,
-            [
-                "agy",
-                "--dangerously-skip-permissions",
-                "--output-format",
-                "stream-json",
-                "--model",
-                "gemini-3.7-flash",
-                "--effort",
-                "high",
-                "--print-timeout",
-                "7200s",
-                "-p",
-                "run tests",
-            ],
-        )
+        with patch.dict("os.environ", {}, clear=False):
+            os.environ.pop("AET_AGY_MODEL", None)
+            os.environ.pop("AET_AGY_EFFORT", None)
+            cmd = adapter.build_cmd("run tests", headless=True)
+            self.assertEqual(
+                cmd,
+                [
+                    "agy",
+                    "--dangerously-skip-permissions",
+                    "--output-format",
+                    "stream-json",
+                    "--model",
+                    "gemini-3.7-flash",
+                    "--effort",
+                    "high",
+                    "--print-timeout",
+                    "7200s",
+                    "-p",
+                    "run tests",
+                ],
+            )
 
     def test_agy_build_cmd_custom_model_and_effort(self):
         adapter = resolve_cli_adapter("agy")

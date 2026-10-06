@@ -40,7 +40,7 @@ Queue mutations and stage transitions.
 - `heal`: Reconcile stored state against git and apply safe fixes.
 - `reconcile`: Report/remove local refs stranded by the old model. Local-only; never touches origin.
 - `record-merge`: Resolve and record the merge commit for a task.
-- `reset`: Recompute a task from git and blockers, reset to ready/blocked, clear stale runtime fields.
+- `reset`: Reset a task to ready/blocked, clear breaker signatures, and recover workspace.
 - `set-stage`: Set the pipeline stage sub-state for an in-progress task.
 - `transition`: Validate legality, then apply state change.
 - `validate`: Check if a transition is legal.
@@ -76,13 +76,16 @@ Check if a transition is legal.
 
 ## `aet state reset`
 
-Recompute a task from git and blockers, reset to ready/blocked, clear stale runtime fields.
+Reset a task to ready/blocked, clear breaker signatures, and recover workspace.
 
 ### Options
 
 - `task_id` *str* — Task ID. (required)
 - `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
-- `--apply` *boolean* — Apply the reset; otherwise dry-run. (default: `False`)
+- `--dry-run` *boolean* — Preview reset actions without mutating queue or git state. (default: `False`)
+- `--apply` *boolean* — Legacy compatibility flag (ignored; reset is now live by default). (default: `False`)
+- `--hard` *boolean* — Hard reset: remove worktree, delete local branch, and clear runtime fields. (default: `False`)
+- `--stage` *str* — Target stage to set on soft reset (e.g. tdd, implement).
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
 ## `aet state backfill-specs`
@@ -501,7 +504,7 @@ Symlink AE Toolkit skills into agent skills directories.
 ### Options
 
 - `--skills-dir` *str* — Target skills directory.
-- `--agent` *str* — Target agent: claude-code, kimi, cursor, generic.
+- `--agent` *str* — Target agent: claude-code, kimi, cursor, antigravity, generic.
 - `--dry-run` *boolean* — Print actions without executing. (default: `False`)
 - `--force` *boolean* — Replace non-symlink collisions with symlinks. (default: `False`)
 
