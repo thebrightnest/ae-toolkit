@@ -118,7 +118,7 @@ In each iteration of the batch loop, whenever a task transitions to `merged`, th
 - [ ] When multiple `ready` tasks exist and `--max-jobs` allows it, the orchestrator spawns multiple tasks concurrently rather than throttling down to 1 task in `in_progress`. (satisfies: R-6)
 - [ ] A rebase conflict or validation failure on one task aborts cleanly, records conflict details in `awaiting_merge`, and does NOT terminate or block other running tasks. (satisfies: R-7)
 - [ ] `aet run` exits cleanly when no further progress can be made, reporting the list of auto-merged tasks and any tasks left in `awaiting_merge`. (satisfies: R-8)
-- [ ] `skills/aet-drive/SKILL.md` and `.agents/commands/aet-drive.md` document the streamlined flow where `aet-drive` resolves only remaining conflicted `awaiting_merge` tasks. (satisfies: R-9)
+- [x] `skills/aet-drive/SKILL.md` and `.agents/commands/aet-drive.md` document the streamlined flow where `aet-drive` resolves only remaining conflicted `awaiting_merge` tasks. (satisfies: R-9)
 - [ ] Both `single-pr` mode and standalone auto-merge correctly target their respective integration branches and maintain dynamic slot replenishment. (satisfies: R-10)
 
 ---
@@ -149,5 +149,5 @@ In each iteration of the batch loop, whenever a task transitions to `merged`, th
 
 ---
 
-*Stage: scope-validated*
-*Next step: run `aet-work` (single-plan or multi-task queue)*
+*Stage: synced*
+*Next step: run `aet-ship`*
