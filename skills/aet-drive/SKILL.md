@@ -5,7 +5,7 @@ description: Autonomous end-to-end task and epic completion loop with natural CL
 
 # aet-drive
 
-Autonomous execution loop that drives an entire declared epic or sprint queue to completion. The skill orchestrates task execution through `aet run`, automatically merges finished tasks into the active epic branch via `aet ship merge`, intelligently resolves any merge conflicts encountered along the way, and loops until every task is closed.
+Autonomous execution loop that drives an entire declared epic or sprint queue to completion. The skill orchestrates task execution through `aet run`, continuously auto-merges finished tasks into the active epic branch, intelligently resolves any staged merge conflicts encountered along the way, and loops until every task is closed.
 
 ## When to Use
 
@@ -21,8 +21,8 @@ Run `aet context` and parse its JSON for session context (active branch, repo st
 
 In accordance with ADR-039, ADR-029, and ADR-076:
 
-- **Deterministic CLI**: `aet run` executes the pipeline stages in isolated worktrees. `aet ship merge` executes the integration gate, merges tasks into the declared epic branch, and records terminal closure.
-- **Autonomous Agent Judgment**: When merge conflicts occur or semantic harmonization is required, the AI agent inspects conflicting files, reconciles changes, verifies with the project test suite, and completes the merge.
+- **Deterministic CLI**: `aet run` executes the pipeline stages in isolated worktrees and continuously auto-merges clean tasks into the active epic branch under `integration_lock`. `aet ship merge` completes the integration of any staged residual tasks and records terminal closure.
+- **Autonomous Agent Judgment**: When merge conflicts occur or semantic harmonization is required, the orchestrator non-blockingly stages the affected tasks in `awaiting_merge` with diagnostic metadata. The AI agent inspects recorded `conflict_diagnostics`, reconciles changes, verifies with the project test suite, and completes the merge via `aet ship merge`.
 - **Epic Governance**: Tasks integrate automatically into the shared epic branch (`single-pr` mode). Opening or merging the epic PR to trunk (`main`) remains a human decision via `aet ship open-epic`.
 
 ## Prerequisites
@@ -74,6 +74,8 @@ aet run
 ```
 
 `aet run` starts the orchestrator in the background and prints a run ID.
+Clean tasks that pass rebase and re-validation automatically merge into the active epic branch continuously during batch execution, unblocking dependent tasks in real time.
+
 Follow execution until the batch settles:
 
 ```bash
@@ -82,7 +84,9 @@ aet run --follow <run_id>
 
 *(When running in an interactive agent shell, wait for the background run notification or completion event; do not poll `manage_task` or loop on task status).*
 
-### 4. Step B: Identify and Ship Merges
+### 4. Step B: Resolve Staged Conflicts and Merge Residuals
+
+Clean tasks auto-merge into the active epic branch continuously during `aet run`. Tasks appearing in `awaiting_merge` after `aet run` settles were non-blockingly staged due to merge conflicts or post-rebase validation issues encountered during batch execution.
 
 Once the orchestrator settles, inspect the sprint board:
 
@@ -90,11 +94,18 @@ Once the orchestrator settles, inspect the sprint board:
 aet status
 ```
 
-Locate all tasks in the `awaiting_merge` column.
+Locate any tasks remaining in the `awaiting_merge` column.
 
-For each task in `awaiting_merge`:
+If there are tasks remaining in `awaiting_merge`:
 
-1. Run direct merge:
+1. **Inspect Conflict Diagnostics**:
+   For each task in `awaiting_merge`, inspect the recorded `conflict_diagnostics` on the task record or attempt `aet ship merge <task_id>` to identify conflicting files or validation failures.
+
+2. **Execute Conflict Resolution Runbook**:
+   For each conflicted task, follow the **Conflict Resolution Runbook** (see below) to reconcile differences and verify fixes with tests.
+
+3. **Complete the Integration**:
+   Once conflicts are resolved in the task worktree, run:
 
    ```bash
    aet ship merge <task_id>
@@ -102,17 +113,11 @@ For each task in `awaiting_merge`:
 
    *(Note: `aet ship merge` automatically resolves the target branch to the task's stamped epic branch).*
 
-2. **If merge succeeds**:
-   `aet ship merge` validates gates, checks conflicts, performs the merge, and records terminal closure in the provenance ledger.
-   Proceed to the next `awaiting_merge` task.
-
-3. **If merge reports conflicts**:
-   `aet ship merge` aborts and lists the conflicting files.
-   Immediately trigger the **Conflict Resolution Runbook** (see below).
+   `aet ship merge` validates gates, completes the merge into the epic branch, and records terminal closure in the provenance ledger. Proceed to the next `awaiting_merge` task.
 
 ### 5. Step C: Evaluate Queue and Loop
 
-After processing merges, check queue health:
+After processing any staged conflicts, check queue health:
 
 ```bash
 aet status
@@ -126,10 +131,10 @@ aet status
 
 ## Conflict Resolution Runbook
 
-When `aet ship merge <task_id>` outputs merge conflicts:
+When a task is staged in `awaiting_merge` due to merge conflicts:
 
 1. **Locate Conflicting Files**:
-   `aet ship merge` prints the conflicting files:
+   Inspect `conflict_diagnostics` on the task record or review output from `aet ship merge <task_id>`:
 
    ```text
    Merging feat/<task_id> into feat/<epic> produced conflicts in:
