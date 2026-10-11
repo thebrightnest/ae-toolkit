@@ -91,7 +91,6 @@ from aet.queue import (  # noqa: E402
     QueueIntegrityError,
     acquire_lease,
     current_state,
-    get_next_unblocked,
     queue_lock,
     record_task_meta,
     release_lease,
@@ -2584,9 +2583,15 @@ def _integrate_single_pr_task(
 
 
 
-def get_next_ready_task(queue: list[dict]) -> dict | None:
-    """Return the first task whose stored state is ``ready``."""
-    return get_next_unblocked(queue)
+def get_next_ready_task(
+    queue: list[dict], exclude: Collection[str] = ()
+) -> dict | None:
+    """Return the first task whose stored state is ``ready`` and not in ``exclude``."""
+    excluded = set(exclude)
+    for task in queue:
+        if current_state(task) == "ready" and task.get("id") not in excluded:
+            return task
+    return None
 
 
 def has_pending_tasks(queue: list[dict]) -> bool:
@@ -3415,7 +3420,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             print(f"   Teardown failures: {', '.join(teardown_leftovers)}")
         print(f"   Telemetry: {logger.run_dir}")
 
-    def _cleanup_task(task_id: str, ret: int) -> None:
+    def _cleanup_task(task_id: str, ret: int, *, eager_spawn: bool = True) -> None:
         nonlocal successes, failures, stop_spawn, systemic_tally
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
@@ -3467,6 +3472,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     )
                     failures += 1
                     teardown_worktree(repo_root, task_id)
+                if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
+                    _spawn_pass()
                 return
         deltas = _finalize_task(
             backend,
@@ -3514,6 +3521,147 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             )
             teardown_leftovers.append(task_id)
 
+        if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
+            _spawn_pass()
+
+    def _spawn_pass() -> int:
+        nonlocal failures, stop_spawn
+        if stop_spawn or _shutdown_requested:
+            return 0
+        spawned_count = 0
+        spawned_in_pass: set[str] = set()
+        aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+        queue = backend.load()["queue"]
+        while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
+            task = get_next_ready_task(queue, exclude=running.keys() | spawned_in_pass)
+            if not task:
+                break
+
+            task_id = task["id"]
+            spawned_in_pass.add(task_id)
+
+            # Preflight check: epic mismatch guard (R-9)
+            has_mismatch, stamped, resolved = check_task_epic_mismatch(
+                repo_root,
+                config,
+                task,
+                integration_mode,
+                cli_base=getattr(args, "base", None),
+                backend=backend,
+            )
+            if has_mismatch:
+                print(format_epic_mismatch_error(task_id, stamped, resolved))
+                failures += 1
+                stop_spawn = True
+                break
+
+            # Transition the task to in_progress through the sole writer so
+            # stored state reflects that it has been picked up.
+            from_state = current_state(task) or "ready"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    aet_state_bin,
+                    "transition",
+                    task_id,
+                    from_state,
+                    "in_progress",
+                    queue_file,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                print(
+                    f"   ⚠️  Could not transition {task_id} to in_progress: {result.stderr.strip()}"
+                )
+                _mark_failed(backend, queue_file, task_id, from_state)
+                failures += 1
+                stop_spawn = True
+                break
+
+            # Re-read queue after transition and record branch/worktree so the
+            # stored state reflects in_progress and does not spawn the same task
+            # again on the next loop iteration.
+            try:
+                worktree_dir = create_worktree(
+                    repo_root, task_id, base_branch=base_branch
+                )
+            except WorktreeBlockedError as exc:
+                print(f"   {exc}")
+                _mark_failed(backend, queue_file, task_id, "in_progress")
+                failures += 1
+                stop_spawn = True
+                break
+            env = os.environ.copy()
+            env["AET_TASK_ID"] = task_id
+            env["AET_PLAN_FILE"] = task.get("plan_file", "")
+            env["AET_WORKTREE"] = worktree_dir
+            env["AET_RUN_ID"] = logger.run_id
+            env["AET_REPO_ROOT"] = repo_root
+            env["AET_STAGE"] = task.get("stage") or ""
+            env["AET_INTEGRATION_MODE"] = integration_mode
+
+            # Store a repo-relative worktree path for portability under lock.
+            # base_commit records where the branch started (ADR-064); without
+            # it the task can never derive merged from branch ancestry.
+            base_commit = resolve_base_commit(repo_root, task_id)
+            task_integration_branch = None
+            if integration_mode == "single-pr":
+                task_ref = resolve_integration_branch_for_task(
+                    repo_root,
+                    config,
+                    task,
+                    integration_mode,
+                    cli_base=getattr(args, "base", None),
+                    backend=backend,
+                )
+                task_integration_branch = task_ref.ref
+            with queue_lock(queue_file):
+                queue = backend.load()["queue"]
+                record_task_meta(
+                    queue,
+                    task_id,
+                    os.path.relpath(worktree_dir, repo_root),
+                    task_id,
+                    base_commit=base_commit,
+                    integration_branch=task_integration_branch,
+                )
+                backend.save(queue)
+            backend.push()
+
+            # Build the orchestrator command for single-task mode.
+            # Stall timeout is resolved from the selected CLI adapter inside
+            # the child orchestrator (ADR-053); do not pass --stall-timeout.
+            cmd = [
+                sys.executable,
+                __file__,
+                "--plan-file",
+                task.get("plan_file", ""),
+                "--repo-root",
+                repo_root,
+                "--cli-bin",
+                adapter.bin,
+                "--base",
+                integration.ref,
+                "--isolation",
+                args.isolation,
+                "--on-failure",
+                getattr(args, "on_failure", "triage"),
+            ]
+
+            proc = subprocess.Popen(cmd, env=env, start_new_session=True)
+            running[task_id] = proc
+            spawn_times[task_id] = time.monotonic()
+            task_ids.append(task_id)
+            spawned_count += 1
+            print(f"▶️  Spawned {task.get('title', task_id)} (PID {proc.pid})")
+
+            # Refresh stored state for the next iteration in this pass
+            queue = backend.load()["queue"]
+
+        return spawned_count
+
     # Refuse at startup rather than seizing the queue and letting the incumbent
     # run discover it one failed write at a time. Acquired outside the try so a
     # refusal never reaches the finally that releases another run's lease.
@@ -3533,144 +3681,13 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             # Refresh stored state before each spawn pass.
             queue = backend.load()["queue"]
 
-            # Spawn tasks while slots available
-            spawned_this_cycle: set[str] = set()
-            while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
-                task = get_next_ready_task(queue)
-                if not task:
-                    break
-
-                task_id = task["id"]
-                if task_id in spawned_this_cycle:
-                    # Defensive: stored state is stale and keeps returning the same task.
-                    break
-
-                # Preflight check: epic mismatch guard (R-9)
-                has_mismatch, stamped, resolved = check_task_epic_mismatch(
-                    repo_root,
-                    config,
-                    task,
-                    integration_mode,
-                    cli_base=getattr(args, "base", None),
-                    backend=backend,
-                )
-                if has_mismatch:
-                    print(format_epic_mismatch_error(task_id, stamped, resolved))
-                    failures += 1
-                    stop_spawn = True
-                    break
-
-                # Transition the task to in_progress through the sole writer so
-
-                # stored state reflects that it has been picked up.
-                from_state = current_state(task) or "ready"
-                aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
-                result = subprocess.run(
-                    [
-                        sys.executable,
-                        aet_state_bin,
-                        "transition",
-                        task_id,
-                        from_state,
-                        "in_progress",
-                        queue_file,
-                    ],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode != 0:
-                    print(
-                        f"   ⚠️  Could not transition {task_id} to in_progress: {result.stderr.strip()}"
-                    )
-                    _mark_failed(backend, queue_file, task_id, from_state)
-                    failures += 1
-                    stop_spawn = True
-                    break
-
-                # Re-read queue after transition and record branch/worktree so the
-                # stored state reflects in_progress and does not spawn the same task
-                # again on the next loop iteration.
-                try:
-                    worktree_dir = create_worktree(
-                        repo_root, task_id, base_branch=base_branch
-                    )
-                except WorktreeBlockedError as exc:
-                    print(f"   {exc}")
-                    _mark_failed(backend, queue_file, task_id, "in_progress")
-                    failures += 1
-                    stop_spawn = True
-                    break
-                env = os.environ.copy()
-                env["AET_TASK_ID"] = task_id
-                env["AET_PLAN_FILE"] = task.get("plan_file", "")
-                env["AET_WORKTREE"] = worktree_dir
-                env["AET_RUN_ID"] = logger.run_id
-                env["AET_REPO_ROOT"] = repo_root
-                env["AET_STAGE"] = task.get("stage") or ""
-                env["AET_INTEGRATION_MODE"] = integration_mode
-
-                # Store a repo-relative worktree path for portability under lock.
-                # base_commit records where the branch started (ADR-064); without
-                # it the task can never derive merged from branch ancestry.
-                base_commit = resolve_base_commit(repo_root, task_id)
-                task_integration_branch = None
-                if integration_mode == "single-pr":
-                    task_ref = resolve_integration_branch_for_task(
-                        repo_root,
-                        config,
-                        task,
-                        integration_mode,
-                        cli_base=getattr(args, "base", None),
-                        backend=backend,
-                    )
-                    task_integration_branch = task_ref.ref
-                with queue_lock(queue_file):
-                    queue = backend.load()["queue"]
-                    record_task_meta(
-                        queue,
-                        task_id,
-                        os.path.relpath(worktree_dir, repo_root),
-                        task_id,
-                        base_commit=base_commit,
-                        integration_branch=task_integration_branch,
-                    )
-                    backend.save(queue)
-                backend.push()
-
-                # Build the orchestrator command for single-task mode.
-                # Stall timeout is resolved from the selected CLI adapter inside
-                # the child orchestrator (ADR-053); do not pass --stall-timeout.
-                cmd = [
-                    sys.executable,
-                    __file__,
-                    "--plan-file",
-                    task.get("plan_file", ""),
-                    "--repo-root",
-                    repo_root,
-                    "--cli-bin",
-                    adapter.bin,
-                    "--base",
-                    integration.ref,
-                    "--isolation",
-                    args.isolation,
-                    "--on-failure",
-                    getattr(args, "on_failure", "triage"),
-                ]
-
-                proc = subprocess.Popen(cmd, env=env, start_new_session=True)
-                running[task_id] = proc
-                spawn_times[task_id] = time.monotonic()
-                spawned_this_cycle.add(task_id)
-                task_ids.append(task_id)
-                print(f"▶️  Spawned {task.get('title', task_id)} (PID {proc.pid})")
-
-                # Refresh stored state so the next spawn pass respects the branch we
-                # just recorded and does not pick the same task again.
-                queue = backend.load()["queue"]
+            if not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
+                _spawn_pass()
 
             if not running:
                 if stop_spawn or _shutdown_requested:
                     break
+                queue = backend.load()["queue"]
                 if has_actionable_tasks(queue, running.keys()):
                     time.sleep(0.2)
                     continue
@@ -3694,7 +3711,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     finished.append((task_id, -9))
 
             for task_id, ret in finished:
-                _cleanup_task(task_id, ret)
+                _cleanup_task(task_id, ret, eager_spawn=True)
 
             # Heartbeat
             if now - last_heartbeat > heartbeat_interval:
@@ -3717,7 +3734,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             if proc.poll() is None:
                 print(f"   ⚠️  Terminating leftover task {task_id}")
                 _terminate_process_group(proc, timeout=10)
-            _cleanup_task(task_id, -1)
+            _cleanup_task(task_id, -1, eager_spawn=False)
 
         exit_code = 1 if failures > 0 else 0
         outcome = "success" if exit_code == 0 else "failure"
