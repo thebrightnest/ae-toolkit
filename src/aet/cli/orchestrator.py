@@ -2317,6 +2317,52 @@ def _mark_integration_failure(
             _save_task_record(backend, queue)
 
 
+def _stage_task_conflict(
+    repo_root: str,
+    task_id: str,
+    queue_file: str,
+    backend,
+    diag: dict[str, Any],
+) -> None:
+    """Stage a task in awaiting_merge due to conflict and record diagnostic metadata (R-7)."""
+    if backend is not None and _task_in_queue(backend, task_id):
+        aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+        queue = backend.load()["queue"]
+        t = next((item for item in queue if item.get("id") == task_id), None)
+        curr = current_state(t) if t else "in_progress"
+        if curr != "awaiting_merge":
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    aet_state_bin,
+                    "transition",
+                    task_id,
+                    curr,
+                    "awaiting_merge",
+                    queue_file,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode != 0:
+                print(
+                    f"   ⚠️  Could not transition {task_id} to awaiting_merge: {res.stderr.strip()}"
+                )
+        with queue_lock(queue_file):
+            if hasattr(backend, "fetch"):
+                try:
+                    backend.fetch()
+                except Exception:
+                    pass
+            data = backend.load()
+            q = data["queue"]
+            for target in q:
+                if target.get("id") == task_id:
+                    target["conflict_diagnostics"] = diag
+                    break
+            _save_task_record(backend, q)
+
+
 def _integrate_completed_task(
     repo_root: str,
     task: dict[str, Any] | str,
@@ -2327,18 +2373,18 @@ def _integrate_completed_task(
     integration_branch: str | None = None,
     plan_file: str | None = None,
     plan_data: dict[str, Any] | None = None,
-) -> bool:
+) -> bool | str:
     """Serialize, rebase, re-validate, squash-merge, push, and clean up.
 
     Integration (rebase onto current tip -> re-validate -> detached squash-merge)
     is executed inside the task worktree under the local advisory integration lock
     without checking out the integration branch in repo_root (ADR-045, R-18).
-    A rebase conflict or post-rebase validation failure is reported as an
-    Integration Failure, not triaged as a task failure (R-19).
+    A rebase conflict or post-rebase validation failure stages the task in
+    awaiting_merge with conflict diagnostics (R-7), not triaged as a task failure (R-19).
 
     Also transitions the queued task to ``merged`` when a queue file exists.
-    Returns ``True`` on success and raises ``IntegrationFailureError`` on any
-    integration failure.
+    Returns ``True`` on success, ``'staged_conflict'`` on rebase/validation conflict,
+    and raises ``IntegrationFailureError`` on any other integration failure.
     """
     task_id = task["id"] if isinstance(task, dict) else str(task)
     task_dict = task if isinstance(task, dict) else {"id": task_id}
@@ -2370,6 +2416,9 @@ def _integrate_completed_task(
         )
         target_ref = f"origin/{integration_branch}" if res.returncode == 0 else integration_branch
 
+        rc_pre, pre_rebase_commit, _ = run_git_plain(["-C", worktree_dir, "rev-parse", "HEAD"])
+        pre_rebase_commit = pre_rebase_commit.strip()
+
         # Rebase the task branch onto the live integration tip inside the worktree.
         rebase = subprocess.run(
             ["git", "-C", worktree_dir, "rebase", target_ref],
@@ -2377,20 +2426,52 @@ def _integrate_completed_task(
             text=True,
         )
         if rebase.returncode != 0:
+            conflicts_run = subprocess.run(
+                ["git", "-C", worktree_dir, "diff", "--name-only", "--diff-filter=U"],
+                capture_output=True,
+                text=True,
+            )
+            conflicts = [f.strip() for f in conflicts_run.stdout.splitlines() if f.strip()]
             subprocess.run(
                 ["git", "-C", worktree_dir, "rebase", "--abort"],
                 capture_output=True,
             )
-            raise IntegrationFailureError(
-                f"rebase conflict integrating {task_id}: {rebase.stderr.strip()}"
+            tail = (rebase.stderr if rebase.stderr.strip() else rebase.stdout or "").strip()[-500:]
+            diag = {
+                "reason": "rebase_conflict",
+                "conflicting_files": conflicts,
+                "stderr_tail": tail,
+                "at": telemetry.iso_now(),
+            }
+            _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
+            print(
+                f"⚠️  Task {task_id} staged in awaiting_merge due to rebase conflicts. Independent tasks continue."
             )
+            return "staged_conflict"
 
         # Re-validate the rebased combination before it lands (R-18).
         ok, output = _validate_after_rebase(worktree_dir)
         if not ok:
-            raise IntegrationFailureError(
-                f"validation failed after rebase for {task_id}:\n{output}"
+            subprocess.run(
+                ["git", "-C", worktree_dir, "reset", "--hard", pre_rebase_commit],
+                capture_output=True,
             )
+            subprocess.run(
+                ["git", "-C", worktree_dir, "clean", "-fd"],
+                capture_output=True,
+            )
+            diag = {
+                "reason": "validation_failure",
+                "conflicting_files": [],
+                "stderr_tail": output.strip()[-500:] if output else "validation failed after rebase",
+                "at": telemetry.iso_now(),
+            }
+            _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
+            print(
+                f"⚠️  Task {task_id} staged in awaiting_merge due to post-rebase "
+                "validation failure. Independent tasks continue."
+            )
+            return "staged_conflict"
 
         # Verify required gate evidence before the squash-merge lands (R-22).
         _plan_path = (
@@ -2568,7 +2649,7 @@ def _integrate_single_pr_task(
     backend=None,
     plan_file: str | None = None,
     plan_data: dict[str, Any] | None = None,
-) -> bool:
+) -> bool | str:
     """Backward-compatible delegate to _integrate_completed_task."""
     return _integrate_completed_task(
         repo_root=repo_root,
@@ -3236,6 +3317,31 @@ def _finalize_task(
     return {"successes": 0, "failures": 1, "stop_spawn": False, "triage_outcome": triage_outcome}
 
 
+def _print_settlement_summary(queue: list[dict], merged_task_ids: list[str]) -> None:
+    """Print comprehensive batch settlement summary for staged and blocked tasks (R-8)."""
+    non_terminal = [t for t in queue if current_state(t) not in ("merged", "abandoned")]
+    staged_tasks = [t for t in non_terminal if current_state(t) == "awaiting_merge"]
+    blocked_tasks = [t for t in non_terminal if current_state(t) == "blocked"]
+    print()
+    print("📋 Batch Settlement Summary:")
+    if merged_task_ids:
+        print(f"   Auto-merged ({len(merged_task_ids)}): {', '.join(merged_task_ids)}")
+    else:
+        print("   Auto-merged (0): none")
+    if staged_tasks:
+        print(f"   Staged awaiting_merge ({len(staged_tasks)}):")
+        for st in staged_tasks:
+            diag = st.get("conflict_diagnostics") or {}
+            c_files = diag.get("conflicting_files", [])
+            reason = diag.get("reason", "conflict")
+            if c_files:
+                print(f"     - {st.get('id')}: {reason} ({', '.join(c_files)})")
+            else:
+                print(f"     - {st.get('id')}: {reason}")
+    if blocked_tasks:
+        print(f"   Blocked ({len(blocked_tasks)}): {', '.join(t.get('id') for t in blocked_tasks)}")
+
+
 def run_batch(args: argparse.Namespace, adapter) -> int:
     """Run batch mode from queue file."""
     queue_file = args.queue_file
@@ -3373,6 +3479,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     spawn_times: dict[str, float] = {}
     successes = 0
     failures = 0
+    merged_task_ids: list[str] = []
     stop_spawn = False
     last_heartbeat = time.monotonic()
     summary_written = False
@@ -3421,7 +3528,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         print(f"   Telemetry: {logger.run_dir}")
 
     def _cleanup_task(task_id: str, ret: int, *, eager_spawn: bool = True) -> None:
-        nonlocal successes, failures, stop_spawn, systemic_tally
+        nonlocal successes, failures, stop_spawn, systemic_tally, merged_task_ids
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
         queue = backend.load()["queue"]
@@ -3448,7 +3555,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             if should_integrate and worktree_dir and os.path.isdir(worktree_dir):
                 _write_task_cost(backend, queue_file, task_id, logger)
                 try:
-                    _integrate_completed_task(
+                    integration_status = _integrate_completed_task(
                         repo_root=repo_root,
                         task=task,
                         worktree_dir=worktree_dir,
@@ -3456,11 +3563,16 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                         config=config,
                         integration_mode=integration_mode,
                     )
+                    if integration_status == "staged_conflict":
+                        if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
+                            _spawn_pass()
+                        return
                     queue = backend.load()["queue"]
                     task = next((t for t in queue if t.get("id") == task_id), None)
                     if task and _attach_delivered_size(task, repo_root):
                         _save_task_record(backend, queue)
                     successes += 1
+                    merged_task_ids.append(task_id)
                 except IntegrationFailureError as exc:
                     print(f"   ❌ Integration failure for {task_id}: {exc}")
                     _mark_integration_failure(
@@ -3695,6 +3807,14 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 # own (a ready/in_progress task). Whatever remains is stranded
                 # until an external actor moves it, so exit with a leftover
                 # report instead of spinning forever on the sleep.
+                non_terminal = [
+                    t for t in queue if current_state(t) not in ("merged", "abandoned")
+                ]
+                if non_terminal and all(
+                    current_state(t) in ("awaiting_merge", "blocked")
+                    for t in non_terminal
+                ):
+                    _print_settlement_summary(queue, merged_task_ids)
                 leftover_report.update(leftover_counts(queue))
                 break
 
