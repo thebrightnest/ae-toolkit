@@ -21,9 +21,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+from aet import telemetry, track_record
 from aet.cli.aet_state import resolve_task_record
 from aet.cli_adapter import CLIAdapter
 
@@ -412,3 +414,578 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
                 os.unlink(log_path)
             except FileNotFoundError:
                 pass
+
+
+class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
+    """Integration test suite for R-4, R-5, and R-6."""
+
+    def test_immediate_dag_progression_and_dynamic_slot_replenishment(self):
+        """R-4, R-5: Dependent task is unblocked on blocker merge and dispatched into freed slot."""
+        with (
+            tempfile.TemporaryDirectory() as repo_root,
+            tempfile.TemporaryDirectory() as origin_root,
+        ):
+            original_path = os.environ.get("PATH", "")
+            fake_bin_dir, adapter = _install_fake_cli(origin_root)
+            os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
+            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
+
+            try:
+                _init_git_repo(repo_root, origin_root)
+                Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+                Path(repo_root, ".agents", "aet-config.json").write_text(
+                    json.dumps(
+                        {
+                            "trunk_branch": "main",
+                            "integration_branch": "epic-01",
+                            "integration_mode": "single-pr",
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                _write_test_workflow(repo_root)
+
+                plan_parent = _write_plan(repo_root, "task-parent", blocks=["task-child"])
+                plan_child = _write_plan(repo_root, "task-child", blocked_by=["task-parent"])
+
+                subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", repo_root, "commit", "-q", "-m", "init dag plans"],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                    check=True,
+                )
+                _create_integration_branch(repo_root, "epic-01")
+
+                queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+                backend = orchestrator._make_backend(queue_file)
+                backend.save(
+                    [
+                        {
+                            "id": "task-parent",
+                            "state": "ready",
+                            "plan_file": plan_parent,
+                            "blocks": ["task-child"],
+                        },
+                        {
+                            "id": "task-child",
+                            "state": "blocked",
+                            "plan_file": plan_child,
+                            "blocked_by": ["task-parent"],
+                            "pending_blockers": 1,
+                        },
+                    ]
+                )
+
+                # With max_jobs=1, only task-parent can run first.
+                # When task-parent integrates, task-child is dynamically unblocked and spawned.
+                args = argparse.Namespace(
+                    queue_file=queue_file,
+                    repo_root=repo_root,
+                    base="epic-01",
+                    isolation="standard",
+                    max_jobs=1,
+                    task_timeout=3600,
+                    heartbeat_interval=60,
+                    on_failure="triage",
+                    run_id="run-dag-replenish",
+                )
+
+                exit_code = orchestrator.run_batch(args, adapter)
+                self.assertEqual(exit_code, 0)
+
+                task_parent = _get_task(backend, queue_file, "task-parent")
+                task_child = _get_task(backend, queue_file, "task-child")
+
+                self.assertEqual(task_parent["state"], "merged")
+                self.assertEqual(task_child["state"], "merged")
+
+                # Verify task-child transitioned through release history
+                child_history = [h["to"] for h in task_child.get("history", [])]
+                self.assertIn("ready", child_history)
+                self.assertIn("merged", child_history)
+
+                # Verify both landed on origin/epic-01
+                log_proc = subprocess.run(
+                    ["git", "-C", repo_root, "log", "origin/epic-01", "--oneline"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertIn("Integrate task-parent", log_proc.stdout)
+                self.assertIn("Integrate task-child", log_proc.stdout)
+
+            finally:
+                os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
+                os.environ["PATH"] = original_path
+
+    def test_initial_cycle_starvation_elimination_max_jobs(self):
+        """R-6: With max_jobs=3, all ready tasks are spawned concurrently without throttling."""
+        with (
+            tempfile.TemporaryDirectory() as repo_root,
+            tempfile.TemporaryDirectory() as origin_root,
+        ):
+            original_path = os.environ.get("PATH", "")
+            fake_bin_dir, adapter = _install_fake_cli(origin_root)
+            os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
+            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
+
+            try:
+                _init_git_repo(repo_root, origin_root)
+                Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+                Path(repo_root, ".agents", "aet-config.json").write_text(
+                    json.dumps(
+                        {
+                            "trunk_branch": "main",
+                            "integration_branch": "epic-01",
+                            "integration_mode": "single-pr",
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                _write_test_workflow(repo_root)
+
+                plans = [_write_plan(repo_root, f"task-{i}") for i in range(3)]
+                subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", repo_root, "commit", "-q", "-m", "init starvation plans"],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                    check=True,
+                )
+                _create_integration_branch(repo_root, "epic-01")
+
+                # Concurrency instrumentation: each task synchronizes on a barrier
+                # to prove all 3 tasks were dispatched and running concurrently in the initial cycle
+                concurrency_log = Path(repo_root, ".agents", "concurrency.log")
+                barrier_dir = Path(repo_root, ".agents", "barrier")
+                barrier_dir.mkdir(parents=True, exist_ok=True)
+                hooks_dir = Path(repo_root, ".agents", "hooks")
+                hooks_dir.mkdir(parents=True, exist_ok=True)
+
+                for i in range(3):
+                    (hooks_dir / f"task-{i}.py").write_text(
+                        "t_start = time.time()\n"
+                        f"pathlib.Path({str(barrier_dir)!r}, f'{i}.ready').write_text('1')\n"
+                        "all_active = False\n"
+                        "while time.time() - t_start < 20.0:\n"
+                        f"    if len(list(pathlib.Path({str(barrier_dir)!r}).glob('*.ready'))) >= 3:\n"
+                        "        all_active = True\n"
+                        "        break\n"
+                        "    time.sleep(0.05)\n"
+                        "t_end = time.time()\n"
+                        f"with open({str(concurrency_log)!r}, 'a') as f:\n"
+                        f"    f.write(f'{i}:{{t_start}}:{{t_end}}:{{all_active}}\\n')\n"
+                        f"pathlib.Path(wt, 'task-{i}.txt').write_text('work')\n"
+                        "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
+                        f"subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-{i}'], check=True)\n"
+                        "from aet import evidence, telemetry\n"
+                        "project_slug = telemetry.derive_project_slug(repo_root)\n"
+                        "record = {\n"
+                        f"    'task_id': 'task-{i}',\n"
+                        "    'stage': 'qa-complete',\n"
+                        "    'skill': 'aet-qa',\n"
+                        "    'verdict': 'pass',\n"
+                        "    'summary': 'qa passed',\n"
+                        "    'generated_at': telemetry.iso_now(),\n"
+                        "    'tree_hash': '',\n"
+                        "    'test_command': 'make validate',\n"
+                        "    'tests_total': 1,\n"
+                        "    'tests_passed': 1,\n"
+                        "    'tests_failed': 0,\n"
+                        "}\n"
+                        f"evidence.write_verdict('task-{i}', 'qa', record, "
+                        "project_slug=project_slug, worktree_dir=wt)\n",
+                        encoding="utf-8",
+                    )
+
+                queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+                backend = orchestrator._make_backend(queue_file)
+                backend.save(
+                    [
+                        {"id": f"task-{i}", "state": "ready", "plan_file": plans[i]}
+                        for i in range(3)
+                    ]
+                )
+
+                args = argparse.Namespace(
+                    queue_file=queue_file,
+                    repo_root=repo_root,
+                    base="epic-01",
+                    isolation="standard",
+                    max_jobs=3,
+                    task_timeout=3600,
+                    heartbeat_interval=60,
+                    on_failure="triage",
+                    run_id="run-starvation",
+                )
+
+                exit_code = orchestrator.run_batch(args, adapter)
+                self.assertEqual(exit_code, 0)
+
+                # Verify all 3 tasks were launched concurrently in the initial cycle
+                self.assertTrue(concurrency_log.exists())
+                entries = [
+                    line.strip().split(":")
+                    for line in concurrency_log.read_text().splitlines()
+                    if line.strip()
+                ]
+                self.assertEqual(len(entries), 3)
+
+                task_starts = {int(p[0]): float(p[1]) for p in entries}
+                task_ends = {int(p[0]): float(p[2]) for p in entries}
+                all_actives = {int(p[0]): (p[3] == "True") for p in entries}
+
+                # Under concurrent dispatch (max_jobs=3), all 3 tasks reached active state simultaneously
+                for i in range(3):
+                    self.assertTrue(
+                        all_actives[i],
+                        f"task-{i} timed out waiting for concurrent peer tasks",
+                    )
+
+                # Overlap check: all tasks started before any task ended
+                self.assertLess(
+                    max(task_starts.values()),
+                    min(task_ends.values()) + 0.5,
+                    "Tasks were not executing simultaneously in the initial cycle",
+                )
+
+                for i in range(3):
+                    t = _get_task(backend, queue_file, f"task-{i}")
+                    self.assertEqual(t["state"], "merged")
+
+            finally:
+                os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
+                os.environ["PATH"] = original_path
+
+
+class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
+    """Integration test suite for R-7 and R-8."""
+
+    def test_non_blocking_conflict_staging_and_batch_settle(self):
+        """R-7, R-8: Conflicted task stages in awaiting_merge, independent tasks merge, batch settles."""
+        with (
+            tempfile.TemporaryDirectory() as repo_root,
+            tempfile.TemporaryDirectory() as origin_root,
+        ):
+            original_path = os.environ.get("PATH", "")
+            fake_bin_dir, adapter = _install_fake_cli(origin_root)
+            os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
+            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
+
+            try:
+                _init_git_repo(repo_root, origin_root)
+                Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+                Path(repo_root, ".agents", "aet-config.json").write_text(
+                    json.dumps(
+                        {
+                            "trunk_branch": "main",
+                            "integration_branch": "epic-01",
+                            "integration_mode": "single-pr",
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                _write_test_workflow(repo_root)
+
+                # Initialize conflict.txt and plan files on main
+                Path(repo_root, "conflict.txt").write_text("initial base line\n", encoding="utf-8")
+                plan_c1 = _write_plan(repo_root, "task-c1")
+                plan_c2 = _write_plan(repo_root, "task-c2", blocks=["task-blocked"])
+                plan_ind = _write_plan(repo_root, "task-ind")
+                plan_blocked = _write_plan(repo_root, "task-blocked", blocked_by=["task-c2"])
+
+                subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", repo_root, "commit", "-q", "-m", "add conflict base and plans"],
+                    check=True,
+                )
+                subprocess.run(["git", "-C", repo_root, "push", "-q", "origin", "main"], check=True)
+                subprocess.run(
+                    ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                    check=True,
+                )
+                _create_integration_branch(repo_root, "epic-01")
+
+                hooks_dir = Path(repo_root, ".agents", "hooks")
+                hooks_dir.mkdir(parents=True, exist_ok=True)
+
+                # task-c1 edits conflict.txt and merges first
+                (hooks_dir / "task-c1.py").write_text(
+                    "pathlib.Path(wt, 'conflict.txt').write_text('Line from task-c1\\n')\n"
+                    "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
+                    "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-c1'], check=True)\n"
+                    "from aet import evidence, telemetry\n"
+                    "project_slug = telemetry.derive_project_slug(repo_root)\n"
+                    "record = {\n"
+                    "    'task_id': name,\n"
+                    "    'stage': 'qa-complete',\n"
+                    "    'skill': 'aet-qa',\n"
+                    "    'verdict': 'pass',\n"
+                    "    'summary': 'task-c1 passed',\n"
+                    "    'generated_at': telemetry.iso_now(),\n"
+                    "    'tree_hash': '',\n"
+                    "    'test_command': 'make validate',\n"
+                    "    'tests_total': 1,\n"
+                    "    'tests_passed': 1,\n"
+                    "    'tests_failed': 0,\n"
+                    "}\n"
+                    "evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)\n",
+                    encoding="utf-8",
+                )
+
+                # task-c2 edits conflict.txt with conflicting content, sleeps 0.4s so task-c1 merges first
+                (hooks_dir / "task-c2.py").write_text(
+                    "time.sleep(0.4)\n"
+                    "pathlib.Path(wt, 'conflict.txt').write_text('Line from task-c2 DIFFERENT\\n')\n"
+                    "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
+                    "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-c2'], check=True)\n"
+                    "from aet import evidence, telemetry\n"
+                    "project_slug = telemetry.derive_project_slug(repo_root)\n"
+                    "record = {\n"
+                    "    'task_id': name,\n"
+                    "    'stage': 'qa-complete',\n"
+                    "    'skill': 'aet-qa',\n"
+                    "    'verdict': 'pass',\n"
+                    "    'summary': 'task-c2 passed',\n"
+                    "    'generated_at': telemetry.iso_now(),\n"
+                    "    'tree_hash': '',\n"
+                    "    'test_command': 'make validate',\n"
+                    "    'tests_total': 1,\n"
+                    "    'tests_passed': 1,\n"
+                    "    'tests_failed': 0,\n"
+                    "}\n"
+                    "evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)\n",
+                    encoding="utf-8",
+                )
+
+                # task-ind touches independent.txt, finishes after task-c2 attempts rebase
+                (hooks_dir / "task-ind.py").write_text(
+                    "time.sleep(0.7)\n"
+                    "pathlib.Path(wt, 'independent.txt').write_text('Independent work\\n')\n"
+                    "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
+                    "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-ind'], check=True)\n"
+                    "from aet import evidence, telemetry\n"
+                    "project_slug = telemetry.derive_project_slug(repo_root)\n"
+                    "record = {\n"
+                    "    'task_id': name,\n"
+                    "    'stage': 'qa-complete',\n"
+                    "    'skill': 'aet-qa',\n"
+                    "    'verdict': 'pass',\n"
+                    "    'summary': 'task-ind passed',\n"
+                    "    'generated_at': telemetry.iso_now(),\n"
+                    "    'tree_hash': '',\n"
+                    "    'test_command': 'make validate',\n"
+                    "    'tests_total': 1,\n"
+                    "    'tests_passed': 1,\n"
+                    "    'tests_failed': 0,\n"
+                    "}\n"
+                    "evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)\n",
+                    encoding="utf-8",
+                )
+
+                queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+                backend = orchestrator._make_backend(queue_file)
+                backend.save(
+                    [
+                        {"id": "task-c1", "state": "ready", "plan_file": plan_c1},
+                        {
+                            "id": "task-c2",
+                            "state": "ready",
+                            "plan_file": plan_c2,
+                            "blocks": ["task-blocked"],
+                        },
+                        {"id": "task-ind", "state": "ready", "plan_file": plan_ind},
+                        {
+                            "id": "task-blocked",
+                            "state": "blocked",
+                            "plan_file": plan_blocked,
+                            "blocked_by": ["task-c2"],
+                            "pending_blockers": 1,
+                        },
+                    ]
+                )
+
+                args = argparse.Namespace(
+                    queue_file=queue_file,
+                    repo_root=repo_root,
+                    base="epic-01",
+                    isolation="standard",
+                    max_jobs=3,
+                    task_timeout=3600,
+                    heartbeat_interval=60,
+                    on_failure="triage",
+                    run_id="run-conflict-staging",
+                )
+
+                exit_code = orchestrator.run_batch(args, adapter)
+                # Batch settles cleanly with 0 (staged tasks are non-blocking outcomes, not run failures)
+                self.assertEqual(exit_code, 0)
+
+                t_c1 = _get_task(backend, queue_file, "task-c1")
+                t_c2 = _get_task(backend, queue_file, "task-c2")
+                t_ind = _get_task(backend, queue_file, "task-ind")
+                t_blocked = _get_task(backend, queue_file, "task-blocked")
+
+                # task-c1 and task-ind auto-merged cleanly
+                self.assertEqual(t_c1["state"], "merged")
+                self.assertEqual(t_ind["state"], "merged")
+
+                # task-c2 was staged in awaiting_merge with diagnostics (R-7)
+                self.assertEqual(t_c2["state"], "awaiting_merge")
+                diag = t_c2.get("conflict_diagnostics")
+                self.assertIsNotNone(diag)
+                self.assertEqual(diag.get("reason"), "rebase_conflict")
+                self.assertIn("conflict.txt", diag.get("conflicting_files", []))
+
+                # task-blocked remained blocked (R-8)
+                self.assertEqual(t_blocked["state"], "blocked")
+
+                # Origin epic-01 has both task-c1 and task-ind commits
+                log_proc = subprocess.run(
+                    ["git", "-C", repo_root, "log", "origin/epic-01", "--oneline"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertIn("Integrate task-c1", log_proc.stdout)
+                self.assertIn("Integrate task-ind", log_proc.stdout)
+                self.assertNotIn("Integrate task-c2", log_proc.stdout)
+
+            finally:
+                os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
+                os.environ["PATH"] = original_path
+
+
+class TestDualModeParity(unittest.TestCase):
+    """Integration test suite for R-10."""
+
+    def test_dual_mode_parity_standalone_targeting_trunk(self):
+        """R-10: Auto-merge and replenishment operate identically in standalone mode targeting trunk."""
+        with (
+            tempfile.TemporaryDirectory() as repo_root,
+            tempfile.TemporaryDirectory() as origin_root,
+        ):
+            original_path = os.environ.get("PATH", "")
+            fake_bin_dir, adapter = _install_fake_cli(origin_root)
+            os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
+            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
+
+            try:
+                _init_git_repo(repo_root, origin_root)
+                Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+                Path(repo_root, ".agents", "aet-config.json").write_text(
+                    json.dumps(
+                        {
+                            "trunk_branch": "main",
+                            "integration_mode": "pr-per-task",
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                _write_test_workflow(repo_root)
+
+                plan_parent = _write_plan(repo_root, "task-std-p", blocks=["task-std-c"])
+                plan_child = _write_plan(repo_root, "task-std-c", blocked_by=["task-std-p"])
+
+                subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", repo_root, "commit", "-q", "-m", "init standalone plans"],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                    check=True,
+                )
+                subprocess.run(["git", "-C", repo_root, "push", "-q", "origin", "main"], check=True)
+
+                queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+                backend = orchestrator._make_backend(queue_file)
+                backend.save(
+                    [
+                        {
+                            "id": "task-std-p",
+                            "state": "ready",
+                            "plan_file": plan_parent,
+                            "work_class": "normal",
+                            "blocks": ["task-std-c"],
+                        },
+                        {
+                            "id": "task-std-c",
+                            "state": "blocked",
+                            "plan_file": plan_child,
+                            "work_class": "normal",
+                            "blocked_by": ["task-std-p"],
+                            "pending_blockers": 1,
+                        },
+                    ]
+                )
+
+                args = argparse.Namespace(
+                    queue_file=queue_file,
+                    repo_root=repo_root,
+                    base="main",
+                    isolation="standard",
+                    max_jobs=1,
+                    task_timeout=3600,
+                    heartbeat_interval=60,
+                    on_failure="triage",
+                    run_id="run-standalone-parity",
+                )
+
+                # Patch track_record.is_eligible_for_auto_merge so standalone tasks auto-merge into trunk
+                with patch.object(track_record, "is_eligible_for_auto_merge", return_value=True):
+                    exit_code = orchestrator.run_batch(args, adapter)
+
+                self.assertEqual(exit_code, 0)
+
+                t_std_p = _get_task(backend, queue_file, "task-std-p")
+                t_std_c = _get_task(backend, queue_file, "task-std-c")
+                self.assertEqual(t_std_p["state"], "merged")
+                self.assertEqual(t_std_c["state"], "merged")
+
+                # Verify both landed directly on origin/main
+                log_proc = subprocess.run(
+                    ["git", "-C", repo_root, "log", "origin/main", "--oneline"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertIn("Integrate task-std-p", log_proc.stdout)
+                self.assertIn("Integrate task-std-c", log_proc.stdout)
+
+            finally:
+                os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
+                os.environ["PATH"] = original_path
+
+
+class TestAetDriveHarmonizationContract(unittest.TestCase):
+    """Verification for R-9 conflict diagnostics contract."""
+
+    def test_conflict_diagnostics_contract_for_aet_drive(self):
+        """R-9: Staged task metadata adheres to conflict diagnostics schema for aet-drive."""
+        diag = {
+            "reason": "rebase_conflict",
+            "conflicting_files": ["foo.py", "bar.py"],
+            "stderr_tail": "CONFLICT (content): Merge conflict in foo.py",
+            "at": telemetry.iso_now(),
+        }
+        task = {
+            "id": "task-example",
+            "state": "awaiting_merge",
+            "conflict_diagnostics": diag,
+        }
+        self.assertEqual(task["state"], "awaiting_merge")
+        self.assertIn("reason", task["conflict_diagnostics"])
+        self.assertIn("conflicting_files", task["conflict_diagnostics"])
+        self.assertIn("stderr_tail", task["conflict_diagnostics"])
+        self.assertIn("at", task["conflict_diagnostics"])
+        self.assertIsInstance(task["conflict_diagnostics"]["conflicting_files"], list)
+
+
+if __name__ == "__main__":
+    unittest.main()
