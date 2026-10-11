@@ -5156,5 +5156,272 @@ class TestParentManagedIntegration(unittest.TestCase):
                             self.assertEqual(q_task["integration_failure"]["reason"], "simulated failure")
 
 
+class TestBatchDynamicSlotReplenishment(TestBatchLivePickupAndExit):
+    """Dynamic concurrency slot replenishment and starvation elimination tests (cam-02)."""
+
+    def test_get_next_ready_task_excludes_specified_tasks(self):
+        """get_next_ready_task filters out any task IDs in the exclude collection."""
+        queue = [
+            {"id": "task-1", "state": "ready"},
+            {"id": "task-2", "state": "ready"},
+            {"id": "task-3", "state": "ready"},
+        ]
+        # First ready without exclude
+        task = orchestrator.get_next_ready_task(queue)
+        self.assertIsNotNone(task)
+        self.assertEqual(task["id"], "task-1")
+
+        # Exclude task-1 -> task-2
+        task = orchestrator.get_next_ready_task(queue, exclude={"task-1"})
+        self.assertIsNotNone(task)
+        self.assertEqual(task["id"], "task-2")
+
+        # Exclude task-1 and task-2 -> task-3
+        task = orchestrator.get_next_ready_task(queue, exclude={"task-1", "task-2"})
+        self.assertIsNotNone(task)
+        self.assertEqual(task["id"], "task-3")
+
+        # Exclude all -> None
+        task = orchestrator.get_next_ready_task(queue, exclude={"task-1", "task-2", "task-3"})
+        self.assertIsNone(task)
+
+    def test_batch_spawns_all_ready_tasks_up_to_max_jobs(self):
+        """A batch with 4 ready tasks and max_jobs=4 spawns all 4 concurrently in the first cycle."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": f"task-{i}",
+                        "title": f"task-{i}",
+                        "plan_file": f"docs/plans/task-{i}.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                    for i in range(1, 5)
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=4)
+
+                spawned: list[str] = []
+                procs: dict[str, _InstantProc] = {}
+
+                def fake_popen(cmd, **kwargs):
+                    if kwargs.get("start_new_session"):
+                        env = kwargs.get("env", {})
+                        task_id = env.get("AET_TASK_ID")
+                        if task_id:
+                            spawned.append(task_id)
+                        p = _InstantProc()
+                        if task_id:
+                            procs[task_id] = p
+                        return p
+                    return subprocess.Popen(*cmd, **kwargs)
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn(side_effect=fake_popen):
+                        with patch.object(
+                            orchestrator,
+                            "verify_branch_has_commits",
+                            return_value=(True, ""),
+                        ):
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=30)
+
+                self.assertFalse(timed_out, "run_batch timed out")
+                self.assertEqual(rc, 0)
+                # All 4 ready tasks must have been spawned
+                self.assertEqual(sorted(spawned), ["task-1", "task-2", "task-3", "task-4"])
+
+    def test_batch_eagerly_replenishes_slot_on_task_completion(self):
+        """When 5 tasks exist and max_jobs=4, finishing task-1 eagerly spawns waiting task-5 immediately."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": f"task-{i}",
+                        "title": f"task-{i}",
+                        "plan_file": f"docs/plans/task-{i}.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                    for i in range(1, 6)
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=4)
+
+                spawn_order: list[str] = []
+
+                class ControllableProc:
+                    def __init__(self, pid):
+                        self.pid = pid
+                        self._exited = False
+
+                    def poll(self):
+                        return 0 if self._exited else None
+
+                    def wait(self, timeout=None):
+                        return 0
+
+                procs: dict[str, ControllableProc] = {}
+                pid_counter = 1000
+
+                def fake_popen(cmd, **kwargs):
+                    nonlocal pid_counter
+                    if kwargs.get("start_new_session"):
+                        env = kwargs.get("env", {})
+                        task_id = env.get("AET_TASK_ID")
+                        pid_counter += 1
+                        p = ControllableProc(pid_counter)
+                        if task_id:
+                            spawn_order.append(task_id)
+                            procs[task_id] = p
+                            # When task-1 is spawned, we will let it finish once 4 tasks are running
+                            if len(spawn_order) == 4:
+                                procs["task-1"]._exited = True
+                            elif len(spawn_order) == 5:
+                                # When task-5 is spawned, let all remaining finish
+                                for pr in procs.values():
+                                    pr._exited = True
+                        return p
+                    return subprocess.Popen(*cmd, **kwargs)
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn(side_effect=fake_popen):
+                        with patch.object(
+                            orchestrator,
+                            "verify_branch_has_commits",
+                            return_value=(True, ""),
+                        ):
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=30)
+
+                self.assertFalse(timed_out, "run_batch timed out")
+                self.assertEqual(rc, 0)
+                # First 4 spawned, then task-1 finished and task-5 was spawned
+                self.assertEqual(len(spawn_order), 5)
+                self.assertEqual(spawn_order[:4], ["task-1", "task-2", "task-3", "task-4"])
+                self.assertEqual(spawn_order[4], "task-5")
+
+    def test_batch_spawns_dependent_task_promoted_by_parent_merge(self):
+        """When a parent task finishes and merges, its dependent transitions to ready and is
+        spawned in the same batch."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "parent",
+                        "title": "parent",
+                        "plan_file": "docs/plans/parent.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                        "blocks": ["dependent"],
+                    },
+                    {
+                        "id": "dependent",
+                        "title": "dependent",
+                        "plan_file": "docs/plans/dependent.md",
+                        "blocked_by": ["parent"],
+                        "pending_blockers": 1,
+                        "state": "blocked",
+                    },
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=2)
+
+                spawned: list[str] = []
+                aet_state_bin = str(
+                    Path(__file__).parents[2] / "src" / "aet" / "cli" / "aet_state.py"
+                )
+
+                def fake_popen(cmd, **kwargs):
+                    if kwargs.get("start_new_session"):
+                        env = kwargs.get("env", {})
+                        task_id = env.get("AET_TASK_ID")
+                        if task_id:
+                            spawned.append(task_id)
+                        return _InstantProc()
+                    return subprocess.Popen(*cmd, **kwargs)
+
+                def fake_integrate(repo_root, task, worktree_dir, backend, config, integration_mode):
+                    task_id = task["id"] if isinstance(task, dict) else str(task)
+                    subprocess.run(
+                        ["git", "-C", repo_root, "commit", "--allow-empty", "-m", f"merge {task_id}"],
+                        check=True,
+                        capture_output=True,
+                    )
+                    subprocess.run(
+                        ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                        check=True,
+                        capture_output=True,
+                    )
+                    head_rev = subprocess.run(
+                        ["git", "-C", repo_root, "rev-parse", "HEAD"],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    ).stdout.strip()
+                    queue = backend.load()["queue"]
+                    for t in queue:
+                        if t.get("id") == task_id:
+                            t["merge_commit"] = head_rev
+                            break
+                    backend.save(queue)
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            aet_state_bin,
+                            "transition",
+                            task_id,
+                            "in_progress",
+                            "awaiting_merge",
+                            queue_file,
+                        ],
+                        cwd=repo_root,
+                        check=True,
+                        capture_output=True,
+                    )
+                    subprocess.run(
+                        [
+                            sys.executable,
+                            aet_state_bin,
+                            "transition",
+                            task_id,
+                            "awaiting_merge",
+                            "merged",
+                            queue_file,
+                        ],
+                        cwd=repo_root,
+                        check=True,
+                        capture_output=True,
+                    )
+                    return True
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn(side_effect=fake_popen):
+                        with patch.object(orchestrator, "resolve_integration_mode", return_value="single-pr"):
+                            with patch.object(orchestrator, "_integrate_completed_task", side_effect=fake_integrate):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_branch_has_commits",
+                                    return_value=(True, ""),
+                                ):
+                                    rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=30)
+
+                self.assertFalse(timed_out, "run_batch timed out")
+                self.assertEqual(rc, 0)
+                # Parent was spawned first, merged, unblocked dependent, and dependent was spawned in same batch
+                self.assertEqual(spawned, ["parent", "dependent"])
+
+
 if __name__ == "__main__":
     unittest.main()
