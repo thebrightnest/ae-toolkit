@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.19.0] — 2026-10-11
+
+### Added
+
+- **Continuous serialized auto-merge under lock in `aet run`** — the orchestrator now integrates finished tasks lazily and continuously as soon as their pipeline stages pass, rather than waiting for the entire batch to complete. The parent process serializes rebase, validation, squash-merge, and push under an `integration_lock` directly onto the target trunk or epic branch.
+- **Dynamic worker slot replenishment without batch stalls** — worker slots are freed immediately upon task completion. Dependent tasks in the DAG whose blockers have merged are dynamically promoted to `ready` and dispatched into open slots in real time, eliminating worker starvation.
+- **Non-blocking conflict staging with diagnostic recording** — when a concurrent task encounters a rebase conflict against newly landed changes, its rebase aborts cleanly, conflict metadata is recorded to `conflict_diagnostics`, and the task transitions to `awaiting_merge` while independent tasks continue executing and merging uninterrupted.
+- **Task state reset and recovery command (`aet state reset`)** — added `aet state reset` to recover tasks stuck in `in_progress` or failed states due to aborted sessions or crashes, releasing stale worktree locks while preserving verified stage evidence.
+
+### Fixed
+
+- **Epic ref comparison normalization in auto-merge** — normalized git ref comparison when checking whether a task branch is already merged into the active epic branch, preventing redundant rebase attempts on `awaiting_merge` tasks.
+
+**Upgrading from 1.18.x:** no configuration changes or migrations are required. The continuous auto-merge and slot replenishment run automatically inside `aet run` and `/aet-drive`.
+
+---
+
 ## [1.18.0] — 2026-10-04
 
 ### Added

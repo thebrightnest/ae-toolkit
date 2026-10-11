@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.18.0
+## Current Version: 1.19.0
 
-Last updated: 2026-10-04
+Last updated: 2026-10-11
 
 ---
 
@@ -24,10 +24,10 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, a single admission policy shared by every route onto the board, correction of a queued plan by editing the file and re-adding it, a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall, an epic declared once in the queue envelope rather than inferred on every invocation, preflight checks that refuse in the foreground before a run detaches, and a liveness check that reads process start time so a recycled process id is never reported as an active run.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, a single admission policy shared by every route onto the board, correction of a queued plan by editing the file and re-adding it, a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall, an epic declared once in the queue envelope rather than inferred on every invocation, preflight checks that refuse in the foreground before a run detaches, a liveness check that reads process start time so a recycled process id is never reported as an active run, continuous serialized auto-merge under lock directly onto the target branch during batch runs, dynamic worker slot replenishment that dispatches newly unblocked DAG tasks immediately without batch stalls, and non-blocking conflict staging to `awaiting_merge` with diagnostic metadata.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
-- **aet-drive** — Autonomous execution loop that drives an entire declared epic or sprint queue to completion. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, standalone sprint mode when no active epic is set, automatic integration of finished tasks into the active epic branch via `aet ship merge`, and intelligent resolution of integration conflicts.
+- **aet-drive** — Autonomous execution loop that drives an entire declared epic or sprint queue to completion. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, standalone sprint mode when no active epic is set, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks into the active epic branch via `aet ship merge`, and intelligent resolution of integration conflicts.
 
 ### Quality and Security Skills
 
@@ -68,6 +68,7 @@ Carry context and lessons across runs.
 - **aet breaker** — Shows the tracked failure signatures behind the circuit breaker and resets it. Clearing a tripped breaker no longer needs a low-level git ref command.
 - **aet docs lint** — Checks a fact a document copies from the tree against the tree itself: a retired data path, an architecture-decision relation, or a code symbol an anchor names. A deliberate divergence is declared with an escape marker rather than left to decay.
 - **aet state audit** — Reconciles stored task state against git and names any task record carrying no plan spec.
+- **aet state reset** — Resets stuck, crashed, or interrupted task states back to ready, clearing stale worktree leases and orphaned runtime state while preserving verified stage evidence.
 - **aet performance-report** — Reports what agent runs consumed for the project in the current directory: cost, tokens and stage time per PRD, with each PRD's share of the total. Groups plans by the PRD that owns them, falls back to the slice prefix when a project keeps no PRDs, and writes the same figures as JSON for charting. Where a stage reported no usage the report says so and treats its cost as a floor rather than a zero.
 
 ---
@@ -89,6 +90,15 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.19.0
+
+- **Continuous auto-merge in batch runs** — tasks running concurrently now merge into trunk or the epic branch the moment they finish and pass gates, rather than waiting for the entire batch to complete before any code lands.
+- **Dynamic worker slot replenishment** — open worker slots are immediately filled by newly unblocked downstream tasks as dependencies merge, maximizing parallel throughput and eliminating idle worker starvation.
+- **Non-blocking conflict staging** — if a concurrent task encounters merge conflicts with newly integrated code, it safely stages aside in `awaiting_merge` with detailed diagnostic metadata while other independent tasks continue building and shipping without interruption.
+- **Task state reset and recovery (`aet state reset`)** — quickly recover interrupted, stuck, or crashed tasks back to ready without losing previously verified stage evidence.
+
+**Upgrading from 1.18.x:** no configuration changes or migrations are required. The new concurrent auto-merge and slot replenishment behaviors take effect automatically in `aet run` and `/aet-drive`.
 
 ### What's New in v1.18.0
 
