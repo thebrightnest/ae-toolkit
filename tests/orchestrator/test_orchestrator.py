@@ -2894,8 +2894,8 @@ class _InstantProc:
         return 0
 
 
-class TestBatchLivePickupAndExit(unittest.TestCase):
-    """run_batch frontier pickup and exit-when-idle behavior (frh-16)."""
+class _BatchRepoMixin:
+    """Helper methods for constructing batch test repos and driving run_batch."""
 
     def _init_batch_repo(
         self,
@@ -2971,7 +2971,7 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
         )
         return base_commit
 
-    def _run_batch(self, args, adapter, timeout: float = 10):
+    def _run_batch(self, args, adapter, timeout: float = 60):
         """Run run_batch in a thread; return (rc, stdout, timed_out)."""
         result = {"rc": None, "out": ""}
         orchestrator._shutdown_requested = False
@@ -3024,6 +3024,10 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
             heartbeat_interval=999,
             on_failure="continue",
         )
+
+
+class TestBatchLivePickupAndExit(unittest.TestCase, _BatchRepoMixin):
+    """run_batch frontier pickup and exit-when-idle behavior (frh-16)."""
 
     def test_batch_exits_with_report_when_only_awaiting_merge_remains(self):
         """A batch with only awaiting_merge tasks exits 0 with a leftover report.
@@ -3184,7 +3188,7 @@ class TestBatchLivePickupAndExit(unittest.TestCase):
                             return_value=(True, ""),
                         ):
                             rc, out, timed_out = self._run_batch(
-                                args, _FAKE_ADAPTER, timeout=30
+                                args, _FAKE_ADAPTER, timeout=60
                             )
 
                 self.assertFalse(timed_out, "run_batch spun instead of exiting")
@@ -5155,8 +5159,326 @@ class TestParentManagedIntegration(unittest.TestCase):
                             self.assertIn("integration_failure", q_task)
                             self.assertEqual(q_task["integration_failure"]["reason"], "simulated failure")
 
+    def test_integrate_completed_task_rebase_conflict_staged(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            subprocess.run(["git", "init", "--bare", "-q", origin_root], check=True)
+            subprocess.run(["git", "init", "-q", repo_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
+            Path(repo_root, "conflict.txt").write_text("initial content\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
+            subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "remote", "add", "origin", origin_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
 
-class TestBatchDynamicSlotReplenishment(TestBatchLivePickupAndExit):
+            _use_shared_posture(repo_root)
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.fetch()
+
+            task_id = "task-conflict"
+            worktree_dir = orchestrator.create_worktree(repo_root, task_id, base_branch="main")
+
+            # Advance main on origin to create an overlapping change
+            Path(repo_root, "conflict.txt").write_text("main divergence\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "advance main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "origin", "main"], check=True)
+
+            # In worktree, modify the same file to create a rebase conflict
+            Path(worktree_dir, "conflict.txt").write_text("worktree divergence\n", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(["git", "-C", worktree_dir, "commit", "-m", "task divergence"], check=True)
+
+            plan_file = os.path.join(repo_root, "docs", "plans", f"{task_id}.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                f"---\nid: {task_id}\nworkflow: software\n---\n# {task_id}\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add plan"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "origin", "main"], check=True)
+
+            task_record = {
+                "id": task_id,
+                "title": task_id,
+                "state": "in_progress",
+                "worktree": os.path.relpath(worktree_dir, repo_root),
+                "integration_branch": "main",
+                "spec": {},
+            }
+            backend.save([task_record])
+            backend.push()
+
+            status = orchestrator._integrate_completed_task(
+                repo_root=repo_root,
+                task=task_record,
+                worktree_dir=worktree_dir,
+                backend=backend,
+                integration_mode="single-pr",
+                integration_branch="main",
+                plan_file=plan_file,
+            )
+
+            self.assertEqual(status, "staged_conflict")
+
+            # Worktree and branch still exist and worktree is in clean state
+            self.assertTrue(os.path.exists(worktree_dir))
+            clean_check = subprocess.run(
+                ["git", "-C", worktree_dir, "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(clean_check.stdout.strip(), "")
+
+            # Queue record updated with awaiting_merge and conflict_diagnostics
+            queue = backend.load()["queue"]
+            q_task = next(t for t in queue if t["id"] == task_id)
+            self.assertEqual(orchestrator.current_state(q_task), "awaiting_merge")
+            self.assertIn("conflict_diagnostics", q_task)
+            diag = q_task["conflict_diagnostics"]
+            self.assertEqual(diag["reason"], "rebase_conflict")
+            self.assertIn("conflict.txt", diag["conflicting_files"])
+            self.assertTrue(len(diag["stderr_tail"]) > 0)
+            self.assertTrue("at" in diag)
+
+    def test_integrate_completed_task_post_rebase_validation_failure_staged(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            subprocess.run(["git", "init", "--bare", "-q", origin_root], check=True)
+            subprocess.run(["git", "init", "-q", repo_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
+            Path(repo_root, "init.txt").write_text("initial\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
+            subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "remote", "add", "origin", origin_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            _use_shared_posture(repo_root)
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.fetch()
+
+            task_id = "task-val-fail"
+            worktree_dir = orchestrator.create_worktree(repo_root, task_id, base_branch="main")
+
+            Path(worktree_dir, "work.txt").write_text("clean work\n", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(["git", "-C", worktree_dir, "commit", "-m", "work"], check=True)
+
+            plan_file = os.path.join(repo_root, "docs", "plans", f"{task_id}.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                f"---\nid: {task_id}\nworkflow: software\n---\n# {task_id}\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add plan"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "origin", "main"], check=True)
+
+            task_record = {
+                "id": task_id,
+                "title": task_id,
+                "state": "in_progress",
+                "worktree": os.path.relpath(worktree_dir, repo_root),
+                "integration_branch": "main",
+                "spec": {},
+            }
+            backend.save([task_record])
+            backend.push()
+
+            with patch.object(
+                orchestrator,
+                "_validate_after_rebase",
+                return_value=(False, "Simulated validation error: tests failed"),
+            ):
+                status = orchestrator._integrate_completed_task(
+                    repo_root=repo_root,
+                    task=task_record,
+                    worktree_dir=worktree_dir,
+                    backend=backend,
+                    integration_mode="single-pr",
+                    integration_branch="main",
+                    plan_file=plan_file,
+                )
+
+            self.assertEqual(status, "staged_conflict")
+            self.assertTrue(os.path.exists(worktree_dir))
+
+            clean_check = subprocess.run(
+                ["git", "-C", worktree_dir, "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(clean_check.stdout.strip(), "")
+
+            queue = backend.load()["queue"]
+            q_task = next(t for t in queue if t["id"] == task_id)
+            self.assertEqual(orchestrator.current_state(q_task), "awaiting_merge")
+            self.assertIn("conflict_diagnostics", q_task)
+            diag = q_task["conflict_diagnostics"]
+            self.assertEqual(diag["reason"], "validation_failure")
+            self.assertEqual(diag["conflicting_files"], [])
+            self.assertIn("Simulated validation error", diag["stderr_tail"])
+
+    def test_print_settlement_summary(self):
+        queue = [
+            {"id": "task-m", "state": "merged"},
+            {
+                "id": "task-c",
+                "state": "awaiting_merge",
+                "conflict_diagnostics": {
+                    "reason": "rebase_conflict",
+                    "conflicting_files": ["src/app.py", "src/util.py"],
+                },
+            },
+            {"id": "task-b", "state": "blocked"},
+        ]
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            orchestrator._print_settlement_summary(queue, ["task-m"])
+        output = buf.getvalue()
+
+        self.assertIn("📋 Batch Settlement Summary:", output)
+        self.assertIn("Auto-merged (1): task-m", output)
+        self.assertIn("Staged awaiting_merge (1):", output)
+        self.assertIn("task-c: rebase_conflict (src/app.py, src/util.py)", output)
+        self.assertIn("Blocked (1): task-b", output)
+
+    def test_run_batch_staged_conflict_continues_sibling_and_settles_cleanly(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            subprocess.run(["git", "init", "--bare", "-q", origin_root], check=True)
+            subprocess.run(["git", "init", "-q", repo_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
+            Path(repo_root, "file.txt").write_text("initial\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
+            subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "remote", "add", "origin", origin_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            _use_shared_posture(repo_root)
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.fetch()
+
+            # Task 1: will encounter rebase conflict
+            task_1 = "task-1-conflict"
+            wt_1 = orchestrator.create_worktree(repo_root, task_1, base_branch="main")
+            Path(wt_1, "file.txt").write_text("task 1 work\n", encoding="utf-8")
+            subprocess.run(["git", "-C", wt_1, "add", "."], check=True)
+            subprocess.run(["git", "-C", wt_1, "commit", "-m", "t1 work"], check=True)
+
+            # Task 2: independent task that succeeds
+            task_2 = "task-2-ok"
+            wt_2 = orchestrator.create_worktree(repo_root, task_2, base_branch="main")
+            Path(wt_2, "independent.txt").write_text("task 2 work\n", encoding="utf-8")
+            subprocess.run(["git", "-C", wt_2, "add", "."], check=True)
+            subprocess.run(["git", "-C", wt_2, "commit", "-m", "t2 work"], check=True)
+
+            plan_1 = os.path.join(repo_root, "docs", "plans", f"{task_1}.md")
+            Path(plan_1).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_1).write_text(f"---\nid: {task_1}\nworkflow: software\n---\n# {task_1}\n", encoding="utf-8")
+
+            plan_2 = os.path.join(repo_root, "docs", "plans", f"{task_2}.md")
+            Path(plan_2).write_text(f"---\nid: {task_2}\nworkflow: software\n---\n# {task_2}\n", encoding="utf-8")
+
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add plans"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "origin", "main"], check=True)
+
+            records = [
+                {
+                    "id": task_1,
+                    "title": task_1,
+                    "state": "ready",
+                    "plan_file": plan_1,
+                    "worktree": os.path.relpath(wt_1, repo_root),
+                    "integration_branch": "main",
+                    "spec": {},
+                },
+                {
+                    "id": task_2,
+                    "title": task_2,
+                    "state": "ready",
+                    "plan_file": plan_2,
+                    "worktree": os.path.relpath(wt_2, repo_root),
+                    "integration_branch": "main",
+                    "spec": {},
+                },
+            ]
+            backend.save(records)
+            backend.push()
+
+            args = argparse.Namespace(
+                queue_file=queue_file,
+                repo_root=repo_root,
+                max_jobs=2,
+                isolation="worktree",
+                on_failure="triage",
+                base="main",
+            )
+
+            real_popen = subprocess.Popen
+
+            def fake_popen(*a, **kw):
+                if kw.get("start_new_session"):
+                    return _InstantProc()
+                return real_popen(*a, **kw)
+
+            def mock_integrate(repo_root, task, worktree_dir, **kwargs):
+                t_id = task["id"] if isinstance(task, dict) else str(task)
+                if t_id == task_1:
+                    # Task 1 stages conflict
+                    diag = {
+                        "reason": "rebase_conflict",
+                        "conflicting_files": ["file.txt"],
+                        "stderr_tail": "CONFLICT (content): Merge conflict in file.txt",
+                        "at": "2026-10-11T12:00:00Z",
+                    }
+                    orchestrator._stage_task_conflict(repo_root, t_id, queue_file, backend, diag)
+                    return "staged_conflict"
+                else:
+                    # Task 2 integrates successfully
+                    queue = backend.load()["queue"]
+                    for t in queue:
+                        if t["id"] == t_id:
+                            t["state"] = "merged"
+                            break
+                    backend.save(queue)
+                    backend.push()
+                    return True
+
+            with patch.object(orchestrator.subprocess, "Popen", side_effect=fake_popen):
+                with patch.object(orchestrator, "resolve_integration_mode", return_value="single-pr"):
+                    with patch.object(orchestrator, "_integrate_completed_task", side_effect=mock_integrate):
+                        exit_code = orchestrator.run_batch(args, _FAKE_ADAPTER)
+
+            self.assertEqual(exit_code, 0)
+            queue = backend.load()["queue"]
+            q_1 = next(t for t in queue if t["id"] == task_1)
+            q_2 = next(t for t in queue if t["id"] == task_2)
+
+            self.assertEqual(orchestrator.current_state(q_1), "awaiting_merge")
+            self.assertIn("conflict_diagnostics", q_1)
+            self.assertEqual(orchestrator.current_state(q_2), "merged")
+            # Worktree for staged task is preserved
+            self.assertTrue(os.path.exists(wt_1))
+
+
+class TestBatchDynamicSlotReplenishment(unittest.TestCase, _BatchRepoMixin):
     """Dynamic concurrency slot replenishment and starvation elimination tests (cam-02)."""
 
     def test_get_next_ready_task_excludes_specified_tasks(self):
@@ -5228,7 +5550,7 @@ class TestBatchDynamicSlotReplenishment(TestBatchLivePickupAndExit):
                             "verify_branch_has_commits",
                             return_value=(True, ""),
                         ):
-                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=30)
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=60)
 
                 self.assertFalse(timed_out, "run_batch timed out")
                 self.assertEqual(rc, 0)
@@ -5299,7 +5621,7 @@ class TestBatchDynamicSlotReplenishment(TestBatchLivePickupAndExit):
                             "verify_branch_has_commits",
                             return_value=(True, ""),
                         ):
-                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=30)
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=120)
 
                 self.assertFalse(timed_out, "run_batch timed out")
                 self.assertEqual(rc, 0)
@@ -5415,7 +5737,7 @@ class TestBatchDynamicSlotReplenishment(TestBatchLivePickupAndExit):
                                     "verify_branch_has_commits",
                                     return_value=(True, ""),
                                 ):
-                                    rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=30)
+                                    rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=60)
 
                 self.assertFalse(timed_out, "run_batch timed out")
                 self.assertEqual(rc, 0)

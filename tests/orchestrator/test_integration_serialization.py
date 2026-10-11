@@ -382,13 +382,13 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
             )
             subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
 
-            with self.assertRaises(orchestrator.IntegrationFailureError):
-                orchestrator._integrate_single_pr_task(
-                    repo_root=repo_root,
-                    task_id="task-a",
-                    integration_branch="epic-01",
-                    worktree_dir=worktree_a,
-                )
+            res = orchestrator._integrate_single_pr_task(
+                repo_root=repo_root,
+                task_id="task-a",
+                integration_branch="epic-01",
+                worktree_dir=worktree_a,
+            )
+            self.assertEqual(res, "staged_conflict")
 
             # Lock must be released: a second integration should not block forever.
             with integration_lock.integration_lock(repo_root):
@@ -429,13 +429,13 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
             with patch.object(
                 orchestrator, "_validate_after_rebase", return_value=(False, "tests failed")
             ):
-                with self.assertRaises(orchestrator.IntegrationFailureError):
-                    orchestrator._integrate_single_pr_task(
-                        repo_root=repo_root,
-                        task_id="task-a",
-                        integration_branch="epic-01",
-                        worktree_dir=worktree_a,
-                    )
+                res = orchestrator._integrate_single_pr_task(
+                    repo_root=repo_root,
+                    task_id="task-a",
+                    integration_branch="epic-01",
+                    worktree_dir=worktree_a,
+                )
+                self.assertEqual(res, "staged_conflict")
 
             with integration_lock.integration_lock(repo_root):
                 pass
@@ -476,8 +476,9 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
             backend = orchestrator._make_backend(queue_file)
             backend.save([{"id": "task-a", "state": "in_progress", "plan_file": plan_a}])
 
-            with patch.object(
-                orchestrator, "_validate_after_rebase", return_value=(False, "tests failed")
+            with (
+                patch.object(orchestrator, "_validate_after_rebase", return_value=(True, "")),
+                patch.object(orchestrator.gate, "check_task_evidence", return_value=(False, ["tests failed"])),
             ):
                 with self.assertRaises(orchestrator.IntegrationFailureError):
                     orchestrator._integrate_single_pr_task(
@@ -493,7 +494,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 queue_file,
                 "task-a",
                 "in_progress",
-                "validation failed after rebase for task-a:\ntests failed",
+                "missing required gate evidence for task-a:\ntests failed",
             )
 
             queue = backend.load()["queue"]
