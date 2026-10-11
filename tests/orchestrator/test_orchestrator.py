@@ -4895,5 +4895,266 @@ class TestGapAnalysisRecording(unittest.TestCase):
                     self.assertEqual(qa_record["targeted_tests"], [])
 
 
+class TestParentManagedIntegration(unittest.TestCase):
+    def test_run_single_exits_clean_without_integration(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\n"
+                "id: demo\n"
+                "pipeline: full\n"
+                "security_review: skipped\n"
+                "docs_sync: skipped\n"
+                "---\n\n# Demo\n\n_Stage: plan-approved_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            args = _make_args(repo_root, plan_file)
+            with patch.dict(os.environ, {"AET_TASK_ID": "demo", "AET_INTEGRATION_MODE": "single-pr"}, clear=False):
+                with patch.object(orchestrator, "process_task", return_value=True) as mock_pt:
+                    with patch.object(orchestrator, "_integrate_completed_task") as mock_integrate:
+                        exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+                        self.assertEqual(exit_code, 0)
+                        mock_integrate.assert_not_called()
+                        self.assertIsNone(mock_pt.call_args.kwargs.get("integration_mode"))
+
+    def test_integrate_completed_task_worktree_isolated(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            subprocess.run(["git", "init", "--bare", "-q", origin_root], check=True)
+            subprocess.run(["git", "init", "-q", repo_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
+            Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
+            subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "remote", "add", "origin", origin_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            _use_shared_posture(repo_root)
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.fetch()
+
+            task_id = "task-1"
+            worktree_dir = orchestrator.create_worktree(repo_root, task_id, base_branch="main")
+
+            Path(worktree_dir, "work.txt").write_text("task 1 work", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(["git", "-C", worktree_dir, "commit", "-m", "work in task-1"], check=True)
+
+            plan_file = os.path.join(repo_root, "docs", "plans", f"{task_id}.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                f"---\nid: {task_id}\nworkflow: software\n---\n# {task_id}\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add plan"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "origin", "main"], check=True)
+
+            task_record = {
+                "id": task_id,
+                "title": task_id,
+                "state": "in_progress",
+                "worktree": os.path.relpath(worktree_dir, repo_root),
+                "integration_branch": "main",
+                "spec": {},
+            }
+            backend.save([task_record])
+            backend.push()
+
+            with patch.object(orchestrator, "_validate_after_rebase", return_value=(True, "")):
+                with patch.object(orchestrator.gate, "check_task_evidence", return_value=(True, [])):
+                    result = orchestrator._integrate_completed_task(
+                        repo_root=repo_root,
+                        task=task_record,
+                        worktree_dir=worktree_dir,
+                        backend=backend,
+                        integration_mode="single-pr",
+                        integration_branch="main",
+                        plan_file=plan_file,
+                    )
+            self.assertTrue(result)
+
+            log = subprocess.run(
+                ["git", "-C", repo_root, "log", "main", "--oneline"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertIn(f"Integrate {task_id}", log)
+
+            self.assertFalse(os.path.exists(worktree_dir))
+
+            branches = subprocess.run(
+                ["git", "-C", repo_root, "branch"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertNotIn(task_id, branches)
+
+            self.assertFalse(any(t["id"] == task_id for t in backend.load()["queue"]))
+            blob = subprocess.run(
+                ["git", "-C", repo_root, "cat-file", "blob", f"refs/aet/sealed/{task_id}"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            sealed_task = json.loads(blob)
+            self.assertEqual(sealed_task.get("state"), "merged")
+            self.assertIsNotNone(sealed_task.get("merge_commit"))
+
+    def test_run_batch_cleanup_integrates_on_child_exit_zero(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            _use_shared_posture(repo_root)
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add config"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.fetch()
+
+            task_id = "task-b"
+            worktree_dir = orchestrator.create_worktree(repo_root, task_id, base_branch="main")
+            Path(worktree_dir, "work.txt").write_text("task b work", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(["git", "-C", worktree_dir, "commit", "-m", "work in task-b"], check=True)
+
+            plan_file = os.path.join(repo_root, "docs", "plans", f"{task_id}.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                f"---\nid: {task_id}\nworkflow: software\n---\n# {task_id}\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add plan"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            task_record = {
+                "id": task_id,
+                "title": task_id,
+                "state": "ready",
+                "plan_file": plan_file,
+                "worktree": os.path.relpath(worktree_dir, repo_root),
+                "integration_branch": "main",
+                "spec": {},
+            }
+            backend.save([task_record])
+            backend.push()
+
+            args = argparse.Namespace(
+                queue_file=queue_file,
+                repo_root=repo_root,
+                max_jobs=1,
+                isolation="worktree",
+                on_failure="triage",
+                base="main",
+            )
+
+            real_popen = subprocess.Popen
+
+            def fake_popen(*a, **kw):
+                if kw.get("start_new_session"):
+                    return _InstantProc()
+                return real_popen(*a, **kw)
+
+            with patch.object(orchestrator.subprocess, "Popen", side_effect=fake_popen):
+                with patch.object(orchestrator, "resolve_integration_mode", return_value="single-pr"):
+                    with patch.object(orchestrator, "_integrate_completed_task") as mock_integrate:
+                        with patch.object(orchestrator, "has_actionable_tasks", side_effect=[True, False]):
+                            exit_code = orchestrator.run_batch(args, _FAKE_ADAPTER)
+                            self.assertEqual(exit_code, 0)
+                            mock_integrate.assert_called_once()
+                            call_kwargs = mock_integrate.call_args.kwargs
+                            self.assertEqual(call_kwargs["task"]["id"], task_id)
+                            self.assertEqual(call_kwargs["integration_mode"], "single-pr")
+
+    def test_run_batch_cleanup_handles_integration_failure(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            _use_shared_posture(repo_root)
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add config"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.fetch()
+
+            task_id = "task-fail"
+            worktree_dir = orchestrator.create_worktree(repo_root, task_id, base_branch="main")
+            Path(worktree_dir, "work.txt").write_text("task fail work", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(["git", "-C", worktree_dir, "commit", "-m", "work in task-fail"], check=True)
+
+            plan_file = os.path.join(repo_root, "docs", "plans", f"{task_id}.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                f"---\nid: {task_id}\nworkflow: software\n---\n# {task_id}\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add plan"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            task_record = {
+                "id": task_id,
+                "title": task_id,
+                "state": "ready",
+                "plan_file": plan_file,
+                "worktree": os.path.relpath(worktree_dir, repo_root),
+                "integration_branch": "main",
+                "spec": {},
+            }
+            backend.save([task_record])
+            backend.push()
+
+            args = argparse.Namespace(
+                queue_file=queue_file,
+                repo_root=repo_root,
+                max_jobs=1,
+                isolation="worktree",
+                on_failure="triage",
+                base="main",
+            )
+
+            real_popen = subprocess.Popen
+
+            def fake_popen(*a, **kw):
+                if kw.get("start_new_session"):
+                    return _InstantProc()
+                return real_popen(*a, **kw)
+
+            with patch.object(orchestrator.subprocess, "Popen", side_effect=fake_popen):
+                with patch.object(orchestrator, "resolve_integration_mode", return_value="single-pr"):
+                    with patch.object(
+                        orchestrator,
+                        "_integrate_completed_task",
+                        side_effect=orchestrator.IntegrationFailureError("simulated failure"),
+                    ):
+                        with patch.object(orchestrator, "has_actionable_tasks", side_effect=[True, False]):
+                            exit_code = orchestrator.run_batch(args, _FAKE_ADAPTER)
+                            self.assertEqual(exit_code, 1)
+                            queue = backend.load()["queue"]
+                            q_task = next(t for t in queue if t["id"] == task_id)
+                            self.assertIn("integration_failure", q_task)
+                            self.assertEqual(q_task["integration_failure"]["reason"], "simulated failure")
+
+
 if __name__ == "__main__":
     unittest.main()
