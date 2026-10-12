@@ -298,7 +298,6 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
             log_path = log.name
 
         os.environ["AET_INTEGRATION_LOCK_LOG"] = log_path
-        os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
         original_path = os.environ.get("PATH", "")
         fake_bin_dir, adapter = _install_fake_cli(origin_root)
         os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
@@ -312,6 +311,7 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
                         "trunk_branch": "main",
                         "integration_branch": "epic-01",
                         "integration_mode": "single-pr",
+                        "validate_command": "true",
                     }
                 ),
                 encoding="utf-8",
@@ -408,7 +408,6 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
 
         finally:
             os.environ.pop("AET_INTEGRATION_LOCK_LOG", None)
-            os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
             os.environ["PATH"] = original_path
             try:
                 os.unlink(log_path)
@@ -428,7 +427,6 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
             original_path = os.environ.get("PATH", "")
             fake_bin_dir, adapter = _install_fake_cli(origin_root)
             os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
-            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
 
             try:
                 _init_git_repo(repo_root, origin_root)
@@ -439,6 +437,7 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
                             "trunk_branch": "main",
                             "integration_branch": "epic-01",
                             "integration_mode": "single-pr",
+                            "validate_command": "true",
                         }
                     ),
                     encoding="utf-8",
@@ -518,7 +517,6 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
                 self.assertIn("Integrate task-child", log_proc.stdout)
 
             finally:
-                os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
                 os.environ["PATH"] = original_path
 
     def test_initial_cycle_starvation_elimination_max_jobs(self):
@@ -530,7 +528,6 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
             original_path = os.environ.get("PATH", "")
             fake_bin_dir, adapter = _install_fake_cli(origin_root)
             os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
-            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
 
             try:
                 _init_git_repo(repo_root, origin_root)
@@ -541,6 +538,7 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
                             "trunk_branch": "main",
                             "integration_branch": "epic-01",
                             "integration_mode": "single-pr",
+                            "validate_command": "true",
                         }
                     ),
                     encoding="utf-8",
@@ -659,7 +657,6 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
                     self.assertEqual(t["state"], "merged")
 
             finally:
-                os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
                 os.environ["PATH"] = original_path
 
 
@@ -675,7 +672,6 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
             original_path = os.environ.get("PATH", "")
             fake_bin_dir, adapter = _install_fake_cli(origin_root)
             os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
-            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
 
             try:
                 _init_git_repo(repo_root, origin_root)
@@ -686,6 +682,7 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
                             "trunk_branch": "main",
                             "integration_branch": "epic-01",
                             "integration_mode": "single-pr",
+                            "validate_command": "true",
                         }
                     ),
                     encoding="utf-8",
@@ -857,7 +854,6 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
                 self.assertNotIn("Integrate task-c2", log_proc.stdout)
 
             finally:
-                os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
                 os.environ["PATH"] = original_path
 
 
@@ -873,7 +869,6 @@ class TestDualModeParity(unittest.TestCase):
             original_path = os.environ.get("PATH", "")
             fake_bin_dir, adapter = _install_fake_cli(origin_root)
             os.environ["PATH"] = str(fake_bin_dir) + os.pathsep + original_path
-            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
 
             try:
                 _init_git_repo(repo_root, origin_root)
@@ -883,6 +878,7 @@ class TestDualModeParity(unittest.TestCase):
                         {
                             "trunk_branch": "main",
                             "integration_mode": "pr-per-task",
+                            "validate_command": "true",
                         }
                     ),
                     encoding="utf-8",
@@ -959,7 +955,6 @@ class TestDualModeParity(unittest.TestCase):
                 self.assertIn("Integrate task-std-c", log_proc.stdout)
 
             finally:
-                os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
                 os.environ["PATH"] = original_path
 
 

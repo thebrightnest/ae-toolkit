@@ -2243,27 +2243,23 @@ def process_task(
     return True
 
 
-def _validate_after_rebase(worktree_dir: str) -> tuple[bool, str]:
+def _validate_after_rebase(
+    worktree_dir: str,
+    task_id: str = "",
+    repo_root: str = "",
+) -> tuple[bool, str]:
     """Re-run task validation in the rebased worktree.
 
-    Returns ``(True, "")`` on success, ``(False, output)`` on failure. The
-    default command is the project's full validation gate; tests and unusual
-    projects can override it via ``AET_INTEGRATION_VALIDATE_CMD``.
+    Returns ``(True, "")`` on success, ``(False, output)`` on failure.
+    Uses ``pre_integration_check`` so an unmoved target yields SKIP.
     """
-    cmd_env = os.environ.get("AET_INTEGRATION_VALIDATE_CMD", "")
-    if cmd_env:
-        cmd = cmd_env.split()
-    else:
-        cmd = ["make", "validate"]
-    result = subprocess.run(
-        cmd,
-        cwd=worktree_dir,
-        capture_output=True,
-        text=True,
+    check_result = validation.pre_integration_check(
+        task_id=task_id,
+        worktree_dir=worktree_dir,
+        repo_root=repo_root or None,
     )
-    if result.returncode != 0:
-        output = result.stdout + result.stderr
-        return False, output
+    if not check_result.ok:
+        return False, check_result.output
     return True, ""
 
 
@@ -2450,7 +2446,7 @@ def _integrate_completed_task(
             return "staged_conflict"
 
         # Re-validate the rebased combination before it lands (R-18).
-        ok, output = _validate_after_rebase(worktree_dir)
+        ok, output = _validate_after_rebase(worktree_dir, task_id=task_id, repo_root=repo_root)
         if not ok:
             subprocess.run(
                 ["git", "-C", worktree_dir, "reset", "--hard", pre_rebase_commit],
