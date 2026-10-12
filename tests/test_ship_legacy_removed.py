@@ -13,7 +13,10 @@ import re
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from typer.testing import CliRunner
 
 _REPO_ROOT = Path(__file__).parents[1]
 _REPO_SRC = _REPO_ROOT / "src"
@@ -94,8 +97,10 @@ class TestShipCloseRejectsLegacyPositional(unittest.TestCase):
             return 0
 
         with patch.object(ship.aet_state, "cmd_record_merge", side_effect=fake_record_merge):
-            rc_close = ship.main(["close", "t1", "/path/to/plan.md", "/path/to/queue.json"])
-            legacy_ns = ship.aet_state.argparse.Namespace(
+            runner = CliRunner()
+            result_close = runner.invoke(ship.app, ["close", "t1", "/path/to/plan.md", "/path/to/queue.json"])
+            rc_close = result_close.exit_code
+            legacy_ns = SimpleNamespace(
                 command="record-merge",
                 task_id="t1",
                 plan="/path/to/plan.md",
@@ -109,6 +114,18 @@ class TestShipCloseRejectsLegacyPositional(unittest.TestCase):
         self.assertNotEqual(rc_close, 0)
         self.assertNotEqual(rc_legacy, 0)
         self.assertEqual(len(captured), 0)
+
+    def test_record_merge_subcommand_removed(self):
+        """`record-merge` subcommand has been removed from `aet ship`."""
+        import typer.main
+
+        cmd = typer.main.get_command(ship.app)
+        self.assertNotIn("record-merge", cmd.commands)
+
+        runner = CliRunner()
+        result = runner.invoke(ship.app, ["--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertNotIn("record-merge", result.output)
 
 
 if __name__ == "__main__":

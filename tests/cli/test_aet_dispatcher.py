@@ -54,7 +54,8 @@ class TestAetGroupRouting(unittest.TestCase):
         result = run_typer(aet.app, ["ship", "--help"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("open", result.output)
-        self.assertIn("record-merge", result.output)
+        self.assertIn("close", result.output)
+        self.assertNotIn("record-merge", result.output)
 
     def test_retro_routes_to_retro_command(self):
         result = run_typer(aet.app, ["retro", "--help"])

@@ -10,7 +10,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from typer.testing import CliRunner
 
 from aet import plan_parser
 from aet.backends.git_refs_backend import GitRefsBackend
@@ -36,23 +39,26 @@ class TestShipSplitParser(unittest.TestCase):
 
     def test_split_subcommand_parses_task_and_groups(self):
         """aet ship split accepts a task id and repeated message/paths groups."""
-        parser = ship.build_parser()
-        args = parser.parse_args(
-            [
-                "split",
-                "t1",
-                "--message",
-                "feat: add alpha",
-                "--paths",
-                "alpha.py",
-                "--message",
-                "feat: add beta",
-                "--paths",
-                "beta.py",
-                "gamma.py",
-            ]
-        )
-        self.assertEqual(args.command, "split")
+        runner = CliRunner()
+        with patch.object(ship, "cmd_split", return_value=0) as mock_split:
+            result = runner.invoke(
+                ship.app,
+                [
+                    "split",
+                    "t1",
+                    "--message",
+                    "feat: add alpha",
+                    "--paths",
+                    "alpha.py",
+                    "--message",
+                    "feat: add beta",
+                    "--paths",
+                    "beta.py,gamma.py",
+                ],
+            )
+        self.assertEqual(result.exit_code, 0)
+        mock_split.assert_called_once()
+        args = mock_split.call_args[0][0]
         self.assertEqual(args.plan, "t1")
         self.assertEqual(args.message, ["feat: add alpha", "feat: add beta"])
         self.assertEqual(args.paths, [["alpha.py"], ["beta.py", "gamma.py"]])
@@ -130,15 +136,12 @@ class TestShipSplitCommand(unittest.TestCase):
         }
         with patch.object(ship.subprocess, "run", side_effect=self._mock_run(responses)):
             rc = ship.cmd_split(
-                ship.parse_args(
-                    [
-                        "split",
-                        "t1",
-                        "--message",
-                        "feat: one",
-                        "--paths",
-                        "a.py",
-                    ]
+                SimpleNamespace(
+                    plan="t1",
+                    base=None,
+                    message=["feat: one"],
+                    paths=[["a.py"]],
+                    dry_run=False,
                 )
             )
         self.assertNotEqual(rc, 0)
@@ -152,17 +155,12 @@ class TestShipSplitCommand(unittest.TestCase):
         }
         with patch.object(ship.subprocess, "run", side_effect=self._mock_run(responses)):
             rc = ship.cmd_split(
-                ship.parse_args(
-                    [
-                        "split",
-                        "t1",
-                        "--base",
-                        "origin/main",
-                        "--message",
-                        "feat: one",
-                        "--paths",
-                        "a.py",
-                    ]
+                SimpleNamespace(
+                    plan="t1",
+                    base="origin/main",
+                    message=["feat: one"],
+                    paths=[["a.py"]],
+                    dry_run=False,
                 )
             )
         self.assertNotEqual(rc, 0)
@@ -175,17 +173,12 @@ class TestShipSplitCommand(unittest.TestCase):
         }
         with patch.object(ship.subprocess, "run", side_effect=self._mock_run(responses)):
             rc = ship.cmd_split(
-                ship.parse_args(
-                    [
-                        "split",
-                        "t1",
-                        "--message",
-                        "feat: one",
-                        "--paths",
-                        "a.py",
-                        "--paths",
-                        "b.py",
-                    ]
+                SimpleNamespace(
+                    plan="t1",
+                    base=None,
+                    message=["feat: one"],
+                    paths=[["a.py"], ["b.py"]],
+                    dry_run=False,
                 )
             )
         self.assertNotEqual(rc, 0)
@@ -297,20 +290,12 @@ class TestShipSplitIntegration(unittest.TestCase):
         os.chdir(str(self.clone))
         original_sha = self._head_sha()
         rc = ship.cmd_split(
-            ship.parse_args(
-                [
-                    "split",
-                    "t1",
-                    "--message",
-                    "feat: add alpha",
-                    "--paths",
-                    "alpha.py",
-                    "--message",
-                    "feat: add beta and plan",
-                    "--paths",
-                    "beta.py",
-                    str(self.plan_path),
-                ]
+            SimpleNamespace(
+                plan="t1",
+                base=None,
+                message=["feat: add alpha", "feat: add beta and plan"],
+                paths=[["alpha.py"], ["beta.py", str(self.plan_path)]],
+                dry_run=False,
             )
         )
         self.assertEqual(rc, 0)
@@ -337,15 +322,12 @@ class TestShipSplitIntegration(unittest.TestCase):
         os.chdir(str(self.clone))
         original_sha = self._head_sha()
         rc = ship.cmd_split(
-            ship.parse_args(
-                [
-                    "split",
-                    "t1",
-                    "--message",
-                    "feat: add alpha only",
-                    "--paths",
-                    "alpha.py",
-                ]
+            SimpleNamespace(
+                plan="t1",
+                base=None,
+                message=["feat: add alpha only"],
+                paths=[["alpha.py"]],
+                dry_run=False,
             )
         )
         self.assertNotEqual(rc, 0)

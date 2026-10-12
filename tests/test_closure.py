@@ -294,7 +294,6 @@ class TestShipArchivalClosureIntegration(unittest.TestCase):
             pr_base="origin/main",
             rebased=False,
             scope_audit=[],
-            dry_run=False,
             message="Gate passed.",
         )
         with (

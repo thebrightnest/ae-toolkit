@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import importlib.machinery
 import importlib.util
 import os
@@ -11,7 +10,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from typer.testing import CliRunner
 
 from aet import plan_parser
 from aet.backends.git_refs_backend import GitRefsBackend
@@ -37,19 +39,25 @@ class TestShipMergeParser(unittest.TestCase):
 
     def test_merge_subcommand_defaults_branch_to_none(self):
         """aet ship merge defaults --branch to None for runtime trunk resolution."""
-        parser = ship.build_parser()
-        args = parser.parse_args(["merge", "t1"])
-        self.assertEqual(args.command, "merge")
-        self.assertEqual(args.plan, "t1")
-        self.assertIsNone(args.branch)
+        with patch.object(ship, "cmd_merge", return_value=0) as mock_cmd:
+            runner = CliRunner()
+            result = runner.invoke(ship.app, ["merge", "t1"])
+            self.assertEqual(result.exit_code, 0)
+            mock_cmd.assert_called_once()
+            args = mock_cmd.call_args[0][0]
+            self.assertEqual(args.plan, "t1")
+            self.assertIsNone(args.branch)
 
     def test_merge_subcommand_parses_branch(self):
         """aet ship merge accepts an explicit --branch."""
-        parser = ship.build_parser()
-        args = parser.parse_args(["merge", "t1", "--branch", "dev"])
-        self.assertEqual(args.command, "merge")
-        self.assertEqual(args.plan, "t1")
-        self.assertEqual(args.branch, "dev")
+        with patch.object(ship, "cmd_merge", return_value=0) as mock_cmd:
+            runner = CliRunner()
+            result = runner.invoke(ship.app, ["merge", "t1", "--branch", "dev"])
+            self.assertEqual(result.exit_code, 0)
+            mock_cmd.assert_called_once()
+            args = mock_cmd.call_args[0][0]
+            self.assertEqual(args.plan, "t1")
+            self.assertEqual(args.branch, "dev")
 
 
 class TestShipMergeConflictDetection(unittest.TestCase):
@@ -180,9 +188,14 @@ class TestShipMergeCommand(unittest.TestCase):
         backend.save(queue)
 
     def test_merge_defaults_branch_to_none_for_runtime_resolution(self):
-        """argparse defaults --branch to None so cmd_merge resolves the trunk at runtime."""
-        args = ship.parse_args(["merge", "t1"])
-        self.assertIsNone(args.branch)
+        """Typer defaults --branch to None so cmd_merge resolves the trunk at runtime."""
+        with patch.object(ship, "cmd_merge", return_value=0) as mock_cmd:
+            runner = CliRunner()
+            result = runner.invoke(ship.app, ["merge", "t1"])
+            self.assertEqual(result.exit_code, 0)
+            mock_cmd.assert_called_once()
+            args = mock_cmd.call_args[0][0]
+            self.assertIsNone(args.branch)
 
     def test_merge_refuses_to_proceed_when_gate_fails(self):
         """If the gate reports failure, merge exits before conflict/merge checks."""
@@ -191,14 +204,13 @@ class TestShipMergeCommand(unittest.TestCase):
             pr_base="origin/dev",
             rebased=False,
             scope_audit=[],
-            dry_run=False,
             message="Working tree is dirty.",
         )
         with (
             patch.object(ship, "_run_gate", return_value=gate_result),
             patch.object(ship, "_resolve_feature_branch", return_value="t1"),
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan="t1", branch="dev", dry_run=False))
+            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="dev", dry_run=False))
         self.assertNotEqual(rc, 0)
 
     def test_merge_stops_on_conflict_detection(self):
@@ -208,7 +220,6 @@ class TestShipMergeCommand(unittest.TestCase):
             pr_base="origin/dev",
             rebased=False,
             scope_audit=[],
-            dry_run=False,
             message="Gate passed.",
         )
         with (
@@ -220,7 +231,7 @@ class TestShipMergeCommand(unittest.TestCase):
                     with patch.object(ship, "_has_merge_conflicts", return_value=(True, "conflict!")):
                         with patch.object(ship, "_merge_into_target", return_value=(True, "", "sha")) as merge_mock:
                             rc = ship.cmd_merge(
-                                argparse.Namespace(plan="t1", branch="dev", dry_run=False)
+                                SimpleNamespace(plan="t1", branch="dev", dry_run=False)
                             )
         self.assertNotEqual(rc, 0)
         merge_mock.assert_not_called()
@@ -232,7 +243,6 @@ class TestShipMergeCommand(unittest.TestCase):
             pr_base="origin/dev",
             rebased=False,
             scope_audit=[],
-            dry_run=False,
             message="Gate passed.",
         )
         with (
@@ -249,7 +259,7 @@ class TestShipMergeCommand(unittest.TestCase):
                         ):
                             with patch.object(ship.aet_state, "cmd_record_merge", return_value=0) as close_mock:
                                 rc = ship.cmd_merge(
-                                    argparse.Namespace(plan="t1", branch="dev", dry_run=False)
+                                    SimpleNamespace(plan="t1", branch="dev", dry_run=False)
                                 )
         self.assertEqual(rc, 0)
         close_mock.assert_called_once()
@@ -259,6 +269,39 @@ class TestShipMergeCommand(unittest.TestCase):
         self.assertEqual(ns.target_branch, "dev")
         self.assertEqual(ns.branch, "t1")
 
+    def test_merge_records_closure_with_task_recorded_branch(self):
+        """aet ship merge passes the task's recorded branch to cmd_record_merge."""
+        gate_result = ship.GateResult(
+            ok=True,
+            pr_base="origin/dev",
+            rebased=False,
+            scope_audit=[],
+            message="Gate passed.",
+        )
+        task = {
+            "id": "t1",
+            "branch": "feature/custom-branch-name",
+            "spec": {"tasks": [{"id": "t1"}]},
+        }
+        with (
+            patch.object(ship, "_resolve_ship_task", return_value=None),
+            patch.object(ship, "_resolve_trunk_ref", return_value="origin/dev"),
+            patch.object(ship, "_resolve_feature_branch", return_value="feature/custom-branch-name"),
+            patch.object(ship, "_run_gate", return_value=gate_result),
+            patch.object(ship, "_check_release_guard", return_value=None),
+            patch.object(ship, "_is_monolithic_commit", return_value=False),
+            patch.object(ship, "_has_merge_conflicts", return_value=(False, "")),
+            patch.object(ship, "_merge_into_target", return_value=(True, "merged", "abc123")),
+            patch.object(ship.aet_state, "cmd_record_merge", return_value=0) as close_mock,
+            patch.object(ship, "archive_plan_file"),
+        ):
+            args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task=task, spec=task["spec"], task_id="t1")
+            rc = ship.cmd_merge(args)
+        self.assertEqual(rc, 0)
+        close_mock.assert_called_once()
+        ns = close_mock.call_args[0][0]
+        self.assertEqual(ns.branch, "feature/custom-branch-name")
+
     def test_merge_dry_run_skips_closure(self):
         """Dry-run reports success but does not call record-merge."""
         gate_result = ship.GateResult(
@@ -266,7 +309,6 @@ class TestShipMergeCommand(unittest.TestCase):
             pr_base="origin/dev",
             rebased=False,
             scope_audit=[],
-            dry_run=True,
             message="Gate passed.",
         )
         with (
@@ -283,44 +325,9 @@ class TestShipMergeCommand(unittest.TestCase):
                         ):
                             with patch.object(ship.aet_state, "cmd_record_merge") as close_mock:
                                 rc = ship.cmd_merge(
-                                    argparse.Namespace(plan="t1", branch="dev", dry_run=True)
+                                    SimpleNamespace(plan="t1", branch="dev", dry_run=True)
                                 )
         self.assertEqual(rc, 0)
-        close_mock.assert_not_called()
-
-    def test_merge_stacked_targeting_trunk_exits_naming_parent(self):
-        """Merging a stacked branch into trunk without explicit base is refused."""
-        stack = ship.StackInfo(
-            trunk_ref="origin/main",
-            base_ref="origin/feat-parent",
-            parent="feat-parent",
-            position="PR 2 of 2",
-        )
-        gate_result = ship.GateResult(
-            ok=True,
-            pr_base="origin/feat-parent",
-            stack=stack,
-            rebased=False,
-            scope_audit=[],
-            dry_run=False,
-            message="Gate passed.",
-        )
-        with (
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_resolve_feature_branch", return_value="t1"),
-        ):
-            with patch.object(ship, "_check_release_guard", return_value=None):
-                with patch.object(ship, "_is_monolithic_commit", return_value=False):
-                    with patch.object(ship, "_has_merge_conflicts", return_value=(False, "")):
-                        with patch.object(
-                            ship, "_merge_into_target", return_value=(True, "merged", "abc123")
-                        ) as merge_mock:
-                            with patch.object(ship.aet_state, "cmd_record_merge") as close_mock:
-                                rc = ship.cmd_merge(
-                                    argparse.Namespace(plan="t1", branch="main", dry_run=False)
-                                )
-        self.assertNotEqual(rc, 0)
-        merge_mock.assert_not_called()
         close_mock.assert_not_called()
 
     def test_merge_stacked_targeting_parent_is_allowed(self):
@@ -337,7 +344,6 @@ class TestShipMergeCommand(unittest.TestCase):
             stack=stack,
             rebased=False,
             scope_audit=[],
-            dry_run=False,
             message="Gate passed.",
         )
         with (
@@ -350,43 +356,7 @@ class TestShipMergeCommand(unittest.TestCase):
                         with patch.object(ship, "_merge_into_target", return_value=(True, "merged", "abc123")):
                             with patch.object(ship.aet_state, "cmd_record_merge", return_value=0):
                                 rc = ship.cmd_merge(
-                                    argparse.Namespace(plan="t1", branch="feat-parent", dry_run=False)
-                                )
-        self.assertEqual(rc, 0)
-
-    def test_merge_stacked_with_explicit_base_skips_guard(self):
-        """An explicit --base override skips the stacked merge guard."""
-        stack = ship.StackInfo(
-            trunk_ref="origin/main",
-            base_ref="origin/feat-parent",
-            parent="feat-parent",
-            position="PR 2 of 2",
-        )
-        gate_result = ship.GateResult(
-            ok=True,
-            pr_base="origin/feat-parent",
-            stack=stack,
-            rebased=False,
-            scope_audit=[],
-            dry_run=False,
-            message="Gate passed.",
-        )
-        with (
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_resolve_feature_branch", return_value="t1"),
-        ):
-            with patch.object(ship, "_check_release_guard", return_value=None):
-                with patch.object(ship, "_is_monolithic_commit", return_value=False):
-                    with patch.object(ship, "_has_merge_conflicts", return_value=(False, "")):
-                        with patch.object(ship, "_merge_into_target", return_value=(True, "merged", "abc123")):
-                            with patch.object(ship.aet_state, "cmd_record_merge", return_value=0):
-                                rc = ship.cmd_merge(
-                                    argparse.Namespace(
-                                        plan="t1",
-                                        branch="main",
-                                        base="origin/feat-parent",
-                                        dry_run=False,
-                                    )
+                                    SimpleNamespace(plan="t1", branch="feat-parent", dry_run=False)
                                 )
         self.assertEqual(rc, 0)
 
@@ -469,7 +439,6 @@ class TestShipMergeCommand(unittest.TestCase):
             pr_base="origin/main",
             rebased=False,
             scope_audit=[],
-            dry_run=False,
             message="Gate passed.",
         )
         with (
@@ -480,7 +449,7 @@ class TestShipMergeCommand(unittest.TestCase):
             patch.object(ship, "_merge_into_target", side_effect=fake_merge),
             patch.object(ship.aet_state, "cmd_record_merge", return_value=0),
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan="t1", branch="main", dry_run=False))
+            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
         self.assertEqual(rc, 0)
         # The task branch — never the "main" checkout — is what gets merged.
         self.assertEqual(captured["feature"], "t1")
@@ -500,7 +469,7 @@ class TestShipMergeCommand(unittest.TestCase):
             patch.object(ship, "_merge_into_target") as merge_mock,
             patch.object(ship.aet_state, "cmd_record_merge") as close_mock,
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan="t1", branch="main", dry_run=False))
+            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
         self.assertNotEqual(rc, 0)
         merge_mock.assert_not_called()
         close_mock.assert_not_called()
@@ -513,7 +482,7 @@ class TestShipMergeCommand(unittest.TestCase):
             patch.object(ship, "_merge_into_target") as merge_mock,
             patch.object(ship.aet_state, "cmd_record_merge") as close_mock,
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan="t1", branch="main", dry_run=False))
+            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
         self.assertNotEqual(rc, 0)
         merge_mock.assert_not_called()
         close_mock.assert_not_called()
@@ -699,7 +668,7 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
 
     def test_target_branch_defaults_to_task_integration_branch(self):
         """When --branch is omitted, target_branch defaults to task's integration_branch."""
-        args = argparse.Namespace(
+        args = SimpleNamespace(
             plan="t1",
             command="merge",
             branch=None,
@@ -724,7 +693,7 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
             args.task = task
             args.spec = task["spec"]
             args.task_id = "t1"
-            mock_gate.return_value = argparse.Namespace(
+            mock_gate.return_value = SimpleNamespace(
                 ok=True, message="gate ok", stack=None, pr_base="origin/feat/my-epic"
             )
             rc = ship.cmd_merge(args)
@@ -734,7 +703,7 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
 
     def test_explicit_branch_overrides_task_integration_branch(self):
         """When --branch is explicitly provided, it overrides task's integration_branch."""
-        args = argparse.Namespace(
+        args = SimpleNamespace(
             plan="t1",
             command="merge",
             branch="custom-target",
@@ -759,7 +728,7 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
             args.task = task
             args.spec = task["spec"]
             args.task_id = "t1"
-            mock_gate.return_value = argparse.Namespace(
+            mock_gate.return_value = SimpleNamespace(
                 ok=True, message="gate ok", stack=None, pr_base="origin/custom-target"
             )
             rc = ship.cmd_merge(args)

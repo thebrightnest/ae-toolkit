@@ -13,6 +13,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from typer.testing import CliRunner
+
 from aet import plan_parser
 from aet.backends.git_refs_backend import GitRefsBackend
 
@@ -180,12 +182,14 @@ class TestShipResolution(unittest.TestCase):
         merged_env = {"AET_SHIP_TEST_CMD": "true"}
         if env:
             merged_env.update(env)
+        cmd_args = argv[1:] if argv and argv[0] == "ship" else argv
+        runner = CliRunner()
         with patch.dict(os.environ, merged_env, clear=False):
-            with patch.object(sys, "argv", argv):
-                mock = _subprocess_mock(self._gate_success_responses())
-                with patch.object(ship.aet_state.subprocess, "run", side_effect=mock):
-                    with patch.object(ship.subprocess, "run", side_effect=mock):
-                        return ship.main()
+            mock = _subprocess_mock(self._gate_success_responses())
+            with patch.object(ship.aet_state.subprocess, "run", side_effect=mock):
+                with patch.object(ship.subprocess, "run", side_effect=mock):
+                    result = runner.invoke(ship.app, cmd_args)
+                    return result.exit_code
 
     def test_gate_accepts_task_id(self):
         """``aet ship gate <id>`` resolves to the live task record."""

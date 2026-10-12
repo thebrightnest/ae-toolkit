@@ -10,9 +10,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+
+from typer.testing import CliRunner
 
 from aet.backends.git_refs_backend import GitRefsBackend
 
@@ -115,15 +116,12 @@ class TestShipVerify(unittest.TestCase):
         return _git(self.repo, "rev-parse", "HEAD").stdout.strip()
 
     def _run_verify(self, argv: list[str]) -> tuple[int, str, str]:
-        """Run `ship.main(argv)` with gh patched to fail, capturing output."""
+        """Run `ship.app` with gh patched to fail, capturing output."""
+        cmd_args = argv[1:] if argv and argv[0] == "ship" else argv
+        runner = CliRunner()
         with patch.object(ship.aet_state, "run_gh", return_value=(1, "", "")):
-            with patch.object(sys, "argv", argv):
-                stdout_capture = StringIO()
-                stderr_capture = StringIO()
-                with patch.object(sys, "stdout", stdout_capture):
-                    with patch.object(sys, "stderr", stderr_capture):
-                        rc = ship.main()
-                return rc, stdout_capture.getvalue(), stderr_capture.getvalue()
+            result = runner.invoke(ship.app, cmd_args)
+            return result.exit_code, result.output, result.output
 
     def test_verify_squash_merged_branch_reports_squash_and_exact_kind(self):
         """A squash-merged branch resolves with strategy squash and match kind exact."""
@@ -311,14 +309,11 @@ class TestShipVerifySinglePr(unittest.TestCase):
         return self._git("rev-parse", "HEAD").stdout.strip()
 
     def _run_verify(self, argv: list[str]) -> tuple[int, str, str]:
+        cmd_args = argv[1:] if argv and argv[0] == "ship" else argv
+        runner = CliRunner()
         with patch.object(ship.aet_state, "run_gh", return_value=(1, "", "")):
-            with patch.object(sys, "argv", argv):
-                stdout_capture = StringIO()
-                stderr_capture = StringIO()
-                with patch.object(sys, "stdout", stdout_capture):
-                    with patch.object(sys, "stderr", stderr_capture):
-                        rc = ship.main()
-                return rc, stdout_capture.getvalue(), stderr_capture.getvalue()
+            result = runner.invoke(ship.app, cmd_args)
+            return result.exit_code, result.output, result.output
 
     def test_verify_resolves_prd_derived_target_branch(self):
         """ship verify checks origin/<prd-stem> when no --target-branch is given."""

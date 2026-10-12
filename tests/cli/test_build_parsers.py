@@ -52,7 +52,7 @@ _MODULES = {
     "aet.cli.report": {"callback": True},
     "aet.cli.retro": {"callback": True},
     "aet.cli.ship": {
-        "commands": ["default", "gate", "open", "open-epic", "merge", "split", "verify", "close", "record-merge"]
+        "commands": ["default", "gate", "open", "open-epic", "merge", "split", "verify", "close"]
     },
     "aet.cli.sprint": {"commands": ["add", "intake"]},
     "aet.cli.status": {"callback": True},

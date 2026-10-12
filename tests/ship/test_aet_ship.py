@@ -5,11 +5,12 @@ import importlib.util
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from typer.testing import CliRunner
 
 from aet import plan_parser
 from aet.backends.git_refs_backend import GitRefsBackend
@@ -160,10 +161,12 @@ class TestShipClosure(unittest.TestCase):
         }
 
     def _run_ship_close(self, argv: list[str]) -> int:
+        cmd_args = argv[1:] if argv and argv[0] == "ship" else argv
+        runner = CliRunner()
         mock = _subprocess_mock(self._success_responses())
-        with patch.object(sys, "argv", argv):
-            with patch.object(ship.aet_state.subprocess, "run", side_effect=mock):
-                return ship.main()
+        with patch.object(ship.aet_state.subprocess, "run", side_effect=mock):
+            result = runner.invoke(ship.app, cmd_args)
+            return result.exit_code
 
     def test_ship_records_merge_seals_task_without_touching_plan(self):
         """aet ship close seals the queue entry and archives the plan (R-4/ADR-072)."""

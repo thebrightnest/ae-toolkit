@@ -10,7 +10,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from typer.testing import CliRunner
 
 from aet import plan_parser
 from aet.backends.git_refs_backend import GitRefsBackend
@@ -131,14 +134,18 @@ def _subprocess_mock(responses, record=None):
 class TestShipGateParser(unittest.TestCase):
     def test_gate_subcommand_parses_plan_argument(self):
         """aet ship gate accepts a task id."""
-        parser = ship.build_parser()
-        args = parser.parse_args(["gate", "t1"])
-        self.assertEqual(args.command, "gate")
-        self.assertEqual(args.plan, "t1")
+        runner = CliRunner()
+        result = runner.invoke(ship.app, ["gate", "--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("plan", result.output.lower())
 
 
 class TestShipGateChecks(unittest.TestCase):
     """Behavior-driven tests for each aet ship gate check."""
+
+    def _run_gate(self, plan: str = "t1") -> int:
+        runner = CliRunner()
+        return runner.invoke(ship.app, ["gate", plan]).exit_code
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -236,7 +243,7 @@ class TestShipGateChecks(unittest.TestCase):
         responses[("git", "log", "--oneline", "--decorate", "--ancestry-path", "old-merge-base..HEAD")] = (0, "", "")
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+            rc = self._run_gate("t1")
 
         self.assertNotEqual(rc, 0)
 
@@ -247,7 +254,7 @@ class TestShipGateChecks(unittest.TestCase):
         responses[("git", "status", "--short")] = (0, " M src/aet/cli/ship.py\n", "")
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+            rc = self._run_gate("t1")
 
         self.assertNotEqual(rc, 0)
 
@@ -260,7 +267,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertNotEqual(rc, 0)
 
@@ -276,7 +283,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -299,7 +306,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -311,7 +318,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -323,7 +330,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -335,7 +342,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -372,7 +379,7 @@ class TestShipGateChecks(unittest.TestCase):
         # Without the verdict -> refused
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
         self.assertNotEqual(rc, 0)
 
         # A hand-written working-tree file is no longer read.
@@ -381,7 +388,7 @@ class TestShipGateChecks(unittest.TestCase):
         (evidence_dir / "t1-evidence.md").write_text("# Evidence\n", encoding="utf-8")
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
         self.assertNotEqual(rc, 0)
 
         # With the verify verdict recorded -> passes
@@ -389,7 +396,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
         self.assertEqual(rc, 0)
 
     def test_workflow_without_verify_stage_imposes_no_requirement(self):
@@ -430,7 +437,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -457,9 +464,14 @@ class TestShipGateChecks(unittest.TestCase):
             "AET_REPORTS_DIR": str(self.repo / "reports-archive"),
         }
 
-        args = ship.parse_args(["gate", "t1"])
-        args.task_id = "t1"
-        args.spec = self._spec(content)
+        args = SimpleNamespace(
+            command="gate",
+            plan="t1",
+            base=None,
+            dry_run=False,
+            task_id="t1",
+            spec=self._spec(content),
+        )
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
@@ -496,7 +508,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -508,7 +520,7 @@ class TestShipGateChecks(unittest.TestCase):
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -594,7 +606,8 @@ class TestShipGateIntegration(unittest.TestCase):
         os.chdir(str(self.clone))
         env = {"AET_SHIP_TEST_CMD": "true"}
         with patch.dict(os.environ, env):
-            rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+            runner = CliRunner()
+            rc = runner.invoke(ship.app, ["gate", "t1"]).exit_code
         self.assertEqual(rc, 0)
 
     def test_gate_uses_non_main_trunk_when_origin_head_points_elsewhere(self):
@@ -615,7 +628,8 @@ class TestShipGateIntegration(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_recording_run):
-                rc = ship.cmd_gate(ship.parse_args(["gate", "t1"]))
+                runner = CliRunner()
+                rc = runner.invoke(ship.app, ["gate", "t1"]).exit_code
 
         self.assertEqual(rc, 0)
         self.assertTrue(any(c[0] == "git" and c[1] == "merge-base" and "origin/develop" in c for c in commands))

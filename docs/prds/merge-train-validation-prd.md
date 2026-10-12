@@ -160,7 +160,7 @@ Not a reproducible defect — current behaviour is correct but redundant.
       `merged` and task 3 `awaiting_merge` with the failing output. (satisfies: R-8)
 - [ ] `aet ship open-epic` on a tip just validated by a flush runs no suite. (satisfies: R-9)
 - [ ] An ADR supersedes ADR-070 decision 2 and records the train. (satisfies: R-10)
-- [ ] `aet ship record-merge` no longer exists; `src/aet/cli/ship.py` has no `argparse`
+- [x] `aet ship record-merge` no longer exists; `src/aet/cli/ship.py` has no `argparse`
       parser; the ship test suite runs through Typer's `CliRunner`. (satisfies: R-11)
 - [ ] aet-ship SKILL.md lists the gate's real checks and no epic-branch merge
       example; `aet docs generate` output matches. (satisfies: R-12)
@@ -187,7 +187,7 @@ Not a reproducible defect — current behaviour is correct but redundant.
 - **Bisect cost.** Prefix bisect on a batch of n is ⌈log₂ n⌉ suite runs. The cost
   is paid only on red; green batches pay one run.
 - **Leftovers found in research** (2026-10-12): argparse dispatch reachable only
-  from tests (`build_parser`, `parse_args`, `main` in `src/aet/cli/ship.py`); `record-merge` routes to the same handler as
+  from tests (the former build_parser, parse_args, and main helpers in the ship CLI module); `record-merge` routes to the same handler as
   `close`; the stacked guard in `cmd_merge` is unreachable because `cmd_merge`
   always sets `args.base`; `AET_SHIP_COVERAGE_CMD` output discarded
   in `_run_gate`; `prepare_worktree_dependencies` called twice; `GateResult.dry_run`
@@ -214,5 +214,5 @@ Not a reproducible defect — current behaviour is correct but redundant.
   trees); a bug in fast-forward or bisect could strand tasks. Mitigated by
   fail-closed handling and rebuildable staging refs.
 
-*Stage: scope-validated*
-*Next step: `aet sprint add` the mtv-0* plans, then `aet run`*
+*Stage: synced*
+*Next step: run `aet-ship`*
