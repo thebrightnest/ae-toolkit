@@ -20,7 +20,7 @@ Pre-merge gate, PR creation, merge, and post-merge closure for AET tasks.
 - `aet ship <plan_file|task_id>` — run the gate, then open a PR.
 - `aet ship gate <plan_file|task_id>` — run the pre-merge gate only.
 - `aet ship open <plan_file|task_id>` — run the gate and open a PR.
-- `aet ship merge <plan_file|task_id> [--branch <target>]` — run the gate, detect conflicts against the target branch, merge directly into it, and record closure. `--branch` defaults to the resolved trunk branch.
+- `aet ship merge <task_id> [--branch <target>]` — run pre-integration checks, rebase under `integration_lock`, validate post-rebase combined tree, squash-merge directly into the target branch, enforce required evidence gates for all verdict kinds, and record closure. `--branch` defaults to the resolved integration/trunk branch.
 - `aet ship split <plan_file|task_id> --message <msg> --paths <path>...` — split a monolithic PR range into logical commits. Repeat `--message`/`--paths` pairs in order. Fails closed if the resulting tree does not match the original HEAD.
 - `aet ship verify <task_id|plan> [--squash-fallback]` — verify a branch has merged without mutating queue or ledger state. Prints `<merge-sha> <strategy> (<match-kind>)`.
 - `aet ship close <task_id>` — record post-merge closure (task looked up in the live queue, then sealed history).
@@ -28,7 +28,7 @@ Pre-merge gate, PR creation, merge, and post-merge closure for AET tasks.
 
 A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet ship merge` resolves to the task record (live queue first, then sealed history); the plan file is never consulted after intake.
 
-`aet ship merge` checks for merge conflicts against `origin/<target>` before merging and records the resulting merge commit in the work queue.
+`aet ship merge` routes through the unified `integrate()` path: it checks for rebase conflicts against `origin/<target>`, enforces all required evidence kinds (the same gate bar applied by `aet run`), runs release and monolithic-commit guards under `integration_lock`, performs a squash merge into the target branch, and records the resulting merge commit in the work queue.
 
 ## Pre-Merge Gate
 
@@ -67,9 +67,6 @@ aet run
 
 # Open the epic pull request targeting trunk:
 aet ship open-epic
-
-# Or when the epic branch is ready to merge directly to trunk:
-aet ship merge feat/epic-name --branch main
 
 # Close each task that was part of the epic, pointing at the epic branch as
 # the integration target and the trunk merge commit if needed:

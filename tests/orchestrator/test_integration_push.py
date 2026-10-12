@@ -212,7 +212,7 @@ class TestIntegrationPush(unittest.TestCase):
                     _write_verdict(repo_root, "task-a", kind)
 
                 with patch.object(orchestrator, "_validate_after_rebase", return_value=(True, "")):
-                    result_a = orchestrator._integrate_single_pr_task(
+                    result_a = orchestrator.integrate(
                         repo_root=repo_root,
                         task_id="task-a",
                         integration_branch="epic-01",
@@ -243,7 +243,7 @@ class TestIntegrationPush(unittest.TestCase):
                     _write_verdict(repo_root, "task-b", kind)
 
                 with patch.object(orchestrator, "_validate_after_rebase", return_value=(True, "")):
-                    result_b = orchestrator._integrate_single_pr_task(
+                    result_b = orchestrator.integrate(
                         repo_root=repo_root,
                         task_id="task-b",
                         integration_branch="epic-01",

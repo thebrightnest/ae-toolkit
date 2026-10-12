@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import importlib.machinery
-import importlib.util
+import io
+import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,23 +14,11 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from aet import plan_parser
+from aet import integration_lock, plan_parser, validation
+from aet.backends import create_backend
 from aet.backends.git_refs_backend import GitRefsBackend
-
-_SHIP_PY = Path(__file__).parents[1] / "src" / "aet" / "cli" / "ship.py"
-_spec = importlib.util.spec_from_loader(
-    "aet_ship_merge", importlib.machinery.SourceFileLoader("aet_ship_merge", str(_SHIP_PY))
-)
-ship = importlib.util.module_from_spec(_spec)
-sys.modules["aet_ship_merge"] = ship
-_spec.loader.exec_module(ship)
-
-
-class MockResult:
-    def __init__(self, returncode, stdout="", stderr=""):
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
+from aet.cli import ship
+from aet.integrate import IntegrateResult
 
 
 class TestShipMergeParser(unittest.TestCase):
@@ -60,69 +47,34 @@ class TestShipMergeParser(unittest.TestCase):
             self.assertEqual(args.branch, "dev")
 
 
-class TestShipMergeConflictDetection(unittest.TestCase):
-    """Conflict detection before direct merge."""
+class TestShipMergeConflictHandling(unittest.TestCase):
+    """Conflict and refusal handling in `cmd_merge`."""
 
-    def test_has_merge_conflicts_detects_conflict_markers(self):
-        """_has_merge_conflicts returns True when merge-tree emits conflict markers."""
-        responses = {
-            ("git", "merge-base", "HEAD", "origin/dev"): (0, "base-sha\n", ""),
-            ("git", "merge-tree", "base-sha", "HEAD", "origin/dev"): (
-                0,
-                "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> origin/dev\n",
-                "",
-            ),
-        }
-        with patch.object(ship.subprocess, "run", side_effect=self._mock_run(responses)):
-            has_conflicts, msg = ship._has_merge_conflicts("dev")
-        self.assertTrue(has_conflicts)
-        self.assertIn("conflicts", msg.lower())
+    def test_cmd_merge_handles_staged_conflict(self):
+        """cmd_merge reports failure when integrate returns staged_conflict."""
+        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec={"tasks": []})
+        staged_res = IntegrateResult("staged_conflict", detail={"stderr_tail": "rebase conflict in src/cli.py"})
+        with patch.object(ship, "_resolve_ship_task", return_value=None), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
+             patch.object(ship, "_find_target_worktree", return_value=Path("/fake/worktree")), \
+             patch.object(ship, "integrate", return_value=staged_res), \
+             patch("sys.stderr", new=io.StringIO()) as fake_err:
+            rc = ship.cmd_merge(args)
+        self.assertEqual(rc, 1)
+        self.assertIn("src/cli.py", fake_err.getvalue())
 
-    def test_has_merge_conflicts_extracts_conflicting_files(self):
-        """_has_merge_conflicts parses conflicting filenames from merge-tree output."""
-        responses = {
-            ("git", "merge-base", "HEAD", "origin/dev"): (0, "base-sha\n", ""),
-            ("git", "merge-tree", "base-sha", "HEAD", "origin/dev"): (
-                0,
-                "changed in both\n"
-                "  base   100644 1111111 src/cli.py\n"
-                "  our    100644 2222222 src/cli.py\n"
-                "  their  100644 3333333 src/cli.py\n"
-                "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> origin/dev\n",
-                "",
-            ),
-        }
-        with patch.object(ship.subprocess, "run", side_effect=self._mock_run(responses)):
-            has_conflicts, msg = ship._has_merge_conflicts("dev")
-        self.assertTrue(has_conflicts)
-        self.assertIn("src/cli.py", msg)
-        self.assertIn("produced conflicts in:\n  - src/cli.py", msg)
-
-    def test_has_merge_conflicts_returns_false_when_clean(self):
-        """_has_merge_conflicts returns False when merge-tree has no conflict markers."""
-        responses = {
-            ("git", "merge-base", "HEAD", "origin/dev"): (0, "base-sha\n", ""),
-            ("git", "merge-tree", "base-sha", "HEAD", "origin/dev"): (
-                0,
-                "merged content\n",
-                "",
-            ),
-        }
-        with patch.object(ship.subprocess, "run", side_effect=self._mock_run(responses)):
-            has_conflicts, msg = ship._has_merge_conflicts("dev")
-        self.assertFalse(has_conflicts)
-        self.assertEqual(msg, "")
-
-    @staticmethod
-    def _mock_run(responses):
-        def mock_run(cmd, **kwargs):
-            args = tuple(cmd)
-            if args in responses:
-                rc, out, err = responses[args]
-                return MockResult(rc, out, err)
-            return MockResult(1, "", f"unexpected: {cmd!r}")
-
-        return mock_run
+    def test_cmd_merge_handles_guard_refused(self):
+        """cmd_merge reports failure when integrate returns guard_refused."""
+        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec={"tasks": []})
+        refused_res = IntegrateResult("guard_refused", detail="Release guard refused")
+        with patch.object(ship, "_resolve_ship_task", return_value=None), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
+             patch.object(ship, "_find_target_worktree", return_value=Path("/fake/worktree")), \
+             patch.object(ship, "integrate", return_value=refused_res), \
+             patch("sys.stderr", new=io.StringIO()) as fake_err:
+            rc = ship.cmd_merge(args)
+        self.assertEqual(rc, 1)
+        self.assertIn("Release guard refused", fake_err.getvalue())
 
 
 class TestShipMergeCommand(unittest.TestCase):
@@ -180,7 +132,7 @@ class TestShipMergeCommand(unittest.TestCase):
                 "id": task_id,
                 "state": "awaiting_merge",
                 "stage": "qa-complete",
-                "branch": "t1",
+                "branch": task_id,
                 "plan_file": str(Path("docs/plans") / f"{task_id}.md"),
             }
             queue.append(task)
@@ -197,177 +149,75 @@ class TestShipMergeCommand(unittest.TestCase):
             args = mock_cmd.call_args[0][0]
             self.assertIsNone(args.branch)
 
-    def test_merge_refuses_to_proceed_when_gate_fails(self):
-        """If the gate reports failure, merge exits before conflict/merge checks."""
-        gate_result = ship.GateResult(
-            ok=False,
-            pr_base="origin/dev",
-            rebased=False,
-            scope_audit=[],
-            message="Working tree is dirty.",
-        )
-        with (
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_resolve_feature_branch", return_value="t1"),
-        ):
-            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="dev", dry_run=False))
+    def test_merge_refuses_to_proceed_when_integrate_fails(self):
+        """If integrate reports failure, cmd_merge exits non-zero."""
+        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec=self._spec())
+        with patch.object(ship, "_resolve_ship_task", return_value=None), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
+             patch.object(ship, "_find_target_worktree", return_value=self.repo), \
+             patch.object(ship, "integrate", return_value=IntegrateResult("staged_conflict", detail="Gate failed")):
+            rc = ship.cmd_merge(args)
         self.assertNotEqual(rc, 0)
 
     def test_merge_stops_on_conflict_detection(self):
-        """Detected conflicts stop the merge before touching the target branch."""
-        gate_result = ship.GateResult(
-            ok=True,
-            pr_base="origin/dev",
-            rebased=False,
-            scope_audit=[],
-            message="Gate passed.",
-        )
-        with (
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_resolve_feature_branch", return_value="t1"),
-        ):
-            with patch.object(ship, "_check_release_guard", return_value=None):
-                with patch.object(ship, "_is_monolithic_commit", return_value=False):
-                    with patch.object(ship, "_has_merge_conflicts", return_value=(True, "conflict!")):
-                        with patch.object(ship, "_merge_into_target", return_value=(True, "", "sha")) as merge_mock:
-                            rc = ship.cmd_merge(
-                                SimpleNamespace(plan="t1", branch="dev", dry_run=False)
-                            )
+        """Detected conflicts in integrate stop the merge."""
+        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec=self._spec())
+        with patch.object(ship, "_resolve_ship_task", return_value=None), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
+             patch.object(ship, "_find_target_worktree", return_value=self.repo), \
+             patch.object(ship, "integrate", return_value=IntegrateResult("staged_conflict", detail="conflict!")):
+            rc = ship.cmd_merge(args)
         self.assertNotEqual(rc, 0)
-        merge_mock.assert_not_called()
 
-    def test_merge_happy_path_records_closure(self):
-        """A clean gate + no conflicts triggers merge and records closure."""
-        gate_result = ship.GateResult(
-            ok=True,
-            pr_base="origin/dev",
-            rebased=False,
-            scope_audit=[],
-            message="Gate passed.",
-        )
-        with (
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_resolve_feature_branch", return_value="t1"),
-        ):
-            with patch.object(ship, "_check_release_guard", return_value=None):
-                with patch.object(ship, "_is_monolithic_commit", return_value=False):
-                    with patch.object(ship, "_has_merge_conflicts", return_value=(False, "")):
-                        with patch.object(
-                            ship,
-                            "_merge_into_target",
-                            return_value=(True, "merged", "abc123"),
-                        ):
-                            with patch.object(ship.aet_state, "cmd_record_merge", return_value=0) as close_mock:
-                                rc = ship.cmd_merge(
-                                    SimpleNamespace(plan="t1", branch="dev", dry_run=False)
-                                )
+    def test_merge_happy_path_calls_integrate_and_archives(self):
+        """A clean merge calls integrate and archives the plan."""
+        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec=self._spec())
+        merged_res = IntegrateResult("merged", detail="abc123")
+        with patch.object(ship, "_resolve_ship_task", return_value=None), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
+             patch.object(ship, "_find_target_worktree", return_value=self.repo), \
+             patch.object(ship, "integrate", return_value=merged_res) as mock_integrate, \
+             patch.object(ship, "archive_plan_file") as mock_archive:
+            rc = ship.cmd_merge(args)
         self.assertEqual(rc, 0)
-        close_mock.assert_called_once()
-        ns = close_mock.call_args[0][0]
-        self.assertEqual(ns.task_id, "t1")
-        self.assertEqual(ns.merge_commit, "abc123")
-        self.assertEqual(ns.target_branch, "dev")
-        self.assertEqual(ns.branch, "t1")
+        mock_integrate.assert_called_once()
+        mock_archive.assert_called_once_with("t1")
 
-    def test_merge_records_closure_with_task_recorded_branch(self):
-        """aet ship merge passes the task's recorded branch to cmd_record_merge."""
-        gate_result = ship.GateResult(
-            ok=True,
-            pr_base="origin/dev",
-            rebased=False,
-            scope_audit=[],
-            message="Gate passed.",
-        )
+    def test_merge_calls_integrate_with_task_recorded_branch(self):
+        """cmd_merge passes task dict with recorded branch to integrate."""
         task = {
             "id": "t1",
             "branch": "feature/custom-branch-name",
             "spec": {"tasks": [{"id": "t1"}]},
         }
-        with (
-            patch.object(ship, "_resolve_ship_task", return_value=None),
-            patch.object(ship, "_resolve_trunk_ref", return_value="origin/dev"),
-            patch.object(ship, "_resolve_feature_branch", return_value="feature/custom-branch-name"),
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_check_release_guard", return_value=None),
-            patch.object(ship, "_is_monolithic_commit", return_value=False),
-            patch.object(ship, "_has_merge_conflicts", return_value=(False, "")),
-            patch.object(ship, "_merge_into_target", return_value=(True, "merged", "abc123")),
-            patch.object(ship.aet_state, "cmd_record_merge", return_value=0) as close_mock,
-            patch.object(ship, "archive_plan_file"),
-        ):
-            args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task=task, spec=task["spec"], task_id="t1")
+        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task=task, spec=task["spec"], task_id="t1")
+        merged_res = IntegrateResult("merged", detail="abc123")
+        with patch.object(ship, "_resolve_ship_task", return_value=None), \
+             patch.object(ship, "_resolve_feature_branch", return_value="feature/custom-branch-name"), \
+             patch.object(ship, "_find_target_worktree", return_value=self.repo), \
+             patch.object(ship, "integrate", return_value=merged_res) as mock_integrate, \
+             patch.object(ship, "archive_plan_file"):
             rc = ship.cmd_merge(args)
         self.assertEqual(rc, 0)
-        close_mock.assert_called_once()
-        ns = close_mock.call_args[0][0]
-        self.assertEqual(ns.branch, "feature/custom-branch-name")
+        mock_integrate.assert_called_once()
+        call_task = mock_integrate.call_args[1]["task"]
+        self.assertEqual(call_task["branch"], "feature/custom-branch-name")
 
-    def test_merge_dry_run_skips_closure(self):
-        """Dry-run reports success but does not call record-merge."""
-        gate_result = ship.GateResult(
-            ok=True,
-            pr_base="origin/dev",
-            rebased=False,
-            scope_audit=[],
-            message="Gate passed.",
-        )
-        with (
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_resolve_feature_branch", return_value="t1"),
-        ):
-            with patch.object(ship, "_check_release_guard", return_value=None):
-                with patch.object(ship, "_is_monolithic_commit", return_value=False):
-                    with patch.object(ship, "_has_merge_conflicts", return_value=(False, "")):
-                        with patch.object(
-                            ship,
-                            "_merge_into_target",
-                            return_value=(True, "would merge", None),
-                        ):
-                            with patch.object(ship.aet_state, "cmd_record_merge") as close_mock:
-                                rc = ship.cmd_merge(
-                                    SimpleNamespace(plan="t1", branch="dev", dry_run=True)
-                                )
+    def test_merge_dry_run_skips_integrate(self):
+        """Dry-run reports success but does not call integrate."""
+        args = SimpleNamespace(plan="t1", branch="dev", dry_run=True, task_id="t1", spec=self._spec())
+        with patch.object(ship, "_resolve_ship_task", return_value=None), \
+             patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
+             patch.object(ship, "integrate") as mock_integrate:
+            rc = ship.cmd_merge(args)
         self.assertEqual(rc, 0)
-        close_mock.assert_not_called()
-
-    def test_merge_stacked_targeting_parent_is_allowed(self):
-        """Merging a stacked branch into its detected parent is allowed."""
-        stack = ship.StackInfo(
-            trunk_ref="origin/main",
-            base_ref="origin/feat-parent",
-            parent="feat-parent",
-            position="PR 2 of 2",
-        )
-        gate_result = ship.GateResult(
-            ok=True,
-            pr_base="origin/feat-parent",
-            stack=stack,
-            rebased=False,
-            scope_audit=[],
-            message="Gate passed.",
-        )
-        with (
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_resolve_feature_branch", return_value="t1"),
-        ):
-            with patch.object(ship, "_check_release_guard", return_value=None):
-                with patch.object(ship, "_is_monolithic_commit", return_value=False):
-                    with patch.object(ship, "_has_merge_conflicts", return_value=(False, "")):
-                        with patch.object(ship, "_merge_into_target", return_value=(True, "merged", "abc123")):
-                            with patch.object(ship.aet_state, "cmd_record_merge", return_value=0):
-                                rc = ship.cmd_merge(
-                                    SimpleNamespace(plan="t1", branch="feat-parent", dry_run=False)
-                                )
-        self.assertEqual(rc, 0)
+        mock_integrate.assert_not_called()
 
     def _init_repo_with_task_branch(self, task_id: str) -> Path:
         """Create a real temp git repo whose HEAD is on ``main`` and which also
-        has a branch named *task_id* carrying a commit absent from main — the
-        exact shape that triggered the bug (running the merge from a checkout on
-        main, where ``git branch --show-current`` returns "main")."""
+        has a branch named *task_id* carrying a commit absent from main."""
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        # Restore cwd before the temp repo is torn down (LIFO cleanup order).
         self.addCleanup(os.chdir, self.cwd)
         repo = Path(tmp.name)
 
@@ -419,41 +269,22 @@ class TestShipMergeCommand(unittest.TestCase):
         return repo
 
     def test_merge_resolves_feature_branch_from_task_not_checkout(self):
-        """Regression: the merge source is the task's branch, not the checkout.
-
-        The bug ran `aet ship merge` from a checkout on main, so the source
-        resolved to "main" and main was merged into main (a no-op) while the task
-        was still recorded as merged. cmd_merge must resolve the branch from the
-        task id.
-        """
+        """Regression: the merge source is the task's branch, not the checkout."""
         os.chdir(self._init_repo_with_task_branch("t1"))
         captured = {}
 
-        def fake_merge(target_branch, feature_branch, dry_run):
-            captured["target"] = target_branch
-            captured["feature"] = feature_branch
-            return (True, "merged", "abc123")
+        def fake_integrate(*args, **kwargs):
+            captured["task"] = kwargs.get("task")
+            captured["integration_branch"] = kwargs.get("integration_branch")
+            return IntegrateResult("merged", detail="abc123")
 
-        gate_result = ship.GateResult(
-            ok=True,
-            pr_base="origin/main",
-            rebased=False,
-            scope_audit=[],
-            message="Gate passed.",
-        )
-        with (
-            patch.object(ship, "_run_gate", return_value=gate_result),
-            patch.object(ship, "_check_release_guard", return_value=None),
-            patch.object(ship, "_is_monolithic_commit", return_value=False),
-            patch.object(ship, "_has_merge_conflicts", return_value=(False, "")),
-            patch.object(ship, "_merge_into_target", side_effect=fake_merge),
-            patch.object(ship.aet_state, "cmd_record_merge", return_value=0),
-        ):
+        with patch.object(ship, "_find_target_worktree", return_value=Path("/fake/wt")), \
+             patch.object(ship, "integrate", side_effect=fake_integrate), \
+             patch.object(ship, "archive_plan_file"):
             rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
         self.assertEqual(rc, 0)
-        # The task branch — never the "main" checkout — is what gets merged.
-        self.assertEqual(captured["feature"], "t1")
-        self.assertEqual(captured["target"], "main")
+        self.assertEqual(captured["task"]["branch"], "t1")
+        self.assertEqual(captured["integration_branch"], "main")
 
     def test_resolve_feature_branch_uses_task_id_not_checkout(self):
         """_resolve_feature_branch returns the task's branch (HEAD is on main),
@@ -464,203 +295,20 @@ class TestShipMergeCommand(unittest.TestCase):
 
     def test_merge_refuses_self_merge(self):
         """A resolved feature branch equal to the target aborts before any merge."""
-        with (
-            patch.object(ship, "_resolve_feature_branch", return_value="main"),
-            patch.object(ship, "_merge_into_target") as merge_mock,
-            patch.object(ship.aet_state, "cmd_record_merge") as close_mock,
-        ):
+        with patch.object(ship, "_resolve_feature_branch", return_value="main"), \
+             patch.object(ship, "integrate") as mock_integrate:
             rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
         self.assertNotEqual(rc, 0)
-        merge_mock.assert_not_called()
-        close_mock.assert_not_called()
+        mock_integrate.assert_not_called()
 
     def test_merge_fails_closed_when_branch_unresolvable(self):
         """When no branch resolves for the task, refuse rather than record a
         merge that did not happen."""
-        with (
-            patch.object(ship, "_resolve_feature_branch", return_value=None),
-            patch.object(ship, "_merge_into_target") as merge_mock,
-            patch.object(ship.aet_state, "cmd_record_merge") as close_mock,
-        ):
+        with patch.object(ship, "_resolve_feature_branch", return_value=None), \
+             patch.object(ship, "integrate") as mock_integrate:
             rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
         self.assertNotEqual(rc, 0)
-        merge_mock.assert_not_called()
-        close_mock.assert_not_called()
-
-
-class TestShipMergeIntoTarget(unittest.TestCase):
-    """Tests for `_merge_into_target` worktree and merge logic."""
-
-    def test_merge_creates_temp_worktree_and_cleans_up(self):
-        """When no target worktree exists, create one, merge, push, and remove it."""
-        repo_root = "/repo"
-        worktree_path = Path(repo_root) / ".worktrees" / ".merge-dev-1234"
-        responses = {
-            ("git", "worktree", "list", "--porcelain"): (0, "", ""),
-            ("git", "rev-parse", "--show-toplevel"): (0, f"{repo_root}\n", ""),
-            (
-                "git",
-                "worktree",
-                "add",
-                "--checkout",
-                str(worktree_path),
-                "origin/dev",
-            ): (0, "", ""),
-            ("git", "-C", str(worktree_path), "checkout", "dev"): (0, "", ""),
-            ("git", "-C", str(worktree_path), "pull", "origin", "dev"): (0, "", ""),
-            (
-                "git",
-                "-C",
-                str(worktree_path),
-                "merge",
-                "--no-ff",
-                "-m",
-                "Merge feat-001 into dev",
-                "feat-001",
-            ): (0, "", ""),
-            ("git", "-C", str(worktree_path), "rev-parse", "HEAD"): (
-                0,
-                "merge-commit-sha\n",
-                "",
-            ),
-            ("git", "-C", str(worktree_path), "push", "origin", "dev"): (0, "", ""),
-            (
-                "git",
-                "-C",
-                str(worktree_path),
-                "merge-base",
-                "--is-ancestor",
-                "feat-001",
-                "dev",
-            ): (0, "", ""),
-            ("git", "worktree", "remove", "--force", str(worktree_path)): (0, "", ""),
-        }
-        commands: list[tuple[str, ...]] = []
-
-        def mock_run(cmd, **kwargs):
-            commands.append(tuple(cmd))
-            args = tuple(cmd)
-            if args in responses:
-                rc, out, err = responses[args]
-                return MockResult(rc, out, err)
-            return MockResult(1, "", f"unexpected: {cmd!r}")
-
-        with patch.object(ship.subprocess, "run", side_effect=mock_run):
-            with patch.object(ship.os, "getpid", return_value=1234):
-                ok, msg, merge_commit = ship._merge_into_target("dev", "feat-001", False)
-
-        self.assertTrue(ok)
-        self.assertEqual(merge_commit, "merge-commit-sha")
-        self.assertIn(("git", "worktree", "remove", "--force", str(worktree_path)), commands)
-
-    def test_merge_reuses_existing_worktree(self):
-        """When a target worktree already exists, use it instead of creating one."""
-        existing = "/repo/.worktrees/dev"
-        responses = {
-            (
-                "git",
-                "worktree",
-                "list",
-                "--porcelain",
-            ): (
-                0,
-                f"worktree {existing}\nbranch refs/heads/dev\n",
-                "",
-            ),
-            ("git", "-C", existing, "checkout", "dev"): (0, "", ""),
-            ("git", "-C", existing, "pull", "origin", "dev"): (0, "", ""),
-            (
-                "git",
-                "-C",
-                existing,
-                "merge",
-                "--no-ff",
-                "-m",
-                "Merge feat-001 into dev",
-                "feat-001",
-            ): (0, "", ""),
-            ("git", "-C", existing, "rev-parse", "HEAD"): (
-                0,
-                "merge-commit-sha\n",
-                "",
-            ),
-            ("git", "-C", existing, "push", "origin", "dev"): (0, "", ""),
-            (
-                "git",
-                "-C",
-                existing,
-                "merge-base",
-                "--is-ancestor",
-                "feat-001",
-                "dev",
-            ): (0, "", ""),
-        }
-        commands: list[tuple[str, ...]] = []
-
-        def mock_run(cmd, **kwargs):
-            commands.append(tuple(cmd))
-            args = tuple(cmd)
-            if args in responses:
-                rc, out, err = responses[args]
-                return MockResult(rc, out, err)
-            return MockResult(1, "", f"unexpected: {cmd!r}")
-
-        with patch.object(ship.subprocess, "run", side_effect=mock_run):
-            ok, msg, merge_commit = ship._merge_into_target("dev", "feat-001", False)
-
-        self.assertTrue(ok)
-        self.assertEqual(merge_commit, "merge-commit-sha")
-        self.assertFalse(any(c[1] == "worktree" and c[2] == "add" for c in commands))
-
-    def test_merge_fails_closed_when_branch_not_ancestor(self):
-        """Regression: a merge that leaves the feature branch un-incorporated (a
-        silent no-op) fails closed instead of reporting success."""
-        existing = "/repo/.worktrees/dev"
-        responses = {
-            ("git", "worktree", "list", "--porcelain"): (
-                0,
-                f"worktree {existing}\nbranch refs/heads/dev\n",
-                "",
-            ),
-            ("git", "-C", existing, "checkout", "dev"): (0, "", ""),
-            ("git", "-C", existing, "pull", "origin", "dev"): (0, "", ""),
-            (
-                "git",
-                "-C",
-                existing,
-                "merge",
-                "--no-ff",
-                "-m",
-                "Merge feat-001 into dev",
-                "feat-001",
-            ): (0, "", ""),
-            ("git", "-C", existing, "rev-parse", "HEAD"): (0, "merge-commit-sha\n", ""),
-            ("git", "-C", existing, "push", "origin", "dev"): (0, "", ""),
-            # The branch did NOT end up an ancestor — the no-op merge the bug produced.
-            (
-                "git",
-                "-C",
-                existing,
-                "merge-base",
-                "--is-ancestor",
-                "feat-001",
-                "dev",
-            ): (1, "", ""),
-        }
-
-        def mock_run(cmd, **kwargs):
-            args = tuple(cmd)
-            if args in responses:
-                rc, out, err = responses[args]
-                return MockResult(rc, out, err)
-            return MockResult(1, "", f"unexpected: {cmd!r}")
-
-        with patch.object(ship.subprocess, "run", side_effect=mock_run):
-            ok, msg, merge_commit = ship._merge_into_target("dev", "feat-001", False)
-
-        self.assertFalse(ok)
-        self.assertIsNone(merge_commit)
-        self.assertIn("not an ancestor", msg)
+        mock_integrate.assert_not_called()
 
 
 class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
@@ -683,23 +331,14 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_trunk_ref", return_value="origin/main"), \
              patch.object(ship, "_resolve_feature_branch", return_value="feat/t1"), \
-             patch.object(ship, "_run_gate") as mock_gate, \
-             patch.object(ship, "_has_merge_conflicts", return_value=(False, "")), \
-             patch.object(ship, "_check_release_guard", return_value=None), \
-             patch.object(ship, "_is_monolithic_commit", return_value=False), \
-             patch.object(ship, "_merge_into_target", return_value=(True, "ok", "commit-sha")), \
-             patch("aet.cli.aet_state.cmd_record_merge"), \
-             patch.object(ship, "archive_plan_file"):
+             patch.dict(os.environ, {"AET_INTEGRATION_MODE": "single-pr"}), \
+             patch("sys.stdout", new=io.StringIO()) as fake_out:
             args.task = task
             args.spec = task["spec"]
             args.task_id = "t1"
-            mock_gate.return_value = SimpleNamespace(
-                ok=True, message="gate ok", stack=None, pr_base="origin/feat/my-epic"
-            )
             rc = ship.cmd_merge(args)
             self.assertEqual(rc, 0)
-            mock_gate.assert_called_once()
-            self.assertEqual(args.base, "origin/feat/my-epic")
+            self.assertIn("into feat/my-epic", fake_out.getvalue())
 
     def test_explicit_branch_overrides_task_integration_branch(self):
         """When --branch is explicitly provided, it overrides task's integration_branch."""
@@ -718,22 +357,137 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_trunk_ref", return_value="origin/main"), \
              patch.object(ship, "_resolve_feature_branch", return_value="feat/t1"), \
-             patch.object(ship, "_run_gate") as mock_gate, \
-             patch.object(ship, "_has_merge_conflicts", return_value=(False, "")), \
-             patch.object(ship, "_check_release_guard", return_value=None), \
-             patch.object(ship, "_is_monolithic_commit", return_value=False), \
-             patch.object(ship, "_merge_into_target", return_value=(True, "ok", "commit-sha")), \
-             patch("aet.cli.aet_state.cmd_record_merge"), \
-             patch.object(ship, "archive_plan_file"):
+             patch("sys.stdout", new=io.StringIO()) as fake_out:
             args.task = task
             args.spec = task["spec"]
             args.task_id = "t1"
-            mock_gate.return_value = SimpleNamespace(
-                ok=True, message="gate ok", stack=None, pr_base="origin/custom-target"
-            )
             rc = ship.cmd_merge(args)
             self.assertEqual(rc, 0)
-            self.assertEqual(args.base, "origin/custom-target")
+            self.assertIn("into custom-target", fake_out.getvalue())
+
+
+class TestShipMergeIntegration(unittest.TestCase):
+    """End-to-end integration test for `aet ship merge`."""
+
+    def test_ship_merge_acquires_lock_and_produces_squash_commit(self):
+        """`aet ship merge` acquires integration_lock and produces a squash commit on the target."""
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            subprocess.run(["git", "init", "--bare", "-q", origin_root], check=True)
+            subprocess.run(["git", "init", "-q", repo_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
+            Path(repo_root, "README.md").write_text("# test\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
+            subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "remote", "add", "origin", origin_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            # Create target branch
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "-b", "target-branch"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "target-branch"], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/target-branch", "HEAD"],
+                check=True,
+            )
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
+
+            agents_dir = Path(repo_root, ".agents")
+            agents_dir.mkdir(parents=True, exist_ok=True)
+            (agents_dir / "aet-config.json").write_text(
+                json.dumps({
+                    "trunk_branch": "main",
+                    "integration_branch": "target-branch",
+                    "integration_mode": "single-pr",
+                }),
+                encoding="utf-8",
+            )
+
+            # Create task branch with 2 commits
+            task_id = "task-merge-lock"
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "-b", task_id, "target-branch"], check=True)
+            Path(repo_root, "file1.txt").write_text("content 1\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "file1.txt"], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "commit 1"], check=True)
+            Path(repo_root, "file2.txt").write_text("content 2\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "file2.txt"], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "commit 2"], check=True)
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
+
+            # Setup plan file
+            plan_dir = Path(repo_root, "docs", "plans", "active")
+            plan_dir.mkdir(parents=True, exist_ok=True)
+            plan_path = plan_dir / f"{task_id}.md"
+            plan_path.write_text(
+                f"---\nid: {task_id}\nstatus: awaiting_merge\n---\n# Plan\n- [x] done\n",
+                encoding="utf-8",
+            )
+
+            backend = create_backend(
+                config_path=str(agents_dir / "aet-config.json"),
+                queue_file=str(agents_dir / "aet-queue"),
+                history_file=str(agents_dir / "work-history.jsonl"),
+            )
+            backend.save([
+                {
+                    "id": task_id,
+                    "state": "awaiting_merge",
+                    "stage": "qa-complete",
+                    "branch": task_id,
+                    "plan_file": f"docs/plans/active/{task_id}.md",
+                    "spec": {
+                        "frontmatter": {"id": task_id},
+                        "title": f"Plan {task_id}",
+                        "body": "- [x] done",
+                        "tasks": [{"id": task_id}],
+                    },
+                }
+            ])
+
+            cwd = os.getcwd()
+            try:
+                os.chdir(repo_root)
+                lock_acquired = False
+                original_lock = integration_lock.integration_lock
+
+                from contextlib import contextmanager
+
+                @contextmanager
+                def spy_lock(*args, **kwargs):
+                    nonlocal lock_acquired
+                    lock_acquired = True
+                    with original_lock(*args, **kwargs):
+                        yield
+
+                skip_check = validation.CheckResult("SKIP", None, True, "")
+                with patch("aet.integrate.integration_lock", side_effect=spy_lock), \
+                     patch("aet.validation.pre_integration_check", return_value=skip_check), \
+                     patch("aet.gate.check_task_evidence", return_value=(True, [])):
+                    args = SimpleNamespace(plan=task_id, branch="target-branch", dry_run=False)
+                    rc = ship.cmd_merge(args)
+
+                self.assertEqual(rc, 0)
+                self.assertTrue(lock_acquired, "integration_lock was not acquired during ship merge")
+
+                # Verify target branch received squash commit
+                log = subprocess.run(
+                    ["git", "-C", repo_root, "log", "origin/target-branch", "--oneline"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertIn(f"Integrate {task_id}", log.stdout)
+                # Verify commit 1 and commit 2 are squashed (not distinct commits in target log)
+                self.assertNotIn("commit 1", log.stdout)
+                self.assertNotIn("commit 2", log.stdout)
+
+                # Verify plan was archived
+                self.assertFalse(plan_path.exists())
+                archived = Path(repo_root, "docs", "plans", "archive", f"{task_id}.md")
+                self.assertTrue(archived.exists())
+            finally:
+                os.chdir(cwd)
 
 
 if __name__ == "__main__":

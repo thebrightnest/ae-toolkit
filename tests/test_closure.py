@@ -17,6 +17,7 @@ from aet import plan_parser
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.cli import ship
 from aet.closure import archive_plan_file
+from aet.integrate import IntegrateResult
 
 pytestmark = pytest.mark.xdist_group("cwd")
 
@@ -299,11 +300,12 @@ class TestShipArchivalClosureIntegration(unittest.TestCase):
         with (
             patch.object(ship, "_run_gate", return_value=gate_result),
             patch.object(ship, "_resolve_feature_branch", return_value=task_id),
-            patch.object(ship, "_check_release_guard", return_value=None),
-            patch.object(ship, "_is_monolithic_commit", return_value=False),
-            patch.object(ship, "_has_merge_conflicts", return_value=(False, "")),
-            patch.object(ship, "_merge_into_target", return_value=(True, "merged", "abc123")),
-            patch.object(ship.aet_state, "cmd_record_merge", return_value=0),
+            patch.object(ship, "_find_target_worktree", return_value=self.repo),
+            patch.object(
+                ship,
+                "integrate",
+                return_value=IntegrateResult(status="merged", detail="abc123"),
+            ),
             patch("sys.stdout", new=io.StringIO()) as fake_out,
         ):
             rc = ship.cmd_merge(argparse.Namespace(plan=task_id, branch="main", dry_run=False))

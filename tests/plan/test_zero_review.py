@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -317,6 +316,7 @@ class TestAutoMergeAction(unittest.TestCase):
         self.plan_file = self.root / "docs" / "plans" / "t-1.md"
         self.plan_file.parent.mkdir(parents=True, exist_ok=True)
         self.plan_file.write_text("---\nid: t-1\n---\n\n# T-1\n", encoding="utf-8")
+        (self.root / ".worktrees" / "t-1").mkdir(parents=True, exist_ok=True)
         queue = {
             "tasks": [
                 {
@@ -336,28 +336,9 @@ class TestAutoMergeAction(unittest.TestCase):
 
     def test_enabled_class_at_threshold_auto_merges_via_closure_path(self):
         """An enabled class at threshold triggers record-merge, not awaiting_merge."""
-        responses = {
-            ("git", "fetch", "origin"): (0, "", ""),
-            ("git", "checkout", "main"): (0, "", ""),
-            ("git", "merge", "--no-ff", "-m", "auto-merge(t-1)", "feat-t-1"): (0, "", ""),
-            ("git", "push", "origin", "main"): (0, "", ""),
-            ("git", "rev-parse", "HEAD"): (0, "merge_sha\n", ""),
-        }
+        from aet.integrate import IntegrateResult
 
-        def mock_run(cmd, **kwargs):
-            key = tuple(cmd)
-            if key[0] == sys.executable and "record-merge" in key:
-                # Simulate record-merge success by transitioning the task.
-                with open(self.queue_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                data["tasks"] = []
-                with open(self.queue_file, "w", encoding="utf-8") as f:
-                    json.dump(data, f)
-                return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
-            rc, out, err = responses.get(key, (1, "", ""))
-            return type("R", (), {"returncode": rc, "stdout": out, "stderr": err})()
-
-        with patch.object(track_record.subprocess, "run", side_effect=mock_run):
+        with patch("aet.integrate.integrate", return_value=IntegrateResult("merged", "commit-sha")) as mock_int:
             merged = track_record.perform_auto_merge(
                 {"id": "t-1", "branch": "feat-t-1"},
                 str(self.queue_file),
@@ -365,27 +346,13 @@ class TestAutoMergeAction(unittest.TestCase):
             )
 
         self.assertTrue(merged)
-        with open(self.queue_file, "r", encoding="utf-8") as f:
-            live = json.load(f)
-        self.assertEqual(live["tasks"], [])
+        mock_int.assert_called_once()
 
     def test_git_failure_aborts_auto_merge(self):
-        """If any git step fails, perform_auto_merge returns False and does not record-merge."""
-        responses = {
-            ("git", "fetch", "origin"): (0, "", ""),
-            ("git", "checkout", "main"): (0, "", ""),
-            ("git", "merge", "--no-ff", "-m", "auto-merge(t-1)", "feat-t-1"): (1, "", "merge failed"),
-        }
+        """If integrate fails or stages conflict, perform_auto_merge returns False."""
+        from aet.integrate import IntegrateResult
 
-        calls = []
-
-        def mock_run(cmd, **kwargs):
-            calls.append(tuple(cmd))
-            key = tuple(cmd)
-            rc, out, err = responses.get(key, (1, "", ""))
-            return type("R", (), {"returncode": rc, "stdout": out, "stderr": err})()
-
-        with patch.object(track_record.subprocess, "run", side_effect=mock_run):
+        with patch("aet.integrate.integrate", return_value=IntegrateResult("staged_conflict", "failed")):
             merged = track_record.perform_auto_merge(
                 {"id": "t-1", "branch": "feat-t-1"},
                 str(self.queue_file),
@@ -393,7 +360,6 @@ class TestAutoMergeAction(unittest.TestCase):
             )
 
         self.assertFalse(merged)
-        self.assertNotIn((sys.executable, "record-merge"), calls)
 
 
 class TestLoadPolicy(unittest.TestCase):
