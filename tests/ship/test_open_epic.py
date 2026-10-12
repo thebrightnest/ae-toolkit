@@ -22,6 +22,10 @@ def _init_repo(path: Path) -> Path:
     git(["config", "user.name", "Test User"], path)
     (path / "README.md").write_text("# Test Repo\n", encoding="utf-8")
     (path / ".gitignore").write_text(".agents/\n", encoding="utf-8")
+    (path / ".agents").mkdir(parents=True, exist_ok=True)
+    (path / ".agents" / "aet-config.json").write_text(
+        '{"validate_command": "true"}\n', encoding="utf-8"
+    )
     git(["add", "."], path)
     git(["commit", "-q", "-m", "initial"], path)
     git(["branch", "-M", "main"], path)
@@ -102,7 +106,6 @@ class TestOpenEpic(unittest.TestCase):
         with (
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
-            patch.dict(os.environ, {"AET_SHIP_TEST_CMD": "true"}),
         ):
             result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
 
@@ -146,7 +149,6 @@ class TestOpenEpic(unittest.TestCase):
         with (
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
-            patch.dict(os.environ, {"AET_SHIP_TEST_CMD": "true"}),
         ):
             result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
 
@@ -181,7 +183,6 @@ class TestOpenEpic(unittest.TestCase):
         with (
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
-            patch.dict(os.environ, {"AET_SHIP_TEST_CMD": "true"}),
         ):
             res1 = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
 
@@ -192,7 +193,6 @@ class TestOpenEpic(unittest.TestCase):
         with (
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=existing_url),
-            patch.dict(os.environ, {"AET_SHIP_TEST_CMD": "true"}),
         ):
             res2 = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
 
@@ -220,11 +220,13 @@ class TestOpenEpic(unittest.TestCase):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, "https://github.com/example/repo/pull/104\n"
 
-        # Gate failure via failing test command
+        # Gate failure via failing validate_command
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "false"}\n', encoding="utf-8"
+        )
         with (
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
-            patch.dict(os.environ, {"AET_SHIP_TEST_CMD": "false"}),
         ):
             result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
 
@@ -251,7 +253,6 @@ class TestOpenEpic(unittest.TestCase):
         with (
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
-            patch.dict(os.environ, {"AET_SHIP_TEST_CMD": "true"}),
         ):
             result = run_typer(app, ["ship", "open-epic", branch_name], cwd=self.repo)
 

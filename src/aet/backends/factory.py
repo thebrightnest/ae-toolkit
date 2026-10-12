@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +73,8 @@ LEGAL_CONFIG_KEYS = frozenset({
     "boundary_contract",  # read by aet.boundary
     "symlink_dependencies",  # read by aet.worktree
     "release_prep",  # read by aet.cli.release_prep
+    "validate_command",
+    "lint_command",
 })
 
 # Removed-key migration message reused by config resolution and CLI.
@@ -317,6 +320,45 @@ def resolve_integration_mode_with_provenance(
     if "integration_mode" in config:
         return config["integration_mode"], f"config ({source})"
     return "pr-per-task", "default"
+
+
+DEFAULT_VALIDATE_COMMAND = ["make", "validate"]
+
+
+def resolve_validation_commands(
+    repo_root: str | Path | None = None,
+    config_path: str | None = None,
+) -> tuple[list[str], list[str] | None]:
+    """Resolve validation commands from AET config.
+
+    Returns ``(validate_cmd, lint_cmd)`` where ``validate_cmd`` defaults to
+    ``["make", "validate"]`` and ``lint_cmd`` defaults to ``None``.
+    String values in config are split using :func:`shlex.split`.
+    """
+    config = resolve_config(config_path or DEFAULT_CONFIG_PATH, repo_root=repo_root)
+    validate_raw = config.get("validate_command")
+    if validate_raw is not None:
+        if isinstance(validate_raw, str):
+            validate_cmd = shlex.split(validate_raw)
+        elif isinstance(validate_raw, list):
+            validate_cmd = list(validate_raw)
+        else:
+            validate_cmd = shlex.split(str(validate_raw))
+    else:
+        validate_cmd = list(DEFAULT_VALIDATE_COMMAND)
+
+    lint_raw = config.get("lint_command")
+    if lint_raw is not None:
+        if isinstance(lint_raw, str):
+            lint_cmd = shlex.split(lint_raw)
+        elif isinstance(lint_raw, list):
+            lint_cmd = list(lint_raw)
+        else:
+            lint_cmd = shlex.split(str(lint_raw))
+    else:
+        lint_cmd = None
+
+    return validate_cmd, lint_cmd
 
 
 def _load_config(path: Path) -> dict[str, Any]:

@@ -5,6 +5,7 @@ from aet.backends.factory import (
     LegacyTaskBackendError,
     create_backend,
     resolve_config,
+    resolve_validation_commands,
 )
 from aet.backends.git_refs_backend import GitRefsBackend
 
@@ -14,4 +15,5 @@ __all__ = [
     "LegacyTaskBackendError",
     "create_backend",
     "resolve_config",
+    "resolve_validation_commands",
 ]

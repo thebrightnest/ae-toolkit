@@ -7,7 +7,8 @@ relates: [31, 67]
 
 ## Status
 
-Accepted (2026-08-28). Motivated by
+Accepted (2026-08-28). Decision 2 superseded in part by ADR-078 (ship consumes
+recorded verdicts; missing verdicts trigger RUN instead of refusal). Motivated by
 `docs/bugs/20260828-verify-evidence-has-three-contracts.md`.
 
 ## Context

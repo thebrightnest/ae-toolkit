@@ -140,6 +140,7 @@ class TestSinglePrLoop(unittest.TestCase):
                         "trunk_branch": "main",
                         "integration_branch": "epic-01",
                         "integration_mode": "single-pr",
+                        "validate_command": "true",
                     }
                 ),
                 encoding="utf-8",
@@ -167,7 +168,6 @@ class TestSinglePrLoop(unittest.TestCase):
 
             env = os.environ.copy()
             env["AET_PROJECT_ID"] = "demo-project"
-            env["AET_INTEGRATION_VALIDATE_CMD"] = "true"
 
             with patch.dict(os.environ, env, clear=True):
                 with patch.object(

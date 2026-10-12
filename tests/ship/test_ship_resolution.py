@@ -108,6 +108,9 @@ class TestShipResolution(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "test@example.com"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Test User"], check=True)
         (self.repo / ".agents").mkdir(parents=True, exist_ok=True)
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "true"}\n', encoding="utf-8"
+        )
         (self.repo / "README.md").write_text("hello\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "initial"], check=True)
@@ -179,7 +182,7 @@ class TestShipResolution(unittest.TestCase):
 
     def _run_gate(self, argv: list[str], env: dict | None = None) -> int:
         """Run a ship command with git subprocess mocked and the test gate disabled."""
-        merged_env = {"AET_SHIP_TEST_CMD": "true"}
+        merged_env = {}
         if env:
             merged_env.update(env)
         cmd_args = argv[1:] if argv and argv[0] == "ship" else argv

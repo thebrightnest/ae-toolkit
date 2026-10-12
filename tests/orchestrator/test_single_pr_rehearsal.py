@@ -208,6 +208,7 @@ def _write_shadow_config(home_dir: str, slug: str) -> Path:
                 "trunk_branch": "main",
                 "integration_branch": "epic-rehearsal",
                 "integration_mode": "single-pr",
+                "validate_command": ".agents/validate-rehearsal.sh",
             }
         ),
         encoding="utf-8",
@@ -339,7 +340,6 @@ class TestSinglePrRehearsal(unittest.TestCase):
             "HOME": home_dir,
             "PATH": new_path,
             "AET_PROJECT_ID": PROJECT_SLUG,
-            "AET_INTEGRATION_VALIDATE_CMD": ".agents/validate-rehearsal.sh",
         }
         # Add to the environment rather than replacing it. ``clear=True`` here
         # discarded the isolation ``_isolate_class_scoped_setup`` establishes,

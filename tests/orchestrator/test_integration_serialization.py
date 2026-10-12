@@ -533,6 +533,7 @@ class TestBatchIntegrationSerialization(unittest.TestCase):
                         "trunk_branch": "main",
                         "integration_branch": "epic-01",
                         "integration_mode": "single-pr",
+                        "validate_command": "true",
                     }
                 ),
                 encoding="utf-8",
@@ -559,10 +560,6 @@ class TestBatchIntegrationSerialization(unittest.TestCase):
                     for i in range(3)
                 ]
             )
-
-            # The temporary repo has no Makefile, so override the post-rebase
-            # validation command to a no-op that always succeeds.
-            os.environ["AET_INTEGRATION_VALIDATE_CMD"] = "true"
 
             # Fake adapter binary: create a commit in the worktree and exit 0.
             # Named "claude" and placed on PATH so the spawned subprocess can
@@ -634,7 +631,6 @@ class TestBatchIntegrationSerialization(unittest.TestCase):
             _assert_no_overlapping_hold(events)
         finally:
             os.environ.pop("AET_INTEGRATION_LOCK_LOG", None)
-            os.environ.pop("AET_INTEGRATION_VALIDATE_CMD", None)
             os.environ["PATH"] = original_path
             try:
                 os.unlink(log_path)
