@@ -13,11 +13,99 @@ targeted validation when tracked files have not changed.
 from __future__ import annotations
 
 import json
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aet import change_scope, test_runners
+from aet import change_scope, evidence, telemetry, test_runners
+from aet.backends import resolve_validation_commands
 from aet.validation_cache import ValidationCache
+
+
+@dataclass(frozen=True)
+class CheckResult:
+    """Outcome of a pre-integration validation check."""
+
+    decision: str
+    ran: list[str] | None
+    ok: bool
+    output: str
+
+
+def pre_integration_check(
+    task_id: str,
+    worktree_dir: str | Path | None = None,
+    repo_root: str | Path | None = None,
+) -> CheckResult:
+    """Perform pre-integration check on a worktree before staging/shipping.
+
+    Compares the worktree against the recorded QA verdict using
+    `evidence.validation_freshness`:
+    - SKIP: tree is unchanged since the last passing QA verdict; runs no subprocess.
+    - LINT_ONLY: only non-code paths changed; runs configured `lint_command`,
+      falling back to `validate_command` when unset.
+    - RUN: code changed, verdict missing or failing, or any freshness check error;
+      runs `validate_command`.
+
+    Never raises on freshness errors; an uncomputable or errored freshness state
+    is treated as RUN.
+    """
+    config_root = None
+    if worktree_dir is not None and (Path(worktree_dir) / ".agents" / "aet-config.json").exists():
+        config_root = worktree_dir
+    elif repo_root is not None:
+        config_root = repo_root
+    elif worktree_dir is not None:
+        config_root = worktree_dir
+
+    validate_cmd, lint_cmd = resolve_validation_commands(repo_root=config_root)
+
+    try:
+        slug = (
+            telemetry.derive_project_slug(repo_root or worktree_dir)
+            if (repo_root or worktree_dir)
+            else None
+        )
+        freshness = evidence.validation_freshness(
+            task_id=task_id,
+            kind="qa",
+            worktree_dir=worktree_dir,
+            project_slug=slug,
+        )
+        decision = freshness.decision
+    except Exception:
+        decision = evidence.RUN
+
+    if decision == evidence.SKIP:
+        return CheckResult(decision=evidence.SKIP, ran=None, ok=True, output="")
+
+    if decision == evidence.LINT_ONLY and lint_cmd:
+        cmd = lint_cmd
+    else:
+        cmd = validate_cmd
+
+    target_cwd = str(worktree_dir) if worktree_dir is not None else (str(repo_root) if repo_root is not None else None)
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=target_cwd,
+            capture_output=True,
+            text=True,
+        )
+        return CheckResult(
+            decision=decision,
+            ran=cmd,
+            ok=(proc.returncode == 0),
+            output=proc.stdout + proc.stderr,
+        )
+    except OSError as err:
+        return CheckResult(
+            decision=decision,
+            ran=cmd,
+            ok=False,
+            output=str(err),
+        )
 
 
 def select_targeted_tests(
