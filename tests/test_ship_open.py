@@ -206,6 +206,9 @@ class TestShipOpenChecks(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "test@example.com"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Test User"], check=True)
         (self.repo / ".agents").mkdir(parents=True, exist_ok=True)
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "true"}\n', encoding="utf-8"
+        )
         (self.repo / "README.md").write_text("hello\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "initial"], check=True)
@@ -297,12 +300,10 @@ class TestShipOpenChecks(unittest.TestCase):
             " M src/aet/cli/ship.py\n",
             "",
         )
-        env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = self._run_open("t1")
+        with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
+            rc = self._run_open("t1")
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -324,12 +325,10 @@ class TestShipOpenChecks(unittest.TestCase):
         )
         self._save_task(self._spec(content))
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = self._run_open("t1")
+        with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
+            rc = self._run_open("t1")
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -354,12 +353,10 @@ class TestShipOpenChecks(unittest.TestCase):
         )
         responses[("git", "rebase", "--onto", "origin/main", "old-merge-base", "feat-001")] = (0, "", "")
         responses[("git", "log", "--oneline", "--decorate", "--ancestry-path", "old-merge-base..HEAD")] = (0, "", "")
-        env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = self._run_open("t1")
+        with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
+            rc = self._run_open("t1")
 
         self.assertEqual(rc, 0)
         push_cmds = [c for c in commands if c[0] == "git" and c[1] == "push"]
@@ -373,12 +370,10 @@ class TestShipOpenChecks(unittest.TestCase):
     def test_open_pushes_normal_when_not_rebased(self):
         """When no rebase occurs, open uses a plain git push."""
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = self._run_open("t1")
+        with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
+            rc = self._run_open("t1")
 
         self.assertEqual(rc, 0)
         push_cmds = [c for c in commands if c[0] == "git" and c[1] == "push"]
@@ -461,12 +456,10 @@ class TestShipOpenChecks(unittest.TestCase):
             "chore(release): bump version\n",
             "",
         )
-        env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = self._run_open("t1")
+        with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
+            rc = self._run_open("t1")
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -479,12 +472,10 @@ class TestShipOpenChecks(unittest.TestCase):
             "src/aet/cli/ship.py\nVERSION\n",
             "",
         )
-        env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = self._run_open("t1")
+        with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
+            rc = self._run_open("t1")
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -589,7 +580,10 @@ class TestShipOpenIntegration(unittest.TestCase):
         readme = self.clone / "README.md"
         readme.write_text("hello\n", encoding="utf-8")
         (self.clone / ".agents").mkdir(parents=True, exist_ok=True)
-        self._git("add", "README.md")
+        (self.clone / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "true"}\n', encoding="utf-8"
+        )
+        self._git("add", ".")
         self._git("commit", "-m", "initial")
         self._git("push", "-u", "origin", "main")
 
@@ -647,7 +641,6 @@ class TestShipOpenIntegration(unittest.TestCase):
     def test_open_integration_happy_path(self):
         """The full open flow runs against a real git repo with mocked gh."""
         os.chdir(str(self.clone))
-        env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
 
         original_run = ship.subprocess.run
@@ -661,10 +654,9 @@ class TestShipOpenIntegration(unittest.TestCase):
                     return MockResult(0, "https://github.com/org/repo/pull/7\n", "")
             return original_run(cmd, **kwargs)
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_recording_run):
-                runner = CliRunner()
-                rc = runner.invoke(ship.app, ["open", "t1"]).exit_code
+        with patch.object(ship.subprocess, "run", side_effect=_recording_run):
+            runner = CliRunner()
+            rc = runner.invoke(ship.app, ["open", "t1"]).exit_code
 
         self.assertEqual(rc, 0)
         self.assertTrue(any(c[0] == "gh" for c in commands))

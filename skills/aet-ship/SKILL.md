@@ -37,10 +37,9 @@ A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet sh
 1. **Workspace and branch resolution**: Resolves the feature branch from the task record, locating its existing worktree or allocating a dedicated temporary worktree.
 2. Rebase verification of the resolved feature branch against trunk.
 3. Clean working tree check in the resolved workspace.
-4. Test suite execution (`AET_SHIP_TEST_CMD`, defaulting to `make validate`) inside the resolved workspace, explicitly reporting the validated branch.
-5. Optional coverage check (`AET_SHIP_COVERAGE_CMD`).
-6. **Evidence resolution**: Resolves required evidence from the workflow definition via `gate.required_evidence`, then checks each required kind's verdict via `gate.check_task_evidence` — the same derivation the in-run stage gates use (ADR-070). A verdict that is missing, unreadable, or not `pass` pauses the gate, and the refusal names the kind, the producing stage, and the reason. Verify evidence for a `critical` task is the `verify` verdict written by `aet-verify`; no working-tree file is read.
-7. Scope audit and commit count checks against the resolved feature branch and declared files in the plan spec.
+4. Pre-integration validation check via `pre_integration_check` inside the resolved workspace, skipping execution if the working tree matches the recorded QA verdict, running `lint_command` if only non-code paths changed, or running `validate_command` (defaulting to `make validate`).
+5. **Evidence resolution**: Resolves required evidence from the workflow definition via `gate.required_evidence`, then checks each required kind's verdict via `gate.check_task_evidence` — the same derivation the in-run stage gates use (ADR-070, ADR-078). A verdict that is missing, unreadable, or not `pass` pauses the gate, and the refusal names the kind, the producing stage, and the reason. Verify evidence for a `critical` task is the `verify` verdict written by `aet-verify`; no working-tree file is read.
+6. Scope audit and commit count checks against the resolved feature branch and declared files in the plan spec.
 
 ## Integration Modes
 

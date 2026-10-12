@@ -43,6 +43,9 @@ def _init_repo(path: Path) -> Path:
     _git(path, "config", "user.email", "test@example.com")
     _git(path, "config", "user.name", "Test User")
     (path / ".agents").mkdir(parents=True, exist_ok=True)
+    (path / ".agents" / "aet-config.json").write_text(
+        '{"validate_command": "./test.sh"}\n', encoding="utf-8"
+    )
     (path / "README.md").write_text("hello\n", encoding="utf-8")
     _git(path, "add", ".")
     _git(path, "commit", "-q", "-m", "initial commit on main")
@@ -111,7 +114,6 @@ class TestShipGateWorkspace(unittest.TestCase):
         _git(worktree_dir, "commit", "-q", "-m", "add failing test on feature")
 
         env = {
-            "AET_SHIP_TEST_CMD": "./test.sh",
             "AET_BACKEND": "git-refs",
         }
         with patch.dict(os.environ, env):
@@ -134,7 +136,6 @@ class TestShipGateWorkspace(unittest.TestCase):
         _git(worktree_dir, "commit", "-q", "-m", "add test on feature")
 
         env = {
-            "AET_SHIP_TEST_CMD": "./test.sh",
             "AET_BACKEND": "git-refs",
         }
         with patch.dict(os.environ, env):
@@ -148,12 +149,16 @@ class TestShipGateWorkspace(unittest.TestCase):
 
     def test_gate_creates_temp_worktree_when_no_worktree_exists(self):
         """When the branch exists without a worktree, a temporary worktree is created and cleaned up."""
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "true"}\n', encoding="utf-8"
+        )
+        _git(self.repo, "add", ".agents/aet-config.json")
+        _git(self.repo, "commit", "-q", "-m", "switch validate_command to true")
         task_id = "feat-temp"
         _git(self.repo, "branch", task_id, "main")
         _save_task_record(self.repo, task_id)
 
         env = {
-            "AET_SHIP_TEST_CMD": "true",
             "AET_BACKEND": "git-refs",
         }
         with patch.dict(os.environ, env):
@@ -192,7 +197,6 @@ class TestShipGateWorkspace(unittest.TestCase):
         _git(worktree_dir, "commit", "-q", "-m", "failing commit")
 
         env = {
-            "AET_SHIP_TEST_CMD": "./test.sh",
             "AET_BACKEND": "git-refs",
         }
         with patch.dict(os.environ, env):

@@ -28,7 +28,6 @@ import importlib.util
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -40,7 +39,7 @@ import typer
 from typer.core import TyperGroup
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import gate, plan_parser  # noqa: E402
+from aet import gate, plan_parser, validation  # noqa: E402
 from aet.backends.factory import resolve_config  # noqa: E402
 from aet.branch_ref import resolve_trunk_branch  # noqa: E402
 from aet.closure import archive_plan_file  # noqa: E402
@@ -595,28 +594,28 @@ def _run_gate(args: SimpleNamespace) -> GateResult:
                 stack=stack,
             )
 
-        test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
-        test_result = subprocess.run(shlex.split(test_cmd), cwd=str(workspace), capture_output=True, text=True)
-        if test_result.returncode != 0:
+        repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
+        check_result = validation.pre_integration_check(
+            task_id=args.task_id,
+            worktree_dir=workspace,
+            repo_root=repo_root,
+        )
+        if not check_result.ok:
             return GateResult(
                 ok=False,
                 pr_base=pr_base,
                 rebased=rebased,
                 scope_audit=[],
-                message=f"Test suite failed:\n{test_result.stdout}\n{test_result.stderr}",
+                message=f"Validation failed ({check_result.decision}):\n{check_result.output}",
                 stack=stack,
             )
 
-        coverage_cmd = os.environ.get("AET_SHIP_COVERAGE_CMD")
-        if coverage_cmd:
-            subprocess.run(shlex.split(coverage_cmd), cwd=str(workspace), capture_output=True, text=True)
-
-        repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
         plan_fm = spec.get("frontmatter", {}) if isinstance(spec, dict) else {}
-        # The verdict is the evidence (ADR-070). The previous check read a
-        # working-tree markdown file that no producer wrote, so this gate could only
-        # be satisfied out of band
-        # (docs/bugs/20260828-verify-evidence-has-three-contracts.md).
+        # Ship consumes recorded verdicts (ADR-078, superseding ADR-070 decision 2).
+        # A task's lifecycle (run -> integrate -> ship) is single-machine; verdicts
+        # in ~/.aet/reports are authoritative on that machine. On another machine a
+        # missing verdict means RUN for validation freshness — the gate runs the
+        # suite, it does not refuse.
         #
         # Only `verify` is checked here. The other kinds are enforced in-run by
         # their own stage gates, at the moment they are written; re-checking them at

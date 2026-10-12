@@ -159,6 +159,9 @@ class TestShipGateChecks(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "Test User"], check=True)
         (self.repo / "README.md").write_text("hello\n", encoding="utf-8")
         (self.repo / ".agents").mkdir(parents=True, exist_ok=True)
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "true"}\n', encoding="utf-8"
+        )
         subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "initial"], check=True)
 
@@ -218,7 +221,6 @@ class TestShipGateChecks(unittest.TestCase):
             ("git", "rev-parse", "--verify", "--quiet", "origin/t1"): (0, "", ""),
             ("git", "worktree", "list", "--porcelain"): (0, f"worktree {self.repo}\nbranch refs/heads/{branch}\n", ""),
             ("git", "merge-base", "HEAD", "origin/main"): (0, f"{origin_main}\n", ""),
-            ("git", "merge-base", branch, "origin/main"): (0, f"{origin_main}\n", ""),
             ("git", "rev-parse", "origin/main"): (0, f"{origin_main}\n", ""),
             ("git", "branch", "--show-current"): (0, f"{branch}\n", ""),
             ("git", "status", "--short"): (0, "", ""),
@@ -260,32 +262,17 @@ class TestShipGateChecks(unittest.TestCase):
 
     def test_gate_test_failure_stops(self):
         """A failing test suite stops the gate."""
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "false"}\n', encoding="utf-8"
+        )
         self._save_task(self._spec())
         responses = self._base_responses()
         responses[("false",)] = (1, "", "test failure")
-        env = {"AET_SHIP_TEST_CMD": "false"}
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-                rc = self._run_gate("t1")
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = self._run_gate("t1")
 
         self.assertNotEqual(rc, 0)
-
-    def test_gate_coverage_drop_flagged(self):
-        """A coverage drop is flagged but does not stop the gate."""
-        self._save_task(self._spec())
-        responses = self._base_responses()
-        responses[("false",)] = (1, "", "coverage dropped")
-        env = {
-            "AET_SHIP_TEST_CMD": "true",
-            "AET_SHIP_COVERAGE_CMD": "false",
-        }
-
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-                rc = self._run_gate("t1")
-
-        self.assertEqual(rc, 0)
 
     def test_gate_incomplete_plan_flagged(self):
         """An unchecked task in the plan is flagged but does not stop the gate."""
@@ -302,11 +289,9 @@ class TestShipGateChecks(unittest.TestCase):
         )
         self._save_task(self._spec(content))
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-                rc = self._run_gate("t1")
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -314,11 +299,9 @@ class TestShipGateChecks(unittest.TestCase):
         """When the plan is synced, aet-review and aet-cso are skipped."""
         self._save_task(self._spec())
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            with patch.dict(os.environ, env):
-                rc = self._run_gate("t1")
+            rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -326,11 +309,9 @@ class TestShipGateChecks(unittest.TestCase):
         """When the plan is reviewed, only aet-review is skipped."""
         self._save_task(self._spec())
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            with patch.dict(os.environ, env):
-                rc = self._run_gate("t1")
+            rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -338,11 +319,9 @@ class TestShipGateChecks(unittest.TestCase):
         """When the plan is qa-complete, aet-review is not skipped."""
         self._save_task(self._spec())
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            with patch.dict(os.environ, env):
-                rc = self._run_gate("t1")
+            rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -371,10 +350,8 @@ class TestShipGateChecks(unittest.TestCase):
         )
         self._save_task(self._spec(content))
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
-
         reports = self.repo / "reports-archive"
-        env["AET_REPORTS_DIR"] = str(reports)
+        env = {"AET_REPORTS_DIR": str(reports)}
 
         # Without the verdict -> refused
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
@@ -433,11 +410,9 @@ class TestShipGateChecks(unittest.TestCase):
         )
         self._save_task(self._spec(content))
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            with patch.dict(os.environ, env):
-                rc = self._run_gate("t1")
+            rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -460,7 +435,6 @@ class TestShipGateChecks(unittest.TestCase):
         # Point the archive at the temp repo: the gate reads a verdict now, and
         # the developer's real ~/.aet/reports must not decide this test.
         env = {
-            "AET_SHIP_TEST_CMD": "true",
             "AET_REPORTS_DIR": str(self.repo / "reports-archive"),
         }
 
@@ -504,11 +478,9 @@ class TestShipGateChecks(unittest.TestCase):
             "src/aet/cli/ship.py\ndocs/prds/OTHER-01.md\n",
             "",
         )
-        env = {"AET_SHIP_TEST_CMD": "true"}
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            with patch.dict(os.environ, env):
-                rc = self._run_gate("t1")
+            rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
 
@@ -516,7 +488,44 @@ class TestShipGateChecks(unittest.TestCase):
         """When every gate check passes, the gate returns 0."""
         self._save_task(self._spec())
         responses = self._base_responses()
-        env = {"AET_SHIP_TEST_CMD": "true"}
+
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            rc = self._run_gate("t1")
+
+        self.assertEqual(rc, 0)
+
+    def test_gate_skips_validation_when_tree_hash_matches_qa_verdict(self):
+        """When the QA verdict tree hash matches the current working tree, validation is skipped."""
+        # Set validate_command to false so if it ran, it would fail
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "false"}\n', encoding="utf-8"
+        )
+        self._save_task(self._spec())
+        reports = Path(self.tmpdir.name) / "reports-archive"
+        _write_passing_verdict(self.repo, reports, "t1", "qa")
+
+        responses = self._base_responses()
+        env = {
+            "AET_REPORTS_DIR": str(reports),
+            "AET_EVIDENCE_PATH_QA": "",
+            "AET_REPO_ROOT": str(self.repo),
+        }
+
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            with patch.dict(os.environ, env):
+                rc = self._run_gate("t1")
+
+        self.assertEqual(rc, 0)
+
+    def test_gate_ignores_removed_aet_ship_test_cmd_env_var(self):
+        """AET_SHIP_TEST_CMD in os.environ is ignored."""
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "true"}\n', encoding="utf-8"
+        )
+        self._save_task(self._spec())
+        responses = self._base_responses()
+        # If AET_SHIP_TEST_CMD was read, it would run "false" and fail
+        env = {"AET_SHIP_TEST_CMD": "false"}
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
             with patch.dict(os.environ, env):
@@ -592,6 +601,10 @@ class TestShipGateIntegration(unittest.TestCase):
         src_dir = self.clone / "src" / "aet" / "cli"
         src_dir.mkdir(parents=True)
         (src_dir / "ship.py").write_text("# ship\n", encoding="utf-8")
+        (self.clone / ".agents").mkdir(parents=True, exist_ok=True)
+        (self.clone / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "true"}\n', encoding="utf-8"
+        )
         self._git("add", ".")
         self._git("commit", "-m", "feat: ship gate")
 
@@ -604,10 +617,8 @@ class TestShipGateIntegration(unittest.TestCase):
     def test_gate_integration_happy_path(self):
         """The full gate runs successfully against a real git repo."""
         os.chdir(str(self.clone))
-        env = {"AET_SHIP_TEST_CMD": "true"}
-        with patch.dict(os.environ, env):
-            runner = CliRunner()
-            rc = runner.invoke(ship.app, ["gate", "t1"]).exit_code
+        runner = CliRunner()
+        rc = runner.invoke(ship.app, ["gate", "t1"]).exit_code
         self.assertEqual(rc, 0)
 
     def test_gate_uses_non_main_trunk_when_origin_head_points_elsewhere(self):
@@ -618,7 +629,6 @@ class TestShipGateIntegration(unittest.TestCase):
         self._git("remote", "set-head", "origin", "develop")
         self._git("checkout", "feat-001")
         os.chdir(str(self.clone))
-        env = {"AET_SHIP_TEST_CMD": "true"}
         commands: list[tuple[str, ...]] = []
         original_run = ship.subprocess.run
 
@@ -626,10 +636,9 @@ class TestShipGateIntegration(unittest.TestCase):
             commands.append(tuple(cmd))
             return original_run(cmd, **kwargs)
 
-        with patch.dict(os.environ, env):
-            with patch.object(ship.subprocess, "run", side_effect=_recording_run):
-                runner = CliRunner()
-                rc = runner.invoke(ship.app, ["gate", "t1"]).exit_code
+        with patch.object(ship.subprocess, "run", side_effect=_recording_run):
+            runner = CliRunner()
+            rc = runner.invoke(ship.app, ["gate", "t1"]).exit_code
 
         self.assertEqual(rc, 0)
         self.assertTrue(any(c[0] == "git" and c[1] == "merge-base" and "origin/develop" in c for c in commands))

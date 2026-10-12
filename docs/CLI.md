@@ -710,6 +710,8 @@ Configure the AET project config.
 - `--trunk-branch` *str* — Set the trunk branch name.
 - `--integration-mode` *str* — Set the integration mode.
 - `--integration-branch` *str* — Set the integration branch name.
+- `--validate-command` *str* — Set the full validation command.
+- `--lint-command` *str* — Set the lint validation command.
 - `--scope` *str* — Write to project config or user config (default: project if in-tree config exists).
 - `--non-interactive` *boolean* — Fail if a required value is missing instead of prompting. (default: `False`)
 - `--migrate` *boolean* — Rename legacy .agents/aet-work.json to .agents/aet-config.json. (default: `False`)
