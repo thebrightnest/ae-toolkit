@@ -15,8 +15,6 @@ Usage:
   aet ship close <task_id>            Record post-merge closure (task id from queue task).
   aet ship close <task_id> [queue_file]
                                       Record post-merge closure (explicit queue).
-  aet ship record-merge <task_id> [queue_file]
-                                      Hidden alias for ``close``.
 
 ``gate``, ``open``, ``merge``, ``split``, and the default command resolve the task id to a
 live task record (or a sealed merged record) in the work queue. Plan file paths are no longer
@@ -25,7 +23,6 @@ accepted; use ``aet sprint add`` to intake a plan.
 
 from __future__ import annotations
 
-import argparse
 import importlib.machinery
 import importlib.util
 import json
@@ -36,6 +33,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, NamedTuple, Optional
 
 import typer
@@ -89,7 +87,6 @@ class GateResult:
         pr_base: str,
         rebased: bool,
         scope_audit: list[str],
-        dry_run: bool,
         message: str = "",
         stack: Optional[StackInfo] = None,
     ):
@@ -97,7 +94,6 @@ class GateResult:
         self.pr_base = pr_base
         self.rebased = rebased
         self.scope_audit = scope_audit
-        self.dry_run = dry_run
         self.message = message
         self.stack = stack
 
@@ -187,7 +183,7 @@ def _normalize_verify_args(
     return task_id, plan, queue
 
 
-def _resolve_ship_task(args: argparse.Namespace) -> int | None:
+def _resolve_ship_task(args: SimpleNamespace) -> int | None:
     """Resolve a ship command's ``plan`` argument to a live task record.
 
     Rejects ``.md`` paths, reports settled tasks, and fails closed when no
@@ -238,18 +234,7 @@ def _resolve_task_branch(task_id: str, queue: str) -> Optional[str]:
     return task.get("branch") if task else None
 
 
-def _resolve_task_record(task_id: str, queue: str) -> Optional[dict]:
-    """Return the queued task record for *task_id*, or None."""
-    try:
-        backend = aet_state.make_backend(queue)
-        backend.fetch()
-        data = backend.load()
-        return aet_state.find_task(data["queue"], task_id)
-    except Exception:
-        return None
-
-
-def cmd_verify(args: argparse.Namespace) -> int:
+def cmd_verify(args: SimpleNamespace) -> int:
     """Verify that a branch has merged without mutating queue or ledger state.
 
     Runs the resolution ladder (ancestry, GitHub CLI, optional diff fallback)
@@ -277,7 +262,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     if target_branch:
         integration_branch = target_branch
     else:
-        task = _resolve_task_record(task_id, queue)
+        task = task_record
         if task is not None:
             integration_branch = aet_state._resolve_integration_for_task(queue, task).ref
         else:
@@ -337,7 +322,7 @@ def cmd_ship(args):
         if not branch_to_delete:
             return _fail(f"Cannot delete branch for {task_id}: no branch recorded and none provided.")
 
-    ns = aet_state.argparse.Namespace(
+    ns = SimpleNamespace(
         command="record-merge",
         task_id=task_id,
         queue=queue,
@@ -365,7 +350,7 @@ def cmd_ship(args):
     return 0
 
 
-def cmd_default(args: argparse.Namespace) -> int:
+def cmd_default(args: SimpleNamespace) -> int:
     """Run the gate and, if it passes, open a PR for a task."""
     rc = _resolve_ship_task(args)
     if rc is not None:
@@ -540,7 +525,7 @@ def _create_gate_worktree(branch: str) -> Path:
     return worktree_dir
 
 
-def _run_gate(args: argparse.Namespace) -> GateResult:
+def _run_gate(args: SimpleNamespace) -> GateResult:
     """Execute gate checks and return a structured result for reuse."""
     spec = getattr(args, "spec", None) or {}
     task_id = getattr(args, "task_id", getattr(args, "plan", None))
@@ -552,7 +537,6 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
             pr_base=getattr(args, "base", "") or "",
             rebased=False,
             scope_audit=[],
-            dry_run=args.dry_run,
             message=(
                 f"Cannot resolve a feature branch for task {task_id!r}: "
                 f"neither {task_id!r} nor origin/{task_id} exists."
@@ -574,7 +558,6 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                 pr_base=getattr(args, "base", "") or "",
                 rebased=False,
                 scope_audit=[],
-                dry_run=args.dry_run,
                 message=f"Cannot resolve a workspace for branch {feature_branch!r}: {exc}",
                 stack=None,
             )
@@ -598,7 +581,6 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                 pr_base=pr_base,
                 rebased=False,
                 scope_audit=[],
-                dry_run=args.dry_run,
                 message=message,
                 stack=stack,
             )
@@ -609,18 +591,9 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                 pr_base=pr_base,
                 rebased=rebased,
                 scope_audit=[],
-                dry_run=args.dry_run,
                 message="Working tree is dirty. Stash, commit, or abort before shipping.",
                 stack=stack,
             )
-
-        if created_temp_worktree:
-            try:
-                from aet.worktree import prepare_worktree_dependencies
-                repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
-                prepare_worktree_dependencies(str(repo_root), str(workspace))
-            except Exception:
-                pass
 
         test_cmd = os.environ.get("AET_SHIP_TEST_CMD", "make validate")
         test_result = subprocess.run(shlex.split(test_cmd), cwd=str(workspace), capture_output=True, text=True)
@@ -630,7 +603,6 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                 pr_base=pr_base,
                 rebased=rebased,
                 scope_audit=[],
-                dry_run=args.dry_run,
                 message=f"Test suite failed:\n{test_result.stdout}\n{test_result.stderr}",
                 stack=stack,
             )
@@ -662,7 +634,6 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
                     pr_base=pr_base,
                     rebased=rebased,
                     scope_audit=[],
-                    dry_run=args.dry_run,
                     message=(
                         "⛔ Pipeline paused at aet-ship.\n"
                         f"Workflow stage '{verify_stages[0]}' requires a passing "
@@ -679,7 +650,6 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
             pr_base=pr_base,
             rebased=rebased,
             scope_audit=flagged,
-            dry_run=args.dry_run,
             message=f"Pre-merge gate passed for {feature_branch}.",
             stack=stack,
         )
@@ -688,7 +658,7 @@ def _run_gate(args: argparse.Namespace) -> GateResult:
             _remove_worktree(workspace)
 
 
-def cmd_gate(args: argparse.Namespace) -> int:
+def cmd_gate(args: SimpleNamespace) -> int:
     """Run the pre-merge gate for a task."""
     rc = _resolve_ship_task(args)
     if rc is not None:
@@ -954,7 +924,7 @@ def _check_release_guard(
     return None
 
 
-def cmd_open(args: argparse.Namespace) -> int:
+def cmd_open(args: SimpleNamespace) -> int:
     """Run the gate and open a PR for a task."""
     rc = _resolve_ship_task(args)
     if rc is not None:
@@ -1062,7 +1032,7 @@ def _find_existing_pr(branch: str) -> Optional[str]:
     return None
 
 
-def cmd_open_epic(args: argparse.Namespace) -> int:
+def cmd_open_epic(args: SimpleNamespace) -> int:
     """Run the gate and open a PR for an epic branch."""
     queue = getattr(args, "queue", ".agents/aet-queue")
     branch_arg = getattr(args, "branch", None)
@@ -1084,7 +1054,7 @@ def cmd_open_epic(args: argparse.Namespace) -> int:
 
     print(f"Running aet ship open-epic for {branch}")
 
-    gate_args = argparse.Namespace(
+    gate_args = SimpleNamespace(
         plan=branch,
         task_id=branch,
         base=getattr(args, "base", None),
@@ -1165,7 +1135,7 @@ def cmd_open_epic(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_split(args: argparse.Namespace) -> int:
+def cmd_split(args: SimpleNamespace) -> int:
     """Split the PR range into caller-supplied commit groups.
 
     Refuses on a dirty tree or empty range, prints the original HEAD SHA for
@@ -1432,7 +1402,7 @@ def _merge_into_target(target_branch: str, feature_branch: str, dry_run: bool) -
             _remove_worktree(worktree)
 
 
-def cmd_merge(args: argparse.Namespace) -> int:
+def cmd_merge(args: SimpleNamespace) -> int:
     """Run the gate, detect conflicts, merge directly into a target branch, and close."""
     rc = _resolve_ship_task(args)
     if rc is not None:
@@ -1465,26 +1435,11 @@ def cmd_merge(args: argparse.Namespace) -> int:
 
     # The gate should treat the target branch as the merge base so tests and
     # checks run against the same integration point we will merge into.
-    explicit_base = bool(getattr(args, "base", None))
     args.base = f"origin/{target_branch}"
     result = _run_gate(args)
     if not result.ok:
         return _fail(f"Gate failed: {result.message}")
     print(f"   {result.message}")
-
-    # Stacked merge guard: if detection found a parent that is not the trunk and
-    # the user asked to merge into the trunk without explicitly overriding the
-    # base, refuse rather than silently merge a stacked branch into trunk.
-    if (
-        not explicit_base
-        and result.stack
-        and result.stack.parent is not None
-        and result.stack.base_ref != trunk_ref
-        and f"origin/{target_branch}" == trunk_ref
-    ):
-        return _fail(
-            f"Stacked branch detected: merge into `{result.stack.base_ref}` or rebase onto `{trunk_ref}` first."
-        )
 
     guard_error = _check_release_guard(result.pr_base, feature_branch=feature_branch)
     if guard_error:
@@ -1513,14 +1468,16 @@ def cmd_merge(args: argparse.Namespace) -> int:
         print("✅ aet ship merge complete (dry-run).")
         return 0
 
+    queue = getattr(args, "queue", ".agents/aet-queue")
+    task_branch = (task.get("branch") if isinstance(task, dict) else None) or feature_branch or task_id
     rc = aet_state.cmd_record_merge(
-        argparse.Namespace(
+        SimpleNamespace(
             command="record-merge",
             task_id=task_id,
-            queue=".agents/aet-queue",
+            queue=queue,
             plan=None,
             dry_run=False,
-            branch=task_id,
+            branch=task_branch,
             merge_commit=merge_commit,
             target_branch=target_branch,
         )
@@ -1534,278 +1491,13 @@ def cmd_merge(args: argparse.Namespace) -> int:
     return 0
 
 
-def _add_close_args(parser: argparse.ArgumentParser) -> None:
-    """Add the post-merge closure arguments to *parser*."""
-    parser.add_argument(
-        "task_id",
-        help="Task ID to close (use `aet sprint add` to intake a plan).",
-    )
-    parser.add_argument(
-        "plan",
-        nargs="?",
-        default=None,
-        help="Deprecated and ignored: plan paths are no longer accepted (R-3).",
-    )
-    parser.add_argument(
-        "queue",
-        nargs="?",
-        default=".agents/aet-queue",
-        help="Path to the queue anchor.",
-    )
-    parser.add_argument(
-        "--branch",
-        help="Branch name to use for merge verification. Overrides the task's branch field.",
-    )
-    parser.add_argument(
-        "--merge-commit",
-        help="Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.",
-    )
-    parser.add_argument(
-        "--target-branch",
-        help="Target branch the source branch merged into (default: configured integration branch). "
-        "Use 'main' when closing an epic whose integration branch merged to trunk.",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes.",
-    )
-    parser.add_argument(
-        "--delete-branch",
-        action="store_true",
-        help="After successful closure, delete the remote and local feature branch.",
-    )
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="aet ship",
-        description="Pre-merge gate, PR creation, and post-merge closure for AE Toolkit tasks.",
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    gate_parser = sub.add_parser(
-        "gate",
-        help="Run the pre-merge validation gate.",
-    )
-    gate_parser.add_argument(
-        "plan",
-        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
-    )
-    gate_parser.add_argument(
-        "--base",
-        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
-    )
-    gate_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes.",
-    )
-
-    open_parser = sub.add_parser(
-        "open",
-        help="Run the gate and open a PR for the plan.",
-    )
-    open_parser.add_argument(
-        "plan",
-        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
-    )
-    open_parser.add_argument(
-        "--base",
-        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
-    )
-    open_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes.",
-    )
-
-    open_epic_parser = sub.add_parser(
-        "open-epic",
-        help="Run the pre-merge gate and open a PR for an epic branch.",
-    )
-    open_epic_parser.add_argument(
-        "branch",
-        nargs="?",
-        default=None,
-        help="Integration branch to open PR for (default: active epic declaration).",
-    )
-    open_epic_parser.add_argument(
-        "--base",
-        help="Override the PR base branch/ref (default: resolved trunk).",
-    )
-    open_epic_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes.",
-    )
-
-    merge_parser = sub.add_parser(
-        "merge",
-        help="Run the gate, detect conflicts, merge directly into a target branch, and close.",
-    )
-    merge_parser.add_argument(
-        "plan",
-        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
-    )
-    merge_parser.add_argument(
-        "--branch",
-        default=None,
-        help="Target branch to merge into (default: resolved trunk branch).",
-    )
-    merge_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes.",
-    )
-
-    split_parser = sub.add_parser(
-        "split",
-        help="Split the PR range into caller-supplied commit groups.",
-    )
-    split_parser.add_argument(
-        "plan",
-        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
-    )
-    split_parser.add_argument(
-        "--base",
-        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
-    )
-    split_parser.add_argument(
-        "--message",
-        "-m",
-        action="append",
-        help="Commit message for one group. Repeat for each group.",
-    )
-    split_parser.add_argument(
-        "--paths",
-        action="append",
-        nargs="+",
-        help="Paths for one group. Repeat for each group, after its --message.",
-    )
-    split_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes.",
-    )
-
-    verify_parser = sub.add_parser(
-        "verify",
-        help="Verify a branch has merged without mutating state.",
-    )
-    verify_parser.add_argument(
-        "task_id",
-        help="Task ID to verify.",
-    )
-    verify_parser.add_argument(
-        "plan_or_queue",
-        nargs="?",
-        default=None,
-        help="Plan path (when first arg is a task ID) or queue path (when first arg is a plan).",
-    )
-    verify_parser.add_argument(
-        "queue",
-        nargs="?",
-        default=".agents/aet-queue",
-        help="Path to the queue anchor.",
-    )
-    verify_parser.add_argument(
-        "--squash-fallback",
-        action="store_true",
-        help="Enable diff-based squash-merge fallback when ancestry and gh fail.",
-    )
-    verify_parser.add_argument(
-        "--branch",
-        help="Branch name to verify. Overrides the task's branch field.",
-    )
-    verify_parser.add_argument(
-        "--target-branch",
-        help="Target branch to verify the merge against (default: configured integration branch).",
-    )
-
-    close_parser = sub.add_parser(
-        "close",
-        help="Record post-merge closure for a task.",
-    )
-    _add_close_args(close_parser)
-
-    # Hidden alias kept for backward compatibility during the transition.
-    record_merge_parser = sub.add_parser(
-        "record-merge",
-        help=argparse.SUPPRESS,
-    )
-    _add_close_args(record_merge_parser)
-
-    # Default behavior when the first positional argument is a plan file.
-    default_parser = sub.add_parser(
-        "default",
-        help=argparse.SUPPRESS,
-    )
-    default_parser.add_argument(
-        "plan",
-        help="Task id of the plan to ship (use `aet sprint add` to intake a plan).",
-    )
-    default_parser.add_argument(
-        "--base",
-        help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
-    )
-    default_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be done without making changes.",
-    )
-
-    return parser
-
-
-_KNOWN_SUBCOMMANDS = {"gate", "open", "open-epic", "merge", "split", "verify", "close", "record-merge"}
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse arguments.
-
-    A bare ``aet ship <task_id>`` is treated as the default subcommand, which
-    runs the gate and then opens a PR. Explicit subcommands are dispatched
-    unchanged.
-    """
-    argv = list(argv or sys.argv[1:])
-    if not argv:
-        parser = build_parser()
-        parser.print_help(sys.stderr)
-        parser.exit(2)
-    if argv[0] not in _KNOWN_SUBCOMMANDS and argv[0] not in ("--help", "-h"):
-        argv.insert(0, "default")
-    return build_parser().parse_args(argv)
-
-
-def main(argv: list[str] | None = None):
-    args = parse_args(argv)
-    if args.command == "gate":
-        return cmd_gate(args)
-    if args.command == "open":
-        return cmd_open(args)
-    if args.command == "open-epic":
-        return cmd_open_epic(args)
-    if args.command == "merge":
-        return cmd_merge(args)
-    if args.command == "split":
-        return cmd_split(args)
-    if args.command == "verify":
-        return cmd_verify(args)
-    if args.command in ("close", "record-merge"):
-        return cmd_ship(args)
-    if args.command == "default":
-        return cmd_default(args)
-    return _fail(f"Unknown command: {args.command}")
-
-
 class _ShipGroup(TyperGroup):
     """Click group that routes bare ``ship <plan>`` to a hidden default command.
 
     A callback with a positional ``plan`` argument cannot coexist with
     subcommands because Click consumes the first token for the callback before
     checking for a subcommand name. Inserting a hidden ``default`` command when
-    the first positional is not a known subcommand preserves the legacy argparse
+    the first positional is not a known subcommand preserves the default command
     routing exactly.
     """
 
@@ -1843,7 +1535,7 @@ def ship_default(
     ),
 ) -> None:
     """Run the gate and, if it passes, open a PR (default behavior)."""
-    rc = cmd_default(argparse.Namespace(plan=plan, base=base, dry_run=dry_run))
+    rc = cmd_default(SimpleNamespace(plan=plan, base=base, dry_run=dry_run))
     raise typer.Exit(rc)
 
 
@@ -1865,7 +1557,7 @@ def ship_gate(
     ),
 ) -> None:
     """Run the pre-merge validation gate."""
-    rc = cmd_gate(argparse.Namespace(plan=plan, base=base, dry_run=dry_run))
+    rc = cmd_gate(SimpleNamespace(plan=plan, base=base, dry_run=dry_run))
     raise typer.Exit(rc)
 
 
@@ -1887,7 +1579,7 @@ def ship_open(
     ),
 ) -> None:
     """Run the gate and open a PR for the plan."""
-    rc = cmd_open(argparse.Namespace(plan=plan, base=base, dry_run=dry_run))
+    rc = cmd_open(SimpleNamespace(plan=plan, base=base, dry_run=dry_run))
     raise typer.Exit(rc)
 
 
@@ -1909,7 +1601,7 @@ def ship_open_epic(
     ),
 ) -> None:
     """Run the gate and open a PR for an epic branch."""
-    rc = cmd_open_epic(argparse.Namespace(branch=branch, base=base, dry_run=dry_run))
+    rc = cmd_open_epic(SimpleNamespace(branch=branch, base=base, dry_run=dry_run))
     raise typer.Exit(rc)
 
 
@@ -1931,7 +1623,7 @@ def ship_merge(
     ),
 ) -> None:
     """Run the gate, detect conflicts, merge directly into a target branch, and close."""
-    rc = cmd_merge(argparse.Namespace(plan=plan, branch=branch, dry_run=dry_run))
+    rc = cmd_merge(SimpleNamespace(plan=plan, branch=branch, dry_run=dry_run))
     raise typer.Exit(rc)
 
 
@@ -1966,7 +1658,7 @@ def ship_split(
     """Split the PR range into caller-supplied commit groups."""
     path_groups = [p.split(",") for p in paths] if paths else None
     rc = cmd_split(
-        argparse.Namespace(
+        SimpleNamespace(
             plan=plan,
             base=base,
             message=message,
@@ -1988,7 +1680,7 @@ def _run_ship_close(
     delete_branch: bool = False,
 ) -> int:
     return cmd_ship(
-        argparse.Namespace(
+        SimpleNamespace(
             command="record-merge",
             task_id=task_id,
             plan=plan,
@@ -2034,7 +1726,7 @@ def ship_verify(
 ) -> None:
     """Verify a branch has merged without mutating state."""
     rc = cmd_verify(
-        argparse.Namespace(
+        SimpleNamespace(
             command="verify",
             task_id=task_id,
             plan=plan_or_queue,
@@ -2089,66 +1781,6 @@ def ship_close(
     ),
 ) -> None:
     """Record post-merge closure for a task."""
-    try:
-        resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(task_id, plan, queue)
-    except ValueError as exc:
-        raise typer.Exit(_fail(str(exc)))
-    raise typer.Exit(
-        _run_ship_close(
-            resolved_task_id,
-            resolved_plan,
-            resolved_queue,
-            branch,
-            merge_commit,
-            target_branch,
-            dry_run,
-            delete_branch,
-        )
-    )
-
-
-@app.command(name="record-merge")
-def ship_record_merge(
-    task_id: str = typer.Argument(
-        ...,
-        help="Task ID to close (use `aet sprint add` to intake a plan).",
-    ),
-    plan: Optional[str] = typer.Argument(
-        None,
-        help="Deprecated and ignored: plan paths are no longer accepted (R-3).",
-    ),
-    queue: str = typer.Argument(
-        ".agents/aet-queue",
-        help="Path to the queue anchor.",
-    ),
-    branch: Optional[str] = typer.Option(
-        None,
-        "--branch",
-        help="Branch name to use for merge verification. Overrides the task's branch field.",
-    ),
-    merge_commit: Optional[str] = typer.Option(
-        None,
-        "--merge-commit",
-        help="Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.",
-    ),
-    target_branch: Optional[str] = typer.Option(
-        None,
-        "--target-branch",
-        help="Target branch the source branch merged into (default: configured integration branch). "
-        "Use 'main' when closing an epic whose integration branch merged to trunk.",
-    ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be done without making changes.",
-    ),
-    delete_branch: bool = typer.Option(
-        False,
-        "--delete-branch",
-        help="After successful closure, delete the remote and local feature branch.",
-    ),
-) -> None:
-    """Hidden alias for close."""
     try:
         resolved_task_id, resolved_plan, resolved_queue = _normalize_close_args(task_id, plan, queue)
     except ValueError as exc:

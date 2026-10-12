@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import importlib.machinery
 import importlib.util
 import json
@@ -12,9 +11,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from typer.testing import CliRunner
 
 from aet.backends.git_refs_backend import GitRefsBackend
 
@@ -147,7 +148,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         _git(self.repo, "commit", "-q", "-m", "feat(t1): implement")
         _git(self.repo, "checkout", "-q", "main")
         _git(self.repo, "merge", "-q", "--no-ff", "t1", "-m", "Merge t1")
-        args = argparse.Namespace(
+        args = SimpleNamespace(
             command="close",
             task_id="t1",
             plan=None,
@@ -214,7 +215,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         _git(self.repo, "checkout", "-q", "main")
         _git(self.repo, "merge", "-q", "--no-ff", "t1", "-m", "Merge t1")
 
-        args = argparse.Namespace(
+        args = SimpleNamespace(
             command="close",
             task_id="t1",
             plan=None,
@@ -256,7 +257,7 @@ class TestShipCloseTransaction(unittest.TestCase):
 
         backend.save = _failing_save  # type: ignore[method-assign]
 
-        args = argparse.Namespace(
+        args = SimpleNamespace(
             command="close",
             task_id="t1",
             plan=None,
@@ -305,7 +306,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         _git(self.repo, "merge", "-q", "--no-ff", "t1", "-m", "Merge t1")
         _git(self.repo, "push", "origin", "main", check=False)
 
-        args = argparse.Namespace(
+        args = SimpleNamespace(
             command="close",
             task_id="t1",
             plan=None,
@@ -334,7 +335,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         _git(self.repo, "push", "-u", "origin", "t1", check=False)
         # Do NOT merge to main, so record-merge fails.
 
-        args = argparse.Namespace(
+        args = SimpleNamespace(
             command="close",
             task_id="t1",
             plan=None,
@@ -365,7 +366,7 @@ class TestShipCloseTransaction(unittest.TestCase):
         _git(self.repo, "merge", "-q", "--no-ff", "t1", "-m", "Merge t1")
         _git(self.repo, "push", "origin", "main", check=False)
 
-        args = argparse.Namespace(
+        args = SimpleNamespace(
             command="close",
             task_id="t1",
             plan=None,
@@ -388,7 +389,9 @@ class TestShipCloseParser(unittest.TestCase):
 
     def test_close_subcommand_parses_task_id(self):
         """aet ship close accepts a task id as the first positional."""
-        parser = ship.build_parser()
-        args = parser.parse_args(["close", "t1"])
-        self.assertEqual(args.command, "close")
-        self.assertEqual(args.task_id, "t1")
+        runner = CliRunner()
+        with patch.object(ship, "_run_ship_close", return_value=0) as mock_close:
+            result = runner.invoke(ship.app, ["close", "t1"])
+        self.assertEqual(result.exit_code, 0)
+        mock_close.assert_called_once()
+        self.assertEqual(mock_close.call_args[0][0], "t1")

@@ -187,7 +187,7 @@ Not a reproducible defect — current behaviour is correct but redundant.
 - **Bisect cost.** Prefix bisect on a batch of n is ⌈log₂ n⌉ suite runs. The cost
   is paid only on red; green batches pay one run.
 - **Leftovers found in research** (2026-10-12): argparse dispatch reachable only
-  from tests (`build_parser`, `parse_args`, `main` in `src/aet/cli/ship.py`); `record-merge` routes to the same handler as
+  from tests (the former build_parser, parse_args, and main helpers in the ship CLI module); `record-merge` routes to the same handler as
   `close`; the stacked guard in `cmd_merge` is unreachable because `cmd_merge`
   always sets `args.base`; `AET_SHIP_COVERAGE_CMD` output discarded
   in `_run_gate`; `prepare_worktree_dependencies` called twice; `GateResult.dry_run`

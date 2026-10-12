@@ -12,6 +12,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from typer.testing import CliRunner
+
 from aet import plan_parser
 from aet.backends.git_refs_backend import GitRefsBackend
 
@@ -121,10 +123,10 @@ def _open_mock(responses, record=None):
 class TestShipOpenParser(unittest.TestCase):
     def test_open_subcommand_parses_task_argument(self):
         """aet ship open accepts a task id."""
-        parser = ship.build_parser()
-        args = parser.parse_args(["open", "t1"])
-        self.assertEqual(args.command, "open")
-        self.assertEqual(args.plan, "t1")
+        runner = CliRunner()
+        result = runner.invoke(ship.app, ["open", "--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("plan", result.output.lower())
 
 
 class TestDeterminePrBase(unittest.TestCase):
@@ -188,6 +190,10 @@ class TestDeterminePrBase(unittest.TestCase):
 
 class TestShipOpenChecks(unittest.TestCase):
     """Behavior-driven tests for aet ship open decisions."""
+
+    def _run_open(self, plan: str = "t1") -> int:
+        runner = CliRunner()
+        return runner.invoke(ship.app, ["open", plan]).exit_code
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -296,7 +302,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+                rc = self._run_open("t1")
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -323,7 +329,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+                rc = self._run_open("t1")
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -353,7 +359,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+                rc = self._run_open("t1")
 
         self.assertEqual(rc, 0)
         push_cmds = [c for c in commands if c[0] == "git" and c[1] == "push"]
@@ -372,7 +378,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+                rc = self._run_open("t1")
 
         self.assertEqual(rc, 0)
         push_cmds = [c for c in commands if c[0] == "git" and c[1] == "push"]
@@ -384,7 +390,7 @@ class TestShipOpenChecks(unittest.TestCase):
         responses = self._base_responses()
 
         with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            rc = ship.cmd_open(ship.parse_args(["open", "no-such-task"]))
+            rc = self._run_open("no-such-task")
 
         self.assertNotEqual(rc, 0)
 
@@ -460,7 +466,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+                rc = self._run_open("t1")
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -478,7 +484,7 @@ class TestShipOpenChecks(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_open_mock(responses, commands)):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+                rc = self._run_open("t1")
 
         self.assertNotEqual(rc, 0)
         self.assertFalse(any(c[0] == "gh" for c in commands))
@@ -497,7 +503,6 @@ class TestShipOpenChecks(unittest.TestCase):
             stack=stack,
             rebased=False,
             scope_audit=[],
-            dry_run=False,
             message="Gate passed.",
         )
         with (
@@ -507,13 +512,10 @@ class TestShipOpenChecks(unittest.TestCase):
             patch.object(ship, "_push_branch", return_value=(True, "")),
             patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")),
         ):
-            from io import StringIO
-
-            stdout_capture = StringIO()
-            with patch.object(sys, "stdout", stdout_capture):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
-        self.assertEqual(rc, 0)
-        output = stdout_capture.getvalue()
+            runner = CliRunner()
+            result = runner.invoke(ship.app, ["open", "t1"])
+        self.assertEqual(result.exit_code, 0)
+        output = result.output
         self.assertIn("STACKED PR", output)
         self.assertIn("trunk", output)
         self.assertNotIn("main", output)
@@ -532,7 +534,6 @@ class TestShipOpenChecks(unittest.TestCase):
             stack=stack,
             rebased=False,
             scope_audit=[],
-            dry_run=False,
             message="Gate passed.",
         )
         captured = []
@@ -549,7 +550,7 @@ class TestShipOpenChecks(unittest.TestCase):
             patch.object(ship, "_create_pr", return_value=(True, "https://github.com/org/repo/pull/99\n")),
             patch.object(ship.Ledger, "write_event", side_effect=fake_write_event),
         ):
-            rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+            rc = self._run_open("t1")
 
         self.assertEqual(rc, 0)
         self.assertEqual(len(captured), 1)
@@ -662,7 +663,8 @@ class TestShipOpenIntegration(unittest.TestCase):
 
         with patch.dict(os.environ, env):
             with patch.object(ship.subprocess, "run", side_effect=_recording_run):
-                rc = ship.cmd_open(ship.parse_args(["open", "t1"]))
+                runner = CliRunner()
+                rc = runner.invoke(ship.app, ["open", "t1"]).exit_code
 
         self.assertEqual(rc, 0)
         self.assertTrue(any(c[0] == "gh" for c in commands))

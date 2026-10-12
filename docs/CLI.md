@@ -544,7 +544,6 @@ Pre-merge gate, PR creation, and post-merge closure.
 - `merge`: Run the gate, detect conflicts, merge directly into a target branch, and close.
 - `open`: Run the gate and open a PR for the plan.
 - `open-epic`: Run the gate and open a PR for an epic branch.
-- `record-merge`: Hidden alias for close.
 - `split`: Split the PR range into caller-supplied commit groups.
 - `verify`: Verify a branch has merged without mutating state.
 
@@ -626,21 +625,6 @@ Verify a branch has merged without mutating state.
 ## `aet ship close`
 
 Record post-merge closure for a task.
-
-### Options
-
-- `task_id` *str* — Task ID to close (use `aet sprint add` to intake a plan). (required)
-- `plan` *str* — Deprecated and ignored: plan paths are no longer accepted (R-3).
-- `queue` *str* — Path to the queue anchor. (default: `.agents/aet-queue`)
-- `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
-- `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.
-- `--target-branch` *str* — Target branch the source branch merged into (default: configured integration branch). Use 'main' when closing an epic whose integration branch merged to trunk.
-- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
-- `--delete-branch` *boolean* — After successful closure, delete the remote and local feature branch. (default: `False`)
-
-## `aet ship record-merge`
-
-Hidden alias for close.
 
 ### Options
 
