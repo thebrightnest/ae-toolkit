@@ -1,13 +1,13 @@
 ---
 subject: ship-verdict-consumption
-relates: [25, 48, 70]
+relates: [70, 25, 48]
 ---
 
 # Ship Consumes Recorded Verdicts; Validation Is Configured Once
 
 ## Status
 
-Proposed (2026-10-12). Supersedes ADR-070 decision 2 only; ADR-070's other
+Accepted (2026-10-12). Supersedes ADR-070 decision 2 only; ADR-070's other
 decisions stand. Delivered by `mtv-02-validation-config-and-verdict-aware-gate`
 (PRD: `docs/prds/merge-train-validation-prd.md`).
 

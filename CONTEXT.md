@@ -127,7 +127,7 @@ Queue state travels with the repository via `refs/aet/*` on origin — `refs/aet
 git fetch origin 'refs/aet/*:refs/aet/*'
 ```
 
-`~/.aet` stays machine-local: it holds config, telemetry, and reports, and is never pushed. Offline work is safe; mutation pushes are best-effort everywhere except closure, where a failed push fails the closure loudly (ADR-055). `git fetch --prune` is unsafe for `refs/aet/*`: a local-only task is indistinguishable from a deleted-upstream task, so pruning destroys work that has not yet pushed (ADR-059).
+`~/.aet` stays machine-local: it holds config, telemetry, and reports, and is never pushed. Offline work is safe; mutation pushes are best-effort everywhere except closure, where a failed push fails the closure loudly (ADR-055). `git fetch --prune` is unsafe for `refs/aet/*`: a local-only task is indistinguishable from a deleted-upstream task, so pruning destroys work that has not yet pushed (ADR-059). A task's lifecycle (run → integrate → ship) is single-machine: verdicts in `~/.aet/reports` are authoritative on that machine, and in-flight tasks are never moved between machines. On another machine a missing verdict means RUN for validation freshness — the pre-merge gate runs the suite, it does not refuse (ADR-078).
 
 ## Forward-Only State Model (ADR-011, revised by ADR-013)
 
@@ -218,7 +218,7 @@ Optional, gitignored `.agents/work-history.jsonl` containing transitions and clo
 Explicit human-run reconciliation of stored state against git; replaces implicit derive-on-read.
 
 **Gate Evidence (Verdict)**:
-A schema-validated JSON verdict written by a checking skill (qa, review, cso, sync-docs) to `~/.aet/reports/{project-slug}/{task-id}/`, consumed fail-closed by the orchestrator's stage gates (ADR-019) and, in `single-pr` mode, by the serialized integration step before the squash-merge lands (ADR-045). The plan footer `*Stage:*` remains a human breadcrumb; gating decisions read evidence, never the footer.
+A schema-validated JSON verdict written by a checking skill (qa, review, cso, sync-docs) to `~/.aet/reports/{project-slug}/{task-id}/`, consumed fail-closed by the orchestrator's stage gates (ADR-019), by `aet ship` via `pre_integration_check` (ADR-078), and, in `single-pr` mode, by the serialized integration step before the squash-merge lands (ADR-045). Verdicts are authoritative on the machine executing the task's lifecycle; on another machine a missing verdict means RUN for validation freshness (the gate runs the suite, it does not refuse). The plan footer `*Stage:*` remains a human breadcrumb; gating decisions read evidence, never the footer.
 _Avoid_: treating a footer stage string as proof a stage passed.
 
 **Workflow**:
