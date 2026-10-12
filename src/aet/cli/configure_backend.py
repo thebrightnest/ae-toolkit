@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -174,8 +175,25 @@ def _resolve_scope(project_root: Path, scope: str | None) -> str:
     return "user"
 
 
+def _validate_command_string(name: str, value: str | None) -> str | None:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    if not trimmed:
+        return f"{name} must be a non-empty string."
+    try:
+        tokens = shlex.split(trimmed)
+    except ValueError as exc:
+        return f"Invalid {name}: cannot parse command ({exc})."
+    if not tokens:
+        return f"{name} must contain at least one command token."
+    return None
+
+
 def _validate_options(
     integration_mode: str | None,
+    validate_command: str | None = None,
+    lint_command: str | None = None,
 ) -> str | None:
     """Reject values the resolver would reject, naming legal values."""
     if integration_mode is not None and integration_mode not in INTEGRATION_MODES:
@@ -183,6 +201,12 @@ def _validate_options(
             f"Invalid integration_mode '{integration_mode}'. "
             f"Choose one of: {', '.join(sorted(INTEGRATION_MODES))}."
         )
+    err = _validate_command_string("validate_command", validate_command)
+    if err:
+        return err
+    err = _validate_command_string("lint_command", lint_command)
+    if err:
+        return err
     return None
 
 
@@ -190,6 +214,8 @@ def _build_updates(
     trunk_branch: str | None,
     integration_mode: str | None,
     integration_branch: str | None,
+    validate_command: str | None = None,
+    lint_command: str | None = None,
 ) -> dict:
     """Build the merge-style config updates for the keys explicitly provided."""
     updates: dict = {}
@@ -202,6 +228,12 @@ def _build_updates(
 
     if integration_branch is not None:
         updates["integration_branch"] = integration_branch
+
+    if validate_command is not None:
+        updates["validate_command"] = validate_command.strip()
+
+    if lint_command is not None:
+        updates["lint_command"] = lint_command.strip()
 
     return updates
 
@@ -343,6 +375,8 @@ def _run(
     migrate: bool,
     guided: bool,
     shared: bool,
+    validate_command: str | None = None,
+    lint_command: str | None = None,
 ) -> int:
     project_root = Path.cwd()
 
@@ -362,7 +396,11 @@ def _run(
     if guided:
         return _run_guided(scope, integration_mode)
 
-    validation_error = _validate_options(integration_mode)
+    validation_error = _validate_options(
+        integration_mode,
+        validate_command=validate_command,
+        lint_command=lint_command,
+    )
     if validation_error is not None:
         print(f"Error: {validation_error}", file=sys.stderr)
         return 1
@@ -370,7 +408,11 @@ def _run(
     resolved_scope = _resolve_scope(project_root, scope)
     target = _target_path(project_root, resolved_scope)
     updates = _build_updates(
-        trunk_branch, integration_mode, integration_branch
+        trunk_branch,
+        integration_mode,
+        integration_branch,
+        validate_command=validate_command,
+        lint_command=lint_command,
     )
 
     if not updates:
@@ -412,6 +454,16 @@ def configure(
         "--integration-branch",
         help="Set the integration branch name.",
     ),
+    validate_command: str | None = typer.Option(
+        None,
+        "--validate-command",
+        help="Set the full validation command.",
+    ),
+    lint_command: str | None = typer.Option(
+        None,
+        "--lint-command",
+        help="Set the lint validation command.",
+    ),
     scope: str | None = typer.Option(
         None,
         "--scope",
@@ -448,6 +500,8 @@ def configure(
         migrate,
         guided,
         shared,
+        validate_command=validate_command,
+        lint_command=lint_command,
     )
     raise typer.Exit(rc)
 
