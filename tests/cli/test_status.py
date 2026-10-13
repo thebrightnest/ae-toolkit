@@ -249,5 +249,72 @@ class TestStatusLastRunHealth(unittest.TestCase):
         self.assertIn("syntax", data["last_run"]["summary"].lower())
 
 
+class TestStatusMergeTrain(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo_root = Path(self._tmp.name) / "repo"
+        init_git_repo(self.repo_root)
+
+        self.queue_path, self.history_path = seed_git_queue(
+            self.repo_root,
+            [
+                {
+                    "id": "t1",
+                    "state": "awaiting_merge",
+                    "title": "task one",
+                    "branch": "t1",
+                    "train": {
+                        "branch": "main",
+                        "staged_commit": "abc1234567890",
+                        "position": 1,
+                        "staged_at": "2026-10-13T10:00:00Z",
+                    },
+                },
+                {
+                    "id": "t2",
+                    "state": "ready",
+                    "title": "task two",
+                    "branch": "t2",
+                },
+            ],
+        )
+        self.plans_dir = self.repo_root / "docs" / "plans"
+        self.plans_dir.mkdir(parents=True, exist_ok=True)
+        self._cwd = os.getcwd()
+        os.chdir(self.repo_root)
+        self.addCleanup(os.chdir, self._cwd)
+
+    def _status_output(self, json_output: bool = False) -> str:
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            status._run(
+                str(self.queue_path),
+                str(self.history_path),
+                self.plans_dir,
+                json_output,
+            )
+        return buf.getvalue()
+
+    def test_status_human_shows_merge_train(self):
+        output = self._status_output()
+        self.assertIn("Merge train (1 staged):", output)
+        self.assertIn("#1 t1 → main (abc1234)", output)
+
+    def test_status_json_projection_merge_train(self):
+        output = self._status_output(json_output=True)
+        data = json.loads(output)
+        self.assertIn("merge_train", data)
+        self.assertEqual(data["merge_train"]["length"], 1)
+        self.assertEqual(data["merge_train"]["tasks"], ["t1"])
+
+        t1_item = next(t for t in data["tasks"] if t["id"] == "t1")
+        self.assertIsNotNone(t1_item.get("train"))
+        self.assertEqual(t1_item["train"]["staged_commit"], "abc1234567890")
+
+        t2_item = next(t for t in data["tasks"] if t["id"] == "t2")
+        self.assertIsNone(t2_item.get("train"))
+
+
 if __name__ == "__main__":
     unittest.main()

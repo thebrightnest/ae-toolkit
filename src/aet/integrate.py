@@ -28,17 +28,19 @@ from aet.backends.factory import DEFAULT_CONFIG_PATH, resolve_config, resolve_in
 from aet.branch_ref import resolve_integration_branch_for_task
 from aet.integration_lock import IntegrationFailureError, integration_lock
 from aet.queue import current_state, queue_lock
-from aet.worktree import delete_local_branch, push_branch, run_git_plain
+from aet.train import train_ref, train_tip, update_train_ref
+from aet.worktree import delete_local_branch, run_git_plain
 
 
 @dataclass
 class IntegrateResult:
-    status: Literal["merged", "staged_conflict", "guard_refused"]
+    status: Literal["staged", "merged", "staged_conflict", "guard_refused"]
     detail: Any = None
+    branch: str = ""
 
     @property
     def ok(self) -> bool:
-        return self.status == "merged"
+        return self.status in ("staged", "merged")
 
     @property
     def message(self) -> str:
@@ -144,26 +146,6 @@ def is_monolithic_commit(
     """True when one commit covers the whole range while the plan has >1 task."""
     count = commit_count(pr_base, feature_branch=feature_branch, workspace=workspace)
     return count == 1 and plan_task_count(spec) > 1
-
-
-def _validate_after_rebase(
-    worktree_dir: str,
-    task_id: str = "",
-    repo_root: str = "",
-) -> tuple[bool, str]:
-    """Re-run task validation in the rebased worktree.
-
-    Returns ``(True, "")`` on success, ``(False, output)`` on failure.
-    Uses ``pre_integration_check`` so an unmoved target yields SKIP.
-    """
-    check_result = validation.pre_integration_check(
-        task_id=task_id,
-        worktree_dir=worktree_dir,
-        repo_root=repo_root or None,
-    )
-    if not check_result.ok:
-        return False, check_result.output
-    return True, ""
 
 
 def _task_in_queue(backend: Any, task_id: str) -> bool:
@@ -377,16 +359,19 @@ def integrate(
             text=True,
         )
 
-        res = subprocess.run(
-            ["git", "-C", repo_root, "rev-parse", "--verify", f"refs/remotes/origin/{integration_branch}"],
+        ref = train_ref(integration_branch)
+        res_train = subprocess.run(
+            ["git", "-C", repo_root, "rev-parse", "--verify", ref],
             capture_output=True,
+            text=True,
         )
-        target_ref = f"origin/{integration_branch}" if res.returncode == 0 else integration_branch
+        old_staging_commit = res_train.stdout.strip() if res_train.returncode == 0 else "0" * 40
+        target_ref = train_tip(repo_root, integration_branch)
 
         rc_pre, pre_rebase_commit, _ = run_git_plain(["-C", worktree_dir, "rev-parse", "HEAD"])
         pre_rebase_commit = pre_rebase_commit.strip()
 
-        # Rebase the task branch onto the live integration tip inside the worktree.
+        # Rebase the task branch onto the live train tip inside the worktree.
         rebase = subprocess.run(
             ["git", "-C", worktree_dir, "rebase", target_ref],
             capture_output=True,
@@ -414,9 +399,9 @@ def integrate(
             print(
                 f"⚠️  Task {task_id} staged in awaiting_merge due to rebase conflicts. Independent tasks continue."
             )
-            return IntegrateResult(status="staged_conflict", detail=diag)
+            return IntegrateResult(status="staged_conflict", detail=diag, branch=integration_branch)
 
-        # Release guard and monolithic-commit guard under lock right after rebase, before validation (R-3)
+        # Release guard and monolithic-commit guard under lock right after rebase (R-3)
         guard_error = check_release_guard(target_ref, feature_branch="HEAD", workspace=Path(worktree_dir))
         if guard_error:
             subprocess.run(
@@ -435,7 +420,7 @@ def integrate(
             }
             _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
             print(f"⚠️  Task {task_id} staged in awaiting_merge due to guard refusal: {guard_error}")
-            return IntegrateResult(status="guard_refused", detail=diag)
+            return IntegrateResult(status="guard_refused", detail=diag, branch=integration_branch)
 
         if is_monolithic_commit(target_ref, spec, feature_branch="HEAD", workspace=Path(worktree_dir)):
             subprocess.run(
@@ -458,31 +443,7 @@ def integrate(
             }
             _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
             print(f"⚠️  Task {task_id} staged in awaiting_merge due to guard refusal: {diag['stderr_tail']}")
-            return IntegrateResult(status="guard_refused", detail=diag)
-
-        # Re-validate the rebased combination before it lands (R-18).
-        ok, output = _validate_after_rebase(worktree_dir, task_id=task_id, repo_root=repo_root)
-        if not ok:
-            subprocess.run(
-                ["git", "-C", worktree_dir, "reset", "--hard", pre_rebase_commit],
-                capture_output=True,
-            )
-            subprocess.run(
-                ["git", "-C", worktree_dir, "clean", "-fd"],
-                capture_output=True,
-            )
-            diag = {
-                "reason": "validation_failure",
-                "conflicting_files": [],
-                "stderr_tail": output.strip()[-500:] if output else "validation failed after rebase",
-                "at": telemetry.iso_now(),
-            }
-            _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
-            print(
-                f"⚠️  Task {task_id} staged in awaiting_merge due to post-rebase "
-                "validation failure. Independent tasks continue."
-            )
-            return IntegrateResult(status="staged_conflict", detail=diag)
+            return IntegrateResult(status="guard_refused", detail=diag, branch=integration_branch)
 
         # Verify required gate evidence before the squash-merge lands (R-22).
         _evidence_ok, _evidence_failures = gate.check_task_evidence(
@@ -494,7 +455,7 @@ def integrate(
                 f"{task_id}:\n" + "\n".join(_evidence_failures)
             )
 
-        # Clean any working tree modifications from post-rebase validation before checkout.
+        # Clean worktree before checkout
         subprocess.run(
             ["git", "-C", worktree_dir, "reset", "--hard", "HEAD"],
             capture_output=True,
@@ -503,7 +464,8 @@ def integrate(
             ["git", "-C", worktree_dir, "clean", "-fd"],
             capture_output=True,
         )
-        # Detached squash-merge inside the isolated worktree without touching repo_root HEAD.
+
+        # Detached squash-merge onto train tip
         checkout = subprocess.run(
             ["git", "-C", worktree_dir, "checkout", "-f", "--detach", target_ref],
             capture_output=True,
@@ -550,38 +512,14 @@ def integrate(
         rc, out, _ = run_git_plain(["-C", worktree_dir, "rev-parse", "HEAD"])
         if rc != 0:
             raise IntegrationFailureError("could not resolve merge commit")
-        merge_commit = out.strip()
+        staged_commit = out.strip()
 
-        # Update local ref in repo_root.
-        head_ref = subprocess.run(
-            ["git", "-C", repo_root, "symbolic-ref", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-        )
-        if head_ref.returncode == 0 and head_ref.stdout.strip() == integration_branch:
-            subprocess.run(
-                ["git", "-C", repo_root, "reset", "--hard", merge_commit],
-                capture_output=True,
-                text=True,
-            )
-        else:
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", f"refs/heads/{integration_branch}", merge_commit],
-                capture_output=True,
-                text=True,
-            )
-
-        ok, err = push_branch(repo_root, integration_branch)
-        if not ok:
+        # Update staging ref via CAS (R-3)
+        ok_cas = update_train_ref(repo_root, integration_branch, staged_commit, old_commit=old_staging_commit)
+        if not ok_cas:
             raise IntegrationFailureError(
-                f"push of {integration_branch} failed: {err}"
+                f"CAS update of staging ref {ref} failed (expected {old_staging_commit})"
             )
-
-        # Update remote-tracking ref so ancestry checks pass.
-        subprocess.run(
-            ["git", "-C", repo_root, "update-ref", f"refs/remotes/origin/{integration_branch}", merge_commit],
-            capture_output=True,
-        )
 
         # Clean up the task branch and worktree under lock.
         subprocess.run(
@@ -590,22 +528,13 @@ def integrate(
         )
         delete_local_branch(repo_root, task_branch)
 
-    # Record the merge commit on the task record.
-    if backend is not None and _task_in_queue(backend, task_id):
-        queue = backend.load()["queue"]
-        for t in queue:
-            if t.get("id") == task_id:
-                t["merge_commit"] = merge_commit
-                break
-        _save_task_record(backend, queue)
-
-    # Transition task state to merged.
+    # Record train marker and transition to awaiting_merge (R-5)
     if backend is not None and _task_in_queue(backend, task_id):
         aet_state_bin = str(Path(__file__).resolve().parent / "cli" / "aet_state.py")
-        queue = backend.load()["queue"]
+        queue = backend.load().get("queue", [])
         t = next((item for item in queue if item.get("id") == task_id), None)
         curr = current_state(t) if t else "in_progress"
-        if curr != "awaiting_merge" and curr != "merged":
+        if curr != "awaiting_merge":
             res = subprocess.run(
                 [
                     sys.executable,
@@ -623,25 +552,32 @@ def integrate(
                 raise IntegrationFailureError(
                     f"Could not transition {task_id} to awaiting_merge: {res.stderr.strip()}"
                 )
-            curr = "awaiting_merge"
-        if curr == "awaiting_merge":
-            res = subprocess.run(
-                [
-                    sys.executable,
-                    aet_state_bin,
-                    "transition",
-                    task_id,
-                    "awaiting_merge",
-                    "merged",
-                    queue_file,
-                ],
-                capture_output=True,
-                text=True,
-            )
-            if res.returncode != 0:
-                raise IntegrationFailureError(
-                    f"Could not transition {task_id} to merged: {res.stderr.strip()}"
-                )
 
-    print(f"   ✅ {task_id} integrated into {integration_branch}")
-    return IntegrateResult(status="merged", detail=merge_commit)
+        with queue_lock(queue_file):
+            if hasattr(backend, "fetch"):
+                try:
+                    backend.fetch()
+                except Exception:
+                    pass
+            data = backend.load()
+            queue = data.get("queue", [])
+            existing_staged = [
+                item for item in queue
+                if item.get("train")
+                and isinstance(item["train"], dict)
+                and item["train"].get("branch", integration_branch) == integration_branch
+            ]
+            position = max((item["train"].get("position", 0) for item in existing_staged), default=0) + 1
+            for target in queue:
+                if target.get("id") == task_id:
+                    target["train"] = {
+                        "branch": integration_branch,
+                        "staged_commit": staged_commit,
+                        "position": position,
+                        "staged_at": telemetry.iso_now(),
+                    }
+                    break
+            _save_task_record(backend, queue)
+
+    print(f"   🚆 {task_id} staged on train for {integration_branch} ({staged_commit[:8]})")
+    return IntegrateResult(status="staged", detail=staged_commit, branch=integration_branch)

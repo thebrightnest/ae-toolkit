@@ -7,7 +7,7 @@ relates: [11, 29, 45, 64, 78]
 
 ## Status
 
-Proposed (2026-10-12). Delivered by `mtv-04-merge-train-staging-and-flush`
+Accepted (2026-10-13). Delivered by `mtv-04-merge-train-staging-and-flush`
 and `mtv-05-train-bisect-and-eject` (PRD:
 `docs/prds/merge-train-validation-prd.md`).
 
@@ -40,9 +40,11 @@ many tasks.
    Dependents therefore only start from a validated tip.
 5. **Invariant.** The integration branch — trunk in `pr-per-task` — moves only
    to a tree with a passing batch verdict.
-6. **Red flush.** A deterministic prefix bisect finds the first failing task;
-   it is ejected (marker cleared, stays `awaiting_merge` with diagnostics) and
-   the rest re-stack and flush again. Because of decision 4, no batch-mate
+6. **Red flush.** In `mtv-04`, any red flush halts integration fail-closed
+   (ADR-029) leaving staged tasks `awaiting_merge` with diagnostics. In
+   `mtv-05`, deterministic prefix bisect finds the first failing task; it is
+   ejected (marker cleared, stays `awaiting_merge` with diagnostics) and the
+   rest re-stack and flush again. Because of decision 4, no batch-mate
    depends on another, so ejection never cascades. Any non-suite failure halts
    integration fail-closed (ADR-029).
 

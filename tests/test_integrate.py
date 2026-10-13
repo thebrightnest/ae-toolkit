@@ -123,9 +123,13 @@ class TestIntegrate(unittest.TestCase):
                     integration_branch="epic-01",
                 )
 
-            self.assertEqual(res.status, "merged")
+            self.assertEqual(res.status, "staged")
             self.assertTrue(res.ok)
             self.assertIsNotNone(res.detail)
+
+            from aet.train import flush
+            flush_res = flush(repo_root=repo_root, branch="epic-01", backend=backend)
+            self.assertTrue(flush_res.ok)
 
             # Check that target branch has the squash commit
             log = subprocess.run(

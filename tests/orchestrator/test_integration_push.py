@@ -220,6 +220,8 @@ class TestIntegrationPush(unittest.TestCase):
                         plan_file=plan_a,
                     )
                 self.assertTrue(result_a)
+                from aet.train import flush
+                flush(repo_root, "epic-01")
 
                 # Only the integration branch should be on origin; no task branch.
                 remote_heads = _remote_heads(repo_root)
@@ -250,6 +252,7 @@ class TestIntegrationPush(unittest.TestCase):
                         worktree_dir=worktree_b,
                     )
                 self.assertTrue(result_b)
+                flush(repo_root, "epic-01")
 
                 remote_heads = _remote_heads(repo_root)
                 self.assertIn("epic-01", remote_heads)

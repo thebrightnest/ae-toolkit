@@ -43,8 +43,20 @@ ENVELOPE_SCHEMA_VERSION = 1
 # remote ref that points at a non-commit object without force. Overwriting is
 # safe because the namespace is backend-owned and tasks are identified by
 # their ref names, not by a linear history.
-_AET_FETCH_REFSPEC = "+refs/aet/*:refs/aet/*"
-_AET_PUSH_REFSPEC = "+refs/aet/*"
+#
+# Note: refs/aet/train/* is local staging and MUST NOT be fetched or pushed (ADR-079).
+_AET_FETCH_REFSPECS = [
+    "+refs/aet/tasks/*:refs/aet/tasks/*",
+    "+refs/aet/sealed/*:refs/aet/sealed/*",
+    "+refs/aet/meta/*:refs/aet/meta/*",
+]
+_AET_PUSH_REFSPECS = [
+    "+refs/aet/tasks/*",
+    "+refs/aet/sealed/*",
+    "+refs/aet/meta/*",
+]
+_AET_FETCH_REFSPEC = _AET_FETCH_REFSPECS[0]
+_AET_PUSH_REFSPEC = _AET_PUSH_REFSPECS[0]
 
 
 def _has_remote(repo_root: str) -> bool:
@@ -356,10 +368,10 @@ class GitRefsBackend(TaskBackend):
         """
         if not _has_remote(self.repo_root):
             return
-        self._git("fetch", "origin", _AET_FETCH_REFSPEC)
+        self._git("fetch", "origin", *_AET_FETCH_REFSPECS)
 
     def push(self, *, mandatory: bool = False) -> bool:
-        """Push ``refs/aet/*`` to ``origin``.
+        """Push backend refs to ``origin``.
 
         Best-effort by default: returns ``False`` on failure without raising so
         local operation is never blocked. When ``mandatory`` is ``True`` (terminal
@@ -392,7 +404,7 @@ class GitRefsBackend(TaskBackend):
                 )
             return True
 
-        result = self._git("push", "origin", _AET_PUSH_REFSPEC)
+        result = self._git("push", "origin", *_AET_PUSH_REFSPECS)
         if result.returncode != 0:
             if mandatory:
                 stderr = result.stderr.decode("utf-8", errors="replace").strip()
@@ -408,7 +420,7 @@ class GitRefsBackend(TaskBackend):
         if self._deleted_refs:
             delete_refspecs = [f":{ref}" for ref in sorted(self._deleted_refs)]
             del_result = self._git(
-                "push", "origin", _AET_PUSH_REFSPEC, *delete_refspecs
+                "push", "origin", *_AET_PUSH_REFSPECS, *delete_refspecs
             )
             if del_result.returncode == 0:
                 self._deleted_refs.clear()

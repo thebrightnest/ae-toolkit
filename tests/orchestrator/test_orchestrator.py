@@ -4939,6 +4939,7 @@ class TestParentManagedIntegration(unittest.TestCase):
             subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
             subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
             Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+            Path(repo_root, ".gitignore").write_text(".worktrees/\n", encoding="utf-8")
             Path(repo_root, "Makefile").write_text("validate:\n\t@true\n", encoding="utf-8")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
@@ -4992,6 +4993,10 @@ class TestParentManagedIntegration(unittest.TestCase):
                         plan_file=plan_file,
                     )
             self.assertTrue(result)
+
+            from aet.train import flush
+            flush_res = flush(repo_root=repo_root, branch="main", backend=backend)
+            self.assertTrue(flush_res.ok)
 
             log = subprocess.run(
                 ["git", "-C", repo_root, "log", "main", "--oneline"],
@@ -5255,6 +5260,7 @@ class TestParentManagedIntegration(unittest.TestCase):
             subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
             subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
             Path(repo_root, "init.txt").write_text("initial\n", encoding="utf-8")
+            Path(repo_root, ".gitignore").write_text(".worktrees/\n", encoding="utf-8")
             Path(repo_root, "Makefile").write_text("validate:\n\t@true\n", encoding="utf-8")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
@@ -5278,7 +5284,14 @@ class TestParentManagedIntegration(unittest.TestCase):
             plan_file = os.path.join(repo_root, "docs", "plans", f"{task_id}.md")
             Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
             Path(plan_file).write_text(
-                f"---\nid: {task_id}\nworkflow: software\n---\n# {task_id}\n",
+                f"---\n"
+                f"id: {task_id}\n"
+                f"workflow: software\n"
+                f"security_review: skipped\n"
+                f"docs_sync: skipped\n"
+                f"qa: skipped\n"
+                f"code_review: skipped\n"
+                f"---\n# {task_id}\n",
                 encoding="utf-8",
             )
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
@@ -5296,12 +5309,8 @@ class TestParentManagedIntegration(unittest.TestCase):
             backend.save([task_record])
             backend.push()
 
-            with patch.object(
-                orchestrator,
-                "_validate_after_rebase",
-                return_value=(False, "Simulated validation error: tests failed"),
-            ):
-                status = orchestrator._integrate_completed_task(
+            with patch.object(orchestrator.gate, "check_task_evidence", return_value=(True, [])):
+                res = orchestrator._integrate_completed_task(
                     repo_root=repo_root,
                     task=task_record,
                     worktree_dir=worktree_dir,
@@ -5311,25 +5320,20 @@ class TestParentManagedIntegration(unittest.TestCase):
                     plan_file=plan_file,
                 )
 
-            self.assertEqual(status, "staged_conflict")
-            self.assertTrue(os.path.exists(worktree_dir))
-
-            clean_check = subprocess.run(
-                ["git", "-C", worktree_dir, "status", "--porcelain"],
-                capture_output=True,
-                text=True,
-                check=True,
+            self.assertEqual(res.status, "staged")
+            from aet.train import flush
+            flush_res = flush(
+                repo_root=repo_root,
+                branch="main",
+                backend=backend,
+                validate_command=["false"],
             )
-            self.assertEqual(clean_check.stdout.strip(), "")
+            self.assertFalse(flush_res.ok)
+            self.assertEqual(flush_res.status, "red")
 
             queue = backend.load()["queue"]
             q_task = next(t for t in queue if t["id"] == task_id)
             self.assertEqual(orchestrator.current_state(q_task), "awaiting_merge")
-            self.assertIn("conflict_diagnostics", q_task)
-            diag = q_task["conflict_diagnostics"]
-            self.assertEqual(diag["reason"], "validation_failure")
-            self.assertEqual(diag["conflicting_files"], [])
-            self.assertIn("Simulated validation error", diag["stderr_tail"])
 
     def test_print_settlement_summary(self):
         queue = [

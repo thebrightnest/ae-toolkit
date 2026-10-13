@@ -70,6 +70,14 @@ SCHEMAS: dict[str, dict[str, type]] = {
         "generated_at": str,
         "tree_hash": str,
     },
+    "batch": {
+        "branch": str,
+        "verdict": str,
+        "summary": str,
+        "generated_at": str,
+        "tree_hash": str,
+        "task_ids": list,
+    },
 }
 
 VALID_VERDICTS = {"pass", "fail"}
@@ -126,6 +134,8 @@ def evidence_path(
 
     root = Path(reports_root).expanduser() if reports_root else reports_dir()
     slug = project_slug if project_slug else telemetry.derive_project_slug()
+    if kind == "batch":
+        return root / slug / "_train" / task_id / "batch.json"
     return root / slug / task_id / f"{kind}.json"
 
 
@@ -182,6 +192,7 @@ BUILDER_FLAGS: dict[str, str] = {
     "cso": "--summary <one-line>",
     "sync-docs": "--summary <one-line> --divergence <item-or-file>",
     "verify": "--summary <one-line>",
+    "batch": "--summary <one-line>",
 }
 
 # What the qa builder reads when no pytest-json-report file is available.
@@ -275,7 +286,21 @@ def write_verdict(
         )
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(record, indent=2, default=str) + "\n", encoding="utf-8")
+    if kind == "batch":
+        existing: list[Any] = []
+        if path.exists():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, list):
+                    existing = loaded
+                elif isinstance(loaded, dict):
+                    existing = [loaded]
+            except Exception:
+                existing = []
+        existing.append(record)
+        path.write_text(json.dumps(existing, indent=2, default=str) + "\n", encoding="utf-8")
+    else:
+        path.write_text(json.dumps(record, indent=2, default=str) + "\n", encoding="utf-8")
     return path
 
 

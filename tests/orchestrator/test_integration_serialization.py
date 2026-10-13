@@ -285,6 +285,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            _write_test_workflow(repo_root)
             plan_a = _write_plan(repo_root, "task-a")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(
@@ -313,6 +314,9 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 )
 
             self.assertTrue(result)
+            from aet.train import flush
+            flush(repo_root, "epic-01")
+
             remote_heads = subprocess.run(
                 ["git", "-C", repo_root, "ls-remote", "--heads", "origin"],
                 capture_output=True,
@@ -396,7 +400,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 pass
 
     def test_validation_failure_is_integration_failure_and_releases_lock(self):
-        """A post-rebase validation failure raises IntegrationFailureError."""
+        """A post-rebase validation failure under train.flush releases the lock."""
         with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
             _init_git_repo(repo_root, origin_root)
             Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
@@ -410,7 +414,8 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            _write_plan(repo_root, "task-a")
+            _write_test_workflow(repo_root)
+            plan_a = _write_plan(repo_root, "task-a")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(
                 ["git", "-C", repo_root, "commit", "-q", "-m", "add plans"],
@@ -426,17 +431,24 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 repo_root, "task-a", base_branch="origin/epic-01"
             )
             _add_commit_to_worktree(worktree_a, "task-a.txt", "task-a work")
+            _write_qa_verdict(repo_root, "task-a")
 
-            with patch.object(
-                orchestrator, "_validate_after_rebase", return_value=(False, "tests failed")
-            ):
-                res = orchestrator.integrate(
-                    repo_root=repo_root,
-                    task_id="task-a",
-                    integration_branch="epic-01",
-                    worktree_dir=worktree_a,
-                )
-                self.assertEqual(res, "staged_conflict")
+            res = orchestrator.integrate(
+                repo_root=repo_root,
+                task_id="task-a",
+                integration_branch="epic-01",
+                worktree_dir=worktree_a,
+                plan_file=plan_a,
+            )
+            self.assertEqual(res.status, "staged")
+            from aet.train import flush
+            flush_res = flush(
+                repo_root=repo_root,
+                branch="epic-01",
+                validate_command=["false"],
+            )
+            self.assertFalse(flush_res.ok)
+            self.assertEqual(flush_res.status, "red")
 
             with integration_lock.integration_lock(repo_root):
                 pass

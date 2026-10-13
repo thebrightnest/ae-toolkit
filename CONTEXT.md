@@ -229,7 +229,7 @@ _Avoid_: calling lifecycle states "workflow state"; using "work class" for a wor
 Plan frontmatter (`security_review`, `docs_sync`: `required`/`skipped`, with a reason required when skipped) deciding at plan time whether a gated stage runs. Policy input authored at triage — part of the plan's machine contract, not runtime judgment and not state.
 _Avoid_: runtime heuristics deciding whether a gate runs.
 
-## Branch Model (ADR-044, ADR-045, ADR-076)
+## Branch Model (ADR-044, ADR-045, ADR-076, ADR-079)
 
 **Trunk Branch**:
 The final merge target, resolved as: config → `git symbolic-ref refs/remotes/origin/HEAD` → `main`. No code path names a branch literally. (ADR-044)
@@ -240,6 +240,18 @@ The branch task worktrees are cut from and integrate into. In `single-pr` mode, 
 **Integration Mode**:
 Project configuration, `pr-per-task` (default) or `single-pr`, resolved through the external-first config chain. Selects what the terminal event is for a task and who serializes merges — the forge (`pr-per-task`) or AET's local advisory lock (`single-pr`). (ADR-045)
 
+**Merge Train**:
+The pipelined integration subsystem where tasks are checked against their own QA verdicts, squash-merged under `integration_lock` onto a local staging ref without running tests, and validated once per batch outside the lock before moving the integration branch. (ADR-079)
+
+**Staging Ref**:
+The local-only git ref `refs/aet/train/<integration-branch>` holding the cumulative squash-merged commits of currently staged tasks awaiting a batch flush. It is never pushed to remotes and can be reconstructed from task records. (ADR-079)
+
+**Flush**:
+The atomic batch validation process that snapshots the staging ref, runs `validate_command` in an isolated temporary worktree outside the lock, and on green fast-forwards the integration branch to the snapshot, pushes, and transitions tasks to `merged`. (ADR-079)
+
+**Batch Verdict**:
+A schema-validated JSON verdict (`kind: batch`) written to `<reports>/<slug>/_train/<branch>/batch.json` recording the passing validation of a flushed merge train snapshot along with its tree hash and task IDs. (ADR-079)
+
 **Epic**:
 The set of plans decomposing one deliverable that share one **Integration Branch** and one PR in `single-pr`. An epic's identity is an explicit declaration (branch, PR title, body file) rather than an inference from a PRD filename; not a persisted entity beyond the envelope key and per-task stamp. (ADR-045, ADR-076)
 _Avoid_: epic as a separate queue entity or file in `docs/epics/`.
@@ -248,12 +260,12 @@ _Avoid_: epic as a separate queue entity or file in `docs/epics/`.
 The single declared epic active in the queue envelope metadata at `refs/aet/meta/queue`, declared via `aet epic set <branch> [--title] [--body-file]`. Tasks are stamped with their resolved integration branch at intake; when an in-flight task's stamp does not match the active epic resolution, execution halts fail-closed with an actionable mismatch error. (ADR-076)
 _Avoid_: assuming multi-epic concurrency; ignoring mismatch halts without resetting the task or switching the active epic.
 
-**Integrated (terminal semantics in `single-pr`)**:
-In `single-pr`, the terminal state `merged` means squash-merged into the **Integration Branch** locally, and blockers unblock on that event; trunk arrival is verified once per **Epic** when the integration branch's PR merges. In `pr-per-task`, `merged` keeps its trunk meaning.
+**Integrated**:
+The terminal state `merged` means fast-forwarded onto the **Integration Branch** (or trunk in `pr-per-task`) by a green flush of the merge train, with merge evidence recorded in the execution log. Blockers unblock when their dependencies reach this terminal state. In `single-pr`, trunk arrival is verified once per **Epic** when the integration branch's PR merges. (ADR-045, ADR-064, ADR-079)
 _Avoid_: "done" — the mode decides which event it names.
 
 **Integration Failure**:
-An engine-level outcome in `single-pr`: a rebase conflict or post-rebase validation failure while integrating a task that already passed. Distinct from the agent-session **Failure Class** menu (ADR-030), which is unchanged — integration failures are never triaged as task failures, never requeued, and do not count toward the **Circuit Breaker**.
+An engine-level outcome in both integration modes: a rebase conflict, guard refusal, pre-integration check failure, or batch ejection; applies in both integration modes while integrating a task that already passed. Distinct from the agent-session **Failure Class** menu (ADR-030), which is unchanged — integration failures are never triaged as task failures, never requeued, and do not count toward the **Circuit Breaker**. (ADR-045, ADR-078, ADR-079)
 _Avoid_: calling it a task failure; adding it to the ADR-030 menu.
 
 ## Telemetry & Panel (ADR-012, ADR-019, ADR-022)
