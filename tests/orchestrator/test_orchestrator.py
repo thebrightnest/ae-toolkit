@@ -5328,12 +5328,12 @@ class TestParentManagedIntegration(unittest.TestCase):
                 backend=backend,
                 validate_command=["false"],
             )
-            self.assertFalse(flush_res.ok)
-            self.assertEqual(flush_res.status, "red")
+            self.assertEqual(flush_res.status, "empty")
 
             queue = backend.load()["queue"]
             q_task = next(t for t in queue if t["id"] == task_id)
             self.assertEqual(orchestrator.current_state(q_task), "awaiting_merge")
+            self.assertEqual(q_task["conflict_diagnostics"]["reason"], "batch_validation")
 
     def test_print_settlement_summary(self):
         queue = [

@@ -131,26 +131,27 @@ aet status
 
 ## Conflict Resolution Runbook
 
-When a task is staged in `awaiting_merge` due to merge conflicts:
+When a task is in `awaiting_merge` due to integration conflict or merge train ejection:
 
-1. **Locate Conflicting Files**:
-   Inspect `conflict_diagnostics` on the task record (populated by `integrate()`) or review output from `aet ship merge <task_id>`:
+1. **Inspect Conflict Diagnostics**:
+   Inspect `conflict_diagnostics` on the task record (populated by `integrate()` or merge train `flush()`) or review output from `aet ship merge <task_id>`:
+
+   - **`rebase_conflict`**: A direct merge conflict occurred while rebasing the task onto the integration branch.
+   - **`batch_validation`**: The merge train prefix bisect identified this task as the culprit breaking batch validation. `stderr_tail` contains the failing test or command output.
+   - **`restack_conflict`**: Following culprit ejection from the merge train, this downstream task could not cleanly cherry-pick onto the restacked train tip. `conflicting_files` lists the conflicting paths.
 
    ```json
    {
-     "reason": "rebase_conflict",
-     "conflicting_files": [
-       "path/to/file1.py",
-       "path/to/file2.py"
-     ],
-     "stderr_tail": "CONFLICT (content): Merge conflict in path/to/file1.py...",
+     "reason": "batch_validation",
+     "conflicting_files": [],
+     "stderr_tail": "FAILED tests/test_foo.py::test_bar - AssertionError...",
      "at": "2026-10-12T22:00:00Z"
    }
    ```
 
 2. **Inspect and Reconcile**:
-   Open each conflicting file using file viewing tools.
-   Examine conflict markers:
+   - For **`batch_validation`**: Inspect `stderr_tail` to locate the failing tests or commands. In the task branch or worktree, fix the root cause and ensure all validation passes.
+   - For **`rebase_conflict`** and **`restack_conflict`**: Open each conflicting file using file viewing tools. Examine conflict markers:
 
    ```text
    <<<<<<< <source_branch>

@@ -42,9 +42,15 @@ many tasks.
    to a tree with a passing batch verdict.
 6. **Red flush.** In `mtv-04`, any red flush halts integration fail-closed
    (ADR-029) leaving staged tasks `awaiting_merge` with diagnostics. In
-   `mtv-05`, deterministic prefix bisect finds the first failing task; it is
-   ejected (marker cleared, stays `awaiting_merge` with diagnostics) and the
-   rest re-stack and flush again. Because of decision 4, no batch-mate
+   `mtv-05`, deterministic prefix bisect over ordered staged commits $c_1 \dots c_n$
+   against the base integration tip isolates the culprit in $\le \lceil \log_2 n \rceil$
+   test runs. If bisect finds no failing prefix (flake path), the snapshot is re-run
+   once; if red again, integration halts fail-closed (`FlushResult(ok=False, status="halt")`).
+   When a culprit is found, it is ejected (train marker cleared, stays `awaiting_merge`
+   with `conflict_diagnostics` reason `batch_validation` and `stderr_tail`).
+   Remaining tasks are restacked under `integration_lock` via cherry-pick; any task
+   that cannot apply cleanly is ejected with reason `restack_conflict`. Clean tasks
+   are updated on the staging ref and flushed again. Because of decision 4, no batch-mate
    depends on another, so ejection never cascades. Any non-suite failure halts
    integration fail-closed (ADR-029).
 

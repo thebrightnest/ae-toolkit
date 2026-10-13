@@ -1,10 +1,12 @@
-"""Integration tests for Merge Train staging and flush (ADR-079, R-3, R-5, R-6, R-7).
+"""Integration tests for Merge Train staging and flush (ADR-079, R-3, R-5, R-6, R-7, R-8).
 
 Covers:
 1. Three independent tasks → exactly one validate_command call at end of run, all three merged.
 2. Task B blocked by staged Task A → flush triggers and Task B starts in the same run.
 3. No validation subprocess starts while integration_lock is held (lock-holder instrumentation).
 4. Red flush → all staged tasks remain awaiting_merge, integration branch unmoved.
+5. Batch of four where task 3 breaks validation → tasks 1, 2, 4 merge;
+   task 3 stays awaiting_merge with batch_validation.
 """
 
 from __future__ import annotations
@@ -187,7 +189,7 @@ else:
     subprocess.run(['git', '-C', wt, 'add', '.'], check=True)
     subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', f'stage {{counter}}'], check=True)
     from aet import evidence, telemetry
-    project_slug = telemetry.derive_project_slug(repo_root)
+    dest = evidence.resolve_verdict_path(name, 'qa')
     record = {{
         'task_id': name,
         'stage': 'qa-complete',
@@ -200,7 +202,7 @@ else:
         'tests_passed': 1,
         'tests_failed': 0,
     }}
-    evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)
+    evidence.write_verdict(name, 'qa', record, path=dest, worktree_dir=wt)
 """
     fake_cli.write_text(script_content, encoding="utf-8")
     fake_cli.chmod(0o755)
@@ -239,6 +241,9 @@ class TestMergeTrainFlush(unittest.TestCase):
         self.lock_log = Path(self.misc_dir) / "lock.log"
 
         self._orig_env = os.environ.copy()
+        for key in list(os.environ):
+            if key.startswith("AET_"):
+                del os.environ[key]
         os.environ["AET_REPORTS_DIR"] = str(self.reports_dir)
         os.environ["AET_TELEMETRY_ARCHIVE_DIR"] = str(self.telemetry_dir)
         os.environ["AET_INTEGRATION_LOCK_LOG"] = str(self.lock_log)
@@ -582,17 +587,19 @@ class TestMergeTrainFlush(unittest.TestCase):
             run_id="run-red-flush",
         )
 
-        # Batch run will fail due to red flush halt
+        # Batch run completes with tasks ejected to awaiting_merge with batch_validation diagnostics
         exit_code = orchestrator.run_batch(args, self.adapter)
-        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(exit_code, 0)
 
-        # Both tasks must remain awaiting_merge with their train markers intact
+        # Both tasks must remain awaiting_merge with train markers cleared and diagnostics recorded
         rec_1 = _get_task(backend, queue_file, "task-1")
         rec_2 = _get_task(backend, queue_file, "task-2")
         self.assertEqual(rec_1["state"], "awaiting_merge")
         self.assertEqual(rec_2["state"], "awaiting_merge")
-        self.assertIsNotNone(rec_1.get("train"))
-        self.assertIsNotNone(rec_2.get("train"))
+        self.assertIsNone(rec_1.get("train"))
+        self.assertIsNone(rec_2.get("train"))
+        self.assertEqual(rec_1["conflict_diagnostics"]["reason"], "batch_validation")
+        self.assertEqual(rec_2["conflict_diagnostics"]["reason"], "batch_validation")
 
         # Integration branch on origin must be unmoved
         curr_tip = subprocess.run(
@@ -602,6 +609,129 @@ class TestMergeTrainFlush(unittest.TestCase):
             check=True,
         ).stdout.strip()
         self.assertEqual(curr_tip, orig_tip, "Integration branch should not move on red flush")
+
+    def test_batch_of_four_ejects_culprit_and_merges_clean_tasks(self):
+        """Batch of four with task 3 breaking validation: tasks 1, 2, 4 merge; task 3 stays awaiting_merge."""
+        val_script = Path(self.repo_root) / "val_check.py"
+        val_script.write_text(
+            "import sys, pathlib\n"
+            "if pathlib.Path('fail.txt').exists():\n"
+            "    sys.stderr.write('Task 3 broke batch validation\\n')\n"
+            "    sys.exit(1)\n"
+            "sys.exit(0)\n",
+            encoding="utf-8",
+        )
+
+        Path(self.repo_root, ".agents", "aet-config.json").write_text(
+            json.dumps(
+                {
+                    "trunk_branch": "main",
+                    "integration_branch": "epic-01",
+                    "integration_mode": "single-pr",
+                    "validate_command": f"{sys.executable} {val_script}",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        plans = [
+            _write_plan(self.repo_root, f"task-{i}")
+            for i in range(1, 5)
+        ]
+
+        subprocess.run(["git", "-C", self.repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", self.repo_root, "commit", "-q", "-m", "init plans"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", self.repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+        _create_integration_branch(self.repo_root, "epic-01")
+
+        orig_tip = subprocess.run(
+            ["git", "-C", self.repo_root, "rev-parse", "origin/epic-01"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        # Set up hook for task-3 to write fail.txt
+        hooks_dir = Path(self.repo_root) / ".agents" / "hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+        (hooks_dir / "task-3.py").write_text(
+            "import pathlib, subprocess\n"
+            "from aet import evidence, telemetry\n"
+            "pathlib.Path(wt, 'fail.txt').write_text('bad')\n"
+            "pathlib.Path(wt, 'task-3.txt').write_text('task 3 done')\n"
+            "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
+            "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-3 commit'], check=True)\n"
+            "dest = evidence.resolve_verdict_path(name, 'qa')\n"
+            "record = {\n"
+            "    'task_id': name,\n"
+            "    'stage': 'qa-complete',\n"
+            "    'skill': 'aet-qa',\n"
+            "    'verdict': 'pass',\n"
+            "    'summary': 'qa passed',\n"
+            "    'generated_at': telemetry.iso_now(),\n"
+            "    'test_command': 'make validate',\n"
+            "    'tests_total': 1,\n"
+            "    'tests_passed': 1,\n"
+            "    'tests_failed': 0,\n"
+            "}\n"
+            "evidence.write_verdict(name, 'qa', record, path=dest, worktree_dir=wt)\n",
+            encoding="utf-8",
+        )
+
+        queue_file = os.path.join(self.repo_root, ".agents", "aet-queue")
+        backend = orchestrator._make_backend(queue_file)
+        backend.save(
+            [
+                {"id": f"task-{i}", "state": "ready", "plan_file": plans[i - 1]}
+                for i in range(1, 5)
+            ]
+        )
+
+        args = argparse.Namespace(
+            queue_file=queue_file,
+            repo_root=self.repo_root,
+            base="epic-01",
+            isolation="standard",
+            max_jobs=4,
+            task_timeout=3600,
+            heartbeat_interval=60,
+            on_failure="triage",
+            run_id="run-batch-four",
+        )
+
+        exit_code = orchestrator.run_batch(args, self.adapter)
+        self.assertEqual(exit_code, 0)
+
+        # Tasks 1, 2, 4 must be merged
+        rec_1 = _get_task(backend, queue_file, "task-1")
+        rec_2 = _get_task(backend, queue_file, "task-2")
+        rec_4 = _get_task(backend, queue_file, "task-4")
+        self.assertEqual(rec_1["state"], "merged")
+        self.assertEqual(rec_2["state"], "merged")
+        self.assertEqual(rec_4["state"], "merged")
+
+        # Culprit task-3 stays awaiting_merge with batch_validation diagnostics
+        rec_3 = _get_task(backend, queue_file, "task-3")
+        self.assertEqual(rec_3["state"], "awaiting_merge")
+        self.assertIsNone(rec_3.get("train"))
+        self.assertIsNotNone(rec_3.get("conflict_diagnostics"))
+        self.assertEqual(rec_3["conflict_diagnostics"]["reason"], "batch_validation")
+        self.assertIn("Task 3 broke batch validation", rec_3["conflict_diagnostics"]["stderr_tail"])
+
+        # Integration branch on origin must have moved to include tasks 1, 2, 4
+        curr_tip = subprocess.run(
+            ["git", "-C", self.repo_root, "rev-parse", "origin/epic-01"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        self.assertNotEqual(curr_tip, orig_tip, "Integration branch should advance with clean tasks")
 
 
 if __name__ == "__main__":

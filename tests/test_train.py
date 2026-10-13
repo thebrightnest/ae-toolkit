@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from aet import evidence, train
+from aet import evidence, telemetry, train
 from aet.backends import create_backend
 
 pytestmark = pytest.mark.xdist_group("git-repo")
@@ -170,7 +170,8 @@ class TestTrainFlush(unittest.TestCase):
             self.assertNotEqual(res.returncode, 0)
 
             # Verify batch verdict recorded
-            batch_path = evidence.resolve_verdict_path("main", "batch")
+            slug = telemetry.derive_project_slug(repo_dir)
+            batch_path = evidence.resolve_verdict_path("main", "batch", project_slug=slug)
             self.assertTrue(batch_path.exists())
             verdicts = json.loads(batch_path.read_text(encoding="utf-8"))
             self.assertEqual(verdicts[-1]["verdict"], "pass")
@@ -301,15 +302,59 @@ class TestTrainFlush(unittest.TestCase):
                 backend=backend,
                 validate_command=["false"],  # Fails!
             )
-            self.assertFalse(result.ok)
-            self.assertEqual(result.status, "red")
+            self.assertTrue(result.ok)
+            self.assertEqual(result.status, "empty")
 
             # Main unmoved
             curr_main = subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "main"], text=True).strip()
             self.assertEqual(curr_main, initial_main)
 
-            # Task remains awaiting_merge with train marker
+            # Task remains awaiting_merge with culprit ejected (train marker cleared)
             saved_queue = backend.load()["queue"]
             t1 = saved_queue[0]
             self.assertEqual(t1["state"], "awaiting_merge")
-            self.assertIn("train", t1)
+            self.assertNotIn("train", t1)
+            self.assertEqual(t1["conflict_diagnostics"]["reason"], "batch_validation")
+
+    def test_red_flush_flake_halts_fail_closed(self):
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir:
+            _init_repo(repo_dir, origin_dir, "main")
+            queue_file = os.path.join(repo_dir, ".agents", "aet-queue")
+            os.makedirs(os.path.join(repo_dir, ".agents"), exist_ok=True)
+            backend = create_backend(
+                config_path=os.path.join(repo_dir, ".agents", "aet-config.json"),
+                queue_file=queue_file,
+                history_file=os.path.join(repo_dir, ".agents", "work-history.jsonl"),
+            )
+
+            Path(repo_dir, "task1.txt").write_text("task1 content", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_dir, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_dir, "commit", "-m", "task 1 commit"], check=True)
+            c1 = subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "HEAD"], text=True).strip()
+            subprocess.run(["git", "-C", repo_dir, "reset", "--hard", "HEAD~1"], check=True)
+
+            train.update_train_ref(repo_dir, "main", c1, old_commit="0" * 40)
+            queue = [
+                {
+                    "id": "task-1",
+                    "state": "awaiting_merge",
+                    "train": {
+                        "branch": "main",
+                        "position": 1,
+                        "staged_commit": c1,
+                        "staged_at": "2026-10-13T10:00:00Z",
+                    },
+                }
+            ]
+            backend.save(queue)
+
+            from unittest.mock import patch
+            with patch("aet.train.bisect", return_value=None):
+                result = train.flush(
+                    repo_dir,
+                    "main",
+                    backend=backend,
+                    validate_command=["false"],
+                )
+            self.assertFalse(result.ok)
+            self.assertEqual(result.status, "halt")

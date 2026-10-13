@@ -156,7 +156,7 @@ Not a reproducible defect — current behaviour is correct but redundant.
 - [ ] Task B blocked by staged task A starts in the same run after a flush. (satisfies: R-6)
 - [ ] The integration branch ref is only ever moved to a commit that has a
       passing batch verdict. (satisfies: R-7)
-- [ ] A batch of four where task 3 breaks the suite ends with tasks 1, 2, 4
+- [x] A batch of four where task 3 breaks the suite ends with tasks 1, 2, 4
       `merged` and task 3 `awaiting_merge` with the failing output. (satisfies: R-8)
 - [ ] `aet ship open-epic` on a tip just validated by a flush runs no suite. (satisfies: R-9)
 - [ ] An ADR supersedes ADR-070 decision 2 and records the train. (satisfies: R-10)

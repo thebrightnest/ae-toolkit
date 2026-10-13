@@ -447,8 +447,8 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 branch="epic-01",
                 validate_command=["false"],
             )
-            self.assertFalse(flush_res.ok)
-            self.assertEqual(flush_res.status, "red")
+            self.assertEqual(flush_res.status, "empty")
+            self.assertEqual(flush_res.tasks_flushed, [])
 
             with integration_lock.integration_lock(repo_root):
                 pass
