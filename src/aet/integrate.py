@@ -356,6 +356,17 @@ def integrate(
         )
         return IntegrateResult(status="staged_conflict", detail=diag)
 
+    # Clean any working tree modifications or untracked artifacts left behind by
+    # pre-integration checks so the worktree is completely clean before git rebase.
+    subprocess.run(
+        ["git", "-C", worktree_dir, "reset", "--hard", "HEAD"],
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", worktree_dir, "clean", "-fd"],
+        capture_output=True,
+    )
+
     print(f"   🔀 Integrating {task_id} into {integration_branch}")
 
     with integration_lock(repo_root):
@@ -486,6 +497,10 @@ def integrate(
         # Clean any working tree modifications from post-rebase validation before checkout.
         subprocess.run(
             ["git", "-C", worktree_dir, "reset", "--hard", "HEAD"],
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", worktree_dir, "clean", "-fd"],
             capture_output=True,
         )
         # Detached squash-merge inside the isolated worktree without touching repo_root HEAD.

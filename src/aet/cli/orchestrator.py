@@ -2358,7 +2358,7 @@ def _stage_task_conflict(
             _save_task_record(backend, q)
 
 
-def integrate(*args: Any, **kwargs: Any) -> Any:
+def _integrate_completed_task(*args: Any, **kwargs: Any) -> Any:
     import aet.integrate as _integrate_mod
     original_val = _integrate_mod._validate_after_rebase
     try:
@@ -2368,7 +2368,8 @@ def integrate(*args: Any, **kwargs: Any) -> Any:
         _integrate_mod._validate_after_rebase = original_val
 
 
-_integrate_completed_task = integrate
+def integrate(*args: Any, **kwargs: Any) -> Any:
+    return _integrate_completed_task(*args, **kwargs)
 
 
 
