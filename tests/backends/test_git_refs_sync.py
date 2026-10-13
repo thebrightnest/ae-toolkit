@@ -187,9 +187,10 @@ def test_push_refspec_never_includes_local_paths(repo: Path, monkeypatch) -> Non
 
     push_calls = [c for c in captured if len(c) >= 2 and c[0] == "push" and c[1] == "origin"]
     assert len(push_calls) == 1
-    refspec = push_calls[0][2]
-    assert refspec == "+refs/aet/*"
-    assert "~/.aet" not in refspec
+    refspecs = push_calls[0][2:]
+    assert "+refs/aet/tasks/*" in refspecs
+    assert all(r.startswith("+refs/aet/") for r in refspecs)
+    assert not any("refs/aet/train" in r for r in refspecs)
     assert not any("~/.aet" in arg for call in captured for arg in call)
 
 

@@ -230,6 +230,16 @@ def _json_projection(
     for task in queue:
         category = _display_category(task)
         counts[category] = counts.get(category, 0) + 1
+
+    staged = [
+        t
+        for t in queue
+        if t.get("train")
+        and isinstance(t["train"], dict)
+        and t["train"].get("staged_commit")
+    ]
+    staged.sort(key=lambda t: t["train"].get("position", 0))
+
     return {
         "queue_updated_at": _queue_updated_at(backend),
         "active_runs": _active_runs(runs_dir),
@@ -244,6 +254,10 @@ def _json_projection(
             "remedy": None,
         },
         "last_run": last_run_info,
+        "merge_train": {
+            "length": len(staged),
+            "tasks": [t.get("id") for t in staged],
+        },
         "summary": counts,
         "tasks": [
             {
@@ -255,6 +269,7 @@ def _json_projection(
                 "blocks": task.get("blocks", []),
                 "pending_blockers": pending_blockers(task),
                 "plan_file": task.get("plan_file"),
+                "train": task.get("train"),
             }
             for task in queue
         ],
@@ -398,6 +413,26 @@ def _run(
             print(f"  - {task.get('id')} — {task.get('title')}")
     else:
         print("\nNo failed tasks.")
+
+    staged = [
+        t
+        for t in queue
+        if t.get("train")
+        and isinstance(t["train"], dict)
+        and t["train"].get("staged_commit")
+    ]
+    staged.sort(key=lambda t: t["train"].get("position", 0))
+    if staged:
+        print(f"\nMerge train ({len(staged)} staged):")
+        for task in staged:
+            train_info = task["train"]
+            pos = train_info.get("position", "")
+            pos_prefix = f"#{pos} " if pos != "" else ""
+            task_id = task.get("id", "")
+            branch = train_info.get("branch", "")
+            commit = train_info.get("staged_commit", "")
+            commit_str = commit[:7] if commit else ""
+            print(f"  - {pos_prefix}{task_id} → {branch} ({commit_str})")
 
     # Worktree paths are recorded relative to the repo root, so they must be
     # resolved against it and not against the current directory — otherwise

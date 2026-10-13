@@ -58,6 +58,7 @@ from aet import (  # noqa: E402
     session_log,
     telemetry,
     track_record,
+    train,
     triage,
     validation,
 )
@@ -2358,18 +2359,8 @@ def _stage_task_conflict(
             _save_task_record(backend, q)
 
 
-def _integrate_completed_task(*args: Any, **kwargs: Any) -> Any:
-    import aet.integrate as _integrate_mod
-    original_val = _integrate_mod._validate_after_rebase
-    try:
-        _integrate_mod._validate_after_rebase = _validate_after_rebase
-        return _integrate_impl(*args, **kwargs)
-    finally:
-        _integrate_mod._validate_after_rebase = original_val
-
-
-def integrate(*args: Any, **kwargs: Any) -> Any:
-    return _integrate_completed_task(*args, **kwargs)
+integrate = _integrate_impl
+_integrate_completed_task = integrate
 
 
 
@@ -2443,6 +2434,88 @@ def has_actionable_tasks(queue: list[dict], owned_ids: Collection[str] = ()) -> 
         if state == "in_progress" and task.get("id") in owned:
             return True
     return False
+
+
+def _get_staged_branches(repo_root: str | Path, queue: list[dict[str, Any]]) -> list[str]:
+    """Return unique integration branches that have staged tasks on their merge train."""
+    branches: list[str] = []
+    for t in queue:
+        train_info = t.get("train")
+        if train_info and isinstance(train_info, dict) and current_state(t) == "awaiting_merge":
+            branch = train_info.get("branch")
+            if branch and branch not in branches:
+                branches.append(branch)
+    verified: list[str] = []
+    for b in branches:
+        ref = train.train_ref(b)
+        res = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--verify", ref],
+            capture_output=True,
+        )
+        if res.returncode == 0:
+            verified.append(b)
+    return verified
+
+
+def _branches_to_flush_for_blocked_tasks(
+    repo_root: str | Path,
+    queue: list[dict[str, Any]],
+    backend: Any = None,
+) -> list[str]:
+    """Return branches that should be flushed to unblock tasks waiting on staged tasks."""
+    task_by_id = {t["id"]: t for t in queue if t.get("id")}
+    branches: list[str] = []
+
+    for task in queue:
+        state = current_state(task)
+        if state in ("merged", "abandoned", "in_progress"):
+            continue
+        blocked_by = task.get("blocked_by", [])
+        if not blocked_by:
+            continue
+
+        all_satisfied_or_staged = True
+        has_staged_blocker = False
+        task_branches: list[str] = []
+
+        for blocker_id in blocked_by:
+            blocker_task = task_by_id.get(blocker_id)
+            if blocker_task is None:
+                if backend is not None and hasattr(backend, "read_sealed"):
+                    sealed = backend.read_sealed(blocker_id)
+                    if sealed and current_state(sealed) in ("merged", "abandoned"):
+                        continue
+                all_satisfied_or_staged = False
+                break
+
+            blocker_state = current_state(blocker_task)
+            if blocker_state in ("merged", "abandoned"):
+                continue
+            elif blocker_state == "awaiting_merge" and blocker_task.get("train"):
+                has_staged_blocker = True
+                b = blocker_task["train"].get("branch")
+                if b and b not in task_branches:
+                    task_branches.append(b)
+            else:
+                all_satisfied_or_staged = False
+                break
+
+        if all_satisfied_or_staged and has_staged_blocker:
+            for b in task_branches:
+                if b not in branches:
+                    branches.append(b)
+
+    verified: list[str] = []
+    for b in branches:
+        ref = train.train_ref(b)
+        res = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--verify", ref],
+            capture_output=True,
+        )
+        if res.returncode == 0:
+            verified.append(b)
+    return verified
+
 
 
 def leftover_counts(queue: list[dict]) -> dict[str, int]:
@@ -3274,7 +3347,17 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                         config=config,
                         integration_mode=integration_mode,
                     )
-                    if integration_status == "staged_conflict":
+                    status_val = (
+                        integration_status.status
+                        if hasattr(integration_status, "status")
+                        else str(integration_status)
+                    )
+                    if status_val == "staged_conflict":
+                        if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
+                            _spawn_pass()
+                        return
+                    if status_val == "staged":
+                        successes += 1
                         if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
                             _spawn_pass()
                         return
@@ -3355,6 +3438,21 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         spawned_in_pass: set[str] = set()
         aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
         queue = backend.load()["queue"]
+        # Trigger (b): a task is blocked only by staged tasks — flush before scheduling.
+        to_flush = _branches_to_flush_for_blocked_tasks(repo_root, queue, backend=backend)
+        if to_flush:
+            for b in to_flush:
+                print(f"🚂 Flushing merge train for {b} (unblocking dependent tasks)...")
+                flush_res = train.flush(repo_root, b, backend=backend, config=config)
+                if flush_res.ok:
+                    print(f"   ✅ Merge train flushed for {b}: {len(flush_res.tasks_flushed)} task(s) merged")
+                    merged_task_ids.extend(flush_res.tasks_flushed)
+                else:
+                    print(f"   ❌ Merge train flush failed for {b}: {flush_res.error or flush_res.output}")
+                    failures += 1
+                    stop_spawn = True
+                    return 0
+            queue = backend.load()["queue"]
         while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
             task = get_next_ready_task(queue, exclude=running.keys() | spawned_in_pass)
             if not task:
@@ -3514,6 +3612,31 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 if has_actionable_tasks(queue, running.keys()):
                     time.sleep(0.2)
                     continue
+
+                # Trigger (a): idle train non-empty — no in-progress and no ready tasks
+                # remain while the train is non-empty. Flush each staged branch (R-6).
+                staged_branches = _get_staged_branches(repo_root, queue)
+                if staged_branches:
+                    flush_failed = False
+                    for b in staged_branches:
+                        print(f"🚂 Flushing merge train for {b} (idle train non-empty)...")
+                        flush_res = train.flush(repo_root, b, backend=backend, config=config)
+                        if flush_res.ok:
+                            print(f"   ✅ Merge train flushed for {b}: {len(flush_res.tasks_flushed)} task(s) merged")
+                            merged_task_ids.extend(flush_res.tasks_flushed)
+                        else:
+                            print(f"   ❌ Merge train flush failed for {b}: {flush_res.error or flush_res.output}")
+                            failures += 1
+                            stop_spawn = True
+                            flush_failed = True
+                            break
+                    if flush_failed:
+                        break
+                    # Reload queue and check if newly merged tasks unblocked ready tasks
+                    queue = backend.load()["queue"]
+                    if has_actionable_tasks(queue, running.keys()):
+                        continue
+
                 # Nothing running and nothing that can still make progress on its
                 # own (a ready/in_progress task). Whatever remains is stranded
                 # until an external actor moves it, so exit with a leftover
@@ -4067,7 +4190,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                     from_state = current_state(queue_task) or "in_progress"
                     if integration_mode == "single-pr":
                         try:
-                            integrate(
+                            int_res = integrate(
                                 repo_root=repo_root,
                                 task=queue_task,
                                 worktree_dir=worktree_dir,
@@ -4077,6 +4200,23 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                                 plan_file=plan_file,
                                 plan_data=plan_fm,
                             )
+                            if int_res.status == "staged":
+                                from aet.train import flush
+                                target_branch = (
+                                    queue_task.get("train", {}).get("branch")
+                                    or integration.name
+                                    or "main"
+                                )
+                                flush_res = flush(
+                                    repo_root=repo_root,
+                                    branch=target_branch,
+                                    backend=backend,
+                                    config=config,
+                                )
+                                if flush_res.status == "red" or not flush_res.ok:
+                                    raise IntegrationFailureError(
+                                        flush_res.error or flush_res.output or "flush failed"
+                                    )
                             print(f"   ✅ Task {task_id} merged locally (single-pr)")
                         except IntegrationFailureError as exc:
                             print(f"   ❌ Integration failure for {task_id}: {exc}")

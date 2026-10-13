@@ -1286,6 +1286,17 @@ def cmd_merge(args: SimpleNamespace) -> int:
     if not result.ok:
         return _fail(result.message or f"Integration failed with status {result.status}")
 
+    if result.status == "staged":
+        from aet.train import flush
+        flush_res = flush(
+            repo_root=repo_root,
+            branch=target_branch,
+            backend=backend,
+            config=config,
+        )
+        if not flush_res.ok or flush_res.status == "red":
+            return _fail(f"Flush failed: {flush_res.error or flush_res.output or 'flush failed'}")
+
     archive_plan_file(task_id)
     print("✅ aet ship merge complete.")
     return 0
