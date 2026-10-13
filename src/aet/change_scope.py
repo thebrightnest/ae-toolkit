@@ -21,7 +21,7 @@ BASE_REF = "origin/main"
 
 # A change set that selects at least this share of the suite is reported as the
 # full suite instead: the coverage is the same and the command line stays short.
-FULL_SUITE_SHARE = 0.5
+FULL_SUITE_SHARE = 0.75
 
 
 def is_code_path(path: str) -> bool:
