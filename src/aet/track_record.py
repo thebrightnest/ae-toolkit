@@ -8,6 +8,7 @@ auto-merge. The shipped default policy is empty: nothing auto-merges.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -355,74 +356,79 @@ def perform_auto_merge(
     task: dict[str, Any],
     queue_file: str,
     repo_root: str,
+    worktree_dir: str | Path | None = None,
 ) -> bool:
-    """Auto-merge ``task`` by merging its branch to main and recording closure.
+    """Auto-merge ``task`` by integrating its branch via ``integrate()``.
 
-    Drives the existing ``aet-state record-merge`` path so ``merged`` stays a
-    single-writer transition. Returns True on success, False on any failure.
+    Routes through ``integrate()`` under ``integration_lock``.
+    Returns True on success, False on any failure.
     """
     task_id = task.get("id")
     branch = task.get("branch")
     if not task_id or not branch:
         return False
 
-    script_dir = Path(__file__).resolve().parent.parent / "bin"
-    aet_state_bin = str(script_dir / "aet-state")
+    from aet.integrate import integrate
 
-    def _run_git(*args: str) -> tuple[int, str, str]:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=repo_root,
+    # Resolve existing worktree or create one for the task
+    if worktree_dir is not None:
+        worktree_path: Path | None = Path(worktree_dir)
+    else:
+        candidate = Path(repo_root) / ".worktrees" / task_id
+        worktree_path = candidate if candidate.is_dir() else None
+    created = False
+
+    if worktree_path is None:
+        res = subprocess.run(
+            ["git", "-C", repo_root, "worktree", "list", "--porcelain"],
             capture_output=True,
             text=True,
         )
-        return result.returncode, result.stdout, result.stderr
+        if res.returncode == 0:
+            current: Path | None = None
+            for line in res.stdout.splitlines():
+                if line.startswith("worktree "):
+                    current = Path(line[len("worktree ") :])
+                elif line.startswith("branch ") and current is not None:
+                    if line[len("branch ") :] == f"refs/heads/{branch}":
+                        worktree_path = current
+                        break
 
-    steps = [
-        ("fetch", "origin"),
-        ("checkout", "main"),
-        ("merge", "--no-ff", "-m", f"auto-merge({task_id})", branch),
-        ("push", "origin", "main"),
-    ]
-    for step in steps:
-        rc, _out, err = _run_git(*step)
-        if rc != 0:
+    if worktree_path is None:
+        worktree_path = Path(repo_root) / ".worktrees" / f".merge-{task_id}-{os.getpid()}"
+        res = subprocess.run(
+            ["git", "-C", repo_root, "worktree", "add", "--checkout", str(worktree_path), branch],
+            capture_output=True,
+            text=True,
+        )
+        if res.returncode != 0:
             print(
-                f"   ⚠️  Auto-merge git step failed for {task_id}: git {' '.join(step)}: {err.strip()}",
+                f"   ⚠️  Auto-merge worktree creation failed for {task_id}: {res.stderr.strip()}",
                 file=sys.stderr,
             )
             return False
+        created = True
 
-    rc, out, _err = _run_git("rev-parse", "HEAD")
-    if rc != 0:
-        return False
-    merge_commit = out.strip()
-    if not merge_commit:
-        return False
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            aet_state_bin,
-            "record-merge",
-            task_id,
-            "--merge-commit",
-            merge_commit,
-            queue_file,
-        ],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print(
-            f"   ⚠️  Auto-merge record-merge failed for {task_id}: {result.stderr.strip()}",
-            file=sys.stderr,
+    try:
+        result = integrate(
+            repo_root=repo_root,
+            task=task,
+            worktree_dir=str(worktree_path),
         )
-        return False
-
-    print(f"   ✅ Auto-merged {task_id} via closure path")
-    return True
+        if not result.ok:
+            print(
+                f"   ⚠️  Auto-merge integration failed for {task_id}: {result.message}",
+                file=sys.stderr,
+            )
+            return False
+        print(f"   ✅ Auto-merged {task_id} via integrate()")
+        return True
+    finally:
+        if created and worktree_path.exists():
+            subprocess.run(
+                ["git", "-C", repo_root, "worktree", "remove", "--force", str(worktree_path)],
+                capture_output=True,
+            )
 
 
 def format_eligibility_report(

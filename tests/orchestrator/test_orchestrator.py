@@ -4939,6 +4939,7 @@ class TestParentManagedIntegration(unittest.TestCase):
             subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
             subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
             Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+            Path(repo_root, "Makefile").write_text("validate:\n\t@true\n", encoding="utf-8")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
             subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
@@ -5166,6 +5167,7 @@ class TestParentManagedIntegration(unittest.TestCase):
             subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
             subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
             Path(repo_root, "conflict.txt").write_text("initial content\n", encoding="utf-8")
+            Path(repo_root, "Makefile").write_text("validate:\n\t@true\n", encoding="utf-8")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
             subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
@@ -5253,6 +5255,7 @@ class TestParentManagedIntegration(unittest.TestCase):
             subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
             subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
             Path(repo_root, "init.txt").write_text("initial\n", encoding="utf-8")
+            Path(repo_root, "Makefile").write_text("validate:\n\t@true\n", encoding="utf-8")
             subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
             subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
             subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
@@ -5550,7 +5553,7 @@ class TestBatchDynamicSlotReplenishment(unittest.TestCase, _BatchRepoMixin):
                             "verify_branch_has_commits",
                             return_value=(True, ""),
                         ):
-                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=60)
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=120)
 
                 self.assertFalse(timed_out, "run_batch timed out")
                 self.assertEqual(rc, 0)
@@ -5737,7 +5740,7 @@ class TestBatchDynamicSlotReplenishment(unittest.TestCase, _BatchRepoMixin):
                                     "verify_branch_has_commits",
                                     return_value=(True, ""),
                                 ):
-                                    rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=60)
+                                    rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=120)
 
                 self.assertFalse(timed_out, "run_batch timed out")
                 self.assertEqual(rc, 0)

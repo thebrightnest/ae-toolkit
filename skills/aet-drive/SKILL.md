@@ -134,12 +134,18 @@ aet status
 When a task is staged in `awaiting_merge` due to merge conflicts:
 
 1. **Locate Conflicting Files**:
-   Inspect `conflict_diagnostics` on the task record or review output from `aet ship merge <task_id>`:
+   Inspect `conflict_diagnostics` on the task record (populated by `integrate()`) or review output from `aet ship merge <task_id>`:
 
-   ```text
-   Merging feat/<task_id> into feat/<epic> produced conflicts in:
-     - path/to/file1.py
-     - path/to/file2.py
+   ```json
+   {
+     "reason": "rebase_conflict",
+     "conflicting_files": [
+       "path/to/file1.py",
+       "path/to/file2.py"
+     ],
+     "stderr_tail": "CONFLICT (content): Merge conflict in path/to/file1.py...",
+     "at": "2026-10-12T22:00:00Z"
+   }
    ```
 
 2. **Inspect and Reconcile**:

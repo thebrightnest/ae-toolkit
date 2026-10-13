@@ -56,6 +56,7 @@ def _init_git_repo(repo_root: str, origin_root: str) -> None:
         check=True,
     )
     Path(repo_root, "README.md").write_text("# test", encoding="utf-8")
+    Path(repo_root, "Makefile").write_text("validate:\n\t@true\n", encoding="utf-8")
     subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
     subprocess.run(
         ["git", "-C", repo_root, "commit", "-q", "-m", "initial"],
@@ -303,7 +304,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
             _write_qa_verdict(repo_root, "task-a")
 
             with patch.object(orchestrator, "_validate_after_rebase", return_value=(True, "")):
-                result = orchestrator._integrate_single_pr_task(
+                result = orchestrator.integrate(
                     repo_root=repo_root,
                     task_id="task-a",
                     integration_branch="epic-01",
@@ -382,7 +383,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
             )
             subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
 
-            res = orchestrator._integrate_single_pr_task(
+            res = orchestrator.integrate(
                 repo_root=repo_root,
                 task_id="task-a",
                 integration_branch="epic-01",
@@ -429,7 +430,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
             with patch.object(
                 orchestrator, "_validate_after_rebase", return_value=(False, "tests failed")
             ):
-                res = orchestrator._integrate_single_pr_task(
+                res = orchestrator.integrate(
                     repo_root=repo_root,
                     task_id="task-a",
                     integration_branch="epic-01",
@@ -481,7 +482,7 @@ class TestIntegrationSinglePrTask(unittest.TestCase):
                 patch.object(orchestrator.gate, "check_task_evidence", return_value=(False, ["tests failed"])),
             ):
                 with self.assertRaises(orchestrator.IntegrationFailureError):
-                    orchestrator._integrate_single_pr_task(
+                    orchestrator.integrate(
                         repo_root=repo_root,
                         task_id="task-a",
                         integration_branch="epic-01",

@@ -50,7 +50,7 @@ from aet import (  # noqa: E402
     breaker,
     divergence,
     evidence,
-    gate,
+    gate,  # noqa: F401
     handoff,
     liveness,
     plan_parser,
@@ -80,9 +80,11 @@ from aet.branch_ref import (  # noqa: E402
     resolve_trunk_branch,
 )
 from aet.cli_adapter import resolve_cli_adapter  # noqa: E402
+from aet.integrate import (  # noqa: E402
+    integrate as _integrate_impl,
+)
 from aet.integration_lock import (  # noqa: E402
     IntegrationFailureError,
-    integration_lock,
 )
 from aet.queue import (  # noqa: E402
     LEASE_HELD_EXIT_CODE,
@@ -111,11 +113,8 @@ from aet.worktree import (  # noqa: E402
     check_base_hygiene,
     copy_untracked_files,
     create_worktree,
-    delete_local_branch,
     prepare_worktree_dependencies,
-    push_branch,
     render_task_plan,
-    run_git_plain,
     teardown_worktree,
 )
 
@@ -2216,7 +2215,7 @@ def process_task(
             repo_root, config, task, integration_mode, backend=backend
         )
         try:
-            _integrate_completed_task(
+            integrate(
                 repo_root=repo_root,
                 task=task,
                 worktree_dir=worktree_dir,
@@ -2359,304 +2358,20 @@ def _stage_task_conflict(
             _save_task_record(backend, q)
 
 
-def _integrate_completed_task(
-    repo_root: str,
-    task: dict[str, Any] | str,
-    worktree_dir: str,
-    backend=None,
-    config: dict[str, Any] | None = None,
-    integration_mode: str | None = None,
-    integration_branch: str | None = None,
-    plan_file: str | None = None,
-    plan_data: dict[str, Any] | None = None,
-) -> bool | str:
-    """Serialize, rebase, re-validate, squash-merge, push, and clean up.
-
-    Integration (rebase onto current tip -> re-validate -> detached squash-merge)
-    is executed inside the task worktree under the local advisory integration lock
-    without checking out the integration branch in repo_root (ADR-045, R-18).
-    A rebase conflict or post-rebase validation failure stages the task in
-    awaiting_merge with conflict diagnostics (R-7), not triaged as a task failure (R-19).
-
-    Also transitions the queued task to ``merged`` when a queue file exists.
-    Returns ``True`` on success, ``'staged_conflict'`` on rebase/validation conflict,
-    and raises ``IntegrationFailureError`` on any other integration failure.
-    """
-    task_id = task["id"] if isinstance(task, dict) else str(task)
-    task_dict = task if isinstance(task, dict) else {"id": task_id}
-    if config is None:
-        config = resolve_config(DEFAULT_CONFIG_PATH, repo_root=repo_root)
-    if integration_mode is None:
-        integration_mode = os.environ.get("AET_INTEGRATION_MODE") or resolve_integration_mode(
-            DEFAULT_CONFIG_PATH, repo_root=repo_root
-        )
-    if integration_branch is None:
-        integration_branch = resolve_integration_branch_for_task(
-            repo_root, config, task_dict, integration_mode, backend=backend
-        ).ref
-
-    print(f"   🔀 Integrating {task_id} into {integration_branch}")
-    queue_file = os.path.join(repo_root, ".agents", "aet-queue")
-
-    with integration_lock(repo_root):
-        # Fetch latest tip so local tracking ref tracks the live remote tip.
-        subprocess.run(
-            ["git", "-C", repo_root, "fetch", "origin", integration_branch],
-            capture_output=True,
-            text=True,
-        )
-
-        res = subprocess.run(
-            ["git", "-C", repo_root, "rev-parse", "--verify", f"refs/remotes/origin/{integration_branch}"],
-            capture_output=True,
-        )
-        target_ref = f"origin/{integration_branch}" if res.returncode == 0 else integration_branch
-
-        rc_pre, pre_rebase_commit, _ = run_git_plain(["-C", worktree_dir, "rev-parse", "HEAD"])
-        pre_rebase_commit = pre_rebase_commit.strip()
-
-        # Rebase the task branch onto the live integration tip inside the worktree.
-        rebase = subprocess.run(
-            ["git", "-C", worktree_dir, "rebase", target_ref],
-            capture_output=True,
-            text=True,
-        )
-        if rebase.returncode != 0:
-            conflicts_run = subprocess.run(
-                ["git", "-C", worktree_dir, "diff", "--name-only", "--diff-filter=U"],
-                capture_output=True,
-                text=True,
-            )
-            conflicts = [f.strip() for f in conflicts_run.stdout.splitlines() if f.strip()]
-            subprocess.run(
-                ["git", "-C", worktree_dir, "rebase", "--abort"],
-                capture_output=True,
-            )
-            tail = (rebase.stderr if rebase.stderr.strip() else rebase.stdout or "").strip()[-500:]
-            diag = {
-                "reason": "rebase_conflict",
-                "conflicting_files": conflicts,
-                "stderr_tail": tail,
-                "at": telemetry.iso_now(),
-            }
-            _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
-            print(
-                f"⚠️  Task {task_id} staged in awaiting_merge due to rebase conflicts. Independent tasks continue."
-            )
-            return "staged_conflict"
-
-        # Re-validate the rebased combination before it lands (R-18).
-        ok, output = _validate_after_rebase(worktree_dir, task_id=task_id, repo_root=repo_root)
-        if not ok:
-            subprocess.run(
-                ["git", "-C", worktree_dir, "reset", "--hard", pre_rebase_commit],
-                capture_output=True,
-            )
-            subprocess.run(
-                ["git", "-C", worktree_dir, "clean", "-fd"],
-                capture_output=True,
-            )
-            diag = {
-                "reason": "validation_failure",
-                "conflicting_files": [],
-                "stderr_tail": output.strip()[-500:] if output else "validation failed after rebase",
-                "at": telemetry.iso_now(),
-            }
-            _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
-            print(
-                f"⚠️  Task {task_id} staged in awaiting_merge due to post-rebase "
-                "validation failure. Independent tasks continue."
-            )
-            return "staged_conflict"
-
-        # Verify required gate evidence before the squash-merge lands (R-22).
-        _plan_path = (
-            Path(plan_file)
-            if plan_file
-            else Path(worktree_dir) / "docs" / "plans" / f"{task_id}.md"
-        )
-        _plan_fm = plan_data or (
-            plan_parser.parse_frontmatter(_plan_path)
-            if _plan_path.exists()
-            else (task_dict.get("spec") or {})
-        )
-        _evidence_ok, _evidence_failures = gate.check_task_evidence(
-            task_id, _plan_fm, repo_root
-        )
-        if not _evidence_ok:
-            raise IntegrationFailureError(
-                "missing required gate evidence for "
-                f"{task_id}:\n" + "\n".join(_evidence_failures)
-            )
-
-        # Clean any working tree modifications from post-rebase validation before checkout.
-        subprocess.run(
-            ["git", "-C", worktree_dir, "reset", "--hard", "HEAD"],
-            capture_output=True,
-        )
-        # Detached squash-merge inside the isolated worktree without touching repo_root HEAD.
-        checkout = subprocess.run(
-            ["git", "-C", worktree_dir, "checkout", "-f", "--detach", target_ref],
-            capture_output=True,
-            text=True,
-        )
-        if checkout.returncode != 0:
-            raise IntegrationFailureError(
-                f"checkout {target_ref} in worktree failed: {checkout.stderr.strip()}"
-            )
-
-        merge = subprocess.run(
-            ["git", "-C", worktree_dir, "merge", "--squash", task_id],
-            capture_output=True,
-            text=True,
-        )
-        if merge.returncode != 0:
-            subprocess.run(
-                ["git", "-C", worktree_dir, "merge", "--abort"],
-                capture_output=True,
-            )
-            subprocess.run(
-                ["git", "-C", worktree_dir, "checkout", task_id],
-                capture_output=True,
-            )
-            raise IntegrationFailureError(
-                f"squash merge of {task_id} failed: {merge.stderr.strip()}"
-            )
-
-        commit = subprocess.run(
-            ["git", "-C", worktree_dir, "commit", "-m", f"Integrate {task_id}"],
-            capture_output=True,
-            text=True,
-        )
-        if commit.returncode != 0:
-            subprocess.run(
-                ["git", "-C", worktree_dir, "checkout", task_id],
-                capture_output=True,
-            )
-            raise IntegrationFailureError(
-                f"commit after squash merge failed: {commit.stderr.strip()}"
-            )
-
-        rc, out, _ = run_git_plain(["-C", worktree_dir, "rev-parse", "HEAD"])
-        if rc != 0:
-            raise IntegrationFailureError("could not resolve merge commit")
-        merge_commit = out.strip()
-
-        # Update local ref in repo_root.
-        head_ref = subprocess.run(
-            ["git", "-C", repo_root, "symbolic-ref", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-        )
-        if head_ref.returncode == 0 and head_ref.stdout.strip() == integration_branch:
-            subprocess.run(
-                ["git", "-C", repo_root, "reset", "--hard", merge_commit],
-                capture_output=True,
-                text=True,
-            )
-        else:
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", f"refs/heads/{integration_branch}", merge_commit],
-                capture_output=True,
-                text=True,
-            )
-
-        ok, err = push_branch(repo_root, integration_branch)
-        if not ok:
-            raise IntegrationFailureError(
-                f"push of {integration_branch} failed: {err}"
-            )
-
-        # Update remote-tracking ref so ancestry checks pass.
-        subprocess.run(
-            ["git", "-C", repo_root, "update-ref", f"refs/remotes/origin/{integration_branch}", merge_commit],
-            capture_output=True,
-        )
-
-        # Clean up the task branch and worktree under lock.
-        subprocess.run(
-            ["git", "-C", repo_root, "worktree", "remove", "--force", worktree_dir],
-            capture_output=True,
-        )
-        delete_local_branch(repo_root, task_id)
-
-    # Record the merge commit on the task record.
-    if backend is not None and _task_in_queue(backend, task_id):
-        queue = backend.load()["queue"]
-        for t in queue:
-            if t.get("id") == task_id:
-                t["merge_commit"] = merge_commit
-                break
-        _save_task_record(backend, queue)
-
-    # Transition task state to merged.
-    if backend is not None and _task_in_queue(backend, task_id):
-        aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
-        queue = backend.load()["queue"]
-        t = next((item for item in queue if item.get("id") == task_id), None)
-        curr = current_state(t) if t else "in_progress"
-        if curr != "awaiting_merge" and curr != "merged":
-            res = subprocess.run(
-                [
-                    sys.executable,
-                    aet_state_bin,
-                    "transition",
-                    task_id,
-                    curr,
-                    "awaiting_merge",
-                    queue_file,
-                ],
-                capture_output=True,
-                text=True,
-            )
-            if res.returncode != 0:
-                raise IntegrationFailureError(
-                    f"Could not transition {task_id} to awaiting_merge: {res.stderr.strip()}"
-                )
-            curr = "awaiting_merge"
-        if curr == "awaiting_merge":
-            res = subprocess.run(
-                [
-                    sys.executable,
-                    aet_state_bin,
-                    "transition",
-                    task_id,
-                    "awaiting_merge",
-                    "merged",
-                    queue_file,
-                ],
-                capture_output=True,
-                text=True,
-            )
-            if res.returncode != 0:
-                raise IntegrationFailureError(
-                    f"Could not transition {task_id} to merged: {res.stderr.strip()}"
-                )
-
-    print(f"   ✅ {task_id} integrated into {integration_branch}")
-    return True
+def _integrate_completed_task(*args: Any, **kwargs: Any) -> Any:
+    import aet.integrate as _integrate_mod
+    original_val = _integrate_mod._validate_after_rebase
+    try:
+        _integrate_mod._validate_after_rebase = _validate_after_rebase
+        return _integrate_impl(*args, **kwargs)
+    finally:
+        _integrate_mod._validate_after_rebase = original_val
 
 
-def _integrate_single_pr_task(
-    repo_root: str,
-    task_id: str,
-    integration_branch: str,
-    worktree_dir: str,
-    backend=None,
-    plan_file: str | None = None,
-    plan_data: dict[str, Any] | None = None,
-) -> bool | str:
-    """Backward-compatible delegate to _integrate_completed_task."""
-    return _integrate_completed_task(
-        repo_root=repo_root,
-        task={"id": task_id},
-        worktree_dir=worktree_dir,
-        backend=backend,
-        integration_mode="single-pr",
-        integration_branch=integration_branch,
-        plan_file=plan_file,
-        plan_data=plan_data,
-    )
+def integrate(*args: Any, **kwargs: Any) -> Any:
+    return _integrate_completed_task(*args, **kwargs)
+
+
 
 
 
@@ -3551,7 +3266,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             if should_integrate and worktree_dir and os.path.isdir(worktree_dir):
                 _write_task_cost(backend, queue_file, task_id, logger)
                 try:
-                    integration_status = _integrate_completed_task(
+                    integration_status = integrate(
                         repo_root=repo_root,
                         task=task,
                         worktree_dir=worktree_dir,
@@ -4352,7 +4067,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                     from_state = current_state(queue_task) or "in_progress"
                     if integration_mode == "single-pr":
                         try:
-                            _integrate_completed_task(
+                            integrate(
                                 repo_root=repo_root,
                                 task=queue_task,
                                 worktree_dir=worktree_dir,

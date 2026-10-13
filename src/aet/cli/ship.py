@@ -39,10 +39,18 @@ import typer
 from typer.core import TyperGroup
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
-from aet import gate, plan_parser, validation  # noqa: E402
-from aet.backends.factory import resolve_config  # noqa: E402
-from aet.branch_ref import resolve_trunk_branch  # noqa: E402
+from aet import gate, plan_parser, validation  # noqa: I001, E402
+from aet.backends import create_backend  # noqa: E402
+from aet.backends.factory import DEFAULT_CONFIG_PATH, resolve_config, resolve_integration_mode  # noqa: E402
+from aet.branch_ref import resolve_integration_branch_for_task, resolve_trunk_branch  # noqa: E402
 from aet.closure import archive_plan_file  # noqa: E402
+from aet.integrate import (  # noqa: I001, E402
+    check_release_guard as _check_release_guard,
+    commit_count as _commit_count,
+    commit_subjects as _commit_subjects,
+    integrate,
+    is_monolithic_commit as _is_monolithic_commit,
+)
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
 
 # Load aet-state as a module so we can reuse its merge-resolution and
@@ -524,6 +532,11 @@ def _create_gate_worktree(branch: str) -> Path:
     return worktree_dir
 
 
+def _remove_worktree(path: Path) -> None:
+    """Remove a temporary worktree, ignoring errors."""
+    _run_git("worktree", "remove", "--force", str(path), check=False)
+
+
 def _run_gate(args: SimpleNamespace) -> GateResult:
     """Execute gate checks and return a structured result for reuse."""
     spec = getattr(args, "spec", None) or {}
@@ -724,57 +737,6 @@ def _print_stage_skips(stage: str) -> None:
     # qa-complete or earlier: run review, then conditional CSO.
 
 
-def _plan_task_count(spec: dict[str, Any]) -> int:
-    """Count checked/unchecked tasks from the task record."""
-    count = 0
-    for item in spec.get("tasks", []):
-        stripped = item.strip()
-        if stripped.startswith("- [ ]") or stripped.startswith("- [x]"):
-            count += 1
-    return count
-
-
-def _commit_count(
-    pr_base: str,
-    feature_branch: Optional[str] = None,
-    workspace: Optional[Path] = None,
-) -> int:
-    """Return the number of commits between pr_base and feature_branch."""
-    target_ref = feature_branch or "HEAD"
-    git_args = ["-C", str(workspace)] if workspace else []
-    result = _run_git(*git_args, "rev-list", "--count", f"{pr_base}..{target_ref}", check=False)
-    if result.returncode != 0:
-        return 0
-    try:
-        return int(result.stdout.strip())
-    except ValueError:
-        return 0
-
-
-def _commit_subjects(
-    pr_base: str,
-    feature_branch: Optional[str] = None,
-    workspace: Optional[Path] = None,
-) -> list[str]:
-    """Return commit subjects in the pr_base..feature_branch range."""
-    target_ref = feature_branch or "HEAD"
-    git_args = ["-C", str(workspace)] if workspace else []
-    result = _run_git(*git_args, "log", f"{pr_base}..{target_ref}", "--pretty=format:%s", check=False)
-    if result.returncode != 0:
-        return []
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-
-
-def _is_monolithic_commit(
-    pr_base: str,
-    spec: dict[str, Any],
-    feature_branch: Optional[str] = None,
-    workspace: Optional[Path] = None,
-) -> bool:
-    """True when one commit covers the whole range while the plan has >1 task."""
-    count = _commit_count(pr_base, feature_branch=feature_branch, workspace=workspace)
-    return count == 1 and _plan_task_count(spec) > 1
-
 
 def _extract_prd_link(spec: dict[str, Any]) -> str | None:
     """Return the PRD path referenced in the task record's Source line, if any."""
@@ -903,24 +865,6 @@ def _create_pr(pr_base: str, title: str, body: str, dry_run: bool) -> tuple[bool
     finally:
         os.unlink(body_path)
 
-
-def _check_release_guard(
-    pr_base: str,
-    feature_branch: Optional[str] = None,
-    workspace: Optional[Path] = None,
-) -> str | None:
-    """Block ``chore(release)`` commits and VERSION changes on feature branches."""
-    for subject in _commit_subjects(pr_base, feature_branch=feature_branch, workspace=workspace):
-        if re.match(r"^chore\(release\)", subject):
-            return f"Release guard: commit '{subject}' is a chore(release) on a feature branch."
-    target_ref = feature_branch or "HEAD"
-    git_args = ["-C", str(workspace)] if workspace else []
-    diff = _run_git(*git_args, "diff", f"{pr_base}..{target_ref}", "--name-only", check=False)
-    if diff.returncode == 0:
-        for line in diff.stdout.splitlines():
-            if line.strip() == "VERSION":
-                return "Release guard: VERSION file changed on a feature branch."
-    return None
 
 
 def cmd_open(args: SimpleNamespace) -> int:
@@ -1218,47 +1162,6 @@ def cmd_split(args: SimpleNamespace) -> int:
     return 0
 
 
-def _has_merge_conflicts(
-    target_branch: str,
-    feature_branch: Optional[str] = None,
-    workspace: Optional[Path] = None,
-) -> tuple[bool, str]:
-    """Return (has_conflicts, message) for merging feature_branch into origin/<target_branch>."""
-    target_ref = f"origin/{target_branch}"
-    source_ref = feature_branch or "HEAD"
-    git_args = ["-C", str(workspace)] if workspace else []
-    base_result = _run_git(*git_args, "merge-base", source_ref, target_ref, check=False)
-    if base_result.returncode != 0:
-        return True, f"Could not find merge base between {source_ref} and {target_ref}."
-    merge_base = base_result.stdout.strip()
-    tree_result = _run_git(*git_args, "merge-tree", merge_base, source_ref, target_ref, check=False)
-    if tree_result.returncode != 0:
-        return True, f"Merge-tree failed for {target_ref}: {tree_result.stderr}"
-    if any(line.startswith("<<<<<<< ") for line in tree_result.stdout.splitlines()):
-        conflicted_files: list[str] = []
-        for line in tree_result.stdout.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("our ") or stripped.startswith("their "):
-                parts = stripped.split(maxsplit=3)
-                if len(parts) >= 4:
-                    conflicted_files.append(parts[3])
-            elif "Merge conflict in " in stripped:
-                conflicted_files.append(stripped.split("Merge conflict in ", 1)[1].strip())
-        if conflicted_files:
-            file_list = "\n".join(f"  - {f}" for f in sorted(set(conflicted_files)))
-            return (
-                True,
-                f"Merging {source_ref} into {target_ref} produced conflicts in:\n{file_list}\n"
-                "Rebase onto the target branch or resolve the conflicts first.",
-            )
-        return (
-            True,
-            f"Merging {source_ref} into {target_ref} would produce conflicts. "
-            "Rebase onto the target branch or resolve the conflicts first.",
-        )
-    return False, ""
-
-
 def _find_target_worktree(branch: str) -> Optional[Path]:
     """Return the path of an existing worktree for *branch*, or None."""
     result = _run_git("worktree", "list", "--porcelain", check=False)
@@ -1275,147 +1178,14 @@ def _find_target_worktree(branch: str) -> Optional[Path]:
     return None
 
 
-def _create_temp_worktree(target_branch: str) -> Path:
-    """Create a temporary worktree for origin/<target_branch> and return its path."""
-    repo_root = Path(_run_git("rev-parse", "--show-toplevel").stdout.strip())
-    worktree_dir = repo_root / ".worktrees" / f".merge-{target_branch}-{os.getpid()}"
-    result = _run_git(
-        "worktree",
-        "add",
-        "--checkout",
-        str(worktree_dir),
-        f"origin/{target_branch}",
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Could not create worktree for {target_branch}: {result.stderr}")
-    return worktree_dir
-
-
-def _remove_worktree(path: Path) -> None:
-    """Remove a temporary worktree, ignoring errors."""
-    _run_git("worktree", "remove", "--force", str(path), check=False)
-
-
-def _merge_into_target(target_branch: str, feature_branch: str, dry_run: bool) -> tuple[bool, str, Optional[str]]:
-    """Merge *feature_branch* into *target_branch* and push.
-
-    Returns (ok, message, merge_commit). *merge_commit* is None on failure or
-    dry-run. Existing worktrees for the target branch are reused; otherwise a
-    temporary worktree is created and removed.
-    """
-    target_ref = f"origin/{target_branch}"
-    worktree = _find_target_worktree(target_branch)
-    created = False
-    if worktree is None:
-        if dry_run:
-            return (
-                True,
-                f"Would create a worktree for {target_ref}, merge {feature_branch} into "
-                f"{target_branch}, and push {target_branch}.",
-                None,
-            )
-        try:
-            worktree = _create_temp_worktree(target_branch)
-            created = True
-        except RuntimeError as exc:
-            return False, str(exc), None
-
-    try:
-        if dry_run:
-            return (
-                True,
-                f"Would merge {feature_branch} into {target_branch} and push {target_branch}.",
-                None,
-            )
-
-        checkout_result = _run_git("-C", str(worktree), "checkout", target_branch, check=False)
-        if checkout_result.returncode != 0:
-            return False, f"Could not checkout {target_branch}: {checkout_result.stderr}", None
-
-        pull_result = _run_git("-C", str(worktree), "pull", "origin", target_branch, check=False)
-        if pull_result.returncode != 0:
-            return False, f"Could not pull {target_ref}: {pull_result.stderr}", None
-
-        merge_message = f"Merge {feature_branch} into {target_branch}"
-        merge_result = _run_git(
-            "-C",
-            str(worktree),
-            "merge",
-            "--no-ff",
-            "-m",
-            merge_message,
-            feature_branch,
-            check=False,
-        )
-        if merge_result.returncode != 0:
-            _run_git("-C", str(worktree), "merge", "--abort", check=False)
-            return (
-                False,
-                f"Merge into {target_branch} failed:\n{merge_result.stdout}\n{merge_result.stderr}",
-                None,
-            )
-
-        sha_result = _run_git("-C", str(worktree), "rev-parse", "HEAD", check=False)
-        if sha_result.returncode != 0:
-            return False, f"Could not read merge commit SHA: {sha_result.stderr}", None
-        merge_commit = sha_result.stdout.strip()
-
-        push_result = _run_git("-C", str(worktree), "push", "origin", target_branch, check=False)
-        if push_result.returncode != 0:
-            return (
-                False,
-                f"Push of {target_branch} failed:\n{push_result.stdout}\n{push_result.stderr}",
-                None,
-            )
-
-        # Fail-closed post-condition: the feature branch must be an ancestor of the
-        # target after the merge. Catches silent no-op merges (e.g. an already-merged
-        # or misresolved source) that would otherwise report success while leaving the
-        # branch's commits behind.
-        ancestry = _run_git(
-            "-C",
-            str(worktree),
-            "merge-base",
-            "--is-ancestor",
-            feature_branch,
-            target_branch,
-            check=False,
-        )
-        if ancestry.returncode != 0:
-            return (
-                False,
-                f"Post-merge verification failed: {feature_branch} is not an ancestor "
-                f"of {target_branch} after the merge. The branch was not incorporated; "
-                "refusing to report success.",
-                None,
-            )
-
-        return (
-            True,
-            f"Merged {feature_branch} into {target_branch} ({merge_commit}).",
-            merge_commit,
-        )
-    finally:
-        if created:
-            _remove_worktree(worktree)
-
-
 def cmd_merge(args: SimpleNamespace) -> int:
-    """Run the gate, detect conflicts, merge directly into a target branch, and close."""
+    """Run pre-integration checks, rebase, validate, and squash-merge directly into the target branch."""
     rc = _resolve_ship_task(args)
     if rc is not None:
         return rc
 
     spec = args.spec
-    trunk_ref = _resolve_trunk_ref()
     task = getattr(args, "task", None)
-    task_integration = None
-    if isinstance(task, dict):
-        task_integration = task.get("integration_branch")
-        if not task_integration and isinstance(task.get("stamp"), dict):
-            task_integration = task["stamp"].get("branch")
-    target_branch = args.branch or task_integration or trunk_ref.removeprefix("origin/")
     task_id = args.task_id
     feature_branch = _resolve_feature_branch(task_id)
     if not feature_branch:
@@ -1424,6 +1194,37 @@ def cmd_merge(args: SimpleNamespace) -> int:
             f"{task_id!r} nor origin/{task_id} exists. Refusing to record a merge "
             "that did not happen."
         )
+
+    repo_root = Path(_run_git("rev-parse", "--show-toplevel").stdout.strip())
+    config = resolve_config(DEFAULT_CONFIG_PATH, repo_root=repo_root)
+    integration_mode = os.environ.get("AET_INTEGRATION_MODE") or resolve_integration_mode(repo_root=repo_root)
+
+    queue_file = getattr(args, "queue", None) or str(repo_root / ".agents" / "aet-queue")
+    try:
+        backend = create_backend(
+            config_path=str(repo_root / DEFAULT_CONFIG_PATH),
+            queue_file=queue_file,
+            history_file=str(repo_root / ".agents" / "work-history.jsonl"),
+        )
+    except Exception:
+        backend = None
+
+    task_dict = task if isinstance(task, dict) else {"id": task_id, "branch": feature_branch, "spec": spec}
+    if not task_dict.get("branch"):
+        task_dict["branch"] = feature_branch
+
+    target_ref_obj = resolve_integration_branch_for_task(
+        repo_root,
+        config,
+        task_dict,
+        integration_mode,
+        cli_base=getattr(args, "branch", None),
+        backend=backend,
+    )
+    target_branch = target_ref_obj.ref
+    if target_branch.startswith("origin/"):
+        target_branch = target_branch[len("origin/"):]
+
     if feature_branch == target_branch:
         return _fail(
             f"Refusing to merge {feature_branch!r} into itself: the resolved feature "
@@ -1432,60 +1233,60 @@ def cmd_merge(args: SimpleNamespace) -> int:
 
     print(f"Running aet ship merge for {task_id} into {target_branch}")
 
-    # The gate should treat the target branch as the merge base so tests and
-    # checks run against the same integration point we will merge into.
-    args.base = f"origin/{target_branch}"
-    result = _run_gate(args)
-    if not result.ok:
-        return _fail(f"Gate failed: {result.message}")
-    print(f"   {result.message}")
-
-    guard_error = _check_release_guard(result.pr_base, feature_branch=feature_branch)
-    if guard_error:
-        return _fail(guard_error)
-
-    if _is_monolithic_commit(result.pr_base, spec, feature_branch=feature_branch):
-        return _fail(
-            "Monolithic commit detected: one commit spans the entire merge range "
-            "while the plan lists multiple tasks.\n"
-            "Run `aet ship split` to split it into logical pieces before merging."
-        )
-
-    print(f"Checking for merge conflicts against origin/{target_branch}...")
-    has_conflicts, conflict_msg = _has_merge_conflicts(target_branch, feature_branch=feature_branch)
-    if has_conflicts:
-        return _fail(conflict_msg)
-    print("   No conflicts detected.")
-
-    print(f"Merging {feature_branch} into {target_branch}...")
-    ok, msg, merge_commit = _merge_into_target(target_branch, feature_branch, args.dry_run)
-    if not ok:
-        return _fail(msg)
-    print(f"   {msg}")
-
-    if args.dry_run:
+    if getattr(args, "dry_run", False):
+        print(f"Would integrate {task_id} into {target_branch}.")
         print("✅ aet ship merge complete (dry-run).")
         return 0
 
-    queue = getattr(args, "queue", ".agents/aet-queue")
-    task_branch = (task.get("branch") if isinstance(task, dict) else None) or feature_branch or task_id
-    rc = aet_state.cmd_record_merge(
-        SimpleNamespace(
-            command="record-merge",
+    # Locate existing worktree or create a temporary one for feature_branch
+    worktree_path = _find_target_worktree(feature_branch)
+    created = False
+    if worktree_path is None:
+        candidate = repo_root / ".worktrees" / task_id
+        if candidate.is_dir():
+            worktree_path = candidate
+        else:
+            worktree_path = repo_root / ".worktrees" / f".merge-{task_id}-{os.getpid()}"
+            res = _run_git(
+                "worktree",
+                "add",
+                "--checkout",
+                str(worktree_path),
+                feature_branch,
+                check=False,
+            )
+            if res.returncode != 0:
+                return _fail(f"Could not create worktree for {feature_branch}: {res.stderr}")
+            created = True
+
+    try:
+        plan_file = getattr(args, "plan", None)
+        if isinstance(plan_file, str) and not plan_file.endswith(".md"):
+            plan_file = None
+        if not plan_file and isinstance(task, dict):
+            plan_file = task.get("plan_file")
+        result = integrate(
+            str(repo_root),
+            task=task_dict,
+            worktree_dir=str(worktree_path),
+            backend=backend,
+            config=config,
+            integration_mode=integration_mode,
+            integration_branch=target_branch,
+            plan_file=plan_file,
+            plan_data=spec,
             task_id=task_id,
-            queue=queue,
-            plan=None,
-            dry_run=False,
-            branch=task_branch,
-            merge_commit=merge_commit,
-            target_branch=target_branch,
         )
-    )
-    if rc != 0:
-        return _fail("Merge succeeded, but recording closure failed. Run `aet ship close` manually to finish.")
+    except Exception as exc:
+        return _fail(f"Integration failed: {exc}")
+    finally:
+        if created and worktree_path.exists():
+            _run_git("worktree", "remove", "--force", str(worktree_path), check=False)
+
+    if not result.ok:
+        return _fail(result.message or f"Integration failed with status {result.status}")
 
     archive_plan_file(task_id)
-
     print("✅ aet ship merge complete.")
     return 0
 
