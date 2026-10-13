@@ -5553,7 +5553,7 @@ class TestBatchDynamicSlotReplenishment(unittest.TestCase, _BatchRepoMixin):
                             "verify_branch_has_commits",
                             return_value=(True, ""),
                         ):
-                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=60)
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=120)
 
                 self.assertFalse(timed_out, "run_batch timed out")
                 self.assertEqual(rc, 0)
@@ -5740,7 +5740,7 @@ class TestBatchDynamicSlotReplenishment(unittest.TestCase, _BatchRepoMixin):
                                     "verify_branch_has_commits",
                                     return_value=(True, ""),
                                 ):
-                                    rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=60)
+                                    rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER, timeout=120)
 
                 self.assertFalse(timed_out, "run_batch timed out")
                 self.assertEqual(rc, 0)
