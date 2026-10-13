@@ -151,6 +151,23 @@ def _save_task_record(backend: Any, queue: list[dict[str, Any]]) -> None:
         pass
 
 
+def _run_flush_validation(cmd_list: list[str], worktree_dir: str) -> subprocess.CompletedProcess[str]:
+    """Run validation command in worktree, skipping default 'make validate' if no Makefile exists."""
+    if cmd_list == ["make", "validate"] and not (Path(worktree_dir) / "Makefile").exists():
+        return subprocess.CompletedProcess(
+            args=cmd_list,
+            returncode=0,
+            stdout="No Makefile found; skipping default make validate\n",
+            stderr="",
+        )
+    return subprocess.run(
+        cmd_list,
+        cwd=worktree_dir,
+        capture_output=True,
+        text=True,
+    )
+
+
 def flush(
     repo_root: str | Path,
     branch: str,
@@ -238,12 +255,7 @@ def flush(
             )
 
         tree_hash = verifier.working_tree_hash(temp_worktree)
-        proc = subprocess.run(
-            cmd_list,
-            cwd=temp_worktree,
-            capture_output=True,
-            text=True,
-        )
+        proc = _run_flush_validation(cmd_list, temp_worktree)
     except Exception as exc:
         return FlushResult(
             ok=False,

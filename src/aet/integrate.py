@@ -36,6 +36,7 @@ from aet.worktree import delete_local_branch, run_git_plain
 class IntegrateResult:
     status: Literal["staged", "merged", "staged_conflict", "guard_refused"]
     detail: Any = None
+    branch: str = ""
 
     @property
     def ok(self) -> bool:
@@ -398,7 +399,7 @@ def integrate(
             print(
                 f"⚠️  Task {task_id} staged in awaiting_merge due to rebase conflicts. Independent tasks continue."
             )
-            return IntegrateResult(status="staged_conflict", detail=diag)
+            return IntegrateResult(status="staged_conflict", detail=diag, branch=integration_branch)
 
         # Release guard and monolithic-commit guard under lock right after rebase (R-3)
         guard_error = check_release_guard(target_ref, feature_branch="HEAD", workspace=Path(worktree_dir))
@@ -419,7 +420,7 @@ def integrate(
             }
             _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
             print(f"⚠️  Task {task_id} staged in awaiting_merge due to guard refusal: {guard_error}")
-            return IntegrateResult(status="guard_refused", detail=diag)
+            return IntegrateResult(status="guard_refused", detail=diag, branch=integration_branch)
 
         if is_monolithic_commit(target_ref, spec, feature_branch="HEAD", workspace=Path(worktree_dir)):
             subprocess.run(
@@ -442,7 +443,7 @@ def integrate(
             }
             _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
             print(f"⚠️  Task {task_id} staged in awaiting_merge due to guard refusal: {diag['stderr_tail']}")
-            return IntegrateResult(status="guard_refused", detail=diag)
+            return IntegrateResult(status="guard_refused", detail=diag, branch=integration_branch)
 
         # Verify required gate evidence before the squash-merge lands (R-22).
         _evidence_ok, _evidence_failures = gate.check_task_evidence(
@@ -579,4 +580,4 @@ def integrate(
             _save_task_record(backend, queue)
 
     print(f"   🚆 {task_id} staged on train for {integration_branch} ({staged_commit[:8]})")
-    return IntegrateResult(status="staged", detail=staged_commit)
+    return IntegrateResult(status="staged", detail=staged_commit, branch=integration_branch)

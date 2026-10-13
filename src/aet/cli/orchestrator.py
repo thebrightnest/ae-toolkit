@@ -2216,7 +2216,7 @@ def process_task(
             repo_root, config, task, integration_mode, backend=backend
         )
         try:
-            integrate(
+            int_res = integrate(
                 repo_root=repo_root,
                 task=task,
                 worktree_dir=worktree_dir,
@@ -2227,6 +2227,19 @@ def process_task(
                 plan_file=plan_file,
                 plan_data=plan_fm,
             )
+            if int_res and getattr(int_res, "status", None) == "staged":
+                from aet.train import flush
+                target_branch = getattr(int_res, "branch", "") or task_integration.ref
+                flush_res = flush(
+                    repo_root=repo_root,
+                    branch=target_branch,
+                    backend=backend,
+                    config=config,
+                )
+                if not flush_res.ok or flush_res.status == "red":
+                    raise IntegrationFailureError(
+                        flush_res.error or flush_res.output or "merge train flush failed"
+                    )
         except IntegrationFailureError as exc:
             print(f"   ❌ Integration failure for {task_id}: {exc}")
             queue_file = os.path.join(repo_root, ".agents", "aet-queue")
@@ -2359,8 +2372,12 @@ def _stage_task_conflict(
             _save_task_record(backend, q)
 
 
-integrate = _integrate_impl
-_integrate_completed_task = integrate
+def _integrate_completed_task(*args: Any, **kwargs: Any) -> Any:
+    return _integrate_impl(*args, **kwargs)
+
+
+def integrate(*args: Any, **kwargs: Any) -> Any:
+    return _integrate_completed_task(*args, **kwargs)
 
 
 
@@ -4189,46 +4206,47 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 if queue_task:
                     from_state = current_state(queue_task) or "in_progress"
                     if integration_mode == "single-pr":
-                        try:
-                            int_res = integrate(
-                                repo_root=repo_root,
-                                task=queue_task,
-                                worktree_dir=worktree_dir,
-                                backend=backend,
-                                config=config,
-                                integration_mode=integration_mode,
-                                plan_file=plan_file,
-                                plan_data=plan_fm,
-                            )
-                            if int_res.status == "staged":
-                                from aet.train import flush
-                                target_branch = (
-                                    queue_task.get("train", {}).get("branch")
-                                    or integration.name
-                                    or "main"
-                                )
-                                flush_res = flush(
+                        if from_state != "merged":
+                            try:
+                                int_res = integrate(
                                     repo_root=repo_root,
-                                    branch=target_branch,
+                                    task=queue_task,
+                                    worktree_dir=worktree_dir,
                                     backend=backend,
                                     config=config,
+                                    integration_mode=integration_mode,
+                                    plan_file=plan_file,
+                                    plan_data=plan_fm,
                                 )
-                                if flush_res.status == "red" or not flush_res.ok:
-                                    raise IntegrationFailureError(
-                                        flush_res.error or flush_res.output or "flush failed"
+                                if int_res.status == "staged":
+                                    from aet.train import flush
+                                    target_branch = (
+                                        getattr(int_res, "branch", "")
+                                        or queue_task.get("train", {}).get("branch")
+                                        or getattr(integration, "ref", "main")
                                     )
-                            print(f"   ✅ Task {task_id} merged locally (single-pr)")
-                        except IntegrationFailureError as exc:
-                            print(f"   ❌ Integration failure for {task_id}: {exc}")
-                            _mark_integration_failure(
-                                backend,
-                                queue_file,
-                                task_id,
-                                from_state,
-                                str(exc),
-                            )
-                            exit_code = 3
-                            success = False
+                                    flush_res = flush(
+                                        repo_root=repo_root,
+                                        branch=target_branch,
+                                        backend=backend,
+                                        config=config,
+                                    )
+                                    if flush_res.status == "red" or not flush_res.ok:
+                                        raise IntegrationFailureError(
+                                            flush_res.error or flush_res.output or "flush failed"
+                                        )
+                                print(f"   ✅ Task {task_id} merged locally (single-pr)")
+                            except IntegrationFailureError as exc:
+                                print(f"   ❌ Integration failure for {task_id}: {exc}")
+                                _mark_integration_failure(
+                                    backend,
+                                    queue_file,
+                                    task_id,
+                                    from_state,
+                                    str(exc),
+                                )
+                                exit_code = 3
+                                success = False
                     elif from_state == "merged":
                         print(f"   ✅ Task {task_id} merged locally (single-pr)")
                     elif from_state == "awaiting_merge":
