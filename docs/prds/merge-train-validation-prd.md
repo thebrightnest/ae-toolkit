@@ -141,28 +141,28 @@ Not a reproducible defect — current behaviour is correct but redundant.
 
 ## Acceptance Criteria
 
-- [ ] With `validate_command` set in `.agents/aet-config.json`, `aet run` and
+- [x] With `validate_command` set in `.agents/aet-config.json`, `aet run` and
       `aet ship merge` invoke that command; setting `AET_SHIP_TEST_CMD` has no
       effect. (satisfies: R-1)
-- [ ] A task whose worktree tree equals its passing QA verdict's `tree_hash` is
+- [x] A task whose worktree tree equals its passing QA verdict's `tree_hash` is
       staged without any validation command running; one with a post-QA code
       edit runs `validate_command` before staging. (satisfies: R-2)
-- [ ] While one task is staging, `integration_lock` is held for seconds, not for
+- [x] While one task is staging, `integration_lock` is held for seconds, not for
       a suite run: no validation subprocess starts while the lock is held. (satisfies: R-3)
-- [ ] `git grep` finds no `merge --no-ff`/`merge --squash` of a task branch
+- [x] `git grep` finds no `merge --no-ff`/`merge --squash` of a task branch
       outside `integrate()`. (satisfies: R-4)
-- [ ] Three independent tasks completing during one run produce one
+- [x] Three independent tasks completing during one run produce one
       `validate_command` invocation at end of run and three `merged` tasks. (satisfies: R-6, R-7)
-- [ ] Task B blocked by staged task A starts in the same run after a flush. (satisfies: R-6)
-- [ ] The integration branch ref is only ever moved to a commit that has a
+- [x] Task B blocked by staged task A starts in the same run after a flush. (satisfies: R-6)
+- [x] The integration branch ref is only ever moved to a commit that has a
       passing batch verdict. (satisfies: R-7)
 - [x] A batch of four where task 3 breaks the suite ends with tasks 1, 2, 4
       `merged` and task 3 `awaiting_merge` with the failing output. (satisfies: R-8)
-- [ ] `aet ship open-epic` on a tip just validated by a flush runs no suite. (satisfies: R-9)
-- [ ] An ADR supersedes ADR-070 decision 2 and records the train. (satisfies: R-10)
+- [x] `aet ship open-epic` on a tip just validated by a flush runs no suite. (satisfies: R-9)
+- [x] An ADR supersedes ADR-070 decision 2 and records the train. (satisfies: R-10)
 - [x] `aet ship record-merge` no longer exists; `src/aet/cli/ship.py` has no `argparse`
       parser; the ship test suite runs through Typer's `CliRunner`. (satisfies: R-11)
-- [ ] aet-ship SKILL.md lists the gate's real checks and no epic-branch merge
+- [x] aet-ship SKILL.md lists the gate's real checks and no epic-branch merge
       example; `aet docs generate` output matches. (satisfies: R-12)
 
 ## Technical Notes

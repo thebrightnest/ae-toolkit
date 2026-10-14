@@ -147,6 +147,11 @@ def _isolate_class_scoped_setup(request, tmp_path_factory):
         mp.delenv("AET_REPO_ROOT", raising=False)
         mp.delenv("AET_TASK_ID", raising=False)
         mp.delenv("AET_RUN_ID", raising=False)
+        mp.delenv("AET_WORKTREE", raising=False)
+        mp.delenv("AET_EVIDENCE_PATH", raising=False)
+        for k in list(os.environ):
+            if k.startswith("AET_EVIDENCE_PATH_"):
+                mp.delenv(k, raising=False)
         mp.setattr(telemetry, "DEFAULT_ARCHIVE_DIR", archive)
         mp.setattr(ledger, "_resolve_ledger_repo_root", lambda: ledger_root)
         mp.setattr(git_refs_backend, "_has_remote", guarded)
@@ -155,16 +160,22 @@ def _isolate_class_scoped_setup(request, tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def _isolate_aet_repo_root(monkeypatch):
-    """Remove ``AET_REPO_ROOT`` from the inherited environment.
+    """Remove orchestration environment variables from the inherited environment.
 
-    The orchestrator that launches the test suite sets ``AET_REPO_ROOT`` to
-    the real project checkout.  Tests must resolve their own repository roots
-    (or set the variable explicitly) so they do not accidentally read the
-    developer's in-tree config.
+    The orchestrator that launches the test suite sets ``AET_REPO_ROOT``,
+    ``AET_TASK_ID``, ``AET_RUN_ID``, ``AET_WORKTREE``, and ``AET_EVIDENCE_PATH``.
+    Tests must resolve their own repository roots and verdict destinations
+    (or set the variables explicitly) so they do not accidentally read or write
+    the developer's live stores or inherited paths.
     """
     monkeypatch.delenv("AET_REPO_ROOT", raising=False)
     monkeypatch.delenv("AET_TASK_ID", raising=False)
     monkeypatch.delenv("AET_RUN_ID", raising=False)
+    monkeypatch.delenv("AET_WORKTREE", raising=False)
+    monkeypatch.delenv("AET_EVIDENCE_PATH", raising=False)
+    for k in list(os.environ):
+        if k.startswith("AET_EVIDENCE_PATH_"):
+            monkeypatch.delenv(k, raising=False)
 
 
 @pytest.fixture(autouse=True)

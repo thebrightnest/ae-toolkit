@@ -37,9 +37,31 @@ A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet sh
 1. **Workspace and branch resolution**: Resolves the feature branch from the task record, locating its existing worktree or allocating a dedicated temporary worktree.
 2. Rebase verification of the resolved feature branch against trunk.
 3. Clean working tree check in the resolved workspace.
-4. Pre-integration validation check via `pre_integration_check` inside the resolved workspace, skipping execution if the working tree matches the recorded QA verdict, running `lint_command` if only non-code paths changed, or running `validate_command` (defaulting to `make validate`).
-5. **Evidence resolution**: Resolves required evidence from the workflow definition via `gate.required_evidence`, then checks each required kind's verdict via `gate.check_task_evidence` — the same derivation the in-run stage gates use (ADR-070, ADR-078). A verdict that is missing, unreadable, or not `pass` pauses the gate, and the refusal names the kind, the producing stage, and the reason. Verify evidence for a `critical` task is the `verify` verdict written by `aet-verify`; no working-tree file is read.
+4. Pre-integration validation check via `pre_integration_check` inside the resolved workspace, skipping execution if the working tree matches an existing passing `batch` verdict or recorded `qa` verdict (`SKIP`), running `lint_command` if only non-code paths changed (`LINT_ONLY`), or running `validate_command` (`RUN`, defaulting to `make validate`).
+5. **Verify evidence check**: If the workflow requires a `verify` evidence kind (such as for `critical` tasks), checks for a passing `verify` verdict via `gate.verdict_status`. Other evidence kinds are enforced in-run by their respective stage gates and are not re-checked at ship.
 6. Scope audit and commit count checks against the resolved feature branch and declared files in the plan spec.
+
+## Merge Train and Validation Reuse
+
+Tasks integrate into the target integration branch through a local merge train on `refs/aet/train/<branch>`. Instead of running a full validation suite under lock for each individual task, tasks are staged onto the train tip sequentially. Validation is deferred to batch flushes or reused from prior verdicts.
+
+### Flush Triggers
+
+The merge train flushes when:
+
+1. **End of run**: `aet run` has no more in-progress or ready tasks left in the batch.
+2. **Dependency unblock**: A task is ready to start but is blocked by a staged task. Flushing advances the branch so the dependent task starts from validated code.
+3. **Epic PR creation**: `aet ship open-epic` flushes any remaining staged tasks before opening the epic PR.
+4. **Single-task integration**: `aet ship merge` flushes the train when integrating a task.
+
+During a flush, `validate_command` runs once in a temporary worktree. On green, the integration branch fast-forwards and pushes, all staged tasks transition to `merged`, and a `batch` verdict stamped with the snapshot's `tree_hash` is recorded. On failure, deterministic prefix bisect isolates the culprit task, ejects it to `awaiting_merge` with conflict diagnostics, and re-stacks remaining tasks.
+
+### Verdict Reuse and Config Keys
+
+- **Verdict reuse**: Pre-merge checks consult recorded verdicts: if the working tree matches an existing passing `batch` verdict or the task's `qa` verdict, validation is skipped (`SKIP`). If only non-code files changed, `lint_command` runs (`LINT_ONLY`). Otherwise `validate_command` runs (`RUN`).
+- **Configuration**: Validation commands are configured in `.agents/aet-config.json`:
+  - `validate_command`: Command to run for full validation (replaces removed env var `AET_SHIP_TEST_CMD`, defaults to `make validate`).
+  - `lint_command`: Command to run when only non-code files changed (replaces removed env var `AET_SHIP_LINT_CMD`).
 
 ## Integration Modes
 

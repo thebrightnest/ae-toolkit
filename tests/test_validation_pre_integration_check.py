@@ -142,3 +142,70 @@ def test_subprocess_oserror_returns_ok_false(tmp_path: Path):
         assert res.decision == RUN
         assert res.ok is False
         assert "make not found" in res.output
+
+
+def test_batch_verdict_skip_preferred_even_if_qa_fails(tmp_path: Path):
+    def fake_freshness(task_id, kind, **kwargs):
+        if kind == "batch":
+            return FreshnessResult(SKIP, "tree unchanged since last pass", "h1", "h1")
+        return FreshnessResult(RUN, "prior verdict did not pass", "", "h1")
+
+    with patch("aet.validation.evidence.validation_freshness", side_effect=fake_freshness), \
+         patch("aet.validation.subprocess.run", side_effect=_subproc_mock()) as mock_subproc:
+        res = pre_integration_check("task-1", worktree_dir=tmp_path)
+        assert res.decision == SKIP
+        assert res.ok is True
+        assert res.ran is None
+        assert res.verdict_kind == "batch"
+        non_git_calls = [c for c in mock_subproc.call_args_list if c.args[0][0] != "git"]
+        assert non_git_calls == []
+
+
+def test_qa_verdict_used_when_batch_verdict_not_identical_tree(tmp_path: Path):
+    cfg_dir = tmp_path / ".agents"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "aet-config.json").write_text(
+        '{"validate_command": "make validate", "lint_command": "ruff check"}',
+        encoding="utf-8",
+    )
+
+    def fake_freshness(task_id, kind, **kwargs):
+        if kind == "batch":
+            return FreshnessResult(RUN, "code changed", "h0", "h1", ["app.py"])
+        if kind == "qa":
+            return FreshnessResult(LINT_ONLY, "only non-code changed", "h0", "h1", ["doc.md"])
+        return FreshnessResult(RUN, "no prior verdict", "", "h1")
+
+    mock = _subproc_mock(stdout="lint ok\n")
+    with patch("aet.validation.evidence.validation_freshness", side_effect=fake_freshness), \
+         patch("aet.validation.subprocess.run", side_effect=mock):
+        res = pre_integration_check("task-1", worktree_dir=tmp_path)
+        assert res.decision == LINT_ONLY
+        assert res.ran == ["ruff", "check"]
+        assert res.ok is True
+        assert res.verdict_kind == "qa"
+
+
+def test_batch_verdict_fallback_when_no_qa_verdict(tmp_path: Path):
+    cfg_dir = tmp_path / ".agents"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "aet-config.json").write_text(
+        '{"validate_command": "make validate", "lint_command": "ruff check"}',
+        encoding="utf-8",
+    )
+
+    def fake_freshness(task_id, kind, **kwargs):
+        if kind == "batch":
+            return FreshnessResult(LINT_ONLY, "only non-code changed", "h0", "h1", ["doc.md"])
+        if kind == "qa":
+            return FreshnessResult(RUN, "no prior verdict", "", "h1")
+        return FreshnessResult(RUN, "no prior verdict", "", "h1")
+
+    mock = _subproc_mock(stdout="lint ok\n")
+    with patch("aet.validation.evidence.validation_freshness", side_effect=fake_freshness), \
+         patch("aet.validation.subprocess.run", side_effect=mock):
+        res = pre_integration_check("task-1", worktree_dir=tmp_path)
+        assert res.decision == LINT_ONLY
+        assert res.ran == ["ruff", "check"]
+        assert res.ok is True
+        assert res.verdict_kind == "batch"

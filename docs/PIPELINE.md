@@ -152,6 +152,41 @@ The live queue **is the board**: it holds exactly the set of open work (ADR-013,
 
 The queue `state` axis (`ready`, `blocked`, `in_progress`, …) remains the runtime scheduling signal; `ready`/`blocked` are still computed solely from `blocked_by` (R-12), never from labels or human edits.
 
+## Task Integration and Merge Train
+
+Task integration into trunk or an epic integration branch is unified under `integrate()`: both autonomous batch execution (`aet run`) and single-task operations (`aet ship merge`) share the same integration machinery.
+
+Instead of running full test suites sequentially under lock for every task, tasks stage onto a local merge train reference (`refs/aet/train/<branch>`).
+
+### Pre-Integration Check and Verdict Reuse
+
+Before a completed task is staged onto the train, `pre_integration_check` evaluates the working tree against recorded verdicts to avoid redundant validation runs:
+
+1. **Batch verdict**: If an existing passing `batch` verdict matches the current `tree_hash`, validation is skipped (`SKIP`).
+2. **QA verdict**: If the task's passing `qa` verdict matches the `tree_hash`, validation is skipped (`SKIP`). If only non-code paths changed, `lint_command` runs (`LINT_ONLY`). Otherwise, `validate_command` runs (`RUN`).
+3. **Verdict fallback**: If no prior QA verdict is found (e.g. for epic branches or tasks without QA), the check evaluates freshness against the latest passing `batch` verdict and applies the same tiers (`SKIP`, `LINT_ONLY`, `RUN`).
+4. **Unconditional run**: If no prior passing verdict exists, `validate_command` runs unconditionally (`RUN`).
+
+### Staging under Integration Lock
+
+Tasks are rebased onto `refs/aet/train/<branch>` inside `integration_lock`. Because validation either resolves from prior verdicts or defers to a train flush, the lock is held only for brief git operations (seconds), keeping parallel execution unblocked.
+
+### Flush Triggers
+
+The merge train accumulates staged tasks and flushes the train ref to the target branch under four conditions:
+
+1. **End of run**: The orchestrator finishes all ready or in-progress tasks in the current batch.
+2. **Dependency unblock**: A task is ready to start but depends on a staged task. Flushing advances the target branch so the dependent task branches from validated code.
+3. **Epic PR creation**: `aet ship open-epic` flushes any remaining staged tasks before opening the epic PR.
+4. **Single-task integration**: `aet ship merge` flushes the train when integrating an individual task.
+
+### Flush Execution and Bisect Ejection
+
+During a flush, `validate_command` runs in a dedicated temporary worktree against the staging tip:
+
+- **Green flush**: When the suite passes, the target integration branch fast-forwards to the staging tip, changes are pushed, all staged tasks transition to `merged`, and a `batch` verdict stamped with the snapshot's `tree_hash` is recorded.
+- **Red flush**: If the suite fails, deterministic prefix bisect isolates the culprit task. The culprit task is ejected back to `awaiting_merge` with `conflict_diagnostics`, remaining non-culprit tasks are re-stacked onto the train, and the staging ref is updated.
+
 ## Closure Push
 
 Terminal closure is versioned. `aet-state record-merge` records the terminal ledger event and updates the plan footer (`*Stage: merged*`) through the closure transaction, then pushes the resulting commit. A push failure leaves the local commit intact and returns a recoverable error; re-running `record-merge` retries the push without duplicating queue history.

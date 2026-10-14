@@ -285,24 +285,34 @@ def integrate(
         ).ref
 
     # Resolve spec for guards and gate
-    _plan_path = (
-        Path(plan_file)
-        if plan_file
-        else Path(worktree_dir) / "docs" / "plans" / f"{task_id}.md"
-    )
-    if not _plan_path.exists() and repo_root:
-        _candidate = Path(repo_root) / "docs" / "plans" / f"{task_id}.md"
-        if _candidate.exists():
-            _plan_path = _candidate
+    _plan_path = Path(plan_file) if plan_file else None
+    if not _plan_path or not _plan_path.exists():
+        candidates = []
+        if worktree_dir:
+            candidates.extend([
+                Path(worktree_dir) / "docs" / "plans" / "active" / f"{task_id}.md",
+                Path(worktree_dir) / "docs" / "plans" / f"{task_id}.md",
+            ])
+        if repo_root:
+            candidates.extend([
+                Path(repo_root) / "docs" / "plans" / "active" / f"{task_id}.md",
+                Path(repo_root) / "docs" / "plans" / f"{task_id}.md",
+            ])
+        for cand in candidates:
+            if cand.is_file():
+                _plan_path = cand
+                break
 
     _plan_fm = plan_data or (
         plan_parser.parse_frontmatter(_plan_path)
-        if _plan_path.exists()
+        if _plan_path and _plan_path.exists()
         else (task_dict.get("spec") or {})
     )
+    if isinstance(_plan_fm, dict) and "frontmatter" in _plan_fm and isinstance(_plan_fm["frontmatter"], dict):
+        _plan_fm = _plan_fm["frontmatter"]
 
     spec: dict[str, Any] = {}
-    if _plan_path.exists():
+    if _plan_path and _plan_path.exists():
         spec = plan_parser.extract_plan_spec(_plan_path) or {}
     if not spec:
         spec = task_dict.get("spec") or {}

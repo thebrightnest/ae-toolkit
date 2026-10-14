@@ -31,22 +31,27 @@ class CheckResult:
     ran: list[str] | None
     ok: bool
     output: str
+    verdict_kind: str | None = None
 
 
 def pre_integration_check(
     task_id: str,
     worktree_dir: str | Path | None = None,
     repo_root: str | Path | None = None,
+    branch: str | None = None,
 ) -> CheckResult:
     """Perform pre-integration check on a worktree before staging/shipping.
 
-    Compares the worktree against the recorded QA verdict using
-    `evidence.validation_freshness`:
-    - SKIP: tree is unchanged since the last passing QA verdict; runs no subprocess.
-    - LINT_ONLY: only non-code paths changed; runs configured `lint_command`,
-      falling back to `validate_command` when unset.
-    - RUN: code changed, verdict missing or failing, or any freshness check error;
-      runs `validate_command`.
+    Consults verdicts in order:
+    1. A passing `batch` verdict on an identical tree: skips validation (`SKIP`).
+    2. The task's `qa` verdict via `evidence.validation_freshness`:
+       - SKIP: tree is unchanged since the last passing QA verdict; runs no subprocess.
+       - LINT_ONLY: only non-code paths changed; runs configured `lint_command`,
+         falling back to `validate_command` when unset.
+       - RUN: code changed, verdict failing; runs `validate_command`.
+    3. If no prior QA verdict is found (e.g. for epic branches or tasks without QA),
+       falls back to the `batch` verdict's freshness decision and R-2 tiers.
+    4. If no prior verdict of either kind is found, runs `validate_command`.
 
     Never raises on freshness errors; an uncomputable or errored freshness state
     is treated as RUN.
@@ -61,26 +66,63 @@ def pre_integration_check(
 
     validate_cmd, lint_cmd = resolve_validation_commands(repo_root=config_root)
 
+    slug = (
+        telemetry.derive_project_slug(repo_root or worktree_dir)
+        if (repo_root or worktree_dir)
+        else None
+    )
+
+    batch_freshness = None
     try:
-        slug = (
-            telemetry.derive_project_slug(repo_root or worktree_dir)
-            if (repo_root or worktree_dir)
-            else None
+        batch_freshness = evidence.validation_freshness(
+            task_id=task_id,
+            kind="batch",
+            worktree_dir=worktree_dir,
+            branch=branch,
+            project_slug=slug,
         )
-        freshness = evidence.validation_freshness(
+        if batch_freshness.decision == evidence.SKIP:
+            return CheckResult(
+                decision=evidence.SKIP,
+                ran=None,
+                ok=True,
+                output="",
+                verdict_kind="batch",
+            )
+    except Exception:
+        pass
+
+    qa_freshness = None
+    try:
+        qa_freshness = evidence.validation_freshness(
             task_id=task_id,
             kind="qa",
             worktree_dir=worktree_dir,
             project_slug=slug,
         )
-        decision = freshness.decision
     except Exception:
-        decision = evidence.RUN
+        pass
 
-    if decision == evidence.SKIP:
-        return CheckResult(decision=evidence.SKIP, ran=None, ok=True, output="")
+    if qa_freshness is not None and qa_freshness.reason != "no prior verdict":
+        chosen_decision = qa_freshness.decision
+        verdict_kind = "qa"
+    elif batch_freshness is not None and batch_freshness.reason != "no prior verdict":
+        chosen_decision = batch_freshness.decision
+        verdict_kind = "batch"
+    else:
+        chosen_decision = evidence.RUN
+        verdict_kind = None
 
-    if decision == evidence.LINT_ONLY and lint_cmd:
+    if chosen_decision == evidence.SKIP:
+        return CheckResult(
+            decision=evidence.SKIP,
+            ran=None,
+            ok=True,
+            output="",
+            verdict_kind=verdict_kind,
+        )
+
+    if chosen_decision == evidence.LINT_ONLY and lint_cmd:
         cmd = lint_cmd
     else:
         cmd = validate_cmd
@@ -94,17 +136,19 @@ def pre_integration_check(
             text=True,
         )
         return CheckResult(
-            decision=decision,
+            decision=chosen_decision,
             ran=cmd,
             ok=(proc.returncode == 0),
             output=proc.stdout + proc.stderr,
+            verdict_kind=verdict_kind,
         )
     except OSError as err:
         return CheckResult(
-            decision=decision,
+            decision=chosen_decision,
             ran=cmd,
             ok=False,
             output=str(err),
+            verdict_kind=verdict_kind,
         )
 
 

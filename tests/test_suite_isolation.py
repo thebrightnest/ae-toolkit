@@ -43,3 +43,12 @@ def test_guard_does_not_hide_remotes_of_other_repositories(tmp_path):
         "The guard must be scoped to this checkout; tests that exercise "
         "fetch/push against a fixture remote depend on real detection."
     )
+
+
+def test_orchestration_env_vars_are_isolated():
+    """Orchestrator session variables must not leak into test environments."""
+    import os
+
+    for key in ("AET_REPO_ROOT", "AET_TASK_ID", "AET_RUN_ID", "AET_WORKTREE", "AET_EVIDENCE_PATH"):
+        assert key not in os.environ, f"{key} leaked into test environment"
+    assert not any(k.startswith("AET_EVIDENCE_PATH_") for k in os.environ)

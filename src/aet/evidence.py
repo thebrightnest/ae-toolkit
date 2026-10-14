@@ -362,11 +362,84 @@ def default_is_code_path(path: str) -> bool:
     return True
 
 
+def find_batch_verdicts(
+    task_id: str,
+    branch: str | None = None,
+    project_slug: str | None = None,
+    reports_root: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """Find and return all batch verdict records applicable to task_id or branch."""
+    paths_to_check: list[Path] = []
+    p1 = None
+    try:
+        p1 = resolve_verdict_path(
+            task_id=task_id,
+            kind="batch",
+            project_slug=project_slug,
+            reports_root=reports_root,
+        )
+        paths_to_check.append(p1)
+    except Exception:
+        pass
+
+    if branch and branch != task_id:
+        try:
+            p2 = resolve_verdict_path(
+                task_id=branch,
+                kind="batch",
+                project_slug=project_slug,
+                reports_root=reports_root,
+            )
+            paths_to_check.append(p2)
+        except Exception:
+            pass
+
+    # Also search _train directory under reports root
+    root = Path(reports_root).expanduser() if reports_root else reports_dir()
+    slug = project_slug if project_slug else telemetry.derive_project_slug()
+    train_dir = root / slug / "_train"
+    if train_dir.is_dir():
+        for f in train_dir.rglob("batch.json"):
+            if f not in paths_to_check:
+                paths_to_check.append(f)
+
+    seen_records: list[dict[str, Any]] = []
+    for p in paths_to_check:
+        if not p.is_file():
+            continue
+        try:
+            loaded = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        raw_list = loaded if isinstance(loaded, list) else [loaded] if isinstance(loaded, dict) else []
+        for rec in raw_list:
+            if not isinstance(rec, dict):
+                continue
+            is_match = False
+            rec_branch = rec.get("branch")
+            rec_task_id = rec.get("task_id")
+            rec_task_ids = rec.get("task_ids") or []
+            if rec_task_id == task_id:
+                is_match = True
+            elif rec_branch and (rec_branch == task_id or (branch and rec_branch == branch)):
+                is_match = True
+            elif task_id in rec_task_ids or (branch and branch in rec_task_ids):
+                is_match = True
+            elif p1 is not None and str(p) == str(p1):
+                is_match = True
+
+            if is_match and rec not in seen_records:
+                seen_records.append(rec)
+
+    return seen_records
+
+
 def validation_freshness(
     task_id: str,
     kind: str,
     worktree_dir: str | Path | None = None,
     *,
+    branch: str | None = None,
     is_code_path: Callable[[str], bool] = default_is_code_path,
     project_slug: str | None = None,
     reports_root: str | Path | None = None,
@@ -386,25 +459,54 @@ def validation_freshness(
     if not current:
         return FreshnessResult(RUN, "working tree hash unavailable", current_hash=current)
 
-    path = resolve_verdict_path(
-        task_id=task_id,
-        kind=kind,
-        project_slug=project_slug,
-        reports_root=reports_root,
-    )
-    try:
-        prior = read_verdict(path)
-    except FileNotFoundError:
-        return FreshnessResult(RUN, "no prior verdict", current_hash=current)
+    if kind == "batch":
+        prior_records = find_batch_verdicts(
+            task_id=task_id,
+            branch=branch,
+            project_slug=project_slug,
+            reports_root=reports_root,
+        )
+        if not prior_records:
+            return FreshnessResult(RUN, "no prior verdict", current_hash=current)
+        prior: Any = prior_records
+    else:
+        path = resolve_verdict_path(
+            task_id=task_id,
+            kind=kind,
+            project_slug=project_slug,
+            reports_root=reports_root,
+        )
+        try:
+            prior = read_verdict(path)
+        except FileNotFoundError:
+            return FreshnessResult(RUN, "no prior verdict", current_hash=current)
 
-    if prior.get("verdict") != "pass":
-        return FreshnessResult(RUN, "prior verdict did not pass", current_hash=current)
+    if isinstance(prior, list):
+        if not prior:
+            return FreshnessResult(RUN, "no prior verdict", current_hash=current)
+        exact = next(
+            (r for r in prior if r.get("verdict") == "pass" and r.get("tree_hash") == current),
+            None,
+        )
+        if exact is not None:
+            return FreshnessResult(SKIP, "tree unchanged since last pass", current, current)
 
-    prior_hash = prior.get("tree_hash") or ""
-    if not prior_hash:
-        return FreshnessResult(RUN, "prior verdict has no tree hash", current_hash=current)
-    if prior_hash == current:
-        return FreshnessResult(SKIP, "tree unchanged since last pass", prior_hash, current)
+        latest_pass = next(
+            (r for r in reversed(prior) if r.get("verdict") == "pass" and r.get("tree_hash")),
+            None,
+        )
+        if latest_pass is None:
+            return FreshnessResult(RUN, "prior verdict did not pass", current_hash=current)
+        prior_hash = latest_pass.get("tree_hash") or ""
+    else:
+        if prior.get("verdict") != "pass":
+            return FreshnessResult(RUN, "prior verdict did not pass", current_hash=current)
+
+        prior_hash = prior.get("tree_hash") or ""
+        if not prior_hash:
+            return FreshnessResult(RUN, "prior verdict has no tree hash", current_hash=current)
+        if prior_hash == current:
+            return FreshnessResult(SKIP, "tree unchanged since last pass", prior_hash, current)
 
     paths = verifier.changed_paths(root, prior_hash, current)
     if paths is None:

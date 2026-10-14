@@ -29,6 +29,11 @@ _spec.loader.exec_module(ship)
 
 def _write_passing_verdict(repo: Path, reports: Path, task_id: str, kind: str) -> Path:
     """Write a schema-valid passing verdict for *kind*, as its skill would."""
+    return _write_verdict(repo, reports, task_id, kind, verdict="pass")
+
+
+def _write_verdict(repo: Path, reports: Path, task_id: str, kind: str, verdict: str = "pass") -> Path:
+    """Write a schema-valid verdict for *kind* with the specified verdict."""
     from aet import evidence as evidence_lib
     from aet import telemetry as telemetry_lib
 
@@ -41,11 +46,14 @@ def _write_passing_verdict(repo: Path, reports: Path, task_id: str, kind: str) -
             "task_id": task_id,
             "stage": "stage",
             "skill": f"aet-{kind}",
-            "verdict": "pass",
-            "summary": f"{kind} passed",
+            "verdict": verdict,
+            "summary": f"{kind} {verdict}",
             "generated_at": "2026-08-28T00:00:00Z",
         }
     )
+    if kind == "batch":
+        record["task_ids"] = [task_id]
+        record["branch"] = "main"
     record.pop("tree_hash", None)
     return evidence_lib.write_verdict(
         task_id=task_id,
@@ -55,6 +63,7 @@ def _write_passing_verdict(repo: Path, reports: Path, task_id: str, kind: str) -
         reports_root=str(reports),
         worktree_dir=str(repo),
     )
+
 
 
 class MockResult:
@@ -532,6 +541,77 @@ class TestShipGateChecks(unittest.TestCase):
                 rc = self._run_gate("t1")
 
         self.assertEqual(rc, 0)
+
+    def test_gate_prefers_batch_verdict_over_qa_verdict_when_both_match(self):
+        """When both QA and batch verdicts match the tree, batch is chosen."""
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "false"}\n', encoding="utf-8"
+        )
+        self._save_task(self._spec())
+        reports = Path(self.tmpdir.name) / "reports-archive"
+        _write_passing_verdict(self.repo, reports, "t1", "qa")
+        _write_passing_verdict(self.repo, reports, "t1", "batch")
+
+        responses = self._base_responses()
+        env = {
+            "AET_REPORTS_DIR": str(reports),
+            "AET_EVIDENCE_PATH_QA": "",
+            "AET_EVIDENCE_PATH_BATCH": "",
+            "AET_REPO_ROOT": str(self.repo),
+        }
+
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            with patch.dict(os.environ, env):
+                gate_args = SimpleNamespace(
+                    plan="t1",
+                    task_id="t1",
+                    base=None,
+                    dry_run=False,
+                    spec=self._spec(),
+                    queue=".agents/aet-queue",
+                )
+                res = ship._run_gate(gate_args)
+                self.assertTrue(res.ok)
+                self.assertEqual(res.verdict_kind, "batch")
+
+                rc = self._run_gate("t1")
+                self.assertEqual(rc, 0)
+
+    def test_gate_passes_when_batch_verdict_passes_even_if_qa_verdict_failed(self):
+        """When QA verdict failed but batch verdict passed on identical tree, gate passes."""
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "false"}\n', encoding="utf-8"
+        )
+        self._save_task(self._spec())
+        reports = Path(self.tmpdir.name) / "reports-archive"
+        _write_verdict(self.repo, reports, "t1", "qa", verdict="fail")
+        _write_passing_verdict(self.repo, reports, "t1", "batch")
+
+        responses = self._base_responses()
+        env = {
+            "AET_REPORTS_DIR": str(reports),
+            "AET_EVIDENCE_PATH_QA": "",
+            "AET_EVIDENCE_PATH_BATCH": "",
+            "AET_REPO_ROOT": str(self.repo),
+        }
+
+        with patch.object(ship.subprocess, "run", side_effect=_subprocess_mock(responses)):
+            with patch.dict(os.environ, env):
+                gate_args = SimpleNamespace(
+                    plan="t1",
+                    task_id="t1",
+                    base=None,
+                    dry_run=False,
+                    spec=self._spec(),
+                    queue=".agents/aet-queue",
+                )
+                res = ship._run_gate(gate_args)
+                self.assertTrue(res.ok)
+                self.assertEqual(res.verdict_kind, "batch")
+
+                rc = self._run_gate("t1")
+                self.assertEqual(rc, 0)
+
 
 
 class TestShipGateIntegration(unittest.TestCase):

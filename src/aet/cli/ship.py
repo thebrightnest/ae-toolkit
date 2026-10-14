@@ -96,6 +96,7 @@ class GateResult:
         scope_audit: list[str],
         message: str = "",
         stack: Optional[StackInfo] = None,
+        verdict_kind: Optional[str] = None,
     ):
         self.ok = ok
         self.pr_base = pr_base
@@ -103,6 +104,7 @@ class GateResult:
         self.scope_audit = scope_audit
         self.message = message
         self.stack = stack
+        self.verdict_kind = verdict_kind
 
 
 def _resolve_feature_branch(task_id: str, queue: str = ".agents/aet-queue") -> Optional[str]:
@@ -612,6 +614,7 @@ def _run_gate(args: SimpleNamespace) -> GateResult:
             task_id=args.task_id,
             worktree_dir=workspace,
             repo_root=repo_root,
+            branch=feature_branch,
         )
         if not check_result.ok:
             return GateResult(
@@ -621,6 +624,7 @@ def _run_gate(args: SimpleNamespace) -> GateResult:
                 scope_audit=[],
                 message=f"Validation failed ({check_result.decision}):\n{check_result.output}",
                 stack=stack,
+                verdict_kind=check_result.verdict_kind,
             )
 
         plan_fm = spec.get("frontmatter", {}) if isinstance(spec, dict) else {}
@@ -654,6 +658,7 @@ def _run_gate(args: SimpleNamespace) -> GateResult:
                         "--verdict pass --summary <one-line>`."
                     ),
                     stack=stack,
+                    verdict_kind=check_result.verdict_kind,
                 )
 
         flagged = _scope_audit(spec, pr_base, feature_branch=feature_branch, workspace=workspace)
@@ -664,6 +669,7 @@ def _run_gate(args: SimpleNamespace) -> GateResult:
             scope_audit=flagged,
             message=f"Pre-merge gate passed for {feature_branch}.",
             stack=stack,
+            verdict_kind=check_result.verdict_kind,
         )
     finally:
         if created_temp_worktree and workspace:
@@ -981,6 +987,7 @@ def cmd_open_epic(args: SimpleNamespace) -> int:
     branch_arg = getattr(args, "branch", None)
 
     epic = None
+    backend = None
     try:
         backend = aet_state.make_backend(queue)
         backend.fetch()
@@ -996,6 +1003,12 @@ def cmd_open_epic(args: SimpleNamespace) -> int:
         )
 
     print(f"Running aet ship open-epic for {branch}")
+
+    repo_root = Path(_run_git("rev-parse", "--show-toplevel").stdout.strip())
+    from aet.train import flush
+    flush_res = flush(repo_root=repo_root, branch=branch, backend=backend)
+    if not flush_res.ok or flush_res.status == "red":
+        return _fail(f"Flush failed: {flush_res.error or flush_res.output or 'flush failed'}")
 
     gate_args = SimpleNamespace(
         plan=branch,

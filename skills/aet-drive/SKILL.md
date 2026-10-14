@@ -86,7 +86,10 @@ aet run --follow <run_id>
 
 ### 4. Step B: Resolve Staged Conflicts and Merge Residuals
 
-Clean tasks auto-merge into the active epic branch continuously during `aet run`. Tasks appearing in `awaiting_merge` after `aet run` settles were non-blockingly staged due to merge conflicts or post-rebase validation issues encountered during batch execution.
+Tasks appearing in `awaiting_merge` on the sprint board fall into two categories:
+
+- **Staged on the merge train** (task record has a `train` block): The task has completed its work and was staged onto `refs/aet/train/<branch>`. It is waiting for an upcoming merge train flush. When all ready work finishes or upon `aet ship open-epic`, the train flushes automatically and transitions the task to `merged`.
+- **Ejected or conflicted** (task has `conflict_diagnostics`, or no `train` block): The task encountered a rebase conflict, was ejected during batch bisect validation failure (`batch_validation`), or encountered a restack conflict (`restack_conflict`). These require resolution before merging.
 
 Once the orchestrator settles, inspect the sprint board:
 
@@ -98,13 +101,16 @@ Locate any tasks remaining in the `awaiting_merge` column.
 
 If there are tasks remaining in `awaiting_merge`:
 
-1. **Inspect Conflict Diagnostics**:
-   For each task in `awaiting_merge`, inspect the recorded `conflict_diagnostics` on the task record or attempt `aet ship merge <task_id>` to identify conflicting files or validation failures.
+1. **Check Staging Status**:
+   If a task is staged on the merge train (has `train` metadata), it will flush with the batch. To flush immediately, invoke `aet ship merge <task_id>` or `aet ship open-epic`.
 
-2. **Execute Conflict Resolution Runbook**:
-   For each conflicted task, follow the **Conflict Resolution Runbook** (see below) to reconcile differences and verify fixes with tests.
+2. **Inspect Conflict Diagnostics**:
+   If a task was ejected or encountered a conflict, inspect `conflict_diagnostics` on the task record or attempt `aet ship merge <task_id>` to identify conflicting files or failing tests.
 
-3. **Complete the Integration**:
+3. **Execute Conflict Resolution Runbook**:
+   For each conflicted or ejected task, follow the **Conflict Resolution Runbook** (see below) to reconcile differences and verify fixes with tests.
+
+4. **Complete the Integration**:
    Once conflicts are resolved in the task worktree, run:
 
    ```bash

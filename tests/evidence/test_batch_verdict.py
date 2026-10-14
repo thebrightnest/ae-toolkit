@@ -87,3 +87,48 @@ class TestBatchVerdictEvidence(unittest.TestCase):
             self.assertEqual(len(data2), 2)
             self.assertEqual(data2[0]["summary"], "First batch flush")
             self.assertEqual(data2[1]["summary"], "Second batch flush")
+
+    def test_find_batch_verdicts(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            record1 = {
+                "branch": "feat/my-branch",
+                "verdict": "pass",
+                "summary": "Branch flush",
+                "generated_at": "2026-10-13T12:00:00Z",
+                "tree_hash": "hash1",
+                "task_ids": ["task-1"],
+            }
+            evidence.write_verdict(
+                "feat/my-branch",
+                "batch",
+                record1,
+                project_slug="my-proj",
+                reports_root=tmpdir,
+            )
+
+            # Match by task_id in task_ids
+            recs = evidence.find_batch_verdicts(
+                "task-1",
+                project_slug="my-proj",
+                reports_root=tmpdir,
+            )
+            self.assertEqual(len(recs), 1)
+            self.assertEqual(recs[0]["tree_hash"], "hash1")
+
+            # Match by branch
+            recs = evidence.find_batch_verdicts(
+                "other-task",
+                branch="feat/my-branch",
+                project_slug="my-proj",
+                reports_root=tmpdir,
+            )
+            self.assertEqual(len(recs), 1)
+
+            # No match for unrelated task when branch is None
+            recs = evidence.find_batch_verdicts(
+                "unrelated-task",
+                branch=None,
+                project_slug="my-proj",
+                reports_root=tmpdir,
+            )
+            self.assertEqual(len(recs), 0)

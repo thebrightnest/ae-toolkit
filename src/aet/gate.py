@@ -63,6 +63,8 @@ def required_evidence(repo_root: str | Path, plan_fm: dict[str, Any]) -> list[tu
     unless the plan frontmatter marks its gate key ``skipped`` (a missing key
     fails safe to required). Ungated evidence stages (qa, review) always run.
     """
+    if isinstance(plan_fm, dict) and "frontmatter" in plan_fm and isinstance(plan_fm["frontmatter"], dict):
+        plan_fm = plan_fm["frontmatter"]
     workflow_name = plan_fm.get("workflow") or "software"
     try:
         workflow = load_workflow(repo_root, workflow_name)
@@ -130,8 +132,13 @@ def plan_for_branch(repo_root: str | Path, branch: str) -> Path | None:
     This mirrors aet-work's worktree naming (``branch_name = task_id``); a
     branch is a task branch only when a matching plan file exists.
     """
-    plan = Path(repo_root) / "docs" / "plans" / f"{branch}.md"
-    return plan if plan.is_file() else None
+    for candidate in [
+        Path(repo_root) / "docs" / "plans" / "active" / f"{branch}.md",
+        Path(repo_root) / "docs" / "plans" / f"{branch}.md",
+    ]:
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def is_task_branch(repo_root: str | Path, branch: str) -> bool:

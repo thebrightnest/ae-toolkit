@@ -267,6 +267,205 @@ class TestOpenEpic(unittest.TestCase):
         self.assertEqual(cut_events[0]["ref"], pr_url)
         self.assertEqual(cut_events[0]["ref_kind"], "pr")
 
+    def test_open_epic_flushes_staging_ref_before_gate(self):
+        """open-epic flushes staged tasks from refs/aet/train/<branch> before running gate."""
+        branch_name = "epic/train-flush"
+        self._branch(
+            branch_name,
+            "base.txt",
+            "base content\n",
+            "feat(epic): base commit",
+        )
+
+        backend = self._backend()
+        backend.set_epic(branch_name)
+
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"integration_mode": "single-pr"}\n', encoding="utf-8"
+        )
+
+        # Stage a commit onto refs/aet/train/epic/train-flush
+        (self.repo / "task1.txt").write_text("task 1 content\n", encoding="utf-8")
+        git(["add", "task1.txt"], self.repo)
+        git(["commit", "-q", "-m", "feat(task1): task 1 commit"], self.repo)
+        import subprocess
+        c1 = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        # Reset local branch back to prior commit
+        git(["reset", "--hard", "HEAD~1"], self.repo)
+
+        # Update train ref
+        from aet import train as train_lib
+        train_lib.update_train_ref(self.repo, branch_name, c1, old_commit="0" * 40)
+
+        queue = [
+            {
+                "id": "t-1",
+                "state": "awaiting_merge",
+                "integration_branch": branch_name,
+                "train": {
+                    "branch": branch_name,
+                    "position": 1,
+                    "staged_commit": c1,
+                    "staged_at": "2026-10-13T10:00:00Z",
+                },
+            }
+        ]
+        backend.save(queue)
+
+        created_prs = []
+
+        def mock_create_pr(pr_base, title, body, dry_run):
+            created_prs.append({"pr_base": pr_base, "title": title, "body": body})
+            return True, "https://github.com/example/repo/pull/201\n"
+
+        with (
+            patch.object(ship, "_create_pr", side_effect=mock_create_pr),
+            patch.object(ship, "_find_existing_pr", return_value=None),
+        ):
+            result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+
+        self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+        self.assertEqual(len(created_prs), 1)
+
+        # Verify task-1 was flushed and marked merged
+        sealed_t1 = backend.read_sealed("t-1")
+        self.assertIsNotNone(sealed_t1)
+        self.assertEqual(sealed_t1.get("state"), "merged")
+
+        # Verify epic branch now has c1
+        epic_tip = subprocess.check_output(
+            ["git", "-C", str(self.repo), "rev-parse", branch_name], text=True
+        ).strip()
+        self.assertEqual(epic_tip, c1)
+
+    def test_open_epic_skips_validation_with_matching_batch_verdict(self):
+        """Epic tip with a matching passing batch verdict skips validation."""
+        branch_name = "epic/batch-skip"
+        self._branch(
+            branch_name,
+            "skip.txt",
+            "skip content\n",
+            "feat(skip): initial commit",
+        )
+
+        backend = self._backend()
+        backend.set_epic(branch_name)
+
+        # Set validate_command to false so if validation ran, it would fail
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "false"}\n', encoding="utf-8"
+        )
+
+        reports = Path(self.tmpdir.name) / "reports-archive"
+        from aet import evidence as evidence_lib
+        from aet import telemetry as telemetry_lib
+
+        rec = {
+            "kind": "batch",
+            "branch": branch_name,
+            "verdict": "pass",
+            "summary": "Merge train flush passed",
+            "generated_at": telemetry_lib.iso_now(),
+            "task_ids": ["t-skip"],
+        }
+        evidence_lib.write_verdict(
+            task_id=branch_name,
+            kind="batch",
+            record=rec,
+            project_slug=telemetry_lib.derive_project_slug(str(self.repo)),
+            reports_root=str(reports),
+            worktree_dir=str(self.repo),
+        )
+
+        created_prs = []
+
+        def mock_create_pr(pr_base, title, body, dry_run):
+            created_prs.append({"pr_base": pr_base, "title": title, "body": body})
+            return True, "https://github.com/example/repo/pull/202\n"
+
+        env = {
+            "AET_REPORTS_DIR": str(reports),
+            "AET_EVIDENCE_PATH_BATCH": "",
+            "AET_REPO_ROOT": str(self.repo),
+        }
+
+        with (
+            patch.object(ship, "_create_pr", side_effect=mock_create_pr),
+            patch.object(ship, "_find_existing_pr", return_value=None),
+            patch.dict(os.environ, env),
+        ):
+            result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+
+        self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+        self.assertEqual(len(created_prs), 1)
+
+    def test_open_epic_runs_lint_only_when_epic_tip_moved_by_docs_only_commit(self):
+        """Epic tip moved by a docs-only commit runs lint_command only."""
+        branch_name = "epic/batch-lint"
+        self._branch(
+            branch_name,
+            "code.py",
+            "x = 1\n",
+            "feat(code): add code",
+        )
+
+        backend = self._backend()
+        backend.set_epic(branch_name)
+
+        # Set config: validate_command fails, lint_command passes
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "false", "lint_command": "true"}\n', encoding="utf-8"
+        )
+
+        reports = Path(self.tmpdir.name) / "reports-archive"
+        from aet import evidence as evidence_lib
+        from aet import telemetry as telemetry_lib
+
+        rec = {
+            "kind": "batch",
+            "branch": branch_name,
+            "verdict": "pass",
+            "summary": "Merge train flush passed",
+            "generated_at": telemetry_lib.iso_now(),
+            "task_ids": ["t-lint"],
+        }
+        evidence_lib.write_verdict(
+            task_id=branch_name,
+            kind="batch",
+            record=rec,
+            project_slug=telemetry_lib.derive_project_slug(str(self.repo)),
+            reports_root=str(reports),
+            worktree_dir=str(self.repo),
+        )
+
+        # Commit a docs-only change to README.md
+        (self.repo / "README.md").write_text("# Updated Documentation\n", encoding="utf-8")
+        git(["add", "README.md"], self.repo)
+        git(["commit", "-q", "-m", "docs: update readme"], self.repo)
+        git(["push", "origin", branch_name], self.repo)
+
+        created_prs = []
+
+        def mock_create_pr(pr_base, title, body, dry_run):
+            created_prs.append({"pr_base": pr_base, "title": title, "body": body})
+            return True, "https://github.com/example/repo/pull/203\n"
+
+        env = {
+            "AET_REPORTS_DIR": str(reports),
+            "AET_EVIDENCE_PATH_BATCH": "",
+            "AET_REPO_ROOT": str(self.repo),
+        }
+
+        with (
+            patch.object(ship, "_create_pr", side_effect=mock_create_pr),
+            patch.object(ship, "_find_existing_pr", return_value=None),
+            patch.dict(os.environ, env),
+        ):
+            result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+
+        self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+        self.assertEqual(len(created_prs), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
