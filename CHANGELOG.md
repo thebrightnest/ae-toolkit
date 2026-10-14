@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.20.0] — 2026-10-14
+
+### Added
+
+- **Merge Train Staging and Atomic Batch Flush** — candidate merges are now staged into an atomic merge train ref (`refs/aet/train/<branch>`) and validated in batches under `integration_lock`. Rather than sequentially re-running full validation suites per task on trunk, the orchestrator and ship commands validate the combined batch once, dramatically speeding up multi-task throughput during batch runs.
+- **Prefix Bisect and Automatic Culprit Ejection** — when a staged merge train batch fails combined validation, the train automatically runs a prefix binary search across candidate branches to isolate and eject the failing culprit without human intervention. Healthy sibling tasks are flushed cleanly, while the culprit task is returned to `awaiting_merge` with diagnostic evidence.
+- **Unified Task Integration Primitive (`integrate()`)** — consolidated all disparate task merge logic from the orchestrator, `aet ship merge`, and track-record auto-merge into a single authoritative `integrate()` function. Enforces integration locking, monolithic commit checks, release guards, and squash-merging across every integration entry point.
+- **Configurable Validation Commands** — added `validation.validate_command` and `validation.lint_command` configuration keys to `.agents/aet-config.json` with fallback resolution, allowing repositories to customize project-specific test and lint runners for pre-merge gates.
+- **Verdict-Aware Pre-Merge Gates & Tree Fingerprinting** — `aet ship gate` and `pre_integration_check` check tree fingerprints against recorded verdicts to skip redundant validation when code has not changed relative to a fresh passing test run.
+- **Epic Gate Batch Verdict Reuse** — `aet ship open-epic` skips re-running the test suite if the epic branch head matches the fresh batch validation verdict stamped by the merge train during task integration.
+
+### Changed
+
+- **Dead and Duplicate Code Cleanup in `aet ship`** — removed redundant merge routines and deprecated validation helpers from `aet ship` in favor of the unified `integrate()` pipeline and `pre_integration_check` gate.
+
+### Performance
+
+- **Optimized Test Execution Concurrency** — capped default `pytest-xdist` parallel worker count to 4 (preventing CPU thread thrashing and memory contention) and raised the change-scope full-suite threshold to 75% for smarter test selection.
+
+**Upgrading from 1.19.x:** no configuration changes or migrations are required. The merge train, unified integration pipeline, and test performance optimizations operate automatically. Optionally declare `validation.validate_command` in `.agents/aet-config.json` to customize the test suite executed during merge train flushes.
+
+---
+
 ## [1.19.0] — 2026-10-11
 
 ### Added

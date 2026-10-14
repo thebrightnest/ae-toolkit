@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.19.0
+## Current Version: 1.20.0
 
-Last updated: 2026-10-11
+Last updated: 2026-10-14
 
 ---
 
@@ -24,10 +24,10 @@ Turn ideas into actionable, validated plans.
 
 Run plans with isolation, quality gates, and traceability.
 
-- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, a single admission policy shared by every route onto the board, correction of a queued plan by editing the file and re-adding it, a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall, an epic declared once in the queue envelope rather than inferred on every invocation, preflight checks that refuse in the foreground before a run detaches, a liveness check that reads process start time so a recycled process id is never reported as an active run, continuous serialized auto-merge under lock directly onto the target branch during batch runs, dynamic worker slot replenishment that dispatches newly unblocked DAG tasks immediately without batch stalls, and non-blocking conflict staging to `awaiting_merge` with diagnostic metadata.
+- **aet-work** — Work queue management and sequential or parallel task execution. Spawns isolated sessions per task in git worktrees, with curated sprint intake, evidence-gated completion, live-run visibility in the panel, usage-cost telemetry, a git-refs task store that travels with the repository, detached-only run invocation with bounded completion reports, hybrid liveness supervision that lets a quiet-but-working session keep running, night-shift runtime resilience, configurable branch models including single-PR integration mode, shadow posture for projects that keep their board entirely local, multi-machine state sync via `refs/aet/*`, run-scoped handoff note injection, portable plan specs carried in the task record, recovery of missing stage verdicts without re-running the whole stage, one integration branch per PRD so concurrent epics never share a pull request, plan-quality validation at every entry to the board rather than only at `aet sprint add`, a single admission policy shared by every route onto the board, correction of a queued plan by editing the file and re-adding it, a run that stops and asks to be resumed when it meets a provider rate limit instead of retrying into the same wall, an epic declared once in the queue envelope rather than inferred on every invocation, preflight checks that refuse in the foreground before a run detaches, a liveness check that reads process start time so a recycled process id is never reported as an active run, continuous serialized auto-merge under lock directly onto the target branch during batch runs, dynamic worker slot replenishment that dispatches newly unblocked DAG tasks immediately without batch stalls, non-blocking conflict staging to `awaiting_merge` with diagnostic metadata, atomic merge train batch validation under integration lock that validates multi-task candidate flushes in a single pass, and automated prefix bisect and culprit ejection on failing train flushes to isolate broken tasks without halting the batch.
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
-- **aet-drive** — Autonomous execution loop that drives an entire declared epic or sprint queue to completion. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, standalone sprint mode when no active epic is set, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks into the active epic branch via `aet ship merge`, and intelligent resolution of integration conflicts.
+- **aet-drive** — Autonomous execution loop that drives an entire declared epic or sprint queue to completion. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, standalone sprint mode when no active epic is set, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts.
 
 ### Quality and Security Skills
 
@@ -42,7 +42,7 @@ Verify code before it ships.
 
 Land code cleanly and document releases.
 
-- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct merge via `aet ship merge`, provider-specific merge-guard harness detection, squash-merge verification fallback, stacked PR split and trunk substitution, and optional branch deletion on close. Resolves a task id against the record across open, gate, close, merge, split, and verify; plan paths are no longer accepted. Which verdict a stage must show is read from the workflow definition rather than kept as a separate list, and a gate's default routing derives from the plan's work class. `aet ship open-epic` runs the gate and opens the pull request for an epic branch. The gate, the conflict detection and the commit count all run against the branch being merged rather than against whichever branch the checkout happens to be on.
+- **aet-ship** — Pre-merge validation, PR creation, merge verification, direct integration via a single unified `integrate()` primitive, provider-specific merge-guard harness detection, squash-merge verification fallback, stacked PR split and trunk substitution, and optional branch deletion on close. Resolves a task id against the record across open, gate, close, merge, split, and verify; plan paths are no longer accepted. Which verdict a stage must show is read from the workflow definition rather than kept as a separate list, and a gate's default routing derives from the plan's work class. Pre-merge gates evaluate tree fingerprints to skip redundant validation when fresh verdicts exist, and `aet ship open-epic` reuses fresh merge train batch verdicts to bypass redundant suite runs when opening epic pull requests. The gate, the conflict detection and the commit count all run against the branch being merged rather than against whichever branch the checkout happens to be on.
 - **aet-release-prep** — Release preparation: commit analysis, changelog and product-documentation updates, and version bump suggestions. How each release is resolved — where the window starts, which scheme the project versions by, which manifest holds the version, and where the two documents live — is detected from the repository and can be pinned in configuration where detection would be ambiguous. Projects that deploy continuously and carry no version numbers are supported alongside those that tag or bump a manifest, and a release run follows the conventions of the changelog it is writing into rather than imposing its own.
 - **aet-sync-docs** — Sync the PRD to reflect what was actually built.
 
@@ -90,6 +90,16 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.20.0
+
+- **Merge Train batch validation** — candidate task merges are staged and validated in batches under lock rather than running the full test suite sequentially per task, slashing multi-task landing time during batch and epic runs.
+- **Automated prefix bisect and culprit ejection** — if a staged batch of merges fails validation, the merge train automatically bisects candidates to isolate and eject the broken task back to `awaiting_merge` while cleanly integrating all passing tasks.
+- **Verdict-aware pre-merge gates** — pre-merge gates check tree fingerprints against recent passing test runs, skipping redundant validation runs when the codebase has not changed.
+- **Epic gate batch verdict reuse** — `aet ship open-epic` reuses fresh batch test verdicts stamped by the merge train, opening epic pull requests immediately without re-running the test suite.
+- **Configurable project test commands** — repositories can declare custom validation and lint commands (`validation.validate_command` and `validation.lint_command`) in `.agents/aet-config.json` to tailor pre-merge checks to any project stack.
+
+**Upgrading from 1.19.x:** no configuration changes or migrations are required. The merge train, verdict-aware validation skipping, and test execution optimizations activate automatically.
 
 ### What's New in v1.19.0
 
