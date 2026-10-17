@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,10 @@ import aet.worktree
 from tests.cli._helpers import run_typer
 
 aet_setup = importlib.import_module("aet.cli.setup")
+
+
+def _git_init(repo_root: str) -> None:
+    subprocess.run(["git", "init", "-q", repo_root], check=True)
 
 
 class TestSetupBootstrapCli(unittest.TestCase):
@@ -86,6 +91,41 @@ class TestGitignoreDrift(unittest.TestCase):
             aet_setup.write_aet_gitignore_entries(repo_root)
 
             self.assertEqual(aet_setup.missing_aet_gitignore_entries(repo_root), [])
+
+    def test_an_entry_covered_by_a_parent_pattern_is_not_missing(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _git_init(repo_root)
+            (Path(repo_root) / ".gitignore").write_text("docs/plans\n", encoding="utf-8")
+
+            missing = aet_setup.missing_aet_gitignore_entries(repo_root)
+
+            self.assertNotIn("docs/plans/active/", missing)
+            self.assertIn(".worktrees/", missing)
+
+    def test_an_entry_re_included_by_a_negation_is_missing(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _git_init(repo_root)
+            (Path(repo_root) / ".gitignore").write_text(".worktrees/\n!.worktrees/\n", encoding="utf-8")
+
+            self.assertIn(".worktrees/", aet_setup.missing_aet_gitignore_entries(repo_root))
+
+    def test_an_entry_ignored_only_outside_the_project_gitignore_is_missing(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _git_init(repo_root)
+            (Path(repo_root) / ".git" / "info" / "exclude").write_text(".worktrees/\n", encoding="utf-8")
+
+            self.assertIn(".worktrees/", aet_setup.missing_aet_gitignore_entries(repo_root))
+
+    def test_bootstrap_does_not_append_an_entry_a_parent_pattern_covers(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _git_init(repo_root)
+            gitignore = Path(repo_root) / ".gitignore"
+            gitignore.write_text("docs/plans\n", encoding="utf-8")
+
+            added = aet_setup.write_aet_gitignore_entries(repo_root)
+
+            self.assertNotIn("docs/plans/active/", added)
+            self.assertNotIn("docs/plans/active/", gitignore.read_text(encoding="utf-8").splitlines())
 
     def test_a_retired_name_is_reported_stale(self):
         retired = sorted(aet.worktree.AET_RETIRED_IGNORED_PATHS)[0]
