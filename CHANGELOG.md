@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.21.1] — 2026-10-17
+
+### Fixed
+
+- **`aet sprint add` skipped every structural plan check** — intake passes a relative plans directory while the task backend's repo root is absolute, so the validator listed the plans corpus as absolute paths that never matched the plan being admitted, and dropped all of its structural findings. A plan with a missing or mismatched `id`, an invalid `size`, a bad `blocked_by` reference, or a duplicate id was admitted anyway; plans saved as `<id>-plan.md` then reached the board and were never archived at closure, because closure looks for `<id>.md`. The validator now matches the same file however its path is written, so intake refuses these plans as `aet plan validate` always did (#194).
+- **`aet-plan` named plans in a form intake rejects** — `aet-plan` and `aet-pipeline-plan` told agents to save plans as `{ticket-id}-plan.md`. They now save `docs/plans/active/{ticket-id}.md`, and the frontmatter contract states that the filename is the task id.
+
+**Upgrading from 1.21.0:** run `aet update`. A live plan with a structural error that intake used to admit is now refused on its next `aet sprint add`; rename a `<id>-plan.md` plan to `<id>.md` before adding it.
+
+---
+
 ## [1.21.0] — 2026-10-17
 
 ### Added

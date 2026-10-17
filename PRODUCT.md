@@ -4,7 +4,7 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.21.0
+## Current Version: 1.21.1
 
 Last updated: 2026-10-17
 
@@ -90,6 +90,11 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.21.1
+
+- **Plan checks you can rely on** — adding a plan to the sprint now refuses one with a missing or mismatched id, an invalid size, or a broken dependency, instead of letting it onto the board.
+- **Plans that file themselves away** — plans are named after their task id, so finished plans move to the archive automatically when they merge.
 
 ### What's New in v1.21.0
 
