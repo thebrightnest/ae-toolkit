@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.21.0] — 2026-10-17
+
+### Added
+
+- **Self-update with `aet update`** — an install made by the one-line installer now updates itself in one command. `aet update` fetches the newest stable release tag, reinstalls the package into its venv, and relinks skills and the `aet` binary; `--check` shows the current and latest release with the steps it would run, `--tag` targets a specific release, and `--yes` skips the prompt. If any step after the checkout fails, the clone is restored to the previous commit and reinstalled, so a failed update leaves the previous version working (ADR-042). It refuses a managed clone with uncommitted changes, and on a development checkout it points to `git pull && make install-skills` instead of touching it. `aet setup update` is the same command.
+- **Version currency awareness** — `aet --version` prints a notice when a newer release exists, and `aet setup verify` reports whether the installed version is current. The lookup uses `git ls-remote` (no API token, no rate limit) and is cached on disk for 24 hours, so `--version` never waits on the network. `AET_NO_UPDATE_CHECK=1`, `CI`, or non-terminal output turn it off.
+- **Dangling skill links are pruned** — `aet setup skills` now removes symlinks that point into a toolkit `skills/` root whose target no longer exists, so a retired skill stops appearing in agent skill lists. Links that point elsewhere, links whose target exists, and real directories are never touched. `aet setup verify` names each dangling toolkit link without changing anything and points to `aet setup skills`.
+
+### Changed
+
+- **Merge worktrees no longer collide with IDE file watchers** — `aet ship merge` and merge train flushes failed intermittently with `index.lock: File exists` in repositories open in VS Code, Cursor, or JetBrains. The squash commit is now built in the object database with `git commit-tree` instead of checking files out, and ephemeral merge worktrees live in the system temp directory outside the repository. A partially created worktree is cleaned up and pruned. `aet-setup` documents the watcher exclusions for the persistent `.worktrees/` directory.
+- **Queue execution is `aet-drive` and the CLI** — every hand-off that said "run aet-work" now points to `aet sprint add <plan>` then `/aet-drive`, or `aet run-one <id>` for a single task. The queue reference material moved from the skill to `docs/reference/queue/`.
+- **Upgrades go through `aet-plan`** — upgrade requests are planned by `aet-plan`'s upgrade-planning reference (breaking-change inventory, risk ratings, critical work class), so an upgrade plan has the frontmatter `aet sprint add` needs. `aet-prime` routes upgrade requests there.
+
+### Removed
+
+- **`aet-work`, `aet-upgrade`, and `aet-extract-stack` skills** — `aet-work` was a manual of CLI commands with no judgment left in it and overlapped `aet-drive`; `aet-upgrade` produced plans that could not be queued; `aet-extract-stack` was a one-off scaffold job nothing routed to (ADR-080).
+- **`--dry-run` on `aet ship`, `aet state`, and `aet setup`** — the flag came off `aet ship` and every subcommand, `aet state reset`, `transition`, `set-stage`, and `record-merge`, and `aet setup link`, `skills`, and `verify`. It printed a mock result without checking mergeability or running anything, which let unattended runs report work that never happened. These commands now run directly and print what they did. The installer keeps its own `--dry-run`; `aet update --check` previews an update.
+
+### Fixed
+
+- **The panel's empty state named a retired skill** — it told users with no telemetry to "Run a plan with aet-work"; it now names `aet run`.
+- **Change-scoped test runs pulled in unrelated tests** — a quoted `"__init__.py"` literal wired the file that contained it to every package `__init__`, so a change to it selected tests it does not affect. Quoted `__init__.py` basenames are now ignored when deriving test coverage.
+
+### Documentation
+
+- **Install and update instructions** — the README has an Updating section for installer-managed, development, and `pip` installs, and [docs/upgrades/v1.20.0-to-v1.21.0.md](docs/upgrades/v1.20.0-to-v1.21.0.md) covers the retired skills and removed flags.
+
+**Upgrading from 1.20.x:** `aet update` first ships in this release, so re-run the installer once (`curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash`); it relinks skills and removes the links to the retired ones. Scripts that pass `--dry-run` to `aet ship`, `aet state`, or `aet setup` must drop the flag. See the [upgrade guide](docs/upgrades/v1.20.0-to-v1.21.0.md).
+
+---
+
 ## [1.20.0] — 2026-10-14
 
 ### Added

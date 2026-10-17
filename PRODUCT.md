@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.20.0
+## Current Version: 1.21.0
 
-Last updated: 2026-10-14
+Last updated: 2026-10-17
 
 ---
 
@@ -50,7 +50,8 @@ Land code cleanly and document releases.
 
 Keep projects and the toolkit itself healthy.
 
-- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, `aet setup skills` with native auto-detection for Antigravity (`~/.gemini/config/skills`) alongside Claude, Kimi, and Cursor, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the active epic declaration beside the resolved trunk and integration branch.
+- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, `aet setup skills` with native auto-detection for Antigravity (`~/.gemini/config/skills`) alongside Claude, Kimi, and Cursor, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the active epic declaration beside the resolved trunk and integration branch, says whether the installed version is the newest release, and names any skill link left pointing at a skill that no longer exists. `aet setup skills` removes those links, so a retired skill disappears from the agent's skill list.
+- **aet update** — Updates an installer-managed install, CLI and skills together, to the newest release in one command. `aet update --check` shows what would change first, `--tag` picks a specific release, and a failed update puts the previous version back. `aet --version` says when a newer release is out.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
 
@@ -89,6 +90,15 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.21.0
+
+- **One-command updates** — `aet update` brings the CLI and skills to the newest release, previews the change with `--check`, and rolls back if anything fails.
+- **Know when you're behind** — `aet --version` and `aet setup verify` tell you when a newer release is available, without slowing everyday commands.
+- **No more ghost skills** — re-linking skills removes entries for skills that were retired, so your agent's skill list matches what is installed.
+- **Merges that don't fight your editor** — task merges no longer fail with lock errors when the repository is open in VS Code, Cursor, or JetBrains.
+- **A leaner skill set** — queue execution lives in `/aet-drive`, and dependency upgrades are planned through `/aet-plan` so they can be queued like any other work.
+- **Commands that do what they say** — `aet ship`, `aet state`, and `aet setup` always run for real; preview an update with `aet update --check`.
 
 ### What's New in v1.20.0
 
