@@ -4,7 +4,7 @@
 
 ## Context
 
-`aet-work` runs tasks in isolated git worktrees. `aet-ship` opens PRs from those worktrees. If the worktree branch is not based on the current `origin/main`, the resulting PR can include unrelated commits.
+The `aet run` orchestrator runs tasks in isolated git worktrees. `aet-ship` opens PRs from those worktrees. If the worktree branch is not based on the current `origin/main`, the resulting PR can include unrelated commits.
 
 ## Before `aet run`
 

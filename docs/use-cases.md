@@ -29,20 +29,17 @@ You have an idea. You want solid foundations from day one.
   → Breaks PRD into vertical-slice tickets in docs/plans/
   → Generates .agents/work-queue.json with DAG structure
 
-/aet-work run --dry-run
-  → Previews what the AFK loop would pick first
-
-/aet-work run
-  → Picks first unblocked task, implements, validates, commits
-  → Clears context between tasks
-  → Repeats until all tasks done
+/aet-drive
+  → Offers the approved plans; you pick which to admit (aet sprint add)
+  → Runs aet run: each task in its own worktree and fresh sessions
+  → Repeats until all tasks are closed
 
 /aet-ship
   → Pre-merge gate: tests, coverage, review, security audit
   → Bisectable commits, CHANGELOG, VERSION bump, PR opened
 ```
 
-**Skills used:** `aet-setup`, `aet-plan`, `aet-work`, `aet-ship`
+**Skills used:** `aet-setup`, `aet-plan`, `aet-drive`, `aet-ship`
 
 ---
 
@@ -189,32 +186,29 @@ You have a multi-week epic. You want to plan it once, then let the agent work th
 /aet-plan publish-issues --tracker=github
   → Pushes tickets to GitHub Issues with HITL/AFK labels
   → Your team can view and triage in the tracker
-  → Local work queue remains the source of truth for aet-work
+  → Local work queue remains the source of truth for the `aet` queue
 
 # Night shift: Agent implements (AFK)
-/aet-work run
-  → Task 1: unblocked → implement → validate → done
-  → CLEAR CONTEXT
-  → Task 2: now unblocked → implement → validate → done
-  → CLEAR CONTEXT
-  → Task 3: implement → FAIL (test broken)
-  → LOOP STOPS for human review
+/aet-drive
+  → aet run: unblocked tasks run in parallel, each in fresh sessions
+  → Task 1, Task 2: implement → validate → merged
+  → Task 3: implement → FAIL (test broken) → triage records the failure class
 
 # Morning: Human reviews
 # Fix the issue, update .agents/learnings.jsonl
 
 # Resume night shift
-/aet-work run
-  → Picks up where it left off
-  → Task 3: retry → done
-  → Tasks 4–8: continue sequentially
+/aet-drive
+  → Reports Task 3's failure class and log tail
+  → Moves Task 3 back to ready once you confirm the fix
+  → Tasks 3–8: continue until closed
 
 # When all tasks done
 /aet-ship
   → Merges the epic branch
 ```
 
-**Skills used:** `aet-plan`, `aet-validate-scope`, `aet-work`, `aet-ship`
+**Skills used:** `aet-plan`, `aet-validate-scope`, `aet-drive`, `aet-ship`
 
 **Key feature:** Context is explicitly cleared between tasks. The loop can run 20+ tasks without degradation because each task starts with a clean 5–15k token context window.
 
@@ -421,11 +415,11 @@ Your team has a mature codebase with documented domain language and ADRs. A new 
 
 ## Scenario 10: Learning from Telemetry Across Projects
 
-You have multiple projects running `aet-work` and want the toolkit to learn from recurring inefficiencies.
+You have multiple projects running the `aet` queue and want the toolkit to learn from recurring inefficiencies.
 
 ```
 # In each project, telemetry is written automatically
-/aet-work run-one docs/plans/some-plan.md
+aet run-one docs/plans/some-plan.md
   → Writes per-task JSONL logs to ~/.aet/telemetry/{project-slug}/{date}/{run-id}/
 
 # Configure dependency warmup once per project
@@ -442,6 +436,6 @@ edit .agents/aet-config.json
   → Records the learning in .agents/learnings.jsonl
 ```
 
-**Skills used:** `aet-work`, `aet-evolve`
+**Skills used:** `aet-drive`, `aet-evolve`
 
 **Key principle:** Telemetry turns individual runs into training data for the AI layer. One rule update can save hours across every future project. See `telemetry-guide.md` for setup details.

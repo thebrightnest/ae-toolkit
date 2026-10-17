@@ -96,6 +96,7 @@ Do **not** write an ADR for:
 - [077 — Release Prep Is Configured, Not Inferred](077-release-prep-is-configured-not-inferred.md)
 - [078 — Ship Consumes Recorded Verdicts; Validation Is Configured Once](078-ship-consumes-recorded-verdicts.md)
 - [079 — Merge Train: Stage Under the Lock, Validate Once per Batch](079-merge-train.md)
+- [080 — Retire aet-work, aet-extract-stack, and aet-upgrade](080-retire-aet-work-extract-stack-upgrade.md)
 
 ## Format
 

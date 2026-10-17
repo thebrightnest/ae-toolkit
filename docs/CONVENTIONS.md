@@ -99,7 +99,7 @@ Rules:
 
 ## AET Configuration
 
-`aet-work` reads its integration config through an external-first
+The `aet` queue reads its integration config through an external-first
 precedence chain so that AET can run without committing any AET _config_ to a
 shared repo. ADR-048 records the two-layer model and the rename from the legacy
 `.agents/aet-work.json` file.
@@ -237,7 +237,7 @@ single PR, while still using AET's queue and state machine locally.
    aet run
    ```
 
-   `aet-work` uses `docs-roadmap` as the worktree base, stamps tasks at intake,
+   `aet run` uses `docs-roadmap` as the worktree base, stamps tasks at intake,
    and integrates tasks locally into `docs-roadmap`.
 
 4. Open the epic pull request targeting trunk:

@@ -115,7 +115,7 @@ See ADR-061 (`docs/adr/061-the-record-is-the-plan-after-intake.md`) and ADR-068 
 
 ## Example dialogue
 
-> **Dev:** “I added a new plan file. Why doesn’t `aet-work status` show it as `ready`?”
+> **Dev:** “I added a new plan file. Why doesn’t `aet status` show it as `ready`?”
 >
 > **Expert:** “Approved plans are not added to the sprint automatically. Run `aet sprint add docs/plans/<id>.md` to put it on the board; it will become `ready` if it has no blockers. Use `aet gate review` to see all approved plans that are not yet on the board.”
 

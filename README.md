@@ -212,7 +212,6 @@ These are the components of the AE Toolkit system. They are installed together; 
 | [aet-ship](./skills/aet-ship)                                     | Pre-merge validation gate with bisectable commits, commit-message conventions, and PR creation.                                                                                           |
 | [aet-release-prep](./skills/aet-release-prep)                     | Release preparation: analyze commits, suggest version bumps, and update CHANGELOG.md and PRODUCT.md.                                                                                      |
 | [aet-sync-docs](./skills/aet-sync-docs)                           | Sync PRD and plan.md to reflect what was actually built. Appends a divergence summary when implementation drifts from the plan.                                                           |
-| [aet-work](./skills/aet-work)                                     | Work queue management and AFK task orchestration. Curated intake, evidence-gated completion, and a local telemetry panel. Backed by local JSON, git-refs, or GitHub Issues.               |
 | [aet-drive](./skills/aet-drive)                                   | Autonomous end-to-end epic completion loop: orchestrates task execution, automatic shipping, and conflict resolution.                                                                     |
 
 ### Pipelines
@@ -222,7 +221,6 @@ These skills orchestrate the full toolkit workflow:
 | Skill                                           | Description                                                                                               |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | [aet-pipeline-plan](./skills/aet-pipeline-plan) | End-to-end planning pipeline. Runs triage → plan → validate-scope with hard human gates.                  |
-| [aet-work](./skills/aet-work)                   | Work queue management with unified orchestrator. Runs plans with session-isolated, evidence-gated stages. |
 | [aet-drive](./skills/aet-drive)                 | Autonomous epic completion loop: runs queue, merges tasks into epic branch, and resolves conflicts.       |
 
 ---

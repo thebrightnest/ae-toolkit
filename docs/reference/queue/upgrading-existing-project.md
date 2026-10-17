@@ -4,7 +4,7 @@
 
 <!-- aet-lint: off -->
 <!-- Deliberate citation of legacy files and schemas in upgrade guide -->
-You have an existing project that uses the AE Toolkit (aet-work) and its work queue is still on the old model:
+You have an existing project that uses the AE Toolkit and its `aet` work queue is still on the old model:
 
 - `tasks[].status` is the only field.
 - `merge_verified` or `done` appear as terminal statuses.
@@ -39,7 +39,7 @@ Update the skills in `~/.agents/skills/` (or wherever they are installed). For t
 make install-skills
 ```
 
-For other projects, copy or symlink the latest `aet-work/` skill directory.
+For other projects, re-run the installer or `aet setup skills` against the latest toolkit checkout.
 
 ### 2. Back up current state
 

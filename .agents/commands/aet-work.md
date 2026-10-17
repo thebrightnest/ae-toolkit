@@ -114,7 +114,7 @@ The table below documents namespace mapping; strings in backticks are labels, no
 | --------------- | --------------- | ----- |
 | `aet-evolve` | **No CLI subcommand.** Activate as a skill. Use `aet retro` (telemetry retro) or run the `retro` + `system-evolve` procedure manually. | `aet evolve` fails. |
 | `aet-plan` | `aet plan validate` | Validates plans. |
-| `aet-work` | `aet run`, `aet run-one`, `aet status`, `aet next`, `aet queue sync`, `aet state`, etc. | The `aet-work` skill owns the queue/orchestrator. |
+| `aet-work` | `aet run`, `aet run-one`, `aet status`, `aet next`, `aet queue sync`, `aet state`, etc. | The `aet` CLI owns the queue/orchestrator; autonomous runs use `/aet-drive`. |
 | `aet-ship` | `aet ship` (gate + open) and `aet ship close` (post-merge closure) | Unified workflow; skill is judgment residue only. |
 | `aet-qa` | No direct CLI; invoked inside the pipeline. | |
 | `aet-review` | No direct CLI; invoked inside the pipeline or via skill activation. | |

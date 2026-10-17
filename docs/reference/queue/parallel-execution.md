@@ -1,4 +1,4 @@
-# Parallel Execution in aet-work
+# Parallel Execution in the aet Queue
 
 ## Bash Job Control Approach
 

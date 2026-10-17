@@ -1,22 +1,9 @@
-# Plan Frontmatter Contract
+# Plan Frontmatter Parsing
 
-Plan files use YAML frontmatter between leading `---` fences.  The
-`aet.plan_parser.parse_frontmatter` function is the canonical reader.
-
-## Required keys
-
-- `id` — string, must match the plan filename stem.
-- `size` — one of `S`, `M`, `L`.
-
-## Optional keys
-
-- `blocked_by` — list of task ids.  Missing or empty means no blockers.
-- `work_class` — one of `trivial`, `normal`, `critical`.
-- `pipeline` — pipeline name (e.g., `standard`).
-- `security_review` — `required` or `skipped`; `skipped` requires
-  `security_review_reason`.
-- `docs_sync` — `required` or `skipped`; `skipped` requires
-  `docs_sync_reason`.
+Plan files use YAML frontmatter between leading `---` fences. The
+`aet.plan_parser.parse_frontmatter` function is the canonical reader. The keys a
+plan author sets are documented in
+[`skills/aet-plan/references/work-queue-format.md`](../../../skills/aet-plan/references/work-queue-format.md#plan-frontmatter-keys).
 
 ## PyYAML shim
 

@@ -180,7 +180,7 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 **Work queue handoff:**
 
 - `aet-plan` produces `docs/plans/active/*.md` only
-- Queue management is owned by aet-work. The user curates the sprint with `aet sprint add <plan-file>`; plans may be untracked at intake
+- Queue management is owned by the `aet` CLI plus `aet-drive`. The user curates the sprint with `aet sprint add <plan-file>`; plans may be untracked at intake
 - This keeps queue format, merge logic, and state management in a single skill
 - See [references/work-queue-format.md](references/work-queue-format.md) for the task record schema
 
@@ -230,7 +230,7 @@ Or "None — can start immediately" if no blockers.
 **Rules:**
 
 - Publish in dependency order (blockers first) so real issue IDs can be referenced
-- External issues are a mirror; the local work queue remains the source of truth for aet-work
+- External issues are a mirror; the local work queue remains the source of truth for the `aet` queue
 - If the tracker is not configured, skip this step and document the gap in AGENTS.md
 
 ### `plan`
@@ -288,7 +288,7 @@ After the `plan` command completes and the plan.md is ready for review:
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
 4. The new plan files are ready to queue. Because mid-sprint queue state is local-only, remind the user that untracked plans are load-bearing: `git clean -fdx` or git-following backups will discard in-flight work.
 5. Do not run `aet sprint add`, and do not report on whether intake happened. Intake belongs to the operator, or to `aet-pipeline-plan` Step 3 when this skill runs inside that pipeline. This mirrors step 9 of `create-stories`; the two must not diverge.
-6. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet-work\`"`
+6. Print: `"✓ Stage: prd-approved / plan-draft → Next step: run \`aet-validate-scope\`, then \`aet sprint add\` + \`/aet-drive\`"`
 
 ## Key Principles
 

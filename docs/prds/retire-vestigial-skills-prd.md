@@ -278,5 +278,28 @@ user-facing code strings change.
 - **Doc-rule invariants lost in the move.** Mitigation: R-9 retargets each rule rather
   than deleting it, and the acceptance criteria check that `aet docs lint` passes.
 
-*Stage: scope-validated*
-*Next step: `aet sprint add` the RVS plans, then run `/aet-drive`*
+## Divergence Summary
+
+*Recorded: 2026-10-17 — Branch: RVS-01*
+
+RVS-01 (retire `aet-work`, ADR-080) was built as planned. Tasks 1–7 match the plan;
+the entries below are small additions found in the diff.
+
+### Changed from plan
+
+- None.
+
+### Added (unplanned)
+
+- `docs/adr/README.md`: added the ADR-080 row to the ADR index, as every new ADR needs.
+- `skills/aet-setup/examples/worktree-ship-hygiene.md.example`: changed "`aet-work` runs
+  tasks in isolated git worktrees" to "The `aet run` orchestrator ...". The plan's
+  `aet-work` grep over `skills/` found this file, but it was not in Files to Modify.
+
+### Deferred
+
+- R-11…R-14 (retire `aet-extract-stack`, fold `aet-upgrade` into `aet-plan`) remain with
+  RVS-02, and R-16…R-18 with RVS-03, as planned.
+
+*Stage: synced*
+*Next step: run `aet-ship` for RVS-01; RVS-02 and RVS-03 follow through `/aet-drive`*

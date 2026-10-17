@@ -81,7 +81,7 @@ If this session still contains planning context, strongly recommend clearing it 
 >
 > Note: entering a worktree does **not** clear the context window. If context is stale, start a new session first, then set up the worktree.
 
-**Worktree mode** (use with `--worktree` flag, "in a worktree", or when invoked by aet-work):
+**Worktree mode** (use with `--worktree` flag, "in a worktree", or when invoked by the `aet run` orchestrator):
 
 Worktree mode puts each implementation on its own branch using standard git commands — no agent-specific tooling required.
 

@@ -1,6 +1,6 @@
-# aet-work Command Reference
+# Queue Command Reference
 
-Detailed procedures for `aet` commands. The skill file describes the mental model; this file describes the mechanics.
+Detailed procedures for the `aet` queue commands. The `aet-drive` skill drives the queue end to end; this file describes the mechanics.
 
 ## `backlog add`
 
@@ -39,13 +39,11 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the orc
 
 **Procedure:**
 
-1. **Plan-drift warning:** Run the `plan-drift` check and print an informational warning if drift is detected; do **not** refuse to start the AFK loop.
-
-2. **Pre-branch git hygiene:**
+1. **Pre-branch git hygiene:**
 
    Before spawning the first task, the orchestrator ensures the trunk branch is clean and synchronized with its remote tracking branch. If the trunk has dirty non-plan paths, is behind its remote, or is ahead with any non-plan changes, the orchestrator prints an actionable reason and halts before creating any worktrees. Trunk hygiene is a mechanical durability hard-stop: the loop halts in unattended mode too (ADR-027). Mutations to task and history state are ignored by the dirty check because the orchestrator writes them as part of normal operation. Untracked or modified `docs/plans/*.md` files are also ignored at intake: mid-sprint queue state is local-only until a terminal transition (merged/abandoned) persists it (ADR-054). Operators must treat untracked plans as load-bearing — `git clean -fdx` or git-following backups can discard in-flight work.
 
-3. **Invoke the detached orchestrator:**
+2. **Invoke the detached orchestrator:**
 
    Run the command as a normal foreground invocation. It spawns the orchestrator in its own detached session, prints the run ID, log path, and follow command, and returns immediately:
 
@@ -57,7 +55,7 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the orc
 
    **Failure handling:** `--on-failure={triage|continue|halt}` (default `triage`). `triage` spawns a cheap triage session that decides whether to requeue a transient failure or quarantine a design defect; `continue` marks the task failed and keeps spawning new tasks; `halt` stops the shift on the first failure.
 
-4. **Observe a running batch:**
+3. **Observe a running batch:**
 
    To wait for an already-spawned run to finish and print a bounded completion report:
 
@@ -67,13 +65,13 @@ AFK loop with OS-level process isolation and parallel execution. Invokes the orc
 
    `--follow` does **not** tail or stream the run log; it waits silently and emits the same fixed-shape report that `run-one` prints.
 
-5. **Concurrency cap:**
+4. **Concurrency cap:**
 
    - Default: `4` parallel tasks
    - Override: `aet run --max-jobs <n>` (accepted values: `1`–`8`)
    - The orchestrator never exceeds the cap to prevent resource exhaustion
 
-6. **Resume behavior:**
+5. **Resume behavior:**
    - Re-running `run` resumes from the current queue state
    - Already-done or in-progress tasks with existing worktrees are skipped automatically
 
@@ -207,23 +205,13 @@ Print an execution telemetry summary from the archive.
 
 **When to use:** After one or more orchestrator runs to inspect throughput, failure rate, and resource usage.
 
-## Plan-drift detection
+## Plan Backlog
 
-Detect plan files that exist on disk but are not represented in the active work queue.
-
-**Procedure:**
-
-1. Read the active task board and collect all `plan_file` paths
-2. Read `.agents/work-history.jsonl` and collect all settled `plan_file` paths
-3. List all `docs/plans/*.md` files. Only atomic plans in this directory are considered; roadmaps and audits stored elsewhere are ignored.
-4. Identify any plan files whose path is not found in the queue's `plan_file` set **and** not found in the settled history's `plan_file` set
-5. Compare the most recent modification time of any `docs/plans/*.md` against the `queue_updated_at` field (or the queue file's mtime as fallback)
-6. Report findings:
-   - Orphaned plans: print each filename and `⚠️ Plan drift detected: N plan file(s) not in queue. Admit them with aet sprint add.`
-   - Stale queue: if plans are newer than the queue, print `⚠️ Queue is stale (plans modified after last queue update). Run aet queue sync to reconcile the board.`
-   - If none: print `✅ No plan drift detected. All plans are tracked in the queue.`
-
-Plan-drift detection checks only the active queue. Settled tasks are ignored; their plan files may still exist on disk but are no longer tracked as active work.
+The Plan Backlog is the set of `docs/plans/active/*.md` files whose `id` is not on the
+Board. No command lists it: `aet status` and `aet next` report only the Board, not plan
+drift. To find it, compare the plan files' `id` frontmatter with the ids `aet status`
+shows. `aet-drive` does this in its curation step and admits only the plans the user
+names with `aet sprint add`.
 
 ## Drift check
 

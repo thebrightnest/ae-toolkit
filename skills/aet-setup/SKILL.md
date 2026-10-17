@@ -38,7 +38,7 @@ With optional flags to override sensible defaults.
 
 ### `install-binaries`
 
-Put the `aet` dispatcher on `PATH` so skills like aet-work, aet-ship, and aet-evolve can invoke their helpers (`aet state`, `aet run`, `aet mine-learnings`, etc.).
+Put the `aet` dispatcher on `PATH` so skills like aet-drive, aet-ship, and aet-evolve can invoke their helpers (`aet state`, `aet run`, `aet mine-learnings`, etc.).
 
 **Prerequisite:** `npx skills` copies skill markdown only; the `aet` Python package must be installed first. See [references/install-binaries.md](references/install-binaries.md) for the full procedure.
 
@@ -158,7 +158,7 @@ Run `aet configure --guided` to write the AET config in two questions:
 1. **Scope** — `team` writes `.agents/aet-config.json` (committed with the repo); `shadow` writes `~/.aet/{slug}/config.json` (nothing committed).
 2. **Integration mode** — `pr-per-task` or `single-pr`.
 
-The guided flow detects existing config, shows current values, and asks before overwriting. In unattended contexts (`AET_EXECUTION_MODE=unattended` or `--scope`/`--integration-mode` flags), it skips prompts and writes directly. There is no store to select — `git-refs` is the only one — and the removed `task_backend` key is not written; projections are configured on the `projections` axis. See `aet-work/references/github-backend.md` for the label contract and sync behavior.
+The guided flow detects existing config, shows current values, and asks before overwriting. In unattended contexts (`AET_EXECUTION_MODE=unattended` or `--scope`/`--integration-mode` flags), it skips prompts and writes directly. There is no store to select — `git-refs` is the only one — and the removed `task_backend` key is not written; projections are configured on the `projections` axis. See `docs/reference/queue/github-backend.md` in the toolkit repository for the label contract and sync behavior.
 
 ### Step 7: Validate
 
@@ -212,7 +212,7 @@ Create `docs/references/` at project root for task-specific reference documents 
 
 Add a smoke-check home at `.agents/smoke/` for session-level foundation checks. Smoke checks run **once per session** (not per task) to confirm the project boots, core services are healthy, and primary auth/CRUD paths still work.
 
-**AET skill binaries:** If the project uses aet-work, aet-ship, or aet-evolve, ensure the `aet` dispatcher is on `PATH`. Run `aet setup link`. `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
+**AET skill binaries:** If the project uses aet-drive, aet-ship, or aet-evolve, ensure the `aet` dispatcher is on `PATH`. Run `aet setup link`. `make install-skills` from the toolkit repo runs it automatically. Document this in `AGENTS.md` so future sessions do not silently fall back to manual steps.
 
 ### Type Safety
 

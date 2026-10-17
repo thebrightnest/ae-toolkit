@@ -159,12 +159,12 @@ rules:
 
   # t2r-06: intake-commit rules are pinned in data
   - type: must_contain
-    target: skills/aet-work/SKILL.md
+    target: skills/aet-drive/SKILL.md
     value: "No commit or push happens at intake"
-    reason: "aet-work SKILL.md must state the intake durability rule"
+    reason: "aet-drive SKILL.md owns queue curation and must state the intake durability rule"
 
   - type: must_contain
-    target: skills/aet-work/references/queue-commands.md
+    target: docs/reference/queue/queue-commands.md
     value: "No commit or push happens at intake"
     reason: "queue-commands reference must state the intake durability rule"
 
@@ -181,7 +181,7 @@ rules:
 
   # t2r-06: direct-JSON-edit contradiction
   - type: must_not_contain
-    target: skills/aet-work/references/queue-commands.md
+    target: docs/reference/queue/queue-commands.md
     value: "direct JSON update"
     reason: "Stale-worktree repair must go through aet state transition only"
 

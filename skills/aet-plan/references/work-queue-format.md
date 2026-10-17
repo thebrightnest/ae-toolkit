@@ -8,6 +8,30 @@ Task records are stored in git refs under `refs/aet/tasks/<task-id>`.
 
 Task records store **persistent facts** and the canonical `state` for each task. Reads (`aet status`, `aet next`, the orchestrator) project the stored `state` directly; they do not recompute pickability from git on every read. A separate `aet state audit` command reconciles stored state against git ground truth on demand.
 
+## Plan Frontmatter Keys
+
+Plan files use YAML frontmatter between leading `---` fences. Intake
+(`aet sprint add`) reads these keys from the plan.
+
+Required:
+
+- `id` — string, must match the plan filename stem.
+- `size` — one of `S`, `M`, `L`.
+
+Optional:
+
+- `blocked_by` — list of task ids. Missing or empty means no blockers.
+- `work_class` — one of `trivial`, `normal`, `critical`.
+- `pipeline` — pipeline name (e.g., `standard`).
+- `security_review` — `required` or `skipped`; `skipped` requires
+  `security_review_reason`.
+- `docs_sync` — `required` or `skipped`; `skipped` requires
+  `docs_sync_reason`.
+
+Prose values may contain backticks and colons; the parser quotes them before
+loading. Parser internals live in the toolkit repository at
+`docs/reference/queue/frontmatter-parsing.md`.
+
 ## Schema
 
 ```json

@@ -50,7 +50,7 @@ If `ACTIVE_PRD_STAGE` or `ACTIVE_PLAN_STAGE` is found, skip already-completed st
 | Stage found                          | Resume from                          |
 | ------------------------------------ | ------------------------------------ |
 | `prd-approved` or `prd-draft`        | Step 2 (aet-validate-scope)          |
-| `scope-validated` or `plan-approved` | Pipeline complete → suggest aet-work |
+| `scope-validated` or `plan-approved` | Pipeline complete → suggest `/aet-drive` |
 
 ## Commands
 
@@ -122,7 +122,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 
 - `docs/prds/{seq}-{feature}-prd.md` — stage: `scope-validated`
 - `docs/plans/active/*.md` — stage: `plan-approved`
-- Task records — curated via `aet sprint add` and reconciled via `aet queue sync`, ready for aet-work
+- Task records — curated via `aet sprint add` and reconciled via `aet queue sync`, ready for `/aet-drive`
 
 ## Completion Protocol
 
@@ -150,7 +150,7 @@ After the pipeline completes all steps:
 - **Resumable** — if a stage is found in the footer, skip completed steps
 - **Same quality as individual skills** — the pipeline chains skills, it does not shortcut them
 - **AFK-safe** — the only human touchpoints are the defined gates; everything else runs unattended
-- **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to aet-work
+- **Implementation lockout** — Never edit application source files during planning. If a step would require code changes, stop and redirect to `aet-implement`
 - **UI validation is a lens, not a stage** — UI/UX coverage is checked as part of `aet-validate-scope` when the PRD describes user-facing interfaces. It is not a separate pipeline step.
 - **Imperative requests are planning targets** — "Do X" means "Plan how to do X"
 - **Session-sized output** — The pipeline delegates to `aet-plan`, which shapes plans against the advisory guardrail model in `docs/CONVENTIONS.md`. Plans that enter the queue are intended to be implementable in a single agent session; actual size is measured at closure (ADR-046).

@@ -4,7 +4,7 @@ This document defines the canonical pipeline stages and the work-class routing t
 
 ## Work Classes
 
-Every incoming request is classified into one of three work classes before any skill runs. `work_class` is also a stored, machine-readable task attribute: an optional plan-frontmatter key (`trivial`, `normal`, or `critical`) that `aet-work sync` validates and copies onto the task record, defaulting to `unclassified` when absent. The stored value is used by downstream readers (risk score, zero-review track record) rather than the routing decision itself.
+Every incoming request is classified into one of three work classes before any skill runs. `work_class` is also a stored, machine-readable task attribute: an optional plan-frontmatter key (`trivial`, `normal`, or `critical`) that `aet queue sync` validates and copies onto the task record, defaulting to `unclassified` when absent. The stored value is used by downstream readers (risk score, zero-review track record) rather than the routing decision itself.
 
 | Class        | Trigger Examples                                | Pipeline                                                | Plans?           | QA Gate           |
 | ------------ | ----------------------------------------------- | ------------------------------------------------------- | ---------------- | ----------------- |
@@ -82,9 +82,9 @@ Entry-point skills enforce symmetric guards to prevent misrouted work:
 
 ## Canonical Stage State Machine
 
-The `aet-work` orchestrator is the sole conductor of the pipeline. It reads each task's recorded `state` and `stage` from `.agents/work-queue.json`, spawns isolated agent sessions per stage group, and advances plans automatically. The plan footer `*Stage:*` is a human breadcrumb, not a scheduler input.
+The `aet run` orchestrator is the sole conductor of the pipeline. It reads each task's recorded `state` and `stage` from `.agents/work-queue.json`, spawns isolated agent sessions per stage group, and advances plans automatically. The plan footer `*Stage:*` is a human breadcrumb, not a scheduler input.
 
-The stage sequence, skill bindings, evidence gates, and session grouping are **data, not engine code**. The canonical stage list is the workflow file: a repo-level `.agents/workflows/<name>.json` when present, otherwise the packaged `aet-work/workflows/software.json`; the plan frontmatter key `workflow:` selects the workflow by name (default `software`). A missing or invalid workflow file fails the run loudly at task start — there is no baked-in fallback sequence. The table below mirrors the packaged `software` workflow.
+The stage sequence, skill bindings, evidence gates, and session grouping are **data, not engine code**. The canonical stage list is the workflow file: a repo-level `.agents/workflows/<name>.json` when present, otherwise the packaged `src/aet/workflows/software.json`; the plan frontmatter key `workflow:` selects the workflow by name (default `software`). A missing or invalid workflow file fails the run loudly at task start — there is no baked-in fallback sequence. The table below mirrors the packaged `software` workflow.
 
 | Stage           | Skills                     | Evidence gate                                                  | Next stage    |
 | --------------- | -------------------------- | -------------------------------------------------------------- | ------------- |
@@ -139,7 +139,7 @@ The per-task circuit breaker (nsr-03) has absolute precedence: the third identic
 Workflow state is **recorded at transition time and trusted on read**.
 
 - `aet-state transition` is the only writer of `tasks[].state`.
-- `aet-work status`, `aet-work next`, and the orchestrator project the stored `state` directly and make **zero git calls** on the read path.
+- `aet status`, `aet next`, and the orchestrator project the stored `state` directly and make **zero git calls** on the read path.
 - `aet-state audit` reconciles stored state against git ground truth on demand; it is never invoked during normal operation.
 
 ## Sprint Membership
@@ -229,11 +229,11 @@ blocked_by:
 ```
 
 - `id` must match the filename stem and be unique within the PRD family.
-- `blocked_by` is the authoritative dependency DAG; prose dependency sections are ignored by `aet-work sync`.
+- `blocked_by` is the authoritative dependency DAG; prose dependency sections are ignored by `aet queue sync`.
 - `size` is the S/M/L complexity label.
 - `stage` lives only in the task record, never in plan frontmatter.
 
-`aet-work sync` validates every plan and fails closed on missing, duplicate, or mismatched IDs, unknown blockers, or invalid size values.
+`aet queue sync` validates every plan and fails closed on missing, duplicate, or mismatched IDs, unknown blockers, or invalid size values.
 
 ## Live / Settled Partition
 

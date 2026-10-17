@@ -67,7 +67,7 @@ Exclude `.worktrees/` from IDE file watchers (VS Code `.vscode/settings.json`):
 
 ### 4. `.agents/aet-config.json` (queue config)
 
-Created by `aet configure --guided` during `aet-setup` Step 6. Sets the integration mode used by aet-work:
+Created by `aet configure --guided` during `aet-setup` Step 6. Sets the integration mode used by the `aet run` orchestrator:
 
 ```json
 {
@@ -98,7 +98,7 @@ GitHub Issues mirroring is configured on the `projections` axis. A forge is a pr
 
 The projection dispatcher catches projection failures and warns on stderr; storage writes remain fail-closed.
 
-See `aet-work/references/github-backend.md` for the label contract, `gh` CLI requirements, issue body format, and GitHub-to-local sync behavior.
+See `docs/reference/queue/github-backend.md` in the toolkit repository for the label contract, `gh` CLI requirements, issue body format, and GitHub-to-local sync behavior.
 
 ### 5. `docs/references/` directory
 

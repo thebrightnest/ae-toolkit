@@ -1,13 +1,13 @@
 # Telemetry Guide for AET Projects
 
 This guide explains how telemetry works in projects that run the AE Toolkit
-(`aet-work`). Telemetry is **local-first** and written directly to the user-level
+(`aet run`). Telemetry is **local-first** and written directly to the user-level
 archive so it survives project worktree deletion. `aet-evolve mine-learnings`
 reads the archive when you want cross-project analysis.
 
 ## What gets recorded
 
-When `aet-work` runs a task, the orchestrator writes directly to:
+When `aet run` runs a task, the orchestrator writes directly to:
 
 ```
 ~/.aet/telemetry/<main-worktree-dir>/<worktree-label>/{date}/{run-id}/
@@ -254,17 +254,17 @@ not grounds for suppressing either record.
    make install-skills
    ```
 
-2. Run any plan with `aet-work`:
+2. Run any plan with `aet run-one`:
 
    ```bash
-   aet-work run-one docs/plans/some-plan.md
+   aet run-one docs/plans/some-plan.md
    ```
 
    The orchestrator creates the archive directory automatically on first run
    and prints the path when it finishes.
 
-3. Add `~/.aet/telemetry/` and `aet-work.log` to your personal ignore rules if
-   desired. These paths are outside the project, so no project `.gitignore`
+3. Add `~/.aet/telemetry/` to your personal ignore rules if
+   desired. This path is outside the project, so no project `.gitignore`
    changes are required for telemetry.
 
 ## Configuring worktree dependency warmup
@@ -335,9 +335,9 @@ visibility requires the launcher.
 For a quick text summary of recent runs:
 
 ```bash
-aet-work report
-aet-work report --since 2026-06-01
-aet-work report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
+aet report
+aet report --since 2026-06-01
+aet report --run-dir ~/.aet/telemetry/my-project/2026-06-30/<run-id>
 ```
 
 This prints run and task counts, wall-clock time, the average isolation level,
@@ -360,7 +360,7 @@ class present in the history (tasks without a `work_class` land in
 `unclassified`).
 
 The `--json` projection is the canonical output of
-`aet-work/lib/metrics.py::aggregate`:
+`src/aet/metrics.py::aggregate`:
 
 ```json
 {
@@ -438,7 +438,7 @@ explicitly itself.
 Runs archived before the worktree-based slug scheme (thp-02) sit under
 origin-derived names like `thebrightnest/ae-toolkit`. Records do not embed the
 slug — only the archive paths do — so migration is pure directory renames, and
-`aet-work report` and the panel follow automatically. Use the in-repo helper:
+`aet report` and the panel follow automatically. Use the in-repo helper:
 
 ```bash
 # dry-run first (default): lists every pending move, touches nothing
@@ -467,9 +467,9 @@ path traversal. To roll back, replay the dry-run output inverted
 - Retention is handled by the prune CLI. Dry-run first, then delete:
 
   ```bash
-  aet-work report --prune 30           # dry run: lists candidates, deletes nothing
-  aet-work report --prune 30 --force   # actually delete runs older than 30 days
-  aet-work report --prune 30 --project <slug>  # scope to one project subtree
+  aet report --prune 30           # dry run: lists candidates, deletes nothing
+  aet report --prune 30 --force   # actually delete runs older than 30 days
+  aet report --prune 30 --project <slug>  # scope to one project subtree
   ```
 
   A run dir is pruned only when both its date path segment and its newest file
@@ -484,7 +484,7 @@ path traversal. To roll back, replay the dry-run output inverted
 
 | Symptom                                               | Fix                                                                               |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `~/.aet/telemetry/` is empty                          | Run `aet-work run-one` or `aet-work run` at least once.                           |
+| `~/.aet/telemetry/` is empty                          | Run `aet run-one` or `aet run` at least once.                           |
 | `mine-learnings` finds no patterns                    | Run more tasks or extend the date range.                                          |
 | Dependency warmup does not run                        | Verify `.agents/aet-config.json` exists and the source paths are correct.         |
 | Junk projects (`tests`, `tmp*`) appear in the archive | Pre-thp-01 pollution from test runs; the suite is isolated now — delete the dirs. |

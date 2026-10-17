@@ -23,7 +23,7 @@
     {
       "hash": "e5f6g7h8",
       "type": "feature",
-      "subject": "feat: add parallel execution support to aet-work"
+      "subject": "feat: add parallel execution support to the orchestrator (`aet run`)"
     },
     {
       "hash": "i9j0k1l2",
@@ -47,7 +47,7 @@
    ### Added
 
    - `aet-release-prep` skill for automated release preparation
-   - Parallel execution support in `aet-work` for concurrent task processing
+   - Parallel execution support in the orchestrator (`aet run`) for concurrent task processing
 
    ### Fixed
 
@@ -59,7 +59,7 @@
 3. **Update PRODUCT.md:**
    - Add "What's New in v1.1.0" with 2 bullets (the features)
    - Add `aet-release-prep` to the Skills table
-   - Update aet-work core feature section to mention parallel execution
+   - Update the orchestrator (`aet run`) core feature section to mention parallel execution
 4. **Bump version:** Note `v1.1.0` for the user to tag manually (git-tag source)
 
 ## Result

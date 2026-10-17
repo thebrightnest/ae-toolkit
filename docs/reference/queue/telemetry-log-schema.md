@@ -10,7 +10,7 @@ The orchestrator writes execution telemetry directly to the user-level archive:
 ```
 
 `{project-slug}` is the worktree-based slug derived by
-`aet-work/lib/telemetry.py::derive_project_slug`:
+`src/aet/project_id.py::derive_project_slug`:
 `<main-worktree-dir>/<worktree-label>` (e.g. `aiskills/main`). The primary
 worktree is labelled `main`; a linked worktree contributes its own directory
 name. The `AET_PROJECT_ID` / `AET_REPO_SLUG` environment variables override
@@ -98,7 +98,7 @@ Records have two provenances:
 - **Wire-derived** — after a kimi session exits, the orchestrator extracts
   every Bash test invocation from the session's wire log
   (`~/.kimi-code/sessions/<workDirKey>/<sessionId>/agents/*/wire.jsonl`) via
-  `aet-work/lib/wirelog.py::extract_test_invocations`: each `tool.call` whose
+  `src/aet/wirelog.py::extract_test_invocations`: each `tool.call` whose
   command matches the test-runner match list, paired with its `tool.result`
   event. `start_time`/`end_time` come from the wire events' top-level `time`
   (epoch millis, converted to ISO-8601), so `duration_seconds` is real.
@@ -108,7 +108,7 @@ Records have two provenances:
   unmeasurable from a single timestamp).
 
 `scope` is assigned by the single shared heuristic
-`aet-work/lib/telemetry.py::classify_test_scope` — no emission site hardcodes
+`src/aet/telemetry.py::classify_test_scope` — no emission site hardcodes
 a scope value:
 
 | Value        | Meaning                                                                                                            |
@@ -181,7 +181,7 @@ aet report --since 2026-06-15T00:00:00Z
 aet report --run-dir ~/.aet/telemetry/my-project/main/2026-06-30/<run-id>
 ```
 
-Or read the log programmatically via `aet-work/lib/telemetry.py`:
+Or read the log programmatically via `src/aet/telemetry.py`:
 
 ```python
 from telemetry import RunLogger, report

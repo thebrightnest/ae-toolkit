@@ -1,6 +1,6 @@
 ---
 name: aet-drive
-description: Autonomous end-to-end task and epic completion loop with natural CLI adapter auto-detection, pipelined task execution (aet run), automatic task integration (aet ship merge), and intelligent merge conflict resolution. Triggers on "/aet-drive", "run aet-drive", "aet-drive", "drive epic", "run epic", "drive sprint", "run sprint", "complete epic", "finish epic", "autonomous epic", "drive the epic to completion".
+description: Autonomous end-to-end task and epic completion loop with natural CLI adapter auto-detection, pipelined task execution (aet run), automatic task integration (aet ship merge), and intelligent merge conflict resolution. Triggers on "/aet-drive", "run aet-drive", "aet-drive", "drive epic", "run epic", "drive sprint", "run sprint", "complete epic", "finish epic", "autonomous epic", "drive the epic to completion", "what's next", "what's unblocked", "run tasks", "run the queue", "night shift", "AFK mode", "keep working".
 ---
 
 # aet-drive
@@ -11,7 +11,9 @@ Autonomous execution loop that drives an entire declared epic or sprint queue to
 
 - You have tasks in the sprint queue (with or without an active epic) and want hands-free execution to completion.
 - You want the agent to automatically run pipeline stages, ship ready tasks, and resolve any integration conflicts without pausing for user intervention.
-- Invoked anywhere via `/aet-drive` (or natural triggers: "run aet-drive", "drive epic", "complete epic", "run epic", "drive sprint").
+- You have approved plans but an empty board, and want to pick which ones to admit.
+- You are back from a night run and want to see what the engine left in `failed` or `quarantined`.
+- Invoked anywhere via `/aet-drive` (or natural triggers: "run aet-drive", "drive epic", "complete epic", "run epic", "drive sprint", "what's next", "run the queue", "night shift", "AFK mode").
 
 ## Context
 
@@ -39,6 +41,23 @@ In accordance with ADR-039, ADR-029, and ADR-076:
 > **Zero-Hesitation Execution Rule**: Immediately launch `aet run`. Do not pause to audit plans, PRDs, queue history, or epic envelopes unless `aet run` fails or halts with an error. If no epic is set, proceed directly in standalone sprint mode without asking the user or stopping.
 
 Execute this loop continuously until all tasks are closed.
+
+### 0. Curate the Sprint
+
+Run `aet status`. If it shows ready tasks, go straight to Step 1.
+
+If no task is ready, work out the **Plan Backlog**: the `id` frontmatter of each
+`docs/plans/active/*.md` that is not on the Board. `aet status` does not list the
+backlog; compare the plan files against the Board yourself.
+
+- If the backlog is empty, report the Board and halt.
+- Otherwise list the backlog (id, title, `blocked_by`) and ask the user which plans
+  to admit.
+- Run `aet sprint add <id>` only for the ids the user names. Never bulk-add: board
+  admission has one path (ADR-066). This is the one step where the
+  Zero-Hesitation rule yields to the user.
+
+No commit or push happens at intake; plan durability is deferred to terminal closure.
 
 ### 1. Natural CLI Adapter Adaptation
 
@@ -130,7 +149,7 @@ aet status
 ```
 
 - **If unblocked tasks are `ready`**: Return to **Step A** (`aet run`).
-- **If tasks are blocked or errored**: Analyze the blocker. If it requires external human decisions or credentials, pause and report details to the user.
+- **If tasks are blocked or errored**: Analyze the blocker. If it requires external human decisions or credentials, pause and report details to the user. Tasks left in `failed` or `quarantined` go to **Residual Failures**.
 - **If all epic tasks are closed**: The epic is complete! Proceed to **Epic Finalization**.
 
 ---
@@ -194,6 +213,51 @@ When a task is in `awaiting_merge` due to integration conflict or merge train ej
    ```bash
    aet ship merge <task_id>
    ```
+
+---
+
+## Residual Failures
+
+The engine's Triage session (ADR-030, `--on-failure=triage`, the default) already
+assigns each failure its Failure Class (`environment`, `flaky`, `design`, `timeout`,
+`canceled`), and the Circuit Breaker re-queues or quarantines the task. Do not repeat
+that work or invent another set of classes.
+
+For each task still in `failed` or `quarantined` after the run settles:
+
+1. Report its recorded Failure Class and stage from `aet status`, plus the tail of
+   `.agents/runs/<run-id>/output.log`.
+2. For a `design` failure, point the user to re-planning with `aet-plan`.
+3. Move the task forward only after the user confirms the cause is fixed:
+
+   ```bash
+   aet state transition <id> failed ready
+   aet state transition <id> quarantined ready
+   ```
+
+4. Abandon a task only on the user's word:
+
+   ```bash
+   aet state transition <id> <current_status> abandoned --reason="<user's reason>"
+   ```
+
+Every move goes through `aet state transition`; never edit queue state by hand.
+
+---
+
+## Queue Commands
+
+The deterministic queue surface lives in the CLI. The full operator reference is
+`docs/reference/queue/queue-commands.md` in the toolkit repository.
+
+| Command                        | Purpose                                                 |
+| ------------------------------ | ------------------------------------------------------- |
+| `aet status`                   | Board: counts, blockers, ready, failed, worktree health |
+| `aet next`                     | Move the next ready task to `in_progress`               |
+| `aet run-one <id>`             | Run the full pipeline on one task                       |
+| `aet queue sync`               | Append-only reconciliation after queue edits            |
+| `aet state audit` / `heal`     | Compare state with git ground truth / repair it         |
+| `aet report`                   | Execution telemetry summary                             |
 
 ---
 

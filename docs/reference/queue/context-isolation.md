@@ -13,7 +13,7 @@ This is not hypothetical. The "smart zone" for LLMs is ~100k tokens. After that,
 
 ## Why Cooperative Isolation Failed
 
-Earlier versions of aet-work attempted a cooperative approach: the skill instructed the agent to clear its own context between tasks (via `/clear`, session restart, or equivalent). This failed on every tested runtime for the same reason — **no agent can reset its own context and continue executing skill instructions mid-session.** The instruction is ignored, context leaks, and quality degrades.
+Earlier versions of the queue skill attempted a cooperative approach: the skill instructed the agent to clear its own context between tasks (via `/clear`, session restart, or equivalent). This failed on every tested runtime for the same reason — **no agent can reset its own context and continue executing skill instructions mid-session.** The instruction is ignored, context leaks, and quality degrades.
 
 The only reliable solution is to move isolation out of the skill and into the OS process layer.
 
@@ -160,4 +160,4 @@ This behavior is intentional. Plan edits are local-only until terminal closure; 
 - `bin/orchestrator` — the unified Python orchestrator invoked by `aet run`
 - `lib/aet_queue.py` — queue read/write operations with wrapper-format preservation
 - `lib/cli_adapter.py` — CLI detection and command building for Kimi and Claude
-- `references/parallel-execution.md` — deep dive on concurrency caps and resume behavior
+- [`parallel-execution.md`](parallel-execution.md) — deep dive on concurrency caps and resume behavior

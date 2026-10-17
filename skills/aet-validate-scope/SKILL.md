@@ -23,7 +23,7 @@ This skill is **validation-only**. No application source code is written, modifi
 - Do not run application tests, linting, or type-checking
 - Do not implement "quick fixes" found during validation
 
-If validation reveals that code changes are needed, stop and redirect to `aet-plan` or aet-work.
+If validation reveals that code changes are needed, stop and redirect to `aet-plan` or `aet-implement`.
 
 ## Context
 
@@ -170,13 +170,13 @@ After `validate` completes, conflicts are resolved, and the closure check passes
 
    ```
    *Stage: scope-validated*
-   *Next step: run `aet-work` (single-plan or multi-task queue)*
+   *Next step: `aet sprint add <plan>` then `/aet-drive` (or `aet run-one <id>`)*
    ```
 
 2. Do not touch the plan.md footer. Plan files are transient working copies
    (gitignored); the task's stage is recorded on the queue/ledger by code.
 
-3. Print: `"✓ Stage: scope-validated / plan-approved → Next step: run \`aet-work\`"`
+3. Print: `"✓ Stage: scope-validated / plan-approved → Next step: \`aet sprint add <plan>\` then \`/aet-drive\` (or \`aet run-one <id>\`)"`
 
 ## Key Principles
 
