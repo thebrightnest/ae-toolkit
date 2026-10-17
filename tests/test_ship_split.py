@@ -141,7 +141,6 @@ class TestShipSplitCommand(unittest.TestCase):
                     base=None,
                     message=["feat: one"],
                     paths=[["a.py"]],
-                    dry_run=False,
                 )
             )
         self.assertNotEqual(rc, 0)
@@ -160,7 +159,6 @@ class TestShipSplitCommand(unittest.TestCase):
                     base="origin/main",
                     message=["feat: one"],
                     paths=[["a.py"]],
-                    dry_run=False,
                 )
             )
         self.assertNotEqual(rc, 0)
@@ -178,7 +176,6 @@ class TestShipSplitCommand(unittest.TestCase):
                     base=None,
                     message=["feat: one"],
                     paths=[["a.py"], ["b.py"]],
-                    dry_run=False,
                 )
             )
         self.assertNotEqual(rc, 0)
@@ -295,7 +292,6 @@ class TestShipSplitIntegration(unittest.TestCase):
                 base=None,
                 message=["feat: add alpha", "feat: add beta and plan"],
                 paths=[["alpha.py"], ["beta.py", str(self.plan_path)]],
-                dry_run=False,
             )
         )
         self.assertEqual(rc, 0)
@@ -327,7 +323,6 @@ class TestShipSplitIntegration(unittest.TestCase):
                 base=None,
                 message=["feat: add alpha only"],
                 paths=[["alpha.py"]],
-                dry_run=False,
             )
         )
         self.assertNotEqual(rc, 0)

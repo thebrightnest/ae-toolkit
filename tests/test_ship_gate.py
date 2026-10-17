@@ -451,7 +451,6 @@ class TestShipGateChecks(unittest.TestCase):
             command="gate",
             plan="t1",
             base=None,
-            dry_run=False,
             task_id="t1",
             spec=self._spec(content),
         )
@@ -566,7 +565,6 @@ class TestShipGateChecks(unittest.TestCase):
                     plan="t1",
                     task_id="t1",
                     base=None,
-                    dry_run=False,
                     spec=self._spec(),
                     queue=".agents/aet-queue",
                 )
@@ -601,7 +599,6 @@ class TestShipGateChecks(unittest.TestCase):
                     plan="t1",
                     task_id="t1",
                     base=None,
-                    dry_run=False,
                     spec=self._spec(),
                     queue=".agents/aet-queue",
                 )

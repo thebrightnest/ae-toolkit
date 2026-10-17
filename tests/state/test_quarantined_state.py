@@ -107,7 +107,6 @@ class TestQuarantinedStateApplication(unittest.TestCase):
             from_stage="in_progress",
             to_stage="quarantined",
             queue=queue_path,
-            dry_run=False,
             reason="deterministic failure",
         )
 
@@ -130,7 +129,6 @@ class TestQuarantinedStateApplication(unittest.TestCase):
             from_stage="failed",
             to_stage="quarantined",
             queue=queue_path,
-            dry_run=False,
             reason="deterministic failure",
         )
 
@@ -150,7 +148,6 @@ class TestQuarantinedStateApplication(unittest.TestCase):
             from_stage="quarantined",
             to_stage="ready",
             queue=queue_path,
-            dry_run=False,
             reason="human un-quarantine",
         )
 
@@ -192,7 +189,6 @@ class TestQuarantinedStateApplication(unittest.TestCase):
                 from_stage="quarantined",
                 to_stage="abandoned",
                 queue=str(queue_path),
-                dry_run=False,
                 reason="give up",
             )
 
@@ -231,7 +227,6 @@ class TestQuarantinedStateApplication(unittest.TestCase):
             from_stage="quarantined",
             to_stage="ready",
             queue=queue_path,
-            dry_run=False,
             reason="human un-quarantine",
         )
 

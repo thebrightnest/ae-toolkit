@@ -419,7 +419,6 @@ def _run_merge(args: argparse.Namespace) -> int:
         branch=branch,
         merge_commit=None,
         plan=task.get("plan_file"),
-        dry_run=False,
     )
     return aet_state.cmd_record_merge(ns)
 
@@ -436,7 +435,6 @@ def _run_abandon(args: argparse.Namespace) -> int:
         to_stage="abandoned",
         queue=args.queue_file,
         reason=args.reason,
-        dry_run=False,
     )
     rc = aet_state.cmd_transition(ns)
     if rc != 0:

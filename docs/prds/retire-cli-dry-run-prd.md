@@ -75,3 +75,26 @@ This PRD retires `--dry-run` flags from the `aet ship`, `aet state`, and `aet se
   - Remove `dry_run` option from `skills`, `hooks`, `project` and simplify `_link_skill`.
 - Test updates:
   - Replace tests that verified `--dry-run` with tests verifying direct execution or remove the obsolete dry-run test cases.
+
+## Divergence Summary
+
+_Recorded: 2026-10-17 — Branch: RDR-01_
+
+### Changed from plan
+
+- R-4 (`aet setup`): The plan named `skills`, `hooks`, and `project`, but `aet setup` has no `hooks` or `project` commands. `--dry-run` came off the commands that actually carried it: `link`, `skills`, and `verify`. `_link_skill` was simplified as planned.
+
+### Added (unplanned)
+
+- `scripts/install.sh`: Removed `DRY_RUN_FLAG` and the `--dry-run` forwarding to `aet setup skills|link|verify`, since those flags no longer exist. The installer keeps its own `--dry-run`, which only logs the commands it would run.
+- `README.md`: Removed the `aet setup skills --dry-run` example.
+- `tests/cli/test_no_dry_run_flags.py`: New regression guard. It checks that each retired `ship`, `state`, and `setup` command has no `--dry-run` option.
+
+### Deferred
+
+- None. Read-only `aet state` maintenance commands (`--apply` defaults to a preview) are out of scope and unchanged.
+
+---
+
+_Stage: synced_
+_Next step: run `aet-ship`_

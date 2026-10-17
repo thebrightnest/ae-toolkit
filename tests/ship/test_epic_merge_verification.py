@@ -98,7 +98,6 @@ class TestEpicMergeVerification(unittest.TestCase):
                     branch=None,
                     merge_commit=None,
                     target_branch="main",
-                    dry_run=False,
                 )
             )
         self.assertEqual(rc, 0)
@@ -121,7 +120,6 @@ class TestEpicMergeVerification(unittest.TestCase):
                     branch="epic-01",
                     merge_commit=None,
                     target_branch="epic-01",
-                    dry_run=False,
                 )
             )
         self.assertNotEqual(rc, 0)
@@ -142,7 +140,6 @@ class TestEpicMergeVerification(unittest.TestCase):
                     branch="epic-01",
                     merge_commit=None,
                     target_branch="main",
-                    dry_run=False,
                 )
             )
         self.assertNotEqual(rc, 0)
@@ -165,7 +162,6 @@ class TestEpicMergeVerification(unittest.TestCase):
                     branch="epic-01",
                     merge_commit="merge-sha-1",
                     target_branch="main",
-                    dry_run=False,
                 )
             )
         self.assertEqual(rc, 0)

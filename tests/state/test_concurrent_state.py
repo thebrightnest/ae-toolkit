@@ -38,7 +38,6 @@ def _worker_set_stages(queue_path: str, task_id: str, stages: list[str]) -> None
             task_id=task_id,
             stage=stage,
             queue=queue_path,
-            dry_run=False,
         )
         rc = mod.cmd_set_stage(args)
         if rc != 0:
@@ -72,7 +71,6 @@ def _worker_writer(queue_path: str, task_id: str, stages: list[str], done: multi
             task_id=task_id,
             stage=stage,
             queue=queue_path,
-            dry_run=False,
         )
         mod.cmd_set_stage(args)
     done.set()
@@ -148,7 +146,6 @@ class TestSetStageBackendRouting(unittest.TestCase):
                 task_id="t1",
                 stage="implemented",
                 queue=str(queue_path),
-                dry_run=False,
             )
             rc = aet_state.cmd_set_stage(args)
             self.assertEqual(rc, 0)

@@ -135,9 +135,6 @@ aet setup skills --agent claude-code
 
 # Use a custom skills directory
 aet setup skills --skills-dir ~/.claude/skills
-
-# Preview what would happen without making changes
-aet setup skills --dry-run
 ```
 
 Or install skills via `npx`:

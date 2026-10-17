@@ -161,7 +161,6 @@ class TestAuditCommand(unittest.TestCase):
             args = aet_state.argparse.Namespace(
                 command="audit",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
@@ -196,7 +195,6 @@ class TestAuditCommand(unittest.TestCase):
             args = aet_state.argparse.Namespace(
                 command="audit",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
@@ -245,7 +243,6 @@ class TestAuditCommand(unittest.TestCase):
             args = aet_state.argparse.Namespace(
                 command="audit",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             err = io.StringIO()
@@ -321,7 +318,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
         )
 
         with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
@@ -355,7 +351,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
         )
 
         with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
@@ -393,7 +388,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
         )
 
         with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
@@ -425,7 +419,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
         )
 
         with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
@@ -465,7 +458,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
             plan=str(plan_path),
             branch=None,
             merge_commit=None,
@@ -528,7 +520,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
             plan=str(plan_path),
             branch=None,
             merge_commit=None,
@@ -576,51 +567,11 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
         )
 
         rc = aet_state.cmd_record_merge(args)
 
         self.assertEqual(rc, 0)
-
-    def test_record_merge_with_plan_dry_run_does_not_mutate_plan(self):
-        """record-merge --plan --dry-run reports without updating the plan."""
-        plan_dir = Path(self.tmpdir.name) / "docs" / "plans"
-        plan_dir.mkdir(parents=True)
-        plan_path = plan_dir / "t1.md"
-        original_content = (
-            "---\n"
-            "id: t1\n"
-            "---\n\n"
-            "# Plan T1\n\n"
-            "---\n\n"
-            "*Stage: awaiting_merge*\n"
-        )
-        plan_path.write_text(original_content, encoding="utf-8")
-        self.queue["tasks"][0]["plan_file"] = str(plan_path)
-        self._seed_queue(self.queue["tasks"])
-
-        responses = {
-            ("git", "fetch", "origin"): (0, "", ""),
-            ("git", "rev-parse", "feat-001"): (0, "abc1234\n", ""),
-            ("git", "rev-parse", "base0000"): (0, "base0000\n", ""),
-            ("git", "merge-base", "--is-ancestor", "abc1234", "origin/main"): (0, "", ""),
-        }
-
-        args = aet_state.argparse.Namespace(
-            command="record-merge",
-            task_id="t1",
-            queue=str(self.queue_file_path),
-            dry_run=True,
-            plan=str(plan_path),
-        )
-
-        with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
-            rc = aet_state.cmd_record_merge(args)
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(plan_path.read_text(encoding="utf-8"), original_content)
-        self.assertEqual(len(load_git_queue(self.queue_file_path)), 1)
 
     def test_record_merge_plan_update_skipped_when_merge_unverified(self):
         """If merge verification fails, the plan file is not updated."""
@@ -655,7 +606,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
             plan=str(plan_path),
         )
 
@@ -685,7 +635,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
         )
 
         with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
@@ -725,7 +674,6 @@ class TestRecordMerge(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=str(self.queue_file_path),
-            dry_run=False,
         )
 
         with patch.object(
@@ -972,7 +920,6 @@ class TestSetStage(unittest.TestCase):
             task_id="t1",
             stage="implemented",
             queue=queue_path,
-            dry_run=False,
         )
 
         rc = aet_state.cmd_set_stage(args)
@@ -994,7 +941,6 @@ class TestSetStage(unittest.TestCase):
             task_id="t1",
             stage="implemented",
             queue=queue_path,
-            dry_run=False,
         )
 
         rc = aet_state.cmd_set_stage(args)
@@ -1002,27 +948,6 @@ class TestSetStage(unittest.TestCase):
         self.assertEqual(rc, 1)
         task = self._load_task(queue_path)
         self.assertNotIn("stage", task)
-        self.assertNotIn("history", task)
-
-    def test_set_stage_dry_run_does_not_mutate(self):
-        """dry-run reports the stage without writing it."""
-        queue_path = self._write_queue(
-            [{"id": "t1", "state": "in_progress", "stage": "plan-approved"}]
-        )
-
-        args = aet_state.argparse.Namespace(
-            command="set-stage",
-            task_id="t1",
-            stage="implemented",
-            queue=queue_path,
-            dry_run=True,
-        )
-
-        rc = aet_state.cmd_set_stage(args)
-
-        self.assertEqual(rc, 0)
-        task = self._load_task(queue_path)
-        self.assertEqual(task["stage"], "plan-approved")
         self.assertNotIn("history", task)
 
     def test_set_stage_leaves_plan_file_untouched(self):
@@ -1051,7 +976,6 @@ class TestSetStage(unittest.TestCase):
                 task_id="t1",
                 stage="implemented",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             rc = aet_state.cmd_set_stage(args)
@@ -1083,7 +1007,6 @@ class TestSetStage(unittest.TestCase):
                 task_id="t1",
                 stage="implemented",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             rc = aet_state.cmd_set_stage(args)
@@ -1109,7 +1032,6 @@ class TestSetStage(unittest.TestCase):
             task_id="t1",
             stage="implemented",
             queue=queue_path,
-            dry_run=False,
         )
 
         rc = aet_state.cmd_set_stage(args)
@@ -1137,7 +1059,6 @@ class TestSetStage(unittest.TestCase):
                     task_id="t1",
                     stage="implemented",
                     queue=str(queue_path),
-                    dry_run=False,
                 )
 
                 rc = aet_state.cmd_set_stage(args)
@@ -1219,7 +1140,6 @@ class TestStateTransition(unittest.TestCase):
             args = aet_state.argparse.Namespace(
                 command="audit",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             stdout_capture = io.StringIO()
@@ -1273,7 +1193,6 @@ class TestStateTransition(unittest.TestCase):
                 from_stage="planned",
                 to_stage="merged",
                 queue=str(queue_path),
-                dry_run=False,
                 reason=None,
             )
 
@@ -1299,7 +1218,6 @@ class TestStateTransition(unittest.TestCase):
                 from_stage="planned",
                 to_stage="ready",
                 queue=str(queue_path),
-                dry_run=False,
                 reason=None,
             )
 
@@ -1347,7 +1265,6 @@ class TestStateTransition(unittest.TestCase):
                 from_stage="awaiting_merge",
                 to_stage="abandoned",
                 queue=str(queue_path),
-                dry_run=False,
                 reason="no longer needed",
             )
 
@@ -1407,7 +1324,6 @@ class TestStateTransition(unittest.TestCase):
                 command="record-merge",
                 task_id="blocker",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             with patch.object(aet_state.subprocess, "run", side_effect=_subprocess_mock(responses)):
@@ -1473,7 +1389,6 @@ class TestStateTransition(unittest.TestCase):
                 command="record-merge",
                 task_id="blocker",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             with patch.object(
@@ -1837,7 +1752,6 @@ class TestPrdDerivedIntegrationBranchState(unittest.TestCase):
             command="record-merge",
             task_id="t1",
             queue=queue_path,
-            dry_run=False,
             plan=None,
             branch=None,
             merge_commit=None,
@@ -1870,7 +1784,6 @@ class TestPrdDerivedIntegrationBranchState(unittest.TestCase):
             from_stage="awaiting_merge",
             to_stage="merged",
             queue=queue_path,
-            dry_run=False,
             reason=None,
         )
         rc = aet_state.cmd_transition(args)

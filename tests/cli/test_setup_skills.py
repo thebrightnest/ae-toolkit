@@ -54,16 +54,6 @@ class TestSetupSkillsFreshLink(SetupSkillsTestCase):
             self.assertTrue(link.is_symlink(), f"{link} is not a symlink")
             self.assertEqual(link.resolve(), skill.resolve())
 
-    def test_dry_run_lists_without_writing(self):
-        result = self._run_setup_skills("--dry-run", "--skills-dir", str(self.skills_dir))
-        self.assertEqual(result.exit_code, 0, result.stderr)
-
-        self.assertFalse(self.skills_dir.exists())
-        repo_skills = [p for p in (self.repo_root / "skills").iterdir() if p.is_dir() and (p / "SKILL.md").is_file()]
-        for skill in repo_skills:
-            self.assertIn("would link", result.stdout)
-            self.assertIn(skill.name, result.stdout)
-
     def test_second_run_is_noop(self):
         self._run_setup_skills("--skills-dir", str(self.skills_dir))
         result = self._run_setup_skills("--skills-dir", str(self.skills_dir))
@@ -174,7 +164,7 @@ class TestSetupSkillsHelp(SetupSkillsTestCase):
         self.assertIn("Symlink AE Toolkit skills", result.stdout)
         self.assertIn("--skills-dir", result.stdout)
         self.assertIn("--agent", result.stdout)
-        self.assertIn("--dry-run", result.stdout)
+        self.assertNotIn("--dry-run", result.stdout)
         self.assertIn("--force", result.stdout)
 
 

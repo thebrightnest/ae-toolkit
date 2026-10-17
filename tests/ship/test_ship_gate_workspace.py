@@ -117,7 +117,7 @@ class TestShipGateWorkspace(unittest.TestCase):
             "AET_BACKEND": "git-refs",
         }
         with patch.dict(os.environ, env):
-            rc = ship.cmd_gate(argparse.Namespace(plan=task_id, base=None, dry_run=False))
+            rc = ship.cmd_gate(argparse.Namespace(plan=task_id, base=None))
 
         # Must fail because the feature branch is red, even though cwd (main) is green
         self.assertNotEqual(rc, 0)
@@ -139,7 +139,7 @@ class TestShipGateWorkspace(unittest.TestCase):
             "AET_BACKEND": "git-refs",
         }
         with patch.dict(os.environ, env):
-            args = argparse.Namespace(plan=task_id, base=None, dry_run=False)
+            args = argparse.Namespace(plan=task_id, base=None)
             rc = ship._resolve_ship_task(args)
             self.assertIsNone(rc)
             result = ship._run_gate(args)
@@ -162,7 +162,7 @@ class TestShipGateWorkspace(unittest.TestCase):
             "AET_BACKEND": "git-refs",
         }
         with patch.dict(os.environ, env):
-            args = argparse.Namespace(plan=task_id, base=None, dry_run=False)
+            args = argparse.Namespace(plan=task_id, base=None)
             ship._resolve_ship_task(args)
             result = ship._run_gate(args)
 
@@ -176,7 +176,7 @@ class TestShipGateWorkspace(unittest.TestCase):
         task_id = "feat-unresolvable"
         _save_task_record(self.repo, task_id)
 
-        args = argparse.Namespace(plan=task_id, base=None, dry_run=False)
+        args = argparse.Namespace(plan=task_id, base=None)
         ship._resolve_ship_task(args)
         result = ship._run_gate(args)
 
@@ -200,7 +200,7 @@ class TestShipGateWorkspace(unittest.TestCase):
             "AET_BACKEND": "git-refs",
         }
         with patch.dict(os.environ, env):
-            rc = ship.cmd_merge(argparse.Namespace(plan=task_id, branch="main", dry_run=False))
+            rc = ship.cmd_merge(argparse.Namespace(plan=task_id, branch="main"))
 
         self.assertNotEqual(rc, 0)
         # Main should not have the commit

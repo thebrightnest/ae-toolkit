@@ -99,7 +99,7 @@ class TestOpenEpic(unittest.TestCase):
 
         created_prs = []
 
-        def mock_create_pr(pr_base, title, body, dry_run):
+        def mock_create_pr(pr_base, title, body):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, "https://github.com/example/repo/pull/101\n"
 
@@ -142,7 +142,7 @@ class TestOpenEpic(unittest.TestCase):
 
         created_prs = []
 
-        def mock_create_pr(pr_base, title, body, dry_run):
+        def mock_create_pr(pr_base, title, body):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, "https://github.com/example/repo/pull/102\n"
 
@@ -175,7 +175,7 @@ class TestOpenEpic(unittest.TestCase):
         created_prs = []
         existing_url = "https://github.com/example/repo/pull/103"
 
-        def mock_create_pr(pr_base, title, body, dry_run):
+        def mock_create_pr(pr_base, title, body):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, f"{existing_url}\n"
 
@@ -216,7 +216,7 @@ class TestOpenEpic(unittest.TestCase):
 
         created_prs = []
 
-        def mock_create_pr(pr_base, title, body, dry_run):
+        def mock_create_pr(pr_base, title, body):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, "https://github.com/example/repo/pull/104\n"
 
@@ -246,7 +246,7 @@ class TestOpenEpic(unittest.TestCase):
         created_prs = []
         pr_url = "https://github.com/example/repo/pull/105"
 
-        def mock_create_pr(pr_base, title, body, dry_run):
+        def mock_create_pr(pr_base, title, body):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, f"{pr_url}\n"
 
@@ -314,7 +314,7 @@ class TestOpenEpic(unittest.TestCase):
 
         created_prs = []
 
-        def mock_create_pr(pr_base, title, body, dry_run):
+        def mock_create_pr(pr_base, title, body):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, "https://github.com/example/repo/pull/201\n"
 
@@ -379,7 +379,7 @@ class TestOpenEpic(unittest.TestCase):
 
         created_prs = []
 
-        def mock_create_pr(pr_base, title, body, dry_run):
+        def mock_create_pr(pr_base, title, body):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, "https://github.com/example/repo/pull/202\n"
 
@@ -446,7 +446,7 @@ class TestOpenEpic(unittest.TestCase):
 
         created_prs = []
 
-        def mock_create_pr(pr_base, title, body, dry_run):
+        def mock_create_pr(pr_base, title, body):
             created_prs.append({"pr_base": pr_base, "title": title, "body": body})
             return True, "https://github.com/example/repo/pull/203\n"
 

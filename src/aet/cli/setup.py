@@ -178,7 +178,6 @@ def _link_skill(
     skill_path: Path,
     target_dir: Path,
     *,
-    dry_run: bool,
     force: bool,
 ) -> str:
     """Ensure ``target_dir/<skill-name>`` symlinks to ``skill_path``.
@@ -194,8 +193,6 @@ def _link_skill(
                 return f"= {skill_path.name} already linked"
         except OSError:
             pass
-        if dry_run:
-            return f"~ {skill_path.name} would repoint"
         link.unlink()
         link.symlink_to(repo_skill)
         return f"~ {skill_path.name} repointed"
@@ -203,14 +200,10 @@ def _link_skill(
     if link.exists():
         if not force:
             return f"! {skill_path.name} exists but is not a symlink (skipping)"
-        if dry_run:
-            return f"+ {skill_path.name} would replace with symlink"
         link.unlink()
         link.symlink_to(repo_skill)
         return f"+ {skill_path.name} replaced with symlink"
 
-    if dry_run:
-        return f"+ {skill_path.name} would link"
     link.symlink_to(repo_skill)
     return f"+ {skill_path.name} linked"
 
@@ -218,7 +211,6 @@ def _link_skill(
 @app.command("link")
 def setup_link(
     bin_dir: str | None = typer.Option(None, "--bin-dir", envvar="AET_BIN_DIR", help="Target bin directory."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without executing."),
 ) -> None:
     """Link ``aet`` into the bin dir."""
     target_dir = Path(bin_dir) if bin_dir else _bin_dir()
@@ -241,34 +233,24 @@ def setup_link(
         )
         raise typer.Exit(1)
 
-    if not dry_run:
-        target_dir.mkdir(parents=True, exist_ok=True)
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     link = target_dir / "aet"
     if link.is_symlink():
         if _link_target_resolves_to(link, script):
             typer.echo(f"  = aet already linked -> {script}")
         else:
-            if dry_run:
-                typer.echo(f"  ~ aet -> {script} (would update stale symlink)")
-            else:
-                link.unlink()
-                link.symlink_to(script)
-                typer.echo(f"  ✓ aet -> {script} (updated stale symlink)")
-    elif link.exists():
-        if dry_run:
-            typer.echo(f"  ! aet exists in {target_dir} and is not a symlink (would skip)")
-        else:
-            typer.echo(
-                f"  ⚠ aet exists in {target_dir} and is not a symlink. Skipping.",
-                err=True,
-            )
-    else:
-        if dry_run:
-            typer.echo(f"  + aet -> {script} (would create symlink)")
-        else:
+            link.unlink()
             link.symlink_to(script)
-            typer.echo(f"  ✓ aet -> {script}")
+            typer.echo(f"  ✓ aet -> {script} (updated stale symlink)")
+    elif link.exists():
+        typer.echo(
+            f"  ⚠ aet exists in {target_dir} and is not a symlink. Skipping.",
+            err=True,
+        )
+    else:
+        link.symlink_to(script)
+        typer.echo(f"  ✓ aet -> {script}")
 
     if str(target_dir) not in os.environ.get("PATH", "").split(os.pathsep):
         typer.echo(f"\n⚠ {target_dir} is not on your PATH. Add it to your shell profile:")
@@ -283,7 +265,6 @@ def setup_skills(
     agent: str | None = typer.Option(
         None, "--agent", envvar="AGENT", help="Target agent: claude-code, kimi, cursor, antigravity, generic."
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without executing."),
     force: bool = typer.Option(False, "--force", help="Replace non-symlink collisions with symlinks."),
 ) -> None:
     """Symlink AE Toolkit skills into agent skills directories."""
@@ -297,14 +278,12 @@ def setup_skills(
         raise typer.Exit(0)
 
     for target_dir in target_dirs:
-        if not dry_run:
-            target_dir.mkdir(parents=True, exist_ok=True)
+        target_dir.mkdir(parents=True, exist_ok=True)
         for skill in skills:
-            status = _link_skill(skill, target_dir, dry_run=dry_run, force=force)
+            status = _link_skill(skill, target_dir, force=force)
             typer.echo(f"  {status}")
 
-    summary = "would link" if dry_run else "linked"
-    typer.echo(f"✓ {summary} {len(skills)} skill(s) to {len(target_dirs)} director(y/ies)")
+    typer.echo(f"✓ linked {len(skills)} skill(s) to {len(target_dirs)} director(y/ies)")
 
 
 def _report_skill_link_drift() -> None:
@@ -378,7 +357,6 @@ def _report_version_currency() -> None:
 @app.command("verify")
 def setup_verify(
     bin_dir: str | None = typer.Option(None, "--bin-dir", envvar="AET_BIN_DIR", help="Target bin directory."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Print actions without executing."),
 ) -> None:
     """Verify that the installed `aet` on PATH matches the expected link.
 
@@ -395,9 +373,6 @@ def setup_verify(
 
     _report_skill_link_drift()
     _report_version_currency()
-
-    if dry_run:
-        typer.echo("  (dry run — would verify aet link against PATH)")
 
     if expected is None:
         typer.echo(

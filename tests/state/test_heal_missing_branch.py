@@ -248,7 +248,6 @@ class TestHealMissingBranch(unittest.TestCase):
             args = aet_state.argparse.Namespace(
                 command="audit",
                 queue=str(queue_path),
-                dry_run=False,
             )
             stdout_capture = io.StringIO()
             with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):

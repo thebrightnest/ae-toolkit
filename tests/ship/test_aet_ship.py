@@ -192,21 +192,6 @@ class TestShipClosure(unittest.TestCase):
         self.assertEqual(settled["merge_commit"], "abc1234")
         self.assertIn("settled_at", settled)
 
-    def test_ship_dry_run_does_not_mutate(self):
-        """aet ship close --dry-run reports success without changing plan or queue."""
-        original_content = self.plan_path.read_text(encoding="utf-8")
-        rc = self._run_ship_close(["ship", "close", "--dry-run", "t1"])
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(self.plan_path.read_text(encoding="utf-8"), original_content)
-
-        backend = GitRefsBackend(
-            queue_file=str(self.queue_path),
-            history_file=str(self.history_file),
-        )
-        self.assertEqual(len(backend.load()["queue"]), 1)
-        self.assertFalse(self.history_file.exists())
-
     def test_ship_defaults_queue_path(self):
         """aet ship close defaults the queue path to .agents/aet-queue in cwd."""
         rc = self._run_ship_close(["ship", "close", "t1"])

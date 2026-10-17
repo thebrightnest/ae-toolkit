@@ -156,7 +156,6 @@ class TestShipCloseTransaction(unittest.TestCase):
             branch=None,
             merge_commit=None,
             target_branch=None,
-            dry_run=False,
         )
         # This test asserts on the ledger write itself, so it pins the ledger to
         # its own fixture repo rather than inheriting conftest's _isolate_ledger
@@ -223,7 +222,6 @@ class TestShipCloseTransaction(unittest.TestCase):
             branch=None,
             merge_commit=None,
             target_branch=None,
-            dry_run=False,
         )
         rc = ship.cmd_ship(args)
         self.assertEqual(rc, 0)
@@ -265,7 +263,6 @@ class TestShipCloseTransaction(unittest.TestCase):
             branch=None,
             merge_commit=None,
             target_branch=None,
-            dry_run=False,
         )
 
         with patch.object(ship.aet_state, "make_backend", return_value=backend):
@@ -314,7 +311,6 @@ class TestShipCloseTransaction(unittest.TestCase):
             branch=None,
             merge_commit=None,
             target_branch=None,
-            dry_run=False,
             delete_branch=True,
         )
         with patch.dict(os.environ, {"AET_BACKEND": "git-refs"}):
@@ -343,43 +339,11 @@ class TestShipCloseTransaction(unittest.TestCase):
             branch=None,
             merge_commit=None,
             target_branch=None,
-            dry_run=False,
             delete_branch=True,
         )
         with patch.dict(os.environ, {"AET_BACKEND": "git-refs"}):
             rc = ship.cmd_ship(args)
         self.assertEqual(rc, ship.EXIT_DELETE_BEFORE_RECORD)
-        self.assertTrue(self._branch_exists("t1"))
-        self.assertTrue(self._remote_branch_exists("t1"))
-
-    def test_close_delete_branch_dry_run_does_not_delete(self):
-        """`--delete-branch --dry-run` reports deletions without executing them."""
-        plan_path = _write_plan(self.repo, "t1")
-        queue_file = _write_queue(self.repo, [_task("t1", plan_path, "t1", _head(self.repo))])
-
-        _git(self.repo, "checkout", "-q", "-b", "t1")
-        (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
-        _git(self.repo, "add", ".")
-        _git(self.repo, "commit", "-q", "-m", "feat(t1): implement")
-        _git(self.repo, "push", "-u", "origin", "t1", check=False)
-        _git(self.repo, "checkout", "-q", "main")
-        _git(self.repo, "merge", "-q", "--no-ff", "t1", "-m", "Merge t1")
-        _git(self.repo, "push", "origin", "main", check=False)
-
-        args = SimpleNamespace(
-            command="close",
-            task_id="t1",
-            plan=None,
-            queue=queue_file,
-            branch=None,
-            merge_commit=None,
-            target_branch=None,
-            dry_run=True,
-            delete_branch=True,
-        )
-        with patch.dict(os.environ, {"AET_BACKEND": "git-refs"}):
-            rc = ship.cmd_ship(args)
-        self.assertEqual(rc, 0)
         self.assertTrue(self._branch_exists("t1"))
         self.assertTrue(self._remote_branch_exists("t1"))
 

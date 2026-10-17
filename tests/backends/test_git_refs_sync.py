@@ -295,7 +295,6 @@ def test_aet_state_transition_pushes_refs_to_remote(repo: Path) -> None:
         from_stage="ready",
         to_stage="in_progress",
         queue=str(repo / ".agents" / "aet-queue"),
-        dry_run=False,
         reason=None,
         force=False,
     )

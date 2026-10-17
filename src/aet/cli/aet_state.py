@@ -783,20 +783,6 @@ def cmd_set_stage(args):
             print(f"Task not found: {args.task_id}", file=sys.stderr)
             return 1
 
-        if args.dry_run:
-            current = queue_lib.current_state(task)
-            if current == "in_progress":
-                print(
-                    f"[dry-run] Would set stage for {args.task_id}: "
-                    f"{task.get('stage')} -> {args.stage}"
-                )
-                return 0
-            print(
-                f"Cannot set stage: task state is '{current}', must be 'in_progress'.",
-                file=sys.stderr,
-            )
-            return 1
-
         try:
             _set_stage(task, args.stage, by="orch")
         except RuntimeError as e:
@@ -1177,7 +1163,6 @@ def cmd_heal(args):
                         command="record-merge",
                         task_id=task_id,
                         queue=args.queue,
-                        dry_run=False,
                         plan=None,
                         branch=branch,
                         merge_commit=task.get("merge_commit"),
@@ -1240,7 +1225,6 @@ def cmd_reset(args):
     - Soft reset (default): preserves worktree and branch, transitions to ready/blocked.
     - Hard reset (--hard / --clean): deletes worktree and branch, clears runtime fields.
     """
-    dry_run = getattr(args, "dry_run", False)
     is_hard = getattr(args, "hard", False) or getattr(args, "clean", False)
     stage = getattr(args, "stage", None)
     force = getattr(args, "force", False)
@@ -1295,47 +1279,6 @@ def cmd_reset(args):
                 break
 
     mode_str = "hard" if is_hard else "soft"
-    has_failure_signatures = bool(task.get("failure_signatures"))
-    branch_name = task.get("branch")
-    worktree_path = task.get("worktree") or os.path.join(repo_root, ".worktrees", args.task_id)
-
-    if dry_run:
-        print(f"[dry-run] Would reset {args.task_id}: {stored_state} -> {target_state} ({mode_str} reset)")
-        print(f"  Mode: {mode_str}")
-        if is_hard:
-            wt_action = (
-                f"would remove ({worktree_path})"
-                if os.path.exists(worktree_path)
-                else "none"
-            )
-            br_action = (
-                f"would delete ({branch_name})"
-                if (branch_name and branch_exists(branch_name, cwd=cwd))
-                else "none"
-            )
-            print(f"  Worktree: {wt_action}")
-            print(f"  Branch: {br_action}")
-            print("  Stage: would clear")
-        else:
-            wt_action = (
-                f"preserved ({worktree_path})"
-                if os.path.exists(worktree_path)
-                else "none"
-            )
-            br_action = (
-                f"preserved ({branch_name})"
-                if (branch_name and branch_exists(branch_name, cwd=cwd))
-                else "none"
-            )
-            print(f"  Worktree: {wt_action}")
-            print(f"  Branch: {br_action}")
-            if stage:
-                print(f"  Stage: would set to '{stage}'")
-            else:
-                print(f"  Stage: preserved ({task.get('stage') or 'none'})")
-        sig_action = "would clear" if has_failure_signatures else "none"
-        print(f"  Failure signatures: {sig_action}")
-        return 0
 
     if not queue_lib.lease_guard(args.queue, force=force):
         return queue_lib.LEASE_HELD_EXIT_CODE
@@ -1616,21 +1559,6 @@ def cmd_transition(args):
 
         integration_branch = _resolve_integration_for_task(args.queue, task).ref
 
-        if args.dry_run:
-            ok, msg = validate_transition(
-                task,
-                args.from_stage,
-                args.to_stage,
-                cwd=cwd,
-                trunk_branch=trunk_branch,
-                integration_branch=integration_branch,
-            )
-            if ok:
-                print(f"[dry-run] Would transition {args.task_id} {args.from_stage} -> {args.to_stage}")
-                return 0
-            print(msg, file=sys.stderr)
-            return 1
-
         evidence = {"reason": args.reason} if args.reason else None
         try:
             _apply_transition(
@@ -1753,27 +1681,6 @@ def cmd_record_merge(args):
         task["merge_strategy"] = merge_strategy
         if branch and task.get("branch") != branch:
             task["branch"] = branch
-
-        if args.dry_run:
-            ok, msg = validate_transition(
-                task,
-                current_state,
-                "merged",
-                cwd=cwd,
-                trunk_branch=trunk_branch,
-                integration_branch=integration_branch,
-            )
-            if ok:
-                print(
-                    f"[dry-run] Would record merge for {args.task_id}: "
-                    f"{merge_commit} ({merge_strategy})"
-                )
-                return 0
-            task["merge_commit"] = previous_merge_commit
-            task["merge_strategy"] = previous_merge_strategy
-            task["branch"] = previous_branch
-            print(msg, file=sys.stderr)
-            return 1
 
         evidence = {"merge_commit": merge_commit, "merge_strategy": merge_strategy}
         try:
@@ -1937,9 +1844,6 @@ def reset(
     queue: Optional[str] = typer.Argument(
         ".agents/aet-queue", help="Path to queue anchor."
     ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Preview reset actions without mutating queue or git state."
-    ),
     apply: bool = typer.Option(
         False, "--apply", help="Legacy compatibility flag (ignored; reset is now live by default)."
     ),
@@ -1965,7 +1869,6 @@ def reset(
         command="reset",
         task_id=task_id,
         queue=queue,
-        dry_run=dry_run,
         apply=apply,
         hard=hard,
         stage=stage,
@@ -2026,9 +1929,6 @@ def transition(
     reason: Optional[str] = typer.Option(
         None, "--reason", help="Reason for transition (used as history evidence)."
     ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show changes without applying them."
-    ),
     force: bool = typer.Option(
         False,
         "--force",
@@ -2042,7 +1942,6 @@ def transition(
         to_stage=to_stage,
         queue=queue,
         reason=reason,
-        dry_run=dry_run,
         force=force,
     )
     try:
@@ -2060,9 +1959,6 @@ def set_stage(
     queue: Optional[str] = typer.Argument(
         ".agents/aet-queue", help="Path to queue anchor."
     ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show changes without applying them."
-    ),
     force: bool = typer.Option(
         False,
         "--force",
@@ -2070,7 +1966,7 @@ def set_stage(
     ),
 ) -> None:
     """Set the pipeline stage sub-state for an in-progress task."""
-    args = argparse.Namespace(task_id=task_id, stage=stage, queue=queue, dry_run=dry_run, force=force)
+    args = argparse.Namespace(task_id=task_id, stage=stage, queue=queue, force=force)
     try:
         rc = cmd_set_stage(args)
     except _INTEGRITY_ERRORS as exc:
@@ -2105,9 +2001,6 @@ def record_merge(
         "--plan",
         help="Deprecated and ignored: plan footer writes were removed (R-4/R-19).",
     ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show changes without applying them."
-    ),
     force: bool = typer.Option(
         False,
         "--force",
@@ -2122,7 +2015,6 @@ def record_merge(
         merge_commit=merge_commit,
         target_branch=target_branch,
         plan=plan,
-        dry_run=dry_run,
         force=force,
     )
     try:

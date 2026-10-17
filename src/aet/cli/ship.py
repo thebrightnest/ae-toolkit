@@ -336,7 +336,6 @@ def cmd_ship(args):
         command="record-merge",
         task_id=task_id,
         queue=queue,
-        dry_run=args.dry_run,
         plan=plan,
         branch=branch,
         merge_commit=getattr(args, "merge_commit", None),
@@ -346,16 +345,11 @@ def cmd_ship(args):
     if rc != 0:
         return EXIT_DELETE_BEFORE_RECORD if delete_branch else rc
 
-    if not args.dry_run:
-        archive_plan_file(task_id)
+    archive_plan_file(task_id)
 
     if delete_branch:
-        if args.dry_run:
-            print(f"[dry-run] Would delete remote branch origin/{branch_to_delete}")
-            print(f"[dry-run] Would delete local branch {branch_to_delete}")
-        else:
-            _run_git("push", "origin", "--delete", branch_to_delete, check=False)
-            _run_git("branch", "-D", branch_to_delete, check=False)
+        _run_git("push", "origin", "--delete", branch_to_delete, check=False)
+        _run_git("branch", "-D", branch_to_delete, check=False)
 
     return 0
 
@@ -469,7 +463,6 @@ def _determine_pr_base(feature_branch: Optional[str] = None) -> StackInfo:
 
 def _rebase_independent_branch(
     stack: StackInfo,
-    dry_run: bool,
     feature_branch: Optional[str] = None,
     workspace: Optional[Path] = None,
 ) -> tuple[bool, str, bool]:
@@ -486,12 +479,6 @@ def _rebase_independent_branch(
     if merge_base == trunk_sha:
         return True, f"Already based on {stack.trunk_ref}.", False
     branch = feature_branch or _run_git(*git_args, "branch", "--show-current").stdout.strip()
-    if dry_run:
-        return (
-            True,
-            f"Would rebase --onto {stack.trunk_ref} {merge_base} {branch}",
-            False,
-        )
     result = _run_git(*git_args, "rebase", "--onto", stack.trunk_ref, merge_base, branch, check=False)
     if result.returncode != 0:
         return (
@@ -588,7 +575,7 @@ def _run_gate(args: SimpleNamespace) -> GateResult:
             pr_base = stack.base_ref
 
         ok, message, rebased = _rebase_independent_branch(
-            stack, args.dry_run, feature_branch=feature_branch, workspace=workspace
+            stack, feature_branch=feature_branch, workspace=workspace
         )
         if not ok:
             return GateResult(
@@ -814,7 +801,6 @@ def _build_pr_body(
 
 def _push_branch(
     rebased: bool,
-    dry_run: bool,
     feature_branch: Optional[str] = None,
     workspace: Optional[Path] = None,
 ) -> tuple[bool, str]:
@@ -837,18 +823,14 @@ def _push_branch(
         cmd = ["git", *git_args, "push", "--force-with-lease", "origin", push_spec]
     else:
         cmd = ["git", *git_args, "push", "-u", "origin", push_spec]
-    if dry_run:
-        return True, f"Would run: {' '.join(cmd)}"
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode == 0, result.stdout + result.stderr
 
 
-def _create_pr(pr_base: str, title: str, body: str, dry_run: bool) -> tuple[bool, str]:
+def _create_pr(pr_base: str, title: str, body: str) -> tuple[bool, str]:
     """Create a GitHub PR using ``gh pr create``."""
     # ``gh`` expects a branch name, not a remote tracking ref.
     gh_base = pr_base.removeprefix("origin/")
-    if dry_run:
-        return True, f"Would create PR against `{gh_base}` with title: {title}"
     with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as body_file:
         body_file.write(body)
         body_path = body_file.name
@@ -904,7 +886,7 @@ def cmd_open(args: SimpleNamespace) -> int:
     changelog_entry = _generate_changelog_entry(_commit_subjects(result.pr_base, feature_branch=feature_branch), spec)
 
     print("Pushing branch...")
-    ok, output = _push_branch(result.rebased, args.dry_run, feature_branch=feature_branch)
+    ok, output = _push_branch(result.rebased, feature_branch=feature_branch)
     if not ok:
         return _fail(f"Push failed:\n{output}")
     if output.strip():
@@ -921,7 +903,7 @@ def cmd_open(args: SimpleNamespace) -> int:
     body = _build_pr_body(spec, stack, result.scope_audit, changelog_entry)
 
     print("Creating PR...")
-    ok, output = _create_pr(result.pr_base, title, body, args.dry_run)
+    ok, output = _create_pr(result.pr_base, title, body)
     if not ok:
         return _fail(f"PR creation failed:\n{output}")
     if output.strip():
@@ -1015,7 +997,6 @@ def cmd_open_epic(args: SimpleNamespace) -> int:
         plan=branch,
         task_id=branch,
         base=getattr(args, "base", None),
-        dry_run=args.dry_run,
         spec={},
         queue=queue,
     )
@@ -1029,7 +1010,7 @@ def cmd_open_epic(args: SimpleNamespace) -> int:
         return _fail(guard_error)
 
     print("Pushing branch...")
-    ok, output = _push_branch(result.rebased, args.dry_run, feature_branch=branch)
+    ok, output = _push_branch(result.rebased, feature_branch=branch)
     if not ok:
         return _fail(f"Push failed:\n{output}")
     if output.strip():
@@ -1063,7 +1044,7 @@ def cmd_open_epic(args: SimpleNamespace) -> int:
         body = _generate_changelog_entry(subjects, spec)
 
     print("Creating PR...")
-    ok, output = _create_pr(result.pr_base, title, body, args.dry_run)
+    ok, output = _create_pr(result.pr_base, title, body)
     if not ok:
         return _fail(f"PR creation failed:\n{output}")
     if output.strip():
@@ -1071,7 +1052,7 @@ def cmd_open_epic(args: SimpleNamespace) -> int:
 
     pr_url = output.strip().splitlines()[0].strip() if output.strip() else ""
 
-    if pr_url and not args.dry_run:
+    if pr_url:
         try:
             Ledger(resolve_ledger_path()).write_event(
                 source="aet-ship",
@@ -1145,12 +1126,6 @@ def cmd_split(args: SimpleNamespace) -> int:
     original_head = _run_git("rev-parse", "HEAD").stdout.strip()
     print(f"Original HEAD: {original_head}")
     print(f"Recovery command: git reset --soft {original_head}")
-
-    if args.dry_run:
-        print(f"[dry-run] Would reset --soft {pr_base}")
-        for message, paths in zip(messages, path_groups):
-            print(f"[dry-run] Would add {paths} and commit with message: {message}")
-        return 0
 
     _run_git("reset", "--soft", pr_base)
 
@@ -1246,11 +1221,6 @@ def cmd_merge(args: SimpleNamespace) -> int:
         )
 
     print(f"Running aet ship merge for {task_id} into {target_branch}")
-
-    if getattr(args, "dry_run", False):
-        print(f"Would integrate {task_id} into {target_branch}.")
-        print("✅ aet ship merge complete (dry-run).")
-        return 0
 
     # Locate existing worktree or create a temporary one for feature_branch
     worktree_path = _find_target_worktree(feature_branch)
@@ -1359,14 +1329,9 @@ def ship_default(
         "--base",
         help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be done without making changes.",
-    ),
 ) -> None:
     """Run the gate and, if it passes, open a PR (default behavior)."""
-    rc = cmd_default(SimpleNamespace(plan=plan, base=base, dry_run=dry_run))
+    rc = cmd_default(SimpleNamespace(plan=plan, base=base))
     raise typer.Exit(rc)
 
 
@@ -1381,14 +1346,9 @@ def ship_gate(
         "--base",
         help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be done without making changes.",
-    ),
 ) -> None:
     """Run the pre-merge validation gate."""
-    rc = cmd_gate(SimpleNamespace(plan=plan, base=base, dry_run=dry_run))
+    rc = cmd_gate(SimpleNamespace(plan=plan, base=base))
     raise typer.Exit(rc)
 
 
@@ -1403,14 +1363,9 @@ def ship_open(
         "--base",
         help="Override the PR base branch/ref (default: resolved trunk or stacked parent).",
     ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be done without making changes.",
-    ),
 ) -> None:
     """Run the gate and open a PR for the plan."""
-    rc = cmd_open(SimpleNamespace(plan=plan, base=base, dry_run=dry_run))
+    rc = cmd_open(SimpleNamespace(plan=plan, base=base))
     raise typer.Exit(rc)
 
 
@@ -1425,14 +1380,9 @@ def ship_open_epic(
         "--base",
         help="Override the PR base branch/ref (default: resolved trunk).",
     ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be done without making changes.",
-    ),
 ) -> None:
     """Run the gate and open a PR for an epic branch."""
-    rc = cmd_open_epic(SimpleNamespace(branch=branch, base=base, dry_run=dry_run))
+    rc = cmd_open_epic(SimpleNamespace(branch=branch, base=base))
     raise typer.Exit(rc)
 
 
@@ -1447,14 +1397,9 @@ def ship_merge(
         "--branch",
         help="Target branch to merge into (default: resolved trunk branch).",
     ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be done without making changes.",
-    ),
 ) -> None:
     """Run the gate, detect conflicts, merge directly into a target branch, and close."""
-    rc = cmd_merge(SimpleNamespace(plan=plan, branch=branch, dry_run=dry_run))
+    rc = cmd_merge(SimpleNamespace(plan=plan, branch=branch))
     raise typer.Exit(rc)
 
 
@@ -1480,11 +1425,6 @@ def ship_split(
         "--paths",
         help="Comma-separated paths for one group. Repeat for each group, after its --message.",
     ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be done without making changes.",
-    ),
 ) -> None:
     """Split the PR range into caller-supplied commit groups."""
     path_groups = [p.split(",") for p in paths] if paths else None
@@ -1494,7 +1434,6 @@ def ship_split(
             base=base,
             message=message,
             paths=path_groups,
-            dry_run=dry_run,
         )
     )
     raise typer.Exit(rc)
@@ -1507,7 +1446,6 @@ def _run_ship_close(
     branch: Optional[str],
     merge_commit: Optional[str],
     target_branch: Optional[str],
-    dry_run: bool,
     delete_branch: bool = False,
 ) -> int:
     return cmd_ship(
@@ -1516,7 +1454,6 @@ def _run_ship_close(
             task_id=task_id,
             plan=plan,
             queue=queue,
-            dry_run=dry_run,
             branch=branch,
             merge_commit=merge_commit,
             target_branch=target_branch,
@@ -1600,11 +1537,6 @@ def ship_close(
         help="Target branch the source branch merged into (default: configured integration branch). "
         "Use 'main' when closing an epic whose integration branch merged to trunk.",
     ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Show what would be done without making changes.",
-    ),
     delete_branch: bool = typer.Option(
         False,
         "--delete-branch",
@@ -1624,7 +1556,6 @@ def ship_close(
             branch,
             merge_commit,
             target_branch,
-            dry_run,
             delete_branch,
         )
     )

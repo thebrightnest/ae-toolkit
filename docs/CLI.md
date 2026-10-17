@@ -82,7 +82,6 @@ Reset a task to ready/blocked, clear breaker signatures, and recover workspace.
 
 - `task_id` *str* — Task ID. (required)
 - `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
-- `--dry-run` *boolean* — Preview reset actions without mutating queue or git state. (default: `False`)
 - `--apply` *boolean* — Legacy compatibility flag (ignored; reset is now live by default). (default: `False`)
 - `--hard` *boolean* — Hard reset: remove worktree, delete local branch, and clear runtime fields. (default: `False`)
 - `--stage` *str* — Target stage to set on soft reset (e.g. tdd, implement).
@@ -111,7 +110,6 @@ Validate legality, then apply state change.
 - `to_stage` *str* — Target stage. (required)
 - `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
 - `--reason` *str* — Reason for transition (used as history evidence).
-- `--dry-run` *boolean* — Show changes without applying them. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
 ## `aet state set-stage`
@@ -123,7 +121,6 @@ Set the pipeline stage sub-state for an in-progress task.
 - `task_id` *str* — Task ID. (required)
 - `stage` *str* — Pipeline stage to record. (required)
 - `queue` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
-- `--dry-run` *boolean* — Show changes without applying them. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
 ## `aet state record-merge`
@@ -138,7 +135,6 @@ Resolve and record the merge commit for a task.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of origin/<target-branch>.
 - `--target-branch` *str* — Branch to verify the merge against. Defaults to the configured integration branch.
 - `--plan` *str* — Deprecated and ignored: plan footer writes were removed (R-4/R-19).
-- `--dry-run` *boolean* — Show changes without applying them. (default: `False`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
 
 ## `aet state reconcile`
@@ -495,7 +491,6 @@ Link ``aet`` into the bin dir.
 ### Options
 
 - `--bin-dir` *str* — Target bin directory.
-- `--dry-run` *boolean* — Print actions without executing. (default: `False`)
 
 ## `aet setup skills`
 
@@ -505,7 +500,6 @@ Symlink AE Toolkit skills into agent skills directories.
 
 - `--skills-dir` *str* — Target skills directory.
 - `--agent` *str* — Target agent: claude-code, kimi, cursor, antigravity, generic.
-- `--dry-run` *boolean* — Print actions without executing. (default: `False`)
 - `--force` *boolean* — Replace non-symlink collisions with symlinks. (default: `False`)
 
 ## `aet setup verify`
@@ -522,7 +516,6 @@ will experience a different copy.
 ### Options
 
 - `--bin-dir` *str* — Target bin directory.
-- `--dry-run` *boolean* — Print actions without executing. (default: `False`)
 
 ## `aet setup bootstrap`
 
@@ -555,7 +548,6 @@ Run the gate and, if it passes, open a PR (default behavior).
 
 - `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
-- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship gate`
 
@@ -565,7 +557,6 @@ Run the pre-merge validation gate.
 
 - `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
-- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship open`
 
@@ -575,7 +566,6 @@ Run the gate and open a PR for the plan.
 
 - `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
-- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship open-epic`
 
@@ -585,7 +575,6 @@ Run the gate and open a PR for an epic branch.
 
 - `branch` *str* — Integration branch to open PR for (default: active epic declaration).
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk).
-- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship merge`
 
@@ -595,7 +584,6 @@ Run the gate, detect conflicts, merge directly into a target branch, and close.
 
 - `plan` *str* — Task id of the plan to ship (use `aet sprint add` to intake a plan). (required)
 - `--branch` *str* — Target branch to merge into (default: resolved trunk branch).
-- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship split`
 
@@ -607,7 +595,6 @@ Split the PR range into caller-supplied commit groups.
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk or stacked parent).
 - `--message` *str* — Commit message for one group. Repeat for each group.
 - `--paths` *str* — Comma-separated paths for one group. Repeat for each group, after its --message.
-- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 
 ## `aet ship verify`
 
@@ -634,7 +621,6 @@ Record post-merge closure for a task.
 - `--branch` *str* — Branch name to use for merge verification. Overrides the task's branch field.
 - `--merge-commit` *str* — Merge commit SHA to record directly. Must be an ancestor of the resolved trunk branch.
 - `--target-branch` *str* — Target branch the source branch merged into (default: configured integration branch). Use 'main' when closing an epic whose integration branch merged to trunk.
-- `--dry-run` *boolean* — Show what would be done without making changes. (default: `False`)
 - `--delete-branch` *boolean* — After successful closure, delete the remote and local feature branch. (default: `False`)
 
 ## `aet size`

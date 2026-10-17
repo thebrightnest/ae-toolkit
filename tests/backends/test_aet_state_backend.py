@@ -150,7 +150,6 @@ class TestBackendAwareTransition(unittest.TestCase):
             from_stage="planned",
             to_stage="ready",
             queue="/fake/aet-queue",
-            dry_run=False,
             reason=None,
         )
 
@@ -177,7 +176,6 @@ class TestBackendAwareTransition(unittest.TestCase):
             from_stage="planned",
             to_stage="ready",
             queue="/fake/aet-queue",
-            dry_run=False,
             reason=None,
         )
 
@@ -201,7 +199,6 @@ class TestBackendAwareTransition(unittest.TestCase):
             from_stage="planned",
             to_stage="ready",
             queue="/fake/aet-queue",
-            dry_run=False,
             reason=None,
         )
 
@@ -214,28 +211,6 @@ class TestBackendAwareTransition(unittest.TestCase):
         self.assertEqual(hooks[0][1]["from_state"], "planned")
         self.assertEqual(hooks[0][1]["to_state"], "ready")
         self.assertNotIn("close_task", [c[0] for c in backend.calls])
-
-    def test_dry_run_transition_does_not_mutate_backend(self):
-        """A dry-run transition validates only and never saves or hooks."""
-        backend = FakeBackend([{"id": "t1", "state": "planned"}])
-
-        args = aet_state.argparse.Namespace(
-            command="transition",
-            task_id="t1",
-            from_stage="planned",
-            to_stage="ready",
-            queue="/fake/aet-queue",
-            dry_run=True,
-            reason=None,
-        )
-
-        with patch.object(aet_state, "create_backend", return_value=backend):
-            rc = aet_state.cmd_transition(args)
-
-        self.assertEqual(rc, 0)
-        self.assertFalse(
-            any(c[0] in ("save", "push", "on_transition", "close_task") for c in backend.calls)
-        )
 
     def test_terminal_transition_calls_backend_close_task(self):
         """A terminal transition seals the task and asks the backend to close it."""
@@ -288,7 +263,6 @@ class TestBackendAwareTransition(unittest.TestCase):
                 from_stage="awaiting_merge",
                 to_stage="merged",
                 queue=str(queue_path),
-                dry_run=False,
                 reason=None,
             )
 
@@ -351,7 +325,6 @@ class TestBackendAwareRecordMerge(unittest.TestCase):
                 command="record-merge",
                 task_id="t1",
                 queue=str(queue_path),
-                dry_run=False,
             )
 
             with patch.object(aet_state, "create_backend", return_value=backend):

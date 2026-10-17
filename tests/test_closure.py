@@ -239,7 +239,6 @@ class TestShipArchivalClosureIntegration(unittest.TestCase):
             branch=None,
             merge_commit=None,
             target_branch=None,
-            dry_run=False,
         )
         with patch("sys.stdout", new=io.StringIO()) as fake_out:
             rc = ship.cmd_ship(args)
@@ -272,7 +271,6 @@ class TestShipArchivalClosureIntegration(unittest.TestCase):
             branch=None,
             merge_commit=None,
             target_branch=None,
-            dry_run=False,
         )
         with patch("sys.stdout", new=io.StringIO()) as fake_out:
             rc = ship.cmd_ship(args)
@@ -308,7 +306,7 @@ class TestShipArchivalClosureIntegration(unittest.TestCase):
             ),
             patch("sys.stdout", new=io.StringIO()) as fake_out,
         ):
-            rc = ship.cmd_merge(argparse.Namespace(plan=task_id, branch="main", dry_run=False))
+            rc = ship.cmd_merge(argparse.Namespace(plan=task_id, branch="main"))
 
         self.assertEqual(rc, 0)
         self.assertFalse(plan_path.exists())

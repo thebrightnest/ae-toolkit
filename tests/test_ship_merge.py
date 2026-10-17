@@ -52,7 +52,7 @@ class TestShipMergeConflictHandling(unittest.TestCase):
 
     def test_cmd_merge_handles_staged_conflict(self):
         """cmd_merge reports failure when integrate returns staged_conflict."""
-        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec={"tasks": []})
+        args = SimpleNamespace(plan="t1", branch="dev", task_id="t1", spec={"tasks": []})
         staged_res = IntegrateResult("staged_conflict", detail={"stderr_tail": "rebase conflict in src/cli.py"})
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
@@ -65,7 +65,7 @@ class TestShipMergeConflictHandling(unittest.TestCase):
 
     def test_cmd_merge_handles_guard_refused(self):
         """cmd_merge reports failure when integrate returns guard_refused."""
-        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec={"tasks": []})
+        args = SimpleNamespace(plan="t1", branch="dev", task_id="t1", spec={"tasks": []})
         refused_res = IntegrateResult("guard_refused", detail="Release guard refused")
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
@@ -151,7 +151,7 @@ class TestShipMergeCommand(unittest.TestCase):
 
     def test_merge_refuses_to_proceed_when_integrate_fails(self):
         """If integrate reports failure, cmd_merge exits non-zero."""
-        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec=self._spec())
+        args = SimpleNamespace(plan="t1", branch="dev", task_id="t1", spec=self._spec())
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
              patch.object(ship, "_find_target_worktree", return_value=self.repo), \
@@ -161,7 +161,7 @@ class TestShipMergeCommand(unittest.TestCase):
 
     def test_merge_stops_on_conflict_detection(self):
         """Detected conflicts in integrate stop the merge."""
-        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec=self._spec())
+        args = SimpleNamespace(plan="t1", branch="dev", task_id="t1", spec=self._spec())
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
              patch.object(ship, "_find_target_worktree", return_value=self.repo), \
@@ -171,7 +171,7 @@ class TestShipMergeCommand(unittest.TestCase):
 
     def test_merge_happy_path_calls_integrate_and_archives(self):
         """A clean merge calls integrate and archives the plan."""
-        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task_id="t1", spec=self._spec())
+        args = SimpleNamespace(plan="t1", branch="dev", task_id="t1", spec=self._spec())
         merged_res = IntegrateResult("merged", detail="abc123")
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
@@ -190,7 +190,7 @@ class TestShipMergeCommand(unittest.TestCase):
             "branch": "feature/custom-branch-name",
             "spec": {"tasks": [{"id": "t1"}]},
         }
-        args = SimpleNamespace(plan="t1", branch="dev", dry_run=False, task=task, spec=task["spec"], task_id="t1")
+        args = SimpleNamespace(plan="t1", branch="dev", task=task, spec=task["spec"], task_id="t1")
         merged_res = IntegrateResult("merged", detail="abc123")
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_feature_branch", return_value="feature/custom-branch-name"), \
@@ -202,16 +202,6 @@ class TestShipMergeCommand(unittest.TestCase):
         mock_integrate.assert_called_once()
         call_task = mock_integrate.call_args[1]["task"]
         self.assertEqual(call_task["branch"], "feature/custom-branch-name")
-
-    def test_merge_dry_run_skips_integrate(self):
-        """Dry-run reports success but does not call integrate."""
-        args = SimpleNamespace(plan="t1", branch="dev", dry_run=True, task_id="t1", spec=self._spec())
-        with patch.object(ship, "_resolve_ship_task", return_value=None), \
-             patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
-             patch.object(ship, "integrate") as mock_integrate:
-            rc = ship.cmd_merge(args)
-        self.assertEqual(rc, 0)
-        mock_integrate.assert_not_called()
 
     def _init_repo_with_task_branch(self, task_id: str) -> Path:
         """Create a real temp git repo whose HEAD is on ``main`` and which also
@@ -281,7 +271,7 @@ class TestShipMergeCommand(unittest.TestCase):
         with patch.object(ship, "_find_target_worktree", return_value=Path("/fake/wt")), \
              patch.object(ship, "integrate", side_effect=fake_integrate), \
              patch.object(ship, "archive_plan_file"):
-            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
+            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main"))
         self.assertEqual(rc, 0)
         self.assertEqual(captured["task"]["branch"], "t1")
         self.assertEqual(captured["integration_branch"], "main")
@@ -297,7 +287,7 @@ class TestShipMergeCommand(unittest.TestCase):
         """A resolved feature branch equal to the target aborts before any merge."""
         with patch.object(ship, "_resolve_feature_branch", return_value="main"), \
              patch.object(ship, "integrate") as mock_integrate:
-            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
+            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main"))
         self.assertNotEqual(rc, 0)
         mock_integrate.assert_not_called()
 
@@ -306,9 +296,13 @@ class TestShipMergeCommand(unittest.TestCase):
         merge that did not happen."""
         with patch.object(ship, "_resolve_feature_branch", return_value=None), \
              patch.object(ship, "integrate") as mock_integrate:
-            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main", dry_run=False))
+            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main"))
         self.assertNotEqual(rc, 0)
         mock_integrate.assert_not_called()
+
+
+class _StopAfterTargetResolution(Exception):
+    """Halts cmd_merge once the target branch has been resolved and announced."""
 
 
 class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
@@ -320,7 +314,6 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
             plan="t1",
             command="merge",
             branch=None,
-            dry_run=True,
             base=None,
         )
         task = {
@@ -331,13 +324,14 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_trunk_ref", return_value="origin/main"), \
              patch.object(ship, "_resolve_feature_branch", return_value="feat/t1"), \
+             patch.object(ship, "_find_target_worktree", side_effect=_StopAfterTargetResolution), \
              patch.dict(os.environ, {"AET_INTEGRATION_MODE": "single-pr"}), \
              patch("sys.stdout", new=io.StringIO()) as fake_out:
             args.task = task
             args.spec = task["spec"]
             args.task_id = "t1"
-            rc = ship.cmd_merge(args)
-            self.assertEqual(rc, 0)
+            with self.assertRaises(_StopAfterTargetResolution):
+                ship.cmd_merge(args)
             self.assertIn("into feat/my-epic", fake_out.getvalue())
 
     def test_explicit_branch_overrides_task_integration_branch(self):
@@ -346,7 +340,6 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
             plan="t1",
             command="merge",
             branch="custom-target",
-            dry_run=True,
             base=None,
         )
         task = {
@@ -357,12 +350,13 @@ class TestShipMergeTargetBranchAutoResolution(unittest.TestCase):
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_trunk_ref", return_value="origin/main"), \
              patch.object(ship, "_resolve_feature_branch", return_value="feat/t1"), \
+             patch.object(ship, "_find_target_worktree", side_effect=_StopAfterTargetResolution), \
              patch("sys.stdout", new=io.StringIO()) as fake_out:
             args.task = task
             args.spec = task["spec"]
             args.task_id = "t1"
-            rc = ship.cmd_merge(args)
-            self.assertEqual(rc, 0)
+            with self.assertRaises(_StopAfterTargetResolution):
+                ship.cmd_merge(args)
             self.assertIn("into custom-target", fake_out.getvalue())
 
 
@@ -472,7 +466,7 @@ class TestShipMergeIntegration(unittest.TestCase):
                      patch("aet.cli.ship.integrate", side_effect=spy_integrate), \
                      patch("aet.validation.pre_integration_check", return_value=skip_check), \
                      patch("aet.gate.check_task_evidence", return_value=(True, [])):
-                    args = SimpleNamespace(plan=task_id, branch="target-branch", dry_run=False)
+                    args = SimpleNamespace(plan=task_id, branch="target-branch")
                     rc = ship.cmd_merge(args)
 
                 self.assertEqual(rc, 0)

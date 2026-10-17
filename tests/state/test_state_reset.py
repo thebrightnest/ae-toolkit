@@ -2,7 +2,6 @@
 
 import importlib.machinery
 import importlib.util
-import io
 import os
 import tempfile
 import unittest
@@ -177,44 +176,6 @@ class TestStateReset(unittest.TestCase):
             self.assertEqual(by_id["t1"]["state"], "blocked")
             self.assertNotIn("branch", by_id["t1"])
 
-    def test_reset_dry_run_reports_without_mutating(self):
-        """reset --dry-run reports the proposed repair without changing the queue."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            plan_path = _make_plan(tmpdir, "t1")
-            queue_path = _make_queue(
-                tmpdir,
-                {
-                    "id": "t1",
-                    "state": "in_progress",
-                    "plan_file": plan_path,
-                    "branch": "feat-t1",
-                },
-            )
-
-            responses = {
-                ("show-ref", "--verify", "--quiet", "refs/heads/feat-t1"): (1, "", ""),
-            }
-
-            args = aet_state.argparse.Namespace(
-                command="reset",
-                task_id="t1",
-                queue=str(queue_path),
-                dry_run=True,
-                force=False,
-            )
-            stdout_capture = io.StringIO()
-            with patch.object(aet_state.subprocess, "run", side_effect=_git_mock(responses)):
-                with patch.object(aet_state.sys, "stdout", stdout_capture):
-                    rc = aet_state.cmd_reset(args)
-
-            self.assertEqual(rc, 0)
-            output = stdout_capture.getvalue()
-            self.assertIn("t1: in_progress -> ready", output)
-
-            task = load_git_queue(queue_path)[0]
-            self.assertEqual(task["state"], "in_progress")
-            self.assertEqual(task["branch"], "feat-t1")
-
     def test_reset_live_by_default(self):
         """Reset mutates queue state live without requiring --apply."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -242,44 +203,6 @@ class TestStateReset(unittest.TestCase):
             self.assertEqual(rc, 0)
             task = load_git_queue(queue_path)[0]
             self.assertEqual(task["state"], "ready")
-
-    def test_reset_dry_run_flag(self):
-        """reset --dry-run reports the proposed repair without mutating queue or git state."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir)
-            init_git_repo(repo_root)
-            plan_path = _make_plan(tmpdir, "t1")
-            queue_path, _ = seed_git_queue(
-                repo_root,
-                [
-                    {
-                        "id": "t1",
-                        "state": "in_progress",
-                        "plan_file": plan_path,
-                        "branch": "feat-t1",
-                    }
-                ],
-            )
-
-            args = aet_state.argparse.Namespace(
-                command="reset",
-                task_id="t1",
-                queue=str(queue_path),
-                dry_run=True,
-                force=False,
-            )
-            stdout_capture = io.StringIO()
-            with patch.object(aet_state.sys, "stdout", stdout_capture):
-                rc = aet_state.cmd_reset(args)
-
-            self.assertEqual(rc, 0)
-            output = stdout_capture.getvalue()
-            self.assertIn("t1: in_progress -> ready", output)
-            self.assertIn("[dry-run]", output)
-
-            task = load_git_queue(queue_path)[0]
-            self.assertEqual(task["state"], "in_progress")
-            self.assertEqual(task["branch"], "feat-t1")
 
     def test_soft_reset_preserves_worktree_and_resets_ready(self):
         """Soft reset preserves existing worktree directory and branch while setting state to ready."""

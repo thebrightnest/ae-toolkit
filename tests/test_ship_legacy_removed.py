@@ -89,7 +89,6 @@ class TestShipCloseRejectsLegacyPositional(unittest.TestCase):
                     "task_id": ns.task_id,
                     "plan": ns.plan,
                     "queue": ns.queue,
-                    "dry_run": ns.dry_run,
                     "branch": ns.branch,
                     "merge_commit": ns.merge_commit,
                 }
@@ -105,7 +104,6 @@ class TestShipCloseRejectsLegacyPositional(unittest.TestCase):
                 task_id="t1",
                 plan="/path/to/plan.md",
                 queue="/path/to/queue.json",
-                dry_run=False,
                 branch=None,
                 merge_commit=None,
             )

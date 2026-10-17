@@ -57,7 +57,6 @@ error() {
 # binds AGENT / AET_SKILLS_DIR via envvar=). This avoids bash marshalling
 # arguments for a Python program — the empty-array crash this plan exists to
 # remove.
-DRY_RUN_FLAG=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --tag)
@@ -87,7 +86,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dry-run)
             DRY_RUN=true
-            DRY_RUN_FLAG="--dry-run"
             shift
             ;;
         --help|-h)
@@ -187,21 +185,21 @@ create_venv_and_install() {
 
 run_setup() {
     if [[ "$DRY_RUN" == true ]]; then
-        log "would run: AET_REPO_ROOT=$REPO_DIR AET_SKILLS_DIR=$AET_SKILLS_DIR AGENT=$AGENT $AET_BIN setup skills $DRY_RUN_FLAG"
-        log "would run: AET_BIN_DIR=$AET_BIN_DIR $AET_BIN setup link $DRY_RUN_FLAG"
-        log "would run: AET_BIN_DIR=$AET_BIN_DIR $AET_BIN setup verify $DRY_RUN_FLAG"
+        log "would run: AET_REPO_ROOT=$REPO_DIR AET_SKILLS_DIR=$AET_SKILLS_DIR AGENT=$AGENT $AET_BIN setup skills"
+        log "would run: AET_BIN_DIR=$AET_BIN_DIR $AET_BIN setup link"
+        log "would run: AET_BIN_DIR=$AET_BIN_DIR $AET_BIN setup verify"
         return 0
     fi
 
     log "linking skills"
     AET_REPO_ROOT="$REPO_DIR" AET_SKILLS_DIR="$AET_SKILLS_DIR" AGENT="$AGENT" \
-        "$AET_BIN" setup skills ${DRY_RUN_FLAG:+--dry-run}
+        "$AET_BIN" setup skills
 
     log "linking aet"
-    AET_BIN_DIR="$AET_BIN_DIR" "$AET_BIN" setup link ${DRY_RUN_FLAG:+--dry-run}
+    AET_BIN_DIR="$AET_BIN_DIR" "$AET_BIN" setup link
 
     log "verifying install"
-    AET_BIN_DIR="$AET_BIN_DIR" "$AET_BIN" setup verify ${DRY_RUN_FLAG:+--dry-run}
+    AET_BIN_DIR="$AET_BIN_DIR" "$AET_BIN" setup verify
 }
 
 print_summary() {
