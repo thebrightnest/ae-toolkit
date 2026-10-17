@@ -4,7 +4,7 @@
     {
       "id": "T1",
       "title": "Example unblocked task",
-      "plan_file": "docs/plans/T1-example-plan.md",
+      "plan_file": "docs/plans/active/T1.md",
       "status": "unblocked",
       "blocks": ["T2"],
       "blocked_by": []
@@ -12,7 +12,7 @@
     {
       "id": "T2",
       "title": "Example blocked task",
-      "plan_file": "docs/plans/T2-example-plan.md",
+      "plan_file": "docs/plans/active/T2.md",
       "status": "blocked",
       "blocks": [],
       "blocked_by": ["T1"]

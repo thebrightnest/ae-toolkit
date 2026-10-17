@@ -2,7 +2,7 @@
 
 Usage:
     orchestrator --queue-file .agents/aet-queue
-    orchestrator --plan-file docs/plans/FEAT-001-plan.md
+    orchestrator --plan-file docs/plans/active/FEAT-001.md
 
 Daemonization design (Open Question #3, nc-06-run-daemonization):
 

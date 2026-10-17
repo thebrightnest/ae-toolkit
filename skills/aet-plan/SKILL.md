@@ -135,12 +135,12 @@ Break the PRD into vertically-sliced, independently implementable tickets.
 **Procedure:**
 
 1. Read the approved PRD from `docs/prds/`.
-2. Create `docs/plans/active/` if it doesn't exist. Create tickets as markdown files in `docs/plans/active/` or push via MCP if configured. Atomic task plans MUST be saved to `docs/plans/active/{ticket-id}-plan.md`. Roadmaps, audits, and meta-plans MUST be saved to `docs/roadmaps/` or `docs/audits/` and will NOT be added to the work queue.
+2. Create `docs/plans/active/` if it doesn't exist. Create tickets as markdown files in `docs/plans/active/` or push via MCP if configured. Atomic task plans MUST be saved to `docs/plans/active/{ticket-id}.md`. Roadmaps, audits, and meta-plans MUST be saved to `docs/roadmaps/` or `docs/audits/` and will NOT be added to the work queue.
 3. **Force vertical slices**: each ticket must cross all layers (schema + API + minimal UI), not horizontal layers (all DB → all API → all UI).
 4. **Apply task size guardrails**. Evaluate each story against the full guardrail model (≤ 2 days human time; ≤ 1,200 expected diff lines; ≤ 2 implementation subsystems; ~100k-token context budget). Auto-split stories that trip two or more signals recursively (max depth 3). Mark `⚠️ ATOMIC OVERSIZED` if unsplittable.
 5. Define blocking relationships between tickets (directed acyclic graph).
 6. Each ticket gets: title, user story, acceptance criteria, technical notes, estimated effort, size label (S/M/L), and the R-id(s) it satisfies (cited on each user story and acceptance criterion so coverage is visible at review time).
-7. **Plan file frontmatter contract.** Every `docs/plans/active/{ticket-id}-plan.md` must begin with YAML frontmatter:
+7. **Plan file frontmatter contract.** The filename stem is the task id: intake refuses a plan whose `id` differs from its filename, and closure archives `docs/plans/active/{ticket-id}.md` by that name. Every `docs/plans/active/{ticket-id}.md` must begin with YAML frontmatter:
 
    ```yaml
    ---
@@ -245,7 +245,7 @@ If the ticket is a dependency or framework upgrade, follow
 
 1. Read the ticket and relevant PRD section.
 2. Use `.agents/templates/plan-template.md` as the structure guide.
-3. Create `docs/plans/active/` if it doesn't exist. Produce `docs/plans/active/{ticket-id}-plan.md` containing: (atomic task plans only; save roadmaps, audits, and meta-plans to `docs/roadmaps/` or `docs/audits/`)
+3. Create `docs/plans/active/` if it doesn't exist. Produce `docs/plans/active/{ticket-id}.md` containing: (atomic task plans only; save roadmaps, audits, and meta-plans to `docs/roadmaps/` or `docs/audits/`)
    - Summary and user story
    - Locked-in architecture decisions (cannot change without re-planning)
    - Files to create and modify
@@ -304,4 +304,4 @@ After the `plan` command completes and the plan.md is ready for review:
 - **Planning lockout** — Never edit application source files during planning. Research and exploration are allowed; code changes are not.
 - **Imperative input = planning target** — When the user says "do X," interpret it as "help me plan X."
 - **Session-sized tasks only** — Aim each task at one independently shippable unit of behaviour. Split when the model says the plan is overloaded, not by reflex.
-- **No nested plan directories** — Never write to `docs/plans/plans/`. The correct path is always `docs/plans/active/{ticket-id}-plan.md`.
+- **No nested plan directories** — Never write to `docs/plans/plans/`. The correct path is always `docs/plans/active/{ticket-id}.md`.

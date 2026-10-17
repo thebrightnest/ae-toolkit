@@ -85,7 +85,7 @@ If the user's request contains implementation directives (e.g., "make", "change"
 1. Follow the `aet-plan` → `clarify-goal` + `create-prd` + `create-stories` + `plan` procedures
    - `create-stories` and `plan` enforce task size guardrails automatically (2-of-N signal model, context-budget + coherence, auto-split, `⚠️ ATOMIC OVERSIZED` marking). See `docs/CONVENTIONS.md` for the current model; size is measured after implementation, not gated at intake (ADR-046).
    - R-trace discipline (numbered R-ids carried brief → PRD → plan task, with a coverage lint) is enforced by `aet-plan` here and demonstrated at the P0 exit gate, ahead of Phase 4's mechanized <!-- aet-lint: off -->`aet plan validate`<!-- aet-lint: on -->
-2. Produce: `docs/prds/{seq}-{feature}-prd.md`, `docs/plans/active/*.md` files (atomic task plans MUST be saved to `docs/plans/active/{ticket-id}-plan.md`)
+2. Produce: `docs/prds/{seq}-{feature}-prd.md`, `docs/plans/active/*.md` files (atomic task plans MUST be saved to `docs/plans/active/{ticket-id}.md`)
 3. **Queue preservation guardrail:** When plans are admitted to the sprint, new tickets must be merged into the existing queue rather than replacing it. Existing tasks must survive the planning session unchanged.
 4. **HARD GATE:** Present PRD to user for review. Ask:
 
