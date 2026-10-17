@@ -353,6 +353,28 @@ def _report_skill_link_drift() -> None:
             typer.echo(f"  = skill links in {target_dir} point at this repo")
 
 
+def _report_version_currency() -> None:
+    """Print whether the installed aet is the newest release (cached 24h)."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    from aet.version_check import version_status
+
+    try:
+        current = version("aet")
+    except PackageNotFoundError:
+        return
+    status = version_status(current, refresh=True)
+    if status is None or status.latest is None:
+        typer.echo(f"  = aet version: v{current} (version check skipped/offline)")
+    elif status.update_available:
+        typer.echo(
+            f"  ⚠ aet version: v{current} (update available: v{status.latest}; run aet update)",
+            err=True,
+        )
+    else:
+        typer.echo(f"  = aet version: v{current} (up to date)")
+
+
 @app.command("verify")
 def setup_verify(
     bin_dir: str | None = typer.Option(None, "--bin-dir", envvar="AET_BIN_DIR", help="Target bin directory."),
@@ -372,6 +394,7 @@ def setup_verify(
     link = target_dir / "aet"
 
     _report_skill_link_drift()
+    _report_version_currency()
 
     if dry_run:
         typer.echo("  (dry run — would verify aet link against PATH)")

@@ -261,3 +261,65 @@ class TestSetupVerifyConfigProvenance(SetupVerifyTestCase):
         rc, out, err = self._run_verify_in_repo(repo)
         self.assertEqual(rc, 0, err)
         self.assertIn("active_epic: feat/titleless-epic (envelope)", out)
+
+
+class TestSetupVerifyVersionCurrency(SetupVerifyTestCase):
+    """`aet setup verify` reports whether the installed aet is current."""
+
+    def setUp(self):
+        super().setUp()
+        from importlib.metadata import version
+
+        from aet import version_check
+
+        self.version_check = version_check
+        self.current = version("aet")
+        self.data_dir = Path(self.tmp.name) / "data"
+        self.cache = self.data_dir / "version-cache.json"
+        (self.bin_dir / "aet").symlink_to(Path(sys.executable).parent / "aet")
+
+    def _run_currency(self, *, tty=True, extra_env=None):
+        env = {
+            "AET_BIN_DIR": str(self.bin_dir),
+            "PATH": str(self.bin_dir),
+            "AET_DATA_DIR": str(self.data_dir),
+            "CI": None,
+            "AET_NO_UPDATE_CHECK": None,
+            **(extra_env or {}),
+        }
+        with (
+            patch.object(aet_setup, "_is_worktree_copy", lambda _script: False),
+            patch.object(self.version_check, "_stdout_is_tty", lambda: tty),
+        ):
+            result = run_typer(aet_setup.app, ["verify"], env=env)
+        return result.exit_code, result.stdout, result.stderr
+
+    def test_reports_up_to_date(self):
+        self.version_check.write_version_cache(self.current, path=self.cache)
+        rc, out, err = self._run_currency()
+        self.assertEqual(rc, 0, err)
+        self.assertIn(f"= aet version: v{self.current} (up to date)", out)
+
+    def test_warns_when_update_available(self):
+        self.version_check.write_version_cache("999.0.0", path=self.cache)
+        rc, out, err = self._run_currency()
+        self.assertEqual(rc, 0, err)
+        self.assertIn(
+            f"⚠ aet version: v{self.current} (update available: v999.0.0; run aet update)",
+            err,
+        )
+
+    def test_reports_skipped_when_last_lookup_failed(self):
+        self.version_check.write_version_cache(None, path=self.cache)
+        rc, out, err = self._run_currency()
+        self.assertEqual(rc, 0, err)
+        self.assertIn(f"= aet version: v{self.current} (version check skipped/offline)", out)
+
+    def test_reports_skipped_when_suppressed(self):
+        self.version_check.write_version_cache("999.0.0", path=self.cache)
+        for kwargs in ({"tty": False}, {"extra_env": {"CI": "1"}}, {"extra_env": {"AET_NO_UPDATE_CHECK": "1"}}):
+            with self.subTest(**kwargs):
+                rc, out, err = self._run_currency(**kwargs)
+                self.assertEqual(rc, 0, err)
+                self.assertIn(f"= aet version: v{self.current} (version check skipped/offline)", out)
+                self.assertNotIn("update available", err)

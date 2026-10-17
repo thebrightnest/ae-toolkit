@@ -244,7 +244,18 @@ def _version_callback(value: bool) -> None:
     if value:
         from importlib.metadata import version as get_version
 
-        typer.echo(f"aet {get_version('aet')}")
+        from aet.version_check import version_status
+
+        current = get_version("aet")
+        typer.echo(f"aet {current}")
+        # Cached-only: --version must never wait on the network.
+        status = version_status(current)
+        if status is not None and status.update_available:
+            typer.echo(
+                f"A newer version of aet is available: v{status.latest} (current: v{current})."
+                " Run 'aet update' to upgrade.",
+                err=True,
+            )
         raise typer.Exit()
 
 

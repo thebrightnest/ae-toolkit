@@ -106,3 +106,26 @@ This feature introduces native version currency awareness and a one-step self-up
 ## Open Questions
 
 None. Ready for review.
+
+## Divergence Summary
+
+_Recorded: 2026-10-17 — Branch: UPD-01_
+
+### Changed from plan
+
+- Cache format (R-3 vs. Technical Notes): the cache stores `latest_version`, `checked_at`, and `source` as R-3 says, not the `current_version` / `last_checked_timestamp` / `update_available` shape shown in Technical Notes. The current version and update status are computed when the cache is read, so a stale cache cannot report an out-of-date "update available" answer after a local upgrade.
+- Remote lookup (R-2): only `git ls-remote` is used. The optional GitHub release API fallback was not built, because git needs no token and has no rate limit. Prerelease and non-SemVer tags are ignored when choosing the latest release.
+- Cache population (R-5): `aet --version` reads only the cache and never fills it. Only `aet setup verify` refreshes the cache (one network call, 5s timeout). The `--version` notice therefore appears only if `setup verify` has run within the last 24h.
+- `aet setup verify` (R-6): adds a third status line, `= aet version: v<current> (version check skipped/offline)`, for when checks are suppressed or the remote can't be reached. The `⚠ update available` line goes to stderr.
+
+### Added (unplanned)
+
+- PEP 440 version parsing: `parse_semver` accepts `a`/`b`/`rc`/`dev` suffixes as prereleases and ignores `+local` metadata. Source and editable installs report versions like `1.20.1.dev4+g2c2d533d2`, and strict SemVer parsing made comparison silently fail (learning recorded in `.agents/learnings.jsonl`).
+- `AET_DATA_DIR` override for the cache location, so it stays consistent with `scripts/install.sh`.
+
+### Deferred
+
+- R-7–R-11 (`aet update`, `--check`, `--dry-run`, dev-clone guard, managed-install update flow, fail-safe): not in UPD-01 scope; left for a follow-up plan. Until it lands, the notices that tell users to "run aet update" point to a command that does not exist yet.
+
+_Stage: synced_
+_Next step: run `aet-ship`_
