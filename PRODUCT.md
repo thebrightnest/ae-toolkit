@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.21.1
+## Current Version: 1.21.2
 
-Last updated: 2026-10-17
+Last updated: 2026-10-18
 
 ---
 
@@ -90,6 +90,10 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.21.2
+
+- **Accurate setup checks** — `aet setup verify` no longer warns about `.gitignore` entries your existing patterns already cover, and flags paths a `!` rule would let slip into commits.
 
 ### What's New in v1.21.1
 

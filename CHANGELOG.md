@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.21.2] — 2026-10-18
+
+### Fixed
+
+- **`aet setup verify` reported covered `.gitignore` entries as missing** — the check compared `.gitignore` lines as literal text, so a repository that ignores `docs/plans` was warned that `docs/plans/active/` was missing, and `aet setup bootstrap` appended the redundant line. A path re-included with `!` was the opposite case: reported as covered while git would track it. The check now asks git which paths the project's own `.gitignore` files ignore. Entries only in `.git/info/exclude` or a global excludes file still count as missing, because teammates do not share them. Outside a git repository the literal comparison remains (#195).
+
+**Upgrading from 1.21.1:** run `aet update`. A repository whose `.gitignore` re-includes an aet path with `!` now gets a warning from `aet setup verify`.
+
+---
+
 ## [1.21.1] — 2026-10-17
 
 ### Fixed
