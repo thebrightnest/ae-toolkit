@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -54,14 +55,48 @@ def _gitignore_lines(repo_root: str | Path) -> set[str]:
     return {line.strip() for line in gitignore.read_text(encoding="utf-8").splitlines()}
 
 
-def missing_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
-    """Return AET ignore entries absent from ``repo_root/.gitignore``.
+def _paths_ignored_by_project_gitignore(repo_root: str | Path, paths: set[str]) -> set[str] | None:
+    """Return the *paths* the project's own ``.gitignore`` files ignore.
 
-    Comparison is literal, so a glob that happens to cover an entry still
-    reports it as missing; the writer appends the exact name.
+    Asks ``git check-ignore`` so parent patterns, globs, and negations resolve
+    the way git resolves them. Only matches from a ``.gitignore`` count: an
+    entry in ``.git/info/exclude`` or a global excludes file is not shared with
+    the rest of the team. Returns None when git cannot answer (not a repo, git
+    missing), so the caller can fall back to a literal comparison.
     """
-    existing = _gitignore_lines(repo_root)
-    return sorted(AET_IGNORED_PATHS - existing)
+    try:
+        result = subprocess.run(
+            ["git", "-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "-v", *sorted(paths)],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode not in (0, 1):
+        return None
+    ignored: set[str] = set()
+    for line in result.stdout.splitlines():
+        match, _, path = line.partition("\t")
+        source, _, rest = match.partition(":")
+        pattern = rest.partition(":")[2]
+        if Path(source).name == ".gitignore" and not pattern.startswith("!"):
+            ignored.add(path)
+    return ignored
+
+
+def missing_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
+    """Return AET ignore entries the project's ``.gitignore`` does not ignore.
+
+    In a git repository, an entry covered by a broader pattern (``docs/plans``
+    covers ``docs/plans/active/``) is not missing. Outside one, comparison is
+    literal and the writer appends the exact name.
+    """
+    ignored = _paths_ignored_by_project_gitignore(repo_root, AET_IGNORED_PATHS)
+    if ignored is None:
+        ignored = _gitignore_lines(repo_root)
+    return sorted(AET_IGNORED_PATHS - ignored)
 
 
 def write_aet_gitignore_entries(repo_root: str | Path) -> list[str]:
