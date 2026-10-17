@@ -42,7 +42,7 @@ loading. Parser internals live in the toolkit repository at
     {
       "id": "T1",
       "title": "User can register",
-      "plan_file": "docs/plans/T1-register-plan.md",
+      "plan_file": "docs/plans/active/T1.md",
       "blocked_by": [],
       "blocks": ["T2"],
       "pending_blockers": 0,
@@ -144,7 +144,7 @@ aet state audit
     {
       "id": "T1",
       "title": "User can register",
-      "plan_file": "docs/plans/T1-register-plan.md",
+      "plan_file": "docs/plans/active/T1.md",
       "blocked_by": [],
       "blocks": ["T2", "T3"],
       "pending_blockers": 0,
@@ -196,7 +196,7 @@ aet state audit
     {
       "id": "T2",
       "title": "User can log in",
-      "plan_file": "docs/plans/T2-login-plan.md",
+      "plan_file": "docs/plans/active/T2.md",
       "blocked_by": ["T1"],
       "blocks": ["T3"],
       "pending_blockers": 0,
@@ -234,7 +234,7 @@ aet state audit
     {
       "id": "T3",
       "title": "User can reset password",
-      "plan_file": "docs/plans/T3-reset-plan.md",
+      "plan_file": "docs/plans/active/T3.md",
       "blocked_by": ["T1", "T2"],
       "blocks": [],
       "pending_blockers": 1,

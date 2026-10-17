@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 import tempfile
 import unittest
@@ -224,6 +225,45 @@ class TestAdmitPlanOperation(unittest.TestCase):
         self.assertEqual(outcome.reason, RefusalReason.VALIDATION_FAILED)
         self.assertTrue(outcome.findings)
         self.assertIsNotNone(outcome.coverage)
+
+    def test_refuse_validation_failed_with_relative_plans_dir(self):
+        """Structural findings survive a relative plans dir and an absolute repo root.
+
+        `aet sprint add` passes ``plans_dir="docs/plans"`` while the backend's
+        ``repo_root`` is absolute. The validator lists the corpus from the
+        absolute root, so its paths must still match the relative plan path or
+        every structural finding is dropped and the plan is admitted.
+        """
+        active_dir = self.plans_dir / "active"
+        active_dir.mkdir(parents=True, exist_ok=True)
+        plan = _make_clean_plan(active_dir, self.prds_dir, "feat-003-plan.md")
+        plan.write_text(
+            plan.read_text(encoding="utf-8").replace("id: feat-003-plan", "id: feat-003"),
+            encoding="utf-8",
+        )
+
+        class _AbsoluteRootBackend:
+            repo_root = str(self.root)
+
+        cwd = os.getcwd()
+        os.chdir(self.root)
+        try:
+            outcome = admit_plan(
+                "docs/plans/active/feat-003-plan.md",
+                plans_dir=Path("docs/plans"),
+                backend=_AbsoluteRootBackend(),
+                history_file=str(self.history_file),
+                queue=[],
+                history=[],
+            )
+        finally:
+            os.chdir(cwd)
+        self.assertIsInstance(outcome, Refused)
+        self.assertEqual(outcome.reason, RefusalReason.VALIDATION_FAILED)
+        self.assertIn(
+            "id mismatch: feat-003 != feat-003-plan",
+            [f.message for f in outcome.findings],
+        )
 
     def test_refuse_blocked_when_disallowed(self):
         """A blocked plan is refused when allow_blocked=False (for sprint intake)."""

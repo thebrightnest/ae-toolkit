@@ -524,7 +524,11 @@ def validate(
             else []
         )
         root_plans = [p for p in corpus.glob("*.md") if not plan_parser.is_settled_plan(p)]
-        all_plans = sorted(set(active_plans + root_plans))
+        # The corpus is listed from repo_root, which may be absolute while the
+        # requested plans are relative. Use the requested path for the same
+        # file, or limit_to never matches and every structural finding drops.
+        requested = {p.resolve(): p for p in live_plans}
+        all_plans = sorted({requested.get(p.resolve(), p) for p in active_plans + root_plans} | limit_to)
     else:
         all_plans = live_plans
     findings.extend(
