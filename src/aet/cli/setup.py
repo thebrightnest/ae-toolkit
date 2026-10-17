@@ -14,10 +14,14 @@ from aet.backends.factory import (
     resolve_integration_mode_with_provenance,
 )
 from aet.branch_ref import resolve_integration_branch, resolve_trunk_branch
+from aet.cli.update import update as _update
 from aet.project_id import resolve_repo_root
 from aet.worktree import AET_IGNORED_PATHS, AET_RETIRED_IGNORED_PATHS
 
 app = typer.Typer(help="Setup and bootstrap commands.")
+
+# Alias of the top-level `aet update` (ADR-039).
+app.command("update")(_update)
 
 
 def _format_branch_provenance(provenance: str, config_source: str) -> str:

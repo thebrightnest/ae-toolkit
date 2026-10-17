@@ -52,6 +52,7 @@ SECTIONS: dict[str, str] = {
     "context": "Inspect & learn",
     # Set up & maintain
     "setup": "Set up & maintain",
+    "update": "Set up & maintain",
     "configure": "Set up & maintain",
     "hooks": "Set up & maintain",
     "harness-guard": "Set up & maintain",

@@ -2,6 +2,16 @@
 
 # AE Toolkit CLI Reference
 
+## `aet update`
+
+Update a managed aet install (CLI and skills) to the latest release.
+
+### Options
+
+- `--check` *boolean* — Show current vs latest release and the planned steps. (default: `False`)
+- `--tag` *str* — Update to this release tag instead of the latest.
+- `--yes` *boolean* — Skip the confirmation prompt. (default: `False`)
+
 ## `aet run`
 
 Run the orchestrator in batch mode.
@@ -482,7 +492,18 @@ Setup and bootstrap commands.
 - `bootstrap`: Write AET ignore entries to the project ``.gitignore``.
 - `link`: Link ``aet`` into the bin dir.
 - `skills`: Symlink AE Toolkit skills into agent skills directories.
+- `update`: Update a managed aet install (CLI and skills) to the latest release.
 - `verify`: Verify that the installed `aet` on PATH matches the expected link.
+
+## `aet setup update`
+
+Update a managed aet install (CLI and skills) to the latest release.
+
+### Options
+
+- `--check` *boolean* — Show current vs latest release and the planned steps. (default: `False`)
+- `--tag` *str* — Update to this release tag instead of the latest.
+- `--yes` *boolean* — Skip the confirmation prompt. (default: `False`)
 
 ## `aet setup link`
 

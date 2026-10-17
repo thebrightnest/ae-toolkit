@@ -127,5 +127,31 @@ _Recorded: 2026-10-17 — Branch: UPD-01_
 
 - R-7–R-11 (`aet update`, `--check`, `--dry-run`, dev-clone guard, managed-install update flow, fail-safe): not in UPD-01 scope; left for a follow-up plan. Until it lands, the notices that tell users to "run aet update" point to a command that does not exist yet.
 
+## Divergence Summary — UPD-02
+
+_Recorded: 2026-10-17 — Branch: UPD-02_
+
+This closes the R-7–R-11 deferral recorded by UPD-01 above: `aet update` now exists, so the "run aet update" notices point to a real command.
+
+### Changed from plan
+
+- `--dry-run` (R-8, AC "`aet update --dry-run`"): not shipped. RDR-01 retired `--dry-run` from the `aet setup` surface, which is where the `aet setup update` alias lives, after this PRD was written. `aet update --check` is read-only and prints the exact steps an update would run (fetch, checkout, install, relink, cache refresh), so it covers the dry-run acceptance criterion. A test asserts both `aet update` and `aet setup update` reject `--dry-run`.
+- Managed-install detection (R-9): an install counts as managed only when `AET_DATA_DIR/repo` is a git clone **and** the running `aet` is the interpreter in `AET_DATA_DIR/venv`. A development checkout gets the `git pull && make install-skills` guidance. Any other install (for example a plain `pip install`) gets a pointer to re-run the installer.
+- Relink steps (R-10): skills and the binary are relinked by running the newly installed `venv/bin/aet setup skills` (with `AET_REPO_ROOT` set to the clone) and `aet setup link` as subprocesses, not in-process. That way the relink runs the new version's code.
+- Fail-safe (R-11): if the checkout, install, or relink fails, the clone goes back to the previous commit and the previous version is reinstalled. If the rollback also fails, the user is told to re-run the installer. A failed `git fetch` stops before anything changes.
+- Version cache (R-10 step 7): the cache is refreshed with the latest stable tag, using the UPD-01 cache format (`latest_version`), not with the installed version.
+
+### Added (unplanned)
+
+- The update refuses to run when the managed clone has uncommitted tracked changes.
+- An interactive confirmation prompt, which `--yes`/`-y` skips. It is never shown when stdin is not a TTY.
+- `--tag` accepts a tag with or without the `v` prefix and is checked against the fetched tags before anything changes. Only stable SemVer tags are picked as "latest".
+- `update` is listed in the "Set up & maintain" section of `aet` help (`src/aet/cli/help_index.py`).
+- A learning about plan drift caused by sibling retirement PRDs (`.agents/learnings.jsonl`).
+
+### Deferred
+
+- None.
+
 _Stage: synced_
 _Next step: run `aet-ship`_

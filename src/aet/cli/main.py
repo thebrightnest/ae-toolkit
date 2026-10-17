@@ -66,6 +66,7 @@ from aet.cli import (
     sprint,
     status,
     sync,
+    update,
     validate_workflows,
 )
 # isort: on
@@ -238,6 +239,7 @@ app.add_typer(
 app.add_typer(retro.app, name="retro")
 app.add_typer(status.app, name="status")
 app.add_typer(validate_workflows.app, name="validate-workflows")
+app.command("update")(update.update)
 
 
 def _version_callback(value: bool) -> None:
