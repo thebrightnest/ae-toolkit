@@ -406,7 +406,7 @@ function buildRun(r) {
 
 /* ---------------- plan model ---------------- */
 
-// Workflow spine from aet-work/workflows/software.json; stage/stages fields on
+// Workflow spine from src/aet/workflows/software.json; stage/stages fields on
 // success records are intersected with it to compute plan progress.
 const SPINE = ["plan-approved", "implemented", "qa-complete", "reviewed", "secure", "synced"];
 
@@ -1056,7 +1056,7 @@ function EmptyState({ mode, onPick }) {
       <Card className="max-w-lg mx-auto mt-16">
         <CardHeader>
           <h2 className="text-lg font-semibold">Archive is empty</h2>
-          <p className="text-sm text-muted-foreground">No telemetry records found. Run a plan with <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">aet-work</code> first, then refresh this page.</p>
+          <p className="text-sm text-muted-foreground">No telemetry records found. Run a plan with <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">aet run</code> first, then refresh this page.</p>
         </CardHeader>
       </Card>
     );
@@ -1320,7 +1320,7 @@ function App() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">AET Telemetry Panel</h1>
           <p className="text-sm text-muted-foreground">
-            Local execution log viewer for <code className="font-mono text-xs">aet-work</code> runs
+            Local execution log viewer for <code className="font-mono text-xs">aet run</code> executions
             {meta && meta.root && <span> · <code className="font-mono text-xs">{meta.root}</code></span>}
           </p>
         </div>

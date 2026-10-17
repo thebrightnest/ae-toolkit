@@ -145,6 +145,10 @@ class DependencyMap:
             if candidate:
                 names.add(candidate)
         for basename in literals:
+            # ``"__init__.py"`` is every package's basename, so it names none;
+            # matching it would wire the file to the whole package tree.
+            if basename == "__init__.py":
+                continue
             for candidate in self._by_basename.get(basename, ()):
                 # A package module is built from path parts for SourceFileLoader
                 # ("src" / "aet" / "cli" / "orchestrator.py"), so the basename is

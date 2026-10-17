@@ -123,6 +123,16 @@ class TestDerivation(unittest.TestCase):
             self.repo.map().tests_for("scripts/bootstrap-fixture.sh"), []
         )
 
+    def test_a_quoted_package_marker_claims_no_package(self):
+        """``"__init__.py"`` names every package at once, so it names none."""
+        self.repo.src("__init__.py")
+        self.repo.src("cli/__init__.py", "from aet.cli import main\n")
+        self.repo.src("cli/main.py")
+        self.repo.src("setup.py", 'MARKER = ROOT / "src" / "aet" / "__init__.py"\n')
+        self.repo.test("test_setup.py", "from aet import setup\n")
+
+        self.assertEqual(self.repo.map().tests_for("src/aet/cli/main.py"), [])
+
     def test_a_quoted_name_matching_nothing_contributes_nothing(self):
         self.repo.src("foo.py")
         self.repo.test("test_foo.py", '"not_a_module.py"\n')

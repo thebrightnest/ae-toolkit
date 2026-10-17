@@ -87,6 +87,20 @@ class TestSkillLinkDrift(unittest.TestCase):
 
         self.assertNotIn("do not point at", self._run())
 
+    def test_dangling_toolkit_links_are_named_and_left_in_place(self):
+        """A retired skill's link dangles; verify reports it and never removes it."""
+        (self.target / "aet-work").symlink_to(self.skills / "aet-work")
+        (self.target / "foreign").symlink_to(self.root / "elsewhere" / "skills" / "foreign")
+        before = sorted(p.name for p in self.target.iterdir())
+
+        err = self._run()
+
+        self.assertIn("1 dangling skill link(s)", err)
+        self.assertIn("aet-work", err)
+        self.assertNotIn("foreign", err)
+        self.assertIn("Run `aet setup skills` to remove them.", err)
+        self.assertEqual(sorted(p.name for p in self.target.iterdir()), before)
+
 
 if __name__ == "__main__":
     sys.exit(unittest.main())

@@ -328,3 +328,31 @@ planned. Tasks 1–6 match the plan; R-11…R-14 are delivered.
 
 *Stage: synced*
 *Next step: run `aet-ship` for RVS-02; RVS-03 follows through `/aet-drive`*
+
+### RVS-03
+
+*Recorded: 2026-10-17 — Branch: RVS-03*
+
+RVS-03 (prune dangling skill links, panel empty state) was built as planned. Tasks 1–6
+match the plan, including the locked-in toolkit-link predicate.
+
+#### Changed from plan
+
+- Task 3 (verify report): the dangling-link pass skips names the toolkit still ships.
+  Those links are repointed rather than removed, and the existing drift pass already
+  reports them, so listing them again would report the same link twice.
+
+#### Added (unplanned)
+
+- `src/aet/test_deps.py`: when matching quoted file literals, `_resolve` now skips the
+  `__init__.py` basename. The new `"__init__.py"` literal in `setup.py` (the toolkit
+  marker check) had wired `setup.py` to every package `__init__`, which pulled unrelated
+  tests into change-scoped runs and failed `test_change_scope`. Covered in
+  `tests/test_test_deps.py`, with a learning recorded in `.agents/learnings.jsonl`.
+
+#### Deferred
+
+- None.
+
+*Stage: synced*
+*Next step: run `aet-ship` for RVS-03*

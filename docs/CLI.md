@@ -491,7 +491,7 @@ Setup and bootstrap commands.
 
 - `bootstrap`: Write AET ignore entries to the project ``.gitignore``.
 - `link`: Link ``aet`` into the bin dir.
-- `skills`: Symlink AE Toolkit skills into agent skills directories.
+- `skills`: Symlink AE Toolkit skills into agent skills directories and remove dangling toolkit skill links.
 - `update`: Update a managed aet install (CLI and skills) to the latest release.
 - `verify`: Verify that the installed `aet` on PATH matches the expected link.
 
@@ -515,7 +515,7 @@ Link ``aet`` into the bin dir.
 
 ## `aet setup skills`
 
-Symlink AE Toolkit skills into agent skills directories.
+Symlink AE Toolkit skills into agent skills directories and remove dangling toolkit skill links.
 
 ### Options
 

@@ -212,6 +212,40 @@ def _link_skill(
     return f"+ {skill_path.name} linked"
 
 
+def _is_toolkit_skill_link(link: Path) -> bool:
+    """True when ``link`` is a symlink whose raw target sits in a toolkit ``skills/``.
+
+    The target is read with ``os.readlink`` and normalized lexically, never
+    resolved, so a missing target can still be classified. A ``skills/``
+    directory belongs to the toolkit when its parent is this repo root or holds
+    ``src/aet/__init__.py``; when the ``skills/`` directory is gone as well, the
+    managed install root (``…/ae-toolkit/repo``) is the remaining evidence.
+    """
+    if not link.is_symlink():
+        return False
+    raw = os.readlink(link)
+    target = Path(os.path.normpath(os.path.join(link.parent, raw)))
+    skills_dir = target.parent
+    if skills_dir.name != "skills":
+        return False
+    root = skills_dir.parent
+    if os.path.realpath(root) == os.path.realpath(_repo_root()):
+        return True
+    if (root / "src" / "aet" / "__init__.py").is_file():
+        return True
+    return not skills_dir.exists() and root.parts[-2:] == ("ae-toolkit", "repo")
+
+
+def _dangling_toolkit_skill_links(target_dir: Path) -> list[Path]:
+    """Return toolkit skill links in ``target_dir`` whose target is missing, sorted."""
+    if not target_dir.is_dir():
+        return []
+    return sorted(
+        p for p in target_dir.iterdir()
+        if not os.path.exists(p) and _is_toolkit_skill_link(p)
+    )
+
+
 @app.command("link")
 def setup_link(
     bin_dir: str | None = typer.Option(None, "--bin-dir", envvar="AET_BIN_DIR", help="Target bin directory."),
@@ -271,7 +305,7 @@ def setup_skills(
     ),
     force: bool = typer.Option(False, "--force", help="Replace non-symlink collisions with symlinks."),
 ) -> None:
-    """Symlink AE Toolkit skills into agent skills directories."""
+    """Symlink AE Toolkit skills into agent skills directories and remove dangling toolkit skill links."""
     target_dirs = _resolve_target_dirs(skills_dir, agent)
     repo_root = _repo_root()
     skill_root = repo_root / "skills"
@@ -281,13 +315,22 @@ def setup_skills(
         typer.echo("warning: no skills found in repository", err=True)
         raise typer.Exit(0)
 
+    pruned = 0
     for target_dir in target_dirs:
         target_dir.mkdir(parents=True, exist_ok=True)
         for skill in skills:
             status = _link_skill(skill, target_dir, force=force)
             typer.echo(f"  {status}")
+        for link in _dangling_toolkit_skill_links(target_dir):
+            raw = os.readlink(link)
+            link.unlink()
+            pruned += 1
+            typer.echo(f"  - removed dangling skill link {link.name} -> {raw}")
 
-    typer.echo(f"✓ linked {len(skills)} skill(s) to {len(target_dirs)} director(y/ies)")
+    typer.echo(
+        f"✓ linked {len(skills)} skill(s) to {len(target_dirs)} director(y/ies);"
+        f" pruned {pruned} dangling skill link(s)"
+    )
 
 
 def _report_skill_link_drift() -> None:
@@ -334,6 +377,20 @@ def _report_skill_link_drift() -> None:
             typer.echo("    Run `aet setup skills` to repoint them.", err=True)
         else:
             typer.echo(f"  = skill links in {target_dir} point at this repo")
+
+        # Names the toolkit still ships are repointed, not removed, so the
+        # drift pass above already covers them.
+        dangling = [
+            p.name for p in _dangling_toolkit_skill_links(target_dir)
+            if p.name not in expected
+        ]
+        if dangling:
+            typer.echo(
+                f"  ⚠ {len(dangling)} dangling skill link(s) in {target_dir}: "
+                f"{', '.join(dangling)}",
+                err=True,
+            )
+            typer.echo("    Run `aet setup skills` to remove them.", err=True)
 
 
 def _report_version_currency() -> None:
