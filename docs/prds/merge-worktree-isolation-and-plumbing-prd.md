@@ -61,3 +61,27 @@ This feature permanently resolves the root causes by:
 ## Open Questions
 
 - None. The plumbing pattern is standard Git object manipulation and already verified against local fixtures.
+
+## Divergence Summary
+
+_Recorded: 2026-10-17 — Branch: MWP-01_
+
+### Changed from plan
+
+- R-5 (IDE watcher exclusion): the documented `.vscode/settings.json` snippet uses `files.watcherExclude` and `search.exclude` for `**/.worktrees/**` rather than `git.ignoredRepositories`. Neither setting is generated automatically; `aet-setup` only documents them.
+- Squash integration failure path: the old code checked out the task branch again after a failed merge or commit. That recovery step was removed rather than ported, because the plumbing path never moves the worktree's HEAD.
+
+### Added (unplanned)
+
+- `aet ship merge` now removes the temp directory when `git worktree add` fails, and the `finally` block runs `git worktree prune` after `remove --force` and `shutil.rmtree`. This guarantees R-4 holds even if the worktree is partially created.
+- `skills/aet-setup/references/README.md` mirrors the watcher-exclusion snippet and notes that merge worktrees now live under the system temp directory.
+- `tests/test_ship_merge.py` asserts that the merge worktree is outside `repo_root`, uses the `aet-merge-{task_id}-` prefix, and leaves no directory or `git worktree list` entry behind (R-3, R-4).
+
+### Deferred
+
+- None.
+
+---
+
+_Stage: synced_
+_Next step: run `aet-ship`_

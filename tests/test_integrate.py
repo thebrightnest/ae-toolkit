@@ -151,6 +151,87 @@ class TestIntegrate(unittest.TestCase):
             self.assertEqual(task_rec["state"], "merged")
             self.assertEqual(task_rec["merge_commit"], res.detail)
 
+    def test_squash_commit_has_train_tip_parent_and_task_tree(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            backend, queue_file = _setup_repo_and_backend(repo_root, origin_root)
+            task_id = "task-plumbing"
+            backend.save([{"id": task_id, "state": "in_progress", "branch": task_id}])
+
+            wt = create_worktree(repo_root, task_id, base_branch="origin/epic-01")
+            _add_commit(wt, "a.txt", "a", "feat: a")
+            _add_commit(wt, "b.txt", "b", "feat: b")
+            task_tree = subprocess.run(
+                ["git", "-C", wt, "rev-parse", "HEAD^{tree}"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            target_tip = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "origin/epic-01"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+
+            skip_check = validation.CheckResult("SKIP", None, True, "")
+            with patch("aet.validation.pre_integration_check", return_value=skip_check), \
+                 patch("aet.gate.check_task_evidence", return_value=(True, [])):
+                res = integrate(
+                    repo_root=repo_root,
+                    task=task_id,
+                    worktree_dir=wt,
+                    backend=backend,
+                    integration_branch="epic-01",
+                )
+
+            self.assertEqual(res.status, "staged")
+            parents = subprocess.run(
+                ["git", "-C", repo_root, "rev-list", "--parents", "-n", "1", res.detail],
+                capture_output=True, text=True, check=True,
+            ).stdout.split()
+            self.assertEqual(parents[1:], [target_tip])
+            staged_tree = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", f"{res.detail}^{{tree}}"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            self.assertEqual(staged_tree, task_tree)
+            message = subprocess.run(
+                ["git", "-C", repo_root, "log", "-1", "--format=%s", res.detail],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            self.assertEqual(message, f"Integrate {task_id}")
+
+    def test_integrate_does_not_touch_task_worktree_checkout(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            backend, queue_file = _setup_repo_and_backend(repo_root, origin_root)
+            task_id = "task-no-checkout"
+            backend.save([{"id": task_id, "state": "in_progress", "branch": task_id}])
+
+            wt = create_worktree(repo_root, task_id, base_branch="origin/epic-01")
+            _add_commit(wt, "a.txt", "a", "feat: a")
+
+            real_run = subprocess.run
+            git_calls: list[list[str]] = []
+
+            def recording_run(cmd, *args, **kwargs):
+                if isinstance(cmd, list) and cmd and cmd[0] == "git":
+                    git_calls.append(cmd)
+                return real_run(cmd, *args, **kwargs)
+
+            skip_check = validation.CheckResult("SKIP", None, True, "")
+            with patch("aet.validation.pre_integration_check", return_value=skip_check), \
+                 patch("aet.gate.check_task_evidence", return_value=(True, [])), \
+                 patch("aet.integrate.subprocess.run", side_effect=recording_run):
+                res = integrate(
+                    repo_root=repo_root,
+                    task=task_id,
+                    worktree_dir=wt,
+                    backend=backend,
+                    integration_branch="epic-01",
+                )
+
+            self.assertEqual(res.status, "staged")
+            verbs = [c[3] for c in git_calls if len(c) > 3 and c[1] == "-C"]
+            for forbidden in ("checkout", "merge", "commit"):
+                self.assertNotIn(forbidden, verbs)
+            self.assertIn("commit-tree", verbs)
+
     def test_pre_integration_check_failure_stages_conflict_without_lock(self):
         with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
             backend, queue_file = _setup_repo_and_backend(repo_root, origin_root)

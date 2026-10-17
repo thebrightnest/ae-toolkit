@@ -460,8 +460,16 @@ class TestShipMergeIntegration(unittest.TestCase):
                     with original_lock(*args, **kwargs):
                         yield
 
+                real_integrate = ship.integrate
+                seen_worktrees: list[str] = []
+
+                def spy_integrate(*a, **kw):
+                    seen_worktrees.append(kw["worktree_dir"])
+                    return real_integrate(*a, **kw)
+
                 skip_check = validation.CheckResult("SKIP", None, True, "")
                 with patch("aet.integrate.integration_lock", side_effect=spy_lock), \
+                     patch("aet.cli.ship.integrate", side_effect=spy_integrate), \
                      patch("aet.validation.pre_integration_check", return_value=skip_check), \
                      patch("aet.gate.check_task_evidence", return_value=(True, [])):
                     args = SimpleNamespace(plan=task_id, branch="target-branch", dry_run=False)
@@ -469,6 +477,19 @@ class TestShipMergeIntegration(unittest.TestCase):
 
                 self.assertEqual(rc, 0)
                 self.assertTrue(lock_acquired, "integration_lock was not acquired during ship merge")
+
+                # The ephemeral merge worktree lives outside the repo (no IDE watcher
+                # contention) and is fully cleaned up afterwards.
+                self.assertEqual(len(seen_worktrees), 1)
+                merge_wt = Path(seen_worktrees[0]).resolve()
+                self.assertNotIn(Path(repo_root).resolve(), merge_wt.parents)
+                self.assertTrue(merge_wt.name.startswith(f"aet-merge-{task_id}-"))
+                self.assertFalse(merge_wt.exists())
+                wt_list = subprocess.run(
+                    ["git", "-C", repo_root, "worktree", "list", "--porcelain"],
+                    capture_output=True, text=True, check=True,
+                ).stdout
+                self.assertNotIn(str(merge_wt), wt_list)
 
                 # Verify target branch received squash commit
                 log = subprocess.run(

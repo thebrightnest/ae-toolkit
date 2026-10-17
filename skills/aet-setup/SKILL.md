@@ -360,6 +360,15 @@ docs/plans/active/
 .worktrees/
 ```
 
+Exclude `.worktrees/` from IDE file watchers too, so editors do not index task worktrees or contend for their git index locks. For VS Code, add to `.vscode/settings.json`:
+
+```json
+{
+  "files.watcherExclude": { "**/.worktrees/**": true },
+  "search.exclude": { "**/.worktrees/**": true }
+}
+```
+
 ## Per-Provider Merge Guard
 
 When setting up a project, install a harness-level merge guard that blocks `gh pr merge` at the provider's tool-call layer. This is the only surface that refuses the command under session auto/bypass mode.

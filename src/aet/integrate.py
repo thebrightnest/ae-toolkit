@@ -465,64 +465,28 @@ def integrate(
                 f"{task_id}:\n" + "\n".join(_evidence_failures)
             )
 
-        # Clean worktree before checkout
-        subprocess.run(
-            ["git", "-C", worktree_dir, "reset", "--hard", "HEAD"],
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "-C", worktree_dir, "clean", "-fd"],
-            capture_output=True,
-        )
-
-        # Detached squash-merge onto train tip
-        checkout = subprocess.run(
-            ["git", "-C", worktree_dir, "checkout", "-f", "--detach", target_ref],
-            capture_output=True,
-            text=True,
-        )
-        if checkout.returncode != 0:
-            raise IntegrationFailureError(
-                f"checkout {target_ref} in worktree failed: {checkout.stderr.strip()}"
-            )
-
+        # Build the squash commit with plumbing: after the rebase, HEAD's tree is
+        # exactly the squashed result on top of the train tip, so no checkout,
+        # merge, or working-tree churn is needed (and no index lock is taken).
         task_branch = task_dict.get("branch") or task_id
-        merge = subprocess.run(
-            ["git", "-C", worktree_dir, "merge", "--squash", task_branch],
-            capture_output=True,
-            text=True,
-        )
-        if merge.returncode != 0:
-            subprocess.run(
-                ["git", "-C", worktree_dir, "merge", "--abort"],
-                capture_output=True,
-            )
-            subprocess.run(
-                ["git", "-C", worktree_dir, "checkout", task_branch],
-                capture_output=True,
-            )
-            raise IntegrationFailureError(
-                f"squash merge of {task_branch} failed: {merge.stderr.strip()}"
-            )
+        rc, tree_out, tree_err = run_git_plain(["-C", worktree_dir, "rev-parse", "HEAD^{tree}"])
+        if rc != 0:
+            raise IntegrationFailureError(f"could not resolve task tree: {tree_err.strip()}")
+        tree_sha = tree_out.strip()
 
         commit = subprocess.run(
-            ["git", "-C", worktree_dir, "commit", "-m", f"Integrate {task_id}"],
+            [
+                "git", "-C", worktree_dir, "commit-tree", tree_sha,
+                "-p", target_ref, "-m", f"Integrate {task_id}",
+            ],
             capture_output=True,
             text=True,
         )
         if commit.returncode != 0:
-            subprocess.run(
-                ["git", "-C", worktree_dir, "checkout", task_branch],
-                capture_output=True,
-            )
             raise IntegrationFailureError(
-                f"commit after squash merge failed: {commit.stderr.strip()}"
+                f"commit-tree for squash integration failed: {commit.stderr.strip()}"
             )
-
-        rc, out, _ = run_git_plain(["-C", worktree_dir, "rev-parse", "HEAD"])
-        if rc != 0:
-            raise IntegrationFailureError("could not resolve merge commit")
-        staged_commit = out.strip()
+        staged_commit = commit.stdout.strip()
 
         # Update staging ref via CAS (R-3)
         ok_cas = update_train_ref(repo_root, integration_branch, staged_commit, old_commit=old_staging_commit)

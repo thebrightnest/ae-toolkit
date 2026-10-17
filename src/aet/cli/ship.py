@@ -28,6 +28,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1259,7 +1260,9 @@ def cmd_merge(args: SimpleNamespace) -> int:
         if candidate.is_dir():
             worktree_path = candidate
         else:
-            worktree_path = repo_root / ".worktrees" / f".merge-{task_id}-{os.getpid()}"
+            # Ephemeral merge worktree lives outside the repo so IDE file watchers
+            # never index it or contend for its index lock.
+            worktree_path = Path(tempfile.mkdtemp(prefix=f"aet-merge-{task_id}-"))
             res = _run_git(
                 "worktree",
                 "add",
@@ -1269,6 +1272,7 @@ def cmd_merge(args: SimpleNamespace) -> int:
                 check=False,
             )
             if res.returncode != 0:
+                shutil.rmtree(worktree_path, ignore_errors=True)
                 return _fail(f"Could not create worktree for {feature_branch}: {res.stderr}")
             created = True
 
@@ -1293,8 +1297,11 @@ def cmd_merge(args: SimpleNamespace) -> int:
     except Exception as exc:
         return _fail(f"Integration failed: {exc}")
     finally:
-        if created and worktree_path.exists():
-            _run_git("worktree", "remove", "--force", str(worktree_path), check=False)
+        if created:
+            if worktree_path.exists():
+                _run_git("worktree", "remove", "--force", str(worktree_path), check=False)
+            shutil.rmtree(worktree_path, ignore_errors=True)
+            _run_git("worktree", "prune", check=False)
 
     if not result.ok:
         return _fail(result.message or f"Integration failed with status {result.status}")

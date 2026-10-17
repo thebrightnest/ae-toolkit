@@ -54,6 +54,17 @@ docs/plans/active/
 .worktrees/
 ```
 
+Exclude `.worktrees/` from IDE file watchers (VS Code `.vscode/settings.json`):
+
+```json
+{
+  "files.watcherExclude": { "**/.worktrees/**": true },
+  "search.exclude": { "**/.worktrees/**": true }
+}
+```
+
+`aet ship merge` creates its ephemeral merge worktree under the system temp directory, so only long-lived task worktrees live in `.worktrees/`.
+
 ### 4. `.agents/aet-config.json` (queue config)
 
 Created by `aet configure --guided` during `aet-setup` Step 6. Sets the integration mode used by aet-work:
