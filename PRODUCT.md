@@ -17,6 +17,7 @@ Last updated: 2026-10-14
 Turn ideas into actionable, validated plans.
 
 - **aet-plan** — PRD creation with 4-digit zero-padded sequential numbering (`{seq}-{feature}-prd.md`), goal clarification, atomic `plan.md` generation, and a `validate` command that checks plans against structure, scope, dependency, and traceability rules. Requirement coverage counts the work already finished for the same PRD, so a plan is only asked to trace what nobody has delivered yet, and each result names how many plans it checked and against what.
+- **aet-plan upgrade planning** — Dependency and framework upgrades are planned through `aet-plan`'s upgrade-planning reference: breaking-change inventory with search evidence, risk ratings, and a critical-class plan with smoke before and after the bump.
 - **aet-pipeline-plan** — End-to-end planning pipeline that runs discovery, planning, and scope validation in sequence, routing newly authored plans directly through `docs/plans/active/`.
 - **aet-validate-scope** — Stress-test plans against the existing domain model, terminology, and documented decisions.
 
@@ -50,7 +51,6 @@ Land code cleanly and document releases.
 Keep projects and the toolkit itself healthy.
 
 - **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, `aet setup skills` with native auto-detection for Antigravity (`~/.gemini/config/skills`) alongside Claude, Kimi, and Cursor, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the active epic declaration beside the resolved trunk and integration branch.
-- **aet-upgrade** — Dependency and framework upgrade planning with breaking-change analysis.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
 

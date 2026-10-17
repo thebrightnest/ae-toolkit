@@ -301,31 +301,28 @@ Laravel 11 is out. You want to upgrade without breaking the app.
 /aet-prime
   → "Upgrade Laravel from 10 to 11"
   → Classified: critical (dependency bump)
-  → Routed to aet-upgrade
+  → Routed to aet-plan (upgrade planning)
 
-/aet-upgrade
+/aet-plan plan
+  → Follows the upgrade-planning reference
   → Fetches Laravel 11 upgrade guide and changelog
-  → Enumerates breaking changes:
+  → Lists breaking changes:
     1. `hashed` cast behavior changed (double-hashing risk)
     2. `storage/app/private` path moved
     3. Password validation rules stricter
-  → Greps codebase for each affected pattern
+  → Searches the code for each affected pattern
   → Risk map:
     - HIGH: User model uses `hashed` cast → 47 factory passwords affected
     - MEDIUM: File upload references `storage/app/private`
     - LOW: Password validation already meets new rules
-
-# Plan the fix
-
-/aet-plan plan
-  → docs/plans/laravel-11-upgrade-plan.md
+  → docs/plans/active/laravel-11-upgrade-plan.md (work_class: critical)
   → Tasks: update User model, fix factories, migrate storage paths
 
 /aet-verify
   → Foundation mode: `make smoke` before upgrade
   → All green — floor is solid
 
-/aet-implement docs/plans/laravel-11-upgrade-plan.md
+/aet-implement docs/plans/active/laravel-11-upgrade-plan.md
 
 /aet-verify
   → Foundation mode: `make smoke` after upgrade
@@ -334,9 +331,9 @@ Laravel 11 is out. You want to upgrade without breaking the app.
 /aet-ship
 ```
 
-**Skills used:** `aet-prime`, `aet-upgrade`, `aet-plan`, `aet-verify`, `aet-implement`, `aet-ship`
+**Skills used:** `aet-prime`, `aet-plan`, `aet-verify`, `aet-implement`, `aet-ship`
 
-**Key principle:** Upgrades are not features and not bugs. They need their own skill because breaking-change analysis is a distinct competence from feature design or bug diagnosis.
+**Key principle:** Upgrades are not features and not bugs. Breaking-change analysis is a distinct competence, so `aet-plan` carries it as an upgrade-planning reference and marks the plan critical-class, which turns on the before-and-after smoke check.
 
 ---
 

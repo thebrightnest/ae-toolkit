@@ -175,9 +175,9 @@ rules:
 
   # t2r-06: footer-format-string contradiction
   - type: must_not_contain
-    target: skills/aet-upgrade/references/breaking-change-template.md
+    target: skills/aet-plan/references/upgrade-planning.md
     value: "aet-pipeline-implement"
-    reason: "Breaking-change template must reference the current next-step skill"
+    reason: "Upgrade-planning reference must reference the current next-step skill"
 
   # t2r-06: direct-JSON-edit contradiction
   - type: must_not_contain

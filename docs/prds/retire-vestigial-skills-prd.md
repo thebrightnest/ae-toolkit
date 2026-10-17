@@ -301,5 +301,30 @@ the entries below are small additions found in the diff.
 - R-11…R-14 (retire `aet-extract-stack`, fold `aet-upgrade` into `aet-plan`) remain with
   RVS-02, and R-16…R-18 with RVS-03, as planned.
 
+### RVS-02
+
+*Recorded: 2026-10-17 — Branch: RVS-02*
+
+RVS-02 (fold `aet-upgrade` into `aet-plan`, remove `aet-extract-stack`) was built as
+planned. Tasks 1–6 match the plan; R-11…R-14 are delivered.
+
+#### Changed from plan
+
+- `skills/aet-prime/SKILL.md`: the upgrade route is its own `Upgrade:` bullet after the
+  `Critical:` example rather than an inline addition to it; same routing, clearer read.
+
+#### Added (unplanned)
+
+- `skills/aet-plan/references/upgrade-planning.md`: also carries the rule that a
+  Medium-risk change with a non-trivial fix is treated as High, and that planning never
+  runs the bump itself, from the deleted `risk-classification.md` and `aet-upgrade`
+  guardrails.
+- `docs/use-cases.md`: the upgrade scenario's plan paths now point to
+  `docs/plans/active/`, matching the current plan layout.
+
+#### Deferred
+
+- R-16…R-18 remain with RVS-03, as planned.
+
 *Stage: synced*
-*Next step: run `aet-ship` for RVS-01; RVS-02 and RVS-03 follow through `/aet-drive`*
+*Next step: run `aet-ship` for RVS-02; RVS-03 follows through `/aet-drive`*

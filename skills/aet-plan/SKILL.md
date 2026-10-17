@@ -1,6 +1,6 @@
 ---
 name: aet-plan
-description: PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Use when starting a new feature, sprint, or project. Prevents misalignment by building shared understanding before any code is written. Triggers on requests like "design this feature," "create a PRD," "break this into tickets," or "publish these to GitHub issues."
+description: PRD creation, goal clarification, story breakdown, plan.md generation, and optional issue tracker publishing. Use when starting a new feature, sprint, or project. Prevents misalignment by building shared understanding before any code is written. Triggers on requests like "design this feature," "create a PRD," "break this into tickets," "publish these to GitHub issues," "upgrade framework," "bump dependency," "plan dependency upgrade," or "evaluate breaking changes."
 ---
 
 # aet-plan
@@ -236,6 +236,10 @@ Or "None — can start immediately" if no blockers.
 ### `plan`
 
 From a ticket/story, produce a structured `plan.md` for implementation.
+
+If the ticket is a dependency or framework upgrade, follow
+[references/upgrade-planning.md](references/upgrade-planning.md) and set
+`work_class: critical`.
 
 **Procedure:**
 

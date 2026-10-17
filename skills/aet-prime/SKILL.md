@@ -63,6 +63,7 @@ Ask the user (or infer from the request):
 - **Trivial:** "fix typo", "change button color", "update copy" — skip `aet-plan`, `aet-tdd`, `aet-qa`, `aet-review`. Edit, validate, ship.
 - **Normal:** "add email field", "new list endpoint", "simple modal" — use lightweight plan (≤ 4 tasks, no full PRD). Skip `aet-verify`.
 - **Critical:** "add OAuth", "migrate database", "upgrade framework" — full ceremony. No shortcuts.
+- **Upgrade:** "upgrade framework", "bump dependency" → `aet-plan` with its upgrade-planning reference (`skills/aet-plan/references/upgrade-planning.md`); the plan is critical-class.
 - **Bug:** Any reproducible defect → `aet-bug-report`. `aet-plan` and `aet-pipeline-plan` must reject bug reports.
 
 #### Step 3 — Summarize and confirm
