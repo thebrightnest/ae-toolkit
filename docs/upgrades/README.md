@@ -4,9 +4,13 @@ Version-specific guides for upgrading the AE Toolkit itself and projects scaffol
 
 ## Toolkit upgrades
 
-| From   | To     | Guide                                    |
-| ------ | ------ | ---------------------------------------- |
-| v0.9.0 | v0.9.1 | [0.9.0-to-0.9.1.md](./0.9.0-to-0.9.1.md) |
+| From    | To      | Guide                                                  |
+| ------- | ------- | ------------------------------------------------------ |
+| v1.20.0 | v1.21.0 | [v1.20.0-to-v1.21.0.md](./v1.20.0-to-v1.21.0.md)       |
+| v1.5.0  | v1.6.0  | [v1.5.0-to-v1.6.0.md](./v1.5.0-to-v1.6.0.md)           |
+| v0.9.0  | v0.9.1  | [0.9.0-to-0.9.1.md](./0.9.0-to-0.9.1.md)               |
+
+For routine updates between releases, run `aet update` (see [Updating](../../README.md#updating)).
 
 ## Project upgrades
 

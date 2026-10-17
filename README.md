@@ -13,7 +13,7 @@ AE Toolkit fixes this by encoding the best agentic engineering patterns from YC,
 ## What you get
 
 - **Proportionate ceremony** — `aet-prime` classifies every request into trivial, normal, or critical work. A typo ships in minutes; auth changes run the full pipeline
-- **Shared understanding before code** — `clarify-goal` builds shared understanding through targeted questions until the agent actually gets it
+- **Shared understanding before code** — `aet-plan` asks targeted questions until the agent actually gets it, before it writes a PRD
 - **Validate against reality before you build** — `aet-validate-scope` catches terminology conflicts, code contradictions, and architectural misalignment while they're still cheap to fix
 - **Observed evidence for critical work** — `aet-verify` exercises the running system and captures proof (HTTP response, screenshot, CLI output) before merge
 - **Test-first development** — `aet-tdd` guides red-green-refactor with vertical tracer bullets and integration-style tests that survive refactors
@@ -80,14 +80,14 @@ curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scrip
 curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash -s -- --dry-run
 
 # Install a specific tag
-curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash -s -- --tag v1.3.0
+curl -fsSL https://raw.githubusercontent.com/thebrightnest/ae-toolkit/main/scripts/install.sh | bash -s -- --tag v1.21.0
 ```
 
 #### Installer options
 
 | Flag                 | Description                                                                   | Example                         |
 | -------------------- | ----------------------------------------------------------------------------- | ------------------------------- |
-| `--tag <tag>`        | Install a tagged release (default: latest semver tag, falling back to `main`) | `--tag v1.3.0`                  |
+| `--tag <tag>`        | Install a tagged release (default: latest semver tag, falling back to `main`) | `--tag v1.21.0`                 |
 | `--agent <agent>`    | Target one agent directory: `claude-code`, `kimi`, `cursor`, or `generic`     | `--agent claude-code`           |
 | `--bin-dir <dir>`    | Target `PATH` directory for the `aet` symlink (default: `~/.local/bin`)       | `--bin-dir ~/.bin`              |
 | `--skills-dir <dir>` | Override the skills directory (default: auto-detect)                          | `--skills-dir ~/.claude/skills` |
@@ -111,7 +111,9 @@ Then reload your profile (`source ~/.bashrc` or `source ~/.zshrc`) or open a new
 aet setup verify
 ```
 
-`verify` is read-only: it never edits `PATH`, shell profiles, or the link.
+`verify` also reports whether the installed version is the newest release. It never edits `PATH`, shell profiles, or the link.
+
+**A skill you no longer have still shows up in your agent.** When a release retires a skill, its symlink is left pointing at nothing. `aet setup skills` (and `aet update`, which runs it) removes links to toolkit skills that no longer exist. Skills installed with `npx skills add` have to be deleted by hand.
 
 ### Manual install
 
@@ -121,10 +123,12 @@ If you prefer not to run the curl installer, install the Python package and skil
 
 ```bash
 # Latest release from source
-pip install git+https://github.com/thebrightnest/ae-toolkit.git@v1.3.0
+pip install git+https://github.com/thebrightnest/ae-toolkit.git@v1.21.0
 ```
 
 #### 2. Install the skills
+
+`aet setup skills` links every toolkit skill and removes links to skills that no longer exist:
 
 ```bash
 # Auto-detect installed agents and link skills to all of them
@@ -173,6 +177,43 @@ make install-skills
 
 `make install-skills` installs the package, symlinks skills, and runs `aet setup link` automatically.
 
+### Updating
+
+How you update depends on how you installed.
+
+**Installer-managed install** (the curl one-liner):
+
+```bash
+# Show the current and latest release, and the steps an update would run
+aet update --check
+
+# Update the CLI and skills to the latest release
+aet update
+
+# Update to a specific release, without the confirmation prompt
+aet update --tag v1.21.0 --yes
+```
+
+`aet update` fetches the release tag, reinstalls the package, and relinks skills and the `aet` binary. If any step after the checkout fails, it restores the previous version. It refuses to run if the managed clone has uncommitted changes. `aet setup update` is the same command.
+
+> **Installed v1.20.0 or earlier?** `aet update` first ships in v1.21.0. Re-run the curl installer once; after that, `aet update` works. See the [v1.20.0 to v1.21.0 guide](./docs/upgrades/v1.20.0-to-v1.21.0.md).
+
+**Development checkout:**
+
+```bash
+git pull
+make install-skills
+```
+
+**`pip` install:**
+
+```bash
+pip install --upgrade git+https://github.com/thebrightnest/ae-toolkit.git@v1.21.0
+aet setup skills
+```
+
+**Knowing when to update.** `aet --version` prints a notice when a newer release exists, and `aet setup verify` reports whether you are up to date. The check uses `git ls-remote` against the toolkit repo and is cached for 24 hours. Set `AET_NO_UPDATE_CHECK=1` to turn it off; it is also skipped when `CI` is set or output is not a terminal.
+
 ### Run it
 
 | Tool                          | How to invoke             | Example                               |
@@ -210,7 +251,6 @@ These are the components of the AE Toolkit system. They are installed together; 
 | [aet-ship](./skills/aet-ship)                                     | Pre-merge validation gate with bisectable commits, commit-message conventions, and PR creation.                                                                                           |
 | [aet-release-prep](./skills/aet-release-prep)                     | Release preparation: analyze commits, suggest version bumps, and update CHANGELOG.md and PRODUCT.md.                                                                                      |
 | [aet-sync-docs](./skills/aet-sync-docs)                           | Sync PRD and plan.md to reflect what was actually built. Appends a divergence summary when implementation drifts from the plan.                                                           |
-| [aet-drive](./skills/aet-drive)                                   | Autonomous end-to-end epic completion loop: orchestrates task execution, automatic shipping, and conflict resolution.                                                                     |
 
 ### Pipelines
 
@@ -287,11 +327,7 @@ Edit `SKILL.md` following the [skill creator guide](https://docs.kimi.ai/skills)
 
 ## Upgrades
 
-See [docs/upgrades/README.md](./docs/upgrades/README.md) for version-specific upgrade guides.
-
-| From   | To     | Guide                                                        |
-| ------ | ------ | ------------------------------------------------------------ |
-| v1.5.0 | v1.6.0 | [v1.5.0-to-v1.6.0.md](./docs/upgrades/v1.5.0-to-v1.6.0.md)   |
+For routine updates, see [Updating](#updating). Releases that need manual steps have a guide in [docs/upgrades/](./docs/upgrades/README.md); the latest is [v1.20.0 to v1.21.0](./docs/upgrades/v1.20.0-to-v1.21.0.md).
 
 ## License
 
