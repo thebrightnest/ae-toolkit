@@ -92,3 +92,9 @@ unused. Classified `normal`.
 - **Copy-based installs** keep a stale directory until deleted by hand. Documented in
   ADR-081 consequences and, at release, the CHANGELOG upgrade note.
 - **A project's existing DESIGN.md** is unaffected; nothing in the toolkit reads it.
+
+---
+
+*Stage: synced*
+
+*Next step: run `aet-ship`*

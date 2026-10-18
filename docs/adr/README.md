@@ -97,6 +97,7 @@ Do **not** write an ADR for:
 - [078 — Ship Consumes Recorded Verdicts; Validation Is Configured Once](078-ship-consumes-recorded-verdicts.md)
 - [079 — Merge Train: Stage Under the Lock, Validate Once per Batch](079-merge-train.md)
 - [080 — Retire aet-work, aet-extract-stack, and aet-upgrade](080-retire-aet-work-extract-stack-upgrade.md)
+- [081 — Retire aet-design-system-creation](081-retire-aet-design-system-creation.md)
 
 ## Format
 
