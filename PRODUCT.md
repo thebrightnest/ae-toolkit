@@ -4,7 +4,7 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.21.2
+## Current Version: 1.21.3
 
 Last updated: 2026-10-18
 
@@ -90,6 +90,10 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.21.3
+
+- **Uncluttered design triggers** — retired the unused `aet-design-system-creation` skill so prompts for design systems, brand guidelines, and visual styling route cleanly to dedicated external design tools without competing for agent context.
 
 ### What's New in v1.21.2
 

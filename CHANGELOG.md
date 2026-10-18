@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.21.3] — 2026-10-18
+
+### Removed
+
+- **`aet-design-system-creation` skill** — retired the unused design-system authoring skill. Design-system creation is handled by dedicated external design skills (e.g. `impeccable`), which cover tokens, critique, and live iteration in more depth than the toolkit should own. Removing it frees trigger phrases ("design system", "visual design", "brand guidelines") to route cleanly to your chosen design tools and saves skill-list context in agent sessions (ADR-081).
+
+**Upgrading from 1.21.2:** run `aet update`. If you use symlinked skills, `aet setup skills` automatically prunes the dangling link to the retired skill. Copy-based installs should remove the `aet-design-system-creation` directory manually. Existing `DESIGN.md` files in user projects are unaffected.
+
+---
+
 ## [1.21.2] — 2026-10-18
 
 ### Fixed
