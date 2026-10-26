@@ -34,7 +34,7 @@ A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet sh
 
 `aet ship gate` (and pre-merge commands including `aet ship open` and `aet ship merge`) runs against the task's resolved feature branch and dedicated workspace, independent of the ambient checkout:
 
-1. **Workspace and branch resolution**: Resolves the feature branch from the task record, locating its existing worktree or allocating a dedicated temporary worktree.
+1. **Workspace and branch resolution**: Resolves the feature branch from the task record, locating its existing worktree or allocating a dedicated temporary worktree. When the root checkout has the feature branch checked out, the merge halts and names the branch.
 2. Rebase verification of the resolved feature branch against trunk.
 3. Clean working tree check in the resolved workspace.
 4. Pre-integration validation check via `pre_integration_check` inside the resolved workspace, skipping execution if the working tree matches an existing passing `batch` verdict or recorded `qa` verdict (`SKIP`), running `lint_command` if only non-code paths changed (`LINT_ONLY`), or running `validate_command` (`RUN`, defaulting to `make validate`).
@@ -119,16 +119,10 @@ queue-ref update is atomic under a single `git update-ref --stdin`
 transaction; the mandatory push of `refs/aet/*` must succeed before closure
 reports success.
 
-At terminal closure (`aet ship close` and `aet ship merge`), resilient plan
-archival checks for a local plan file:
-
-- If `docs/plans/active/<id>.md` (or legacy `docs/plans/<id>.md`) is present on
-  disk, it is moved to `docs/plans/archive/<id>.md` and staged into git if
-  `docs/plans/archive/` is tracked. Repositories can track `docs/plans/archive/`
-  to retain historical settled plans or ignore it for 100% ephemeral plan files.
-- If absent (e.g. in distributed execution where the spec lives only in the task
-  record per ADR-061), an informational notice is logged and closure proceeds
-  cleanly without error.
+Closure does not move, write or stage plan files in the root checkout.
+`docs/plans/active/<id>.md` stays in place after `aet ship close` and
+`aet ship merge`; the provenance ledger records the settled state (ADR-055,
+ADR-082).
 
 Do not ask an agent to update the plan footer, queue state, or ledger. Those
 writes are owned by `aet ship close` and `aet gate submit`. In particular, never

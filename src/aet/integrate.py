@@ -218,6 +218,29 @@ def _stage_task_conflict(
             _save_task_record(backend, q)
 
 
+def _refuse_root_worktree(repo_root: str, worktree_dir: str, task_id: str, branch: str) -> None:
+    """Halt unless *worktree_dir* is a git worktree other than the root checkout (R-5).
+
+    Raises:
+        IntegrationFailureError: the worktree is missing or resolves to the root.
+    """
+    if not os.path.isdir(worktree_dir):
+        raise IntegrationFailureError(
+            f"task {task_id}: worktree for branch {branch!r} is missing at {worktree_dir}; "
+            "integration does not fall back to the root checkout."
+        )
+    rc, top, err = run_git_plain(["-C", worktree_dir, "rev-parse", "--show-toplevel"])
+    if rc != 0:
+        raise IntegrationFailureError(
+            f"task {task_id}: {worktree_dir} for branch {branch!r} is not a git worktree: {err.strip()}"
+        )
+    if os.path.realpath(top.strip()) == os.path.realpath(repo_root):
+        raise IntegrationFailureError(
+            f"task {task_id}: worktree for branch {branch!r} resolves to the root checkout "
+            f"{repo_root}; integration does not reset, clean or rebase the root."
+        )
+
+
 def integrate(
     repo_root: str,
     task: dict[str, Any] | str | None = None,
@@ -272,6 +295,8 @@ def integrate(
                 task_dict["branch"] = matched["branch"]
         except Exception:
             pass
+
+    _refuse_root_worktree(repo_root, worktree_dir, task_id, task_dict.get("branch") or task_id)
 
     if config is None:
         config = resolve_config(DEFAULT_CONFIG_PATH, repo_root=repo_root)

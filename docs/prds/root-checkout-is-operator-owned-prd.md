@@ -83,9 +83,11 @@ change touches git state that holds unrecoverable operator work.
   task branch is checked out in the root, or its worktree is missing,
   integration halts the task and names the branch and the condition. It does
   not fall back to the root.
+<!-- aet-lint: off -->
 - **R-6**: Closure does not move, write or stage plan files in the root. The
   plan archive step, `archive_plan_file` (`src/aet/closure.py`), is removed, as ADR-055 §4
   retired the archive.
+<!-- aet-lint: on -->
 - **R-7**: Base hygiene no longer checks the working tree, and no longer checks
   whether the integration branch is behind origin. It still halts when the
   local integration branch is ahead of origin with a path outside
@@ -168,6 +170,7 @@ change touches git state that holds unrecoverable operator work.
 
 ### Root writes found in code
 
+<!-- aet-lint: off -->
 | Symbol | File | Write | Requirement |
 | --- | --- | --- | --- |
 | `flush` | `src/aet/train.py` | `reset --hard <snapshot>` in root when root HEAD is the integration branch | R-2 |
@@ -175,6 +178,7 @@ change touches git state that holds unrecoverable operator work.
 | `integrate` | `src/aet/integrate.py` | `reset --hard`, `clean -fd`, `rebase` in `worktree_dir`, which is the root when the root is on the task branch and the task worktree is missing | R-5 |
 | `archive_plan_file` | `src/aet/closure.py` | moves the plan file and stages the move in the root index | R-6 |
 | `squash_merge_task_branch` | `src/aet/worktree.py` | checkout, squash and commit in root; no callers | R-1, removed as dead code |
+<!-- aet-lint: on -->
 
 The flush reaches the train from `process_task` and `_spawn_pass`
 (`src/aet/cli/orchestrator.py`), and from `cmd_merge` (`src/aet/cli/ship.py`).
@@ -245,7 +249,7 @@ resolves, so no special case is needed.
 
 _Recorded: 2026-10-26 — Branch: rco-01_
 
-### Changed from plan
+### rco-01: Changed from plan
 
 - rco-01 task 2: `push_branch` in `src/aet/worktree.py` takes an optional
   `commit`. With it, the push refspec is `<commit>:refs/heads/<branch>`, so the
@@ -256,7 +260,7 @@ _Recorded: 2026-10-26 — Branch: rco-01_
 - rco-01 task 3: the behind-origin notice prints after each per-task flush in
   `process_task` and `run_single`, and once at the end of `run_batch`.
 
-### Added (unplanned)
+### rco-01: Added (unplanned)
 
 - rco-01: `tests/orchestrator/test_orchestrator.py` reads `origin/main`
   instead of `main`, because a checked-out branch no longer moves locally.
@@ -264,9 +268,36 @@ _Recorded: 2026-10-26 — Branch: rco-01_
   The fixture's origin is the repo itself, so a checked-out epic branch
   rejects the push.
 
-### Deferred
+### rco-01: Deferred
 
 - None.
+
+_Recorded: 2026-10-26 — Branch: rco-02_
+
+### rco-02: Changed from plan
+
+- rco-02 task 2: `cmd_merge` halts only when the task branch is checked out in
+  the root. A missing task worktree does not halt `cmd_merge`. It allocates a
+  temporary worktree outside the repository, so no command runs in the root.
+  `integrate` halts on a missing worktree, as R-5 requires.
+
+### rco-02: Added (unplanned)
+
+- rco-02: `docs/CONVENTIONS.md` and `skills/aet-ship/SKILL.md` state that
+  closure leaves `docs/plans/active/<id>.md` in place. The archive row and rule
+  are removed, because they described the behavior that R-6 removes.
+- rco-02: `tests/cli/test_ship_close.py` and `tests/ship/test_aet_ship.py`
+  assert that the plan file stays in place. They asserted the archive move.
+- rco-02: R-6 and the "Root writes found in code" table are wrapped in
+  `aet-lint` off markers. They name `archive_plan_file` and
+  `squash_merge_task_branch`, which no longer exist in code.
+
+### rco-02: Deferred
+
+- rco-02: `aet.change_scope.targets` selects deleted test files as pytest
+  targets, so `make validate` exits with code 5 on a branch that deletes a
+  test file. The fix is out of scope and is filed in the local backlog.
+- rco-02 task 6: the merge to main happens at the ship stage.
 
 ---
 

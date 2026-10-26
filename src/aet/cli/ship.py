@@ -44,7 +44,6 @@ from aet import gate, plan_parser, validation  # noqa: I001, E402
 from aet.backends import create_backend  # noqa: E402
 from aet.backends.factory import DEFAULT_CONFIG_PATH, resolve_config, resolve_integration_mode  # noqa: E402
 from aet.branch_ref import resolve_integration_branch_for_task, resolve_trunk_branch  # noqa: E402
-from aet.closure import archive_plan_file  # noqa: E402
 from aet.integrate import (  # noqa: I001, E402
     check_release_guard as _check_release_guard,
     commit_count as _commit_count,
@@ -344,8 +343,6 @@ def cmd_ship(args):
     rc = aet_state.cmd_record_merge(ns)
     if rc != 0:
         return EXIT_DELETE_BEFORE_RECORD if delete_branch else rc
-
-    archive_plan_file(task_id)
 
     if delete_branch:
         _run_git("push", "origin", "--delete", branch_to_delete, check=False)
@@ -1224,6 +1221,12 @@ def cmd_merge(args: SimpleNamespace) -> int:
 
     # Locate existing worktree or create a temporary one for feature_branch
     worktree_path = _find_target_worktree(feature_branch)
+    if worktree_path is not None and worktree_path.resolve() == repo_root.resolve():
+        return _fail(
+            f"Task {task_id}: branch {feature_branch!r} is checked out in the root checkout "
+            f"{repo_root}. Integration does not run in the root; check out another branch "
+            "there and rerun."
+        )
     created = False
     if worktree_path is None:
         candidate = repo_root / ".worktrees" / task_id
@@ -1287,7 +1290,6 @@ def cmd_merge(args: SimpleNamespace) -> int:
         if not flush_res.ok or flush_res.status == "red":
             return _fail(f"Flush failed: {flush_res.error or flush_res.output or 'flush failed'}")
 
-    archive_plan_file(task_id)
     print("✅ aet ship merge complete.")
     return 0
 

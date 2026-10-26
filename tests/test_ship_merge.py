@@ -21,6 +21,17 @@ from aet.cli import ship
 from aet.integrate import IntegrateResult
 
 
+def _root_snapshot(repo: Path | str) -> tuple[str, str]:
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout
+    status = subprocess.run(
+        ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=all"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return head, status
+
+
 class TestShipMergeParser(unittest.TestCase):
     """Argument parsing for the merge subcommand."""
 
@@ -169,19 +180,17 @@ class TestShipMergeCommand(unittest.TestCase):
             rc = ship.cmd_merge(args)
         self.assertNotEqual(rc, 0)
 
-    def test_merge_happy_path_calls_integrate_and_archives(self):
-        """A clean merge calls integrate and archives the plan."""
+    def test_merge_happy_path_calls_integrate(self):
+        """A clean merge calls integrate."""
         args = SimpleNamespace(plan="t1", branch="dev", task_id="t1", spec=self._spec())
         merged_res = IntegrateResult("merged", detail="abc123")
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_feature_branch", return_value="t1"), \
-             patch.object(ship, "_find_target_worktree", return_value=self.repo), \
-             patch.object(ship, "integrate", return_value=merged_res) as mock_integrate, \
-             patch.object(ship, "archive_plan_file") as mock_archive:
+             patch.object(ship, "_find_target_worktree", return_value=Path("/fake/worktree")), \
+             patch.object(ship, "integrate", return_value=merged_res) as mock_integrate:
             rc = ship.cmd_merge(args)
         self.assertEqual(rc, 0)
         mock_integrate.assert_called_once()
-        mock_archive.assert_called_once_with("t1")
 
     def test_merge_calls_integrate_with_task_recorded_branch(self):
         """cmd_merge passes task dict with recorded branch to integrate."""
@@ -194,9 +203,8 @@ class TestShipMergeCommand(unittest.TestCase):
         merged_res = IntegrateResult("merged", detail="abc123")
         with patch.object(ship, "_resolve_ship_task", return_value=None), \
              patch.object(ship, "_resolve_feature_branch", return_value="feature/custom-branch-name"), \
-             patch.object(ship, "_find_target_worktree", return_value=self.repo), \
-             patch.object(ship, "integrate", return_value=merged_res) as mock_integrate, \
-             patch.object(ship, "archive_plan_file"):
+             patch.object(ship, "_find_target_worktree", return_value=Path("/fake/worktree")), \
+             patch.object(ship, "integrate", return_value=merged_res) as mock_integrate:
             rc = ship.cmd_merge(args)
         self.assertEqual(rc, 0)
         mock_integrate.assert_called_once()
@@ -269,12 +277,29 @@ class TestShipMergeCommand(unittest.TestCase):
             return IntegrateResult("merged", detail="abc123")
 
         with patch.object(ship, "_find_target_worktree", return_value=Path("/fake/wt")), \
-             patch.object(ship, "integrate", side_effect=fake_integrate), \
-             patch.object(ship, "archive_plan_file"):
+             patch.object(ship, "integrate", side_effect=fake_integrate):
             rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main"))
         self.assertEqual(rc, 0)
         self.assertEqual(captured["task"]["branch"], "t1")
         self.assertEqual(captured["integration_branch"], "main")
+
+    def test_merge_halts_when_task_branch_checked_out_in_root(self):
+        """The root holds the task branch: merge halts and leaves the root as it was."""
+        repo = self._init_repo_with_task_branch("t1")
+        os.chdir(repo)
+        subprocess.run(["git", "-C", str(repo), "checkout", "-q", "t1"], check=True)
+        (repo / "base.txt").write_text("operator edit\n", encoding="utf-8")
+        (repo / "scratch.txt").write_text("untracked\n", encoding="utf-8")
+        before = _root_snapshot(repo)
+
+        stderr = io.StringIO()
+        with patch("sys.stderr", stderr):
+            rc = ship.cmd_merge(SimpleNamespace(plan="t1", branch="main"))
+
+        self.assertNotEqual(rc, 0)
+        self.assertIn("'t1'", stderr.getvalue())
+        self.assertIn("checked out in the root", stderr.getvalue())
+        self.assertEqual(_root_snapshot(repo), before)
 
     def test_resolve_feature_branch_uses_task_id_not_checkout(self):
         """_resolve_feature_branch returns the task's branch (HEAD is on main),
@@ -497,12 +522,96 @@ class TestShipMergeIntegration(unittest.TestCase):
                 self.assertNotIn("commit 1", log.stdout)
                 self.assertNotIn("commit 2", log.stdout)
 
-                # Verify plan was archived
-                self.assertFalse(plan_path.exists())
-                archived = Path(repo_root, "docs", "plans", "archive", f"{task_id}.md")
-                self.assertTrue(archived.exists())
+                self.assertTrue(plan_path.exists())
             finally:
                 os.chdir(cwd)
+
+    def test_merge_and_close_leave_root_index_and_plan_untouched(self):
+        """`aet ship merge` and `aet ship close` keep the root index and active plans as they were."""
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            def git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", "-C", repo_root, *args], capture_output=True, text=True, check=True
+                ).stdout
+
+            subprocess.run(["git", "init", "--bare", "-q", origin_root], check=True)
+            git("init", "-q")
+            git("config", "user.email", "test@example.com")
+            git("config", "user.name", "Test User")
+            Path(repo_root, "README.md").write_text("# test\n", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-q", "-m", "initial")
+            git("branch", "-M", "main")
+            git("remote", "add", "origin", origin_root)
+            git("push", "-q", "-u", "origin", "main")
+
+            merge_id, close_id = "t-merge", "t-close"
+            git("checkout", "-q", "-b", merge_id)
+            for name in ("a.txt", "b.txt"):
+                Path(repo_root, name).write_text(f"{name}\n", encoding="utf-8")
+                git("add", name)
+                git("commit", "-q", "-m", f"add {name}")
+            git("checkout", "-q", "main")
+            base_commit = git("rev-parse", "HEAD").strip()
+            git("checkout", "-q", "-b", close_id)
+            Path(repo_root, "c.txt").write_text("c\n", encoding="utf-8")
+            git("add", "c.txt")
+            git("commit", "-q", "-m", "add c.txt")
+            git("checkout", "-q", "main")
+            git("merge", "-q", "--no-ff", close_id, "-m", f"Merge {close_id}")
+            git("push", "-q", "origin", "main")
+
+            agents_dir = Path(repo_root, ".agents")
+            agents_dir.mkdir()
+            (agents_dir / "aet-config.json").write_text(
+                json.dumps({"trunk_branch": "main", "integration_mode": "single-pr"}),
+                encoding="utf-8",
+            )
+            plans = {}
+            for task_id in (merge_id, close_id):
+                plan = Path(repo_root, "docs", "plans", "active", f"{task_id}.md")
+                plan.parent.mkdir(parents=True, exist_ok=True)
+                plan.write_text(f"---\nid: {task_id}\n---\n# Plan\n- [x] one\n- [x] two\n", encoding="utf-8")
+                plans[task_id] = plan.read_text(encoding="utf-8")
+            backend = create_backend(
+                config_path=str(agents_dir / "aet-config.json"),
+                queue_file=str(agents_dir / "aet-queue"),
+                history_file=str(agents_dir / "work-history.jsonl"),
+            )
+            backend.save([
+                {
+                    "id": task_id,
+                    "state": "awaiting_merge",
+                    "stage": "qa-complete",
+                    "branch": task_id,
+                    "plan_file": f"docs/plans/active/{task_id}.md",
+                    "base_commit": base_commit,
+                    "spec": {"frontmatter": {"id": task_id}, "tasks": ["- [x] one", "- [x] two"]},
+                }
+                for task_id in (merge_id, close_id)
+            ])
+            index_before = git("diff", "--cached", "--name-status")
+
+            cwd = os.getcwd()
+            self.addCleanup(os.chdir, cwd)
+            os.chdir(repo_root)
+            skip_check = validation.CheckResult("SKIP", None, True, "")
+            with patch("aet.validation.pre_integration_check", return_value=skip_check), \
+                 patch("aet.gate.check_task_evidence", return_value=(True, [])), \
+                 patch("sys.stdout", new=io.StringIO()):
+                merge_rc = ship.cmd_merge(SimpleNamespace(plan=merge_id, branch="main"))
+                close_rc = ship.cmd_ship(SimpleNamespace(
+                    command="close", task_id=close_id, plan=None, queue=".agents/aet-queue",
+                    branch=None, merge_commit=None, target_branch=None,
+                ))
+
+            self.assertEqual((merge_rc, close_rc), (0, 0))
+            self.assertIn(f"Integrate {merge_id}", git("log", "origin/main", "--oneline"))
+            self.assertEqual(git("diff", "--cached", "--name-status"), index_before)
+            for task_id, content in plans.items():
+                plan = Path(repo_root, "docs", "plans", "active", f"{task_id}.md")
+                self.assertEqual(plan.read_text(encoding="utf-8"), content)
+            self.assertFalse(Path(repo_root, "docs", "plans", "archive").exists())
 
 
 if __name__ == "__main__":

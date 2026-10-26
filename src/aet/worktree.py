@@ -356,48 +356,6 @@ def run_git_plain(args: list[str], **kwargs) -> tuple[int, str, str]:
     return result.returncode, result.stdout, result.stderr
 
 
-def squash_merge_task_branch(
-    repo_root: str, task_id: str, integration_branch: str
-) -> tuple[bool, str]:
-    """Squash-merge a task branch into the integration branch.
-
-    Runs in ``repo_root`` and leaves HEAD on ``integration_branch``. Returns
-    ``(True, merge_commit)`` on success, ``(False, message)`` on failure.
-    """
-    branch_name = task_id
-
-    # Ensure the integration branch exists locally and we are on it.
-    checkout = _run_git(
-        ["-C", repo_root, "checkout", integration_branch],
-        capture_output=True,
-        text=True,
-    )
-    if checkout.returncode != 0:
-        return False, f"checkout {integration_branch} failed: {checkout.stderr.strip()}"
-
-    merge = _run_git(
-        ["-C", repo_root, "merge", "--squash", branch_name],
-        capture_output=True,
-        text=True,
-    )
-    if merge.returncode != 0:
-        _run_git(["-C", repo_root, "merge", "--abort"], capture_output=True)
-        return False, f"squash merge of {branch_name} failed: {merge.stderr.strip()}"
-
-    commit = _run_git(
-        ["-C", repo_root, "commit", "-m", f"Integrate {task_id}"],
-        capture_output=True,
-        text=True,
-    )
-    if commit.returncode != 0:
-        return False, f"commit after squash merge failed: {commit.stderr.strip()}"
-
-    rc, out, _ = run_git_plain(["-C", repo_root, "rev-parse", "HEAD"])
-    if rc != 0:
-        return False, "could not resolve merge commit"
-    return True, out.strip()
-
-
 def delete_local_branch(repo_root: str, task_id: str) -> bool:
     """Delete a local branch, ignoring it if it does not exist."""
     result = _run_git(

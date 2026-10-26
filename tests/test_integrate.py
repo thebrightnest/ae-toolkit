@@ -365,3 +365,86 @@ class TestIntegrate(unittest.TestCase):
             self.assertEqual(task_rec["state"], "awaiting_merge")
             self.assertEqual(task_rec["conflict_diagnostics"]["reason"], "guard_refused")
             self.assertIn("Monolithic commit detected", task_rec["conflict_diagnostics"]["stderr_tail"])
+
+
+def _root_snapshot(repo_root: str) -> tuple[str, str]:
+    head = subprocess.run(
+        ["git", "-C", repo_root, "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout
+    status = subprocess.run(
+        ["git", "-C", repo_root, "status", "--porcelain", "--untracked-files=all"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return head, status
+
+
+class TestIntegrateRootGuard(unittest.TestCase):
+    def test_integrate_refuses_root_as_worktree(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            backend, _ = _setup_repo_and_backend(repo_root, origin_root)
+            task_id = "task-root"
+            backend.save([{"id": task_id, "state": "in_progress", "branch": task_id}])
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "-b", task_id, "epic-01"], check=True)
+            _add_commit(repo_root, "feature.txt", "feature", "feat: one")
+            Path(repo_root, "README.md").write_text("operator edit\n", encoding="utf-8")
+            Path(repo_root, "scratch.txt").write_text("untracked\n", encoding="utf-8")
+            before = _root_snapshot(repo_root)
+
+            skip_check = validation.CheckResult("SKIP", None, True, "")
+            with patch("aet.validation.pre_integration_check", return_value=skip_check), \
+                 patch("aet.gate.check_task_evidence", return_value=(True, [])):
+                with self.assertRaises(integration_lock.IntegrationFailureError) as ctx:
+                    integrate(
+                        repo_root=repo_root,
+                        task=task_id,
+                        worktree_dir=repo_root,
+                        backend=backend,
+                        integration_branch="epic-01",
+                    )
+
+            self.assertIn(task_id, str(ctx.exception))
+            self.assertIn("root checkout", str(ctx.exception))
+            self.assertEqual(_root_snapshot(repo_root), before)
+
+    def test_integrate_refuses_directory_that_is_not_a_worktree(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            backend, _ = _setup_repo_and_backend(repo_root, origin_root)
+            task_id = "task-stale"
+            backend.save([{"id": task_id, "state": "in_progress", "branch": task_id}])
+            stale = Path(repo_root, ".worktrees", task_id)
+            stale.mkdir(parents=True)
+            Path(repo_root, "scratch.txt").write_text("untracked\n", encoding="utf-8")
+            before = _root_snapshot(repo_root)
+
+            skip_check = validation.CheckResult("SKIP", None, True, "")
+            with patch("aet.validation.pre_integration_check", return_value=skip_check):
+                with self.assertRaises(integration_lock.IntegrationFailureError) as ctx:
+                    integrate(
+                        repo_root=repo_root,
+                        task=task_id,
+                        worktree_dir=str(stale),
+                        backend=backend,
+                        integration_branch="epic-01",
+                    )
+
+            self.assertIn(task_id, str(ctx.exception))
+            self.assertTrue(stale.is_dir())
+            self.assertEqual(_root_snapshot(repo_root), before)
+
+    def test_integrate_refuses_missing_worktree(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            backend, _ = _setup_repo_and_backend(repo_root, origin_root)
+            task_id = "task-missing"
+            backend.save([{"id": task_id, "state": "in_progress", "branch": task_id}])
+            missing = Path(repo_root, ".worktrees", task_id)
+
+            with self.assertRaises(integration_lock.IntegrationFailureError) as ctx:
+                integrate(
+                    repo_root=repo_root,
+                    task=task_id,
+                    worktree_dir=str(missing),
+                    backend=backend,
+                    integration_branch="epic-01",
+                )
+
+            self.assertIn("missing", str(ctx.exception))
