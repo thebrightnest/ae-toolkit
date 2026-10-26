@@ -249,6 +249,10 @@ The local-only git ref `refs/aet/train/<integration-branch>` holding the cumulat
 **Flush**:
 The atomic batch validation process that snapshots the staging ref, runs `validate_command` in an isolated temporary worktree outside the lock, and on green fast-forwards the integration branch to the snapshot, pushes, and transitions tasks to `merged`. (ADR-079)
 
+**Root Checkout**:
+The operator's primary checkout at `repo_root`, as distinct from task worktrees under `.worktrees/`. AET code does not change its `HEAD` (ADR-044 §5). Task worktrees branch from `origin/<integration-branch>`, never from the root checkout's state.
+_Avoid_: "main checkout" or "the repo" when the checkout is meant; `main` is a branch, not a checkout.
+
 **Batch Verdict**:
 A schema-validated JSON verdict (`kind: batch`) written to `<reports>/<slug>/_train/<branch>/batch.json` recording the passing validation of a flushed merge train snapshot along with its tree hash and task IDs. (ADR-079)
 
