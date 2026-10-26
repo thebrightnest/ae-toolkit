@@ -5,7 +5,7 @@ Under the merge train:
    `refs/aet/train/<branch>` with compare-and-swap under `integration_lock`.
 2. A single `flush()` validates a snapshot of the staging tip in a temporary
    worktree outside the lock.
-3. Green flush fast-forwards the integration branch to the snapshot, pushes,
+3. Green flush advances the integration branch to the snapshot (ADR-082 §2),
    transitions snapshot tasks `awaiting_merge → merged`, and records a batch verdict.
 4. Red flush halts integration fail-closed (ADR-029).
 """
@@ -26,7 +26,9 @@ from aet import evidence, telemetry, verifier
 from aet.backends import create_backend, resolve_validation_commands
 from aet.backends.factory import DEFAULT_CONFIG_PATH
 from aet.integration_lock import integration_lock
-from aet.worktree import push_branch
+from aet.worktree import branch_checked_out_worktrees, push_branch
+
+ZERO_OID = "0" * 40
 
 
 @dataclass
@@ -37,6 +39,7 @@ class FlushResult:
     commit: str | None = None
     output: str = ""
     error: str = ""
+    behind_origin: int = 0
 
     def __bool__(self) -> bool:
         return self.ok
@@ -167,6 +170,26 @@ def _save_task_record(backend: Any, queue: list[dict[str, Any]]) -> None:
         backend.push()
     except Exception:
         pass
+
+
+def _branch_tip(repo_root: str | Path, branch: str) -> str:
+    """Return the local branch tip, or an empty string when the branch does not exist."""
+    res = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
+        capture_output=True,
+        text=True,
+    )
+    return res.stdout.strip() if res.returncode == 0 else ""
+
+
+def _count_commits(repo_root: str | Path, base: str, tip: str) -> int:
+    """Return the number of commits reachable from tip but not from base."""
+    res = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-list", "--count", f"{base}..{tip}"],
+        capture_output=True,
+        text=True,
+    )
+    return int(res.stdout.strip()) if res.returncode == 0 else 0
 
 
 def _run_flush_validation(cmd_list: list[str], worktree_dir: str) -> subprocess.CompletedProcess[str]:
@@ -320,8 +343,8 @@ def flush(
 
     1. Under integration_lock: snapshot the staging tip and staged task list.
     2. Outside the lock: run validation command in a temporary worktree.
-    3. On green: re-take lock, fast-forward branch, push, mark snapshot tasks merged,
-       record batch verdict.
+    3. On green: re-take lock, push the snapshot to origin; move the local branch only when
+       no worktree has it checked out. Mark snapshot tasks merged, record batch verdict.
     4. On red: leave tasks awaiting_merge, halt integration fail-closed.
     """
     repo_root = Path(repo_root).resolve()
@@ -340,6 +363,7 @@ def flush(
 
     snapshot_commit: str = ""
     snapshot_task_ids: list[str] = []
+    expected_branch_tip: str = ""
 
     with integration_lock(str(repo_root)):
         res = subprocess.run(
@@ -350,6 +374,7 @@ def flush(
         if res.returncode != 0:
             return FlushResult(ok=True, status="empty", tasks_flushed=[])
         snapshot_commit = res.stdout.strip()
+        expected_branch_tip = _branch_tip(repo_root, branch)
 
         if backend is not None:
             try:
@@ -631,25 +656,38 @@ def flush(
 
     # Green flush! Re-acquire lock to commit changes
     with integration_lock(str(repo_root)):
-        head_proc = subprocess.run(
-            ["git", "-C", str(repo_root), "symbolic-ref", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-        )
-        if head_proc.returncode == 0 and head_proc.stdout.strip() == branch:
-            subprocess.run(
-                ["git", "-C", str(repo_root), "reset", "--hard", snapshot_commit],
-                capture_output=True,
-                check=True,
-            )
+        behind_origin = 0
+        if branch_checked_out_worktrees(repo_root, branch):
+            # A checked-out branch ref must not move: the worktree index would go stale (ADR-082).
+            ok_push, err_push = push_branch(str(repo_root), branch, commit=snapshot_commit)
+            if ok_push:
+                behind_origin = _count_commits(repo_root, f"refs/heads/{branch}", snapshot_commit)
         else:
-            subprocess.run(
-                ["git", "-C", str(repo_root), "update-ref", f"refs/heads/{branch}", snapshot_commit],
+            moved = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo_root),
+                    "update-ref",
+                    f"refs/heads/{branch}",
+                    snapshot_commit,
+                    expected_branch_tip or ZERO_OID,
+                ],
                 capture_output=True,
-                check=True,
+                text=True,
             )
-
-        ok_push, err_push = push_branch(str(repo_root), branch)
+            if moved.returncode != 0:
+                actual = _branch_tip(repo_root, branch) or "(none)"
+                return FlushResult(
+                    ok=False,
+                    status="halt",
+                    commit=snapshot_commit,
+                    error=(
+                        f"Branch {branch} moved during flush: expected tip "
+                        f"{expected_branch_tip or '(none)'}, actual tip {actual}"
+                    ),
+                )
+            ok_push, err_push = push_branch(str(repo_root), branch)
         if not ok_push:
             return FlushResult(
                 ok=False,
@@ -723,4 +761,5 @@ def flush(
         status="green",
         tasks_flushed=snapshot_task_ids,
         commit=snapshot_commit,
+        behind_origin=behind_origin,
     )

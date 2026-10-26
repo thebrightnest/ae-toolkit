@@ -143,9 +143,10 @@ class TestTrainFlush(unittest.TestCase):
             self.assertEqual(result.status, "green")
             self.assertEqual(result.tasks_flushed, ["task-1"])
 
-            # Verify main branch fast-forwarded to c1
+            # Root has main checked out, so local main stays and only origin moves (R-2)
             main_commit = subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "main"], text=True).strip()
-            self.assertEqual(main_commit, c1)
+            self.assertNotEqual(main_commit, c1)
+            self.assertEqual(result.behind_origin, 1)
 
             # Verify origin/main was pushed
             origin_commit = subprocess.check_output(
@@ -358,3 +359,165 @@ class TestTrainFlush(unittest.TestCase):
                 )
             self.assertFalse(result.ok)
             self.assertEqual(result.status, "halt")
+
+
+def _make_backend(repo_dir: str):
+    os.makedirs(os.path.join(repo_dir, ".agents"), exist_ok=True)
+    return create_backend(
+        config_path=os.path.join(repo_dir, ".agents", "aet-config.json"),
+        queue_file=os.path.join(repo_dir, ".agents", "aet-queue"),
+        history_file=os.path.join(repo_dir, ".agents", "work-history.jsonl"),
+    )
+
+
+def _git_out(repo_dir: str, *args: str) -> str:
+    return subprocess.check_output(["git", "-C", repo_dir, *args], text=True).strip()
+
+
+def _stage_task_commit(repo_dir: str, backend, branch: str, task_id: str = "task-1") -> str:
+    """Commit a task change on a detached base, stage it on the train and record it."""
+    tmp_wt = tempfile.mkdtemp(prefix="aet-test-task-")
+    try:
+        subprocess.run(["git", "-C", repo_dir, "worktree", "add", "-q", "--detach", tmp_wt, branch], check=True)
+        Path(tmp_wt, f"{task_id}.txt").write_text(f"{task_id} content", encoding="utf-8")
+        subprocess.run(["git", "-C", tmp_wt, "add", "."], check=True)
+        subprocess.run(["git", "-C", tmp_wt, "commit", "-q", "-m", task_id], check=True)
+        commit = _git_out(tmp_wt, "rev-parse", "HEAD")
+    finally:
+        subprocess.run(["git", "-C", repo_dir, "worktree", "remove", "--force", tmp_wt], check=True)
+    train.update_train_ref(repo_dir, branch, commit, old_commit="0" * 40)
+    backend.save(
+        [
+            {
+                "id": task_id,
+                "state": "awaiting_merge",
+                "train": {
+                    "branch": branch,
+                    "position": 1,
+                    "staged_commit": commit,
+                    "staged_at": "2026-10-13T10:00:00Z",
+                },
+            }
+        ]
+    )
+    return commit
+
+
+class TestFlushRootCheckout(unittest.TestCase):
+    def test_flush_preserves_root_checkout_when_branch_checked_out(self):
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir:
+            _init_repo(repo_dir, origin_dir, "main")
+            backend = _make_backend(repo_dir)
+            c1 = _stage_task_commit(repo_dir, backend, "main")
+
+            Path(repo_dir, "README.md").write_text("# Repo\noperator edit\n", encoding="utf-8")
+            Path(repo_dir, "staged.txt").write_text("staged by operator\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_dir, "add", "staged.txt"], check=True)
+            Path(repo_dir, "docs", "prds").mkdir(parents=True)
+            Path(repo_dir, "docs", "prds", "x-prd.md").write_text("# PRD\n", encoding="utf-8")
+
+            files = ["README.md", "staged.txt", "docs/prds/x-prd.md"]
+            before = {f: Path(repo_dir, f).read_bytes() for f in files}
+            head_before = _git_out(repo_dir, "rev-parse", "HEAD")
+            index_before = _git_out(repo_dir, "write-tree")
+            status_before = _git_out(repo_dir, "status", "--porcelain", "--", *files)
+
+            result = train.flush(repo_dir, "main", backend=backend, validate_command=["true"])
+
+            self.assertTrue(result.ok, result.error)
+            self.assertEqual(result.status, "green")
+            self.assertEqual({f: Path(repo_dir, f).read_bytes() for f in files}, before)
+            self.assertEqual(_git_out(repo_dir, "rev-parse", "HEAD"), head_before)
+            self.assertEqual(_git_out(repo_dir, "rev-parse", "main"), head_before)
+            self.assertEqual(_git_out(repo_dir, "write-tree"), index_before)
+            self.assertEqual(_git_out(repo_dir, "status", "--porcelain", "--", *files), status_before)
+            self.assertEqual(_git_out(origin_dir, "rev-parse", "main"), c1)
+            self.assertEqual(_git_out(repo_dir, "rev-parse", "refs/remotes/origin/main"), c1)
+            self.assertEqual(result.behind_origin, 1)
+
+    def test_flush_halts_on_rejected_push(self):
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir, \
+                tempfile.TemporaryDirectory() as other_dir:
+            _init_repo(repo_dir, origin_dir, "main")
+            backend = _make_backend(repo_dir)
+            c1 = _stage_task_commit(repo_dir, backend, "main")
+            head_before = _git_out(repo_dir, "rev-parse", "HEAD")
+
+            subprocess.run(["git", "clone", "-q", origin_dir, other_dir], check=True)
+            subprocess.run(
+                ["git", "-C", other_dir, "-c", "user.email=o@example.com", "-c", "user.name=O",
+                 "commit", "-q", "--allow-empty", "-m", "concurrent"],
+                check=True,
+            )
+            subprocess.run(["git", "-C", other_dir, "push", "-q", "origin", "main"], check=True)
+            origin_tip = _git_out(origin_dir, "rev-parse", "main")
+
+            result = train.flush(repo_dir, "main", backend=backend, validate_command=["true"])
+
+            self.assertFalse(result.ok)
+            self.assertEqual(result.status, "halt")
+            self.assertIn("main", result.error)
+            self.assertEqual(_git_out(origin_dir, "rev-parse", "main"), origin_tip)
+            self.assertEqual(_git_out(repo_dir, "rev-parse", "main"), head_before)
+            self.assertEqual(_git_out(repo_dir, "rev-parse", "refs/aet/train/main"), c1)
+            [task] = backend.load()["queue"]
+            self.assertEqual(task["state"], "awaiting_merge")
+            self.assertEqual(task["train"]["staged_commit"], c1)
+
+    def _init_epic(self, repo_dir: str, origin_dir: str) -> str:
+        _init_repo(repo_dir, origin_dir, "main")
+        subprocess.run(["git", "-C", repo_dir, "branch", "epic"], check=True)
+        subprocess.run(["git", "-C", repo_dir, "push", "-q", "origin", "epic"], check=True)
+        return _git_out(repo_dir, "rev-parse", "epic")
+
+    def test_flush_updates_unchecked_branch_with_old_value(self):
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir:
+            self._init_epic(repo_dir, origin_dir)
+            backend = _make_backend(repo_dir)
+            c1 = _stage_task_commit(repo_dir, backend, "epic")
+
+            result = train.flush(repo_dir, "epic", backend=backend, validate_command=["true"])
+
+            self.assertTrue(result.ok, result.error)
+            self.assertEqual(result.status, "green")
+            self.assertEqual(_git_out(repo_dir, "rev-parse", "epic"), c1)
+            self.assertEqual(_git_out(origin_dir, "rev-parse", "epic"), c1)
+            self.assertEqual(result.behind_origin, 0)
+
+    def test_flush_halts_when_branch_tip_moved(self):
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir:
+            epic_before = self._init_epic(repo_dir, origin_dir)
+            backend = _make_backend(repo_dir)
+            c1 = _stage_task_commit(repo_dir, backend, "epic")
+            moved = _git_out(repo_dir, "commit-tree", "-p", epic_before, "-m", "concurrent", f"{epic_before}^{{tree}}")
+            mover = [
+                "git", "-C", repo_dir, "update-ref", "refs/heads/epic", moved, epic_before,
+            ]
+
+            result = train.flush(repo_dir, "epic", backend=backend, validate_command=mover)
+
+            self.assertFalse(result.ok)
+            self.assertEqual(result.status, "halt")
+            self.assertIn("epic", result.error)
+            self.assertIn(epic_before, result.error)
+            self.assertIn(moved, result.error)
+            self.assertEqual(_git_out(repo_dir, "rev-parse", "epic"), moved)
+            self.assertEqual(_git_out(origin_dir, "rev-parse", "epic"), epic_before)
+            [task] = backend.load()["queue"]
+            self.assertEqual(task["state"], "awaiting_merge")
+            self.assertEqual(task["train"]["staged_commit"], c1)
+
+
+def test_flush_reports_branch_behind_origin(capsys):
+    from aet.cli import orchestrator
+
+    behind: dict[str, int] = {}
+    orchestrator._record_behind_origin(behind, "main", train.FlushResult(ok=True, status="green", behind_origin=1))
+    orchestrator._record_behind_origin(behind, "main", train.FlushResult(ok=True, status="green", behind_origin=3))
+    orchestrator._record_behind_origin(behind, "epic", train.FlushResult(ok=True, status="green", behind_origin=0))
+    orchestrator._print_behind_origin(behind)
+
+    out = capsys.readouterr().out
+    assert behind == {"main": 3}
+    assert "main" in out and "3 commit(s) behind origin/main" in out
+    assert "epic" not in out

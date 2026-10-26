@@ -247,7 +247,7 @@ The pipelined integration subsystem where tasks are checked against their own QA
 The local-only git ref `refs/aet/train/<integration-branch>` holding the cumulative squash-merged commits of currently staged tasks awaiting a batch flush. It is never pushed to remotes and can be reconstructed from task records. (ADR-079)
 
 **Flush**:
-The atomic batch validation process that snapshots the staging ref, runs `validate_command` in an isolated temporary worktree outside the lock, and on green fast-forwards the integration branch to the snapshot, pushes, and transitions tasks to `merged`. (ADR-079)
+The atomic batch validation process that snapshots the staging ref, runs `validate_command` in an isolated temporary worktree outside the lock, and on green advances the integration branch to the snapshot and transitions tasks to `merged`. When the integration branch is checked out in any worktree, the flush pushes the snapshot to `origin/<branch>` without force and moves only `refs/remotes/origin/<branch>`; the local branch ref stays behind origin until the operator pulls. When the branch is checked out in no worktree, the flush moves `refs/heads/<branch>` with an old-value check, then pushes. (ADR-079, ADR-082)
 
 **Root Checkout**:
 The operator's primary checkout at `repo_root`, as distinct from task worktrees under `.worktrees/`. AET code does not change its `HEAD` (ADR-044 §5). Task worktrees branch from `origin/<integration-branch>`, never from the root checkout's state.

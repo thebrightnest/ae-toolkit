@@ -4999,7 +4999,7 @@ class TestParentManagedIntegration(unittest.TestCase):
             self.assertTrue(flush_res.ok)
 
             log = subprocess.run(
-                ["git", "-C", repo_root, "log", "main", "--oneline"],
+                ["git", "-C", repo_root, "log", "origin/main", "--oneline"],
                 capture_output=True,
                 text=True,
                 check=True,

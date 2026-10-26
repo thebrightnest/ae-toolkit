@@ -2240,6 +2240,9 @@ def process_task(
                     raise IntegrationFailureError(
                         flush_res.error or flush_res.output or "merge train flush failed"
                     )
+                behind: dict[str, int] = {}
+                _record_behind_origin(behind, target_branch, flush_res)
+                _print_behind_origin(behind)
         except IntegrationFailureError as exc:
             print(f"   ❌ Integration failure for {task_id}: {exc}")
             queue_file = os.path.join(repo_root, ".agents", "aet-queue")
@@ -3118,6 +3121,18 @@ def _finalize_task(
     return {"successes": 0, "failures": 1, "stop_spawn": False, "triage_outcome": triage_outcome}
 
 
+def _record_behind_origin(behind: dict[str, int], branch: str, flush_res: train.FlushResult) -> None:
+    """Record how far a flush left the local ``branch`` behind origin (R-12)."""
+    if flush_res.ok and flush_res.behind_origin > 0:
+        behind[branch] = flush_res.behind_origin
+
+
+def _print_behind_origin(behind: dict[str, int]) -> None:
+    """Print each local integration branch that a flush left behind origin."""
+    for branch, count in sorted(behind.items()):
+        print(f"   ⚠️  Local {branch} is {count} commit(s) behind origin/{branch}; pull before committing.")
+
+
 def _print_settlement_summary(queue: list[dict], merged_task_ids: list[str]) -> None:
     """Print comprehensive batch settlement summary for staged and blocked tasks (R-8)."""
     non_terminal = [t for t in queue if current_state(t) not in ("merged", "abandoned")]
@@ -3281,6 +3296,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     successes = 0
     failures = 0
     merged_task_ids: list[str] = []
+    behind_origin: dict[str, int] = {}
     stop_spawn = False
     last_heartbeat = time.monotonic()
     summary_written = False
@@ -3461,6 +3477,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             for b in to_flush:
                 print(f"🚂 Flushing merge train for {b} (unblocking dependent tasks)...")
                 flush_res = train.flush(repo_root, b, backend=backend, config=config)
+                _record_behind_origin(behind_origin, b, flush_res)
                 if flush_res.ok:
                     print(f"   ✅ Merge train flushed for {b}: {len(flush_res.tasks_flushed)} task(s) merged")
                     merged_task_ids.extend(flush_res.tasks_flushed)
@@ -3638,6 +3655,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     for b in staged_branches:
                         print(f"🚂 Flushing merge train for {b} (idle train non-empty)...")
                         flush_res = train.flush(repo_root, b, backend=backend, config=config)
+                        _record_behind_origin(behind_origin, b, flush_res)
                         if flush_res.ok:
                             print(f"   ✅ Merge train flushed for {b}: {len(flush_res.tasks_flushed)} task(s) merged")
                             merged_task_ids.extend(flush_res.tasks_flushed)
@@ -3707,6 +3725,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 _terminate_process_group(proc, timeout=10)
             _cleanup_task(task_id, -1, eager_spawn=False)
 
+        _print_behind_origin(behind_origin)
         exit_code = 1 if failures > 0 else 0
         outcome = "success" if exit_code == 0 else "failure"
         _write_summary(outcome, exit_code)
@@ -4235,6 +4254,9 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                                         raise IntegrationFailureError(
                                             flush_res.error or flush_res.output or "flush failed"
                                         )
+                                    behind: dict[str, int] = {}
+                                    _record_behind_origin(behind, target_branch, flush_res)
+                                    _print_behind_origin(behind)
                                 print(f"   ✅ Task {task_id} merged locally (single-pr)")
                             except IntegrationFailureError as exc:
                                 print(f"   ❌ Integration failure for {task_id}: {exc}")

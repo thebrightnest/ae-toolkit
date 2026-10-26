@@ -7,7 +7,7 @@ relates: [27, 29, 44, 55, 66, 79]
 
 ## Status
 
-Proposed (2026-10-26). Delivered by `rco-01` to `rco-05` (PRD:
+Accepted (2026-10-26). Delivered by `rco-01` to `rco-05` (PRD:
 `docs/prds/root-checkout-is-operator-owned-prd.md`). Extends ADR-044 §5,
 narrows ADR-027, and sets the flush target rule for ADR-079.
 
@@ -47,7 +47,8 @@ run, although the run reloads the queue on every scheduling pass.
    worktree, a green flush pushes the snapshot to origin without force and sets
    `refs/remotes/origin/<branch>`. The local branch ref does not move. When the
    branch is checked out in no worktree, the flush moves the local ref with
-   `git update-ref` and an old-value check. A rejected push or a failed
+   `git update-ref` and an old-value check. The old value is the local tip
+   that the flush reads when it takes the snapshot. A rejected push or a failed
    old-value check halts the flush fail-closed (ADR-029). This states which ref
    ADR-079 §3 fast-forwards.
 3. **No plain ref move on a checked-out branch.** Moving a checked-out branch

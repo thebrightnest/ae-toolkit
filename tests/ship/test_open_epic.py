@@ -292,6 +292,8 @@ class TestOpenEpic(unittest.TestCase):
         c1 = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
         # Reset local branch back to prior commit
         git(["reset", "--hard", "HEAD~1"], self.repo)
+        # The fixture's origin is the repo itself, so the root must not hold the epic branch.
+        git(["checkout", "-q", "--detach"], self.repo)
 
         # Update train ref
         from aet import train as train_lib

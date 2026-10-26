@@ -409,16 +409,39 @@ def delete_local_branch(repo_root: str, task_id: str) -> bool:
     return result.returncode == 0
 
 
-def push_branch(repo_root: str, branch: str) -> tuple[bool, str]:
-    """Push ``branch`` to ``origin``. Returns ``(True, "")`` on success."""
+def push_branch(repo_root: str, branch: str, commit: str | None = None) -> tuple[bool, str]:
+    """Push ``branch`` to ``origin`` without force. Returns ``(True, "")`` on success.
+
+    With ``commit``, push that commit to ``origin/<branch>`` and leave the local branch alone.
+    """
+    refspec = f"{commit}:refs/heads/{branch}" if commit else branch
     result = _run_git(
-        ["-C", repo_root, "push", "origin", branch],
+        ["-C", repo_root, "push", "origin", refspec],
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
         return False, result.stderr.strip()
     return True, ""
+
+
+def branch_checked_out_worktrees(repo_root: str | Path, branch: str) -> list[str]:
+    """Return the paths of every worktree that has ``branch`` checked out."""
+    result = _run_git(
+        ["-C", str(repo_root), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    target = f"branch refs/heads/{branch}"
+    paths: list[str] = []
+    current = ""
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            current = line[len("worktree ") :]
+        elif line == target:
+            paths.append(current)
+    return paths
 
 
 def _copy_file(src: str, dest: str) -> None:

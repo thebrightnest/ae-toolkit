@@ -241,8 +241,35 @@ resolves, so no special case is needed.
   alternative is `git merge --ff-only` in the root for that case only. That
   keeps the workflow but breaks R-1. The draft takes R-1.
 
+## Divergence Summary
+
+_Recorded: 2026-10-26 — Branch: rco-01_
+
+### Changed from plan
+
+- rco-01 task 2: `push_branch` in `src/aet/worktree.py` takes an optional
+  `commit`. With it, the push refspec is `<commit>:refs/heads/<branch>`, so the
+  checked-out case pushes the snapshot without a local ref move.
+- rco-01 task 2: the `update-ref` old value is the local tip that the flush
+  reads under the lock when it takes the snapshot. An absent branch uses the
+  zero OID. ADR-082 §2 records this rule.
+- rco-01 task 3: the behind-origin notice prints after each per-task flush in
+  `process_task` and `run_single`, and once at the end of `run_batch`.
+
+### Added (unplanned)
+
+- rco-01: `tests/orchestrator/test_orchestrator.py` reads `origin/main`
+  instead of `main`, because a checked-out branch no longer moves locally.
+- rco-01: `tests/ship/test_open_epic.py` detaches the root before the flush.
+  The fixture's origin is the repo itself, so a checked-out epic branch
+  rejects the push.
+
+### Deferred
+
+- None.
+
 ---
 
-*Stage: scope-validated*
+_Stage: synced_
 
-*Next step: `aet sprint add <plan>` then `/aet-drive` (or `aet run-one <id>`)*
+_Next step: run `aet-ship`_

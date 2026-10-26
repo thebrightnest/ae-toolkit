@@ -1082,3 +1082,26 @@ class TestRemoveWorktreeClassification(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBranchCheckedOutWorktrees(unittest.TestCase):
+    def test_branch_checked_out_worktrees(self):
+        """Each worktree that has the branch checked out is listed; others are not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = os.path.realpath(os.path.join(tmp, "repo"))
+            _init_repo_with_origin(repo_root)
+            subprocess.run(["git", "-C", repo_root, "branch", "epic"], check=True)
+            epic_wt = os.path.realpath(os.path.join(tmp, "epic-wt"))
+            detached_wt = os.path.realpath(os.path.join(tmp, "detached-wt"))
+            subprocess.run(
+                ["git", "-C", repo_root, "worktree", "add", "-q", epic_wt, "epic"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "worktree", "add", "-q", "--detach", detached_wt, "main"],
+                check=True,
+            )
+
+            self.assertEqual(worktree.branch_checked_out_worktrees(repo_root, "main"), [repo_root])
+            self.assertEqual(worktree.branch_checked_out_worktrees(repo_root, "epic"), [epic_wt])
+            self.assertEqual(worktree.branch_checked_out_worktrees(repo_root, "other"), [])
