@@ -23,6 +23,7 @@ from unittest.mock import patch
 import pytest
 
 from aet.cli_adapter import CLIAdapter
+from tests.orchestrator._helpers import init_epic_repo, install_fake_agent, write_queue
 
 _ORCHESTRATOR_BIN = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
 _orchestrator_loader = importlib.machinery.SourceFileLoader(
@@ -124,6 +125,35 @@ def _remote_heads(repo_root: str) -> list[str]:
         check=True,
     )
     return [line.split()[1].removeprefix("refs/heads/") for line in result.stdout.splitlines()]
+
+
+def _write_prd_plan(repo_root: str, task_id: str, prd_name: str) -> str:
+    """Write a PRD and a plan that names it; return the plan path."""
+    prd_file = Path(repo_root, "docs", "prds", f"{prd_name}.md")
+    prd_file.parent.mkdir(parents=True, exist_ok=True)
+    prd_file.write_text(f"# {prd_name}\n", encoding="utf-8")
+    plan_file = Path(repo_root, "docs", "plans", f"{task_id}.md")
+    plan_file.parent.mkdir(parents=True, exist_ok=True)
+    plan_file.write_text(
+        f"---\nid: {task_id}\n---\n\n# {task_id}\n\n## Context\n\n"
+        f"- PRD: `docs/prds/{prd_name}.md`\n\n_Stage: plan-approved_\n",
+        encoding="utf-8",
+    )
+    return str(plan_file)
+
+
+class _ChildRecorder:
+    """Replace batch child spawns with ``true`` and record their argv."""
+
+    def __init__(self):
+        self.children: list[list[str]] = []
+        self._real_popen = subprocess.Popen
+
+    def __call__(self, cmd, *args, **kwargs):
+        if isinstance(cmd, list) and "--plan-file" in cmd:
+            self.children.append(list(cmd))
+            return self._real_popen(["true"], *args, **kwargs)
+        return self._real_popen(cmd, *args, **kwargs)
 
 
 class TestSinglePrLoop(unittest.TestCase):
@@ -348,6 +378,102 @@ class TestSinglePrLoop(unittest.TestCase):
 
             self.assertEqual(initial_worktrees, final_worktrees)
             self.assertEqual(initial_branches, final_branches)
+
+    def test_batch_child_receives_its_own_task_branch_as_base(self):
+        """R-3: each child refreshes onto its own task's integration branch."""
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            _init_git_repo(repo_root, origin_root)
+            Path(repo_root, ".agents").mkdir(parents=True, exist_ok=True)
+            config_file = os.path.join(repo_root, ".agents", "aet-config.json")
+            Path(config_file).write_text(
+                json.dumps({"trunk_branch": "main", "integration_mode": "single-pr"}),
+                encoding="utf-8",
+            )
+            plan_a = _write_prd_plan(repo_root, "task-a", "a-prd")
+            plan_b = _write_prd_plan(repo_root, "task-b", "b-prd")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "plans"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "origin", "main"], check=True)
+
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.save(
+                [
+                    {"id": "task-a", "state": "ready", "plan_file": plan_a},
+                    {"id": "task-b", "state": "ready", "plan_file": plan_b},
+                ]
+            )
+            args = orchestrator.argparse.Namespace(
+                queue_file=queue_file,
+                repo_root=repo_root,
+                max_jobs=2,
+                isolation="minimal",
+                task_timeout=3600,
+                heartbeat_interval=60,
+                on_failure="continue",
+                cli_bin=None,
+                base=None,
+            )
+
+            import io
+            from contextlib import redirect_stdout
+
+            recorder = _ChildRecorder()
+            with patch.object(subprocess, "Popen", recorder), redirect_stdout(io.StringIO()):
+                orchestrator.run_batch(args, _FAKE_ADAPTER)
+
+            bases = {
+                Path(cmd[cmd.index("--plan-file") + 1]).stem: cmd[cmd.index("--base") + 1]
+                for cmd in recorder.children
+            }
+            self.assertEqual(bases, {"task-a": "feat/a", "task-b": "feat/b"})
+
+    def test_run_one_bases_the_worktree_on_its_task_branch(self):
+        """R-3: a top-level run of a queued task cuts its worktree from its own epic."""
+        with (
+            tempfile.TemporaryDirectory() as repo_root,
+            tempfile.TemporaryDirectory() as origin_root,
+            tempfile.TemporaryDirectory() as scratch,
+        ):
+            plans = init_epic_repo(repo_root, origin_root, {"task-b": "b-prd"})
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "-b", "feat/b"], check=True)
+            Path(repo_root, "b-seed.txt").write_text("seed", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "b-seed.txt"], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "feat/b seed"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "feat/b"], check=True)
+            subprocess.run(["git", "-C", repo_root, "checkout", "-q", "main"], check=True)
+            hooks = Path(repo_root, ".agents", "hooks")
+            hooks.mkdir(parents=True, exist_ok=True)
+            (hooks / "task-b.py").write_text(
+                "import pathlib\n"
+                "pathlib.Path(repo_root, '.agents', 'hooks', 'seen').write_text("
+                "str(pathlib.Path(wt, 'b-seed.txt').exists()))\n",
+                encoding="utf-8",
+            )
+            write_queue(repo_root, [{"id": "task-b", "state": "ready", "plan_file": plans["task-b"]}])
+            bin_dir, adapter = install_fake_agent(scratch)
+            args = orchestrator.argparse.Namespace(
+                repo_root=repo_root,
+                plan_file=plans["task-b"],
+                run_id="run-one-epic",
+                base=None,
+                skip_intake=True,
+                isolation="standard",
+                force=False,
+                on_failure="continue",
+            )
+
+            import io
+            from contextlib import redirect_stdout
+
+            out = io.StringIO()
+            env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+            with patch.dict(os.environ, env), redirect_stdout(out):
+                os.environ.pop("AET_TASK_ID", None)
+                orchestrator.run_single(args, adapter)
+
+            self.assertTrue((hooks / "seen").exists(), out.getvalue())
+            self.assertEqual((hooks / "seen").read_text(encoding="utf-8"), "True", out.getvalue())
 
 
 if __name__ == "__main__":

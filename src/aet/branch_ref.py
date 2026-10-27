@@ -66,6 +66,24 @@ def resolve_base_ref(repo_root, ref: str) -> str:
     return ref
 
 
+def ensure_integration_branch(repo_root, branch: str, trunk_ref: str) -> bool:
+    """Create ``branch`` at ``trunk_ref`` when it exists neither locally nor on origin.
+
+    Returns True when the branch was created. Never pushes (ADR-045 §4) and
+    never moves ``HEAD`` in the root checkout (ADR-082).
+    """
+    for ref in (f"refs/heads/{branch}", f"refs/remotes/{branch}", f"refs/remotes/origin/{branch}"):
+        if _ref_exists(repo_root, ref):
+            return False
+    subprocess.run(
+        ["git", "-C", str(repo_root), "branch", branch, trunk_ref],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return True
+
+
 def _ref_exists(repo_root, ref: str) -> bool:
     """Return True when ``ref`` resolves in ``repo_root``."""
     return (

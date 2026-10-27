@@ -73,7 +73,9 @@ from aet.backends.factory import (  # noqa: E402
     resolve_posture,
 )
 from aet.branch_ref import (  # noqa: E402
+    BranchRef,
     check_task_epic_mismatch,
+    ensure_integration_branch,
     format_epic_mismatch_error,
     resolve_base_ref,
     resolve_integration_branch,
@@ -406,6 +408,18 @@ def enforce_base_hygiene(
     Halts on unpushed code (ADR-027), and on a no-remote root that has the
     integration branch checked out, which a flush cannot move (ADR-082).
     """
+    msg = base_hygiene_problem(repo_root, integration_branch, trunk_branch)
+    if msg is None:
+        return True
+
+    print(f"⛔ {msg}. Halting.")
+    return False
+
+
+def base_hygiene_problem(
+    repo_root: str, integration_branch: str, trunk_branch: str
+) -> str | None:
+    """Return why ``integration_branch`` fails base hygiene, or None when it passes."""
     ok, msg = check_base_hygiene(repo_root, integration_branch, trunk_branch)
     if ok and not _has_origin_remote(repo_root):
         root = os.path.realpath(repo_root)
@@ -416,11 +430,7 @@ def enforce_base_hygiene(
                 f"No origin remote and {integration_branch} is checked out in the root; "
                 f"check out another branch in the root or add a remote"
             )
-    if ok:
-        return True
-
-    print(f"⛔ {msg}. Halting.")
-    return False
+    return None if ok else msg
 
 
 def _has_origin_remote(repo_root: str) -> bool:
@@ -3177,6 +3187,19 @@ def _print_settlement_summary(queue: list[dict], merged_task_ids: list[str]) -> 
         print(f"   Blocked ({len(blocked_tasks)}): {', '.join(t.get('id') for t in blocked_tasks)}")
 
 
+def _print_integration_branches(refs: list[BranchRef]) -> None:
+    """Print one banner line per distinct integration branch, with provenance."""
+    seen: dict[str, str] = {}
+    for ref in refs:
+        seen.setdefault(ref.ref, ref.provenance)
+    if not seen:
+        print("   Integration branches: none (no ready tasks)")
+        return
+    print("   Integration branches:")
+    for branch, provenance in seen.items():
+        print(f"     {branch} ({provenance})")
+
+
 def run_batch(args: argparse.Namespace, adapter) -> int:
     """Run batch mode from queue file."""
     queue_file = args.queue_file
@@ -3258,30 +3281,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         repo_root, config, cli_base=getattr(args, "base", None)
     )
     base_branch = resolve_base_ref(repo_root, integration.ref)
-    print(f"   Trunk: {trunk.ref} ({trunk.provenance})")
-    print(f"   Integration: {integration.ref} ({integration.provenance})")
-    print(f"   Worktree base: {base_branch}")
-
-    # Check base hygiene
-    if not enforce_base_hygiene(repo_root, integration.ref, trunk.ref):
-        end_time = telemetry.iso_now()
-        logger.write_last_run(
-            telemetry.run_summary_record(
-                run_id=logger.run_id,
-                start_time=start_time,
-                end_time=end_time,
-                tasks_spawned=0,
-                tasks_succeeded=0,
-                tasks_failed=0,
-                outcome="failure",
-                exit_code=1,
-                task_ids=[],
-                final_stage=None,
-            )
-        )
-        return 1
-
-    print("   📋 Plan durability is deferred to the PR (docs/plans/ only).")
 
     # Resolve integration_mode once per run through the external-first config
     # chain so every task in the batch sees the same value.
@@ -3305,6 +3304,50 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             )
         )
         return 1
+    per_task_branches = integration_mode == "single-pr"
+
+    print(f"   Trunk: {trunk.ref} ({trunk.provenance})")
+    if per_task_branches:
+        _print_integration_branches(
+            [
+                resolve_integration_branch_for_task(
+                    repo_root,
+                    config,
+                    t,
+                    integration_mode,
+                    cli_base=getattr(args, "base", None),
+                    backend=backend,
+                )
+                for t in queue
+                if current_state(t) == "ready"
+            ]
+        )
+    else:
+        print(f"   Integration: {integration.ref} ({integration.provenance})")
+        print(f"   Worktree base: {base_branch}")
+
+    # In single-pr mode each branch is checked before its first spawn (ADR-083).
+    if not per_task_branches and not enforce_base_hygiene(
+        repo_root, integration.ref, trunk.ref
+    ):
+        end_time = telemetry.iso_now()
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=0,
+                outcome="failure",
+                exit_code=1,
+                task_ids=[],
+                final_stage=None,
+            )
+        )
+        return 1
+
+    print("   📋 Plan durability is deferred to the PR (docs/plans/ only).")
 
     # Declare that this run owns the queue so out-of-band mutators refuse, and
     # ensure every subprocess inherits the run id for the lease check.
@@ -3321,6 +3364,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     summary_written = False
     leftover_report: dict[str, int] = {}
     teardown_leftovers: list[str] = []
+    hygiene_by_branch: dict[str, str | None] = {}
+    skipped_ids: set[str] = set()
     task_timeout = getattr(args, "task_timeout", 3600)
     heartbeat_interval = getattr(args, "heartbeat_interval", 60)
 
@@ -3507,7 +3552,9 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     return 0
             queue = backend.load()["queue"]
         while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
-            task = get_next_ready_task(queue, exclude=running.keys() | spawned_in_pass)
+            task = get_next_ready_task(
+                queue, exclude=running.keys() | spawned_in_pass | skipped_ids
+            )
             if not task:
                 break
 
@@ -3528,6 +3575,32 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 failures += 1
                 stop_spawn = True
                 break
+
+            task_ref = integration
+            task_base = base_branch
+            if per_task_branches:
+                task_ref = resolve_integration_branch_for_task(
+                    repo_root,
+                    config,
+                    task,
+                    integration_mode,
+                    cli_base=getattr(args, "base", None),
+                    backend=backend,
+                )
+                if task_ref.ref not in hygiene_by_branch:
+                    hygiene_by_branch[task_ref.ref] = base_hygiene_problem(
+                        repo_root, task_ref.ref, trunk.ref
+                    )
+                problem = hygiene_by_branch[task_ref.ref]
+                if problem is not None:
+                    print(f"   ⏭️  Skipping {task_id}: {problem}")
+                    skipped_ids.add(task_id)
+                    continue
+                if ensure_integration_branch(
+                    repo_root, task_ref.ref, resolve_base_ref(repo_root, trunk.ref)
+                ):
+                    print(f"   🌱 Created {task_ref.ref} from {trunk.ref} (local only)")
+                task_base = resolve_base_ref(repo_root, task_ref.ref)
 
             # Transition the task to in_progress through the sole writer so
             # stored state reflects that it has been picked up.
@@ -3559,7 +3632,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             # again on the next loop iteration.
             try:
                 worktree_dir = create_worktree(
-                    repo_root, task_id, base_branch=base_branch
+                    repo_root, task_id, base_branch=task_base
                 )
             except WorktreeBlockedError as exc:
                 print(f"   {exc}")
@@ -3580,17 +3653,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             # base_commit records where the branch started (ADR-064); without
             # it the task can never derive merged from branch ancestry.
             base_commit = resolve_base_commit(repo_root, task_id)
-            task_integration_branch = None
-            if integration_mode == "single-pr":
-                task_ref = resolve_integration_branch_for_task(
-                    repo_root,
-                    config,
-                    task,
-                    integration_mode,
-                    cli_base=getattr(args, "base", None),
-                    backend=backend,
-                )
-                task_integration_branch = task_ref.ref
+            task_integration_branch = task_ref.ref if per_task_branches else None
             with queue_lock(queue_file):
                 queue = backend.load()["queue"]
                 record_task_meta(
@@ -3617,7 +3680,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 "--cli-bin",
                 adapter.bin,
                 "--base",
-                integration.ref,
+                task_ref.ref,
                 "--isolation",
                 args.isolation,
                 "--on-failure",
@@ -3662,7 +3725,9 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 if stop_spawn or _shutdown_requested:
                     break
                 queue = backend.load()["queue"]
-                if has_actionable_tasks(queue, running.keys()):
+                if has_actionable_tasks(
+                    [t for t in queue if t.get("id") not in skipped_ids], running.keys()
+                ):
                     time.sleep(0.2)
                     continue
 
@@ -3688,7 +3753,9 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                         break
                     # Reload queue and check if newly merged tasks unblocked ready tasks
                     queue = backend.load()["queue"]
-                    if has_actionable_tasks(queue, running.keys()):
+                    if has_actionable_tasks(
+                        [t for t in queue if t.get("id") not in skipped_ids], running.keys()
+                    ):
                         continue
 
                 # Nothing running and nothing that can still make progress on its
@@ -3745,7 +3812,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             _cleanup_task(task_id, -1, eager_spawn=False)
 
         _print_behind_origin(behind_origin)
-        exit_code = 1 if failures > 0 else 0
+        exit_code = 1 if failures > 0 or skipped_ids else 0
         outcome = "success" if exit_code == 0 else "failure"
         _write_summary(outcome, exit_code)
         release_lease(queue_file, logger.run_id)
@@ -3991,7 +4058,21 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         integration_mode = resolve_integration_mode(DEFAULT_CONFIG_PATH, repo_root=repo_root)
     except Exception:
         integration_mode = "pr-per-task"
-
+    if not spawned_by_batch and integration_mode == "single-pr":
+        lookup_backend = _make_backend(queue_file)
+        try:
+            planned_task = _find_queued_task(lookup_backend.load()["queue"], plan_file)
+        finally:
+            lookup_backend.close()
+        if planned_task is not None:
+            integration = resolve_integration_branch_for_task(
+                repo_root,
+                config,
+                planned_task,
+                integration_mode,
+                cli_base=getattr(args, "base", None),
+            )
+            base_branch = resolve_base_ref(repo_root, integration.ref)
 
     # Check base hygiene before any worktree work — but only for top-level
     # run-one invocations. Batch children rely on the parent-level check.
@@ -4116,6 +4197,11 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 return 1
 
             # Ensure the worktree/branch exist before recording them.
+            if integration_mode == "single-pr" and ensure_integration_branch(
+                repo_root, integration.ref, resolve_base_ref(repo_root, trunk.ref)
+            ):
+                print(f"   🌱 Created {integration.ref} from {trunk.ref} (local only)")
+                base_branch = resolve_base_ref(repo_root, integration.ref)
 
             try:
                 worktree_dir = create_worktree(

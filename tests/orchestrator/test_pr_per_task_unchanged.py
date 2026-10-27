@@ -294,6 +294,76 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
             loaded = backend.load()["queue"][0]
             self.assertIsNone(loaded.get("integration_branch"))
 
+    def test_pr_per_task_batch_keeps_the_single_integration_line(self):
+        """R-16: the banner, child base and branch list do not follow the PRD."""
+        import argparse
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = os.path.join(temp_dir, "repo")
+            os.makedirs(repo_root)
+            _init_git_repo(repo_root)
+            Path(repo_root, "docs", "prds").mkdir(parents=True)
+            Path(repo_root, "docs", "prds", "a-prd.md").write_text("# a\n", encoding="utf-8")
+            plan_file = os.path.join(repo_root, "docs", "plans", "task-a.md")
+            Path(plan_file).parent.mkdir(parents=True)
+            Path(plan_file).write_text(
+                "---\nid: task-a\n---\n\n# task-a\n\n- PRD: `docs/prds/a-prd.md`\n",
+                encoding="utf-8",
+            )
+            os.makedirs(os.path.join(repo_root, ".agents"), exist_ok=True)
+            Path(repo_root, ".agents", "aet-config.json").write_text(
+                json.dumps({"trunk_branch": "main", "integration_mode": "pr-per-task"}),
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "plan"], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.save([{"id": "task-a", "state": "ready", "plan_file": plan_file}])
+            args = argparse.Namespace(
+                queue_file=queue_file,
+                repo_root=repo_root,
+                max_jobs=1,
+                isolation="minimal",
+                task_timeout=3600,
+                heartbeat_interval=60,
+                on_failure="continue",
+                cli_bin=None,
+                base=None,
+            )
+
+            children: list[list[str]] = []
+            real_popen = subprocess.Popen
+
+            def _popen(cmd, *a, **kw):
+                if isinstance(cmd, list) and "--plan-file" in cmd:
+                    children.append(list(cmd))
+                    return real_popen(["true"], *a, **kw)
+                return real_popen(cmd, *a, **kw)
+
+            out = io.StringIO()
+            with patch.object(subprocess, "Popen", _popen), contextlib.redirect_stdout(out):
+                orchestrator.run_batch(args, _FAKE_ADAPTER)
+
+            output = out.getvalue()
+            self.assertIn("   Integration: main (trunk)\n", output)
+            self.assertIn("   Worktree base: origin/main\n", output)
+            self.assertNotIn("Integration branches", output)
+            self.assertEqual([c[c.index("--base") + 1] for c in children], ["main"])
+            branches = subprocess.run(
+                ["git", "-C", repo_root, "branch", "--list", "feat/*"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertEqual(branches, "")
+
 
 if __name__ == "__main__":
     unittest.main()

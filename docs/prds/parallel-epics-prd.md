@@ -233,5 +233,21 @@ the change selects the branch that task commits integrate into.
 
 - None.
 
+*Recorded: 2026-10-27 — Branch: pep-02-run-drives-many-epics*
+
+### Changed from plan — pep-02
+
+- `pep-02` task 4: `run_one` resolves the task's own branch only for a top-level invocation in `single-pr` mode. It finds the task in the queue by plan file. A batch child takes its branch from `--base`.
+- `pep-02` task 5: `enforce_base_hygiene` delegates to a new `base_hygiene_problem`, which returns the failure message. The per-branch cache in `run_batch` uses that message.
+
+### Added (unplanned) — pep-02
+
+- `pep-02`: a task skipped for base hygiene makes `aet run` exit 1. `has_actionable_tasks` ignores skipped tasks, so the run settles while they stay `ready`.
+- `pep-02`: `tests/orchestrator/_helpers.py` holds the shared two-PRD repository fixtures.
+
+### Deferred — pep-02
+
+- `pep-02`: `ensure_integration_branch` does not validate the branch name with `git check-ref-format --branch`. The name comes from repository content or operator input. Security audit finding L-1, severity Low.
+
 *Stage: synced*
 *Next step: run `aet-ship`*

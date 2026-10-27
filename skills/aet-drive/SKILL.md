@@ -98,6 +98,10 @@ aet run
 ```
 
 `aet run` starts the orchestrator in the background and prints a run ID.
+One `aet run` drives every epic in the queue, one integration branch per PRD (ADR-083).
+Each worktree starts from the tip of its own task's epic branch. A missing epic branch is
+created locally from the trunk tip and is not pushed. Tasks on different epics run
+concurrently up to `--max-jobs`. Never start a second `aet run` for another epic.
 Clean tasks that pass rebase and re-validation automatically merge into their epic branches continuously during batch execution, unblocking dependent tasks in real time.
 
 Follow execution until the batch settles:

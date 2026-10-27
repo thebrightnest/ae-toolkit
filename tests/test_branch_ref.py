@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 from aet.branch_ref import (
+    ensure_integration_branch,
     resolve_base_ref,
     resolve_integration_branch,
     resolve_trunk_branch,
@@ -301,3 +302,105 @@ def test_mismatch_error_names_prd_branch_and_reset() -> None:
     assert "aet epic set" not in text
     assert "branch: feat/old" in text
     assert "aet state reset task-a" in text
+
+
+def _rev(repo: Path, ref: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", ref],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _head(repo: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), "symbolic-ref", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def test_ensure_creates_missing_branch_at_trunk_tip(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    trunk_tip = _rev(repo, "HEAD")
+    head_before = _head(repo)
+
+    created = ensure_integration_branch(repo, "feat/a", "HEAD")
+
+    assert created is True
+    assert _rev(repo, "refs/heads/feat/a") == trunk_tip
+    assert _head(repo) == head_before
+
+
+def test_ensure_leaves_existing_branch_unchanged(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    subprocess.run(["git", "-C", str(repo), "branch", "feat/a"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "--allow-empty", "-q", "-m", "trunk moves"],
+        check=True,
+    )
+    epic_tip = _rev(repo, "refs/heads/feat/a")
+
+    created = ensure_integration_branch(repo, "feat/a", "HEAD")
+
+    assert created is False
+    assert _rev(repo, "refs/heads/feat/a") == epic_tip
+
+
+def test_ensure_skips_a_branch_that_exists_only_on_the_remote(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    _set_remote_ref(repo, "origin/feat/a")
+
+    created = ensure_integration_branch(repo, "feat/a", "HEAD")
+
+    assert created is False
+    assert not _ref_exists(repo, "refs/heads/feat/a")
+
+
+def test_ensure_leaves_a_remote_qualified_ref_alone(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    _set_remote_ref(repo, "origin/epic-01")
+
+    created = ensure_integration_branch(repo, "origin/epic-01", "HEAD")
+
+    assert created is False
+    assert not _ref_exists(repo, "refs/heads/origin/epic-01")
+
+
+def test_ensure_does_not_push_the_new_branch(tmp_path: Path) -> None:
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", "-q", str(origin)], check=True)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(origin)], check=True)
+
+    ensure_integration_branch(repo, "feat/b", "HEAD")
+
+    remote = subprocess.run(
+        ["git", "-C", str(repo), "ls-remote", "origin", "feat/b"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert remote == ""
+
+
+def _ref_exists(repo: Path, ref: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "-C", str(repo), "show-ref", "--quiet", "--verify", ref],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
