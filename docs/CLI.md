@@ -568,7 +568,7 @@ Run the gate and open a PR for an epic branch.
 
 ### Options
 
-- `branch` *str* — Integration branch to open PR for (default: legacy envelope epic).
+- `branch` *str* — Integration branch to open PR for (default: the one branch queued tasks resolve to).
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk).
 
 ## `aet ship merge`

@@ -1,4 +1,4 @@
-"""Tests for `aet ship open-epic` (ned-03)."""
+"""Tests for `aet ship open-epic`."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from aet.backends.factory import create_backend
 from aet.cli import ship
 from aet.cli.main import app
 from aet.ledger import Ledger
-from tests.cli._helpers import git, run_typer, seed_legacy_epic
+from tests.cli._helpers import git, run_typer
 
 
 def _init_repo(path: Path) -> Path:
@@ -63,8 +63,45 @@ class TestOpenEpic(unittest.TestCase):
         git(["commit", "-q", "-m", msg], self.repo)
         git(["push", "-u", "origin", name], self.repo)
 
-    def test_no_active_epic_fails_closed(self):
-        """With no legacy epic and no argument, the command exits non-zero and names `aet epic list`."""
+    def _prd(self, filename: str, content: str) -> None:
+        prd = self.repo / "docs" / "prds" / filename
+        prd.parent.mkdir(parents=True, exist_ok=True)
+        prd.write_text(content, encoding="utf-8")
+        git(["add", str(prd)], self.repo)
+        git(["commit", "-q", "-m", f"docs: add {filename}"], self.repo)
+
+    def _queue(self, branches: list[str]) -> None:
+        (self.repo / ".agents" / "aet-config.json").write_text(
+            '{"validate_command": "true", "integration_mode": "single-pr"}\n', encoding="utf-8"
+        )
+        backend = create_backend(
+            queue_file=str(self.repo / ".agents" / "aet-queue"),
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        )
+        self.addCleanup(backend.close)
+        backend.save(
+            [
+                {"id": f"t-{i}", "state": "pending", "integration_branch": name}
+                for i, name in enumerate(branches)
+            ]
+        )
+
+    def _open(self, *args: str) -> tuple[object, list[dict]]:
+        created_prs: list[dict] = []
+
+        def mock_create_pr(pr_base, title, body):
+            created_prs.append({"pr_base": pr_base, "title": title, "body": body})
+            return True, "https://github.com/example/repo/pull/300\n"
+
+        with (
+            patch.object(ship, "_create_pr", side_effect=mock_create_pr),
+            patch.object(ship, "_find_existing_pr", return_value=None),
+        ):
+            result = run_typer(app, ["ship", "open-epic", *args], cwd=self.repo)
+        return result, created_prs
+
+    def test_no_queued_branch_fails_closed(self):
+        """With no queued task and no argument, the command exits non-zero and names `aet epic list`."""
         result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
         self.assertNotEqual(result.exit_code, 0)
         combined = result.output + result.stderr
@@ -86,8 +123,6 @@ class TestOpenEpic(unittest.TestCase):
         git(["commit", "-q", "-m", "feat(alpha): add second component"], self.repo)
         git(["push", "origin", branch_name], self.repo)
 
-        seed_legacy_epic(self.repo, {"branch": branch_name})
-
         created_prs = []
 
         def mock_create_pr(pr_base, title, body):
@@ -98,7 +133,7 @@ class TestOpenEpic(unittest.TestCase):
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
         ):
-            result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+            result = run_typer(app, ["ship", "open-epic", branch_name], cwd=self.repo)
 
         self.assertEqual(result.exit_code, 0, result.output + result.stderr)
         self.assertEqual(len(created_prs), 1)
@@ -124,13 +159,10 @@ class TestOpenEpic(unittest.TestCase):
         git(["commit", "-q", "-m", "docs(epic): add body file"], self.repo)
         git(["push", "origin", branch_name], self.repo)
 
-        seed_legacy_epic(
-            self.repo,
-            {
-                "branch": branch_name,
-                "title": "Epic Beta: Feature Suite",
-                "body_file": "docs/beta_body.md",
-            },
+        self._prd(
+            "beta-prd.md",
+            f"---\nbranch: {branch_name}\npr_title: \"Epic Beta: Feature Suite\"\n"
+            "pr_body_file: docs/beta_body.md\n---\n\n# PRD: Beta\n",
         )
 
         created_prs = []
@@ -143,7 +175,7 @@ class TestOpenEpic(unittest.TestCase):
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
         ):
-            result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+            result = run_typer(app, ["ship", "open-epic", branch_name], cwd=self.repo)
 
         self.assertEqual(result.exit_code, 0, result.output + result.stderr)
         self.assertEqual(len(created_prs), 1)
@@ -162,8 +194,6 @@ class TestOpenEpic(unittest.TestCase):
             "feat(gamma): add gamma work",
         )
 
-        seed_legacy_epic(self.repo, {"branch": branch_name, "title": "Epic Gamma"})
-
         created_prs = []
         existing_url = "https://github.com/example/repo/pull/103"
 
@@ -176,7 +206,7 @@ class TestOpenEpic(unittest.TestCase):
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
         ):
-            res1 = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+            res1 = run_typer(app, ["ship", "open-epic", branch_name], cwd=self.repo)
 
         self.assertEqual(res1.exit_code, 0, res1.output + res1.stderr)
         self.assertEqual(len(created_prs), 1)
@@ -186,7 +216,7 @@ class TestOpenEpic(unittest.TestCase):
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=existing_url),
         ):
-            res2 = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+            res2 = run_typer(app, ["ship", "open-epic", branch_name], cwd=self.repo)
 
         self.assertEqual(res2.exit_code, 0, res2.output + res2.stderr)
         self.assertIn(existing_url, res2.output)
@@ -203,8 +233,6 @@ class TestOpenEpic(unittest.TestCase):
             "feat(delta): add delta work",
         )
 
-        seed_legacy_epic(self.repo, {"branch": branch_name})
-
         created_prs = []
 
         def mock_create_pr(pr_base, title, body):
@@ -219,7 +247,7 @@ class TestOpenEpic(unittest.TestCase):
             patch.object(ship, "_create_pr", side_effect=mock_create_pr),
             patch.object(ship, "_find_existing_pr", return_value=None),
         ):
-            result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+            result = run_typer(app, ["ship", "open-epic", branch_name], cwd=self.repo)
 
         self.assertNotEqual(result.exit_code, 0)
         self.assertEqual(len(created_prs), 0)
@@ -306,8 +334,6 @@ class TestOpenEpic(unittest.TestCase):
         )
         self.addCleanup(backend.close)
         backend.save(queue)
-        seed_legacy_epic(self.repo, {"branch": branch_name})
-
         created_prs = []
 
         def mock_create_pr(pr_base, title, body):
@@ -343,8 +369,6 @@ class TestOpenEpic(unittest.TestCase):
             "skip content\n",
             "feat(skip): initial commit",
         )
-
-        seed_legacy_epic(self.repo, {"branch": branch_name})
 
         # Set validate_command to false so if validation ran, it would fail
         (self.repo / ".agents" / "aet-config.json").write_text(
@@ -389,7 +413,7 @@ class TestOpenEpic(unittest.TestCase):
             patch.object(ship, "_find_existing_pr", return_value=None),
             patch.dict(os.environ, env),
         ):
-            result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+            result = run_typer(app, ["ship", "open-epic", branch_name], cwd=self.repo)
 
         self.assertEqual(result.exit_code, 0, result.output + result.stderr)
         self.assertEqual(len(created_prs), 1)
@@ -403,8 +427,6 @@ class TestOpenEpic(unittest.TestCase):
             "x = 1\n",
             "feat(code): add code",
         )
-
-        seed_legacy_epic(self.repo, {"branch": branch_name})
 
         # Set config: validate_command fails, lint_command passes
         (self.repo / ".agents" / "aet-config.json").write_text(
@@ -455,10 +477,69 @@ class TestOpenEpic(unittest.TestCase):
             patch.object(ship, "_find_existing_pr", return_value=None),
             patch.dict(os.environ, env),
         ):
-            result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
+            result = run_typer(app, ["ship", "open-epic", branch_name], cwd=self.repo)
 
         self.assertEqual(result.exit_code, 0, result.output + result.stderr)
         self.assertEqual(len(created_prs), 1)
+
+    def test_two_queued_branches_without_argument_refuse_and_name_both(self):
+        """With tasks queued for two branches and no argument, the command refuses and names both."""
+        self._queue(["feat/a", "feat/b"])
+
+        result, created_prs = self._open()
+
+        self.assertNotEqual(result.exit_code, 0)
+        combined = result.output + result.stderr
+        self.assertIn("feat/a", combined)
+        self.assertIn("feat/b", combined)
+        self.assertEqual(created_prs, [])
+
+    def test_title_comes_from_prd_pr_title(self):
+        """`open-epic feat/a` titles the PR from the matched PRD's `pr_title`."""
+        self._prd("a-prd.md", '---\npr_title: "Alpha epic"\n---\n\n# PRD: Alpha\n')
+        self._branch("feat/a", "a.txt", "a\n", "feat(a): add a")
+
+        result, created_prs = self._open("feat/a")
+
+        self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+        self.assertEqual(created_prs[0]["title"], "Alpha epic")
+
+    def test_title_falls_back_to_prd_h1_without_prefix(self):
+        """Without `pr_title`, the PR title is the PRD H1 without its `PRD: ` prefix."""
+        self._prd("a-prd.md", "# PRD: Alpha Feature\n")
+        self._branch("feat/a", "a.txt", "a\n", "feat(a): add a")
+
+        result, created_prs = self._open("feat/a")
+
+        self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+        self.assertEqual(created_prs[0]["title"], "Alpha Feature")
+
+    def test_two_prds_with_different_pr_titles_refuse(self):
+        """Two PRDs on one branch with different `pr_title` values make the command refuse."""
+        self._prd("a-prd.md", '---\npr_title: "First"\n---\n\n# PRD: A\n')
+        self._prd("other-prd.md", '---\nbranch: feat/a\npr_title: "Second"\n---\n\n# PRD: Other\n')
+        self._branch("feat/a", "a.txt", "a\n", "feat(a): add a")
+
+        result, created_prs = self._open("feat/a")
+
+        self.assertNotEqual(result.exit_code, 0)
+        combined = result.output + result.stderr
+        self.assertIn("a-prd.md", combined)
+        self.assertIn("other-prd.md", combined)
+        self.assertEqual(created_prs, [])
+
+    def test_pr_body_file_outside_repository_is_refused(self):
+        """A `pr_body_file` that resolves outside the repository root is refused."""
+        outside = Path(self.tmpdir.name) / "outside.md"
+        outside.write_text("secret\n", encoding="utf-8")
+        self._prd("a-prd.md", "---\npr_body_file: ../outside.md\n---\n\n# PRD: Alpha\n")
+        self._branch("feat/a", "a.txt", "a\n", "feat(a): add a")
+
+        result, created_prs = self._open("feat/a")
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("pr_body_file", result.output + result.stderr)
+        self.assertEqual(created_prs, [])
 
 
 if __name__ == "__main__":

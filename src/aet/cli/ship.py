@@ -961,30 +961,103 @@ def _find_existing_pr(branch: str) -> Optional[str]:
     return None
 
 
+def _queued_epic_branches(repo_root: Path, queue: str) -> list[str]:
+    """Return the non-trunk integration branches that queued tasks resolve to."""
+    from aet.cli.epic import epic_rows
+
+    queue_path = Path(queue) if Path(queue).is_absolute() else repo_root / queue
+    try:
+        rows = epic_rows(
+            repo_root,
+            str(repo_root / DEFAULT_CONFIG_PATH),
+            str(queue_path),
+            str(repo_root / ".agents" / "work-history.jsonl"),
+        )
+    except Exception:
+        return []
+    return [row["branch"] for row in rows if row["provenance"] != "trunk"]
+
+
+def _epic_pr_declaration(repo_root: Path, branch: str) -> tuple[str, Path | None] | str:
+    """Return the epic PR title and body file declared by the PRDs of ``branch``.
+
+    Returns an error message when the PRDs disagree or a body file lies outside ``repo_root``.
+    """
+    from aet.branch_ref import prds_for_branch
+
+    prds = prds_for_branch(repo_root, branch)
+    declared: dict[str, dict[str, str]] = {"pr_title": {}, "pr_body_file": {}}
+    for prd in prds:
+        frontmatter = plan_parser.parse_frontmatter(prd)
+        for key, values in declared.items():
+            if frontmatter.get(key):
+                values[prd.name] = str(frontmatter[key])
+    for key, values in declared.items():
+        if len(set(values.values())) > 1:
+            listing = "; ".join(f"{name}: {value!r}" for name, value in values.items())
+            return f"PRDs on {branch} declare different `{key}` values ({listing})."
+
+    titles = list(declared["pr_title"].values())
+    if titles:
+        title = titles[0]
+    elif prds:
+        match = re.search(r"^#\s+(.+)$", _prd_body(prds[0]), re.M)
+        title = match.group(1).strip().removeprefix("PRD: ") if match else branch
+    else:
+        title = branch
+
+    body_files = list(declared["pr_body_file"].values())
+    if not body_files:
+        return title, None
+    root = repo_root.resolve()
+    body_path = (root / body_files[0]).resolve()
+    if not body_path.is_relative_to(root):
+        return f"`pr_body_file` {body_files[0]!r} resolves outside the repository root."
+    return title, body_path
+
+
+def _prd_body(prd: Path) -> str:
+    """Return a PRD's text after its frontmatter."""
+    content = prd.read_text(encoding="utf-8", errors="ignore")
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) == 3:
+            return parts[2]
+    return content
+
+
 def cmd_open_epic(args: SimpleNamespace) -> int:
     """Run the gate and open a PR for an epic branch."""
     queue = getattr(args, "queue", ".agents/aet-queue")
     branch_arg = getattr(args, "branch", None)
 
-    epic = None
     backend = None
     try:
         backend = aet_state.make_backend(queue)
         backend.fetch()
-        epic = backend.read_legacy_epic()
     except Exception:
         pass
 
-    branch = branch_arg or (epic.get("branch") if epic else None)
+    repo_root = Path(_run_git("rev-parse", "--show-toplevel").stdout.strip())
+    branch = branch_arg
     if not branch:
-        return _fail(
-            "No branch specified. Pass the integration branch; "
-            "`aet epic list` shows the epic branches."
-        )
+        branches = _queued_epic_branches(repo_root, queue)
+        if len(branches) != 1:
+            named = f" Queued tasks resolve to: {', '.join(branches)}." if branches else ""
+            return _fail(
+                "No branch specified and the queue does not resolve to exactly one "
+                f"integration branch.{named} Pass the integration branch; "
+                "`aet epic list` shows the epic branches."
+            )
+        branch = branches[0]
+
+    declaration = _epic_pr_declaration(repo_root, branch)
+    if isinstance(declaration, str):
+        return _fail(declaration)
+    title, body_path = declaration
 
     print(f"Running aet ship open-epic for {branch}")
 
-    repo_root = Path(_run_git("rev-parse", "--show-toplevel").stdout.strip())
     from aet.train import flush
     flush_res = flush(repo_root=repo_root, branch=branch, backend=backend)
     if not flush_res.ok or flush_res.status == "red":
@@ -1018,21 +1091,9 @@ def cmd_open_epic(args: SimpleNamespace) -> int:
         print(existing_pr)
         return 0
 
-    declared_title = None
-    declared_body_file = None
-    if epic and epic.get("branch") == branch:
-        declared_title = epic.get("title")
-        declared_body_file = epic.get("body_file")
-
-    title = declared_title if declared_title else branch
-
-    if declared_body_file:
-        repo_root = _run_git("rev-parse", "--show-toplevel").stdout.strip()
-        bf_path = Path(declared_body_file)
-        if not bf_path.is_absolute():
-            bf_path = Path(repo_root) / bf_path
-        if bf_path.is_file():
-            body = bf_path.read_text(encoding="utf-8")
+    if body_path:
+        if body_path.is_file():
+            body = body_path.read_text(encoding="utf-8")
         else:
             body = f"## {title}\n"
     else:
@@ -1375,7 +1436,7 @@ def ship_open(
 def ship_open_epic(
     branch: Optional[str] = typer.Argument(
         None,
-        help="Integration branch to open PR for (default: legacy envelope epic).",
+        help="Integration branch to open PR for (default: the one branch queued tasks resolve to).",
     ),
     base: Optional[str] = typer.Option(
         None,

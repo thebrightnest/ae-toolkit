@@ -283,5 +283,5 @@ When all tasks belonging to the epic have reached closed status:
    ```text
    All tasks in the epic are merged and closed!
    To open the final PR to trunk (main), run:
-     aet ship open-epic
+     aet ship open-epic <branch>
    ```

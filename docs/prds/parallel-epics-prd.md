@@ -216,18 +216,20 @@ the change selects the branch that task commits integrate into.
 
 ## Divergence Summary
 
-*Recorded: 2026-10-27 — Branch: pep-01-prd-names-the-epic*
+*Recorded: 2026-10-27 — Branches: pep-01-prd-names-the-epic, pep-04-open-epic-by-branch*
 
 ### Changed from plan
 
 - `pep-01` task 4: `cmd_open_epic` in `src/aet/cli/ship.py` changes in `pep-01`, not only in `pep-04`. The rename of `read_epic` to `read_legacy_epic` requires the call site to change. The `open-epic` error text names `aet epic list` and no longer names `aet epic set`.
 - `pep-01` task 6: `aet setup verify` lists epic branches only in `single-pr` mode. In `pr-per-task` mode every task resolves to trunk, so the list carries no epic.
+- `pep-04` task 3: `aet ship open-epic` also refuses when two PRDs on one branch declare different `pr_body_file` values. The plan named only `pr_title`. Two body files have the same ambiguity as two titles.
 
 ### Added (unplanned)
 
 - `pep-01`: `tests/cli/_helpers.py` gets `seed_legacy_epic`, which writes an envelope with the legacy `epic` key for the R-11 tests.
 - `pep-01`: `tests/cli/test_ship_verify.py`, `tests/state/test_aet_state.py`, `tests/ship/test_open_epic.py`, `tests/orchestrator/test_pr_per_task_unchanged.py` and `tests/orchestrator/test_single_pr_loop.py` change to the `feat/<stem>` derived name (R-2) and to the removed `set_epic`.
 - `pep-01`: `skills/aet-drive/examples/README.md` names the epic branches instead of the active epic.
+- `pep-04`: `skills/aet-drive/SKILL.md` prints `aet ship open-epic <branch>` at epic completion. The no-argument form refuses when the queue resolves to more than one integration branch.
 
 ### Deferred
 

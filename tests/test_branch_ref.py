@@ -7,6 +7,7 @@ from pathlib import Path
 
 from aet.branch_ref import (
     ensure_integration_branch,
+    prds_for_branch,
     resolve_base_ref,
     resolve_integration_branch,
     resolve_trunk_branch,
@@ -404,3 +405,16 @@ def _ref_exists(repo: Path, ref: str) -> bool:
         ).returncode
         == 0
     )
+
+
+def test_prds_for_branch_matches_declared_and_derived_branch(tmp_path: Path) -> None:
+    prds = tmp_path / "docs" / "prds"
+    prds.mkdir(parents=True)
+    (prds / "declared-prd.md").write_text("---\nbranch: feat/x\n---\n\n# PRD: Declared\n", encoding="utf-8")
+    (prds / "x-prd.md").write_text("# PRD: Derived\n", encoding="utf-8")
+    (prds / "y-prd.md").write_text("# PRD: Other\n", encoding="utf-8")
+    (prds / "z-prd.md").write_text("---\nbranch: feat/z\n---\n\n# PRD: Declared elsewhere\n", encoding="utf-8")
+
+    found = prds_for_branch(tmp_path, "feat/x")
+
+    assert [p.name for p in found] == ["declared-prd.md", "x-prd.md"]

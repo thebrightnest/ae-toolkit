@@ -110,6 +110,23 @@ def derive_integration_branch_from_prd(prd_path: str | Path | None) -> str | Non
     return f"feat/{stem}"
 
 
+def prds_for_branch(repo_root: str | Path, branch: str) -> list[Path]:
+    """Return the PRDs under ``docs/prds/`` whose resolved branch equals ``branch``.
+
+    A PRD resolves to its frontmatter ``branch``, else to the name derived from its filename.
+    """
+    from aet import plan_parser
+
+    wanted = branch.removeprefix("origin/")
+    matches = []
+    for prd in sorted((Path(repo_root) / "docs" / "prds").glob("*.md")):
+        declared = plan_parser.parse_frontmatter(prd).get("branch")
+        resolved = str(declared) if declared else derive_integration_branch_from_prd(prd)
+        if resolved == wanted:
+            matches.append(prd)
+    return matches
+
+
 def resolve_integration_branch(repo_root, config, cli_base=None) -> BranchRef:
     """Resolve the integration (worktree base) branch ref.
 

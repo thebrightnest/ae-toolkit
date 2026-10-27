@@ -97,6 +97,16 @@ aet ship open-epic feat/epic-name
 aet ship close FEAT-001 --target-branch feat/epic-name
 ```
 
+`aet ship open-epic <branch>` finds the PRDs in `docs/prds/` whose resolved
+branch equals `<branch>`. The PR title is the PRD frontmatter `pr_title`, else
+the PRD H1 without its `PRD: ` prefix, else the branch name. The PR body is the
+file named by the PRD frontmatter `pr_body_file`, resolved inside the repository
+root; without it, the body lists the branch commit subjects. The command refuses
+when two PRDs on the branch declare different `pr_title` or `pr_body_file`
+values, and when `pr_body_file` resolves outside the repository root. The branch
+argument is optional only when the queued tasks resolve to exactly one
+integration branch; with zero or several, the command refuses and names them.
+
 `--target-branch` tells `aet ship close` which branch the task merged into.
 Use the configured integration branch (the epic branch) for per-task closure;
 use `main` when closing the epic itself after it merged to trunk.

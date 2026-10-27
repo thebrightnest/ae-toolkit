@@ -3,6 +3,7 @@
 # status: [draft / review / accepted]
 # branch: [optional-declared-integration-branch]
 # pr_title: "[Optional epic PR title]"
+# pr_body_file: [optional-repo-relative-path-to-epic-PR-body]
 ---
 
 # PRD: [Feature Name]
