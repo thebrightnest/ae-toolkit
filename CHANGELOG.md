@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.22.0] — 2026-10-27
+
+### Added
+
+- **Planning and queuing during a live run** — `aet sprint add` and `aet sprint intake` now admit new tasks while `aet run` holds the run lease. A write that adds only new task ids takes the queue lock and passes the lease; the run spawns the task on its next scheduling pass, so `/aet-drive` reaches it without a restart. Re-ingest of a task already on the board still waits for the run to end. A concurrent run no longer deletes the ref of a task another writer added after the run loaded the queue (ADR-082).
+- **Behind-origin notice** — when a flush pushes to origin while the integration branch is checked out locally, the run prints how many commits the local branch is behind `origin/<branch>`, so the operator pulls before the next commit.
+
+### Changed
+
+- **The root checkout is operator-owned** — no step of `aet run`, `aet run-one`, the merge train, `aet ship merge` or `aet ship close` changes the root checkout's `HEAD`, index or working tree. A green flush pushes the snapshot to origin without force when the integration branch is checked out in any worktree, and moves the local ref with `git update-ref` and an old-value check otherwise. Integration and `aet ship merge` no longer fall back to the root when the task worktree is missing; they halt, or allocate a temporary worktree outside the repository (ADR-082).
+- **A dirty root no longer halts a run** — base hygiene drops the dirty-tree check and the behind-origin check. A new PRD, plan or code edit in the root does not stop the next `aet run`. A local integration branch ahead of origin with a path outside `docs/plans/` still halts, so no worktree builds from a base that omits local code. The ahead check uses the three-dot diff, so a branch behind origin is no longer reported as ahead.
+- **A task worktree receives only its linked PRD** — the mirror copies the PRD the task record links, only when it is untracked, and excludes it from that worktree's commits with a worktree-scoped exclude that keeps the user's global excludes. Unrelated drafts in the root no longer reach task agents.
+
+### Removed
+
+- **Plan archive at closure** — `aet ship close` and `aet ship merge` leave `docs/plans/active/<id>.md` in place and stage nothing; the provenance ledger records the settled state (ADR-055, ADR-082).
+
+**Upgrading from 1.21.3:** run `aet update`. After a run, pull the local integration branch: the run moves `origin/<branch>`, not the checked-out branch. A project with no `origin` remote now halts at run start when the root has the integration branch checked out; check out another branch in the root or add a remote. Plans of merged tasks stay in `docs/plans/active/`; remove them by hand if a clean folder matters.
+
+---
+
 ## [1.21.3] — 2026-10-18
 
 ### Removed

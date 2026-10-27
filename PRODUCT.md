@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.21.3
+## Current Version: 1.22.0
 
-Last updated: 2026-10-18
+Last updated: 2026-10-27
 
 ---
 
@@ -27,7 +27,7 @@ Run plans with isolation, quality gates, and traceability.
 
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
-- **aet-drive** — Autonomous execution loop that drives an entire declared epic or sprint queue to completion. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, standalone sprint mode when no active epic is set, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts.
+- **aet-drive** — Autonomous execution loop that drives an entire declared epic or sprint queue to completion. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, standalone sprint mode when no active epic is set, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts. Tasks added to the sprint while a run is live are picked up on the next scheduling pass, and the run never touches the operator's root checkout, so planning and editing continue in parallel.
 
 ### Quality and Security Skills
 
@@ -62,7 +62,7 @@ Carry context and lessons across runs.
 - **aet context** — Loads git state, filesystem facts, canonical plan stages, budgets, rules digest, and durable insights into a structured payload for agent session start. Supports `--memories-only`, `--hook-json` SessionStart envelopes, and `PRIME.md` override.
 - **aet learnings append** — Records append-only JSONL learnings with schema validation.
 - **aet handoff** — Writes and reads run-scoped handoff notes so agents can pass context between sessions.
-- **aet sprint intake** — Reads `aet:sprint` issues from GitHub, checks each candidate against the dependency graph, and admits it or refuses with the blocking reason named.
+- **aet sprint intake** — Reads `aet:sprint` issues from GitHub, checks each candidate against the dependency graph, and admits it or refuses with the blocking reason named. New tasks can be admitted while a run is live.
 - **aet state reconcile** — Reports and clears refs stranded on a clone, so a board that drifted can be brought back in line without hand-editing refs.
 - **aet epic** — Declares the active epic, shows it, and clears it. The declaration holds the integration branch, the pull request title, and a body file, so an epic pull request has somewhere to live before it ships.
 - **aet breaker** — Shows the tracked failure signatures behind the circuit breaker and resets it. Clearing a tripped breaker no longer needs a low-level git ref command.
@@ -90,6 +90,13 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.22.0
+
+- **Keep planning while a run works** — write PRDs, plans and code in your checkout during `aet run`; a dirty working tree no longer halts the next run.
+- **Queue new work mid-run** — `aet sprint add` and `aet sprint intake` admit new tasks during a live run, and `/aet-drive` picks them up without a restart.
+- **Your checkout stays yours** — runs and merges never reset, clean or rewrite the root checkout; finished work lands on origin and the run tells you how far to pull.
+- **Focused task context** — each task agent sees only the PRD its task links, not every draft in your checkout.
 
 ### What's New in v1.21.3
 
