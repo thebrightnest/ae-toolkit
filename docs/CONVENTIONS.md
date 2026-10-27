@@ -201,12 +201,14 @@ are resolved external-first.
 2. `AET_WORK_BASE_BRANCH` environment variable
 3. Task record stamp (`task["integration_branch"]`)
 4. Parent document declared branch (`branch` in PRD frontmatter)
-5. Envelope active epic (`aet epic set` / `read_epic()`)
-6. PRD filename stem fallback
-7. `integration_branch` in config
-8. `trunk_branch` fallback (via the same trunk resolution above)
+5. Name derived from the PRD filename: `feat/<stem>`, with a trailing `-prd` removed from the stem
+6. `integration_branch` in config
+7. `trunk_branch` fallback (via the same trunk resolution above)
 
-In `pr-per-task` mode, steps 3–6 are skipped, preserving Scenario A as the degenerate case.
+The queue envelope carries no epic. Each PRD names its own epic, and `aet epic list`
+shows the branches that queued tasks resolve to (ADR-083).
+
+In `pr-per-task` mode, steps 3–5 are skipped, preserving Scenario A as the degenerate case.
 
 **`integration_mode`** is resolved from config only; it defaults to `pr-per-task`
 and must be one of `pr-per-task` or `single-pr`.
@@ -225,13 +227,14 @@ single PR, while still using AET's queue and state machine locally.
    aet configure --guided --scope shadow --integration-mode single-pr
    ```
 
-2. Declare the active epic branch, title, and PR body:
+2. Declare the epic branch and PR title in the PRD frontmatter:
 
-   ```bash
-   aet epic set docs-roadmap --title "Docs: Roadmap implementation"
+   ```yaml
+   branch: docs-roadmap
+   pr_title: "Docs: Roadmap implementation"
    ```
 
-3. Run tasks against the declared epic:
+3. Run the tasks of the PRD:
 
    ```bash
    aet run
@@ -243,7 +246,7 @@ single PR, while still using AET's queue and state machine locally.
 4. Open the epic pull request targeting trunk:
 
    ```bash
-   aet ship open-epic
+   aet ship open-epic docs-roadmap
    ```
 
 ## Planning Artifact Directories

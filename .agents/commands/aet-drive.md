@@ -1,6 +1,6 @@
 # AET Drive Operational Command
 
-Reference for executing the autonomous `/aet-drive` workflow across AI coding agents. Drives an entire active epic to completion by coordinating `aet run`, continuous auto-merging, and intelligent merge conflict resolution.
+Reference for executing the autonomous `/aet-drive` workflow across AI coding agents. Drives the epics of the sprint queue to completion by coordinating `aet run`, continuous auto-merging, and intelligent merge conflict resolution.
 
 ## When to Use
 
@@ -19,16 +19,16 @@ Execute this loop continuously until all tasks in the epic are closed.
 - Do not pass `--cli-bin` manually unless running in a sandboxed IDE environment where process trees are hidden.
 - If necessary, set `export AET_CLI_BIN=<bin>` in the environment.
 
-### 2. Verify Active Epic & Board State
+### 2. Verify Epic Branches & Board State
 
-Confirm the active epic and queue readiness:
+Confirm the epic branches and queue readiness:
 
 ```bash
-aet epic show
+aet epic list
 aet status
 ```
 
-- Verify the target epic branch (e.g. `feat/<epic-name>`).
+- Verify the epic branches (e.g. `feat/<prd-stem>`).
 - Confirm tasks are intaken on the sprint board.
 
 ### 3. Step A: Launch or Resume Pipeline Execution
@@ -39,7 +39,7 @@ Launch the orchestrator batch:
 aet run
 ```
 
-Clean tasks that pass rebase and re-validation automatically merge into the active epic branch continuously during batch execution.
+Clean tasks that pass rebase and re-validation automatically merge into their epic branches continuously during batch execution.
 
 Follow the run until completion:
 
@@ -51,7 +51,7 @@ aet run --follow <run-id>
 
 ### 4. Step B: Resolve Staged Conflicts and Merge Residuals
 
-Clean tasks auto-merge into the active epic branch continuously during `aet run`. Tasks appearing in `awaiting_merge` after the batch settles were non-blockingly staged due to merge conflicts or validation issues.
+Clean tasks auto-merge into their epic branches continuously during `aet run`. Tasks appearing in `awaiting_merge` after the batch settles were non-blockingly staged due to merge conflicts or validation issues.
 
 Inspect the queue for any tasks remaining in `awaiting_merge`:
 

@@ -125,3 +125,20 @@ _Next step: run `aet-work`_
 def git(args: list[str], cwd: str | Path) -> None:
     """Run a git command, raising on failure."""
     subprocess.run(["git", *args], cwd=cwd, capture_output=True, check=True)
+
+
+def seed_legacy_epic(repo: str | Path, epic: dict[str, Any]) -> None:
+    """Write a queue envelope that carries the legacy ``epic`` key."""
+    envelope = json.dumps({"epic": epic, "schema_version": 1})
+    sha = subprocess.run(
+        ["git", "-C", str(repo), "hash-object", "-w", "--stdin"],
+        input=envelope,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "update-ref", "refs/aet/meta/queue", sha],
+        check=True,
+        capture_output=True,
+    )

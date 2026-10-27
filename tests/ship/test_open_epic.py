@@ -12,7 +12,7 @@ from aet.backends.factory import create_backend
 from aet.cli import ship
 from aet.cli.main import app
 from aet.ledger import Ledger
-from tests.cli._helpers import git, run_typer
+from tests.cli._helpers import git, run_typer, seed_legacy_epic
 
 
 def _init_repo(path: Path) -> Path:
@@ -56,14 +56,6 @@ class TestOpenEpic(unittest.TestCase):
 
         self.addCleanup(_cleanup_env)
 
-    def _backend(self):
-        backend = create_backend(
-            queue_file=str(self.repo / ".agents" / "aet-queue"),
-            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
-        )
-        self.addCleanup(backend.close)
-        return backend
-
     def _branch(self, name: str, filename: str, content: str, msg: str) -> None:
         git(["checkout", "-q", "-b", name], self.repo)
         (self.repo / filename).write_text(content, encoding="utf-8")
@@ -72,11 +64,11 @@ class TestOpenEpic(unittest.TestCase):
         git(["push", "-u", "origin", name], self.repo)
 
     def test_no_active_epic_fails_closed(self):
-        """With no active epic and no argument, the command exits non-zero and names `aet epic set`."""
+        """With no legacy epic and no argument, the command exits non-zero and names `aet epic list`."""
         result = run_typer(app, ["ship", "open-epic"], cwd=self.repo)
         self.assertNotEqual(result.exit_code, 0)
         combined = result.output + result.stderr
-        self.assertIn("aet epic set", combined)
+        self.assertIn("aet epic list", combined)
 
     def test_title_defaults_to_branch_name_and_body_to_commit_subjects(self):
         """An epic declared without a title produces a PR title equal to the branch name,
@@ -94,8 +86,7 @@ class TestOpenEpic(unittest.TestCase):
         git(["commit", "-q", "-m", "feat(alpha): add second component"], self.repo)
         git(["push", "origin", branch_name], self.repo)
 
-        backend = self._backend()
-        backend.set_epic(branch_name)
+        seed_legacy_epic(self.repo, {"branch": branch_name})
 
         created_prs = []
 
@@ -133,11 +124,13 @@ class TestOpenEpic(unittest.TestCase):
         git(["commit", "-q", "-m", "docs(epic): add body file"], self.repo)
         git(["push", "origin", branch_name], self.repo)
 
-        backend = self._backend()
-        backend.set_epic(
-            branch_name,
-            title="Epic Beta: Feature Suite",
-            body_file="docs/beta_body.md",
+        seed_legacy_epic(
+            self.repo,
+            {
+                "branch": branch_name,
+                "title": "Epic Beta: Feature Suite",
+                "body_file": "docs/beta_body.md",
+            },
         )
 
         created_prs = []
@@ -169,8 +162,7 @@ class TestOpenEpic(unittest.TestCase):
             "feat(gamma): add gamma work",
         )
 
-        backend = self._backend()
-        backend.set_epic(branch_name, title="Epic Gamma")
+        seed_legacy_epic(self.repo, {"branch": branch_name, "title": "Epic Gamma"})
 
         created_prs = []
         existing_url = "https://github.com/example/repo/pull/103"
@@ -211,8 +203,7 @@ class TestOpenEpic(unittest.TestCase):
             "feat(delta): add delta work",
         )
 
-        backend = self._backend()
-        backend.set_epic(branch_name)
+        seed_legacy_epic(self.repo, {"branch": branch_name})
 
         created_prs = []
 
@@ -277,9 +268,6 @@ class TestOpenEpic(unittest.TestCase):
             "feat(epic): base commit",
         )
 
-        backend = self._backend()
-        backend.set_epic(branch_name)
-
         (self.repo / ".agents" / "aet-config.json").write_text(
             '{"integration_mode": "single-pr"}\n', encoding="utf-8"
         )
@@ -312,7 +300,13 @@ class TestOpenEpic(unittest.TestCase):
                 },
             }
         ]
+        backend = create_backend(
+            queue_file=str(self.repo / ".agents" / "aet-queue"),
+            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+        )
+        self.addCleanup(backend.close)
         backend.save(queue)
+        seed_legacy_epic(self.repo, {"branch": branch_name})
 
         created_prs = []
 
@@ -350,8 +344,7 @@ class TestOpenEpic(unittest.TestCase):
             "feat(skip): initial commit",
         )
 
-        backend = self._backend()
-        backend.set_epic(branch_name)
+        seed_legacy_epic(self.repo, {"branch": branch_name})
 
         # Set validate_command to false so if validation ran, it would fail
         (self.repo / ".agents" / "aet-config.json").write_text(
@@ -411,8 +404,7 @@ class TestOpenEpic(unittest.TestCase):
             "feat(code): add code",
         )
 
-        backend = self._backend()
-        backend.set_epic(branch_name)
+        seed_legacy_epic(self.repo, {"branch": branch_name})
 
         # Set config: validate_command fails, lint_command passes
         (self.repo / ".agents" / "aet-config.json").write_text(

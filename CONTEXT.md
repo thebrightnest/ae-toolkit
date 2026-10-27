@@ -229,13 +229,13 @@ _Avoid_: calling lifecycle states "workflow state"; using "work class" for a wor
 Plan frontmatter (`security_review`, `docs_sync`: `required`/`skipped`, with a reason required when skipped) deciding at plan time whether a gated stage runs. Policy input authored at triage — part of the plan's machine contract, not runtime judgment and not state.
 _Avoid_: runtime heuristics deciding whether a gate runs.
 
-## Branch Model (ADR-044, ADR-045, ADR-076, ADR-079)
+## Branch Model (ADR-044, ADR-045, ADR-076, ADR-079, ADR-083)
 
 **Trunk Branch**:
 The final merge target, resolved as: config → `git symbolic-ref refs/remotes/origin/HEAD` → `main`. No code path names a branch literally. (ADR-044)
 
 **Integration Branch**:
-The branch task worktrees are cut from and integrate into. In `single-pr` mode, resolved through the 8-step ordering: CLI override (`--base`) → environment (`AET_WORK_BASE_BRANCH`) → task record stamp (`task['integration_branch']`) → parent document declared branch (`branch` in PRD frontmatter) → envelope active epic (`read_epic()` / `aet epic set`) → PRD filename stem fallback → config `integration_branch` → **Trunk Branch**. In `pr-per-task` mode, steps 3–6 are skipped, and it equals the Trunk Branch in the default mode. (ADR-045, ADR-076)
+The branch task worktrees are cut from and integrate into. In `single-pr` mode, resolved through the 7-step ordering: CLI override (`--base`) → environment (`AET_WORK_BASE_BRANCH`) → task record stamp (`task['integration_branch']`) → parent document declared branch (`branch` in PRD frontmatter) → name derived from the PRD filename (`feat/<stem>`, trailing `-prd` removed) → config `integration_branch` → **Trunk Branch**. In `pr-per-task` mode, steps 3–5 are skipped, and it equals the Trunk Branch in the default mode. (ADR-045, ADR-076, ADR-083)
 
 **Integration Mode**:
 Project configuration, `pr-per-task` (default) or `single-pr`, resolved through the external-first config chain. Selects what the terminal event is for a task and who serializes merges — the forge (`pr-per-task`) or AET's local advisory lock (`single-pr`). (ADR-045)
@@ -257,12 +257,8 @@ _Avoid_: "main checkout" or "the repo" when the checkout is meant; `main` is a b
 A schema-validated JSON verdict (`kind: batch`) written to `<reports>/<slug>/_train/<branch>/batch.json` recording the passing validation of a flushed merge train snapshot along with its tree hash and task IDs. (ADR-079)
 
 **Epic**:
-The set of plans decomposing one deliverable that share one **Integration Branch** and one PR in `single-pr`. An epic's identity is an explicit declaration (branch, PR title, body file) rather than an inference from a PRD filename; not a persisted entity beyond the envelope key and per-task stamp. (ADR-045, ADR-076)
-_Avoid_: epic as a separate queue entity or file in `docs/epics/`.
-
-**Active Epic**:
-The single declared epic active in the queue envelope metadata at `refs/aet/meta/queue`, declared via `aet epic set <branch> [--title] [--body-file]`. Tasks are stamped with their resolved integration branch at intake; when an in-flight task's stamp does not match the active epic resolution, execution halts fail-closed with an actionable mismatch error. (ADR-076)
-_Avoid_: assuming multi-epic concurrency; ignoring mismatch halts without resetting the task or switching the active epic.
+The set of plans decomposing one deliverable that share one **Integration Branch** and one PR in `single-pr`. A task's PRD names its epic: the PRD frontmatter `branch` declares it, and the name derived from the PRD filename is the fallback. An epic is not a persisted entity beyond the PRD and the per-task stamp. Several epics can be in the queue at once; `aet epic list` shows them. When an in-flight task's stamp does not match its resolution, execution halts fail-closed with an actionable mismatch error. (ADR-045, ADR-076, ADR-083)
+_Avoid_: epic as a separate queue entity or file in `docs/epics/`; an "active epic" in the queue envelope.
 
 **Integrated**:
 The terminal state `merged` means fast-forwarded onto the **Integration Branch** (or trunk in `pr-per-task`) by a green flush of the merge train, with merge evidence recorded in the execution log. Blockers unblock when their dependencies reach this terminal state. In `single-pr`, trunk arrival is verified once per **Epic** when the integration branch's PR merges. (ADR-045, ADR-064, ADR-079)

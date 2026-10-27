@@ -276,37 +276,11 @@ Active epic declaration and inspection.
 
 ### Subcommands
 
-- `clear`: Clear the active epic declaration.
-- `set`: Declare the active epic in the queue envelope.
-- `show`: Show the active epic declaration.
+- `list`: List the integration branches that queued tasks resolve to.
 
-## `aet epic set`
+## `aet epic list`
 
-Declare the active epic in the queue envelope.
-
-### Options
-
-- `branch` *str* — Integration branch for the epic. (required)
-- `--title` *str* — Human-readable epic title.
-- `--body-file` *str* — Path to markdown body file describing the epic.
-- `--create` *boolean* — Declare the epic before creating its branch. (default: `False`)
-- `--config` *str* — Path to AET configuration file. (default: `.agents/aet-config.json`)
-- `--queue-file` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
-- `--history-file` *str* — Path to work history. (default: `.agents/work-history.jsonl`)
-
-## `aet epic show`
-
-Show the active epic declaration.
-
-### Options
-
-- `--config` *str* — Path to AET configuration file. (default: `.agents/aet-config.json`)
-- `--queue-file` *str* — Path to queue anchor. (default: `.agents/aet-queue`)
-- `--history-file` *str* — Path to work history. (default: `.agents/work-history.jsonl`)
-
-## `aet epic clear`
-
-Clear the active epic declaration.
+List the integration branches that queued tasks resolve to.
 
 ### Options
 
@@ -594,7 +568,7 @@ Run the gate and open a PR for an epic branch.
 
 ### Options
 
-- `branch` *str* — Integration branch to open PR for (default: active epic declaration).
+- `branch` *str* — Integration branch to open PR for (default: legacy envelope epic).
 - `--base` *str* — Override the PR base branch/ref (default: resolved trunk).
 
 ## `aet ship merge`

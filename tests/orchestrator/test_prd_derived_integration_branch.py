@@ -178,7 +178,7 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
                 ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
                 check=True,
             )
-            _create_integration_branch(repo_root, "alpha-prd")
+            _create_integration_branch(repo_root, "feat/alpha")
 
             worktree_a = orchestrator.create_worktree(
                 repo_root, "task-a", base_branch="origin/main"
@@ -226,11 +226,11 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
 
             # The PRD-derived integration branch should exist on origin.
             remote_heads = _remote_heads(repo_root)
-            self.assertIn("alpha-prd", remote_heads)
+            self.assertIn("feat/alpha", remote_heads)
             # No per-task branch should reach origin.
             self.assertNotIn("task-a", remote_heads)
 
-            log = _integration_log(repo_root, "alpha-prd")
+            log = _integration_log(repo_root, "feat/alpha")
             self.assertIn("Integrate task-a", log)
 
     def test_two_prds_produce_two_integration_branches(self):
@@ -269,8 +269,8 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
                 ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
                 check=True,
             )
-            _create_integration_branch(repo_root, "alpha-prd")
-            _create_integration_branch(repo_root, "beta-prd")
+            _create_integration_branch(repo_root, "feat/alpha")
+            _create_integration_branch(repo_root, "feat/beta")
 
             worktree_a = orchestrator.create_worktree(
                 repo_root, "task-a", base_branch="origin/main"
@@ -358,13 +358,13 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
             self.assertTrue(result_b)
 
             remote_heads = _remote_heads(repo_root)
-            self.assertIn("alpha-prd", remote_heads)
-            self.assertIn("beta-prd", remote_heads)
+            self.assertIn("feat/alpha", remote_heads)
+            self.assertIn("feat/beta", remote_heads)
             self.assertNotIn("task-a", remote_heads)
             self.assertNotIn("task-b", remote_heads)
 
-            alpha_log = _integration_log(repo_root, "alpha-prd")
-            beta_log = _integration_log(repo_root, "beta-prd")
+            alpha_log = _integration_log(repo_root, "feat/alpha")
+            beta_log = _integration_log(repo_root, "feat/beta")
             self.assertIn("Integrate task-a", alpha_log)
             self.assertIn("Integrate task-b", beta_log)
             self.assertNotIn("Integrate task-b", alpha_log)
@@ -454,7 +454,7 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
                 Path(repo_root, ".git", "refs", "heads", "task-a").exists()
             )
             remote_heads = _remote_heads(repo_root)
-            self.assertNotIn("alpha-prd", remote_heads)
+            self.assertNotIn("feat/alpha", remote_heads)
 
     def test_declared_prd_branch_outranks_stem(self):
         """R-5: A PRD declaring branch outranks its filename stem, and a plain PRD still derives the stem."""
@@ -488,7 +488,7 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
             ref_plain = resolve_integration_branch_for_task(
                 repo_root, {}, task_plain, "single-pr"
             )
-            self.assertEqual(ref_plain.ref, "plain-feature-stem")
+            self.assertEqual(ref_plain.ref, "feat/plain-feature-stem")
             self.assertEqual(ref_plain.provenance, "prd")
 
 

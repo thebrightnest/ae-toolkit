@@ -77,18 +77,20 @@ aet ship close FEAT-001
 
 ### `single-pr` (epic mode)
 
-Tasks integrate into a shared Integration Branch (declared via `aet epic set` or
-`--base`) and the epic ships as one PR to trunk. Typical flow:
+Each PRD names one epic. Its tasks integrate into one Integration Branch and the
+epic ships as one PR to trunk. The PRD frontmatter `branch` declares the branch;
+without it, the branch is `feat/<stem>`, where the stem is the PRD filename stem
+without a trailing `-prd`. `--base` overrides both. Typical flow:
 
 ```bash
-# Declare the active epic branch, title, and optional PR body:
-aet epic set feat/epic-name --title "Feature: epic description"
+# Show the epic branches that the queued tasks resolve to:
+aet epic list
 
-# Run tasks against the active epic:
+# Run the queued tasks:
 aet run
 
 # Open the epic pull request targeting trunk:
-aet ship open-epic
+aet ship open-epic feat/epic-name
 
 # Close each task that was part of the epic, pointing at the epic branch as
 # the integration target and the trunk merge commit if needed:

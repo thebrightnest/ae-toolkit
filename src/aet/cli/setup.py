@@ -500,20 +500,18 @@ def setup_verify(
         trunk_provenance = _format_branch_provenance(trunk.provenance, config_source)
         typer.echo(f"  trunk: {trunk.ref} ({trunk_provenance})")
         try:
-            from aet.backends.factory import create_backend
+            from aet.cli.epic import epic_rows
 
-            backend = create_backend(
-                config_path=config_path,
-                queue_file=str(config_repo_root / ".agents" / "aet-queue"),
-                history_file=str(config_repo_root / ".agents" / "work-history.jsonl"),
+            rows = [] if mode != "single-pr" else epic_rows(
+                config_repo_root,
+                config_path,
+                str(config_repo_root / ".agents" / "aet-queue"),
+                str(config_repo_root / ".agents" / "work-history.jsonl"),
             )
-            epic = backend.read_epic()
-            backend.close()
-            if epic and epic.get("branch"):
-                title_str = f" ({epic['title']})" if epic.get("title") else ""
-                typer.echo(f"  active_epic: {epic['branch']}{title_str} (envelope)")
+            for row in rows:
+                typer.echo(f"  epic_branch: {row['branch']} ({row['provenance']})")
         except Exception as exc:
-            typer.echo(f"  ⚠ could not read queue envelope: {exc}", err=True)
+            typer.echo(f"  ⚠ could not read the queue: {exc}", err=True)
 
     for entry in missing_aet_gitignore_entries(config_repo_root):
         typer.echo(f"  ⚠ .gitignore is missing {entry}; run `aet setup bootstrap`", err=True)

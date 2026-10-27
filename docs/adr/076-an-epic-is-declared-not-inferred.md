@@ -8,7 +8,7 @@ relates: [45]
 ## Status
 
 Accepted. Amends ADR-045 (Epic Integration Branch and Per-Task Integration Mode)
-regarding epic identity representation.
+regarding epic identity representation. Amended by ADR-083.
 
 ## Context
 

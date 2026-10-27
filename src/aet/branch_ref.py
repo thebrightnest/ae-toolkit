@@ -80,15 +80,16 @@ def _ref_exists(repo_root, ref: str) -> bool:
 def derive_integration_branch_from_prd(prd_path: str | Path | None) -> str | None:
     """Return an integration branch name derived from a PRD path.
 
-    The branch name is the PRD file's stem.  Returns ``None`` when no PRD path
-    is supplied or the path has no stem.
+    The branch name is ``feat/`` plus the PRD file's stem with a trailing
+    ``-prd`` removed.  Returns ``None`` when no PRD path is supplied or the
+    path has no stem.
     """
     if not prd_path:
         return None
-    path = Path(prd_path)
-    if not path.stem:
+    stem = Path(prd_path).stem.removesuffix("-prd")
+    if not stem:
         return None
-    return path.stem
+    return f"feat/{stem}"
 
 
 def resolve_integration_branch(repo_root, config, cli_base=None) -> BranchRef:
@@ -159,12 +160,11 @@ def resolve_integration_branch_for_task(
     2. Environment (`AET_WORK_BASE_BRANCH`) -> provenance 'env'
     3. Task record stamp (`task["integration_branch"]`) -> provenance 'stamp' (skipped if ignore_stamp=True)
     4. Parent document declared branch (`branch` in PRD frontmatter) -> provenance 'document'
-    5. Envelope active epic (`read_epic()`) -> provenance 'epic'
-    6. PRD filename stem fallback -> provenance 'prd'
-    7. Config `integration_branch` -> provenance 'config'
-    8. Trunk fallback -> provenance 'trunk'
+    5. Name derived from the PRD filename -> provenance 'prd'
+    6. Config `integration_branch` -> provenance 'config'
+    7. Trunk fallback -> provenance 'trunk'
 
-    In ``pr-per-task`` mode, steps 3-6 are skipped, preserving ADR-045 Scenario A
+    In ``pr-per-task`` mode, steps 3-5 are skipped, preserving ADR-045 Scenario A
     as the degenerate case.
     """
     if cli_base:
@@ -196,21 +196,7 @@ def resolve_integration_branch_for_task(
             except Exception:
                 pass
 
-        # 5. Envelope active epic
-        try:
-            if backend is not None:
-                epic = backend.read_epic()
-            else:
-                from aet.backends.git_refs_backend import GitRefsBackend
-
-                b = GitRefsBackend(repo_root=str(repo_root))
-                epic = b.read_epic()
-            if epic and epic.get("branch"):
-                return BranchRef(str(epic["branch"]), "epic")
-        except Exception:
-            pass
-
-        # 6. PRD filename stem fallback
+        # 5. Name derived from the PRD filename
         derived = derive_integration_branch_from_prd(prd_path)
         if derived:
             return BranchRef(derived, "prd")
@@ -264,9 +250,9 @@ def format_epic_mismatch_error(
     """Format the error message for an epic mismatch including remedies."""
     return (
         f"⛔ Epic mismatch for task '{task_id}': task is stamped to integration branch '{stamped_branch}', "
-        f"but the active epic resolves to '{resolved_branch}'.\n"
+        f"but its PRD now resolves to '{resolved_branch}'.\n"
         f"   Remedies:\n"
-        f"   1. Switch the active epic back to the stamped branch: `aet epic set {stamped_branch}` "
-        f"(or pass `--base {stamped_branch}`)\n"
+        f"   1. Keep the stamped branch: declare `branch: {stamped_branch}` in the task's PRD "
+        f"frontmatter (or pass `--base {stamped_branch}`)\n"
         f"   2. Reset the task to target the new epic: `aet state reset {task_id}`"
     )

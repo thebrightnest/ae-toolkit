@@ -971,15 +971,15 @@ def cmd_open_epic(args: SimpleNamespace) -> int:
     try:
         backend = aet_state.make_backend(queue)
         backend.fetch()
-        epic = backend.read_epic()
+        epic = backend.read_legacy_epic()
     except Exception:
         pass
 
     branch = branch_arg or (epic.get("branch") if epic else None)
     if not branch:
         return _fail(
-            "No active epic declaration found and no branch specified. "
-            "Use `aet epic set <branch>` to declare one, or pass a branch name."
+            "No branch specified. Pass the integration branch; "
+            "`aet epic list` shows the epic branches."
         )
 
     print(f"Running aet ship open-epic for {branch}")
@@ -1375,7 +1375,7 @@ def ship_open(
 def ship_open_epic(
     branch: Optional[str] = typer.Argument(
         None,
-        help="Integration branch to open PR for (default: active epic declaration).",
+        help="Integration branch to open PR for (default: legacy envelope epic).",
     ),
     base: Optional[str] = typer.Option(
         None,

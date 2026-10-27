@@ -1,9 +1,11 @@
 """Tests for aet-work backend abstraction."""
 
+import io
 import subprocess
 import tempfile
 import unittest
 from abc import ABC
+from contextlib import redirect_stderr
 from pathlib import Path
 
 from aet.backends.base import TaskBackend
@@ -13,6 +15,7 @@ from aet.backends.factory import (
     create_backend,
 )
 from aet.backends.git_refs_backend import GitRefsBackend
+from tests.cli._helpers import seed_legacy_epic
 
 
 class TestTaskBackend(unittest.TestCase):
@@ -85,84 +88,50 @@ class TestFactory(unittest.TestCase):
                 history_file=self.history_file,
             )
 
-    def test_envelope_without_epic_key_loads(self):
-        """R-15: an envelope written without the epic key loads and reports no active epic."""
-        from aet.backends.git_refs_backend import ENVELOPE_SCHEMA_VERSION
-
-        self.assertEqual(ENVELOPE_SCHEMA_VERSION, 1)
-        subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
-        backend = create_backend(
+    def _backend(self):
+        return create_backend(
             config_path=str(Path(self.tmp.name) / "missing.json"),
             queue_file=self.queue_file,
             history_file=self.history_file,
         )
-        # Empty envelope / no envelope ref exists yet
-        self.assertIsNone(backend.read_epic())
 
-        # Save an envelope without epic
+    def test_envelope_without_epic_key_loads_silently(self):
+        """R-11: an envelope without the epic key loads with no warning."""
+        subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
+        backend = self._backend()
         backend.save([], wrapper={"source_prd": "docs/prds/test.md"})
-        self.assertIsNone(backend.read_epic())
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            backend.load()
+        self.assertIsNone(backend.read_legacy_epic())
+        self.assertEqual(stderr.getvalue(), "")
         backend.close()
 
-    def test_set_and_read_epic_declaration(self):
-        """R-1: set_epic stores epic declaration and read_epic retrieves it."""
+    def test_legacy_epic_key_warns_once_and_is_dropped_on_save(self):
+        """R-11: a legacy epic key warns once, names its branch, and is absent after save."""
         subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
-        backend = create_backend(
-            config_path=str(Path(self.tmp.name) / "missing.json"),
-            queue_file=self.queue_file,
-            history_file=self.history_file,
-        )
-        epic = backend.set_epic(branch="feat/test-epic", title="Test Epic Title")
-        self.assertEqual(epic["branch"], "feat/test-epic")
-        self.assertEqual(epic["title"], "Test Epic Title")
-        self.assertIn("set_at", epic)
+        seed_legacy_epic(self.tmp.name, {"branch": "feat/legacy-epic"})
+        backend = self._backend()
+        self.assertEqual(backend.read_legacy_epic(), {"branch": "feat/legacy-epic"})
 
-        read = backend.read_epic()
-        self.assertIsNotNone(read)
-        self.assertEqual(read["branch"], "feat/test-epic")
-        self.assertEqual(read["title"], "Test Epic Title")
-        self.assertEqual(read["set_at"], epic["set_at"])
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            data = backend.load()
+            backend.load()
+            backend.save(data["queue"])
+        self.assertEqual(stderr.getvalue().count("legacy active epic"), 1)
+        self.assertIn("feat/legacy-epic", stderr.getvalue())
+        self.assertIsNone(backend.read_legacy_epic())
         backend.close()
 
-    def test_set_epic_with_body_file(self):
-        """R-1: set_epic validates that body_file exists on disk."""
+    def test_epic_declaration_writers_are_removed(self):
+        """R-11: the backend no longer declares or clears an epic."""
         subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
-        body = Path(self.tmp.name) / "epic_body.md"
-        body.write_text("Epic description", encoding="utf-8")
-
-        backend = create_backend(
-            config_path=str(Path(self.tmp.name) / "missing.json"),
-            queue_file=self.queue_file,
-            history_file=self.history_file,
-        )
-        backend.set_epic(branch="feat/test-epic", body_file=str(body))
-        read = backend.read_epic()
-        self.assertIsNotNone(read)
-        self.assertEqual(read["body_file"], str(body))
-
-        with self.assertRaises(ValueError):
-            backend.set_epic(branch="feat/test-epic", body_file=str(Path(self.tmp.name) / "nonexistent.md"))
-
-        with self.assertRaises(ValueError):
-            backend.set_epic(branch="")
-
+        backend = self._backend()
+        self.assertFalse(hasattr(backend, "set_epic"))
+        self.assertFalse(hasattr(backend, "clear_epic"))
+        self.assertFalse(hasattr(backend, "read_epic"))
         backend.close()
-
-    def test_clear_epic_declaration(self):
-        """clear_epic clears the epic declaration from the envelope."""
-        subprocess.run(["git", "init", "-q", self.tmp.name], check=True)
-        backend = create_backend(
-            config_path=str(Path(self.tmp.name) / "missing.json"),
-            queue_file=self.queue_file,
-            history_file=self.history_file,
-        )
-        backend.set_epic(branch="feat/test-epic")
-        self.assertIsNotNone(backend.read_epic())
-
-        backend.clear_epic()
-        self.assertIsNone(backend.read_epic())
-        backend.close()
-
 
 if __name__ == "__main__":
     unittest.main()

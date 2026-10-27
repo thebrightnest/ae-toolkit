@@ -329,7 +329,7 @@ class TestSinglePrLoop(unittest.TestCase):
             self.assertIn("Epic mismatch for task 'task-a'", output)
             self.assertIn("epic-01", output)
             self.assertIn("epic-02", output)
-            self.assertIn("aet epic set epic-01", output)
+            self.assertIn("branch: epic-01", output)
             self.assertIn("aet state reset task-a", output)
 
             # Assert worktrees and branches are unchanged

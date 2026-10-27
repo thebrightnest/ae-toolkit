@@ -301,11 +301,11 @@ class TestShipVerifySinglePr(unittest.TestCase):
         self._git("commit", "-q", "-m", f"feat({name})")
 
     def _squash_merge_to_alpha(self, branch: str, message: str) -> str:
-        self._git("checkout", "-q", "alpha-prd")
+        self._git("checkout", "-q", "feat/alpha")
         self._git("merge", "--squash", branch)
         self._git("add", ".")
         self._git("commit", "-q", "-m", message)
-        self._git("push", "origin", "alpha-prd", check=False)
+        self._git("push", "origin", "feat/alpha", check=False)
         return self._git("rev-parse", "HEAD").stdout.strip()
 
     def _run_verify(self, argv: list[str]) -> tuple[int, str, str]:
@@ -317,8 +317,8 @@ class TestShipVerifySinglePr(unittest.TestCase):
 
     def test_verify_resolves_prd_derived_target_branch(self):
         """ship verify checks origin/<prd-stem> when no --target-branch is given."""
-        self._git("checkout", "-q", "-b", "alpha-prd")
-        self._git("push", "-u", "origin", "alpha-prd", check=False)
+        self._git("checkout", "-q", "-b", "feat/alpha")
+        self._git("push", "-u", "origin", "feat/alpha", check=False)
         self._git("checkout", "-q", "main")
         self._branch("t1", "feat.txt", "feature\n")
         sha = self._squash_merge_to_alpha("t1", "feat: implement")

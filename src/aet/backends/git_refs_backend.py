@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from datetime import datetime, timezone
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -118,6 +118,7 @@ class GitRefsBackend(TaskBackend):
         # writers safe.
         self._loaded_shas: dict[str, str] = {}
         self._envelope: dict[str, Any] = {}
+        self._legacy_epic_warned = False
         # Task refs deleted by ``save()`` since the last successful ``push()``.
         # These must be pushed as deletions explicitly; a wildcard push only
         # updates refs that still exist locally.
@@ -280,6 +281,7 @@ class GitRefsBackend(TaskBackend):
                 loaded_shas[task_id] = sha
         self._loaded_shas = loaded_shas
         self._envelope = self._read_envelope()
+        self._drop_legacy_epic()
         return {"queue": queue, "history": read_history(self._history_path())}
 
     def save(
@@ -604,42 +606,22 @@ class GitRefsBackend(TaskBackend):
         if self._ref_sha(ENVELOPE_REF) != envelope_sha:
             self._git("update-ref", ENVELOPE_REF, envelope_sha).check_returncode()
 
-    def read_epic(self) -> dict[str, Any] | None:
-        """Return the active epic declaration from the envelope, or None."""
-        envelope = self._read_envelope()
-        self._envelope = envelope
-        epic = envelope.get("epic")
+    def read_legacy_epic(self) -> dict[str, Any] | None:
+        """Return the legacy ``epic`` key of the stored envelope, or None."""
+        epic = self._read_envelope().get("epic")
         return epic if isinstance(epic, dict) else None
 
-    def set_epic(
-        self,
-        branch: str,
-        title: str | None = None,
-        body_file: str | None = None,
-    ) -> dict[str, Any]:
-        """Set the active epic declaration in the envelope."""
-        if not branch or not branch.strip():
-            raise ValueError("Branch name is required")
-        epic_data: dict[str, Any] = {
-            "branch": branch.strip(),
-            "set_at": datetime.now(timezone.utc).isoformat(),
-        }
-        if title is not None:
-            epic_data["title"] = title
-        if body_file is not None:
-            bf_path = Path(body_file)
-            if not bf_path.is_absolute():
-                bf_path = Path(self.repo_root) / bf_path
-            if not bf_path.is_file():
-                raise ValueError(f"Body file not found: {body_file}")
-            epic_data["body_file"] = body_file
-
-        data = self.load()
-        self.save(data["queue"], wrapper={"epic": epic_data})
-        return epic_data
-
-    def clear_epic(self) -> None:
-        """Clear the active epic declaration from the envelope."""
-        data = self.load()
-        self._envelope.pop("epic", None)
-        self.save(data["queue"])
+    def _drop_legacy_epic(self) -> None:
+        """Remove the legacy ``epic`` key from the loaded envelope; warn once."""
+        epic = self._envelope.pop("epic", None)
+        if epic is None or self._legacy_epic_warned:
+            return
+        self._legacy_epic_warned = True
+        branch = epic.get("branch") if isinstance(epic, dict) else None
+        print(
+            f"⚠ queue envelope carries a legacy active epic ({branch}); "
+            "it no longer selects the integration branch (ADR-083). "
+            f"Declare `branch: {branch}` in the PRD to keep that target. "
+            "The next queue write removes the key.",
+            file=sys.stderr,
+        )

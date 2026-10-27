@@ -13,7 +13,7 @@ User prompt:
 Agent actions:
 
 1. Emits initialization banner showing auto-detected host adapter (`agy`, `claude`, or `kimi`).
-2. Checks active epic (`feat/user-auth`) and queue tasks.
+2. Checks the epic branches (`feat/user-auth`) and queue tasks.
 3. Launches `aet run` to run pipeline stages.
 4. Waits for the run batch to finish.
 5. Runs `aet status` and finds tasks `auth-01` and `auth-02` in `awaiting_merge`.

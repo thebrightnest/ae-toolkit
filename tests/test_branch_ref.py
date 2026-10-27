@@ -10,6 +10,7 @@ from aet.branch_ref import (
     resolve_integration_branch,
     resolve_trunk_branch,
 )
+from tests.cli._helpers import seed_legacy_epic
 
 
 def _init_repo(path: Path) -> None:
@@ -177,8 +178,7 @@ def test_base_ref_leaves_an_already_qualified_ref_alone(tmp_path: Path) -> None:
 
 
 def test_resolution_order_for_single_pr(monkeypatch, tmp_path: Path) -> None:
-    """R-4: Test each step of the 8-step resolution order in single-pr mode."""
-    from aet.backends.factory import create_backend
+    """R-1: Test each step of the 7-step resolution order in single-pr mode."""
     from aet.branch_ref import resolve_integration_branch_for_task
 
     repo = tmp_path / "repo"
@@ -197,13 +197,7 @@ def test_resolution_order_for_single_pr(monkeypatch, tmp_path: Path) -> None:
     plain_prd = repo / "docs" / "prds" / "plain-prd-stem.md"
     plain_prd.write_text("# Plain PRD\n", encoding="utf-8")
 
-    # Setup envelope epic
-    backend = create_backend(
-        queue_file=str(repo / ".agents" / "aet-queue"),
-        history_file=str(repo / ".agents" / "work-history.jsonl"),
-    )
-    backend.set_epic(branch="epic/envelope-branch", title="Envelope Epic")
-    backend.close()
+    seed_legacy_epic(repo, {"branch": "epic/envelope-branch"})
 
     config = {"integration_branch": "config/branch", "trunk_branch": "main"}
     task_with_doc = {"spec": {"frontmatter": {"source_prd": "docs/prds/my-prd-stem.md"}}}
@@ -242,36 +236,21 @@ def test_resolution_order_for_single_pr(monkeypatch, tmp_path: Path) -> None:
     assert ref.ref == "feature/doc-declared"
     assert ref.provenance == "document"
 
-    # 5. Envelope active epic wins over prd stem, config, trunk
+    # 5. Derived PRD name wins over the envelope epic, config, trunk
     ref = resolve_integration_branch_for_task(
         repo, config, task_with_plain_prd, "single-pr", cli_base=None
     )
-    assert ref.ref == "epic/envelope-branch"
-    assert ref.provenance == "epic"
-
-    # Clear epic from envelope
-    backend = create_backend(
-        queue_file=str(repo / ".agents" / "aet-queue"),
-        history_file=str(repo / ".agents" / "work-history.jsonl"),
-    )
-    backend.clear_epic()
-    backend.close()
-
-    # 6. PRD filename stem wins over config, trunk
-    ref = resolve_integration_branch_for_task(
-        repo, config, task_with_plain_prd, "single-pr", cli_base=None
-    )
-    assert ref.ref == "plain-prd-stem"
+    assert ref.ref == "feat/plain-prd-stem"
     assert ref.provenance == "prd"
 
-    # 7. Config integration_branch wins over trunk
+    # 6. Config integration_branch wins over trunk
     ref = resolve_integration_branch_for_task(
         repo, config, task_no_prd, "single-pr", cli_base=None
     )
     assert ref.ref == "config/branch"
     assert ref.provenance == "config"
 
-    # 8. Trunk fallback
+    # 7. Trunk fallback
     ref = resolve_integration_branch_for_task(
         repo, {}, task_no_prd, "single-pr", cli_base=None
     )
@@ -299,3 +278,26 @@ def test_declared_branch_is_used_verbatim(tmp_path: Path) -> None:
 
     assert ref.ref == "feature/custom/deep-branch-name"
     assert ref.provenance == "document"
+
+
+def test_derived_branch_is_feat_plus_stem_without_prd_suffix() -> None:
+    """R-2: The derived name is ``feat/`` plus the stem without a trailing ``-prd``."""
+    from aet.branch_ref import derive_integration_branch_from_prd
+
+    assert (
+        derive_integration_branch_from_prd("docs/prds/conversation-store-prd.md")
+        == "feat/conversation-store"
+    )
+    assert derive_integration_branch_from_prd("docs/prds/notes.md") == "feat/notes"
+    assert derive_integration_branch_from_prd(None) is None
+
+
+def test_mismatch_error_names_prd_branch_and_reset() -> None:
+    """R-11: The mismatch remedies name a PRD ``branch:`` line and ``aet state reset``."""
+    from aet.branch_ref import format_epic_mismatch_error
+
+    text = format_epic_mismatch_error("task-a", "feat/old", "feat/new")
+
+    assert "aet epic set" not in text
+    assert "branch: feat/old" in text
+    assert "aet state reset task-a" in text

@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tests.cli._helpers import run_typer
+from tests.cli._helpers import run_typer, seed_legacy_epic
 
 # Module under test
 aet_setup = importlib.import_module("aet.cli.setup")
@@ -225,42 +225,45 @@ class TestSetupVerifyConfigProvenance(SetupVerifyTestCase):
         self.assertIn("integration_branch: feat/epic (config (project))", out)
         self.assertIn("trunk: develop (config (project))", out)
 
-    def test_verify_reports_active_epic(self):
-        """R-14: When an epic is declared in the envelope, verify outputs active_epic."""
+    def test_verify_reports_epic_branches(self):
+        """R-12: verify lists the epic branches of queued tasks, not the envelope epic."""
         from aet.backends.factory import create_backend
 
         repo = Path(self.tmp.name) / "repo"
         repo.mkdir()
         self._init_repo(repo)
 
-        # 1. No epic: active_epic line is omitted
         rc, out, err = self._run_verify_in_repo(repo)
         self.assertEqual(rc, 0, err)
+        self.assertNotIn("epic_branch", out)
+
+        (repo / ".agents").mkdir(exist_ok=True)
+        (repo / ".agents" / "aet-config.json").write_text(
+            '{"integration_mode": "single-pr"}', encoding="utf-8"
+        )
+        prds = repo / "docs" / "prds"
+        prds.mkdir(parents=True)
+        (prds / "alpha-prd.md").write_text("# Alpha\n", encoding="utf-8")
+        (prds / "beta-prd.md").write_text("# Beta\n", encoding="utf-8")
+        seed_legacy_epic(repo, {"branch": "feat/legacy-epic"})
+        backend = create_backend(
+            queue_file=str(repo / ".agents" / "aet-queue"),
+            history_file=str(repo / ".agents" / "work-history.jsonl"),
+        )
+        backend.save(
+            [
+                {"id": "a-1", "state": "queued", "spec": {"frontmatter": {"source_prd": "docs/prds/alpha-prd.md"}}},
+                {"id": "b-1", "state": "queued", "spec": {"frontmatter": {"source_prd": "docs/prds/beta-prd.md"}}},
+            ]
+        )
+        backend.close()
+
+        rc, out, err = self._run_verify_in_repo(repo)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("epic_branch: feat/alpha (prd)", out)
+        self.assertIn("epic_branch: feat/beta (prd)", out)
         self.assertNotIn("active_epic", out)
-
-        # 2. Epic with title set in envelope
-        backend = create_backend(
-            queue_file=str(repo / ".agents" / "aet-queue"),
-            history_file=str(repo / ".agents" / "work-history.jsonl"),
-        )
-        backend.set_epic(branch="feat/ned-epic", title="Ned Epic Title")
-        backend.close()
-
-        rc, out, err = self._run_verify_in_repo(repo)
-        self.assertEqual(rc, 0, err)
-        self.assertIn("active_epic: feat/ned-epic (Ned Epic Title) (envelope)", out)
-
-        # 3. Epic without title
-        backend = create_backend(
-            queue_file=str(repo / ".agents" / "aet-queue"),
-            history_file=str(repo / ".agents" / "work-history.jsonl"),
-        )
-        backend.set_epic(branch="feat/titleless-epic", title=None)
-        backend.close()
-
-        rc, out, err = self._run_verify_in_repo(repo)
-        self.assertEqual(rc, 0, err)
-        self.assertIn("active_epic: feat/titleless-epic (envelope)", out)
+        self.assertNotIn("feat/legacy-epic", out)
 
 
 class TestSetupVerifyVersionCurrency(SetupVerifyTestCase):

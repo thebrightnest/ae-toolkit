@@ -226,21 +226,15 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
 
     def test_epic_declaration_is_inert_in_pr_per_task(self):
         """R-4: With integration_mode == pr-per-task and an active epic set, resolution matches no-epic result."""
-        from aet.backends.factory import create_backend
         from aet.branch_ref import resolve_integration_branch_for_task
+        from tests.cli._helpers import seed_legacy_epic
 
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = os.path.join(temp_dir, "repo")
             os.makedirs(repo_root)
             _init_git_repo(repo_root)
 
-            # Set epic in envelope
-            backend = create_backend(
-                queue_file=os.path.join(repo_root, ".agents", "aet-queue"),
-                history_file=os.path.join(repo_root, ".agents", "work-history.jsonl"),
-            )
-            backend.set_epic(branch="epic-branch", title="My Epic")
-            backend.close()
+            seed_legacy_epic(repo_root, {"branch": "epic-branch", "title": "My Epic"})
 
             config = {"trunk_branch": "main"}
             task = {

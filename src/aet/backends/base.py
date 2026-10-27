@@ -117,19 +117,6 @@ class TaskBackend(ABC):
         """
         raise NotImplementedError("seal must be implemented by the storage backend")
 
-    def read_epic(self) -> dict[str, Any] | None:
-        """Return the active epic declaration from the backend, or None."""
+    def read_legacy_epic(self) -> dict[str, Any] | None:
+        """Return the legacy ``epic`` key of the queue envelope, or None."""
         return None
-
-    def set_epic(
-        self,
-        branch: str,
-        title: str | None = None,
-        body_file: str | None = None,
-    ) -> dict[str, Any]:
-        """Set the active epic declaration in the backend."""
-        raise NotImplementedError
-
-    def clear_epic(self) -> None:
-        """Clear the active epic declaration from the backend."""
-        raise NotImplementedError

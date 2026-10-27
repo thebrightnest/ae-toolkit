@@ -5,11 +5,11 @@ description: Autonomous end-to-end task and epic completion loop with natural CL
 
 # aet-drive
 
-Autonomous execution loop that drives an entire declared epic or sprint queue to completion. The skill orchestrates task execution through `aet run`, continuously auto-merges finished tasks into the active epic branch, intelligently resolves any staged merge conflicts encountered along the way, and loops until every task is closed.
+Autonomous execution loop that drives the epics of a sprint queue to completion. The skill orchestrates task execution through `aet run`, continuously auto-merges finished tasks into their epic branches, intelligently resolves any staged merge conflicts encountered along the way, and loops until every task is closed.
 
 ## When to Use
 
-- You have tasks in the sprint queue (with or without an active epic) and want hands-free execution to completion.
+- You have tasks in the sprint queue and want hands-free execution to completion.
 - You want the agent to automatically run pipeline stages, ship ready tasks, and resolve any integration conflicts without pausing for user intervention.
 - You have approved plans but an empty board, and want to pick which ones to admit.
 - You are back from a night run and want to see what the engine left in `failed` or `quarantined`.
@@ -17,13 +17,13 @@ Autonomous execution loop that drives an entire declared epic or sprint queue to
 
 ## Context
 
-Run `aet context` and parse its JSON for session context (active branch, repo state, active epic, and queue health). Print the stage banner it emits.
+Run `aet context` and parse its JSON for session context (active branch, repo state, and queue health). Print the stage banner it emits.
 
 ## Mental Model: Deterministic CLI with Autonomous Agent Judgment
 
 In accordance with ADR-039, ADR-029, and ADR-076:
 
-- **Deterministic CLI**: `aet run` executes the pipeline stages in isolated worktrees and continuously auto-merges clean tasks into the active epic branch under `integration_lock`. `aet ship merge` completes the integration of any staged residual tasks and records terminal closure.
+- **Deterministic CLI**: `aet run` executes the pipeline stages in isolated worktrees and continuously auto-merges clean tasks into their epic branches under `integration_lock`. `aet ship merge` completes the integration of any staged residual tasks and records terminal closure.
 - **Autonomous Agent Judgment**: When merge conflicts occur or semantic harmonization is required, the orchestrator non-blockingly stages the affected tasks in `awaiting_merge` with diagnostic metadata. The AI agent inspects recorded `conflict_diagnostics`, reconciles changes, verifies with the project test suite, and completes the merge via `aet ship merge`.
 - **Epic Governance**: Tasks integrate automatically into the shared epic branch (`single-pr` mode). Opening or merging the epic PR to trunk (`main`) remains a human decision via `aet ship open-epic`.
 
@@ -31,7 +31,7 @@ In accordance with ADR-039, ADR-029, and ADR-076:
 
 1. `aet` is installed and on `PATH` (run `aet setup link` if needed).
 2. Tasks are intaken into the sprint queue (`aet status` shows queued tasks).
-3. If an active epic is set (`aet epic show`), tasks integrate into its branch. If `aet epic show` reports no active epic, proceed directly in standalone sprint mode without prompting or stopping.
+3. Each task integrates into the epic branch of its PRD. `aet epic list` shows these branches.
 4. Working tree is clean.
 
 ---
@@ -81,11 +81,11 @@ run to end. Never pass `--force` to admit a task: `--force` also unlocks running
 Run:
 
 ```bash
-aet epic show
+aet epic list
 aet status
 ```
 
-- Note the active epic integration branch if present; if `aet epic show` outputs `No active epic.`, continue immediately in standalone sprint mode without pausing.
+- Note the epic branches that `aet epic list` reports. If it reports `No queued tasks.`, the queue is empty.
 - Confirm tasks are ready to run on the sprint board.
 - If no tasks are ready or queue is empty, report status to the user and halt.
 
@@ -98,7 +98,7 @@ aet run
 ```
 
 `aet run` starts the orchestrator in the background and prints a run ID.
-Clean tasks that pass rebase and re-validation automatically merge into the active epic branch continuously during batch execution, unblocking dependent tasks in real time.
+Clean tasks that pass rebase and re-validation automatically merge into their epic branches continuously during batch execution, unblocking dependent tasks in real time.
 
 Follow execution until the batch settles:
 

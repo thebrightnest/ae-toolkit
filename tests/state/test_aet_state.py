@@ -1718,20 +1718,20 @@ class TestPrdDerivedIntegrationBranchState(unittest.TestCase):
         return str(queue_path)
 
     def _create_task_branch_and_merge_to_alpha(self) -> str:
-        """Create alpha-prd integration branch, merge t1 into it, return merge SHA."""
-        _git(self.repo, "checkout", "-q", "-b", "alpha-prd")
-        _git(self.repo, "push", "-q", "-u", "origin", "alpha-prd")
+        """Create feat/alpha integration branch, merge t1 into it, return merge SHA."""
+        _git(self.repo, "checkout", "-q", "-b", "feat/alpha")
+        _git(self.repo, "push", "-q", "-u", "origin", "feat/alpha")
         _git(self.repo, "checkout", "-q", "main")
         _git(self.repo, "checkout", "-q", "-b", "t1")
         (self.repo / "feat.txt").write_text("feat\n", encoding="utf-8")
         _git(self.repo, "add", ".")
         _git(self.repo, "commit", "-q", "-m", "feat(t1): work")
-        _git(self.repo, "checkout", "-q", "alpha-prd")
+        _git(self.repo, "checkout", "-q", "feat/alpha")
         _git(self.repo, "merge", "--squash", "t1")
         _git(self.repo, "add", ".")
         _git(self.repo, "commit", "-q", "-m", "Integrate t1")
         merge_commit = _git(self.repo, "rev-parse", "HEAD").stdout.strip()
-        _git(self.repo, "push", "-q", "origin", "alpha-prd")
+        _git(self.repo, "push", "-q", "origin", "feat/alpha")
         _git(self.repo, "checkout", "-q", "main")
         _git(self.repo, "branch", "-q", "-D", "t1")
         return merge_commit

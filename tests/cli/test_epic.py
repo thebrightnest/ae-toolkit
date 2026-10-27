@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,92 +26,66 @@ class TestEpicCLI(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_set_then_show_reports_branch_and_title(self):
-        """R-2: aet epic set writes declaration and aet epic show displays it."""
-        # Create a branch so it resolves
-        git(["branch", "feature/epic-1"], self.repo)
+    def _write(self, rel: str, text: str) -> None:
+        path = self.repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
 
-        result = run_typer(
-            app,
-            ["epic", "set", "feature/epic-1", "--title", "My Epic Title"],
-            cwd=self.repo,
-        )
-        self.assertEqual(result.exit_code, 0, result.output + result.stderr)
-
-        show_res = run_typer(app, ["epic", "show"], cwd=self.repo)
-        self.assertEqual(show_res.exit_code, 0, show_res.output + show_res.stderr)
-        self.assertIn("feature/epic-1", show_res.output)
-        self.assertIn("My Epic Title", show_res.output)
-        self.assertIn("set_at", show_res.output)
-
-    def test_clear_reports_no_active_epic(self):
-        """R-2: aet epic clear clears declaration and aet epic show reports no active epic."""
-        git(["branch", "feature/epic-1"], self.repo)
-
-        run_typer(app, ["epic", "set", "feature/epic-1"], cwd=self.repo)
-        clear_res = run_typer(app, ["epic", "clear"], cwd=self.repo)
-        self.assertEqual(clear_res.exit_code, 0, clear_res.output + clear_res.stderr)
-
-        show_res = run_typer(app, ["epic", "show"], cwd=self.repo)
-        self.assertEqual(show_res.exit_code, 0, show_res.output + show_res.stderr)
-        self.assertIn("No active epic", show_res.output)
-
-    def test_set_rejects_a_missing_body_file(self):
-        """R-1: set rejects a missing body file."""
-        git(["branch", "feature/epic-1"], self.repo)
-
-        result = run_typer(
-            app,
-            ["epic", "set", "feature/epic-1", "--body-file", "nonexistent.md"],
-            cwd=self.repo,
-        )
-        self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("nonexistent.md", result.output + result.stderr)
-
-    def test_unknown_branch_is_refused_without_create(self):
-        """R-18: set on unknown branch exits non-zero naming --create and writes no declaration."""
-        result = run_typer(
-            app,
-            ["epic", "set", "unknown-branch"],
-            cwd=self.repo,
-        )
-        self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("--create", result.output + result.stderr)
-
-        # Ensure no declaration was written
+    def _save_queue(self, queue: list[dict]) -> None:
         backend = create_backend(
             queue_file=str(self.repo / ".agents" / "aet-queue"),
             history_file=str(self.repo / ".agents" / "work-history.jsonl"),
         )
-        self.assertIsNone(backend.read_epic())
-        backend.close()
+        try:
+            backend.save(queue)
+        finally:
+            backend.close()
 
-    def test_create_declares_without_creating_a_branch(self):
-        """R-18: with --create, writes declaration and creates no branch."""
-        result = run_typer(
-            app,
-            ["epic", "set", "new-epic-branch", "--create", "--title", "New Epic"],
-            cwd=self.repo,
-        )
-        self.assertEqual(result.exit_code, 0, result.output + result.stderr)
+    def test_removed_declaration_commands_are_unknown(self):
+        """R-12: `aet epic set`, `show` and `clear` exit as unknown commands."""
+        for argv in (["epic", "set", "feat/x"], ["epic", "show"], ["epic", "clear"]):
+            result = run_typer(app, argv, cwd=self.repo)
+            self.assertNotEqual(result.exit_code, 0, argv)
+            self.assertIn("No such command", result.output, argv)
 
-        # Declaration is written
-        backend = create_backend(
-            queue_file=str(self.repo / ".agents" / "aet-queue"),
-            history_file=str(self.repo / ".agents" / "work-history.jsonl"),
+    def test_list_prints_one_row_per_prd_branch(self):
+        """R-12: a queue with tasks from two PRDs lists two branches with provenance, counts and title."""
+        self._write(".agents/aet-config.json", '{"integration_mode": "single-pr"}\n')
+        self._write(
+            "docs/prds/alpha-prd.md",
+            "---\npr_title: Alpha suite\n---\n\n# Alpha\n",
         )
-        epic = backend.read_epic()
-        self.assertIsNotNone(epic)
-        self.assertEqual(epic["branch"], "new-epic-branch")
-        self.assertEqual(epic["title"], "New Epic")
-        backend.close()
+        self._write("docs/prds/beta.md", "---\nbranch: feat/declared-beta\n---\n\n# Beta\n")
+        alpha = {"frontmatter": {"source_prd": "docs/prds/alpha-prd.md"}}
+        beta = {"frontmatter": {"source_prd": "docs/prds/beta.md"}}
+        self._save_queue(
+            [
+                {"id": "a-1", "state": "queued", "spec": alpha},
+                {"id": "a-2", "state": "implemented", "spec": alpha},
+                {"id": "b-1", "state": "queued", "spec": beta},
+            ]
+        )
 
-        # Branch was NOT created
-        check_branch = subprocess.run(
-            ["git", "-C", str(self.repo), "show-ref", "--verify", "refs/heads/new-epic-branch"],
-            capture_output=True,
-        )
-        self.assertNotEqual(check_branch.returncode, 0)
+        result = run_typer(app, ["epic", "list"], cwd=self.repo)
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        rows = [line for line in result.output.splitlines() if line.startswith("  ")]
+        self.assertEqual(len(rows), 2, result.output)
+        alpha_row = next(row for row in rows if "feat/alpha" in row)
+        beta_row = next(row for row in rows if "feat/declared-beta" in row)
+        self.assertIn("(prd)", alpha_row)
+        self.assertIn("implemented=1", alpha_row)
+        self.assertIn("queued=1", alpha_row)
+        self.assertIn("Alpha suite", alpha_row)
+        self.assertIn("(document)", beta_row)
+        self.assertIn("queued=1", beta_row)
+
+    def test_list_on_empty_queue_reports_no_tasks(self):
+        """R-12: an empty queue lists no epic branches."""
+        result = run_typer(app, ["epic", "list"], cwd=self.repo)
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("No queued tasks", result.output)
 
 
 if __name__ == "__main__":
