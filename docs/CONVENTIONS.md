@@ -426,14 +426,14 @@ The `git-refs` backend stores only non-terminal tasks in `refs/aet/tasks/*`. Whe
 
 ## Base Hygiene
 
-The orchestrator's pre-run hygiene check protects against building worktrees from a dirty or stale base. It is narrowed for plan paths but remains fail-closed for everything else.
+The orchestrator's pre-run hygiene check halts only on state that a run depends on. The root working tree is operator-owned (ADR-082): no run step reads it or writes to it.
 
 Rules:
 
-- Untracked or modified files under `docs/plans/` (including `docs/plans/active/`) are ignored by the dirty check and by the ahead-of-origin check. A local branch may be ahead of `origin/main` when every diverging path is in `docs/plans/`.
-- Non-plan dirty paths still halt the run.
-- A branch that is behind `origin/main` still halts.
-- A mixed commit containing both `docs/plans/` and non-plan paths still halts.
+- The working tree and the index of the root checkout are not checked. Untracked, modified and staged files do not halt a run.
+- A local integration branch behind origin does not halt a run. Behind is the expected state after an origin-only flush.
+- A local integration branch ahead of origin halts when a diverging path is outside `docs/plans/` (ADR-054). A branch ahead with only `docs/plans/` paths passes.
+- A project with no `origin` remote halts when the root has the integration branch checked out. The message names the branch. The fix is to check out another branch in the root or to add a remote.
 - `aet sprint add` no longer has an `--allow-untracked` flag. Untracked plans in `docs/plans/active/` are the normal intake state; the durability write happens only at terminal closure (`merged`/`abandoned`).
 - Untracked plans are load-bearing work in progress. `git clean -fdx`, git-following backups, or any process that discards untracked files can destroy queued/in-progress plans.
 

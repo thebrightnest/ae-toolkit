@@ -56,9 +56,8 @@ def resolve_base_ref(repo_root, ref: str) -> str:
     2. ``refs/remotes/origin/<ref>`` exists → ``origin/<ref>``.
     3. Otherwise the local ``<ref>``.
 
-    This mirrors ``worktree.check_base_hygiene``, which already skips its
-    ahead/behind comparison when the remote-tracking ref is absent so that
-    projects without an origin are not falsely halted.
+    This mirrors ``worktree.check_base_hygiene``, which skips its ahead
+    comparison when the remote-tracking ref is absent.
     """
     if _ref_exists(repo_root, f"refs/remotes/{ref}"):
         return ref

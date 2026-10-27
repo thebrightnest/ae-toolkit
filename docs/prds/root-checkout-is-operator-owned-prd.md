@@ -341,6 +341,32 @@ _Recorded: 2026-10-26 — Branch: rco-05_
 - rco-05: `tests/queue/test_queue_guard.py` seeds the task before the lease
   refusal test, because an add of a new task no longer refuses (R-10).
 
+_Recorded: 2026-10-26 — Branch: rco-03_
+
+### rco-03: Changed from plan
+
+- rco-03 task 4: `AET_TOLERATED_DIRTY_PATHS` and `is_tolerated_dirty_path` are
+  removed. The dirty-tree check was their only caller.
+- rco-03 task 1: the ahead check in `check_base_hygiene` uses the three-dot diff
+  `origin/<branch>...<branch>`. The two-dot diff compared the two trees, so a
+  local branch behind origin halted as ahead when origin had gained files.
+  `test_hygiene_passes_when_origin_gained_code` covers R-7 for this case.
+
+### rco-03: Added (unplanned)
+
+- rco-03: `tests/orchestrator/test_orchestrator.py` drops the dirty-halt and
+  behind-halt tests for `enforce_base_hygiene` and `run_single`. One test
+  asserts that a dirty root proceeds.
+- rco-03: `tests/orchestrator/test_run_one_intake_gate.py` adds an `origin`
+  remote to its fixture repository, so the no-remote halt does not stop it.
+- rco-03: the docstrings of `resolve_base_ref` in `src/aet/branch_ref.py` and
+  `write_aet_gitignore_entries` in `src/aet/cli/setup.py` no longer describe the
+  removed dirty-tree and behind-origin checks.
+
+### rco-03: Deferred
+
+- rco-03 task 6: the merge to main happens at the ship stage.
+
 ---
 
 _Stage: synced_

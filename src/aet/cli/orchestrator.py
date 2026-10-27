@@ -111,6 +111,7 @@ from aet.workflow import Workflow, WorkflowError, WorkflowStage, load_workflow  
 from aet.worktree import (  # noqa: E402
     WorktreeBlockedError,
     _format_paths,
+    branch_checked_out_worktrees,
     check_base_hygiene,
     create_worktree,
     mirror_linked_prd,
@@ -402,16 +403,34 @@ def enforce_base_hygiene(
     """Check base hygiene and decide whether to proceed.
 
     Returns True when the caller should continue, False when it should halt.
-    Base hygiene is a mechanical durability check (see ADR-005/ADR-027/ADR-044):
-    a real violation halts in both interactive and unattended mode so an AFK
-    run never builds an empty worktree off a dirty or unpushed base.
+    Halts on unpushed code (ADR-027), and on a no-remote root that has the
+    integration branch checked out, which a flush cannot move (ADR-082).
     """
     ok, msg = check_base_hygiene(repo_root, integration_branch, trunk_branch)
+    if ok and not _has_origin_remote(repo_root):
+        root = os.path.realpath(repo_root)
+        checked_out = branch_checked_out_worktrees(repo_root, integration_branch)
+        if any(os.path.realpath(path) == root for path in checked_out):
+            ok = False
+            msg = (
+                f"No origin remote and {integration_branch} is checked out in the root; "
+                f"check out another branch in the root or add a remote"
+            )
     if ok:
         return True
 
     print(f"⛔ {msg}. Halting.")
     return False
+
+
+def _has_origin_remote(repo_root: str) -> bool:
+    """Return True when ``repo_root`` has a remote named ``origin``."""
+    result = subprocess.run(
+        ["git", "-C", repo_root, "remote", "get-url", "origin"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
 
 
 def build_parser() -> argparse.ArgumentParser:

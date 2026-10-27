@@ -643,10 +643,8 @@ def prepare_worktree_dependencies(repo_root: str, worktree_dir: str) -> list[dic
     return results
 
 
-# Paths the toolkit writes that must never be tracked. This is the "do not
-# track this" declaration: it feeds the `.gitignore` writer that `aet setup`
-# runs, and the hygiene gate forgives it as a consequence of that. Registering a
-# path here is a statement that the file is machine-local.
+# Paths the toolkit writes that must never be tracked. It feeds the `.gitignore`
+# writer that `aet setup` runs; an entry declares the file machine-local.
 AET_IGNORED_PATHS = {
     ".agents/aet-queue",
     ".agents/aet-queue.lock",
@@ -673,15 +671,6 @@ AET_RETIRED_IGNORED_PATHS = {
     ".agents/work-queue.json.lock",
     ".agents/work-archive.json",
     "scripts/.aet-work-orchestrator.log",
-}
-
-
-# Paths the toolkit writes that are meant to be tracked and committed, but whose
-# mid-run mutation must not halt the next unattended run. This is the "tolerate
-# this dirty" declaration, and it feeds the hygiene gate only: writing one of
-# these to the `.gitignore` would silently stop it from ever being committed.
-AET_TOLERATED_DIRTY_PATHS = {
-    ".agents/learnings.jsonl",
 }
 
 
@@ -730,15 +719,6 @@ def _is_ignored_path(path: str) -> bool:
     return _matches_declaration(path, AET_IGNORED_PATHS)
 
 
-def _is_tolerated_dirty_path(path: str) -> bool:
-    """Return True when ``path`` is tracked but tolerated dirty."""
-    return _matches_declaration(path, AET_TOLERATED_DIRTY_PATHS)
-
-
-# Public alias used by consumers that should not reach into the private name.
-is_tolerated_dirty_path = _is_tolerated_dirty_path
-
-
 DIRTY_PATHS_IN_MESSAGE = 10
 
 
@@ -754,50 +734,12 @@ def _format_paths(paths: list[str], limit: int = DIRTY_PATHS_IN_MESSAGE) -> str:
 def check_base_hygiene(
     repo_root: str, integration_branch: str = "main", trunk_branch: str = "main"
 ) -> tuple[bool, str]:
-    """Check if the integration branch is clean and synced with origin.
+    """Check that the local integration branch carries no unpushed code.
 
-    Never-tracked paths (``AET_IGNORED_PATHS``) are excluded from the dirty
-    check because the orchestrator mutates them as part of normal operation and
-    they must be gitignored in projects using the toolkit. Tracked paths the
-    toolkit appends to (``AET_TOLERATED_DIRTY_PATHS``) are excluded too: they are
-    meant to be committed, so ignoring them is not an option, but an append must
-    not halt the next run. Plan files under ``docs/plans/`` are also excluded:
-    their mid-sprint lifecycle status is local-only until a terminal transition
-    commits them (ADR-054). The ahead-of-origin check still halts when any
-    diverging path is outside the deferred set.
-
-    A dirty verdict names the offending paths. An unattended run cannot ask, so
-    a bare refusal would cost the operator a hand-run ``git status`` plus a
-    cross-check against three declarations.
+    Halts only when the branch is ahead of origin with a path outside
+    ``docs/plans/`` (ADR-054). The root working tree is operator-owned (ADR-082).
     """
-    # Check working tree, ignoring AET-generated paths and deferred plan
-    # paths. Use --untracked-files=all so untracked paths are listed
-    # individually rather than collapsed into parent directories.
-    result = subprocess.run(
-        ["git", "-C", repo_root, "status", "--short", "--untracked-files=all"],
-        capture_output=True,
-        text=True,
-    )
-    dirty_paths = []
-    for line in result.stdout.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        parts = stripped.split(maxsplit=1)
-        if len(parts) < 2:
-            continue
-        path = parts[1]
-        if (
-            not _is_ignored_path(path)
-            and not _is_tolerated_dirty_path(path)
-            and not _is_deferred_path(path)
-        ):
-            dirty_paths.append(path)
-    if dirty_paths:
-        return False, f"Working tree is dirty: {_format_paths(dirty_paths)}"
-
-    # No remote tracking branch means there is nothing to be ahead of or
-    # behind; projects without an origin must not be falsely halted.
+    # No remote tracking branch means there is nothing to be ahead of.
     origin_ref = f"refs/remotes/origin/{integration_branch}"
     has_origin = (
         subprocess.run(
@@ -809,8 +751,8 @@ def check_base_hygiene(
     if not has_origin:
         return True, ""
 
-    # Check unpushed commits against the integration branch. Plan-only
-    # divergences are allowed; mixed plan+code divergences still halt.
+    # Three-dot diff: only local commits count, so behind origin never halts.
+    # Plan-only divergences are allowed; mixed plan+code divergences still halt.
     diff = subprocess.run(
         [
             "git",
@@ -818,7 +760,7 @@ def check_base_hygiene(
             repo_root,
             "diff",
             "--name-only",
-            f"origin/{integration_branch}..{integration_branch}",
+            f"origin/{integration_branch}...{integration_branch}",
         ],
         capture_output=True,
         text=True,
@@ -833,25 +775,6 @@ def check_base_hygiene(
     else:
         # Cannot resolve the divergence; fail closed to preserve ADR-027.
         msg = f"Local {integration_branch} is ahead of origin/{integration_branch}"
-        if integration_branch != trunk_branch:
-            msg += f" (trunk: {trunk_branch})"
-        return False, msg
-
-    # Check unpulled commits against the integration branch.
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            repo_root,
-            "rev-list",
-            "--count",
-            f"{integration_branch}..origin/{integration_branch}",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if int(result.stdout.strip() or 0) > 0:
-        msg = f"Local {integration_branch} is behind origin/{integration_branch}"
         if integration_branch != trunk_branch:
             msg += f" (trunk: {trunk_branch})"
         return False, msg

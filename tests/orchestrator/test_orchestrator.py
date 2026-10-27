@@ -231,45 +231,12 @@ class TestEnforceBaseHygiene(unittest.TestCase):
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
                 self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
-    def test_enforce_base_hygiene_halts_when_main_behind_in_interactive_mode(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            # Move origin/main forward while local main stays behind.
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD~0"],
-                check=True,
-            )
-            # Create another commit on a detached branch to advance origin ref.
-            Path(repo_root, "remote.txt").write_text("x", encoding="utf-8")
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            new_head = subprocess.run(
-                ["git", "-C", repo_root, "commit-tree", "HEAD^{tree}", "-m", "remote commit"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", new_head],
-                check=True,
-            )
-            with patch.dict(os.environ, {}, clear=False):
-                os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
-
-    def test_enforce_base_hygiene_halts_when_dirty_in_interactive_mode(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
-            with patch.dict(os.environ, {}, clear=False):
-                os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
-
-    def test_enforce_base_hygiene_halts_when_dirty_in_unattended_mode(self):
+    def test_enforce_base_hygiene_proceeds_when_root_is_dirty(self):
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
-                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
+                self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
     def test_enforce_base_hygiene_proceeds_when_clean_in_unattended_mode(self):
         with tempfile.TemporaryDirectory() as repo_root:
@@ -288,49 +255,6 @@ class TestEnforceBaseHygiene(unittest.TestCase):
             )
             with patch.dict(os.environ, {"AET_EXECUTION_MODE": "unattended"}):
                 self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
-
-    def test_enforce_base_hygiene_ignores_untracked_queue_file(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            Path(repo_root, ".agents").mkdir()
-            Path(repo_root, ".agents", "aet-queue").write_text(
-                '{"tasks": []}', encoding="utf-8"
-            )
-            with patch.dict(os.environ, {}, clear=False):
-                os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
-
-    def test_enforce_base_hygiene_ignores_modified_queue_files(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            Path(repo_root, ".agents").mkdir()
-            queue_file = Path(repo_root, ".agents", "aet-queue")
-            queue_file.write_text('{"tasks": []}', encoding="utf-8")
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add queue"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
-            queue_file.write_text('{"tasks": [{"id": "x"}]}', encoding="utf-8")
-            with patch.dict(os.environ, {}, clear=False):
-                os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertTrue(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
-
-    def test_enforce_base_hygiene_still_halts_on_other_dirty_files(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            Path(repo_root, ".agents").mkdir()
-            Path(repo_root, ".agents", "aet-queue").write_text(
-                '{"tasks": []}', encoding="utf-8"
-            )
-            Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
-            with patch.dict(os.environ, {}, clear=False):
-                os.environ.pop("AET_EXECUTION_MODE", None)
-                self.assertFalse(orchestrator.enforce_base_hygiene(repo_root, "main", "main"))
 
 
 class TestDeferredDurabilityNotice(unittest.TestCase):
@@ -403,41 +327,6 @@ class TestRunSingleHygiene(unittest.TestCase):
                 ["git", "-C", repo_root, "commit", "-q", "-m", "ahead commit"],
                 check=True,
             )
-            args = _make_args(repo_root, "docs/plans/demo.md")
-            with patch.dict(
-                os.environ, {"AET_EXECUTION_MODE": ""}, clear=True
-            ):
-                with patch.object(orchestrator, "process_task") as mock_process:
-                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
-            self.assertEqual(exit_code, 1)
-            mock_process.assert_not_called()
-
-    def test_run_single_halts_when_main_behind(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            new_head = subprocess.run(
-                ["git", "-C", repo_root, "commit-tree", "HEAD^{tree}", "-m", "remote commit"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", new_head],
-                check=True,
-            )
-            args = _make_args(repo_root, "docs/plans/demo.md")
-            with patch.dict(
-                os.environ, {"AET_EXECUTION_MODE": ""}, clear=True
-            ):
-                with patch.object(orchestrator, "process_task") as mock_process:
-                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
-            self.assertEqual(exit_code, 1)
-            mock_process.assert_not_called()
-
-    def test_run_single_halts_when_main_dirty(self):
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_git_repo(repo_root)
-            Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
             args = _make_args(repo_root, "docs/plans/demo.md")
             with patch.dict(
                 os.environ, {"AET_EXECUTION_MODE": ""}, clear=True

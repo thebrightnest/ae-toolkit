@@ -23,6 +23,7 @@ def _git_init(root: Path) -> None:
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     for key, value in (("user.email", "t@example.com"), ("user.name", "T")):
         subprocess.run(["git", "-C", str(root), "config", key, value], check=True)
+    subprocess.run(["git", "-C", str(root), "remote", "add", "origin", str(root)], check=True)
 
 
 def _clean_plan(plans_dir: Path, prds_dir: Path, name: str) -> Path:

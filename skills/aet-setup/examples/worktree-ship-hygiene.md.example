@@ -8,15 +8,9 @@ The `aet run` orchestrator runs tasks in isolated git worktrees. `aet-ship` open
 
 ## Before `aet run`
 
-1. Ensure the parent session is on `main` and `origin/main` is up to date:
-
-   ```bash
-   git checkout main
-   git pull origin main
-   ```
-
-2. If local `main` is ahead of `origin/main`, push it first or expect to rebase shipped branches later.
-3. Verify the orchestrator creates worktrees from `origin/main`, not the current branch.
+1. The root checkout is operator-owned. `aet run` does not read or write its working tree, so uncommitted edits in the root do not halt a run.
+2. If local `main` is ahead of `origin/main` with code, push it first. The run halts on unpushed code.
+3. A project with no `origin` remote must not have the integration branch checked out in the root. Check out another branch in the root or add a remote.
 
 ## Before `aet-ship`
 

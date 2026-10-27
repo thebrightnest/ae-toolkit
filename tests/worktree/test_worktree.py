@@ -705,109 +705,18 @@ class TestCheckBaseHygiene(unittest.TestCase):
             check=True,
         )
 
-    def test_queue_sidecars_do_not_trip_dirty_check(self):
-        """The lock and lease sidecars linger by design; hygiene must ignore them."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            agents_dir = Path(repo_root, ".agents")
-            agents_dir.mkdir()
-            for sidecar in ("aet-queue.lock", "aet-queue.lease"):
-                (agents_dir / sidecar).write_text("", encoding="utf-8")
-
-            ok, msg = worktree.check_base_hygiene(repo_root)
-
-            self.assertTrue(ok, f"sidecars should be ignored, got: {msg}")
-
-    def test_other_untracked_files_still_fail_hygiene(self):
-        """Control: the ignore list must not widen beyond the queue artifacts."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            agents_dir = Path(repo_root, ".agents")
-            agents_dir.mkdir()
-            (agents_dir / "notes.txt").write_text("x", encoding="utf-8")
-
-            ok, msg = worktree.check_base_hygiene(repo_root)
-
-            self.assertFalse(ok)
-            self.assertEqual(msg, "Working tree is dirty: .agents/notes.txt")
-
-    def test_dirty_message_names_every_offending_path(self):
-        """An unattended run cannot ask; the halt must carry its own diagnosis."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            for name in ("one.txt", "two.txt", "three.txt"):
-                Path(repo_root, name).write_text("x", encoding="utf-8")
-
-            ok, msg = worktree.check_base_hygiene(repo_root)
-
-            self.assertFalse(ok)
-            self.assertIn("one.txt", msg)
-            self.assertIn("two.txt", msg)
-            self.assertIn("three.txt", msg)
-            self.assertNotIn("more", msg)
-
-    def test_dirty_message_truncates_a_long_path_list(self):
-        """Ten paths are enough to diagnose; the rest are counted, not printed."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo(repo_root)
-            for index in range(13):
-                Path(repo_root, f"stray{index:02d}.txt").write_text("x", encoding="utf-8")
-
-            ok, msg = worktree.check_base_hygiene(repo_root)
-
-            self.assertFalse(ok)
-            self.assertIn("stray00.txt", msg)
-            self.assertIn("stray09.txt", msg)
-            self.assertNotIn("stray10.txt", msg)
-            self.assertIn("(+3 more)", msg)
-
-    def test_untracked_plan_is_allowed(self):
-        """An untracked docs/plans file is deferred; hygiene ignores it."""
+    def test_hygiene_passes_with_untracked_prd_and_modified_file(self):
+        """No run step reads the root tree, so its edits do not halt a run."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo_with_origin(repo_root)
-            plan = Path(repo_root, "docs", "plans", "new.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("---\nid: new\n---\n", encoding="utf-8")
+            prd = Path(repo_root, "docs", "prds", "new-prd.md")
+            prd.parent.mkdir(parents=True, exist_ok=True)
+            prd.write_text("# PRD\n", encoding="utf-8")
+            Path(repo_root, "README.md").write_text("# edited", encoding="utf-8")
 
             ok, msg = worktree.check_base_hygiene(repo_root, "main", "main")
 
             self.assertTrue(ok, msg)
-
-    def test_modified_plan_is_allowed(self):
-        """A modified docs/plans file is deferred; hygiene ignores it."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo_with_origin(repo_root)
-            plan = Path(repo_root, "docs", "plans", "existing.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("---\nid: existing\n---\n", encoding="utf-8")
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
-            plan.write_text("---\nid: existing\nstatus: queued\n---\n", encoding="utf-8")
-
-            ok, msg = worktree.check_base_hygiene(repo_root, "main", "main")
-
-            self.assertTrue(ok, msg)
-
-    def test_non_plan_dirty_still_halts(self):
-        """A dirty non-deferred path still fails hygiene even with a clean plan."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            self._init_repo_with_origin(repo_root)
-            plan = Path(repo_root, "docs", "plans", "new.md")
-            plan.parent.mkdir(parents=True, exist_ok=True)
-            plan.write_text("---\nid: new\n---\n", encoding="utf-8")
-            Path(repo_root, "dirty.txt").write_text("x", encoding="utf-8")
-
-            ok, msg = worktree.check_base_hygiene(repo_root, "main", "main")
-
-            self.assertFalse(ok)
-            self.assertEqual(msg, "Working tree is dirty: dirty.txt")
 
     def test_ahead_with_only_plan_commits_passes(self):
         """Local main may be ahead of origin if every diverging path is a plan."""
@@ -826,7 +735,7 @@ class TestCheckBaseHygiene(unittest.TestCase):
 
             self.assertTrue(ok, msg)
 
-    def test_ahead_with_mixed_plan_and_code_fails(self):
+    def test_hygiene_halts_when_ahead_with_code(self):
         """A commit mixing a plan and a source file is still a hygiene violation."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo_with_origin(repo_root)
@@ -847,8 +756,8 @@ class TestCheckBaseHygiene(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("ahead", msg.lower())
 
-    def test_behind_origin_still_halts(self):
-        """A local main behind origin fails hygiene regardless of plan paths."""
+    def test_hygiene_passes_when_behind_origin(self):
+        """Behind origin is the expected state after an origin-only flush."""
         with tempfile.TemporaryDirectory() as repo_root:
             self._init_repo_with_origin(repo_root)
             new_head = subprocess.run(
@@ -874,8 +783,30 @@ class TestCheckBaseHygiene(unittest.TestCase):
 
             ok, msg = worktree.check_base_hygiene(repo_root, "main", "main")
 
-            self.assertFalse(ok)
-            self.assertIn("behind", msg.lower())
+            self.assertTrue(ok, msg)
+
+    def test_hygiene_passes_when_origin_gained_code(self):
+        """A flush adds code to origin only; local main behind it carries nothing unpushed."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            self._init_repo_with_origin(repo_root)
+            Path(repo_root, "flushed.py").write_text("x", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "flushed task"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "reset", "-q", "--hard", "HEAD~1"],
+                check=True,
+            )
+
+            ok, msg = worktree.check_base_hygiene(repo_root, "main", "main")
+
+            self.assertTrue(ok, msg)
 
 
 def _task_linking(prd: str | None) -> dict:
