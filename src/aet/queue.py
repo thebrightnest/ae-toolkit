@@ -11,7 +11,7 @@ import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 from filelock import FileLock
 
@@ -243,13 +243,23 @@ def check_lease(queue_file: str) -> None:
     raise LeaseHeldError(run_id)
 
 
-def lease_guard(queue_file: str, force: bool = False) -> bool:
+def lease_guard(
+    queue_file: str,
+    force: bool = False,
+    *,
+    writes: Iterable[str] | None = None,
+    queue: list[dict[str, Any]] | None = None,
+) -> bool:
     """Check the run lease for a mutating entry point.
 
-    Returns ``True`` when the mutation may proceed. When a live lease is held
-    by a different run, a refusal is printed (``force`` false) or an override
-    warning is printed (``force`` true) and the matching boolean is returned.
+    Returns ``True`` when no other live run holds the lease, when ``force`` is
+    set, or when every id in ``writes`` is absent from ``queue`` (add-only).
+    A refusal or an override warning is printed to stderr.
     """
+    if writes is not None and queue is not None:
+        written = set(writes)
+        if written and not written & {t.get("id") for t in queue}:
+            return True
     try:
         check_lease(queue_file)
     except LeaseHeldError as exc:

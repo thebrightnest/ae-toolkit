@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,7 @@ from unittest import mock
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.cli import sprint as sprint_cmd
 from aet.plan_parser import is_task_inert
+from aet.queue import acquire_lease
 
 
 def _git_init(root: Path) -> None:
@@ -165,8 +167,8 @@ class TestInertnessPredicate(unittest.TestCase):
         self.assertEqual(blocking_field, "integration_branch")
 
 
-class TestSprintAddReingestion(unittest.TestCase):
-    """Tests for sprint add re-ingestion and distinct outcomes (R-1, R-2, R-3, R-4)."""
+class _SprintRepoMixin:
+    """A git repo with plan and PRD directories, driven through ``aet sprint add``."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -213,6 +215,10 @@ class TestSprintAddReingestion(unittest.TestCase):
                 with contextlib.redirect_stderr(stderr):
                     rc = sprint_cmd.main()
         return rc, stdout.getvalue(), stderr.getvalue()
+
+
+class TestSprintAddReingestion(_SprintRepoMixin, unittest.TestCase):
+    """Tests for sprint add re-ingestion and distinct outcomes (R-1, R-2, R-3, R-4)."""
 
     def test_inert_task_is_re_ingested(self):
         """Editing an inert queued task's plan and re-adding re-ingests the spec (R-1)."""
@@ -377,6 +383,67 @@ class TestSprintAddReingestion(unittest.TestCase):
             )
         finally:
             fresh_backend.close()
+
+
+class TestSprintAddUnderLiveLease(_SprintRepoMixin, unittest.TestCase):
+    """Add-only intake passes a live run lease; re-ingest does not (R-10, R-11)."""
+
+    def setUp(self):
+        super().setUp()
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop("AET_RUN_ID", None)
+
+    def _hold_live_lease(self) -> None:
+        self.queue_file.parent.mkdir(parents=True, exist_ok=True)
+        acquire_lease(str(self.queue_file), "run-other")
+
+    def test_add_new_task_succeeds_under_live_lease(self):
+        _write_plan(self.plans_dir, "base-1")
+        self.assertEqual(self._run_sprint_add("base-1")[0], 0)
+        self._hold_live_lease()
+
+        _write_plan(self.plans_dir, "new-1", blocked_by=["base-1"])
+        rc, out, err = self._run_sprint_add("new-1")
+
+        self.assertEqual(rc, 0, err)
+        self.assertIn("queued without publishing", out)
+        queue = {t["id"]: t for t in self.backend.load()["queue"]}
+        self.assertEqual(queue["new-1"]["state"], "blocked")
+        self.assertEqual(queue["base-1"]["blocks"], ["new-1"])
+
+    def test_reingest_refuses_under_live_lease(self):
+        _write_plan(self.plans_dir, "base-2")
+        self.assertEqual(self._run_sprint_add("base-2")[0], 0)
+        self._hold_live_lease()
+
+        _write_plan(self.plans_dir, "base-2", body_extra="Edited during the run.")
+        rc, out, err = self._run_sprint_add("base-2")
+
+        self.assertEqual(rc, 1)
+        self.assertIn("Refusing to mutate the queue: owned by run run-other", err)
+        task = next(t for t in self.backend.load()["queue"] if t["id"] == "base-2")
+        self.assertNotIn("Edited during the run.", task["spec"]["body"])
+
+    def test_added_task_survives_run_side_write(self):
+        _write_plan(self.plans_dir, "run-task")
+        self.assertEqual(self._run_sprint_add("run-task")[0], 0)
+        run_backend = GitRefsBackend(
+            queue_file=str(self.queue_file),
+            history_file=str(self.history_file),
+        )
+        run_queue = run_backend.load()["queue"]
+        self._hold_live_lease()
+
+        _write_plan(self.plans_dir, "added-mid-run")
+        self.assertEqual(self._run_sprint_add("added-mid-run")[0], 0)
+
+        run_queue[0]["cost"] = {"tokens": 1, "usd": 0.0}
+        run_backend.save(run_queue)
+
+        ids = {t["id"] for t in self.backend.load()["queue"]}
+        self.assertEqual(ids, {"run-task", "added-mid-run"})
 
 
 if __name__ == "__main__":

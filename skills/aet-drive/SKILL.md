@@ -59,6 +59,11 @@ backlog; compare the plan files against the Board yourself.
 
 No commit or push happens at intake; plan durability is deferred to terminal closure.
 
+Intake of a new task works during a live run. `aet sprint add` and `aet sprint intake`
+pass the run lease when every task they write is new, and the run spawns the task on
+its next scheduling pass. Re-ingest of a task already on the Board still waits for the
+run to end. Never pass `--force` to admit a task: `--force` also unlocks running tasks.
+
 ### 1. Natural CLI Adapter Adaptation
 
 `aet run` automatically inspects process ancestry to detect host CLI adapters (`agy`, `claude`, `kimi`).

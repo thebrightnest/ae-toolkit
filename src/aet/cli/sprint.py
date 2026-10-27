@@ -40,6 +40,7 @@ from aet.queue import (  # noqa: E402
     append_history,
     build_blocks,
     lease_guard,
+    queue_lock,
 )
 
 
@@ -59,6 +60,11 @@ def _add(args: argparse.Namespace) -> int:
     backend.fetch()
     projections = resolve_projections(resolve_config(args.config), posture=backend.posture)
 
+    with queue_lock(args.queue_file):
+        return _add_locked(args, backend, projections, plans_dir)
+
+
+def _add_locked(args: argparse.Namespace, backend, projections, plans_dir: Path) -> int:
     try:
         data = backend.load()
     except QueueIntegrityError as exc:
@@ -159,7 +165,7 @@ def _add(args: argparse.Namespace) -> int:
 
             build_blocks(queue)
 
-            if not lease_guard(args.queue_file, force=args.force):
+            if not lease_guard(args.queue_file, force=args.force, writes=[updated_task["id"]], queue=queue):
                 backend.close()
                 return 1
 
@@ -239,12 +245,12 @@ def _add(args: argparse.Namespace) -> int:
     task = outcome.task
     plan_file = outcome.plan_file
 
-    queue.append(task)
-    build_blocks(queue)
-
-    if not lease_guard(args.queue_file, force=args.force):
+    if not lease_guard(args.queue_file, force=args.force, writes=[task["id"]], queue=queue):
         backend.close()
         return 1
+
+    queue.append(task)
+    build_blocks(queue)
 
     backend.save(queue)
     backend.push()
@@ -279,6 +285,11 @@ def _intake(args: argparse.Namespace) -> int:
     backend.fetch()
     projections = resolve_projections(resolve_config(args.config), posture=backend.posture)
 
+    with queue_lock(args.queue_file):
+        return _intake_locked(args, backend, projections, plans_dir)
+
+
+def _intake_locked(args: argparse.Namespace, backend, projections, plans_dir: Path) -> int:
     try:
         data = backend.load()
     except QueueIntegrityError as exc:
@@ -287,6 +298,7 @@ def _intake(args: argparse.Namespace) -> int:
         return 1
     queue = data["queue"]
     history = data["history"]
+    loaded = list(queue)
 
     github = next(
         (p for p in projections.projections if isinstance(p, GitHubBackend)),
@@ -359,7 +371,8 @@ def _intake(args: argparse.Namespace) -> int:
     if admitted:
         build_blocks(queue)
 
-        if not lease_guard(args.queue_file, force=args.force):
+        written = [task_id for task_id, _ in admitted]
+        if not lease_guard(args.queue_file, force=args.force, writes=written, queue=loaded):
             backend.close()
             return 1
 

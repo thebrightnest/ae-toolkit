@@ -287,7 +287,9 @@ After the `plan` command completes and the plan.md is ready for review:
 2. Plan files do not require a footer. Admission onto the board is governed
    by the operator's invocation (`aet sprint add`) or GitHub label
    (`aet sprint intake`), with validation enforced by the single admission
-   operation (ADR-066). Existing footers are treated as breadcrumbs only.
+   operation (ADR-066). Admission of a new task works during a live run;
+   re-ingest of a task already on the board waits for the run to end.
+   Existing footers are treated as breadcrumbs only.
 
 3. Confirm the intake triage guard was applied (bug vs. feature) and document the classification in the PRD or plan notes.
 4. The new plan files are ready to queue. Because mid-sprint queue state is local-only, remind the user that untracked plans are load-bearing: `git clean -fdx` or git-following backups will discard in-flight work.

@@ -5,15 +5,21 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from aet.backends.git_refs_backend import GitRefsBackend
+from aet.backends.github_backend import GitHubBackend
 from aet.cli import sprint as sprint_cmd
+from aet.queue import acquire_lease
+from tests.test_sprint_add import _SprintRepoMixin
+from tests.test_sprint_add import _write_plan as _write_add_plan
 
 
 def _write_plan(plans_dir: Path, stem: str, blocked_by: list[str] | None = None) -> Path:
@@ -665,6 +671,56 @@ class TestSprintIntakeEnumeratesOnce(unittest.TestCase):
             data = _read_queue(queue_file, history_file)
             ids = {t["id"] for t in data}
             self.assertEqual(ids, {"feat-006", "feat-007"})
+
+
+class TestSprintIntakeUnderLiveLease(_SprintRepoMixin, unittest.TestCase):
+    """The intake door admits new tasks while another run holds the lease."""
+
+    def setUp(self):
+        super().setUp()
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop("AET_RUN_ID", None)
+
+    def _run_sprint_intake(self, candidates: list[dict]) -> tuple[int, str, str]:
+        forge = mock.Mock(spec=GitHubBackend)
+        forge.find_sprint_candidates.return_value = candidates
+        projections = SimpleNamespace(projections=[forge], on_add=lambda task, is_new: None)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        argv = [
+            "sprint",
+            "intake",
+            "--queue-file",
+            str(self.queue_file),
+            "--history-file",
+            str(self.history_file),
+            "--plans-dir",
+            str(self.plans_dir),
+            "--config",
+            str(self.config_path),
+        ]
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(
+            sprint_cmd, "resolve_projections", return_value=projections
+        ):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                rc = sprint_cmd.main()
+        return rc, stdout.getvalue(), stderr.getvalue()
+
+    def test_intake_new_task_succeeds_under_live_lease(self):
+        _write_add_plan(self.plans_dir, "base-1")
+        self.assertEqual(self._run_sprint_add("base-1")[0], 0)
+        self.queue_file.parent.mkdir(parents=True, exist_ok=True)
+        acquire_lease(str(self.queue_file), "run-other")
+
+        _write_add_plan(self.plans_dir, "new-1")
+        rc, out, err = self._run_sprint_intake([{"task_id": "new-1", "issue_number": 7}])
+
+        self.assertEqual(rc, 0, err)
+        self.assertIn("Admitted new-1 (#7)", out)
+        ids = {t["id"] for t in self.backend.load()["queue"]}
+        self.assertEqual(ids, {"base-1", "new-1"})
 
 
 if __name__ == "__main__":

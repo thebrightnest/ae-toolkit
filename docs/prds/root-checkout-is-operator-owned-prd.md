@@ -321,6 +321,26 @@ _Recorded: 2026-10-26 — Branch: rco-04_
   path. The cso stage rated this Low. Backlog item:
   `mirror-exclude-pattern-control-characters`.
 
+_Recorded: 2026-10-26 — Branch: rco-05_
+
+### rco-05: Changed from plan
+
+- rco-05 task 2: the stale run-side write was in `GitRefsBackend.save`
+  (`src/aet/backends/git_refs_backend.py`), not in `src/aet/queue.py`. Its
+  prune deleted the ref of every task absent from the writer's queue, which
+  included tasks another writer added after the load. The prune now deletes
+  only refs that the writer loaded.
+- rco-05 task 1: `aet sprint add` and `aet sprint intake` hold `queue_lock`
+  across load, lease check and save. `aet sprint add` appends the new task
+  only after the lease check passes.
+- rco-05 task 3: the intake-door test is in the existing
+  `tests/cli/test_sprint_intake.py`, not in a new `tests/test_sprint_intake.py`.
+
+### rco-05: Added (unplanned)
+
+- rco-05: `tests/queue/test_queue_guard.py` seeds the task before the lease
+  refusal test, because an add of a new task no longer refuses (R-10).
+
 ---
 
 _Stage: synced_

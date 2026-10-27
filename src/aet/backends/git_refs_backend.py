@@ -311,9 +311,10 @@ class GitRefsBackend(TaskBackend):
 
         # Prune refs for tasks that are no longer in the live queue (sealed or
         # removed). Use the current ref sha as the compare-and-swap value.
+        # A ref this writer never loaded was added by another writer: keep it.
         for ref in self._list_task_refs():
             task_id = ref[len(TASKS_REF_PREFIX) :]
-            if task_id not in seen:
+            if task_id not in seen and task_id in self._loaded_shas:
                 current_sha = self._ref_sha(ref)
                 if current_sha is not None:
                     updates.append(("delete", ref, None, current_sha))

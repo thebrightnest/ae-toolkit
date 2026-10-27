@@ -87,6 +87,18 @@ def _load_tasks(queue_file: Path, history_file: Path) -> list[dict]:
     ).load()["queue"]
 
 
+def _sprint_add(sprint, plan: Path, queue_file: Path, history_file: Path, root: Path) -> None:
+    rc = sprint.main([
+        "add",
+        str(plan),
+        "--queue-file", str(queue_file),
+        "--history-file", str(history_file),
+        "--plans-dir", str(plan.parent),
+        "--config", str(root / "missing-config.json"),
+    ])
+    assert rc == 0
+
+
 def _clear_run_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("AET_RUN_ID", raising=False)
 
@@ -112,18 +124,21 @@ def git_repo(tmp_path: Path) -> Path:
 
 
 def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys):
-    """A foreign live lease makes `aet sprint add` refuse before writing."""
+    """A foreign live lease makes a re-ingesting `aet sprint add` refuse before writing."""
     _clear_run_env(monkeypatch)
     qf = tmp_path / ".agents" / "aet-queue"
     hf = tmp_path / ".agents" / "work-history.jsonl"
     qf.parent.mkdir(parents=True, exist_ok=True)
     hf.touch()
     plan = _write_plan(tmp_path / "docs" / "plans", "feat-add")
+    sprint = _load_bin("sprint")
+    _sprint_add(sprint, plan, qf, hf, tmp_path)
+    before = _load_tasks(qf, hf)
+    capsys.readouterr()
 
     # A live lease owned by a different run (our PID is alive, run_id is foreign).
     acquire_lease(str(qf), "foreign-run")
 
-    sprint = _load_bin("sprint")
     rc = sprint.main([
         "add",
         str(plan),
@@ -136,8 +151,7 @@ def test_add_refused_while_lease_held_by_live_run(tmp_path, monkeypatch, capsys)
     assert rc == 1
     captured = capsys.readouterr()
     assert "foreign-run" in captured.err
-    assert not qf.exists()  # refused before writing the queue
-    assert _load_tasks(qf, hf) == []
+    assert _load_tasks(qf, hf) == before
 
 
 def test_child_with_matching_run_id_allowed(tmp_path, monkeypatch):
@@ -178,10 +192,12 @@ def test_force_overrides_lease_with_warning(tmp_path, monkeypatch, capsys):
     qf.parent.mkdir(parents=True, exist_ok=True)
     hf.touch()
     plan = _write_plan(tmp_path / "docs" / "plans", "feat-force")
+    sprint = _load_bin("sprint")
+    _sprint_add(sprint, plan, qf, hf, tmp_path)
+    capsys.readouterr()
 
     acquire_lease(str(qf), "foreign-run")
 
-    sprint = _load_bin("sprint")
     rc = sprint.main([
         "add",
         str(plan),
