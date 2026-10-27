@@ -6,8 +6,8 @@ expected git command sequence.  The assertion is a command-sequence check,
 not a code-read check, satisfying R-14's regression guard.
 
 Baseline updated by owb-01 (R-19): the working plan is rendered from the
-task record instead of seeded with a standalone commit, and ``docs/plans/``
-is no longer overlaid by ``copy_untracked_files``.
+task record instead of seeded with a standalone commit. Baseline updated by
+rco-04 (R-8): a task with no linked PRD triggers no mirror git calls.
 """
 
 from __future__ import annotations
@@ -210,19 +210,6 @@ class TestPrPerTaskGitSequenceUnchanged(unittest.TestCase):
                     "-b",
                     "demo",
                     "origin/main",
-                ],
-                [
-                    "git",
-                    "-C",
-                    "<repo>",
-                    "ls-files",
-                    "--others",
-                    "--exclude-standard",
-                    "docs/prds/",
-                    "docs/adr/",
-                    "docs/audits/",
-                    "docs/retros/",
-                    "docs/product-briefs/",
                 ],
                 # No seed check: the plan is rendered from the task record
                 # (R-19), so no cat-file probe and no seed commit.

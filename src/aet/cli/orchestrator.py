@@ -112,8 +112,8 @@ from aet.worktree import (  # noqa: E402
     WorktreeBlockedError,
     _format_paths,
     check_base_hygiene,
-    copy_untracked_files,
     create_worktree,
+    mirror_linked_prd,
     prepare_worktree_dependencies,
     render_task_plan,
     teardown_worktree,
@@ -1850,7 +1850,7 @@ def process_task(
     # Create or reuse worktree
     if worktree_dir is None:
         worktree_dir = create_worktree(repo_root, task_id, base_branch=base_branch)
-    copy_untracked_files(repo_root, worktree_dir)
+    mirror_linked_prd(repo_root, worktree_dir, task)
 
     # Render the working plan from the task record into the worktree (R-19).
     # The plan file is ephemeral: it is never committed and never overlays the

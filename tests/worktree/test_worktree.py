@@ -12,56 +12,114 @@ from pathlib import Path
 from aet import worktree
 
 
-class TestCopyUntrackedFiles(unittest.TestCase):
-    def test_copies_untracked_prd_and_adr_into_worktree(self):
-        """Untracked referenced docs (not plans) are copied to the worktree."""
+def _git(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, check=True
+    ).stdout
+
+
+class TestMirrorLinkedPrd(unittest.TestCase):
+    """R-8 and R-9: only the linked untracked PRD reaches the task worktree."""
+
+    def test_mirror_copies_only_linked_untracked_prd(self):
         with tempfile.TemporaryDirectory() as repo_root:
-            worktree_dir = os.path.join(repo_root, ".worktrees", "x-demo")
+            _init_repo_with_origin(repo_root)
+            prds = Path(repo_root, "docs", "prds")
+            prds.mkdir(parents=True)
+            Path(prds, "linked-prd.md").write_text("linked", encoding="utf-8")
+            Path(prds, "other-prd.md").write_text("other", encoding="utf-8")
+            Path(repo_root, "docs", "adr").mkdir(parents=True)
+            Path(repo_root, "docs", "adr", "099-draft.md").write_text("adr", encoding="utf-8")
+            worktree_dir = worktree.create_worktree(repo_root, "x", "origin/main")
+            task = _task_linking("docs/prds/linked-prd.md")
 
-            # Initialize a repo so git ls-files works.
-            subprocess.run(["git", "init", "-q", repo_root], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "config", "user.email", "test@example.com"],
-                check=True,
+            mirrored = worktree.mirror_linked_prd(repo_root, worktree_dir, task)
+
+            self.assertEqual(mirrored, "docs/prds/linked-prd.md")
+            self.assertEqual(
+                Path(worktree_dir, "docs", "prds", "linked-prd.md").read_text(encoding="utf-8"),
+                "linked",
             )
-            subprocess.run(
-                ["git", "-C", repo_root, "config", "user.name", "Test User"],
-                check=True,
+            self.assertFalse(Path(worktree_dir, "docs", "prds", "other-prd.md").exists())
+            self.assertFalse(Path(worktree_dir, "docs", "adr", "099-draft.md").exists())
+
+    def test_mirrored_prd_absent_from_status_and_add_all(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            Path(repo_root, "docs", "prds").mkdir(parents=True)
+            Path(repo_root, "docs", "prds", "linked-prd.md").write_text("linked", encoding="utf-8")
+            worktree_dir = worktree.create_worktree(repo_root, "x", "origin/main")
+
+            worktree.mirror_linked_prd(
+                repo_root, worktree_dir, _task_linking("docs/prds/linked-prd.md")
             )
 
-            # Create tracked directories so pathspecs match.
-            for subdir in [
-                "docs/prds",
-                "docs/adr",
-                "docs/audits",
-                "docs/retros",
-                "docs/product-briefs",
-            ]:
-                Path(repo_root, subdir).mkdir(parents=True, exist_ok=True)
+            self.assertEqual(_git("-C", worktree_dir, "status", "--porcelain"), "")
+            _git("-C", worktree_dir, "add", "-A")
+            self.assertEqual(_git("-C", worktree_dir, "diff", "--cached", "--name-only"), "")
 
-            # Create untracked files. Plans are rendered from the task record,
-            # not mirrored (R-19).
-            untracked_files = [
-                "docs/prds/x-demo-prd.md",
-                "docs/adr/099-x-demo.md",
-                "docs/audits/x-demo-audit.md",
-                "docs/retros/x-demo-retro.md",
-                "docs/product-briefs/x-demo-brief.md",
-            ]
-            for rel_path in untracked_files:
-                Path(repo_root, rel_path).write_text("content", encoding="utf-8")
+    def test_root_status_still_lists_operator_draft(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            Path(repo_root, "docs", "prds").mkdir(parents=True)
+            Path(repo_root, "docs", "prds", "linked-prd.md").write_text("linked", encoding="utf-8")
+            worktree_dir = worktree.create_worktree(repo_root, "x", "origin/main")
+            sibling_dir = worktree.create_worktree(repo_root, "y", "origin/main")
+            Path(sibling_dir, "docs", "prds").mkdir(parents=True)
+            Path(sibling_dir, "docs", "prds", "linked-prd.md").write_text("draft", encoding="utf-8")
 
-            worktree.copy_untracked_files(repo_root, worktree_dir)
-
-            for rel_path in untracked_files:
-                dest = Path(worktree_dir, rel_path)
-                self.assertTrue(dest.exists(), f"Expected {rel_path} to be copied")
-                self.assertEqual(dest.read_text(encoding="utf-8"), "content")
-
-            # Plans are no longer mirrored by copy_untracked_files.
-            self.assertFalse(
-                Path(worktree_dir, "docs", "plans", "x-demo.md").exists()
+            worktree.mirror_linked_prd(
+                repo_root, worktree_dir, _task_linking("docs/prds/linked-prd.md")
             )
+
+            root_status = _git("-C", repo_root, "status", "--porcelain", "-uall")
+            self.assertIn("?? docs/prds/linked-prd.md", root_status)
+            sibling_status = _git("-C", sibling_dir, "status", "--porcelain", "-uall")
+            self.assertIn("?? docs/prds/linked-prd.md", sibling_status)
+
+    def test_no_mirror_for_tracked_or_unlinked_prd(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            prd = Path(repo_root, "docs", "prds", "tracked-prd.md")
+            prd.parent.mkdir(parents=True)
+            prd.write_text("base", encoding="utf-8")
+            _git("-C", repo_root, "add", ".")
+            _git("-C", repo_root, "commit", "-q", "-m", "add prd")
+            _git("-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD")
+            prd.write_text("modified", encoding="utf-8")
+            Path(repo_root, "docs", "prds", "draft-prd.md").write_text("draft", encoding="utf-8")
+            worktree_dir = worktree.create_worktree(repo_root, "x", "origin/main")
+
+            tracked = worktree.mirror_linked_prd(
+                repo_root, worktree_dir, _task_linking("docs/prds/tracked-prd.md")
+            )
+            unlinked = worktree.mirror_linked_prd(repo_root, worktree_dir, _task_linking(None))
+
+            self.assertIsNone(tracked)
+            self.assertIsNone(unlinked)
+            self.assertEqual(
+                Path(worktree_dir, "docs", "prds", "tracked-prd.md").read_text(encoding="utf-8"),
+                "base",
+            )
+            self.assertFalse(Path(worktree_dir, "docs", "prds", "draft-prd.md").exists())
+
+    def test_user_excludes_still_apply_after_mirror(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            user_ignore = Path(repo_root, "..", Path(repo_root).name + "-ignore").resolve()
+            user_ignore.write_text("*.swp\n", encoding="utf-8")
+            self.addCleanup(user_ignore.unlink)
+            _git("-C", repo_root, "config", "core.excludesFile", str(user_ignore))
+            Path(repo_root, "docs", "prds").mkdir(parents=True)
+            Path(repo_root, "docs", "prds", "linked-prd.md").write_text("linked", encoding="utf-8")
+            worktree_dir = worktree.create_worktree(repo_root, "x", "origin/main")
+
+            worktree.mirror_linked_prd(
+                repo_root, worktree_dir, _task_linking("docs/prds/linked-prd.md")
+            )
+            Path(worktree_dir, "notes.swp").write_text("swap", encoding="utf-8")
+
+            self.assertEqual(_git("-C", worktree_dir, "status", "--porcelain"), "")
 
 
 class TestPrepareWorktreeDependencies(unittest.TestCase):
@@ -820,6 +878,12 @@ class TestCheckBaseHygiene(unittest.TestCase):
             self.assertIn("behind", msg.lower())
 
 
+def _task_linking(prd: str | None) -> dict:
+    """Return a task record whose spec links ``prd``."""
+    frontmatter = {"source_prd": prd} if prd else {}
+    return {"id": "x", "spec": {"frontmatter": frontmatter, "body": ""}}
+
+
 def _init_repo_with_origin(repo_root: str) -> None:
     """Initialize a repo with a clean main branch tracking origin."""
     subprocess.run(["git", "init", "-q", repo_root], check=True)
@@ -897,42 +961,6 @@ class TestRenderTaskPlan(unittest.TestCase):
             )
             self.assertFalse(rendered)
             self.assertFalse(Path(worktree_dir, "docs", "plans", "x.md").exists())
-
-
-class TestCopyUntrackedDocs(unittest.TestCase):
-    def test_does_not_overlay_prd_by_content(self):
-        """Non-deferred directories keep the untracked-only mirror behavior."""
-        with tempfile.TemporaryDirectory() as repo_root:
-            _init_repo_with_origin(repo_root)
-            prd = Path(repo_root, "docs", "prds", "tracked.md")
-            prd.parent.mkdir(parents=True, exist_ok=True)
-            prd.write_text("base", encoding="utf-8")
-            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
-            subprocess.run(
-                ["git", "-C", repo_root, "commit", "-q", "-m", "add prd"],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
-                check=True,
-            )
-            prd.write_text("modified", encoding="utf-8")
-            Path(repo_root, "docs", "prds", "new.md").write_text(
-                "untracked", encoding="utf-8"
-            )
-            worktree_dir = worktree.create_worktree(repo_root, "x", "origin/main")
-
-            worktree.copy_untracked_files(repo_root, worktree_dir)
-
-            # Untracked PRD is mirrored.
-            self.assertTrue(Path(worktree_dir, "docs", "prds", "new.md").exists())
-            # Modified tracked PRD is left at the base version.
-            self.assertEqual(
-                Path(worktree_dir, "docs", "prds", "tracked.md").read_text(
-                    encoding="utf-8"
-                ),
-                "base",
-            )
 
 
 class TestTeardownWorktree(unittest.TestCase):

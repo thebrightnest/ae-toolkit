@@ -299,6 +299,28 @@ _Recorded: 2026-10-26 — Branch: rco-02_
   test file. The fix is out of scope and is filed in the local backlog.
 - rco-02 task 6: the merge to main happens at the ship stage.
 
+_Recorded: 2026-10-26 — Branch: rco-04_
+
+### rco-04: Changed from plan
+
+- rco-04 task 2: the worktree-scoped `core.excludesFile` replaces the user's
+  global excludes file in that worktree. The worktree file is therefore seeded
+  from `core.excludesFile` or `$XDG_CONFIG_HOME/git/ignore` before the mirrored
+  path is appended. `test_user_excludes_still_apply_after_mirror` covers it.
+
+### rco-04: Added (unplanned)
+
+- rco-04 task 1: `mirror_linked_prd` skips a linked PRD that resolves outside
+  the repository root, and returns the mirrored repo-relative path.
+- rco-04 task 2: the mirrored path is written as an anchored, glob-escaped
+  pattern, so it matches that one file only.
+
+### rco-04: Deferred
+
+- rco-04: the exclude pattern does not reject control characters in the PRD
+  path. The cso stage rated this Low. Backlog item:
+  `mirror-exclude-pattern-control-characters`.
+
 ---
 
 _Stage: synced_

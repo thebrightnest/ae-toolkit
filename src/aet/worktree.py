@@ -438,38 +438,81 @@ def render_task_plan(repo_root: str, worktree_dir: str, task: dict[str, Any]) ->
     return False
 
 
-def copy_untracked_files(repo_root: str, worktree_dir: str) -> None:
-    """Mirror untracked referenced docs into the worktree.
+def mirror_linked_prd(repo_root: str, worktree_dir: str, task: dict[str, Any]) -> str | None:
+    """Copy the task's linked PRD into the worktree when it is untracked in the root.
 
-    Plans are rendered from the task record by :func:`render_task_plan`, so
-    ``docs/plans/`` is no longer mirrored here.  The referenced doc
-    directories remain an untracked-only copy so we do not silently overwrite
-    tracked PRDs or ADRs with working-tree drafts.
+    Returns:
+        The repo-relative path of the mirrored PRD, or None when nothing is mirrored.
     """
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            repo_root,
-            "ls-files",
-            "--others",
-            "--exclude-standard",
-            "docs/prds/",
-            "docs/adr/",
-            "docs/audits/",
-            "docs/retros/",
-            "docs/product-briefs/",
-        ],
+    from aet.branch_ref import _task_prd_path
+
+    prd = _task_prd_path(task, repo_root)
+    if prd is None or not prd.is_file():
+        return None
+    try:
+        rel = prd.resolve().relative_to(Path(repo_root).resolve()).as_posix()
+    except ValueError:
+        return None
+    untracked = _run_git(
+        ["-C", repo_root, "ls-files", "--others", "--exclude-standard", "--", rel],
         capture_output=True,
         text=True,
         check=True,
     )
-    for untracked in result.stdout.strip().split("\n"):
-        if not untracked or _is_deferred_path(untracked):
-            continue
-        src = os.path.join(repo_root, untracked)
-        dest = os.path.join(worktree_dir, untracked)
-        _copy_file(src, dest)
+    if not untracked.stdout.strip():
+        return None
+    _copy_file(str(prd), os.path.join(worktree_dir, rel))
+    _exclude_in_worktree(worktree_dir, rel)
+    return rel
+
+
+MIRROR_EXCLUDE_FILE = "aet-mirror-exclude"
+
+
+def _user_excludes_file(worktree_dir: str) -> str:
+    """Return the excludes file git applies when ``core.excludesFile`` is unset or inherited."""
+    configured = _run_git(
+        ["-C", worktree_dir, "config", "--path", "core.excludesFile"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if configured:
+        return configured
+    xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(xdg, "git", "ignore")
+
+
+def _exclude_in_worktree(worktree_dir: str, rel: str) -> None:
+    """Exclude ``rel`` in ``worktree_dir`` only, through a worktree-scoped ``core.excludesFile``."""
+    git_dir = _run_git(
+        ["-C", worktree_dir, "rev-parse", "--absolute-git-dir"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    exclude_path = os.path.join(git_dir, MIRROR_EXCLUDE_FILE)
+    if not os.path.exists(exclude_path):
+        # The worktree value replaces the user's excludes file, so it carries its rules.
+        seed = _user_excludes_file(worktree_dir)
+        lines = Path(seed).read_text(encoding="utf-8").splitlines() if os.path.isfile(seed) else []
+        Path(exclude_path).write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+    pattern = "/" + "".join(f"\\{c}" if c in "\\*?[" else c for c in rel)
+    existing = Path(exclude_path).read_text(encoding="utf-8").splitlines()
+    if pattern not in existing:
+        with open(exclude_path, "a", encoding="utf-8") as handle:
+            handle.write(f"{pattern}\n")
+
+    enabled = _run_git(
+        ["-C", worktree_dir, "config", "--bool", "extensions.worktreeConfig"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if enabled != "true":
+        _run_git(["-C", worktree_dir, "config", "extensions.worktreeConfig", "true"], check=True)
+    _run_git(
+        ["-C", worktree_dir, "config", "--worktree", "core.excludesFile", exclude_path],
+        check=True,
+    )
 
 
 def dependency_warmup_required(repo_root: str, worktree_dir: str) -> list[dict]:
