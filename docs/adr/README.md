@@ -99,6 +99,7 @@ Do **not** write an ADR for:
 - [080 — Retire aet-work, aet-extract-stack, and aet-upgrade](080-retire-aet-work-extract-stack-upgrade.md)
 - [081 — Retire aet-design-system-creation](081-retire-aet-design-system-creation.md)
 - [083 — A Task's PRD Names Its Epic, and Epics Run in Parallel](083-a-tasks-prd-names-its-epic.md)
+- [084 — A Gate Failure Is Evidence, and Retries Are Bounded](084-a-gate-failure-is-evidence.md)
 
 ## Format
 
