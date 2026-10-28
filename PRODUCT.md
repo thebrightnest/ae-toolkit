@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.22.0
+## Current Version: 1.23.0
 
-Last updated: 2026-10-27
+Last updated: 2026-10-28
 
 ---
 
@@ -27,7 +27,7 @@ Run plans with isolation, quality gates, and traceability.
 
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
-- **aet-drive** — Autonomous execution loop that drives an entire declared epic or sprint queue to completion. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, standalone sprint mode when no active epic is set, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts. Tasks added to the sprint while a run is live are picked up on the next scheduling pass, and the run never touches the operator's root checkout, so planning and editing continue in parallel.
+- **aet-drive** — Autonomous execution loop that drives every epic and task in the sprint queue to completion. Several epics run in parallel, each into its own branch, and a problem in one epic does not stop the others. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts. Tasks added to the sprint while a run is live are picked up on the next scheduling pass, and the run never touches the operator's root checkout, so planning and editing continue in parallel.
 
 ### Quality and Security Skills
 
@@ -50,7 +50,7 @@ Land code cleanly and document releases.
 
 Keep projects and the toolkit itself healthy.
 
-- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, `aet setup skills` with native auto-detection for Antigravity (`~/.gemini/config/skills`) alongside Claude, Kimi, and Cursor, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the active epic declaration beside the resolved trunk and integration branch, says whether the installed version is the newest release, and names any skill link left pointing at a skill that no longer exists. `aet setup skills` removes those links, so a retired skill disappears from the agent's skill list.
+- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, `aet setup skills` with native auto-detection for Antigravity (`~/.gemini/config/skills`) alongside Claude, Kimi, and Cursor, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the epic branches of the queue beside the resolved trunk, says whether the installed version is the newest release, and names any skill link left pointing at a skill that no longer exists. `aet setup skills` removes those links, so a retired skill disappears from the agent's skill list.
 - **aet update** — Updates an installer-managed install, CLI and skills together, to the newest release in one command. `aet update --check` shows what would change first, `--tag` picks a specific release, and a failed update puts the previous version back. `aet --version` says when a newer release is out.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
@@ -64,7 +64,7 @@ Carry context and lessons across runs.
 - **aet handoff** — Writes and reads run-scoped handoff notes so agents can pass context between sessions.
 - **aet sprint intake** — Reads `aet:sprint` issues from GitHub, checks each candidate against the dependency graph, and admits it or refuses with the blocking reason named. New tasks can be admitted while a run is live.
 - **aet state reconcile** — Reports and clears refs stranded on a clone, so a board that drifted can be brought back in line without hand-editing refs.
-- **aet epic** — Declares the active epic, shows it, and clears it. The declaration holds the integration branch, the pull request title, and a body file, so an epic pull request has somewhere to live before it ships.
+- **aet epic list** — Lists every epic in the queue: its branch, where that branch came from, and how many of its tasks are in each state. An epic is declared in its PRD, which also holds the pull request title and body.
 - **aet breaker** — Shows the tracked failure signatures behind the circuit breaker and resets it. Clearing a tripped breaker no longer needs a low-level git ref command.
 - **aet docs lint** — Checks a fact a document copies from the tree against the tree itself: a retired data path, an architecture-decision relation, or a code symbol an anchor names. A deliberate divergence is declared with an escape marker rather than left to decay.
 - **aet state audit** — Reconciles stored task state against git and names any task record carrying no plan spec.
@@ -90,6 +90,13 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.23.0
+
+- **Run several epics at once** — one `aet run` drives every epic in the queue in parallel, each into its own branch, instead of one epic at a time.
+- **The PRD names the epic** — an epic branch comes from its PRD, so there is nothing to declare before a run.
+- **One problem stops only its own work** — a misconfigured task or branch is skipped with a named remedy while every other epic keeps going.
+- **Ship each epic by name** — `aet ship open-epic <branch>` opens the epic pull request with the title and body from its PRD, and `aet epic list` shows what is in flight.
 
 ### What's New in v1.22.0
 

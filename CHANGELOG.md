@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.23.0] — 2026-10-28
+
+### Added
+
+- **Several epics run in parallel** — in `single-pr` mode one `aet run` drives every epic in the queue. Each task's worktree starts from the tip of its own epic branch, and the child process receives that branch as `--base`. A missing epic branch is created locally at the trunk tip and is not pushed. Base hygiene is checked once per branch, before the first task on it starts. The run banner lists each integration branch with its provenance. Integration stays serialized under the one integration lock (ADR-083).
+- **`aet epic list`** — prints each integration branch that queued tasks resolve to, with provenance, task counts by state, and the PRD `pr_title`.
+- **`aet ship open-epic <branch>`** — opens the epic pull request for a named branch. The branch is optional only when the queue resolves to one branch. The title comes from the PRD frontmatter `pr_title`, else from the PRD heading; the body file comes from `pr_body_file`. Two PRDs on one branch with different values make the command refuse and name both.
+
+### Changed
+
+- **A task's PRD names its epic** — in `single-pr` mode a task's integration branch resolves in this order: `--base`, `AET_WORK_BASE_BRANCH`, the task stamp, the PRD frontmatter `branch`, the name derived from the PRD file, config `integration_branch`, trunk. The derived name is `feat/` plus the PRD filename stem without `-prd`: `conversation-store-prd.md` gives `feat/conversation-store`. The queue envelope's active epic is no longer a resolution step (ADR-083, amends ADR-076).
+- **A fault stops only its own scope** — a task whose stamp differs from its resolved branch is skipped for the rest of the run and stays `ready`. A branch that fails base hygiene skips only its own tasks. A task whose blocker is on another integration branch is not spawned, and the summary names both branches. Other tasks continue. The run summary and `last-run.json` list each skip with its remedy, skips do not count toward the circuit breaker, and the run exits 1 when it skipped a task. The `aet run` preflight no longer halts the whole batch on one stamp mismatch; `aet run-one` keeps that check.
+- **`aet setup verify`** lists the epic branches of the queue in `single-pr` mode, in place of the active epic declaration.
+
+### Removed
+
+- **`aet epic set`, `aet epic show` and `aet epic clear`** — the PRD declares the epic, so the queue envelope holds no epic. `aet epic list` replaces `aet epic show`. An `epic` key in an existing queue envelope is named in one warning and dropped on the next envelope write (ADR-083).
+
+**Upgrading from 1.22.0:** run `aet update`. In `single-pr` mode, a PRD whose tasks must integrate into a branch other than `feat/<stem>` needs a `branch:` line in its frontmatter. This covers PRDs that relied on `aet epic set` and projects that used the bare PRD stem as the branch name. Tasks already stamped keep their branch; if a stamp no longer matches, the run skips the task and names the remedy. Replace `aet epic set` in scripts with a PRD `branch:` line, and pass the branch to `aet ship open-epic` when the queue holds more than one epic.
+
+---
+
 ## [1.22.0] — 2026-10-27
 
 ### Added

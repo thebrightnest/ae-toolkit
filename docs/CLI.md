@@ -272,7 +272,7 @@ Generate the CLI reference markdown file.
 
 ## `aet epic`
 
-Active epic declaration and inspection.
+Epic inspection commands.
 
 ### Subcommands
 
