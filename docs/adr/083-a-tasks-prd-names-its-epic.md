@@ -7,8 +7,9 @@ relates: [39, 44, 45, 76, 79]
 
 ## Status
 
-Proposed. Amends ADR-076 decisions 1, 2 and 4. Applies ADR-045 §2 to every
-task in a batch. PRD: `docs/prds/parallel-epics-prd.md`.
+Accepted (2026-10-28). Delivered by `pep-01` to `pep-04` (PRD:
+`docs/prds/parallel-epics-prd.md`). Amends ADR-076 decisions 1, 2 and 4.
+Applies ADR-045 §2 to every task in a batch.
 
 ## Context
 
