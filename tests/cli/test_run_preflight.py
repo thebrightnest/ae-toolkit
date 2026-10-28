@@ -104,9 +104,10 @@ class TestSynchronousPreflightCliBinary:
 
 
 class TestSynchronousPreflightEpicMismatch:
-    """Stamped epic mismatch fails `aet run` and `aet run-one` synchronously before spawning."""
+    """A stamped epic mismatch fails `aet run-one`; `aet run` spawns and skips the task."""
 
-    def test_run_fails_fast_on_stamped_epic_mismatch(self, repo_env: Path) -> None:
+    def test_run_spawns_despite_stamped_epic_mismatch(self, repo_env: Path) -> None:
+        """R-6: the batch skips the mismatched task itself; preflight does not halt the run."""
         config_file = repo_env / ".agents" / "aet-config.json"
         config_file.write_text('{"integration_mode": "single-pr", "integration_branch": "epic-02"}', encoding="utf-8")
         backend = GitRefsBackend(
@@ -121,14 +122,11 @@ class TestSynchronousPreflightEpicMismatch:
         }
         backend.save([task])
 
-        with patch.object(aet, "_spawn_detached") as spawn:
+        with patch.object(aet, "_spawn_detached", return_value=0) as spawn:
             result = run_typer(aet.app, ["run"], cwd=str(repo_env))
 
-        assert result.exit_code == 1, result.output
-        assert "Epic mismatch" in result.output
-        assert "epic-01" in result.output
-        assert "epic-02" in result.output
-        spawn.assert_not_called()
+        assert "Epic mismatch" not in result.output
+        spawn.assert_called_once()
 
     def test_run_one_fails_fast_on_stamped_epic_mismatch(self, repo_env: Path) -> None:
         config_file = repo_env / ".agents" / "aet-config.json"

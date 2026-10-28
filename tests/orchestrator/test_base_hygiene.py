@@ -134,6 +134,8 @@ class TestPerBranchHygiene(unittest.TestCase):
             self.assertNotIn("task-b", states, output)
             self.assertIn("Skipping task-a", output)
             self.assertIn("Local feat/a is ahead of origin/feat/a", output)
+            summary = output.split("🏁 Orchestrator finished.")[1]
+            self.assertIn("Remedy: push feat/a or reset it to origin/feat/a", summary)
             log = subprocess.run(
                 ["git", "-C", repo_root, "log", "origin/feat/b", "--format=%s"],
                 capture_output=True,

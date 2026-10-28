@@ -4976,8 +4976,11 @@ class TestParentManagedIntegration(unittest.TestCase):
                 with patch.object(orchestrator, "resolve_integration_mode", return_value="single-pr"):
                     with patch.object(orchestrator, "_integrate_completed_task") as mock_integrate:
                         with patch.object(orchestrator, "has_actionable_tasks", side_effect=[True, False]):
-                            exit_code = orchestrator.run_batch(args, _FAKE_ADAPTER)
+                            buf = io.StringIO()
+                            with contextlib.redirect_stdout(buf):
+                                exit_code = orchestrator.run_batch(args, _FAKE_ADAPTER)
                             self.assertEqual(exit_code, 0)
+                            self.assertNotIn("Skipped", buf.getvalue())
                             mock_integrate.assert_called_once()
                             call_kwargs = mock_integrate.call_args.kwargs
                             self.assertEqual(call_kwargs["task"]["id"], task_id)

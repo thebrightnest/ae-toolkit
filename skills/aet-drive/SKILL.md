@@ -157,6 +157,7 @@ After processing any staged conflicts, check queue health:
 aet status
 ```
 
+- **If the run summary lists skipped tasks**: Go to **Skipped Tasks** before any other step.
 - **If unblocked tasks are `ready`**: Return to **Step A** (`aet run`).
 - **If tasks are blocked or errored**: Analyze the blocker. If it requires external human decisions or credentials, pause and report details to the user. Tasks left in `failed` or `quarantined` go to **Residual Failures**.
 - **If all epic tasks are closed**: The epic is complete! Proceed to **Epic Finalization**.
@@ -251,6 +252,27 @@ For each task still in `failed` or `quarantined` after the run settles:
    ```
 
 Every move goes through `aet state transition`; never edit queue state by hand.
+
+---
+
+## Skipped Tasks
+
+A fault on one task or epic skips only that scope (ADR-083). The run summary lists each
+skipped task under `Skipped:` with a reason and a remedy, and the run exits 1. A skipped
+task stays `ready`, adds no failure and does not count toward the Circuit Breaker.
+
+| Reason                  | Cause                                                        |
+| ----------------------- | ------------------------------------------------------------ |
+| `epic mismatch`         | The task's stamp differs from the branch its PRD resolves to |
+| `cross-epic dependency` | A blocker integrates into another epic branch                |
+| base hygiene problem    | The task's epic branch fails base hygiene                    |
+
+For each skipped task:
+
+1. Report the task id, the reason and the remedy from the summary to the operator.
+2. Do not re-run the batch for the skipped task. The same skip recurs until the cause changes.
+3. Apply a remedy only on the operator's word. A cross-epic dependency clears when both PRDs
+   declare one `branch`, or when the blocker's epic PR reaches trunk.
 
 ---
 

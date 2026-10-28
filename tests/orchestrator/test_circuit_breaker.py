@@ -424,6 +424,65 @@ class TestOrchestratorBreakerWiring:
         t1 = next(t for t in queue if t["id"] == "t1")
         assert "failure_signatures" not in t1 or not t1["failure_signatures"]
 
+    def test_three_skips_do_not_trip_systemic_breaker(self, tmp_path, capsys):
+        """R-6, R-9: three skipped tasks add no failure and leave the breaker untripped."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "config", "user.email", "test@example.com"], check=True
+        )
+        subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test User"], check=True)
+        (repo / "README.md").write_text("# test", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "initial"], check=True)
+        config_file = repo / ".agents" / "aet-config.json"
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_file.write_text(
+            json.dumps(
+                {
+                    "trunk_branch": "main",
+                    "integration_branch": "epic-02",
+                    "integration_mode": "single-pr",
+                }
+            ),
+            encoding="utf-8",
+        )
+        queue_file = str(repo / ".agents" / "aet-queue")
+        backend = orchestrator._make_backend(queue_file)
+        backend.save(
+            [
+                {"id": f"t{i}", "state": "ready", "integration_branch": "epic-01"}
+                for i in range(breaker.SYSTEMIC_BREAKER_THRESHOLD)
+            ]
+        )
+        store = breaker.BreakerStore(str(repo))
+        args = orchestrator.argparse.Namespace(
+            queue_file=queue_file,
+            repo_root=str(repo),
+            max_jobs=1,
+            isolation="minimal",
+            task_timeout=3600,
+            heartbeat_interval=60,
+            on_failure="continue",
+            cli_bin=None,
+            base=None,
+        )
+
+        class FakeAdapter:
+            name = "fake"
+            bin = "fake"
+
+        exit_code = orchestrator.run_batch(args, FakeAdapter())
+
+        output = capsys.readouterr().out
+        assert exit_code == 1
+        assert breaker.systemic_tripped(store.load()) is None
+        assert "Failed:    0" in output
+        assert f"Skipped:   {breaker.SYSTEMIC_BREAKER_THRESHOLD}" in output
+        states = {t["id"]: t["state"] for t in backend.load()["queue"]}
+        assert set(states.values()) == {"ready"}
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

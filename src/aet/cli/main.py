@@ -616,27 +616,7 @@ def _validate_preflight(
                 history_file=history_file,
             )
             backend.fetch()
-            data = backend.load()
-            queue = data.get("queue", [])
-            config = resolve_config(config_path, repo_root=repo_root)
-            try:
-                integration_mode = resolve_integration_mode(config_path, repo_root=repo_root)
-            except Exception:
-                integration_mode = "pr-per-task"
-            if integration_mode == "single-pr":
-                for task in queue:
-                    if task.get("state") in ("ready", "in_progress", "planned", "awaiting_merge"):
-                        has_mismatch, stamped, resolved = check_task_epic_mismatch(
-                            repo_root, config, task, integration_mode, backend=backend
-                        )
-                        if has_mismatch:
-                            typer.echo(
-                                format_epic_mismatch_error(task.get("id", ""), stamped, resolved),
-                                err=True,
-                            )
-                            raise typer.Exit(1)
-        except typer.Exit:
-            raise
+            backend.load()
         except (
             QueueIntegrityError,
             LegacyTaskBackendError,

@@ -2426,6 +2426,44 @@ def get_next_ready_task(
     return None
 
 
+def cross_epic_blocker(
+    repo_root: str,
+    config: dict,
+    task: dict,
+    task_branch: str,
+    trunk_branch: str,
+    queue: list[dict],
+    backend,
+    cli_base: str | None = None,
+) -> tuple[str, str] | None:
+    """Return the first blocker that integrates into another epic branch.
+
+    Returns:
+        ``(blocker_id, blocker_branch)``, or None when every blocker shares
+        ``task_branch``, has reached ``trunk_branch``, or has no known branch.
+    """
+    by_id = {t.get("id"): t for t in queue}
+    own = task_branch.removeprefix("origin/")
+    for blocker_id in task.get("blocked_by", []):
+        blocker = by_id.get(blocker_id)
+        if blocker is None and hasattr(backend, "read_sealed"):
+            blocker = backend.read_sealed(blocker_id)
+        if not blocker:
+            continue
+        branch = resolve_integration_branch_for_task(
+            repo_root, config, blocker, "single-pr", cli_base=cli_base, backend=backend
+        ).ref
+        if branch.removeprefix("origin/") == own:
+            continue
+        merge_commit = blocker.get("merge_commit")
+        if merge_commit and train.is_ancestor_or_equal(
+            repo_root, merge_commit, resolve_base_ref(repo_root, trunk_branch)
+        ):
+            continue
+        return blocker_id, branch.removeprefix("origin/")
+    return None
+
+
 def has_pending_tasks(queue: list[dict]) -> bool:
     """Return True if any task is still actionable (stored non-terminal)."""
     return queue_has_pending_tasks(queue)
@@ -3365,7 +3403,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     leftover_report: dict[str, int] = {}
     teardown_leftovers: list[str] = []
     hygiene_by_branch: dict[str, str | None] = {}
-    skipped_ids: set[str] = set()
+    skips: dict[str, dict[str, str]] = {}
     task_timeout = getattr(args, "task_timeout", 3600)
     heartbeat_interval = getattr(args, "heartbeat_interval", 60)
 
@@ -3395,6 +3433,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 ),
                 total_tokens=total_tokens,
                 total_cost_usd=total_cost_usd,
+                skipped=skips,
             )
         )
         logger.copy_work_history(os.path.join(repo_root, ".agents", "work-history.jsonl"))
@@ -3402,6 +3441,10 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         print("🏁 Orchestrator finished.")
         print(f"   Succeeded: {successes}")
         print(f"   Failed:    {failures}")
+        if skips:
+            print(f"   Skipped:   {len(skips)}")
+            for skipped_id, skip in skips.items():
+                print(f"     - {skipped_id}: {skip['reason']}. Remedy: {skip['remedy']}")
         if leftover_report:
             print(f"   Leftover:  {format_leftover_report(leftover_report)}")
         if teardown_leftovers:
@@ -3527,6 +3570,10 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
             _spawn_pass()
 
+    def _skip(task_id: str, reason: str, remedy: str) -> None:
+        print(f"   ⏭️  Skipping {task_id}: {reason}")
+        skips[task_id] = {"reason": reason, "remedy": remedy}
+
     def _spawn_pass() -> int:
         nonlocal failures, stop_spawn
         if stop_spawn or _shutdown_requested:
@@ -3553,7 +3600,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             queue = backend.load()["queue"]
         while len(running) < max_jobs and not stop_spawn and not _shutdown_requested:
             task = get_next_ready_task(
-                queue, exclude=running.keys() | spawned_in_pass | skipped_ids
+                queue, exclude=running.keys() | spawned_in_pass | skips.keys()
             )
             if not task:
                 break
@@ -3572,9 +3619,13 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             )
             if has_mismatch:
                 print(format_epic_mismatch_error(task_id, stamped, resolved))
-                failures += 1
-                stop_spawn = True
-                break
+                _skip(
+                    task_id,
+                    f"epic mismatch: stamped {stamped}, PRD resolves to {resolved}",
+                    f"declare `branch: {stamped}` in the task's PRD, "
+                    f"or run `aet state reset {task_id}`",
+                )
+                continue
 
             task_ref = integration
             task_base = base_branch
@@ -3587,14 +3638,39 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     cli_base=getattr(args, "base", None),
                     backend=backend,
                 )
+                cross = cross_epic_blocker(
+                    repo_root,
+                    config,
+                    task,
+                    task_ref.ref,
+                    trunk.ref,
+                    queue,
+                    backend,
+                    cli_base=getattr(args, "base", None),
+                )
+                if cross is not None:
+                    blocker_id, blocker_branch = cross
+                    _skip(
+                        task_id,
+                        f"cross-epic dependency: blocker {blocker_id} integrates into "
+                        f"{blocker_branch}, task integrates into {task_ref.ref}",
+                        f"declare one `branch` in both PRDs, or wait for the "
+                        f"{blocker_branch} epic PR to reach {trunk.ref}",
+                    )
+                    continue
                 if task_ref.ref not in hygiene_by_branch:
                     hygiene_by_branch[task_ref.ref] = base_hygiene_problem(
                         repo_root, task_ref.ref, trunk.ref
                     )
                 problem = hygiene_by_branch[task_ref.ref]
                 if problem is not None:
-                    print(f"   ⏭️  Skipping {task_id}: {problem}")
-                    skipped_ids.add(task_id)
+                    _skip(
+                        task_id,
+                        problem,
+                        f"push {task_ref.ref} or reset it to origin/{task_ref.ref}"
+                        if _has_origin_remote(repo_root)
+                        else "check out another branch in the root or add a remote",
+                    )
                     continue
                 if ensure_integration_branch(
                     repo_root, task_ref.ref, resolve_base_ref(repo_root, trunk.ref)
@@ -3726,7 +3802,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     break
                 queue = backend.load()["queue"]
                 if has_actionable_tasks(
-                    [t for t in queue if t.get("id") not in skipped_ids], running.keys()
+                    [t for t in queue if t.get("id") not in skips], running.keys()
                 ):
                     time.sleep(0.2)
                     continue
@@ -3754,7 +3830,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     # Reload queue and check if newly merged tasks unblocked ready tasks
                     queue = backend.load()["queue"]
                     if has_actionable_tasks(
-                        [t for t in queue if t.get("id") not in skipped_ids], running.keys()
+                        [t for t in queue if t.get("id") not in skips], running.keys()
                     ):
                         continue
 
@@ -3812,7 +3888,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             _cleanup_task(task_id, -1, eager_spawn=False)
 
         _print_behind_origin(behind_origin)
-        exit_code = 1 if failures > 0 or skipped_ids else 0
+        exit_code = 1 if failures > 0 or skips else 0
         outcome = "success" if exit_code == 0 else "failure"
         _write_summary(outcome, exit_code)
         release_lease(queue_file, logger.run_id)

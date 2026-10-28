@@ -338,6 +338,7 @@ def run_summary_record(
     leftover: dict[str, int] | None = None,
     total_tokens: int | None = None,
     total_cost_usd: float | None = None,
+    skipped: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Build a per-run summary telemetry record.
 
@@ -363,6 +364,7 @@ def run_summary_record(
         "leftover": leftover or {},
         "total_tokens": total_tokens,
         "total_cost_usd": total_cost_usd,
+        "skipped": skipped or {},
     }
 
 

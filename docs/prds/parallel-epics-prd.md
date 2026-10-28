@@ -251,5 +251,21 @@ the change selects the branch that task commits integrate into.
 
 - `pep-02`: `ensure_integration_branch` does not validate the branch name with `git check-ref-format --branch`. The name comes from repository content or operator input. Security audit finding L-1, severity Low.
 
+*Recorded: 2026-10-28 — Branch: pep-03-faults-stop-their-own-scope*
+
+### Changed from plan — pep-03
+
+- `pep-03` task 3: `cross_epic_blocker` ignores a blocker whose `merge_commit` is already on trunk, and a blocker with no queue or sealed record. It resolves the trunk ref only for a blocker on another branch, so the no-skip spawn path adds no git call.
+- `pep-03` task 4: the skips enter `last-run.json` through a new `skipped` field of `run_summary_record` in `src/aet/telemetry.py`. The plan did not list that file.
+
+### Added (unplanned) — pep-03
+
+- `pep-03`: the `aet run` preflight in `src/aet/cli/main.py` no longer checks stamp mismatch over the queue. That check exited 1 before the batch started, so one mismatched task still halted every epic. The `aet run-one` preflight keeps the check, because its scope is one task. `tests/cli/test_run_preflight.py` asserts that `aet run` spawns despite a mismatch.
+- `pep-03`: a base hygiene skip from `pep-02` also carries a remedy in the summary. The remedy is to push or reset the branch, or to check out another branch or add a remote when the repository has no `origin`. `tests/orchestrator/test_base_hygiene.py` asserts the remedy line.
+
+### Deferred — pep-03
+
+- None.
+
 *Stage: synced*
 *Next step: run `aet-ship`*
