@@ -100,6 +100,8 @@ Do **not** write an ADR for:
 - [081 — Retire aet-design-system-creation](081-retire-aet-design-system-creation.md)
 - [083 — A Task's PRD Names Its Epic, and Epics Run in Parallel](083-a-tasks-prd-names-its-epic.md)
 - [084 — A Gate Failure Is Evidence, and Retries Are Bounded](084-a-gate-failure-is-evidence.md)
+- [085 — An Operator Stop Is Canceled, and One Lease Guards the Shared Queue](085-run-lifecycle.md)
+- [086 — Telemetry Records What Happened](086-telemetry-records-what-happened.md)
 
 ## Format
 
