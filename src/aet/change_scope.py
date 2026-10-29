@@ -52,11 +52,11 @@ def _is_shared_fixture(path: str) -> bool:
     return False
 
 
-def _git(*args: str) -> str | None:
+def _git(*args: str, cwd: Path | str | None = None) -> str | None:
     """Run a git command, returning stdout, or ``None`` if it failed at all."""
     try:
         proc = subprocess.run(
-            ["git", *args], capture_output=True, text=True, check=False
+            ["git", *args], capture_output=True, text=True, check=False, cwd=cwd
         )
     except OSError:
         return None
@@ -84,19 +84,19 @@ def _parse_status(payload: str) -> set[str]:
     return paths
 
 
-def changed_paths() -> list[str] | None:
+def changed_paths(repo_root: Path | str | None = None) -> list[str] | None:
     """Every path differing from ``origin/main``, plus uncommitted work.
 
     Returns ``None`` when the change set cannot be determined, which callers
     must treat as "run everything".
     """
-    base = _git("merge-base", "HEAD", BASE_REF)
+    base = _git("merge-base", "HEAD", BASE_REF, cwd=repo_root)
     if base is None:
         return None
-    committed = _git("diff", "--name-only", "-z", f"{base.strip()}..HEAD")
+    committed = _git("diff", "--name-only", "-z", f"{base.strip()}..HEAD", cwd=repo_root)
     if committed is None:
         return None
-    status = _git("status", "--porcelain=v1", "-z")
+    status = _git("status", "--porcelain=v1", "-z", cwd=repo_root)
     if status is None:
         return None
     paths = {p for p in committed.split("\0") if p}

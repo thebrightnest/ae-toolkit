@@ -409,21 +409,51 @@ def _submit(args: argparse.Namespace) -> int:
             f"{record['verdict']!r}"
         )
 
+    def _write_verdict() -> Path | None:
+        task_id = os.environ.get("AET_TASK_ID") or record["task_id"]
+        try:
+            dest = evidence.resolve_verdict_path(task_id=task_id, kind=stage)
+            written = evidence.write_verdict(task_id, stage, record, path=dest)
+        except OSError as exc:
+            backend.close()
+            _fail(f"cannot write verdict: {exc}")
+            return None
+
+        # Record the verdict event in the content-addressed ledger.
+        try:
+            ledger_path = resolve_ledger_path()
+            ledger = Ledger(ledger_path)
+            ledger_payload: dict[str, Any] = {"stage": stage, "verdict": record["verdict"]}
+            if boundary_lens_payload is not None:
+                ledger_payload["boundary_contract_lens"] = boundary_lens_payload
+            if identity_lens_payload is not None:
+                ledger_payload["identity_conflation_lens"] = identity_lens_payload
+            ledger.write_event(
+                source="aet-gate",
+                task=task_id,
+                kind="verdict",
+                ref=str(written),
+                ref_kind="evidence-path",
+                payload=ledger_payload,
+            )
+        except Exception as exc:
+            # A ledger write failure must not roll back the verdict; it is
+            # advisory provenance. Surface the error but keep the gate exit clean.
+            print(f"warning: ledger verdict event failed: {exc}", file=sys.stderr)
+
+        backend.push()
+        backend.close()
+        return written
+
     # Mechanical lenses (R-8 boundary, R-9 identity): only review stage.
     boundary_lens_payload: dict[str, Any] | None = None
     identity_lens_payload: dict[str, Any] | None = None
     if stage == "review":
-        paths = change_scope.changed_paths()
-        repo_root = telemetry.resolve_repo_root()
+        repo_root = _verdict_tree_root()
+        paths = change_scope.changed_paths(repo_root)
         task_id_for_lenses = os.environ.get("AET_TASK_ID") or record.get("task_id")
 
         boundary_result = boundary.check(paths, repo_root=repo_root)
-        if boundary_result.tripped:
-            backend.close()
-            return _fail(
-                f"boundary-contract lens tripped: {boundary_result.reason}; "
-                f"pairs={boundary_result.pairs}; add an agreement test"
-            )
         boundary_lens_payload = {
             "tripped": boundary_result.tripped,
             "shape_paths": boundary_result.shape_paths,
@@ -440,16 +470,19 @@ def _submit(args: argparse.Namespace) -> int:
                 "pairs": boundary_result.pairs,
             }
         )
+        if boundary_result.tripped:
+            record["verdict"] = "fail"
+            written = _write_verdict()
+            if written is None:
+                return 1
+            return _fail(
+                f"boundary-contract lens tripped: {boundary_result.reason}; "
+                f"pairs={boundary_result.pairs}; add an agreement test"
+            )
 
         identity_result = identity.check(
             paths, repo_root=repo_root, task_id=task_id_for_lenses
         )
-        if identity_result.tripped:
-            backend.close()
-            return _fail(
-                f"identity-conflation lens tripped: {identity_result.reason}; "
-                f"findings={identity_result.findings}"
-            )
         identity_lens_payload = {
             "tripped": identity_result.tripped,
             "findings": identity_result.findings,
@@ -467,39 +500,19 @@ def _submit(args: argparse.Namespace) -> int:
                 "declaration_errors": identity_result.declaration_errors,
             }
         )
+        if identity_result.tripped:
+            record["verdict"] = "fail"
+            written = _write_verdict()
+            if written is None:
+                return 1
+            return _fail(
+                f"identity-conflation lens tripped: {identity_result.reason}; "
+                f"findings={identity_result.findings}"
+            )
 
-    task_id = os.environ.get("AET_TASK_ID") or record["task_id"]
-    try:
-        dest = evidence.resolve_verdict_path(task_id=task_id, kind=stage)
-        written = evidence.write_verdict(task_id, stage, record, path=dest)
-    except OSError as exc:
-        backend.close()
-        return _fail(f"cannot write verdict: {exc}")
-
-    # Record the verdict event in the content-addressed ledger.
-    try:
-        ledger_path = resolve_ledger_path()
-        ledger = Ledger(ledger_path)
-        ledger_payload: dict[str, Any] = {"stage": stage, "verdict": record["verdict"]}
-        if boundary_lens_payload is not None:
-            ledger_payload["boundary_contract_lens"] = boundary_lens_payload
-        if identity_lens_payload is not None:
-            ledger_payload["identity_conflation_lens"] = identity_lens_payload
-        ledger.write_event(
-            source="aet-gate",
-            task=task_id,
-            kind="verdict",
-            ref=str(written),
-            ref_kind="evidence-path",
-            payload=ledger_payload,
-        )
-    except Exception as exc:
-        # A ledger write failure must not roll back the verdict; it is
-        # advisory provenance. Surface the error but keep the gate exit clean.
-        print(f"warning: ledger verdict event failed: {exc}", file=sys.stderr)
-
-    backend.push()
-    backend.close()
+    written = _write_verdict()
+    if written is None:
+        return 1
     print(f"✓ {stage} verdict written: {written}")
     return 0
 

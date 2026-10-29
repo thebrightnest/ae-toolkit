@@ -578,7 +578,14 @@ class TestBoundaryLens(unittest.TestCase):
                 )
             self.assertEqual(rc, 1, err)
             self.assertIn("boundary-contract lens tripped", err)
-            self.assertFalse(dest.exists(), "tripped lens must not write verdict")
+            self.assertTrue(dest.is_file(), "tripped lens must write verdict")
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "fail")
+            boundary_findings = [
+                f for f in written.get("findings", []) if f.get("lens") == "boundary-contract"
+            ]
+            self.assertEqual(len(boundary_findings), 1)
+            self.assertTrue(boundary_findings[0]["tripped"])
 
     def test_review_pass_accepted_when_agreement_test_exists_in_builder_mode(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -750,6 +757,128 @@ class TestBoundaryLens(unittest.TestCase):
             self.assertIn("boundary_contract_lens", payload)
             self.assertEqual(payload["boundary_contract_lens"]["tripped"], False)
 
+    def test_cleared_lens_overwrites_fail_verdict(self):
+        """A later pass submit with clear lenses replaces a prior fail verdict."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "review.json"
+            payload = tmp / "payload.json"
+            payload.write_text(json.dumps(_review_payload()), encoding="utf-8")
+            changed = ["src/serializers/user.py", "src/components/user.tsx"]
+            pairs = [("src/serializers/user.py", "src/components/user.tsx")]
+            with patch.object(
+                gate.change_scope, "changed_paths", return_value=changed
+            ), patch.object(
+                gate.boundary, "check", return_value=self._tripped_result(pairs)
+            ), patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 1, err)
+            self.assertTrue(dest.is_file())
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "fail")
+
+            clear = self._clear_result()
+            identity_clear = IdentityResult(
+                tripped=False,
+                reason="no identity conflation detected",
+                findings=[],
+                declaration_valid=True,
+                declaration_errors=[],
+            )
+            with patch.object(
+                gate.change_scope, "changed_paths", return_value=["src/utils/helpers.py"]
+            ), patch.object(
+                gate.boundary, "check", return_value=clear
+            ), patch.object(
+                gate.identity, "check", return_value=identity_clear
+            ), patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "pass")
+            boundary_findings = [
+                f for f in written.get("findings", []) if f.get("lens") == "boundary-contract"
+            ]
+            self.assertEqual(len(boundary_findings), 1)
+            self.assertFalse(boundary_findings[0]["tripped"])
+
+    def test_lenses_see_only_change_in_worktree(self):
+        """Review lenses inspect AET_WORKTREE rather than AET_REPO_ROOT."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            main_repo = tmp / "main"
+            worktree_repo = tmp / "wt"
+            for repo in (main_repo, worktree_repo):
+                repo.mkdir()
+                subprocess.run(["git", "init", "-q", str(repo)], check=True)
+                subprocess.run(
+                    ["git", "-C", str(repo), "config", "user.name", "Test"], check=True
+                )
+                subprocess.run(
+                    ["git", "-C", str(repo), "config", "user.email", "test@example.com"],
+                    check=True,
+                )
+                (repo / "README.md").write_text("init", encoding="utf-8")
+                subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", str(repo), "commit", "-q", "-m", "initial"],
+                    check=True,
+                )
+
+            # In main_repo, create uncommitted changes that would trip boundary lens:
+            (main_repo / "src" / "serializers").mkdir(parents=True)
+            (main_repo / "src" / "components").mkdir(parents=True)
+            (main_repo / "src" / "serializers" / "user.py").write_text("class UserSerializer: pass\n")
+            (main_repo / "src" / "components" / "user.tsx").write_text("export const User = () => null;\n")
+
+            # In worktree_repo, create only safe changes that do not trip boundary lens:
+            (worktree_repo / "src" / "utils").mkdir(parents=True)
+            (worktree_repo / "src" / "utils" / "helpers.py").write_text("def helper(): pass\n")
+
+            dest = tmp / "review.json"
+            env = {
+                "AET_EVIDENCE_PATH": str(dest),
+                "AET_REPO_ROOT": str(main_repo),
+                "AET_WORKTREE": str(worktree_repo),
+                "AET_TASK_ID": "t2r-08",
+            }
+            with patch.dict(os.environ, env, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--summary",
+                        "Review passed",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            self.assertTrue(dest.is_file())
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "pass")
+
 
 class TestIdentityLens(unittest.TestCase):
     """The identity-conflation lens blocks review submits without a declaration."""
@@ -825,7 +954,56 @@ class TestIdentityLens(unittest.TestCase):
                 )
             self.assertEqual(rc, 1, err)
             self.assertIn("identity-conflation lens tripped", err)
-            self.assertFalse(dest.exists(), "tripped lens must not write verdict")
+            self.assertTrue(dest.is_file(), "tripped lens must write verdict")
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "fail")
+            identity_findings = [
+                f for f in written.get("findings", []) if f.get("lens") == "identity-conflation"
+            ]
+            self.assertEqual(len(identity_findings), 1)
+            self.assertTrue(identity_findings[0]["tripped"])
+
+    def test_review_fail_verdict_when_identity_lens_trips(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            dest = tmp / "review.json"
+            payload = tmp / "payload.json"
+            payload.write_text(json.dumps(self._review_payload(verdict="fail")), encoding="utf-8")
+            with patch.object(
+                gate.change_scope, "changed_paths", return_value=["src/api.py"]
+            ), patch.object(
+                gate.boundary, "check", return_value=BoundaryResult(
+                    tripped=False,
+                    reason="no changed paths to analyze",
+                    shape_paths=[],
+                    consumer_paths=[],
+                    agreement_tests=[],
+                    pairs=[],
+                )
+            ), patch.object(
+                gate.identity, "check", return_value=self._tripped_result()
+            ), patch.dict(os.environ, {"AET_EVIDENCE_PATH": str(dest)}, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "fail",
+                        "--evidence",
+                        str(payload),
+                    ]
+                )
+            self.assertEqual(rc, 1, err)
+            self.assertIn("identity-conflation lens tripped", err)
+            self.assertTrue(dest.is_file(), "tripped lens must write verdict")
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "fail")
+            identity_findings = [
+                f for f in written.get("findings", []) if f.get("lens") == "identity-conflation"
+            ]
+            self.assertEqual(len(identity_findings), 1)
+            self.assertTrue(identity_findings[0]["tripped"])
 
     def test_review_pass_accepted_when_identity_declaration_exists(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -940,6 +1118,75 @@ class TestIdentityLens(unittest.TestCase):
             payload = verdict_events[0]["payload"]
             self.assertIn("identity_conflation_lens", payload)
             self.assertEqual(payload["identity_conflation_lens"]["tripped"], False)
+
+    def test_identity_lens_reads_declarations_from_rendered_plan_in_worktree(self):
+        """Identity lens reads declarations from <worktree>/docs/plans/<task-id>.md."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            main_repo = tmp / "main"
+            worktree_repo = tmp / "wt"
+            for repo in (main_repo, worktree_repo):
+                repo.mkdir()
+                subprocess.run(["git", "init", "-q", str(repo)], check=True)
+                subprocess.run(
+                    ["git", "-C", str(repo), "config", "user.name", "Test"], check=True
+                )
+                subprocess.run(
+                    ["git", "-C", str(repo), "config", "user.email", "test@example.com"],
+                    check=True,
+                )
+                (repo / "README.md").write_text("init", encoding="utf-8")
+                subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", str(repo), "commit", "-q", "-m", "initial"],
+                    check=True,
+                )
+
+            # In worktree_repo, write rendered plan with identity declaration:
+            plan_dir = worktree_repo / "docs" / "plans"
+            plan_dir.mkdir(parents=True)
+            plan_file = plan_dir / "t2r-09.md"
+            plan_file.write_text(
+                "---\n"
+                "id: t2r-09\n"
+                "identity:\n"
+                "  - entity: user\n"
+                "    identifiers: [userId, userUuid]\n"
+                "    persists: userId\n"
+                "---\n"
+                "# Plan\n",
+                encoding="utf-8",
+            )
+
+            # Add conflated identifiers to worktree:
+            (worktree_repo / "src").mkdir(parents=True)
+            (worktree_repo / "src" / "api.py").write_text(
+                "userId = 1\nuserUuid = 'abc'\n", encoding="utf-8"
+            )
+
+            dest = tmp / "review.json"
+            env = {
+                "AET_EVIDENCE_PATH": str(dest),
+                "AET_REPO_ROOT": str(main_repo),
+                "AET_WORKTREE": str(worktree_repo),
+                "AET_TASK_ID": "t2r-09",
+            }
+            with patch.dict(os.environ, env, clear=True):
+                rc, _out, err = self._run(
+                    [
+                        "submit",
+                        "--stage",
+                        "review",
+                        "--verdict",
+                        "pass",
+                        "--summary",
+                        "Review passed",
+                    ]
+                )
+            self.assertEqual(rc, 0, err)
+            self.assertTrue(dest.is_file())
+            written = json.loads(dest.read_text(encoding="utf-8"))
+            self.assertEqual(written["verdict"], "pass")
 
 
 class TestGateDispatcherRouting(unittest.TestCase):

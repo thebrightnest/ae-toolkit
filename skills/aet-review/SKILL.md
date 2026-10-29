@@ -75,7 +75,7 @@ Use builder mode, which constructs the payload in code:
 aet gate submit --stage review --verdict <pass|fail> --summary "<one line>"
 ```
 
-Builder mode constructs the payload in code, stamping every schema field itself (including the `findings` list the mechanical lenses append to). It needs `AET_TASK_ID`, which orchestrated sessions already have.
+Builder mode constructs the payload in code, stamping every schema field itself (including the `findings` list the mechanical lenses append to). It needs `AET_TASK_ID`, which orchestrated sessions already have. A tripped lens writes a `fail` verdict with its findings, and the cause is fixed before `pass` is submitted again.
 
 Hand-authoring the full payload and passing `--evidence <payload-file>` still works, but you would be reproducing schema fields you cannot see — the cause of past rejected verdicts. Prefer builder mode; `docs/CLI.md` carries the generated option reference.
 
