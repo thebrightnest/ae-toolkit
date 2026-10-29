@@ -47,6 +47,11 @@ def append(
         "--stage",
         help="Stage name recording this entry.",
     ),
+    task: Optional[str] = typer.Option(
+        None,
+        "--task",
+        help="Task id recording this entry (default: $AET_TASK_ID).",
+    ),
     decision: list[str] = typer.Option(
         [],
         "--decision",
@@ -81,12 +86,14 @@ def append(
     """Append one entry to the run's handoff note."""
     resolved_run_id = _require_run_id(run_id)
     resolved_repo_root = _resolve_repo_root(repo_root)
+    resolved_task_id = task or os.environ.get("AET_TASK_ID")
 
     try:
         handoff.append_entry(
             resolved_repo_root,
             resolved_run_id,
             stage=stage,
+            task_id=resolved_task_id,
             decisions=decision or None,
             pre_existing_failures=pre_existing_failure or None,
             validation_commands=validation_command or None,
@@ -99,6 +106,11 @@ def append(
 
 @app.command("show")
 def show(
+    task: Optional[str] = typer.Option(
+        None,
+        "--task",
+        help="Task id to render handoff for (default: $AET_TASK_ID; unset renders all).",
+    ),
     run_id: Optional[str] = typer.Option(
         None,
         "--run-id",
@@ -113,6 +125,7 @@ def show(
     """Render the run's handoff note as a prompt block."""
     resolved_run_id = _require_run_id(run_id)
     resolved_repo_root = _resolve_repo_root(repo_root)
+    resolved_task_id = task or os.environ.get("AET_TASK_ID")
 
     note = handoff.read_note(resolved_repo_root, resolved_run_id)
     if note is None:
@@ -122,4 +135,4 @@ def show(
             "(no handoff note found for this run)",
         )
         return
-    print(handoff.render_prompt_block(note))
+    print(handoff.render_prompt_block(note, task_id=resolved_task_id))

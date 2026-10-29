@@ -18,7 +18,7 @@ from typing import Any
 
 from filelock import FileLock
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PROMPT_BLOCK_CAP = 4000
 
 
@@ -89,7 +89,7 @@ def read_note(repo_root: str | Path, run_id: str) -> dict[str, Any] | None:
 
     if not isinstance(data, dict):
         return None
-    if data.get("schema_version") != SCHEMA_VERSION:
+    if data.get("schema_version") not in (1, 2):
         return None
     if data.get("run_id") != run_id:
         return None
@@ -104,6 +104,7 @@ def append_entry(
     run_id: str,
     *,
     stage: str,
+    task_id: str | None = None,
     decisions: list[str] | None = None,
     pre_existing_failures: list[str] | None = None,
     validation_commands: list[str] | None = None,
@@ -137,6 +138,7 @@ def append_entry(
 
     entry: dict[str, Any] = {
         "stage": stage,
+        "task_id": task_id,
         "decisions": list(decisions or []),
         "pre_existing_failures": list(pre_existing_failures or []),
         "validation_commands": list(validation_commands or []),
@@ -152,6 +154,8 @@ def append_entry(
                 "run_id": run_id,
                 "entries": [],
             }
+        else:
+            note["schema_version"] = SCHEMA_VERSION
         note["entries"].append(entry)
         _atomic_write(path, note)
 
@@ -172,48 +176,103 @@ def _format_optional(label: str, value: str | None) -> str:
     return f"{label}: (none)"
 
 
-def render_prompt_block(note: dict[str, Any]) -> str:
+def _entry_key(entry: dict[str, Any]) -> tuple[Any, ...]:
+    """Derive a hashable comparison key from all fields except ``recorded_at``."""
+    items: list[tuple[str, Any]] = []
+    for k in sorted(entry.keys()):
+        if k == "recorded_at":
+            continue
+        v = entry[k]
+        if isinstance(v, list):
+            items.append((k, tuple(v)))
+        elif isinstance(v, dict):
+            items.append((k, tuple(sorted(v.items()))))
+        else:
+            items.append((k, v))
+    return tuple(items)
+
+
+def _matches_task(entry: dict[str, Any], task_id: str | None) -> bool:
+    """Return whether ``entry`` belongs to ``task_id`` or is run-level."""
+    if task_id is None:
+        return True
+    entry_task = entry.get("task_id")
+    return not entry_task or entry_task == task_id
+
+
+def _render_entry_block(entry: dict[str, Any], count: int) -> str:
+    """Render a single collapsed entry block with optional repeat count."""
+    stage = entry.get("stage", "unknown")
+    header = (
+        f"[stage: {stage}] (repeated {count} times)"
+        if count > 1
+        else f"[stage: {stage}]"
+    )
+    lines = [
+        header,
+        _format_field("decisions", entry.get("decisions") or []),
+        _format_field(
+            "pre-existing failures",
+            entry.get("pre_existing_failures") or [],
+        ),
+        _format_field(
+            "validation commands",
+            entry.get("validation_commands") or [],
+        ),
+        _format_optional("evidence path", entry.get("evidence_path")),
+    ]
+    return "\n".join(lines)
+
+
+def render_prompt_block(
+    note: dict[str, Any], task_id: str | None = None
+) -> str:
     """Render the handoff note as a prompt injection block.
 
-    The block is capped at ``PROMPT_BLOCK_CAP`` characters; if truncation is
-    required, an explicit marker is appended.
+    Renders entries for ``task_id`` and entries with no ``task_id``.
+    Identical entries (all fields except ``recorded_at``) are collapsed into
+    one with ``(repeated N times)``.  The block is built from the newest entry
+    backwards and stops before ``PROMPT_BLOCK_CAP`` characters, ensuring the
+    newest entry always renders.
     """
-    lines = [
+    preamble = (
         "Run handoff note (written by earlier stages of this same run — trust "
-        "what it records and do NOT re-investigate it):",
-    ]
-    for entry in note.get("entries", []):
-        stage = entry.get("stage", "unknown")
-        lines.append(f"[stage: {stage}]")
-        lines.append(
-            _format_field(
-                "decisions", entry.get("decisions") or []
-            )
-        )
-        lines.append(
-            _format_field(
-                "pre-existing failures",
-                entry.get("pre_existing_failures") or [],
-            )
-        )
-        lines.append(
-            _format_field(
-                "validation commands",
-                entry.get("validation_commands") or [],
-            )
-        )
-        lines.append(
-            _format_optional(
-                "evidence path", entry.get("evidence_path")
-            )
-        )
+        "what it records and do NOT re-investigate it):"
+    )
 
-    rendered = "\n".join(lines)
+    raw_entries = note.get("entries") or []
+    filtered = [e for e in raw_entries if _matches_task(e, task_id)]
+    if not filtered:
+        return preamble
+
+    collapsed: list[tuple[dict[str, Any], int]] = []
+    for e in filtered:
+        if collapsed and _entry_key(collapsed[-1][0]) == _entry_key(e):
+            collapsed[-1] = (collapsed[-1][0], collapsed[-1][1] + 1)
+        else:
+            collapsed.append((e, 1))
+
+    blocks = [_render_entry_block(entry, count) for entry, count in collapsed]
+
+    selected: list[str] = []
+    for b in reversed(blocks):
+        if not selected:
+            selected.append(b)
+        else:
+            candidate_blocks = [b] + list(reversed(selected))
+            candidate_text = preamble + "\n" + "\n".join(candidate_blocks)
+            if len(candidate_text) > PROMPT_BLOCK_CAP:
+                break
+            selected.append(b)
+
+    final_blocks = list(reversed(selected))
+    rendered = preamble + "\n" + "\n".join(final_blocks)
+
     if len(rendered) > PROMPT_BLOCK_CAP:
         truncated = rendered[:PROMPT_BLOCK_CAP]
         marker = "\n[handoff note truncated]"
-        # Ensure room for marker; cap is larger than marker length.
         if len(truncated) + len(marker) > PROMPT_BLOCK_CAP:
             truncated = truncated[: PROMPT_BLOCK_CAP - len(marker)]
         rendered = truncated + marker
+
     return rendered

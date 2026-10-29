@@ -338,4 +338,3 @@ ADR-060, ADR-069, ADR-071, ADR-082 and ADR-084, and against the v1.23.0 code:
 
 *Stage: synced*
 *Next step: run `aet-ship`*
-

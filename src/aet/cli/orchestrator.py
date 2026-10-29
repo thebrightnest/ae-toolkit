@@ -561,7 +561,9 @@ def _qa_freshness_decision(
         return ""
 
 
-def _handoff_clause(repo_root: str, run_id: str | None) -> str:
+def _handoff_clause(
+    repo_root: str, run_id: str | None, task_id: str | None = None
+) -> str:
     """Run handoff note prompt block for ``run_id``, or "" on any error.
 
     Never raises: a stage spawn must not hinge on run-scoped working memory.
@@ -575,7 +577,7 @@ def _handoff_clause(repo_root: str, run_id: str | None) -> str:
     if note is None:
         return ""
     try:
-        block = handoff.render_prompt_block(note)
+        block = handoff.render_prompt_block(note, task_id=task_id)
     except Exception:
         return ""
     return "\n\n" + block
@@ -586,7 +588,9 @@ def _targeted_tests_path(repo_root: str, run_id: str) -> Path:
     return validation.targeted_tests_path(repo_root, run_id)
 
 
-def _record_targeted_tests_handoff(repo_root: str, run_id: str, stage: str) -> None:
+def _record_targeted_tests_handoff(
+    repo_root: str, run_id: str, stage: str, task_id: str | None = None
+) -> None:
     """If implement wrote targeted-test commands, append them to the handoff.
 
     This passes the implement floor to QA so a later full-suite failure can be
@@ -602,6 +606,7 @@ def _record_targeted_tests_handoff(repo_root: str, run_id: str, stage: str) -> N
             repo_root,
             run_id,
             stage=stage,
+            task_id=task_id,
             validation_commands=commands,
         )
     except Exception:  # noqa: BLE001
@@ -1292,6 +1297,7 @@ def _note_branch_state(
             repo_root,
             run_id,
             stage=runnable[0].name,
+            task_id=task_id,
             decisions=decisions,
         )
     except Exception:  # noqa: BLE001 - working memory is never load-bearing
@@ -1609,7 +1615,7 @@ def run_stage(
     signature on the task's ledger record for the circuit breaker (nsr-03).
     """
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
-    handoff_clause = _handoff_clause(repo_root, run_id)
+    handoff_clause = _handoff_clause(repo_root, run_id, task_id=task_id)
     prompt = build_prompt(
         skills, plan_file, current_stage, next_stage,
         freshness_clause=_freshness_clause(freshness),
@@ -1655,7 +1661,9 @@ def run_stage(
     if exit_code == 0 and run_id is not None:
         # The tests were run while advancing toward next_stage; label the
         # handoff entry with the stage that produced them.
-        _record_targeted_tests_handoff(repo_root, run_id, next_stage)
+        _record_targeted_tests_handoff(
+            repo_root, run_id, next_stage, task_id=task_id
+        )
     if exit_code != 0 and task is not None:
         _record_failure_on_task(
             backend,
@@ -1737,7 +1745,7 @@ def run_stage_group(
     ledger record using the first stage's name (nsr-03).
     """
     freshness = _qa_freshness_decision(task_id, repo_root, worktree_dir)
-    handoff_clause = _handoff_clause(repo_root, run_id)
+    handoff_clause = _handoff_clause(repo_root, run_id, task_id=task_id)
     prompt = build_stage_group_prompt(
         plan_file, stages, workflow,
         freshness_clause=_freshness_clause(freshness),
@@ -1789,7 +1797,9 @@ def run_stage_group(
     if exit_code == 0 and run_id is not None:
         # Use the last stage name as the recorder stage; the file is written by
         # the implement portion of the group session.
-        _record_targeted_tests_handoff(repo_root, run_id, stages[-1].name)
+        _record_targeted_tests_handoff(
+            repo_root, run_id, stages[-1].name, task_id=task_id
+        )
     if exit_code != 0 and task is not None:
         _record_failure_on_task(
             backend,

@@ -342,6 +342,7 @@ Append one entry to the run's handoff note.
 ### Options
 
 - `--stage` *str* — Stage name recording this entry. (required)
+- `--task` *str* — Task id recording this entry (default: $AET_TASK_ID).
 - `--decision` *str* — Repeatable decision taken in this stage. (default: `[]`)
 - `--pre-existing-failure` *str* — Repeatable pre-existing failure encountered in this stage. (default: `[]`)
 - `--validation-command` *str* — Repeatable validation command run in this stage. (default: `[]`)
@@ -355,6 +356,7 @@ Render the run's handoff note as a prompt block.
 
 ### Options
 
+- `--task` *str* — Task id to render handoff for (default: $AET_TASK_ID; unset renders all).
 - `--run-id` *str* — Run id (default: $AET_RUN_ID).
 - `--repo-root` *str* — Repository root (default: current directory).
 

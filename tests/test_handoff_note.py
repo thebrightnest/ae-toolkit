@@ -42,6 +42,32 @@ class TestReadNote(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertIsNone(handoff.read_note(tmp, "run-old"))
+            path.write_text(
+                json.dumps(
+                    {"schema_version": 3, "run_id": "run-old", "entries": [{}]}
+                ),
+                encoding="utf-8",
+            )
+            self.assertIsNone(handoff.read_note(tmp, "run-old"))
+
+    def test_read_note_accepts_version_1_and_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for version in (1, 2):
+                path = handoff.handoff_path(tmp, f"run-v{version}")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": version,
+                            "run_id": f"run-v{version}",
+                            "entries": [{"stage": "plan-approved"}],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                note = handoff.read_note(tmp, f"run-v{version}")
+                self.assertIsNotNone(note)
+                self.assertEqual(note["schema_version"], version)
 
     def test_mismatched_run_id_returns_none(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -77,13 +103,15 @@ class TestAppendEntry(unittest.TestCase):
                 tmp,
                 "run-new",
                 stage="plan-approved",
+                task_id="task-x",
                 decisions=["use JSON"],
             )
             self.assertTrue(path.exists())
             data = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(data["schema_version"], 1)
+            self.assertEqual(data["schema_version"], 2)
             self.assertEqual(data["run_id"], "run-new")
             self.assertEqual(len(data["entries"]), 1)
+            self.assertEqual(data["entries"][0]["task_id"], "task-x")
 
     def test_appends_subsequent_entries(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -99,6 +127,34 @@ class TestAppendEntry(unittest.TestCase):
             self.assertEqual(len(data["entries"]), 2)
             self.assertEqual(data["entries"][0]["stage"], "plan-approved")
             self.assertEqual(data["entries"][1]["stage"], "implemented")
+
+    def test_append_entry_upgrades_v1_to_v2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = handoff.handoff_path(tmp, "run-upgrade")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "run-upgrade",
+                        "entries": [
+                            {"stage": "plan-approved", "decisions": ["d1"]}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            handoff.append_entry(
+                tmp,
+                "run-upgrade",
+                stage="implemented",
+                task_id="task-x",
+                decisions=["d2"],
+            )
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(data["schema_version"], 2)
+            self.assertEqual(len(data["entries"]), 2)
+            self.assertEqual(data["entries"][1]["task_id"], "task-x")
 
     def test_empty_fields_raise(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -179,6 +235,106 @@ class TestRenderPromptBlock(unittest.TestCase):
         block = handoff.render_prompt_block(note)
         self.assertLessEqual(len(block), handoff.PROMPT_BLOCK_CAP)
         self.assertIn("[handoff note truncated]", block)
+
+    def test_repeated_entries_collapsed_and_task_filtered(self):
+        entries = []
+        # 57 identical entries of task A
+        for i in range(57):
+            entries.append(
+                {
+                    "stage": "implemented",
+                    "task_id": "task-A",
+                    "decisions": ["retry build"],
+                    "pre_existing_failures": [],
+                    "validation_commands": ["pytest"],
+                    "evidence_path": None,
+                    "recorded_at": f"2026-10-28T10:{i % 60:02d}:00+00:00",
+                }
+            )
+        # entries of task B
+        entries.append(
+            {
+                "stage": "implemented",
+                "task_id": "task-B",
+                "decisions": ["task-B decision"],
+                "pre_existing_failures": [],
+                "validation_commands": ["pytest task-B"],
+                "evidence_path": None,
+                "recorded_at": "2026-10-28T11:00:00+00:00",
+            }
+        )
+        # one newer distinct entry of task A
+        entries.append(
+            {
+                "stage": "qa-complete",
+                "task_id": "task-A",
+                "decisions": ["task-A new decision"],
+                "pre_existing_failures": [],
+                "validation_commands": ["pytest full"],
+                "evidence_path": None,
+                "recorded_at": "2026-10-28T11:30:00+00:00",
+            }
+        )
+
+        note = {
+            "schema_version": 2,
+            "run_id": "run-repeat",
+            "entries": entries,
+        }
+        block = handoff.render_prompt_block(note, task_id="task-A")
+        self.assertIn("(repeated 57 times)", block)
+        self.assertIn("task-A new decision", block)
+        self.assertNotIn("task-B decision", block)
+        self.assertNotIn("task-B", block)
+
+    def test_drops_oldest_entries_when_exceeding_cap(self):
+        entries = [
+            {
+                "stage": "plan-approved",
+                "task_id": "task-A",
+                "decisions": ["old entry " + "a" * 2500],
+                "pre_existing_failures": [],
+                "validation_commands": [],
+                "evidence_path": None,
+                "recorded_at": "2026-10-28T10:00:00+00:00",
+            },
+            {
+                "stage": "implemented",
+                "task_id": "task-A",
+                "decisions": ["newest entry " + "z" * 2500],
+                "pre_existing_failures": [],
+                "validation_commands": [],
+                "evidence_path": None,
+                "recorded_at": "2026-10-28T11:00:00+00:00",
+            },
+        ]
+        note = {
+            "schema_version": 2,
+            "run_id": "run-cap",
+            "entries": entries,
+        }
+        block = handoff.render_prompt_block(note, task_id="task-A")
+        self.assertLessEqual(len(block), handoff.PROMPT_BLOCK_CAP)
+        self.assertIn("newest entry", block)
+        self.assertNotIn("old entry", block)
+
+    def test_v1_note_without_task_id_renders_for_any_task(self):
+        note = {
+            "schema_version": 1,
+            "run_id": "run-v1",
+            "entries": [
+                {
+                    "stage": "plan-approved",
+                    "decisions": ["v1 global decision"],
+                    "pre_existing_failures": [],
+                    "validation_commands": [],
+                    "evidence_path": None,
+                    "recorded_at": "2026-10-28T10:00:00+00:00",
+                }
+            ],
+        }
+        block = handoff.render_prompt_block(note, task_id="arbitrary-task")
+        self.assertIn("v1 global decision", block)
 
 
 if __name__ == "__main__":
