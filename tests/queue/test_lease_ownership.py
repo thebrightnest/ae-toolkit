@@ -77,6 +77,64 @@ class TestLeaseOwnership(unittest.TestCase):
         self.assertNotEqual(queue_lib.LEASE_HELD_EXIT_CODE, 0)
         self.assertNotEqual(queue_lib.LEASE_HELD_EXIT_CODE, 1)
 
+    def test_linked_worktree_acquire_refuses_when_held_by_sibling_worktree(self):
+        """With a lease held from one linked worktree, acquire_lease from a second worktree raises."""
+        import subprocess
+        main_repo = Path(self._tmp.name) / "repo"
+        main_repo.mkdir()
+        subprocess.run(["git", "init", "-q", str(main_repo)], check=True)
+        subprocess.run(["git", "-C", str(main_repo), "config", "user.email", "t@example.com"], check=True)
+        subprocess.run(["git", "-C", str(main_repo), "config", "user.name", "T"], check=True)
+        (main_repo / "README.md").write_text("main", encoding="utf-8")
+        subprocess.run(["git", "-C", str(main_repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(main_repo), "commit", "-q", "-m", "init"], check=True)
+
+        wt_dir = Path(self._tmp.name) / "linked-wt"
+        subprocess.run(
+            ["git", "-C", str(main_repo), "worktree", "add", "-q", str(wt_dir), "-b", "wt-branch"],
+            check=True,
+        )
+
+        q1 = str(main_repo / ".agents" / "aet-queue")
+        q2 = str(wt_dir / ".agents" / "aet-queue")
+
+        # Acquire lease from main_repo
+        queue_lib.acquire_lease(q1, "run-primary")
+
+        # Attempt to acquire lease from linked worktree
+        with self.assertRaises(queue_lib.LeaseHeldError) as ctx:
+            queue_lib.acquire_lease(q2, "run-secondary")
+
+        self.assertEqual(ctx.exception.run_id, "run-primary")
+        self.assertIn("run-primary", str(ctx.exception))
+        self.assertIn(str(main_repo.resolve()), str(ctx.exception))
+
+    def test_live_lease_at_legacy_path_blocks_acquire(self):
+        """A live lease at the legacy per-checkout path blocks acquire_lease."""
+        import json
+        import subprocess
+        repo_dir = Path(self._tmp.name) / "repo-legacy"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init", "-q", str(repo_dir)], check=True)
+        qf = repo_dir / ".agents" / "aet-queue"
+        qf.parent.mkdir(parents=True, exist_ok=True)
+        legacy_lp = repo_dir / ".agents" / "work-queue.lease"
+        legacy_lp.write_text(
+            json.dumps({
+                "run_id": "legacy-run",
+                "pid": os.getpid(),
+                "started_at": "2099-01-01T00:00:00Z",
+                "checkout_path": str(repo_dir),
+            }),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(queue_lib.LeaseHeldError) as ctx:
+            queue_lib.acquire_lease(str(qf), "new-run")
+
+        self.assertEqual(ctx.exception.run_id, "legacy-run")
+        self.assertIn("legacy-run", str(ctx.exception))
+
 
 class TestRefusalIsNotAWorkFailure(unittest.TestCase):
     """_record_stage must not report a refused write as failed work."""

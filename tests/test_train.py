@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from aet import evidence, telemetry, train
+from aet import queue as queue_lib
 from aet.backends import create_backend
 
 pytestmark = pytest.mark.xdist_group("git-repo")
@@ -29,6 +30,7 @@ def _init_repo(repo_root: str, origin_root: str, branch: str = "main") -> None:
     subprocess.run(["git", "-C", repo_root, "branch", "-M", branch], check=True)
     subprocess.run(["git", "-C", repo_root, "remote", "add", "origin", origin_root], check=True)
     subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", branch], check=True)
+    subprocess.run(["git", "-C", origin_root, "symbolic-ref", "HEAD", f"refs/heads/{branch}"], check=True)
     subprocess.run(["git", "-C", repo_root, "update-ref", f"refs/remotes/origin/{branch}", "HEAD"], check=True)
 
 
@@ -506,6 +508,55 @@ class TestFlushRootCheckout(unittest.TestCase):
             [task] = backend.load()["queue"]
             self.assertEqual(task["state"], "awaiting_merge")
             self.assertEqual(task["train"]["staged_commit"], c1)
+
+    def test_flush_during_another_runs_lease_leaves_task_merged(self):
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir:
+            _init_repo(repo_dir, origin_dir, "main")
+            backend = _make_backend(repo_dir)
+            _stage_task_commit(repo_dir, backend, "main", task_id="task-seal-1")
+
+            # Another live run holds the lease on the repository queue
+            queue_file = os.path.join(repo_dir, ".agents", "aet-queue")
+            queue_lib.acquire_lease(queue_file, "other-live-run")
+
+            result = train.flush(repo_dir, "main", backend=backend, validate_command=["true"])
+
+            self.assertTrue(result.ok, result.error)
+            self.assertEqual(result.status, "green")
+            self.assertEqual(result.refused_seals, [])
+            self.assertEqual(result.tasks_flushed, ["task-seal-1"])
+            sealed_sha = _git_out(repo_dir, "rev-parse", "refs/aet/sealed/task-seal-1")
+            self.assertTrue(sealed_sha)
+            sealed_blob = _git_out(repo_dir, "cat-file", "-p", sealed_sha)
+            task_data = json.loads(sealed_blob)
+            self.assertEqual(task_data["state"], "merged")
+
+    def test_flush_refused_seal_records_refused_seals_and_prints(self):
+        import io
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir:
+            self._init_epic(repo_dir, origin_dir)
+            backend = _make_backend(repo_dir)
+            _stage_task_commit(repo_dir, backend, "epic", task_id="task-fail-seal")
+
+            orig_run = subprocess.run
+
+            def mock_run(cmd, *args, **kwargs):
+                if isinstance(cmd, list) and len(cmd) > 2 and cmd[2] == "transition":
+                    return subprocess.CompletedProcess(cmd, 75, stdout="", stderr="owned by other run")
+                return orig_run(cmd, *args, **kwargs)
+
+            stdout_buf = io.StringIO()
+            with patch("subprocess.run", side_effect=mock_run), patch("sys.stdout", stdout_buf):
+                result = train.flush(repo_dir, "epic", backend=backend, validate_command=["true"])
+
+            self.assertTrue(result.ok)
+            self.assertEqual(result.status, "green")
+            self.assertEqual(len(result.refused_seals), 1)
+            self.assertEqual(result.refused_seals[0][0], "task-fail-seal")
+            self.assertIn("owned by other run", result.refused_seals[0][1])
+            self.assertIn("task-fail-seal merged but not sealed: owned by other run", stdout_buf.getvalue())
 
 
 def test_flush_reports_branch_behind_origin(capsys):

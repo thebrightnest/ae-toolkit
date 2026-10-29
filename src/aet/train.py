@@ -40,6 +40,7 @@ class FlushResult:
     output: str = ""
     error: str = ""
     behind_origin: int = 0
+    refused_seals: list[tuple[str, str]] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.ok
@@ -725,8 +726,11 @@ def flush(
             _save_task_record(backend, queue)
 
             aet_state_bin = str(Path(__file__).resolve().parent / "cli" / "aet_state.py")
+            seal_env = os.environ.copy()
+            seal_env["AET_FLUSH_SEAL"] = "1"
+            refused_seals: list[tuple[str, str]] = []
             for tid in snapshot_task_ids:
-                subprocess.run(
+                proc = subprocess.run(
                     [
                         sys.executable,
                         aet_state_bin,
@@ -737,7 +741,15 @@ def flush(
                         queue_file,
                     ],
                     capture_output=True,
+                    text=True,
+                    env=seal_env,
                 )
+                if proc.returncode != 0:
+                    err = (proc.stderr or proc.stdout or "").strip()
+                    refused_seals.append((tid, err))
+                    print(f"{tid} merged but not sealed: {err}")
+        else:
+            refused_seals = []
 
         batch_record = {
             "kind": "batch",
@@ -762,4 +774,5 @@ def flush(
         tasks_flushed=snapshot_task_ids,
         commit=snapshot_commit,
         behind_origin=behind_origin,
+        refused_seals=refused_seals,
     )

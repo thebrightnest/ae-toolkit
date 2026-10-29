@@ -1,13 +1,13 @@
 ---
 subject: root-checkout
-relates: [27, 29, 44, 55, 66, 79]
+relates: [27, 29, 44, 55, 66, 79, 85]
 ---
 
 # The Root Checkout Is Operator-Owned
 
 ## Status
 
-Accepted (2026-10-26). Delivered by `rco-01` to `rco-05` (PRD:
+Accepted (2026-10-26). Amended by ADR-085. Delivered by `rco-01` to `rco-05` (PRD:
 `docs/prds/root-checkout-is-operator-owned-prd.md`). Extends ADR-044 §5,
 narrows ADR-027, and sets the flush target rule for ADR-079.
 
@@ -67,8 +67,10 @@ run, although the run reloads the queue on every scheduling pass.
    excluded from that worktree's commits by a worktree-scoped exclude.
 7. **Add-only intake passes the lease.** A queue write that adds only new task
    ids takes the queue lock and does not need the run lease. The exemption
-   lives in the queue layer, so both ADR-066 doors share it. Every other queue
-   mutation still needs the lease.
+   lives in the queue layer, so both ADR-066 doors share it. A merge-train flush
+   sealing an `awaiting_merge → merged` transition while holding
+   `integration_lock` is likewise exempt (ADR-085). Every other queue mutation
+   still needs the lease.
 
 ## Consequences
 

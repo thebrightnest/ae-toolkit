@@ -18,6 +18,7 @@ from aet.queue import (  # noqa: E402
     QueueIntegrityError,
     acquire_lease,
     check_lease,
+    lease_guard,
     lease_path,
     read_queue,
     release_lease,
@@ -172,6 +173,7 @@ def test_stale_lease_dead_pid_reclaimed_with_warning(tmp_path, monkeypatch, caps
     qf = tmp_path / ".agents" / "aet-queue"
     qf.parent.mkdir(parents=True, exist_ok=True)
     lp = lease_path(str(qf))
+    Path(lp).parent.mkdir(parents=True, exist_ok=True)
     Path(lp).write_text(
         json.dumps({"run_id": "dead-run", "pid": _dead_pid(), "started_at": "x"}),
         encoding="utf-8",
@@ -231,6 +233,29 @@ def test_lease_released_on_batch_crash(tmp_path):
             release_lease(str(qf), "run-crash")
 
     assert not Path(lp).exists()
+
+
+def test_lease_guard_seal_exemption(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
+    """lease_guard passes an awaiting_merge -> merged transition with AET_FLUSH_SEAL set and refuses every other."""
+    _clear_run_env(monkeypatch)
+    qf = tmp_path / ".agents" / "aet-queue"
+    qf.parent.mkdir(parents=True, exist_ok=True)
+    acquire_lease(str(qf), "live-foreign-run")
+    capsys.readouterr()
+
+    # With AET_FLUSH_SEAL set, awaiting_merge -> merged passes
+    monkeypatch.setenv("AET_FLUSH_SEAL", "1")
+    assert lease_guard(str(qf), transition=("awaiting_merge", "merged")) is True
+
+    # With AET_FLUSH_SEAL set, other transitions refuse
+    assert lease_guard(str(qf), transition=("ready", "in_progress")) is False
+    assert lease_guard(str(qf), transition=("in_progress", "failed")) is False
+    assert lease_guard(str(qf), transition=None) is False
+
+    # Without AET_FLUSH_SEAL set, awaiting_merge -> merged refuses
+    monkeypatch.delenv("AET_FLUSH_SEAL", raising=False)
+    assert lease_guard(str(qf), transition=("awaiting_merge", "merged")) is False
+
 
 
 # ---------------------------------------------------------------------------

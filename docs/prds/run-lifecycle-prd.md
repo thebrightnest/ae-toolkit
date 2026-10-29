@@ -320,5 +320,22 @@ ADR-060, ADR-069, ADR-071, ADR-082 and ADR-084, and against the v1.23.0 code:
 - All five plans use `pipeline: standard`. The UI coverage lens does not
   apply: the change is CLI-only.
 
-*Stage: scope-validated*
-*Next step: `aet sprint add <plan>` then `/aet-drive` (or `aet run-one <id>`)*
+## Divergence Summary
+
+*Recorded: 2026-10-28 — Branch: rl-04-shared-run-lease*
+
+### Changed from plan — rl-04
+
+- None.
+
+### Added (unplanned) — rl-04
+
+- `rl-04`: fallback definition `UTC = timezone.utc` in `src/aet/perf_report.py` for Python runtime compatibility.
+
+### Deferred — rl-04
+
+- None.
+
+*Stage: synced*
+*Next step: run `aet-ship`*
+

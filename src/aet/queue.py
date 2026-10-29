@@ -41,10 +41,12 @@ class QueueIntegrityError(Exception):
 class LeaseHeldError(Exception):
     """Raised when a live run lease is held by a different run."""
 
-    def __init__(self, run_id: str | None) -> None:
+    def __init__(self, run_id: str | None, checkout_path: str | None = None) -> None:
         self.run_id = run_id
+        self.checkout_path = checkout_path
+        loc = f" in {checkout_path}" if checkout_path else ""
         super().__init__(
-            f"queue is owned by run {run_id!r}; re-run after the batch "
+            f"queue is owned by run {run_id!r}{loc}; re-run after the batch "
             f"finishes or pass --force to override"
         )
 
@@ -120,15 +122,75 @@ LEASE_FILENAME = "work-queue.lease"
 LEASE_HELD_EXIT_CODE = 75
 
 
-def lease_path(queue_file: str) -> str:
-    """Return the lease sidecar path for a given queue file."""
+def _find_existing_dir(path: Path) -> Path:
+    p = path.resolve()
+    while not p.exists() and p.parent != p:
+        p = p.parent
+    return p
+
+
+def _git_common_dir(start_dir: str | Path) -> Path | None:
+    existing = _find_existing_dir(Path(start_dir))
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=str(existing),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0:
+            out = res.stdout.strip()
+            if out:
+                p = Path(out)
+                if not p.is_absolute():
+                    p = (existing / p).resolve()
+                return p.resolve()
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def _resolve_checkout_path(queue_file: str) -> str:
+    queue_abs = os.path.abspath(queue_file)
+    queue_dir = os.path.dirname(queue_abs)
+    existing = _find_existing_dir(Path(queue_dir))
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=str(existing),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return str(Path(res.stdout.strip()).resolve())
+    except (OSError, ValueError):
+        pass
+    return queue_dir
+
+
+def legacy_lease_path(queue_file: str) -> str:
+    """Return the legacy per-checkout lease path for a given queue file."""
     queue_abs = os.path.abspath(queue_file)
     return os.path.join(os.path.dirname(queue_abs), LEASE_FILENAME)
 
 
-def read_lease(queue_file: str) -> dict[str, Any] | None:
-    """Read the lease JSON, or ``None`` if it is missing or malformed."""
-    path = lease_path(queue_file)
+def lease_path(queue_file: str) -> str:
+    """Return the lease path for a given queue file.
+
+    Resolves to ``<git-common-dir>/aet/work-queue.lease`` when inside a git
+    repository, with the per-checkout path as fallback outside a git repository.
+    """
+    queue_abs = os.path.abspath(queue_file)
+    queue_dir = os.path.dirname(queue_abs)
+    common_dir = _git_common_dir(queue_dir)
+    if common_dir is not None:
+        return str(common_dir / "aet" / LEASE_FILENAME)
+    return legacy_lease_path(queue_file)
+
+
+def _read_lease_file(path: str) -> dict[str, Any] | None:
     if not os.path.exists(path):
         return None
     try:
@@ -141,12 +203,34 @@ def read_lease(queue_file: str) -> dict[str, Any] | None:
     return data
 
 
+def read_lease(queue_file: str) -> dict[str, Any] | None:
+    """Read the lease JSON, or ``None`` if it is missing or malformed.
+
+    Checks the common lease path first, then falls back to the legacy
+    per-checkout path.
+    """
+    primary = lease_path(queue_file)
+    data = _read_lease_file(primary)
+    if data is not None:
+        return data
+    legacy = legacy_lease_path(queue_file)
+    if legacy != primary:
+        return _read_lease_file(legacy)
+    return None
+
+
 def acquire_lease(
-    queue_file: str, run_id: str, force: bool = False
+    queue_file: str,
+    run_id: str,
+    force: bool = False,
+    *,
+    run_dir: str | None = None,
+    checkout_path: str | None = None,
 ) -> dict[str, Any]:
     """Declare that ``run_id`` owns the queue by writing the lease sidecar.
 
-    The lease records ``run_id``, the acquiring ``pid``, and ``started_at``.
+    The lease records ``run_id``, the acquiring ``pid``, ``started_at``,
+    ``run_dir``, and ``checkout_path``.
     Acquisition is serialized under ``queue_lock`` and written atomically so a
     concurrent orchestrator cannot observe a partial lease.
 
@@ -159,10 +243,17 @@ def acquire_lease(
     path = lease_path(queue_file)
     if not force:
         check_lease(queue_file)
+    if checkout_path is None:
+        checkout_path = _resolve_checkout_path(queue_file)
+    if run_dir is None:
+        queue_dir = os.path.dirname(os.path.abspath(queue_file))
+        run_dir = os.path.abspath(os.path.join(queue_dir, "runs", str(run_id)))
     lease = {
         "run_id": run_id,
         "pid": os.getpid(),
         "started_at": datetime.now(timezone.utc).isoformat(),
+        "run_dir": os.path.abspath(run_dir),
+        "checkout_path": os.path.abspath(checkout_path),
     }
     with queue_lock(queue_file):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -182,6 +273,13 @@ def acquire_lease(
             except FileNotFoundError:
                 pass
             raise
+
+        legacy = legacy_lease_path(queue_file)
+        if force and legacy != path:
+            try:
+                os.unlink(legacy)
+            except FileNotFoundError:
+                pass
     return lease
 
 
@@ -191,38 +289,37 @@ def release_lease(queue_file: str, run_id: str) -> None:
     A lease held by a different run is left untouched so a crashing or
     misrouted run cannot delete another orchestrator's ownership marker.
     """
-    path = lease_path(queue_file)
+    primary = lease_path(queue_file)
+    legacy = legacy_lease_path(queue_file)
+    paths = [primary]
+    if legacy != primary:
+        paths.append(legacy)
+
     with queue_lock(queue_file):
-        current = read_lease(queue_file)
-        if current is None:
-            return
-        if current.get("run_id") != run_id:
-            return
-        try:
-            os.unlink(path)
-        except FileNotFoundError:
-            pass
+        for path in paths:
+            current = _read_lease_file(path)
+            if current is not None and current.get("run_id") == run_id:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
 
 
-def check_lease(queue_file: str) -> None:
-    """Refuse mutation when a live lease is held by a different run.
-
-    Rules:
-      - no lease                         -> allowed
-      - lease whose owning run is not live -> stale: reclaim with a warning, allowed
-      - live lease, caller's AET_RUN_ID matches ``run_id`` -> allowed
-      - live lease, otherwise            -> raise ``LeaseHeldError``
-    """
-    lease = read_lease(queue_file)
+def _check_single_lease(path: str, queue_file: str) -> None:
+    lease = _read_lease_file(path)
     if lease is None:
         return
 
     run_id = lease.get("run_id")
     pid = lease.get("pid")
     started_at = lease.get("started_at")
-
-    queue_dir = os.path.dirname(os.path.abspath(queue_file))
-    run_dir = os.path.join(queue_dir, "runs", str(run_id)) if run_id else None
+    run_dir = lease.get("run_dir")
+    checkout_path = lease.get("checkout_path")
+    if not run_dir and run_id:
+        queue_dir = os.path.dirname(os.path.abspath(queue_file))
+        run_dir = os.path.join(queue_dir, "runs", str(run_id))
+    if not checkout_path:
+        checkout_path = os.path.dirname(os.path.abspath(queue_file))
 
     if not is_run_alive(run_dir=run_dir, pid=pid, started=started_at):
         print(
@@ -231,7 +328,7 @@ def check_lease(queue_file: str) -> None:
             file=sys.stderr,
         )
         try:
-            os.unlink(lease_path(queue_file))
+            os.unlink(path)
         except FileNotFoundError:
             pass
         return
@@ -240,7 +337,27 @@ def check_lease(queue_file: str) -> None:
     if caller is not None and caller == run_id:
         return
 
-    raise LeaseHeldError(run_id)
+    raise LeaseHeldError(run_id, checkout_path)
+
+
+def check_lease(queue_file: str) -> None:
+    """Refuse mutation when a live lease is held by a different run.
+
+    Checks both the primary common git lease and the legacy per-checkout lease.
+    Rules:
+      - no lease                         -> allowed
+      - lease whose owning run is not live -> stale: reclaim with a warning, allowed
+      - live lease, caller's AET_RUN_ID matches ``run_id`` -> allowed
+      - live lease, otherwise            -> raise ``LeaseHeldError``
+    """
+    primary = lease_path(queue_file)
+    legacy = legacy_lease_path(queue_file)
+    paths = [primary]
+    if legacy != primary:
+        paths.append(legacy)
+
+    for path in paths:
+        _check_single_lease(path, queue_file)
 
 
 def lease_guard(
@@ -249,13 +366,17 @@ def lease_guard(
     *,
     writes: Iterable[str] | None = None,
     queue: list[dict[str, Any]] | None = None,
+    transition: tuple[str, str] | None = None,
 ) -> bool:
     """Check the run lease for a mutating entry point.
 
     Returns ``True`` when no other live run holds the lease, when ``force`` is
-    set, or when every id in ``writes`` is absent from ``queue`` (add-only).
+    set, when every id in ``writes`` is absent from ``queue`` (add-only), or
+    when ``AET_FLUSH_SEAL`` is set and ``transition`` is ``('awaiting_merge', 'merged')``.
     A refusal or an override warning is printed to stderr.
     """
+    if os.environ.get("AET_FLUSH_SEAL") and transition == ("awaiting_merge", "merged"):
+        return True
     if writes is not None and queue is not None:
         written = set(writes)
         if written and not written & {t.get("id") for t in queue}:
@@ -270,8 +391,9 @@ def lease_guard(
                 file=sys.stderr,
             )
             return True
+        loc = f" in {exc.checkout_path}" if exc.checkout_path else ""
         print(
-            f"⛔ Refusing to mutate the queue: owned by run {exc.run_id}. "
+            f"⛔ Refusing to mutate the queue: owned by run {exc.run_id}{loc}. "
             f"Re-run after the batch finishes, or pass --force to override.",
             file=sys.stderr,
         )

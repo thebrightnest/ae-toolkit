@@ -1546,7 +1546,11 @@ def cmd_transition(args):
     cwd = os.path.dirname(args.queue) if args.queue else "."
     trunk_branch = _resolve_trunk(args.queue)
 
-    if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
+    if not queue_lib.lease_guard(
+        args.queue,
+        force=getattr(args, "force", False),
+        transition=(args.from_stage, args.to_stage),
+    ):
         return queue_lib.LEASE_HELD_EXIT_CODE
 
     with queue_lib.queue_lock(args.queue):

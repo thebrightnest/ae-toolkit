@@ -115,3 +115,54 @@ def test_check_lease_refuses_when_owning_run_is_live(tmp_path: Path, monkeypatch
         check_lease(str(qf))
     assert exc_info.value.run_id == "live-foreign-run"
     assert Path(lp).exists()
+
+
+def test_lease_reclaimed_when_returncode_written_in_another_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+):
+    """A lease whose holder wrote returncode in another worktree is reclaimed."""
+    import subprocess
+    monkeypatch.delenv("AET_RUN_ID", raising=False)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "t@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "T"], check=True)
+    (repo / "README.md").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "init"], check=True)
+
+    wt = tmp_path / "other-wt"
+    subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", str(wt), "-b", "wt-branch"], check=True)
+
+    q1 = repo / ".agents" / "aet-queue"
+    q2 = wt / ".agents" / "aet-queue"
+    q1.parent.mkdir(parents=True, exist_ok=True)
+    q2.parent.mkdir(parents=True, exist_ok=True)
+
+    runs_dir = repo / ".agents" / "runs" / "finished-wt-run"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    (runs_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+    (runs_dir / "started").write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+    (runs_dir / "returncode").write_text("0\n", encoding="utf-8")
+
+    lp = lease_path(str(q1))
+    Path(lp).parent.mkdir(parents=True, exist_ok=True)
+    Path(lp).write_text(
+        json.dumps({
+            "run_id": "finished-wt-run",
+            "pid": os.getpid(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "run_dir": str(runs_dir),
+            "checkout_path": str(repo),
+        }),
+        encoding="utf-8",
+    )
+
+    # Calling check_lease from the sibling worktree (q2) should reclaim the lease
+    check_lease(str(q2))
+
+    captured = capsys.readouterr()
+    assert "stale" in captured.err.lower()
+    assert not Path(lp).exists()
+
