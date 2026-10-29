@@ -196,5 +196,21 @@ ADR-069, ADR-071 and ADR-073, and against the v1.23.0 code:
 | `gfe-02-bounded-retries` | R-6, R-7, R-11 to R-14 | `gfe-01` |
 | `gfe-03-lens-trip-writes-fail-verdict` | R-8 to R-10, R-14 | — |
 
-*Stage: scope-validated*
-*Next step: `aet sprint add <plan>` then `/aet-drive` (or `aet run-one <id>`)*
+## Divergence Summary
+
+*Recorded: 2026-10-28 — Branch: gfe-01-gate-failure-is-evidence*
+
+### Changed from plan
+
+- None.
+
+### Added (unplanned)
+
+- `src/aet/perf_report.py`: Used `timezone.utc` instead of `datetime.UTC` for Python 3.10 compatibility.
+
+### Deferred
+
+- None.
+
+*Stage: synced*
+*Next step: run `aet-ship`*

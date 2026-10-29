@@ -18,7 +18,7 @@ import collections
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -261,7 +261,7 @@ def build_payload(
     return {
         "meta": {
             "schema_version": SCHEMA_VERSION,
-            "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "project": project,
             "worktree": worktree,
             "worktrees_seen": sorted({s.worktree for s in stages}),

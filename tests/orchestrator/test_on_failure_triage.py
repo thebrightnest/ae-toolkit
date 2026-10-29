@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -257,6 +259,66 @@ class TestFinalizeOnFailureTriage(unittest.TestCase):
             )
             self.assertEqual(deltas["failures"], 1)
             self.assertEqual(task_after["state"], "quarantined")
+
+    def test_gate_failure_provides_sufficient_evidence_for_triage(self):
+        """A gate failure records evidence so _finalize_task consults triage instead of skipping."""
+        from aet import telemetry
+
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            task = {
+                "id": "demo",
+                "title": "Demo",
+                "state": "in_progress",
+                "failure_signatures": [],
+            }
+            queue_file = _write_queue(repo_root, [task])
+            backend = orchestrator._make_backend(queue_file)
+            logger = telemetry.RunLogger(repo_root, run_id="r-gate-triage")
+
+            passed = orchestrator._require_passing_verdict(
+                "demo",
+                "qa",
+                repo_root,
+                "docs/plans/demo.md",
+                "qa-complete",
+                logger,
+                task=task,
+                backend=backend,
+            )
+            self.assertFalse(passed)
+
+            consulted = []
+
+            def fake_consult(*args, **kwargs):
+                consulted.append(kwargs)
+                return {"action": "requeue"}
+
+            adapter = unittest.mock.MagicMock()
+            buf = io.StringIO()
+            with patch.object(
+                orchestrator, "_consult_triage_session", side_effect=fake_consult
+            ), redirect_stdout(buf):
+                deltas = orchestrator._finalize_task(
+                    backend,
+                    queue_file,
+                    "demo",
+                    ret=1,
+                    repo_root=repo_root,
+                    on_failure="triage",
+                    adapter=adapter,
+                    worktree_dir=repo_root,
+                )
+
+            self.assertEqual(len(consulted), 1)
+            self.assertEqual(deltas["failures"], 0)
+            self.assertNotIn("insufficient evidence", buf.getvalue())
+            self.assertEqual(consulted[0]["stage"], "qa-complete")
+            self.assertEqual(
+                consulted[0]["signature"],
+                failure.signature(stage="qa-complete", tail="gate:qa:missing"),
+            )
+            self.assertIn("gate:qa:missing", consulted[0]["tail"])
 
     def test_triage_skipped_when_evidence_empty_requeues_environment(self):
         with tempfile.TemporaryDirectory() as repo_root:

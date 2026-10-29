@@ -244,6 +244,63 @@ class TestOrchestratorBreakerWiring:
 
         assert task["failure_signatures"][-1]["signature"] == sig
 
+    def test_third_identical_gate_failure_quarantines_task(self, tmp_path):
+        """The third identical gate failure trips the per-task breaker and quarantines the task."""
+        from aet import telemetry
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+        (repo / "file.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True)
+        subprocess.run(["git", "update-ref", "refs/remotes/origin/main", "HEAD"], cwd=repo, check=True)
+
+        queue_file = str(repo / "queue.json")
+        backend = orchestrator._make_backend(queue_file)
+        task = {
+            "id": "t1",
+            "title": "Task 1",
+            "state": "in_progress",
+            "failure_signatures": [],
+        }
+        backend.save([task])
+
+        logger = telemetry.RunLogger(str(repo), run_id="r-breaker")
+
+        # Simulate 3 identical gate failures (missing verdict for qa)
+        for _ in range(3):
+            passed = orchestrator._require_passing_verdict(
+                "t1",
+                "qa",
+                str(repo),
+                "docs/plans/t1.md",
+                "qa-complete",
+                logger,
+                task=task,
+                backend=backend,
+            )
+            assert passed is False
+
+        assert len(task["failure_signatures"]) == 3
+        assert breaker.should_quarantine_task(task) is True
+
+        deltas = orchestrator._finalize_task(
+            backend,
+            queue_file,
+            "t1",
+            ret=1,
+            repo_root=str(repo),
+        )
+
+        assert deltas["failures"] == 1
+        assert deltas["stop_spawn"] is True
+        data = backend.load()
+        task_after = next(t for t in data["queue"] if t["id"] == "t1")
+        assert task_after["state"] == "quarantined"
+
     def test_finalize_canceled_does_not_record(self, tmp_path):
         """A canceled task does not get a failure signature."""
         repo = tmp_path / "repo"

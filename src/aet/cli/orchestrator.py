@@ -1353,6 +1353,25 @@ def _require_passing_verdict(
 
     if state != "pass":
         print(f"   ❌ Gate fail-closed: {detail} for {task_id}")
+        if task is not None:
+            failure_class = (
+                failure_lib.FailureClass.DESIGN
+                if state == "fail"
+                else failure_lib.FailureClass.ENVIRONMENT
+            )
+            gate_key = f"gate:{kind}:{state}"
+            preview_parts = [gate_key, detail]
+            if record and record.get("summary"):
+                preview_parts.append(record["summary"])
+            preview = "\n".join(preview_parts)
+            _record_failure_on_task(
+                backend,
+                task,
+                failure_class,
+                stage=stage,
+                tail=gate_key,
+                preview=preview,
+            )
         if kind == "qa" and task is not None:
             _attach_gap_analysis_to_task(
                 task, backend, task_id, repo_root, logger
@@ -2652,6 +2671,7 @@ def _record_failure_on_task(
     stage: str,
     tail: str,
     timestamp: str | None = None,
+    preview: str | None = None,
 ) -> str | None:
     """Record a failure signature on *task* when it is countable.
 
@@ -2674,7 +2694,8 @@ def _record_failure_on_task(
     entry = entries[-1]
     entry["class"] = failure_class.value
     entry["stage"] = stage
-    entry["tail_preview"] = tail[-1500:] if tail else ""
+    preview_text = preview if preview is not None else tail
+    entry["tail_preview"] = preview_text[-1500:] if preview_text else ""
     # Persist the updated task record if a backend is available.
     if backend is not None:
         queue = backend.load()["queue"]

@@ -23,7 +23,7 @@ from unittest.mock import patch
 
 import pytest
 
-from aet import evidence, telemetry
+from aet import evidence, failure, telemetry
 from aet.workflow import ExecutionPolicy, Routing, Workflow, WorkflowStage
 
 _ORCHESTRATOR_PY = Path(__file__).parents[2] / "src" / "aet" / "cli" / "orchestrator.py"
@@ -413,3 +413,62 @@ def test_os_environ_is_untouched_by_recovery(gate_env):
     ):
         _run_gate(gate_env, adapter=FakeAdapter())
     assert dict(os.environ) == before
+
+
+def test_gate_failure_records_evidence_on_task(gate_env):
+    """A fail verdict records design evidence; a missing verdict records environment."""
+    _write_qa_verdict(verdict="fail", summary="assertion failed")
+    task_fail = {"id": TASK, "failure_signatures": []}
+    passed, _ = _run_gate(gate_env, task=task_fail)
+    assert passed is False
+    assert len(task_fail["failure_signatures"]) == 1
+    fail_entry = task_fail["failure_signatures"][0]
+    assert fail_entry["class"] == "design"
+    assert fail_entry["stage"] == "qa-complete"
+    assert fail_entry["signature"] == failure.signature(
+        stage="qa-complete", tail="gate:qa:fail"
+    )
+    assert "gate:qa:fail" in fail_entry["tail_preview"]
+    assert "verdict is 'fail'" in fail_entry["tail_preview"]
+    assert "assertion failed" in fail_entry["tail_preview"]
+
+    # Missing verdict
+    _verdict_path().unlink()
+    task_missing = {"id": TASK, "failure_signatures": []}
+    passed_missing, _ = _run_gate(gate_env, task=task_missing)
+    assert passed_missing is False
+    assert len(task_missing["failure_signatures"]) == 1
+    missing_entry = task_missing["failure_signatures"][0]
+    assert missing_entry["class"] == "environment"
+    assert missing_entry["stage"] == "qa-complete"
+    assert missing_entry["signature"] == failure.signature(
+        stage="qa-complete", tail="gate:qa:missing"
+    )
+    assert "gate:qa:missing" in missing_entry["tail_preview"]
+    assert "missing qa verdict" in missing_entry["tail_preview"]
+
+
+def test_two_fail_verdicts_with_different_summaries_produce_same_signature(gate_env):
+    """Signatures key on gate:<kind>:<state>, not on verdict details or summaries."""
+    _write_qa_verdict(verdict="fail", summary="summary alpha")
+    task_1 = {"id": TASK, "failure_signatures": []}
+    _run_gate(gate_env, task=task_1)
+
+    _write_qa_verdict(verdict="fail", summary="summary beta")
+    task_2 = {"id": TASK, "failure_signatures": []}
+    _run_gate(gate_env, task=task_2)
+
+    sig_1 = task_1["failure_signatures"][0]["signature"]
+    sig_2 = task_2["failure_signatures"][0]["signature"]
+    assert sig_1 == sig_2
+    assert sig_1 == failure.signature(stage="qa-complete", tail="gate:qa:fail")
+    assert "summary alpha" in task_1["failure_signatures"][0]["tail_preview"]
+    assert "summary beta" in task_2["failure_signatures"][0]["tail_preview"]
+
+
+def test_gate_failure_with_no_task_records_nothing(gate_env):
+    """When task=None, _require_passing_verdict returns False and records nothing."""
+    _write_qa_verdict(verdict="fail")
+    passed, _ = _run_gate(gate_env, task=None)
+    assert passed is False
+
