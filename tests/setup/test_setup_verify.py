@@ -62,7 +62,7 @@ class TestSetupVerifyOk(SetupVerifyTestCase):
         """Even without a symlink, verify reports the PATH-winning copy."""
         rc, out, err = self._run_verify(path=str(Path(sys.executable).parent))
         self.assertEqual(rc, 0, err)
-        self.assertIn(str(Path(sys.executable).parent / "aet"), out)
+        self.assertIn(str((Path(sys.executable).parent / "aet").resolve()), out)
 
 
 class TestSetupVerifyShadowing(SetupVerifyTestCase):
