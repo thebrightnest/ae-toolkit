@@ -78,7 +78,7 @@ lint-py: install-editable ## Run ruff on Python files
 	@$(PYTHON) -m ruff check .
 	@echo "✓ Python lint passed"
 
-PYTEST_WORKERS ?= 4
+PYTEST_WORKERS ?= 1
 
 test: install-editable ## Run pytest suite (parallel if pytest-xdist is installed)
 	@if $(PYTHON) -c "import xdist" 2>/dev/null; then \
