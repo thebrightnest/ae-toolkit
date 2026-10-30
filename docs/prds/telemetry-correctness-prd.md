@@ -330,5 +330,5 @@ From `content/backlog/client-run-mining-report-2026-10-28.md`, problems 2, 5,
 
 - None.
 
-*Stage: scope-validated*
-*Next step: `aet sprint add <plan>` then `/aet-drive` (or `aet run-one <id>`)*
+*Stage: synced*
+*Next step: run `aet-ship`*

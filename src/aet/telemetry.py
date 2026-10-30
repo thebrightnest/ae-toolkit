@@ -19,10 +19,9 @@ from pathlib import Path
 from typing import Any
 
 # Re-export the neutral identity helper so existing callers keep working.
-from aet import test_runners
+from aet import test_runners, user_paths
 from aet.project_id import derive_project_slug, resolve_repo_root  # noqa: F401
 
-DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
 
 # Maximum number of raw agent-output lines included in a stage record's excerpt.
@@ -156,8 +155,7 @@ def _parse_iso(ts: str) -> datetime:
 
 def archive_dir() -> Path:
     """Return the telemetry archive root, respecting ``AET_TELEMETRY_ARCHIVE_DIR``."""
-    env = os.environ.get("AET_TELEMETRY_ARCHIVE_DIR")
-    return Path(env).expanduser() if env else DEFAULT_ARCHIVE_DIR
+    return user_paths.telemetry_archive_dir()
 
 
 def _sanitize(value: Any, repo_root: Path) -> Any:

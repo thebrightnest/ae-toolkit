@@ -427,11 +427,12 @@ is up to date.
 ## Telemetry during test runs
 
 The toolkit's pytest suite spawns the real orchestrator, but it never writes to
-your real archive: an autouse fixture in `tests/conftest.py` points
-`AET_TELEMETRY_ARCHIVE_DIR` (and the `DEFAULT_ARCHIVE_DIR` fallback, for tests
-that wipe `os.environ` in-process) at a per-test tmp dir, and every subprocess
-spawn inherits it. A test opts out only by setting `AET_TELEMETRY_ARCHIVE_DIR`
-explicitly itself.
+your real archive: an autouse fixture in `tests/conftest.py` points `AET_HOME`
+(and patches the fallback home in `src/aet/user_paths.py`, for tests that wipe
+`os.environ` in-process) at a per-test tmp dir, and every subprocess spawn
+inherits it. Resolvers for `~/.aet/telemetry` (override: `AET_TELEMETRY_ARCHIVE_DIR`)
+and `~/.aet/reports` (override: `AET_REPORTS_DIR`) fall back to `AET_HOME`.
+A test opts out only by setting explicit environment overrides itself.
 
 ## Migrating historical slugs
 

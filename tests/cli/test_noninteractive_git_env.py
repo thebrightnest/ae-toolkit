@@ -14,6 +14,7 @@ out unchanged.
 from __future__ import annotations
 
 import subprocess
+import sys
 from unittest.mock import patch
 
 from aet.cli.main import _ensure_git_is_noninteractive
@@ -26,8 +27,8 @@ def _apply(env: dict, *, isatty: bool, configured_ssh: str = "") -> dict:
     )
     with (
         patch.dict("os.environ", env, clear=True),
-        patch("aet.cli.main.sys.stdin.isatty", return_value=isatty),
-        patch("aet.cli.main.subprocess.run", return_value=completed),
+        patch.object(sys.stdin, "isatty", return_value=isatty),
+        patch("subprocess.run", return_value=completed),
     ):
         _ensure_git_is_noninteractive()
         import os

@@ -338,6 +338,7 @@ class TestSinglePrRehearsal(unittest.TestCase):
         new_path = f"{fake_cli.parent}{os.pathsep}{os.environ.get('PATH', '')}"
         env = {
             "HOME": home_dir,
+            "AET_HOME": str(Path(home_dir) / ".aet"),
             "PATH": new_path,
             "AET_PROJECT_ID": PROJECT_SLUG,
         }

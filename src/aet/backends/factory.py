@@ -8,6 +8,7 @@ import shlex
 from pathlib import Path
 from typing import Any
 
+from aet import user_paths
 from aet.backends.base import SHADOW_POSTURE, SHARED_POSTURE
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.project_id import derive_config_slug, resolve_repo_root
@@ -234,7 +235,7 @@ def resolve_config_with_source(
             return config, "env"
 
     slug = derive_config_slug(repo_root)
-    external_path = Path.home() / ".aet" / slug / "config.json"
+    external_path = user_paths.user_config_path(slug)
     if external_path.exists():
         config = _load_config(external_path)
         if "task_backend" in config:

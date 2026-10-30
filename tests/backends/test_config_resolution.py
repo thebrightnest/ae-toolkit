@@ -128,6 +128,7 @@ class TestConfigResolution(unittest.TestCase):
     def test_noninvasive_setup_leaves_tracked_tree_free_of_aet_config(self):
         env = os.environ.copy()
         env["HOME"] = str(self.home)
+        env["AET_HOME"] = str(self.home / ".aet")
         env["AET_PROJECT_ID"] = "noninvasive-project"
 
         result = subprocess.run(

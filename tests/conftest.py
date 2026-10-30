@@ -2,9 +2,21 @@
 
 import os
 import sys
+import unittest
 from pathlib import Path
 
 import pytest
+
+# Python < 3.11 compatibility: backport enterClassContext to unittest.TestCase.
+if not hasattr(unittest.TestCase, "enterClassContext"):
+
+    @classmethod
+    def _enterClassContext(cls, cm):
+        result = cm.__enter__()
+        cls.addClassCleanup(cm.__exit__, None, None, None)
+        return result
+
+    unittest.TestCase.enterClassContext = _enterClassContext
 
 # The host shell sets PYTHONPATH to the main checkout, which would make every
 # ``import aet`` resolve outside this worktree. Force the repo under test onto
@@ -25,34 +37,27 @@ os.environ["PYTHONPATH"] = (
 
 
 @pytest.fixture(autouse=True)
-def _isolate_telemetry_archive(monkeypatch, tmp_path):
-    """Point the telemetry archive at a per-test tmp dir.
+def _isolate_aet_home(request, monkeypatch, tmp_path):
+    """Point ``AET_HOME`` at a per-test tmp dir and patch user_paths fallback.
 
     The suite spawns the real orchestrator, and env vars are inherited by every
     subprocess, so one autouse fixture keeps all spawn sites out of the real
-    ``~/.aet/telemetry``. Tests that need an explicit archive override this by
-    setting ``AET_TELEMETRY_ARCHIVE_DIR`` themselves.
+    ``~/.aet``. Tests that need an explicit archive or reports dir override
+    ``AET_TELEMETRY_ARCHIVE_DIR`` or ``AET_REPORTS_DIR`` themselves.
 
-    ``DEFAULT_ARCHIVE_DIR`` is patched as well: several tests run orchestrator
+    The fallback home in ``user_paths`` is patched as well: several tests run
     code in-process under ``patch.dict(os.environ, ..., clear=True)``, which
-    wipes the env var; without the module-level patch those calls fall back to
-    the real archive.
+    wipes the env var; without the fallback patch those calls fall back to
+    the real ``~/.aet``.
     """
-    from aet import telemetry
+    if request.cls is not None:
+        return
 
-    archive = tmp_path / "telemetry-archive"
-    monkeypatch.setenv("AET_TELEMETRY_ARCHIVE_DIR", str(archive))
-    monkeypatch.setattr(telemetry, "DEFAULT_ARCHIVE_DIR", archive)
+    from aet import user_paths
 
-
-@pytest.fixture(autouse=True)
-def _isolate_plans_archive(monkeypatch, tmp_path):
-    """Point the settled-plan archive at a per-test tmp dir.
-
-    Keeps closure and migration tests from writing into the real
-    ``~/.aet/<slug>/plans/archive/``.
-    """
-    monkeypatch.setenv("AET_PLANS_ARCHIVE_DIR", str(tmp_path / "plans-archive"))
+    home = tmp_path / "aet-home"
+    monkeypatch.setenv("AET_HOME", str(home))
+    monkeypatch.setattr(user_paths, "_FALLBACK_AET_HOME", home)
 
 
 @pytest.fixture(autouse=True)
@@ -124,11 +129,11 @@ def _isolate_class_scoped_setup(request, tmp_path_factory):
         yield
         return
 
-    from aet import ledger, telemetry
+    from aet import ledger, user_paths
     from aet.backends import git_refs_backend
 
     root = tmp_path_factory.mktemp("class-isolation")
-    archive = root / "telemetry-archive"
+    aet_home = root / "aet-home"
     ledger_root = root / "ledger-root"
     (ledger_root / ".agents").mkdir(parents=True, exist_ok=True)
 
@@ -140,8 +145,7 @@ def _isolate_class_scoped_setup(request, tmp_path_factory):
         return real_has_remote(repo_root)
 
     with pytest.MonkeyPatch.context() as mp:
-        mp.setenv("AET_TELEMETRY_ARCHIVE_DIR", str(archive))
-        mp.setenv("AET_PLANS_ARCHIVE_DIR", str(root / "plans-archive"))
+        mp.setenv("AET_HOME", str(aet_home))
         mp.setenv("AET_BIN_DIR", str(root / "aet-bin"))
         mp.setenv("AET_LEDGER_PATH", str(ledger_root / ".agents" / "ledger.jsonl"))
         mp.delenv("AET_REPO_ROOT", raising=False)
@@ -152,7 +156,7 @@ def _isolate_class_scoped_setup(request, tmp_path_factory):
         for k in list(os.environ):
             if k.startswith("AET_EVIDENCE_PATH_"):
                 mp.delenv(k, raising=False)
-        mp.setattr(telemetry, "DEFAULT_ARCHIVE_DIR", archive)
+        mp.setattr(user_paths, "_FALLBACK_AET_HOME", aet_home)
         mp.setattr(ledger, "_resolve_ledger_repo_root", lambda: ledger_root)
         mp.setattr(git_refs_backend, "_has_remote", guarded)
         yield

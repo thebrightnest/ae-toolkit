@@ -28,10 +28,10 @@ from pathlib import Path
 
 import typer
 
-DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
-DEFAULT_LOOKBACK_DAYS = 7
-
+from aet import telemetry
 from aet.project_id import derive_project_slug  # noqa: E402
+
+DEFAULT_LOOKBACK_DAYS = 7
 
 # Heuristic signals that a finding belongs to the AET toolkit rather than the
 # project being built. Keep this list small and project-agnostic.
@@ -409,7 +409,7 @@ app = typer.Typer(invoke_without_command=True)
 @app.callback()
 def retro(
     archive_dir: Path = typer.Option(
-        DEFAULT_ARCHIVE_DIR,
+        telemetry.archive_dir(),
         "--archive-dir",
         help="Telemetry archive root (default: ~/.aet/telemetry).",
     ),
@@ -435,7 +435,10 @@ def retro(
     ),
 ) -> None:
     """Generate a retro from AET telemetry, split by project-level and AET-level fixes."""
-    rc = _run(archive_dir, project_slug, lookback_days, output, no_mine)
+    effective_archive = (
+        telemetry.archive_dir() if archive_dir == telemetry.archive_dir() else archive_dir
+    )
+    rc = _run(effective_archive, project_slug, lookback_days, output, no_mine)
     raise typer.Exit(rc)
 
 

@@ -15,7 +15,6 @@ Archive layout (as written by src/aet/telemetry.py; the project slug is
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -25,7 +24,7 @@ from typing import Any
 
 import typer
 
-DEFAULT_ARCHIVE_DIR = Path.home() / ".aet" / "telemetry"
+from aet import telemetry
 
 # Per-stage anomaly thresholds. Revisit after one week of data.
 SLOW_STAGE_THRESHOLD_S = 1800
@@ -442,10 +441,7 @@ def propose_edits(patterns: dict[str, Any]) -> str:
 
 
 def _run(archive_dir: Path | None, propose: bool) -> int:
-    archive_dir = (
-        archive_dir
-        or Path(os.environ.get("AET_TELEMETRY_ARCHIVE_DIR") or DEFAULT_ARCHIVE_DIR)
-    ).expanduser()
+    archive_dir = (archive_dir or telemetry.archive_dir()).expanduser()
 
     patterns = mine_archive(archive_dir)
     print(format_report(patterns))

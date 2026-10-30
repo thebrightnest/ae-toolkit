@@ -46,13 +46,13 @@ class TestValidationConfigKeys(unittest.TestCase):
 
     def test_user_scope_shadow_layer_resolution(self):
         """User scope config (~/.aet/<slug>/config.json) takes precedence over project."""
+        from aet import user_paths
         from aet.project_id import derive_config_slug
 
         with tempfile.TemporaryDirectory() as tmpdir:
             slug = derive_config_slug(tmpdir)
-            user_config_dir = Path.home() / ".aet" / slug
-            user_config_dir.mkdir(parents=True, exist_ok=True)
-            user_config_file = user_config_dir / "config.json"
+            user_config_file = user_paths.user_config_path(slug)
+            user_config_file.parent.mkdir(parents=True, exist_ok=True)
             try:
                 user_config_file.write_text(
                     json.dumps({"validate_command": "pytest tests/unit"})

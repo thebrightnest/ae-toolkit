@@ -206,7 +206,7 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
                                 orchestrator,
                                 "_require_passing_verdict",
                                 return_value=True,
-                            ):
+                            ), patch("aet.gate.check_task_evidence", return_value=(True, [])):
                                 with patch.object(
                                     orchestrator,
                                     "_record_stage",
@@ -298,7 +298,7 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
                                 orchestrator,
                                 "_require_passing_verdict",
                                 return_value=True,
-                            ):
+                            ), patch("aet.gate.check_task_evidence", return_value=(True, [])):
                                 with patch.object(
                                     orchestrator,
                                     "_record_stage",
@@ -339,7 +339,7 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
                                 orchestrator,
                                 "_require_passing_verdict",
                                 return_value=True,
-                            ):
+                            ), patch("aet.gate.check_task_evidence", return_value=(True, [])):
                                 with patch.object(
                                     orchestrator,
                                     "_record_stage",
@@ -430,7 +430,7 @@ class TestPrdDerivedIntegrationBranch(unittest.TestCase):
                                 orchestrator,
                                 "_require_passing_verdict",
                                 return_value=True,
-                            ):
+                            ), patch("aet.gate.check_task_evidence", return_value=(True, [])):
                                 with patch.object(
                                     orchestrator,
                                     "_record_stage",

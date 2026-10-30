@@ -47,6 +47,7 @@ from pathlib import Path
 
 import typer
 
+from aet import user_paths
 from aet.backends.factory import INTEGRATION_MODES, resolve_config_with_source
 from aet.project_id import derive_config_slug
 
@@ -157,9 +158,9 @@ def _target_path(project_root: Path, scope: str) -> Path:
     """Return the config file path for the chosen scope."""
     if scope == "user":
         slug = derive_config_slug(project_root)
-        external_config_dir = Path.home() / ".aet" / slug
-        external_config_dir.mkdir(parents=True, exist_ok=True)
-        return external_config_dir / "config.json"
+        target = user_paths.user_config_path(slug)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        return target
 
     agents_dir = project_root / ".agents"
     agents_dir.mkdir(parents=True, exist_ok=True)

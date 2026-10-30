@@ -13,9 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from aet import telemetry, verifier
-
-DEFAULT_REPORTS_DIR = Path.home() / ".aet" / "reports"
+from aet import telemetry, user_paths, verifier
 
 SCHEMAS: dict[str, dict[str, type]] = {
     "qa": {
@@ -111,8 +109,7 @@ class VerdictValueError(ValueError):
 
 def reports_dir() -> Path:
     """Return the reports archive root, respecting ``AET_REPORTS_DIR``."""
-    env = os.environ.get("AET_REPORTS_DIR")
-    return Path(env).expanduser() if env else DEFAULT_REPORTS_DIR
+    return user_paths.reports_dir()
 
 
 def evidence_path(
