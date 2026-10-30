@@ -119,6 +119,7 @@ from aet.worktree import (  # noqa: E402
     mirror_linked_prd,
     prepare_worktree_dependencies,
     render_task_plan,
+    snapshot_worktree,
     teardown_worktree,
 )
 
@@ -1253,9 +1254,10 @@ def _note_branch_state(
     *,
     task: dict,
     task_id: str,
-    runnable: list[WorkflowStage],
+    runnable: list[WorkflowStage] | None = None,
     worktree_dir: str,
-    credited: str | None,
+    credited: str | None = None,
+    snapshot_ref: str | None = None,
 ) -> None:
     """Tell the retry what this branch already carries (ADR-069 decision 3).
 
@@ -1280,7 +1282,7 @@ def _note_branch_state(
                 f"earlier attempt of this task; do not redo that work: "
                 + "; ".join(commits[:10])
             )
-        for stage in runnable:
+        for stage in (runnable or []):
             if stage.evidence is None:
                 continue
             state, _record, _detail = _verdict_state(task_id, stage.evidence, repo_root)
@@ -1291,12 +1293,17 @@ def _note_branch_state(
                 )
         if credited:
             decisions.append(f"The pipeline stage was advanced to '{credited}'.")
+        if snapshot_ref:
+            decisions.append(
+                f"Uncommitted work from an earlier attempt of this task is saved at {snapshot_ref}."
+            )
         if not decisions:
             return
+        stage_name = runnable[0].name if runnable else (task.get("stage") or "ready")
         handoff.append_entry(
             repo_root,
             run_id,
-            stage=runnable[0].name,
+            stage=stage_name,
             task_id=task_id,
             decisions=decisions,
         )
@@ -3539,6 +3546,27 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             if worktree_rel
             else os.path.join(repo_root, ".worktrees", task_id)
         )
+
+        def _snapshot_and_teardown() -> dict[str, Any]:
+            snap_ref = None
+            if worktree_dir and os.path.isdir(worktree_dir):
+                snap_attempt = attempt_counts.get(task_id, 0) if attempt_counts is not None else 0
+                snap_ref = snapshot_worktree(
+                    worktree_dir, task_id, attempt=snap_attempt if snap_attempt > 0 else None
+                )
+                if snap_ref:
+                    print(f"   {task_id} uncommitted work saved to {snap_ref}")
+                    if task:
+                        _note_branch_state(
+                            repo_root,
+                            logger.run_id if logger else None,
+                            task=task,
+                            task_id=task_id,
+                            worktree_dir=worktree_dir,
+                            snapshot_ref=snap_ref,
+                        )
+            return teardown_worktree(repo_root, task_id, force=bool(snap_ref))
+
         if ret == 0:
             if task and worktree_dir and os.path.isdir(worktree_dir):
                 ok, msg = verify_branch_has_commits(worktree_dir)
@@ -3547,7 +3575,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     _mark_failed(backend, queue_file, task_id, current_state(task))
                     failures += 1
                     stop_spawn = True
-                    teardown_worktree(repo_root, task_id)
+                    _snapshot_and_teardown()
                     return
             should_integrate = (integration_mode == "single-pr") or (
                 task is not None and track_record.is_eligible_for_auto_merge(task)
@@ -3593,7 +3621,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                         str(exc),
                     )
                     failures += 1
-                    teardown_worktree(repo_root, task_id)
+                    _snapshot_and_teardown()
                 if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
                     _spawn_pass()
                 return
@@ -3634,7 +3662,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     report = breaker.systemic_report(systemic_tally)
                     print(f"⛔ {report}")
                     stop_spawn = True
-        teardown = teardown_worktree(repo_root, task_id)
+        teardown = _snapshot_and_teardown()
         if not teardown["removed"]:
             obstruction_text = (
                 _format_paths(teardown.get("obstructions", []))

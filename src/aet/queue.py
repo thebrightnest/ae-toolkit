@@ -769,4 +769,16 @@ def seal_terminal(queue_file: str, history_file: str, task_id: str) -> dict[str,
         live = [t for t in queue if t.get("id") != task_id]
         append_history_record(history_file, task)
         write_queue(queue_file, live)
+
+        # Terminal closure deletes all WIP snapshot refs for the task (R-12).
+        q_dir = os.path.dirname(os.path.abspath(queue_file))
+        res = subprocess.run(
+            ["git", "-C", q_dir, "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+        )
+        repo_root = res.stdout.strip() if res.returncode == 0 and res.stdout.strip() else os.path.dirname(q_dir)
+        from aet.worktree import delete_snapshot_refs
+
+        delete_snapshot_refs(repo_root, task_id)
     return task

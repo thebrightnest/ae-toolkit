@@ -253,6 +253,67 @@ class TestDependencyWarmupRequired(unittest.TestCase):
 
 
 class TestCreateWorktree(unittest.TestCase):
+    def test_create_worktree_on_dirty_leftover_snapshots_and_recreates_clean(self):
+        """create_worktree on a dirty leftover directory returns a clean worktree
+        at the branch tip and leaves a snapshot ref.
+        """
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            wt_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
+
+            # Add a commit to task-001
+            Path(wt_dir, "committed.txt").write_text("c1", encoding="utf-8")
+            subprocess.run(["git", "-C", wt_dir, "add", "committed.txt"], check=True)
+            subprocess.run(["git", "-C", wt_dir, "commit", "-m", "task commit"], check=True)
+            tip = subprocess.run(
+                ["git", "-C", wt_dir, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            # Now leave dirty uncommitted files in wt_dir
+            Path(wt_dir, "dirty.txt").write_text("uncommitted", encoding="utf-8")
+
+            # Calling create_worktree on the dirty leftover directory
+            new_wt = worktree.create_worktree(repo_root, "task-001", "origin/main")
+            self.assertEqual(new_wt, wt_dir)
+
+            # Assert new worktree is clean at the branch tip
+            status = subprocess.run(
+                ["git", "-C", new_wt, "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(status, "")
+
+            new_tip = subprocess.run(
+                ["git", "-C", new_wt, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(new_tip, tip)
+
+            # Assert snapshot ref exists and contains dirty.txt
+            snap_ref = "refs/aet/wip/task-001/1"
+            snap_sha = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "--verify", snap_ref],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            self.assertTrue(snap_sha)
+
+            files_in_snap = subprocess.run(
+                ["git", "-C", repo_root, "ls-tree", "-r", "--name-only", snap_ref],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.splitlines()
+            self.assertIn("dirty.txt", files_in_snap)
+            self.assertIn("committed.txt", files_in_snap)
+
     def _init_repo(self, repo_root: str) -> None:
         subprocess.run(["git", "init", "-q", repo_root], check=True)
         subprocess.run(
@@ -1064,3 +1125,151 @@ class TestBranchCheckedOutWorktrees(unittest.TestCase):
             self.assertEqual(worktree.branch_checked_out_worktrees(repo_root, "main"), [repo_root])
             self.assertEqual(worktree.branch_checked_out_worktrees(repo_root, "epic"), [epic_wt])
             self.assertEqual(worktree.branch_checked_out_worktrees(repo_root, "other"), [])
+
+
+class TestSnapshotWorktree(unittest.TestCase):
+    def test_snapshot_worktree_dirty_and_clean(self):
+        """snapshot_worktree on a worktree with a modified tracked file and a new
+        untracked file writes refs/aet/wip/<id>/<n> whose tree holds both;
+        the branch tip and the worktree index are unchanged; a clean worktree returns None.
+        """
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            wt_dir = worktree.create_worktree(repo_root, "task-001", "origin/main")
+
+            # Clean worktree initially returns None
+            self.assertIsNone(worktree.snapshot_worktree(wt_dir, "task-001", 1))
+
+            # Create a tracked file
+            tracked = Path(wt_dir, "tracked.txt")
+            tracked.write_text("initial", encoding="utf-8")
+            subprocess.run(["git", "-C", wt_dir, "add", "tracked.txt"], check=True)
+            subprocess.run(["git", "-C", wt_dir, "commit", "-m", "add tracked"], check=True)
+            branch_tip = subprocess.run(
+                ["git", "-C", wt_dir, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            # Clean worktree again returns None
+            self.assertIsNone(worktree.snapshot_worktree(wt_dir, "task-001", 1))
+
+            # Modify tracked file, add new untracked file
+            tracked.write_text("modified", encoding="utf-8")
+            untracked = Path(wt_dir, "new_untracked.txt")
+            untracked.write_text("untracked", encoding="utf-8")
+
+            status_before = subprocess.run(
+                ["git", "-C", wt_dir, "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+
+            ref = worktree.snapshot_worktree(wt_dir, "task-001", 1)
+            self.assertEqual(ref, "refs/aet/wip/task-001/1")
+
+            # Check ref exists and parent is branch tip
+            parent = subprocess.run(
+                ["git", "-C", wt_dir, "rev-parse", f"{ref}^"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(parent, branch_tip)
+
+            # Check tree holds both files with correct content
+            files_in_tree = subprocess.run(
+                ["git", "-C", wt_dir, "ls-tree", "-r", "--name-only", ref],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.splitlines()
+            self.assertIn("tracked.txt", files_in_tree)
+            self.assertIn("new_untracked.txt", files_in_tree)
+
+            tracked_content = subprocess.run(
+                ["git", "-C", wt_dir, "show", f"{ref}:tracked.txt"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertEqual(tracked_content, "modified")
+
+            untracked_content = subprocess.run(
+                ["git", "-C", wt_dir, "show", f"{ref}:new_untracked.txt"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertEqual(untracked_content, "untracked")
+
+            # Branch tip and worktree index must be unchanged
+            current_tip = subprocess.run(
+                ["git", "-C", wt_dir, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(current_tip, branch_tip)
+
+            status_after = subprocess.run(
+                ["git", "-C", wt_dir, "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertEqual(status_before, status_after)
+
+    def test_closure_deletes_snapshot_refs(self):
+        """Integration: closure of a task with two snapshot refs deletes both (R-12)."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            history_file = os.path.join(repo_root, ".agents", "work-history.jsonl")
+            Path(queue_file).parent.mkdir(parents=True, exist_ok=True)
+
+            task_record = {
+                "id": "task-001",
+                "state": "awaiting_merge",
+                "spec": {"pipeline": "standard"},
+            }
+            from aet import queue as queue_lib
+            queue_lib.write_queue(queue_file, [task_record])
+
+            tip = subprocess.run(
+                ["git", "-C", repo_root, "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/aet/wip/task-001/1", tip],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/aet/wip/task-001/2", tip],
+                check=True,
+            )
+
+            existing_refs = subprocess.run(
+                ["git", "-C", repo_root, "for-each-ref", "--format=%(refname)", "refs/aet/wip/task-001/"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.splitlines()
+            self.assertEqual(len(existing_refs), 2)
+
+            queue_lib.seal_terminal(queue_file, history_file, "task-001")
+
+            remaining_refs = subprocess.run(
+                ["git", "-C", repo_root, "for-each-ref", "--format=%(refname)", "refs/aet/wip/task-001/"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.splitlines()
+            self.assertEqual(remaining_refs, [])
+
+

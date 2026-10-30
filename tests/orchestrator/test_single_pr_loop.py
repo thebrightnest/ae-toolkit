@@ -475,6 +475,84 @@ class TestSinglePrLoop(unittest.TestCase):
             self.assertTrue((hooks / "seen").exists(), out.getvalue())
             self.assertEqual((hooks / "seen").read_text(encoding="utf-8"), "True", out.getvalue())
 
+    def test_requeued_task_with_uncommitted_files_snapshots_and_names_in_handoff(self):
+        """Integration: a requeued task with uncommitted files logs no 'Worktree teardown failed',
+        logs the snapshot ref, and the next attempt's handoff entry names it.
+        """
+        with (
+            tempfile.TemporaryDirectory() as repo_root,
+            tempfile.TemporaryDirectory() as origin_root,
+            tempfile.TemporaryDirectory() as scratch,
+        ):
+            plans = init_epic_repo(repo_root, origin_root, {"task-a": "a-prd"})
+            hooks = Path(repo_root, ".agents", "hooks")
+            hooks.mkdir(parents=True, exist_ok=True)
+            # Fake agent hook writes an uncommitted file and exits non-zero so task-a fails and requeues
+            (hooks / "task-a.py").write_text(
+                "import pathlib, sys\n"
+                "pathlib.Path(wt, 'dirty_uncommitted.txt').write_text('wip')\n"
+                "sys.exit(1)\n",
+                encoding="utf-8",
+            )
+            write_queue(
+                repo_root,
+                [{"id": "task-a", "state": "ready", "plan_file": plans["task-a"]}],
+            )
+            bin_dir, adapter = install_fake_agent(scratch)
+
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            args = orchestrator.argparse.Namespace(
+                queue_file=queue_file,
+                repo_root=repo_root,
+                max_jobs=1,
+                isolation="standard",
+                task_timeout=3600,
+                heartbeat_interval=60,
+                on_failure="triage",
+                cli_bin=None,
+                base=None,
+            )
+
+            import io
+            from contextlib import redirect_stdout
+
+            from aet import handoff
+
+            out = io.StringIO()
+            env = {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+            with patch.dict(os.environ, env), redirect_stdout(out):
+                os.environ.pop("AET_TASK_ID", None)
+                orchestrator.run_batch(args, adapter)
+
+            output = out.getvalue()
+
+            # 1. No "Worktree teardown failed" in logs
+            self.assertNotIn("Worktree teardown failed", output)
+
+            # 2. Logs the snapshot ref
+            expected_ref = "refs/aet/wip/task-a/1"
+            self.assertIn("task-a uncommitted work saved to refs/aet/wip/task-a/1", output)
+
+            # 3. Snapshot ref exists in git and holds dirty_uncommitted.txt
+            files_in_snap = subprocess.run(
+                ["git", "-C", repo_root, "ls-tree", "-r", "--name-only", expected_ref],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.splitlines()
+            self.assertIn("dirty_uncommitted.txt", files_in_snap)
+
+            # 4. Handoff entry names the snapshot ref
+            notes_dir = Path(repo_root, ".agents", "runs")
+            run_dirs = [d for d in notes_dir.iterdir() if d.is_dir()]
+            self.assertTrue(run_dirs, "Expected a run directory with handoff")
+            run_id = run_dirs[0].name
+            note = handoff.read_note(repo_root, run_id)
+            self.assertIsNotNone(note)
+            rendered = handoff.render_prompt_block(note)
+            self.assertIn(expected_ref, rendered)
+
+
 
 if __name__ == "__main__":
     unittest.main()

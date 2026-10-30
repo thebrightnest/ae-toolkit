@@ -299,6 +299,9 @@ _Avoid_: "folder" in UI copy.
 **Worktree (run attribute)**:
 Where a run or session launched — second slug segment, or parsed from a record's raw `plan_file` prefix. An attribute/filter of a run, never a grouping level.
 
+**Snapshot Ref**:
+A local ref under `refs/aet/wip/<task-id>/<attempt>` where uncommitted tracked changes and non-ignored untracked files are saved before a task worktree is removed after a failure, a cancel, or a requeue. The snapshot commit has the task branch tip as its parent, leaving the branch and its tip unchanged. Deleted at terminal closure (`merged` or `abandoned`) and never pushed by the git-refs backend. (ADR-085)
+
 **Live Run (panel)**:
 A run with no `last-run.json` whose archive activity is fresh — within `LIVE_FRESHNESS_MINUTES` of the newest recursive mtime, or with an mtime that advanced between panel polls (panel-live-executions PRD, lvp-01/lvp-02). A panel display status only.
 _Avoid_: conflating with the queue's **Live Set** (active tasks in `refs/aet/tasks/*` and `refs/aet/meta/queue`) — the two share no code or data.

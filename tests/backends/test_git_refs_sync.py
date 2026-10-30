@@ -9,6 +9,7 @@ file path (especially ``~/.aet`` content) is ever pushed.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import importlib.machinery
 import importlib.util
 import json
@@ -19,6 +20,7 @@ from unittest.mock import patch
 import pytest
 
 from aet.backends.git_refs_backend import (
+    _AET_PUSH_REFSPECS,
     ENVELOPE_REF,
     SEALED_REF_PREFIX,
     GitRefsBackend,
@@ -192,6 +194,14 @@ def test_push_refspec_never_includes_local_paths(repo: Path, monkeypatch) -> Non
     assert all(r.startswith("+refs/aet/") for r in refspecs)
     assert not any("refs/aet/train" in r for r in refspecs)
     assert not any("~/.aet" in arg for call in captured for arg in call)
+
+
+def test_push_refspecs_exclude_wip_refs() -> None:
+    """R-12: Push refspecs exclude refs/aet/wip/* so snapshot refs are never pushed."""
+    sample_ref = "refs/aet/wip/x/1"
+    for refspec in _AET_PUSH_REFSPECS:
+        pattern = refspec.lstrip("+").split(":")[0]
+        assert not fnmatch.fnmatch(sample_ref, pattern)
 
 
 def test_two_clones_append_offline_then_fetch_union(repo: Path) -> None:

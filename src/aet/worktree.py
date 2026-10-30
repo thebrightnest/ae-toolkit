@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -76,7 +77,15 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
     )
     base_sha = base_oid.stdout.strip() if base_oid.returncode == 0 else ""
 
-    # If the worktree already exists, refresh it in place rather than deleting
+    # If the worktree already exists, check for obstructions.
+    # A dirty worktree is snapshotted, removed, and created again from the branch tip (R-10).
+    if os.path.isdir(worktree_dir):
+        _remove_deferred_untracked(worktree_dir)
+        if _worktree_obstructions(worktree_dir):
+            snapshot_worktree(worktree_dir, task_id)
+            teardown_worktree(repo_root, task_id, force=True)
+
+    # If the clean worktree still exists, refresh it in place rather than deleting
     # the branch from under it.
     if os.path.isdir(worktree_dir):
         if base_sha and fetch_remote and fetch_ref:
@@ -310,7 +319,116 @@ def _worktree_obstructions(worktree_dir: str) -> list[str]:
     return sorted(obstructions)
 
 
-def teardown_worktree(repo_root: str, task_id: str) -> dict[str, Any]:
+def snapshot_worktree(
+    worktree: str,
+    task_id: str,
+    attempt: int | str | None = None,
+) -> str | None:
+    """Save uncommitted work in ``worktree`` to ``refs/aet/wip/<task-id>/<attempt>``.
+
+    With a temporary GIT_INDEX_FILE, runs git add -A, write-tree, and
+    commit-tree -p <branch tip>, then update-ref. Returns the ref, or None
+    for a clean worktree. The worktree index and the branch stay unchanged.
+    """
+    if not os.path.isdir(worktree):
+        return None
+
+    # First clean deferred untracked files (e.g. rendered plan docs)
+    _remove_deferred_untracked(worktree)
+
+    # Check if there are obstructions or uncommitted changes
+    if not _worktree_obstructions(worktree):
+        return None
+
+    branch_tip = _run_git(
+        ["-C", worktree, "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    if attempt is None:
+        refs_res = _run_git(
+            ["-C", worktree, "for-each-ref", "--format=%(refname)", f"refs/aet/wip/{task_id}/"],
+            capture_output=True,
+            text=True,
+        )
+        existing_attempts: list[int] = []
+        for line in refs_res.stdout.splitlines():
+            line = line.strip()
+            if line:
+                part = line.rsplit("/", 1)[-1]
+                if part.isdigit():
+                    existing_attempts.append(int(part))
+        attempt = max(existing_attempts) + 1 if existing_attempts else 1
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_idx = os.path.join(tmp_dir, "index")
+        env = dict(os.environ, GIT_INDEX_FILE=tmp_idx)
+        if branch_tip:
+            _run_git(["-C", worktree, "read-tree", branch_tip], env=env, check=True)
+        _run_git(["-C", worktree, "add", "-A"], env=env, check=True)
+        tree = _run_git(
+            ["-C", worktree, "write-tree"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        if branch_tip:
+            head_tree = _run_git(
+                ["-C", worktree, "rev-parse", f"{branch_tip}^{{tree}}"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            if tree == head_tree:
+                return None
+
+        commit_cmd = ["-C", worktree, "commit-tree", tree]
+        if branch_tip:
+            commit_cmd.extend(["-p", branch_tip])
+        commit_cmd.extend(["-m", f"WIP snapshot for {task_id} (attempt {attempt})"])
+        commit_sha = _run_git(
+            commit_cmd,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        ref = f"refs/aet/wip/{task_id}/{attempt}"
+        _run_git(["-C", worktree, "update-ref", ref, commit_sha], check=True)
+        return ref
+
+
+def delete_snapshot_refs(repo_root: str, task_id: str) -> list[str]:
+    """Delete all WIP snapshot refs for ``task_id`` under ``refs/aet/wip/<task-id>/*``.
+
+    Returns the list of deleted ref names.
+    """
+    prefix = f"refs/aet/wip/{task_id}/"
+    result = subprocess.run(
+        ["git", "-C", repo_root, "for-each-ref", "--format=%(refname)", prefix],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    deleted: list[str] = []
+    for line in result.stdout.splitlines():
+        ref = line.strip()
+        if ref and ref.startswith(prefix):
+            del_res = subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "-d", ref],
+                capture_output=True,
+            )
+            if del_res.returncode == 0:
+                deleted.append(ref)
+    return deleted
+
+
+def teardown_worktree(repo_root: str, task_id: str, force: bool = False) -> dict[str, Any]:
     """Tear down a task worktree, cleaning AET artifacts but refusing real work.
 
     Returns a dict with keys ``removed`` (bool), ``reason`` (str), and
@@ -330,14 +448,18 @@ def teardown_worktree(repo_root: str, task_id: str) -> dict[str, Any]:
         return result
 
     obstructions = _worktree_obstructions(worktree_dir)
-    if obstructions:
+    if obstructions and not force:
         result["reason"] = "worktree has uncommitted changes"
         result["obstructions"] = obstructions
         return result
 
     try:
+        cmd = ["git", "-C", repo_root, "worktree", "remove"]
+        if force:
+            cmd.append("--force")
+        cmd.append(worktree_dir)
         subprocess.run(
-            ["git", "-C", repo_root, "worktree", "remove", worktree_dir],
+            cmd,
             check=True,
             capture_output=True,
             text=True,
