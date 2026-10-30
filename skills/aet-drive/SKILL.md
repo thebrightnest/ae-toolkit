@@ -110,6 +110,8 @@ Follow execution until the batch settles:
 aet run --follow <run_id>
 ```
 
+To stop a running batch, see the **Stop Procedure** below.
+
 *(When running in an interactive agent shell, wait for the background run notification or completion event; do not poll `manage_task` or loop on task status).*
 
 ### 4. Step B: Resolve Staged Conflicts and Merge Residuals
@@ -226,13 +228,27 @@ When a task is in `awaiting_merge` due to integration conflict or merge train ej
 
 ---
 
+## Stop Procedure
+
+To stop an active batch or single-plan run:
+
+```bash
+aet run stop [RUN_ID] [--timeout SECONDS]
+```
+
+`aet run stop` resolves the target run (or the only live run in the checkout if omitted), sends SIGTERM to the recorded orchestrator process, waits for it to settle up to `--timeout` seconds (default 120), and prints the settlement summary. Tasks interrupted by `aet run stop` are marked `canceled` and returned to `ready` without a breaker strike.
+
+---
+
 ## Residual Failures
 
 The engine's Triage session (ADR-030, `--on-failure=triage`, the default) already
 assigns each failure its Failure Class (`environment`, `flaky`, `design`, `timeout`,
 `canceled`, `throttled`), and the Circuit Breaker re-queues or quarantines the task
 (including via the per-run attempt cap). Do not repeat
-that work or invent another set of classes.
+that work or invent another set of classes. Tasks interrupted by operator stop
+(`aet run stop`) are classified as `canceled` and returned directly to `ready`;
+they do not linger in `failed` or count against the failure breaker.
 
 For each task still in `failed` or `quarantined` after the run settles:
 
@@ -286,6 +302,8 @@ The deterministic queue surface lives in the CLI. The full operator reference is
 | ------------------------------ | ------------------------------------------------------- |
 | `aet status`                   | Board: counts, blockers, ready, failed, worktree health |
 | `aet next`                     | Move the next ready task to `in_progress`               |
+| `aet run`                      | Launch orchestrator in batch mode                       |
+| `aet run stop [id]`            | Stop live run cleanly and return in-flight tasks to `ready` |
 | `aet run-one <id>`             | Run the full pipeline on one task                       |
 | `aet queue sync`               | Append-only reconciliation after queue edits            |
 | `aet state audit` / `heal`     | Compare state with git ground truth / repair it         |

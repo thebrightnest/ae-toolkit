@@ -14,6 +14,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import string
 import subprocess
 import sys
@@ -221,6 +222,11 @@ app.add_typer(size.app, name="size", help="Delivered-size measurement and report
 app.add_typer(sprint.app, name="sprint", help="Sprint queue management.")
 
 # Top-level single-word commands.
+run_app = typer.Typer(
+    help="Run the orchestrator in batch mode.",
+    no_args_is_help=False,
+)
+app.add_typer(run_app, name="run")
 app.add_typer(configure_backend.app, name="configure")
 app.add_typer(context.app, name="context")
 app.add_typer(harness_guard.app, name="harness-guard")
@@ -736,8 +742,35 @@ def _spawn_detached(argv: list[str], run_id: str) -> int:
     return 0
 
 
-@app.command()
+def _extract_settlement_summary(log_text: str) -> str:
+    """Extract settlement summary from orchestrator output log."""
+    lines = log_text.splitlines()
+    if not lines:
+        return ""
+    markers = [
+        "📋 Batch Settlement Summary:",
+        "Batch Settlement Summary:",
+        "📊 Batch complete:",
+        "📊 Run complete:",
+        "Settlement summary:",
+        "settlement summary:",
+    ]
+    best_idx = None
+    for i, line in enumerate(lines):
+        for m in markers:
+            if m.lower() in line.lower():
+                best_idx = i
+                break
+        if best_idx is not None and ("Batch Settlement Summary" in lines[best_idx] or "📋" in lines[best_idx]):
+            break
+    if best_idx is not None:
+        return "\n".join(lines[best_idx:]).strip()
+    return log_text.strip()
+
+
+@run_app.callback(invoke_without_command=True)
 def run(
+    ctx: typer.Context,
     follow: str | None = typer.Option(None, "--follow", help="Follow an existing run id."),
     on_failure: str | None = typer.Option(None, "--on-failure", help="triage|continue|halt"),
     task_timeout: int | None = typer.Option(None, "--task-timeout", help="Per-task timeout (s)."),
@@ -755,6 +788,9 @@ def run(
     ),
 ) -> None:
     """Run the orchestrator in batch mode."""
+    if ctx.invoked_subcommand is not None:
+        return
+
     if follow is not None:
         _follow_run(follow)
         return
@@ -768,6 +804,87 @@ def run(
     flags.extend(["--run-id", run_id, "--log-file", str(_run_log_file(run_id))])
     argv = ["--queue-file", ".agents/aet-queue", *flags]
     raise typer.Exit(_spawn_detached(argv, run_id))
+
+
+@run_app.command("stop")
+def run_stop(
+    run_id: str | None = typer.Argument(
+        None,
+        help="Run ID to stop. Defaults to the only live run of the checkout.",
+    ),
+    timeout: int = typer.Option(
+        120,
+        "--timeout",
+        help="Seconds to wait for the run to settle.",
+    ),
+) -> None:
+    """Stop a live orchestrator run."""
+    runs_dir = _runs_dir()
+    if run_id is None:
+        active = status.active_runs(runs_dir)
+        if len(active) == 0:
+            typer.echo("error: no live runs found", err=True)
+            raise typer.Exit(1)
+        if len(active) > 1:
+            run_ids = ", ".join(r["id"] for r in active)
+            typer.echo(f"error: multiple live runs found ({len(active)}): {run_ids}", err=True)
+            raise typer.Exit(1)
+        target_run_id = active[0]["id"]
+    else:
+        target_run_id = run_id
+
+    rdir = _run_dir(target_run_id)
+    if not rdir.is_dir():
+        typer.echo(f"error: unknown run '{target_run_id}'", err=True)
+        raise typer.Exit(1)
+
+    if not is_run_alive(rdir):
+        typer.echo(f"error: run '{target_run_id}' is not alive", err=True)
+        raise typer.Exit(1)
+
+    pid_file = rdir / "pid"
+    if not pid_file.is_file():
+        typer.echo(f"error: run '{target_run_id}' has no pid file", err=True)
+        raise typer.Exit(1)
+
+    try:
+        pid = int(pid_file.read_text(encoding="utf-8").strip())
+    except ValueError:
+        typer.echo(f"error: invalid pid for run '{target_run_id}'", err=True)
+        raise typer.Exit(1)
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except OSError as exc:
+        typer.echo(f"error: could not send SIGTERM to process {pid}: {exc}", err=True)
+        raise typer.Exit(1)
+
+    rc_file = rdir / "returncode"
+    deadline = time.monotonic() + timeout
+    settled = False
+    while time.monotonic() < deadline:
+        if rc_file.is_file():
+            settled = True
+            break
+        time.sleep(0.1)
+
+    if not settled:
+        if rc_file.is_file():
+            settled = True
+        else:
+            typer.echo(
+                f"error: run '{target_run_id}' did not settle within {timeout}s; still live",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+    log_file = _run_log_file(target_run_id)
+    if log_file.is_file():
+        summary = _extract_settlement_summary(log_file.read_text(encoding="utf-8"))
+        if summary:
+            typer.echo(summary)
 
 
 @app.command("run-one")

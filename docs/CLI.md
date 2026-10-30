@@ -12,19 +12,6 @@ Update a managed aet install (CLI and skills) to the latest release.
 - `--tag` *str* — Update to this release tag instead of the latest.
 - `--yes` *boolean* — Skip the confirmation prompt. (default: `False`)
 
-## `aet run`
-
-Run the orchestrator in batch mode.
-
-### Options
-
-- `--follow` *str* — Follow an existing run id.
-- `--on-failure` *str* — triage|continue|halt
-- `--task-timeout` *int* — Per-task timeout (s).
-- `--cli-bin` *str* — Agent CLI binary path. Defaults to the agent CLI that invoked aet; required when no agent CLI is detected.
-- `--base` *str* — Override the worktree base branch/ref.
-- `--max-jobs` *int* — Max parallel tasks (batch mode). (default: `4`)
-
 ## `aet run-one`
 
 Run the orchestrator for a single plan.
@@ -683,6 +670,32 @@ Read aet:sprint issues from GitHub and admit valid candidates.
 - `--plans-dir` *str* — Directory containing atomic plan markdown files (default: `docs/plans`)
 - `--config` *str* — Path to AET backend configuration (default: `.agents/aet-config.json`)
 - `--force` *boolean* — Override a live run lease and mutate the queue anyway (with a warning). (default: `False`)
+
+## `aet run`
+
+Run the orchestrator in batch mode.
+
+### Options
+
+- `--follow` *str* — Follow an existing run id.
+- `--on-failure` *str* — triage|continue|halt
+- `--task-timeout` *int* — Per-task timeout (s).
+- `--cli-bin` *str* — Agent CLI binary path. Defaults to the agent CLI that invoked aet; required when no agent CLI is detected.
+- `--base` *str* — Override the worktree base branch/ref.
+- `--max-jobs` *int* — Max parallel tasks (batch mode). (default: `4`)
+
+### Subcommands
+
+- `stop`: Stop a live orchestrator run.
+
+## `aet run stop`
+
+Stop a live orchestrator run.
+
+### Options
+
+- `run_id` *str* — Run ID to stop. Defaults to the only live run of the checkout.
+- `--timeout` *int* — Seconds to wait for the run to settle. (default: `120`)
 
 ## `aet configure`
 

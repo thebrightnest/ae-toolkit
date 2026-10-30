@@ -64,7 +64,7 @@ def _render_table(headers: list[str], rows: list[list[str]]) -> list[str]:
     return [fmt(headers), separator, *(fmt(row) for row in rows)]
 
 
-def _active_runs(runs_dir: Path) -> list[dict]:
+def active_runs(runs_dir: Path) -> list[dict]:
     """List detached runs under ``runs_dir`` whose process is still alive."""
     runs: list[dict] = []
     if not runs_dir.is_dir():
@@ -90,6 +90,9 @@ def _active_runs(runs_dir: Path) -> list[dict]:
                 started = ""
         runs.append({"id": entry.name, "pid": pid, "started": started})
     return runs
+
+
+_active_runs = active_runs
 
 
 def _queue_updated_at(backend) -> str | None:

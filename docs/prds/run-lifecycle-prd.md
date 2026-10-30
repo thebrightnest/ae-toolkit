@@ -336,5 +336,19 @@ ADR-060, ADR-069, ADR-071, ADR-082 and ADR-084, and against the v1.23.0 code:
 
 - None.
 
+*Recorded: 2026-10-30 — Branch: rl-02-aet-run-stop*
+
+### Changed from plan — rl-02
+
+- None.
+
+### Added (unplanned) — rl-02
+
+- `rl-02`: updated `scripts/skills-lint` grammar builder to track value-taking flags so flag arguments are not misidentified as subcommand choices.
+
+### Deferred — rl-02
+
+- None.
+
 *Stage: synced*
 *Next step: run `aet-ship`*

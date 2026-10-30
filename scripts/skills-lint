@@ -75,47 +75,55 @@ def load_app():
 
 
 def _click_group_grammar(group):
-    """Return (flags, choices) for a Click/Typer group.
+    """Return (flags, choices, value_flags) for a Click/Typer group.
 
     flags: option strings declared on the group itself (e.g. callback options).
     choices: names of commands registered directly on the group.
+    value_flags: option strings that take an argument.
     """
     flags: set[str] = {"--help"}
+    value_flags: set[str] = set()
     for param in group.params:
         if hasattr(param, "opts"):
             flags.update(param.opts)
+            if not getattr(param, "is_flag", False) and getattr(param, "nargs", 1) != 0:
+                value_flags.update(param.opts)
     choices = set(group.commands.keys())
-    return flags, choices
+    return flags, choices, value_flags
 
 
 def _click_command_grammar(command):
-    """Return option strings declared on a Click/Typer command."""
+    """Return (flags, value_flags) declared on a Click/Typer command."""
     flags: set[str] = {"--help"}
+    value_flags: set[str] = set()
     for param in command.params:
         if hasattr(param, "opts"):
             flags.update(param.opts)
-    return flags
+            if not getattr(param, "is_flag", False) and getattr(param, "nargs", 1) != 0:
+                value_flags.update(param.opts)
+    return flags, value_flags
 
 
 def build_grammars(app):
-    """Map each reachable command path to (flags, choices).
+    """Map each reachable command path to (flags, choices, value_flags).
 
     Paths are tuples of command names starting from the top-level app, e.g.
     ('gate',) for the gate group, ('gate', 'review') for the review command.
     For groups, choices are the names of subcommands. For commands, choices
     is empty.
     """
-    grammars: dict[tuple[str, ...], tuple[set[str], set[str]]] = {}
+    grammars: dict[tuple[str, ...], tuple[set[str], set[str], set[str]]] = {}
 
     def walk(group, path: tuple[str, ...]):
-        flags, choices = _click_group_grammar(group)
-        grammars[path] = (flags, choices)
+        flags, choices, value_flags = _click_group_grammar(group)
+        grammars[path] = (flags, choices, value_flags)
         for name, command in group.commands.items():
             child_path = path + (name,)
             if isinstance(command, (click.core.Group, typer.core.TyperGroup)):
                 walk(command, child_path)
             else:
-                grammars[child_path] = (_click_command_grammar(command), set())
+                flags, value_flags = _click_command_grammar(command)
+                grammars[child_path] = (flags, set(), value_flags)
 
     walk(app, ())
     return grammars
@@ -215,7 +223,8 @@ def _resolve_path(args: list[str], grammars: dict) -> tuple[tuple[str, ...], lis
     current group. The remainder are flags/arguments for the resolved command.
     """
     path: tuple[str, ...] = ()
-    current_flags, current_choices = grammars.get(path, (set(), set()))
+    current_entry = grammars.get(path, (set(), set(), set()))
+    current_choices = current_entry[1]
     i = 0
     while i < len(args):
         token = args[i]
@@ -224,7 +233,8 @@ def _resolve_path(args: list[str], grammars: dict) -> tuple[tuple[str, ...], lis
             continue
         if token in current_choices:
             path = path + (token,)
-            current_flags, current_choices = grammars.get(path, (set(), set()))
+            current_entry = grammars.get(path, (set(), set(), set()))
+            current_choices = current_entry[1]
             i += 1
         else:
             break
@@ -239,21 +249,28 @@ def validate_aet_args(args, grammars):
     if is_opaque(head):
         return []
 
-    top_flags, top_choices = grammars.get((), (set(), set()))
+    top_entry = grammars.get((), (set(), set(), set()))
+    top_choices = top_entry[1]
     if head not in top_choices:
         return [f"unknown aet subcommand '{head}'"]
 
     path, remainder = _resolve_path(args, grammars)
-    flags, choices = grammars.get(path, (set(), set()))
+    flags, choices, value_flags = grammars.get(path, (set(), set(), set()))
     errors = []
     checked_choice = False
+    skip_next = False
     for token in remainder:
+        if skip_next:
+            skip_next = False
+            continue
         if is_opaque(token):
             continue
         if is_flag_token(token):
             flag = token.split("=", 1)[0]
             if flag not in flags:
                 errors.append(f"unknown flag '{flag}' for 'aet {' '.join(path)}'".strip())
+            elif "=" not in token and flag in value_flags:
+                skip_next = True
         elif choices and not checked_choice:
             checked_choice = True
             if token not in choices:
