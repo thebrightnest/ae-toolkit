@@ -2733,6 +2733,8 @@ def _requeue_task(
     backend, queue_file: str, task_id: str, failed_state: str, aet_state_bin: str
 ) -> bool:
     """Transition ``failed -> ready``, reporting failure rather than raising."""
+    if failed_state == "ready":
+        return True
     result = subprocess.run(
         [
             sys.executable,
@@ -2975,6 +2977,7 @@ def _finalize_task(
     adapter=None,
     worktree_dir: str | None = None,
     attempt_counts: dict[str, int] | None = None,
+    canceled: bool = False,
 ) -> dict[str, int | bool]:
     """Finalize a single task after its child process exits.
 
@@ -3070,13 +3073,21 @@ def _finalize_task(
             return {"successes": 0, "failures": 1, "stop_spawn": True}
         return {"successes": 1, "failures": 0, "stop_spawn": False}
 
-    print(f"   ❌ {task_id} failed (exit {ret})")
     queue = backend.load()["queue"]
     task = next((t for t in queue if t.get("id") == task_id), None)
     from_state = current_state(task) if task else "in_progress"
 
     # Roll up per-task cost for incident tasks too (nsr-07).
     _write_task_cost(backend, queue_file, task_id, logger)
+
+    if canceled:
+        requeued = _requeue_task(
+            backend, queue_file, task_id, from_state, aet_state_bin
+        )
+        print(f"   ⏹️  {task_id} canceled by operator stop; returned to ready")
+        return {"successes": 0, "failures": 0 if requeued else 1, "stop_spawn": False}
+
+    print(f"   ❌ {task_id} failed (exit {ret})")
 
     # Missing-plan failures are terminal misconfigurations: leave the task
     # failed and stop spawning. The child exits 2 so the parent can tell
@@ -3295,6 +3306,8 @@ def _print_integration_branches(refs: list[BranchRef]) -> None:
 
 def run_batch(args: argparse.Namespace, adapter) -> int:
     """Run batch mode from queue file."""
+    global _shutdown_requested
+    _shutdown_requested = False
     queue_file = args.queue_file
     repo_root = args.repo_root
     max_jobs = min(args.max_jobs, 8)
@@ -3490,6 +3503,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 total_tokens=total_tokens,
                 total_cost_usd=total_cost_usd,
                 skipped=skips,
+                canceled=_shutdown_requested,
             )
         )
         logger.copy_work_history(os.path.join(repo_root, ".agents", "work-history.jsonl"))
@@ -3507,7 +3521,13 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             print(f"   Teardown failures: {', '.join(teardown_leftovers)}")
         print(f"   Telemetry: {logger.run_dir}")
 
-    def _cleanup_task(task_id: str, ret: int, *, eager_spawn: bool = True) -> None:
+    def _cleanup_task(
+        task_id: str,
+        ret: int,
+        *,
+        eager_spawn: bool = True,
+        canceled: bool = False,
+    ) -> None:
         nonlocal successes, failures, stop_spawn, systemic_tally, merged_task_ids
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
@@ -3588,6 +3608,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             adapter=adapter,
             worktree_dir=worktree_dir,
             attempt_counts=attempt_counts,
+            canceled=canceled,
         )
         successes += deltas["successes"]
         failures += deltas["failures"]
@@ -3595,7 +3616,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             stop_spawn = True
         # Update the systemic breaker tally on every failure. A signature that
         # reaches the threshold across distinct tasks stops the shift.
-        if ret != 0:
+        if ret != 0 and not canceled:
             queue = backend.load()["queue"]
             task = next((t for t in queue if t.get("id") == task_id), None)
             if task is not None:
@@ -3942,7 +3963,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             if proc.poll() is None:
                 print(f"   ⚠️  Terminating leftover task {task_id}")
                 _terminate_process_group(proc, timeout=10)
-            _cleanup_task(task_id, -1, eager_spawn=False)
+            _cleanup_task(task_id, -1, eager_spawn=False, canceled=True)
 
         _print_behind_origin(behind_origin)
         exit_code = 1 if failures > 0 or skips else 0
@@ -4559,6 +4580,33 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                                         )
             except Exception as exc:  # pragma: no cover - defensive logging
                 print(f"   ⚠️  Could not mark {task_id} awaiting merge: {exc}")
+        elif not success and queued_task and not spawned_by_batch:
+            try:
+                queue = backend.load()["queue"]
+                queue_task = next((t for t in queue if t.get("id") == task_id), None)
+                if queue_task:
+                    from_state = current_state(queue_task) or "in_progress"
+                    aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+                    if _shutdown_requested:
+                        _requeue_task(backend, queue_file, task_id, from_state, aet_state_bin)
+                        print(f"   ⏹️  {task_id} canceled by operator stop; returned to ready")
+                    else:
+                        if not queue_task.get("failure_signatures"):
+                            last_entry = (task.get("failure_signatures") or [])[-1:] if task else []
+                            if last_entry:
+                                queue_task.setdefault("failure_signatures", []).extend(last_entry)
+                                _save_task_record(backend, queue)
+                            else:
+                                _record_failure_on_task(
+                                    backend,
+                                    queue_task,
+                                    failure_lib.FailureClass.ENVIRONMENT,
+                                    stage=queue_task.get("stage") or from_state,
+                                    tail=f"exit {exit_code}",
+                                )
+                        _mark_failed(backend, queue_file, task_id, from_state)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                print(f"   ⚠️  Could not finalize failed task {task_id}: {exc}")
 
         end_time = telemetry.iso_now()
 
@@ -4580,6 +4628,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 final_stage=final_stage,
                 total_tokens=total_tokens,
                 total_cost_usd=total_cost_usd,
+                canceled=_shutdown_requested,
             )
         )
         if not spawned_by_batch:

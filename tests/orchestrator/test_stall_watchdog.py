@@ -439,9 +439,13 @@ class TestBatchTimeoutBackstop(unittest.TestCase):
 
             self.assertEqual(rc, 1)
             self.assertIn("timed out after 0.5s", out)
+            self.assertIn("killed by timeout", out)
 
             queue = load_queue(queue_file)
             self.assertEqual(queue[0]["state"], "failed")
+            sigs = queue[0].get("failure_signatures", [])
+            self.assertTrue(len(sigs) > 0)
+            self.assertEqual(sigs[-1].get("class"), "timeout")
 
 
 if __name__ == "__main__":

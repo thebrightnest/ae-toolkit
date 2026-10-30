@@ -328,6 +328,47 @@ class TestOrchestratorBreakerWiring:
 
         assert "failure_signatures" not in task
 
+    def test_three_operator_stops_do_not_quarantine_or_raise_systemic_tally(self, tmp_path):
+        """Three operator stops of one task neither quarantine it nor raise the systemic tally."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True)
+        (repo / "file.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+
+        queue_file = str(repo / "aet-queue")
+        backend = orchestrator._make_backend(queue_file)
+        task = {"id": "t1", "state": "in_progress", "failure_signatures": []}
+        backend.save([task])
+
+        systemic_tally: dict[str, set[str]] = {}
+        for _ in range(3):
+            # Task is spawned into in_progress
+            task = next(x for x in backend.load()["queue"] if x["id"] == "t1")
+            task["state"] = "in_progress"
+            backend.save([task])
+
+            deltas = orchestrator._finalize_task(
+                backend,
+                queue_file,
+                "t1",
+                ret=-1,
+                repo_root=str(repo),
+                canceled=True,
+            )
+            assert deltas["failures"] == 0
+            assert deltas["stop_spawn"] is False
+            queue = backend.load()["queue"]
+            t = next(x for x in queue if x["id"] == "t1")
+            assert t["state"] == "ready"
+            assert t.get("failure_signatures") == []
+            assert not breaker.should_quarantine_task(t)
+
+        assert systemic_tally == {}
+
     def test_systemic_breaker_stops_spawn_in_batch(self, tmp_path):
         """run_batch stops spawning once the systemic breaker trips."""
         repo = tmp_path / "repo"

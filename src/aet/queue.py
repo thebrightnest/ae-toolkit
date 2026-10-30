@@ -429,7 +429,7 @@ LEGAL_TRANSITIONS: dict[str | None, set[str]] = {
     "planned": {"blocked", "ready", "in_progress", "abandoned"},
     "blocked": {"ready", "abandoned"},
     "ready": {"in_progress", "failed", "abandoned"},
-    "in_progress": {"in_progress", "awaiting_merge", "failed", "quarantined", "abandoned"},
+    "in_progress": {"in_progress", "ready", "awaiting_merge", "failed", "quarantined", "abandoned"},
     "awaiting_merge": {"merged", "abandoned"},
     "merged": set(),
     "abandoned": set(),

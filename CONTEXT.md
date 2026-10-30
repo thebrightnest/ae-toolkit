@@ -152,6 +152,9 @@ _Avoid_: conflating a breaker quarantine with human `abandoned`, or expecting th
 **Failure Class**:
 The single category assigned to a terminating agent session: `environment`, `flaky`, `design`, `timeout`, `canceled`, or `throttled`. A fixed, code-owned menu — the breaker's counting never depends on an LLM inferring it. (ADR-030, ADR-065)
 
+**Operator Stop**:
+The clean termination of a run requested by an operator (via SIGINT/SIGTERM or `aet run stop`). In-flight sessions are classed as `canceled`, record no countable failure signature, raise no breaker counts, run no triage, and return tasks to `ready` — an operator stopping a shift is not evidence about the work. (ADR-085)
+
 **Failure Signature**:
 A deterministic short digest of `(stage, normalized-error)` with volatile spans (paths, PIDs, timestamps, ids, line numbers) stripped, so identical failures collide and distinct ones do not. It is the key the **Circuit Breaker** counts. (ADR-030)
 
@@ -185,7 +188,7 @@ _Avoid_: reading "follow" as tailing or streaming. A follower waits and summariz
 The fixed-shape completion output of a **Follower**: one line per stage with status, duration, and exit code, plus a capped excerpt of the failing stage on failure. Its length does not scale with the volume of run output — that is the whole point. Full output stays on disk in `output.log`.
 
 **Stall Timeout**:
-The liveness interval after which the watchdog kills a session that has shown no sign of life. Liveness is hybrid: process-tree activity (active descendants) or run-log/file writes reset the timer. The resulting failure class is `timeout`, and the same class applies to any session killed by a signal (negative exit code) whether from the stall watchdog, the wall-clock backstop, or another signal. A uniform value on every supported `CLIAdapter` (7200 s), not a command flag and not a config key; it is a backstop for true death, not a proxy for per-CLI output cadence. (ADR-053 superseded in part by the liveness redesign, ADR-060)
+The liveness interval after which the watchdog kills a session that has shown no sign of life. Liveness is hybrid: process-tree activity (active descendants) or run-log/file writes reset the timer. The resulting failure class is `timeout`, and the same class applies to any session killed by a signal (negative exit code) — whether from the stall watchdog, the wall-clock backstop, or another signal, excluding a session the orchestrator ends on its own shutdown (which is `canceled`, ADR-085). A uniform value on every supported `CLIAdapter` (7200 s), not a command flag and not a config key; it is a backstop for true death, not a proxy for per-CLI output cadence. (ADR-053 superseded in part by the liveness redesign, ADR-060, amended by ADR-085)
 _Avoid_: treating it as a duration limit — a session with active descendants or growing log files is never killed, however long it runs; treating it as a per-adapter tuning knob.
 
 **Wall Backstop**:

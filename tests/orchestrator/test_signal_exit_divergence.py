@@ -10,7 +10,9 @@ These tests exercise both extremes deterministically.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import io
 import os
 import signal
 import subprocess
@@ -19,10 +21,13 @@ import tempfile
 import threading
 import time
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+from aet import telemetry
 from aet.cli_adapter import CLIAdapter
 from tests.orchestrator._helpers import load_queue, write_queue
 
@@ -327,6 +332,168 @@ class TestFinalizeSignalExitAuthoritative(unittest.TestCase):
                 if entry.get("class") == "timeout"
             ]
             self.assertEqual(len(timeout_sigs), 1)
+
+
+def _write_sleeping_cli(repo_root: str, started_file: str) -> str:
+    """Create a fake agent CLI that records its startup and sleeps."""
+    bin_dir = Path(repo_root) / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    fake_cli = bin_dir / "claude"
+    fake_cli.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os\n"
+        "import signal\n"
+        "import sys\n"
+        "import time\n"
+        "from pathlib import Path\n"
+        f"Path('{started_file}').write_text(str(os.getpid()))\n"
+        "shutdown = False\n"
+        "def _handler(_signum, _frame):\n"
+        "    global shutdown\n"
+        "    shutdown = True\n"
+        "signal.signal(signal.SIGTERM, _handler)\n"
+        "signal.signal(signal.SIGINT, _handler)\n"
+        "while not shutdown:\n"
+        "    time.sleep(0.05)\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    fake_cli.chmod(0o755)
+    return str(fake_cli)
+
+
+class TestFinalizeOperatorStopCanceled(unittest.TestCase):
+    """When canceled=True is passed, _finalize_task returns task to ready without signatures."""
+
+    def test_finalize_canceled_leaves_task_ready_no_signature(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            task_id = "osd-canceled"
+            queue_file = _write_queue(
+                repo_root,
+                task_id,
+                state="in_progress",
+                failure_signatures=[],
+            )
+            backend = orchestrator.create_backend(queue_file=queue_file)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                deltas = orchestrator._finalize_task(
+                    backend,
+                    queue_file,
+                    task_id,
+                    ret=-1,
+                    repo_root=repo_root,
+                    adapter=None,
+                    on_failure="triage",
+                    canceled=True,
+                )
+
+            self.assertEqual(deltas, {"successes": 0, "failures": 0, "stop_spawn": False})
+            self.assertIn("canceled by operator stop; returned to ready", buf.getvalue())
+            queue = load_queue(queue_file)
+            self.assertEqual(queue[0]["state"], "ready")
+            self.assertEqual(queue[0].get("failure_signatures", []), [])
+
+
+class TestOperatorStopIntegration(unittest.TestCase):
+    """rl-01 / R-4, R-7: an operator stop cancels tasks, leaving them ready with no signature."""
+
+    def test_batch_run_sigterm_leaves_task_ready_and_prints_canceled(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            task_id = "rl01-sigterm"
+            started_file = os.path.join(repo_root, "started.txt")
+            fake_cli = _write_sleeping_cli(repo_root, started_file)
+            queue_file = _setup_plan_and_queue(repo_root, task_id)
+            adapter = orchestrator.resolve_cli_adapter(fake_cli)
+
+            args = argparse.Namespace(
+                queue_file=queue_file,
+                plan_file=None,
+                repo_root=repo_root,
+                cli_bin=fake_cli,
+                isolation="minimal",
+                max_jobs=1,
+                task_timeout=30.0,
+                heartbeat_interval=999,
+                on_failure="continue",
+                force=False,
+            )
+
+            result = {"rc": None, "out": ""}
+
+            def target():
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    with patch.dict(os.environ, {"PATH": f"{Path(fake_cli).parent}:{os.environ.get('PATH', '')}"}):
+                        result["rc"] = orchestrator.run_batch(args, adapter)
+                result["out"] = buf.getvalue()
+
+            thread = threading.Thread(target=target)
+            thread.start()
+
+            # Wait for the child session to start
+            for _ in range(100):
+                if os.path.exists(started_file):
+                    break
+                time.sleep(0.05)
+            self.assertTrue(os.path.exists(started_file), "child never started")
+
+            try:
+                # Trigger SIGTERM to orchestrator
+                orchestrator._handle_signal(signal.SIGTERM, None)
+
+                thread.join(timeout=15)
+                self.assertFalse(thread.is_alive(), "run_batch did not finish")
+
+                self.assertIn("canceled by operator stop", result["out"])
+
+                queue = load_queue(queue_file)
+                task = next(t for t in queue if t["id"] == task_id)
+                self.assertEqual(task["state"], "ready")
+                self.assertEqual(task.get("failure_signatures", []), [])
+            finally:
+                orchestrator._shutdown_requested = False
+
+    def test_stage_record_and_run_summary_canceled(self):
+        """Unit test: stage record of canceled task has failure_class: canceled, summary has canceled: true."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            logger = telemetry.RunLogger(repo_root, run_id="test-canceled-run")
+            cls = orchestrator._classify_failure(
+                exit_code=-1,
+                tail="shutdown",
+                stage="implement",
+                verdict_recorded=False,
+                shutdown=True,
+                killed_by_timeout=True,
+            )
+            self.assertEqual(cls.value, "canceled")
+
+            rec = telemetry.stage_record(
+                run_id=logger.run_id,
+                task_id="t1",
+                plan_file="docs/plans/t1.md",
+                stage="implement",
+                agent_cli="test",
+                isolation_level="minimal",
+                start_time=telemetry.iso_now(),
+                end_time=telemetry.iso_now(),
+                exit_code=-1,
+                failure_class=cls.value,
+            )
+            self.assertEqual(rec["failure_class"], "canceled")
+
+            summary = telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=telemetry.iso_now(),
+                end_time=telemetry.iso_now(),
+                tasks_spawned=1,
+                tasks_succeeded=0,
+                tasks_failed=0,
+                canceled=True,
+            )
+            self.assertTrue(summary["canceled"])
 
 
 if __name__ == "__main__":

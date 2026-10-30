@@ -6,7 +6,7 @@ subject: timeout-classification
 
 ## Status
 
-Accepted (2026-08-20). Extends ADR-053 (Supervision Defaults Live on the CLI
+Accepted (2026-08-20). Amended by ADR-085. Extends ADR-053 (Supervision Defaults Live on the CLI
 Adapter). Implements requirement R-8 of the
 `orchestrator-signal-exit-determinism` PRD.
 

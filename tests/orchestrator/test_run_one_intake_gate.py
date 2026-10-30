@@ -311,5 +311,83 @@ class TestRecordedBypass(unittest.TestCase):
         self.assertNotIn("intake_skipped", self.fix.backend().load()["queue"][0])
 
 
+class TestRunSingleExitStates(unittest.TestCase):
+    """rl-01 / R-6: run-one leaves task failed on error, ready on shutdown."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.fix = _Fixture(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _args(self, plan: Path, **overrides) -> argparse.Namespace:
+        args = argparse.Namespace(
+            repo_root=str(self.fix.root),
+            plan_file=str(plan),
+            run_id="test-run",
+            base=None,
+            skip_intake=True,
+            isolation="standard",
+            force=False,
+        )
+        for key, value in overrides.items():
+            setattr(args, key, value)
+        return args
+
+    def test_run_single_session_non_zero_leaves_task_failed_with_signature(self):
+        plan = _clean_plan(self.fix.plans, self.fix.prds, "task-fail.md")
+        backend = self.fix.backend()
+        backend.save([
+            {
+                "id": "task-fail",
+                "plan_file": str(plan),
+                "state": "ready",
+                "failure_signatures": [],
+            }
+        ])
+
+        with patch.dict("os.environ", {"AET_REPO_ROOT": str(self.fix.root)}, clear=False):
+            with patch.object(orchestrator, "create_worktree", return_value=str(self.fix.root)):
+                with patch.object(orchestrator, "process_task", return_value=False):
+                    rc = orchestrator.run_single(self._args(plan), adapter=None)
+
+        self.assertEqual(rc, 1)
+        queue = backend.load()["queue"]
+        task = next(t for t in queue if t["id"] == "task-fail")
+        self.assertEqual(task["state"], "failed")
+        self.assertEqual(len(task.get("failure_signatures", [])), 1)
+
+    def test_run_single_shutdown_requested_leaves_task_ready(self):
+        plan = _clean_plan(self.fix.plans, self.fix.prds, "task-stop.md")
+        backend = self.fix.backend()
+        backend.save([
+            {
+                "id": "task-stop",
+                "plan_file": str(plan),
+                "state": "ready",
+                "failure_signatures": [],
+            }
+        ])
+
+        with patch.dict("os.environ", {"AET_REPO_ROOT": str(self.fix.root)}, clear=False):
+            with patch.object(orchestrator, "create_worktree", return_value=str(self.fix.root)):
+                def stop_process(*args, **kwargs):
+                    orchestrator._shutdown_requested = True
+                    return False
+
+                with patch.object(orchestrator, "process_task", side_effect=stop_process):
+                    try:
+                        rc = orchestrator.run_single(self._args(plan), adapter=None)
+                    finally:
+                        orchestrator._shutdown_requested = False
+
+        self.assertEqual(rc, 1)
+        queue = backend.load()["queue"]
+        task = next(t for t in queue if t["id"] == "task-stop")
+        self.assertEqual(task["state"], "ready")
+        self.assertEqual(len(task.get("failure_signatures", [])), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
