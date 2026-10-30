@@ -45,6 +45,7 @@ _ENVIRONMENT_PATTERNS = [
         re.IGNORECASE,
     ),
     re.compile(r"\bpackage not found\b", re.IGNORECASE),
+    re.compile(r"\bcomputer went to sleep mid-response\b", re.IGNORECASE),
 ]
 
 # Provider-side limits: the work is fine and the window is closed. Distinct
@@ -72,6 +73,9 @@ _THROTTLE_PATTERNS = [
     # "hit" and "resets" where the pattern above requires reached/exceeded.
     re.compile(r"api_error_status\"?\s*[:=]\s*429\b", re.IGNORECASE),
     re.compile(r"\bapi\s+error:?\s*429\b", re.IGNORECASE),
+    re.compile(r"api_error_status\"?\s*[:=]\s*529\b", re.IGNORECASE),
+    re.compile(r"\bapi\s+error:?\s*529\b", re.IGNORECASE),
+    re.compile(r"\b529\s+overloaded\b", re.IGNORECASE),
     re.compile(
         r"\b(?:hit|reached|exceeded)\s+(?:your|the|my)\s+"
         r"(?:usage|session|token|message)\s+limit\b",

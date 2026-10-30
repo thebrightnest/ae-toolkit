@@ -6,7 +6,7 @@ subject: night-shift
 
 ## Status
 
-Accepted (2026-07-16). Roadmap Phase 5 (`content/fable-review/09-2026-07-10-roadmap.md`). Extends the deterministic state model of ADR-011 and applies the razor of ADR-020. Consistent with ADR-005's unattended-execution model but does **not** modify its "gates that must still stop" list.
+Accepted (2026-07-16). Amended by ADR-084. Roadmap Phase 5 (`content/fable-review/09-2026-07-10-roadmap.md`). Extends the deterministic state model of ADR-011 and applies the razor of ADR-020. Consistent with ADR-005's unattended-execution model but does **not** modify its "gates that must still stop" list.
 
 ## Context
 

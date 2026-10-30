@@ -141,6 +141,44 @@ class TestRunStopsFromARealFailure(unittest.TestCase):
         self.assertTrue(result["stop_spawn"])
         triage.assert_not_called()
 
+    def test_529_stops_the_run_and_requeues(self):
+        """A 529 stops the run and requeues the task (R-11)."""
+        task = next(t for t in self.backend.load()["queue"] if t["id"] == "t1")
+        tail = "API Error: 529 Overloaded"
+        failure_class = classify(
+            exit_code=1,
+            tail=tail,
+            stage="implement",
+            verdict_recorded=False,
+            shutdown=False,
+            killed_by_timeout=False,
+        )
+        self.assertIs(failure_class, FailureClass.THROTTLED)
+
+        orchestrator._record_failure_on_task(
+            self.backend, task, failure_class, "implement", tail
+        )
+
+        with patch.object(orchestrator, "_mark_failed", return_value=True):
+            with patch.object(orchestrator, "_requeue_task", return_value=True) as requeue:
+                with patch.object(orchestrator, "_consult_triage_session") as triage:
+                    result = orchestrator._finalize_task(
+                        self.backend,
+                        str(self.queue_file),
+                        "t1",
+                        ret=1,
+                        on_failure="triage",
+                        adapter=None,
+                        repo_root=str(self.root),
+                        worktree_dir=None,
+                    )
+
+        self.assertTrue(result["stop_spawn"])
+        self.assertEqual(result["failures"], 0)
+        requeue.assert_called_once()
+        triage.assert_not_called()
+
+
 
 class TestRunStops(unittest.TestCase):
     """Requeue the task, stop the shift, name the remedy."""

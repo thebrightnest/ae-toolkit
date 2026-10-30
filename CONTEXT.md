@@ -150,13 +150,13 @@ _Avoid_: conflating a breaker quarantine with human `abandoned`, or expecting th
 ## Night-Shift Runtime (ADR-030, ADR-031)
 
 **Failure Class**:
-The single category assigned to a terminating agent session: `environment`, `flaky`, `design`, `timeout`, or `canceled`. A fixed, code-owned menu — the breaker's counting never depends on an LLM inferring it. (ADR-030)
+The single category assigned to a terminating agent session: `environment`, `flaky`, `design`, `timeout`, `canceled`, or `throttled`. A fixed, code-owned menu — the breaker's counting never depends on an LLM inferring it. (ADR-030, ADR-065)
 
 **Failure Signature**:
 A deterministic short digest of `(stage, normalized-error)` with volatile spans (paths, PIDs, timestamps, ids, line numbers) stripped, so identical failures collide and distinct ones do not. It is the key the **Circuit Breaker** counts. (ADR-030)
 
 **Circuit Breaker**:
-The deterministic rule that stops throwing work at a repeating failure: **per-task** (the same **Failure Signature** 3× ⇒ the task is quarantined) and **systemic** (one signature across N distinct tasks ⇒ the shift stops spawning). Counts are persisted, so a quarantine survives across shifts. (ADR-030)
+The deterministic rule that stops throwing work at a repeating failure: **per-task** (the same **Failure Signature** 3× ⇒ the task is quarantined), **attempt cap** (5 failed attempts within one run ⇒ the task is quarantined), and **systemic** (one signature across N distinct tasks ⇒ the shift stops spawning). Counts are persisted, so a quarantine survives across shifts. (ADR-030, ADR-084)
 
 **Triage**:
 A bounded judgment session spawned on a failure under the default `--on-failure=triage`, which confirms the **Failure Class** and routes the outcome — requeue (`flaky`/`environment`) vs quarantine (`design`). Judgment lives in an explicit, sanctioned session; the engine only enforces its verdict, and the breaker bounds it. (ADR-030)

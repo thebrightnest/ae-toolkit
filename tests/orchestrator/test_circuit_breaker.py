@@ -540,6 +540,169 @@ class TestOrchestratorBreakerWiring:
         states = {t["id"]: t["state"] for t in backend.load()["queue"]}
         assert set(states.values()) == {"ready"}
 
+    def test_attempt_cap_quarantines_after_five_failures_with_different_signatures(
+        self, tmp_path, capsys
+    ):
+        """R-6, R-7: A task that fails 5 times with different signatures is quarantined on the 5th failure."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        (repo / "file.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+
+        queue_file = str(repo / "queue.json")
+        backend = orchestrator._make_backend(queue_file)
+        task = {
+            "id": "t1",
+            "title": "Task 1",
+            "state": "in_progress",
+            "failure_signatures": [],
+        }
+        backend.save([task])
+        attempt_counts = {}
+
+        # 4 distinct failures should be requeued
+        for i in range(4):
+            orchestrator._record_failure_on_task(
+                backend,
+                task,
+                FailureClass.ENVIRONMENT,
+                f"stage-{i}",
+                f"unique error tail {i}",
+            )
+            deltas = orchestrator._finalize_task(
+                backend,
+                queue_file,
+                "t1",
+                ret=1,
+                repo_root=str(repo),
+                attempt_counts=attempt_counts,
+            )
+            assert deltas["stop_spawn"] is False
+            data = backend.load()
+            task = next(t for t in data["queue"] if t["id"] == "t1")
+            assert task["state"] == "ready"
+
+        # 5th failure with yet another signature hits the attempt cap
+        orchestrator._record_failure_on_task(
+            backend,
+            task,
+            FailureClass.ENVIRONMENT,
+            "stage-4",
+            "unique error tail 4",
+        )
+        deltas = orchestrator._finalize_task(
+            backend,
+            queue_file,
+            "t1",
+            ret=1,
+            repo_root=str(repo),
+            attempt_counts=attempt_counts,
+        )
+
+        assert deltas["failures"] == 1
+        assert deltas["stop_spawn"] is True
+        data = backend.load()
+        task = next(t for t in data["queue"] if t["id"] == "t1")
+        assert task["state"] == "quarantined"
+
+        output = capsys.readouterr().out
+        cap = breaker.MAX_TASK_ATTEMPTS_PER_RUN
+        assert f"t1 reached the attempt cap ({cap} of {cap}); quarantined" in output
+
+    def test_throttled_failure_followed_by_four_others_does_not_quarantine(
+        self, tmp_path
+    ):
+        """R-6: A throttled failure followed by four other failures does not hit the cap."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+        (repo / "file.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+
+        queue_file = str(repo / "queue.json")
+        backend = orchestrator._make_backend(queue_file)
+        task = {
+            "id": "t1",
+            "title": "Task 1",
+            "state": "in_progress",
+            "failure_signatures": [],
+        }
+        backend.save([task])
+        attempt_counts = {}
+
+        # 1 throttled failure
+        orchestrator._record_failure_on_task(
+            backend,
+            task,
+            FailureClass.THROTTLED,
+            "implement",
+            "rate limit exceeded",
+        )
+        deltas = orchestrator._finalize_task(
+            backend,
+            queue_file,
+            "t1",
+            ret=1,
+            repo_root=str(repo),
+            attempt_counts=attempt_counts,
+        )
+        assert attempt_counts.get("t1", 0) == 0
+        data = backend.load()
+        task = next(t for t in data["queue"] if t["id"] == "t1")
+        assert task["state"] == "ready"
+
+        # Followed by 4 other distinct failures
+        for i in range(4):
+            orchestrator._record_failure_on_task(
+                backend,
+                task,
+                FailureClass.ENVIRONMENT,
+                f"stage-{i}",
+                f"unique error tail {i}",
+            )
+            deltas = orchestrator._finalize_task(
+                backend,
+                queue_file,
+                "t1",
+                ret=1,
+                repo_root=str(repo),
+                attempt_counts=attempt_counts,
+            )
+            data = backend.load()
+            task = next(t for t in data["queue"] if t["id"] == "t1")
+
+        assert attempt_counts["t1"] == 4
+        assert task["state"] == "ready"
+        assert deltas["stop_spawn"] is False
+
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

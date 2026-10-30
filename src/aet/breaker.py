@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 PER_TASK_BREAKER_THRESHOLD = 3
+MAX_TASK_ATTEMPTS_PER_RUN = 5
 SYSTEMIC_BREAKER_THRESHOLD = 3
 
 BREAKER_REF = "refs/aet/breaker"

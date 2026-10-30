@@ -14,7 +14,7 @@ from unittest.mock import patch
 import pytest
 
 # Ensure src/aet is on the path.
-from aet import failure, triage
+from aet import failure, telemetry, triage
 from tests.orchestrator._helpers import write_queue as _write_queue
 
 # Load the orchestrator script (no .py extension) as a module.
@@ -422,6 +422,43 @@ class TestFinalizeOnFailureTriage(unittest.TestCase):
             self.assertEqual(triage_records[0]["outcome"], "skipped")
             self.assertEqual(triage_records[0]["action"], "requeue")
             self.assertEqual(triage_records[0]["reason"], "insufficient_evidence")
+
+    def test_attempt_cap_quarantine_triage_record_reason(self):
+        """The triage record of a cap quarantine carries reason attempt_cap (R-7)."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            task = {
+                "id": "demo",
+                "title": "Demo",
+                "state": "in_progress",
+                "failure_signatures": [
+                    _failure_entry(
+                        tail="unique error",
+                        signature="sig-demo",
+                    )
+                ],
+            }
+            logger = telemetry.RunLogger(repo_root, run_id="run-attempt-cap")
+            queue_file = _write_queue(repo_root, [task])
+            backend = orchestrator._make_backend(queue_file)
+            attempt_counts = {"demo": 4}  # next failure makes it 5
+            orchestrator._finalize_task(
+                backend,
+                queue_file,
+                task["id"],
+                1,
+                repo_root=repo_root,
+                logger=logger,
+                on_failure="triage",
+                attempt_counts=attempt_counts,
+            )
+            records = telemetry.read_jsonl(logger.task_log_path("demo"))
+            triage_records = [r for r in records if r.get("type") == "triage"]
+            self.assertEqual(len(triage_records), 1)
+            self.assertEqual(triage_records[0]["outcome"], "skipped")
+            self.assertEqual(triage_records[0]["action"], "quarantine")
+            self.assertEqual(triage_records[0]["reason"], "attempt_cap")
+
 
     def test_consult_triage_session_returns_none_when_insufficient_evidence(self):
         adapter = unittest.mock.MagicMock()

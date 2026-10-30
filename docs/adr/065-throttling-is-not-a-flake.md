@@ -8,7 +8,7 @@ relates: [60]
 
 ## Status
 
-Accepted (2026-08-24). Amends ADR-030 (Night-Shift Failure Handling), whose
+Accepted (2026-08-24). Amended by ADR-084. Amends ADR-030 (Night-Shift Failure Handling), whose
 taxonomy is a fixed menu this adds one member to. Motivated by item OI-07 of
 `docs/audits/2026-08-24-open-items.md`.
 

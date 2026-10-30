@@ -2974,6 +2974,7 @@ def _finalize_task(
     on_failure: str = "triage",
     adapter=None,
     worktree_dir: str | None = None,
+    attempt_counts: dict[str, int] | None = None,
 ) -> dict[str, int | bool]:
     """Finalize a single task after its child process exits.
 
@@ -3163,10 +3164,25 @@ def _finalize_task(
     tail = entry.get("tail_preview", "")
     signature = entry.get("signature", "")
 
+    if attempt_counts is not None and failure_class_name not in (
+        failure_lib.FailureClass.THROTTLED.value,
+        failure_lib.FailureClass.CANCELED.value,
+    ):
+        attempt_counts[task_id] = attempt_counts.get(task_id, 0) + 1
+
+    attempts = attempt_counts.get(task_id, 0) if attempt_counts is not None else 0
+    cap_reached = attempts >= breaker.MAX_TASK_ATTEMPTS_PER_RUN
+
     verdict = None
     triage_skipped = False
-    if not triage.has_sufficient_evidence(tail=tail, signature=signature):
+    reason = None
+    if cap_reached:
         triage_skipped = True
+        action = "quarantine"
+        reason = "attempt_cap"
+    elif not triage.has_sufficient_evidence(tail=tail, signature=signature):
+        triage_skipped = True
+        reason = "insufficient_evidence"
         print(f"   ⚠️  Triage for {task_id} skipped: insufficient evidence (no tail or signature)")
     elif adapter is not None and worktree_dir is not None:
         try:
@@ -3184,7 +3200,7 @@ def _finalize_task(
             signature=signature,
         )
 
-    action = verdict.get("action") if verdict else None
+    action = "quarantine" if cap_reached else (verdict.get("action") if verdict else None)
     if action is None:
         # Fail-closed: unparseable or errored triage falls back to the
         # deterministic classifier default (nsr-01).
@@ -3202,10 +3218,18 @@ def _finalize_task(
                 outcome=triage_outcome,
                 action=action,
                 failure_class=failure_class_name,
-                reason="insufficient_evidence" if triage_skipped else None,
+                reason=reason if triage_skipped else None,
             ),
             task_id=task_id,
         )
+
+    if cap_reached:
+        print(
+            f"   🚫 {task_id} reached the attempt cap ({attempts} of {breaker.MAX_TASK_ATTEMPTS_PER_RUN}); quarantined"
+        )
+        if _mark_quarantined(backend, queue_file, task_id, failed_state):
+            return {"successes": 0, "failures": 1, "stop_spawn": True, "triage_outcome": triage_outcome}
+        return {"successes": 0, "failures": 1, "stop_spawn": True, "triage_outcome": triage_outcome}
 
     if action == "quarantine":
         if _mark_quarantined(backend, queue_file, task_id, failed_state):
@@ -3283,6 +3307,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     _write_telemetry_path(repo_root, logger.run_id, logger.run_dir)
     start_time = telemetry.iso_now()
     task_ids: list[str] = []
+    attempt_counts: dict[str, int] = {}
 
     try:
         queue = backend.load()["queue"]
@@ -3562,6 +3587,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             on_failure=getattr(args, "on_failure", "triage"),
             adapter=adapter,
             worktree_dir=worktree_dir,
+            attempt_counts=attempt_counts,
         )
         successes += deltas["successes"]
         failures += deltas["failures"]

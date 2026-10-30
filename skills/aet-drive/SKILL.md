@@ -230,7 +230,8 @@ When a task is in `awaiting_merge` due to integration conflict or merge train ej
 
 The engine's Triage session (ADR-030, `--on-failure=triage`, the default) already
 assigns each failure its Failure Class (`environment`, `flaky`, `design`, `timeout`,
-`canceled`), and the Circuit Breaker re-queues or quarantines the task. Do not repeat
+`canceled`, `throttled`), and the Circuit Breaker re-queues or quarantines the task
+(including via the per-run attempt cap). Do not repeat
 that work or invent another set of classes.
 
 For each task still in `failed` or `quarantined` after the run settles:

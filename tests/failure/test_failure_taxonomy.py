@@ -319,3 +319,59 @@ def test_a_throttle_still_wins_over_an_adapter_deadline():
         )
         is FailureClass.THROTTLED
     )
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        "API Error: 529 Overloaded",
+        '{"api_error_status": 529}',
+        '{"api_error_status":529}',
+        "529 Overloaded",
+        "API Error 529",
+    ],
+)
+def test_qualified_529_is_throttled(tail):
+    """Qualified 529 patterns classify as throttled (R-11)."""
+    assert (
+        classify(
+            exit_code=1,
+            tail=tail,
+            stage="implement",
+            verdict_recorded=False,
+            shutdown=False,
+            killed_by_timeout=False,
+        )
+        is FailureClass.THROTTLED
+    )
+
+
+def test_bare_529_stays_unmatched():
+    """A bare 529 does not classify as throttled (R-11)."""
+    assert (
+        classify(
+            exit_code=1,
+            tail="test 529 passed",
+            stage="qa",
+            verdict_recorded=False,
+            shutdown=False,
+            killed_by_timeout=False,
+        )
+        is FailureClass.FLAKY
+    )
+
+
+def test_host_sleep_is_environment():
+    """Host sleep interruption classifies as environment (R-12)."""
+    assert (
+        classify(
+            exit_code=1,
+            tail="computer went to sleep mid-response",
+            stage="implement",
+            verdict_recorded=False,
+            shutdown=False,
+            killed_by_timeout=False,
+        )
+        is FailureClass.ENVIRONMENT
+    )
+
