@@ -970,16 +970,21 @@ def _emit_session_test_runs(
         )
 
 
-def _usage_aggregates(logger: telemetry.RunLogger) -> tuple[int | None, float | None]:
-    """Sum token/cost over this run's stage records; all-null -> ``(None, None)``.
+def _usage_aggregates(
+    logger: telemetry.RunLogger,
+) -> tuple[int | None, float | None, bool]:
+    """Sum token/cost over this run's stage records; all-null -> ``(None, None, True)``.
 
     The ``work-history.jsonl`` copy is queue history, not execution telemetry,
     and is skipped (mirrors the panel's filtering).
+    ``cost_complete`` is False when any stage record of the run has a null
+    ``cost_estimate`` (ADR-086, R-14).
     """
     total_tokens = 0
     total_cost = 0.0
     have_tokens = False
     have_cost = False
+    cost_complete = True
     for path in logger.run_dir.glob("*.jsonl"):
         if path.name == "work-history.jsonl":
             continue
@@ -992,7 +997,13 @@ def _usage_aggregates(logger: telemetry.RunLogger) -> tuple[int | None, float | 
             if record.get("cost_estimate") is not None:
                 total_cost += record["cost_estimate"]
                 have_cost = True
-    return (total_tokens if have_tokens else None, total_cost if have_cost else None)
+            else:
+                cost_complete = False
+    return (
+        total_tokens if have_tokens else None,
+        total_cost if have_cost else None,
+        cost_complete,
+    )
 
 
 def _task_usage_aggregates(
@@ -1685,6 +1696,8 @@ def run_stage(
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    if worktree_dir:
+        env["AET_WORKTREE"] = worktree_dir
     if freshness:
         env["AET_QA_FRESHNESS"] = freshness
     if task_id is not None:
@@ -1814,6 +1827,8 @@ def run_stage_group(
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    if worktree_dir:
+        env["AET_WORKTREE"] = worktree_dir
     if freshness:
         env["AET_QA_FRESHNESS"] = freshness
     if task_id is not None:
@@ -3138,7 +3153,7 @@ def _finalize_task(
     worktree_dir: str | None = None,
     attempt_counts: dict[str, int] | None = None,
     canceled: bool = False,
-) -> dict[str, int | bool]:
+) -> dict[str, Any]:
     """Finalize a single task after its child process exits.
 
     State changes go through ``aet-state transition``; the orchestrator avoids
@@ -3173,7 +3188,7 @@ def _finalize_task(
                 text=True,
             )
             if result.returncode == 0:
-                return {"successes": 1, "failures": 0, "stop_spawn": False}
+                return {"successes": 1, "failures": 0, "stop_spawn": False, "state": "succeeded"}
             print(
                 f"   ⚠️  Could not transition {task_id} to merged: "
                 f"{result.stderr.strip()}"
@@ -3182,15 +3197,15 @@ def _finalize_task(
         # A recorded merge_commit that is already terminal (or could not be
         # sealed above) counts as a success.
         if task and task.get("merge_commit"):
-            return {"successes": 1, "failures": 0, "stop_spawn": False}
+            return {"successes": 1, "failures": 0, "stop_spawn": False, "state": "succeeded"}
         # In single-pr mode the child may already have integrated the task and
         # transitioned it to awaiting_merge before the batch parent finalizes.
         # Trust that state rather than failing because the worktree is gone.
         if from_state == "awaiting_merge":
-            return {"successes": 1, "failures": 0, "stop_spawn": False}
+            return {"successes": 1, "failures": 0, "stop_spawn": False, "state": "succeeded"}
         if from_state == "merged":
             # Single-pr mode: process_task already integrated locally.
-            return {"successes": 1, "failures": 0, "stop_spawn": False}
+            return {"successes": 1, "failures": 0, "stop_spawn": False, "state": "succeeded"}
         # A successful child that produced no commits is a false completion.
         # Fail the task rather than promoting an empty branch to awaiting_merge.
         if task:
@@ -3200,7 +3215,7 @@ def _finalize_task(
                 if not ok:
                     print(f"   ❌ {task_id} succeeded but produced no commits: {msg}")
                     _mark_failed(backend, queue_file, task_id, current_state(task))
-                    return {"successes": 0, "failures": 1, "stop_spawn": True}
+                    return {"successes": 0, "failures": 1, "stop_spawn": True, "state": "failed"}
         # Record delivered diff size when the merge commit is already known
         # (e.g. auto-merge closure). Normal awaiting_merge closure defers the
         # measurement to terminal seal time in ``append_history_record``.
@@ -3210,7 +3225,7 @@ def _finalize_task(
         # ledger record before transition.
         _write_task_cost(backend, queue_file, task_id, logger)
         if task and _maybe_auto_merge(task, queue_file, repo_root):
-            return {"successes": 1, "failures": 0, "stop_spawn": False}
+            return {"successes": 1, "failures": 0, "stop_spawn": False, "state": "succeeded"}
         print(f"   ✅ {task_id} awaiting merge")
         result = subprocess.run(
             [
@@ -3230,8 +3245,8 @@ def _finalize_task(
                 f"   ⚠️  Could not transition {task_id} to awaiting_merge: {result.stderr.strip()}"
             )
             _mark_failed(backend, queue_file, task_id, from_state)
-            return {"successes": 0, "failures": 1, "stop_spawn": True}
-        return {"successes": 1, "failures": 0, "stop_spawn": False}
+            return {"successes": 0, "failures": 1, "stop_spawn": True, "state": "failed"}
+        return {"successes": 1, "failures": 0, "stop_spawn": False, "state": "succeeded"}
 
     queue = backend.load()["queue"]
     task = next((t for t in queue if t.get("id") == task_id), None)
@@ -3245,7 +3260,13 @@ def _finalize_task(
             backend, queue_file, task_id, from_state, aet_state_bin
         )
         print(f"   ⏹️  {task_id} canceled by operator stop; returned to ready")
-        return {"successes": 0, "failures": 0 if requeued else 1, "stop_spawn": False}
+        return {
+            "successes": 0,
+            "failures": 0 if requeued else 1,
+            "stop_spawn": False,
+            "state": "requeued" if requeued else "failed",
+            "canceled": True,
+        }
 
     print(f"   ❌ {task_id} failed (exit {ret})")
 
@@ -3255,7 +3276,7 @@ def _finalize_task(
     if ret == 2:
         print(f"   ⛔ {task_id} halted: plan missing from resolved base")
         _mark_failed(backend, queue_file, task_id, from_state)
-        return {"successes": 0, "failures": 1, "stop_spawn": True}
+        return {"successes": 0, "failures": 1, "stop_spawn": True, "state": "failed"}
 
     # Integration failures (exit code 3) are engine-level outcomes, not task
     # failures. The task passed; the combination did not. They are not triaged
@@ -3263,7 +3284,7 @@ def _finalize_task(
     if ret == 3:
         print(f"   ❌ {task_id} integration failure; bypassing triage/requeue")
         _mark_failed(backend, queue_file, task_id, from_state)
-        return {"successes": 0, "failures": 1, "stop_spawn": False}
+        return {"successes": 0, "failures": 1, "stop_spawn": False, "state": "failed"}
 
     # Signal-killed sessions are terminal timeouts. The child process may have
     # recorded a TIMEOUT signature itself (stall watchdog), or the parent may
@@ -3310,12 +3331,12 @@ def _finalize_task(
             )
         print(f"   ⏱️  {task_id} killed by timeout; leaving failed")
         _mark_failed(backend, queue_file, task_id, from_state)
-        return {"successes": 0, "failures": 1, "stop_spawn": False}
+        return {"successes": 0, "failures": 1, "stop_spawn": False, "state": "failed"}
 
     # Circuit breaker has absolute precedence over triage routing (nsr-03).
     if task and breaker.should_quarantine_task(task):
         if _mark_quarantined(backend, queue_file, task_id, from_state):
-            return {"successes": 0, "failures": 1, "stop_spawn": True}
+            return {"successes": 0, "failures": 1, "stop_spawn": True, "state": "failed"}
 
     # Establish the canonical failed state. All non-breaker failure modes route
     # from here so transitions stay legal (failed -> ready, failed -> quarantined).
@@ -3342,13 +3363,15 @@ def _finalize_task(
             "successes": 0,
             "failures": 0 if requeued else 1,
             "stop_spawn": True,
+            "state": "requeued" if requeued else "failed",
+            "throttled": True,
         }
 
     if on_failure == "halt":
-        return {"successes": 0, "failures": 1, "stop_spawn": True}
+        return {"successes": 0, "failures": 1, "stop_spawn": True, "state": "failed"}
 
     if on_failure == "continue":
-        return {"successes": 0, "failures": 1, "stop_spawn": False}
+        return {"successes": 0, "failures": 1, "stop_spawn": False, "state": "failed"}
 
     # on_failure == "triage" (default).
     last_entry = (task.get("failure_signatures") or [])[-1:] if task else []
@@ -3422,19 +3445,49 @@ def _finalize_task(
             f"   🚫 {task_id} reached the attempt cap ({attempts} of {breaker.MAX_TASK_ATTEMPTS_PER_RUN}); quarantined"
         )
         if _mark_quarantined(backend, queue_file, task_id, failed_state):
-            return {"successes": 0, "failures": 1, "stop_spawn": True, "triage_outcome": triage_outcome}
-        return {"successes": 0, "failures": 1, "stop_spawn": True, "triage_outcome": triage_outcome}
+            return {
+                "successes": 0,
+                "failures": 1,
+                "stop_spawn": True,
+                "triage_outcome": triage_outcome,
+                "state": "failed",
+            }
+        return {
+            "successes": 0,
+            "failures": 1,
+            "stop_spawn": True,
+            "triage_outcome": triage_outcome,
+            "state": "failed",
+        }
 
     if action == "quarantine":
         if _mark_quarantined(backend, queue_file, task_id, failed_state):
-            return {"successes": 0, "failures": 1, "stop_spawn": True, "triage_outcome": triage_outcome}
+            return {
+                "successes": 0,
+                "failures": 1,
+                "stop_spawn": True,
+                "triage_outcome": triage_outcome,
+                "state": "failed",
+            }
         # If quarantine transition fails, fall through to requeue/failed.
 
     # action == "requeue" (or quarantine transition failed): failed -> ready.
     if _requeue_task(backend, queue_file, task_id, failed_state, aet_state_bin):
         print(f"   🔄 {task_id} requeued")
-        return {"successes": 0, "failures": 0, "stop_spawn": False, "triage_outcome": triage_outcome}
-    return {"successes": 0, "failures": 1, "stop_spawn": False, "triage_outcome": triage_outcome}
+        return {
+            "successes": 0,
+            "failures": 0,
+            "stop_spawn": False,
+            "triage_outcome": triage_outcome,
+            "state": "requeued",
+        }
+    return {
+        "successes": 0,
+        "failures": 1,
+        "stop_spawn": False,
+        "triage_outcome": triage_outcome,
+        "state": "failed",
+    }
 
 
 def _record_behind_origin(behind: dict[str, int], branch: str, flush_res: train.FlushResult) -> None:
@@ -3502,7 +3555,10 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     logger = telemetry.RunLogger(repo_root, run_id=getattr(args, "run_id", None))
     _write_telemetry_path(repo_root, logger.run_id, logger.run_dir)
     start_time = telemetry.iso_now()
-    task_ids: list[str] = []
+    task_ids: dict[str, None] = {}
+    end_state: dict[str, str] = {}
+    attempts_failed: int = 0
+    parallel_conflicts_detected: int = 0
     attempt_counts: dict[str, int] = {}
 
     try:
@@ -3524,7 +3580,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 tasks_spawned=0,
                 tasks_succeeded=0,
                 tasks_failed=0,
-                outcome="success",
                 exit_code=0,
                 task_ids=[],
                 final_stage=None,
@@ -3547,7 +3602,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 tasks_spawned=0,
                 tasks_succeeded=0,
                 tasks_failed=0,
-                outcome="failure",
                 exit_code=1,
                 task_ids=[],
                 final_stage=None,
@@ -3587,7 +3641,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 tasks_spawned=0,
                 tasks_succeeded=0,
                 tasks_failed=0,
-                outcome="failure",
                 exit_code=1,
                 task_ids=[],
                 final_stage=None,
@@ -3629,7 +3682,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 tasks_spawned=0,
                 tasks_succeeded=0,
                 tasks_failed=0,
-                outcome="failure",
                 exit_code=1,
                 task_ids=[],
                 final_stage=None,
@@ -3659,24 +3711,31 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     task_timeout = getattr(args, "task_timeout", 3600)
     heartbeat_interval = getattr(args, "heartbeat_interval", 60)
 
-    def _write_summary(outcome: str, exit_code: int) -> None:
+    def _write_summary(exit_code: int) -> None:
         nonlocal summary_written
         if summary_written:
             return
         summary_written = True
         end_time = telemetry.iso_now()
-        total_tokens, total_cost_usd = _usage_aggregates(logger)
+        total_tokens, total_cost_usd, cost_complete = _usage_aggregates(logger)
+        tasks_spawned = len(task_ids)
+        tasks_succeeded = sum(1 for s in end_state.values() if s == "succeeded")
+        tasks_failed = sum(1 for s in end_state.values() if s == "failed")
+        tasks_requeued = sum(1 for s in end_state.values() if s == "requeued")
         logger.write_last_run(
             telemetry.run_summary_record(
                 run_id=logger.run_id,
                 start_time=start_time,
                 end_time=end_time,
-                tasks_spawned=len(task_ids),
-                tasks_succeeded=successes,
-                tasks_failed=failures,
-                outcome=outcome,
+                tasks_spawned=tasks_spawned,
+                tasks_succeeded=tasks_succeeded,
+                tasks_failed=tasks_failed,
+                tasks_requeued=tasks_requeued,
+                attempts_failed=attempts_failed,
+                cost_complete=cost_complete,
+                parallel_conflicts_detected=parallel_conflicts_detected,
                 exit_code=exit_code,
-                task_ids=task_ids,
+                task_ids=list(task_ids.keys()),
                 final_stage=None,
                 leftover=(
                     {**leftover_report, "teardown": len(teardown_leftovers)}
@@ -3692,8 +3751,9 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         logger.copy_work_history(os.path.join(repo_root, ".agents", "work-history.jsonl"))
         print()
         print("🏁 Orchestrator finished.")
-        print(f"   Succeeded: {successes}")
-        print(f"   Failed:    {failures}")
+        print(f"   Succeeded: {tasks_succeeded}")
+        print(f"   Failed:    {tasks_failed}")
+        print(f"   Requeued:  {tasks_requeued}")
         if skips:
             print(f"   Skipped:   {len(skips)}")
             for skipped_id, skip in skips.items():
@@ -3712,6 +3772,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         canceled: bool = False,
     ) -> None:
         nonlocal successes, failures, stop_spawn, systemic_tally, merged_task_ids
+        nonlocal attempts_failed, parallel_conflicts_detected
         running.pop(task_id, None)
         spawn_times.pop(task_id, None)
         queue = backend.load()["queue"]
@@ -3751,6 +3812,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     _mark_failed(backend, queue_file, task_id, current_state(task))
                     failures += 1
                     stop_spawn = True
+                    end_state[task_id] = "failed"
+                    attempts_failed += 1
                     _snapshot_and_teardown()
                     return
             should_integrate = (integration_mode == "single-pr") or (
@@ -3773,11 +3836,14 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                         else str(integration_status)
                     )
                     if status_val == "staged_conflict":
+                        parallel_conflicts_detected += 1
+                        end_state[task_id] = "succeeded"
                         if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
                             _spawn_pass()
                         return
                     if status_val == "staged":
                         successes += 1
+                        end_state[task_id] = "succeeded"
                         if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
                             _spawn_pass()
                         return
@@ -3786,6 +3852,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     if task and _attach_delivered_size(task, repo_root):
                         _save_task_record(backend, queue)
                     successes += 1
+                    end_state[task_id] = "succeeded"
                     merged_task_ids.append(task_id)
                 except IntegrationFailureError as exc:
                     print(f"   ❌ Integration failure for {task_id}: {exc}")
@@ -3797,6 +3864,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                         str(exc),
                     )
                     failures += 1
+                    end_state[task_id] = "failed"
+                    attempts_failed += 1
                     _snapshot_and_teardown()
                 if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
                     _spawn_pass()
@@ -3814,6 +3883,12 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             attempt_counts=attempt_counts,
             canceled=canceled,
         )
+        task_state = deltas.get("state")
+        if task_state:
+            end_state[task_id] = task_state
+        if not deltas.get("canceled") and not deltas.get("throttled"):
+            if task_state in ("failed", "requeued"):
+                attempts_failed += 1
         successes += deltas["successes"]
         failures += deltas["failures"]
         if deltas["stop_spawn"]:
@@ -3857,7 +3932,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         skips[task_id] = {"reason": reason, "remedy": remedy}
 
     def _spawn_pass() -> int:
-        nonlocal failures, stop_spawn
+        nonlocal failures, stop_spawn, parallel_conflicts_detected
         if stop_spawn or _shutdown_requested:
             return 0
         spawned_count = 0
@@ -3871,9 +3946,14 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 print(f"🚂 Flushing merge train for {b} (unblocking dependent tasks)...")
                 flush_res = train.flush(repo_root, b, backend=backend, config=config)
                 _record_behind_origin(behind_origin, b, flush_res)
+                if getattr(flush_res, "restack_conflicts", None):
+                    parallel_conflicts_detected += len(flush_res.restack_conflicts)
                 if flush_res.ok:
                     print(f"   ✅ Merge train flushed for {b}: {len(flush_res.tasks_flushed)} task(s) merged")
                     merged_task_ids.extend(flush_res.tasks_flushed)
+                    for flushed_id in flush_res.tasks_flushed:
+                        if flushed_id in task_ids:
+                            end_state[flushed_id] = "succeeded"
                 else:
                     print(f"   ❌ Merge train flush failed for {b}: {flush_res.error or flush_res.output}")
                     failures += 1
@@ -4048,7 +4128,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             proc = subprocess.Popen(cmd, env=env, start_new_session=True)
             running[task_id] = proc
             spawn_times[task_id] = time.monotonic()
-            task_ids.append(task_id)
+            task_ids[task_id] = None
             spawned_count += 1
             print(f"▶️  Spawned {task.get('title', task_id)} (PID {proc.pid})")
 
@@ -4098,9 +4178,14 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                         print(f"🚂 Flushing merge train for {b} (idle train non-empty)...")
                         flush_res = train.flush(repo_root, b, backend=backend, config=config)
                         _record_behind_origin(behind_origin, b, flush_res)
+                        if getattr(flush_res, "restack_conflicts", None):
+                            parallel_conflicts_detected += len(flush_res.restack_conflicts)
                         if flush_res.ok:
                             print(f"   ✅ Merge train flushed for {b}: {len(flush_res.tasks_flushed)} task(s) merged")
                             merged_task_ids.extend(flush_res.tasks_flushed)
+                            for flushed_id in flush_res.tasks_flushed:
+                                if flushed_id in task_ids:
+                                    end_state[flushed_id] = "succeeded"
                         else:
                             print(f"   ❌ Merge train flush failed for {b}: {flush_res.error or flush_res.output}")
                             failures += 1
@@ -4128,7 +4213,6 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                     for t in non_terminal
                 ):
                     _print_settlement_summary(queue, merged_task_ids)
-                leftover_report.update(leftover_counts(queue))
                 break
 
             # Poll for finished or timed-out processes
@@ -4169,10 +4253,13 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 _terminate_process_group(proc, timeout=10)
             _cleanup_task(task_id, -1, eager_spawn=False, canceled=True)
 
+        queue = backend.load()["queue"]
+        leftover_report.clear()
+        leftover_report.update(leftover_counts(queue))
+
         _print_behind_origin(behind_origin)
-        exit_code = 1 if failures > 0 or skips else 0
-        outcome = "success" if exit_code == 0 else "failure"
-        _write_summary(outcome, exit_code)
+        exit_code = 1 if (any(s != "succeeded" for s in end_state.values()) or skips or failures > 0) else 0
+        _write_summary(exit_code)
         release_lease(queue_file, logger.run_id)
 
     return exit_code
@@ -4386,8 +4473,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 end_time=telemetry.iso_now(),
                 tasks_spawned=0,
                 tasks_succeeded=0,
-                tasks_failed=1,
-                outcome="failure",
+                tasks_failed=0,
                 exit_code=1,
                 task_ids=[],
                 final_stage=None,
@@ -4443,8 +4529,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 end_time=end_time,
                 tasks_spawned=0,
                 tasks_succeeded=0,
-                tasks_failed=1,
-                outcome="failure",
+                tasks_failed=0,
                 exit_code=1,
                 task_ids=[],
                 final_stage=None,
@@ -4475,8 +4560,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 end_time=end_time,
                 tasks_spawned=0,
                 tasks_succeeded=0,
-                tasks_failed=1,
-                outcome="failure",
+                tasks_failed=0,
                 exit_code=1,
                 task_ids=[],
                 final_stage=None,
@@ -4545,10 +4629,9 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                         end_time=telemetry.iso_now(),
                         tasks_spawned=0,
                         tasks_succeeded=0,
-                        tasks_failed=1,
-                        outcome="failure",
+                        tasks_failed=0,
                         exit_code=1,
-                        task_ids=[queued_task_id],
+                        task_ids=[],
                         final_stage=None,
                     )
                 )
@@ -4574,10 +4657,9 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                         end_time=telemetry.iso_now(),
                         tasks_spawned=0,
                         tasks_succeeded=0,
-                        tasks_failed=1,
-                        outcome="failure",
+                        tasks_failed=0,
                         exit_code=4,
-                        task_ids=[queued_task_id],
+                        task_ids=[],
                         final_stage=None,
                     )
                 )
@@ -4753,6 +4835,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                                 print(f"   ❌ Task {task_id} succeeded but produced no commits: {msg}")
                                 _mark_failed(backend, queue_file, task_id, from_state)
                                 exit_code = 1
+                                success = False
                             else:
                                 tokens, usd = _task_usage_aggregates(logger, task_id)
                                 if tokens is not None or usd is not None:
@@ -4824,7 +4907,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
         # Read the final stage from the synthetic task record.
         final_stage = task.get("stage") or read_plan_stage(plan_file) or wf.entry_stage
 
-        total_tokens, total_cost_usd = _usage_aggregates(logger)
+        total_tokens, total_cost_usd, cost_complete = _usage_aggregates(logger)
         logger.write_last_run(
             telemetry.run_summary_record(
                 run_id=logger.run_id,
@@ -4832,8 +4915,10 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 end_time=end_time,
                 tasks_spawned=1,
                 tasks_succeeded=1 if success else 0,
-                tasks_failed=0 if success else 1,
-                outcome="success" if success else "failure",
+                tasks_failed=0 if (success or _shutdown_requested) else 1,
+                tasks_requeued=1 if _shutdown_requested else 0,
+                attempts_failed=0 if (success or _shutdown_requested) else 1,
+                cost_complete=cost_complete,
                 exit_code=exit_code,
                 task_ids=[task_id],
                 final_stage=final_stage,

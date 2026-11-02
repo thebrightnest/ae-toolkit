@@ -174,7 +174,8 @@ class TestRunStopsFromARealFailure(unittest.TestCase):
                     )
 
         self.assertTrue(result["stop_spawn"])
-        self.assertEqual(result["failures"], 0)
+        self.assertEqual(result["failures"], 0)  # R-7 / R-24: throttled requeue returns failures=0
+        self.assertEqual(result["state"], "requeued")
         requeue.assert_called_once()
         triage.assert_not_called()
 
@@ -223,7 +224,8 @@ class TestRunStops(unittest.TestCase):
         result, requeue, _ = self._finalize(FailureClass.THROTTLED.value)
 
         self.assertTrue(result["stop_spawn"])
-        self.assertEqual(result["failures"], 0)
+        self.assertEqual(result["failures"], 0)  # R-7 / R-24: throttled requeue returns failures=0
+        self.assertEqual(result["state"], "requeued")
         requeue.assert_called_once()
 
     def test_a_throttle_does_not_spend_a_triage_session(self):

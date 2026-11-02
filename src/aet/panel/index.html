@@ -346,6 +346,15 @@ function sumUsage(records, field) {
   }
   return { total: counted ? total : null, counted, missing: list.length - counted };
 }
+
+function isCostComplete(records, summary) {
+  if (summary && typeof summary.cost_complete === "boolean") {
+    return summary.cost_complete;
+  }
+  const stages = (records || []).filter(r => !r || !r.type || r.type === "stage");
+  if (!stages.length) return true;
+  return stages.every(s => s && typeof s.cost_estimate === "number" && isFinite(s.cost_estimate));
+}
 // USAGE-HELPERS-END
 
 function fmtPassRate(rate) {
@@ -395,13 +404,14 @@ function buildRun(r) {
   const cost = r.summary && r.summary.total_cost_usd != null
     ? r.summary.total_cost_usd
     : (stageCost.length ? stageCost.reduce((a, s) => a + s.cost_estimate, 0) : null);
+  const costComplete = isCostComplete(stages, r.summary);
   // No-summary status: poll-diff liveness (lvp-02) wins over the freshness
   // window — a dir whose mtime advanced since the previous poll is live
   // regardless of age; otherwise fall back to mtime freshness (lvp-01).
   const status = r.summary
     ? (r.summary.outcome || (r.summary.tasks_failed > 0 ? "failure" : "success"))
     : (r.bumped ? "live" : liveStatus(lastActivity));
-  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, testsObserved, tokens, cost, lastActivity, status };
+  return { ...r, stages, tests, issues, learnings, tasks, start, end, duration, testsAgg, testsObserved, tokens, cost, costComplete, lastActivity, status };
 }
 
 /* ---------------- plan model ---------------- */
@@ -683,7 +693,7 @@ function RunsTable({ runs, selectedId, onSelect }) {
             <Td className="font-medium whitespace-nowrap">{r.project}</Td>
             <Td className="whitespace-nowrap text-muted-foreground">{r.date || "—"}</Td>
             <Td className="font-mono text-xs" title={r.runId}>{shortId(r.runId)}</Td>
-            <Td>{r.summary ? `${r.summary.tasks_succeeded ?? "?"}/${r.summary.tasks_spawned ?? "?"}` : r.tasks.length || "—"}</Td>
+            <Td>{r.summary ? `${r.summary.tasks_succeeded ?? "?"}/${r.summary.tasks_spawned ?? "?"}${r.summary.tasks_requeued ? ` (${r.summary.tasks_requeued} req)` : ""}` : r.tasks.length || "—"}</Td>
             <Td>{r.stages.length || "—"}</Td>
             <Td>{r.testsAgg.total ? `${r.testsAgg.passed}/${r.testsAgg.total}` : "—"}</Td>
             <Td className="whitespace-nowrap">{fmtDuration(r.duration)}</Td>
@@ -945,7 +955,7 @@ function RunDetail({ run }) {
           </div>
         )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Stat label="Tasks" value={s ? `${s.tasks_succeeded ?? "?"} ok / ${s.tasks_failed ?? "?"} failed` : run.tasks.length} />
+          <Stat label="Tasks" value={s ? `${s.tasks_succeeded ?? "?"} ok / ${s.tasks_failed ?? "?"} failed${s.tasks_requeued != null ? ` / ${s.tasks_requeued} req` : ""}` : run.tasks.length} />
           <Stat label="Stage sessions" value={run.stages.length} />
           <Stat label="Tests (claimed)" value={run.testsAgg.total ? `${run.testsAgg.passed}/${run.testsAgg.total} passed` : "—"} testid="run-detail-tests-claimed" />
           <Stat label="Observed pass rate" value={fmtPassRate(run.testsObserved.passRate)} testid="run-detail-observed-pass-rate" />

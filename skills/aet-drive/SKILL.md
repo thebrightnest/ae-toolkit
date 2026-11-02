@@ -160,7 +160,7 @@ aet status
 ```
 
 - **If the run summary lists skipped tasks**: Go to **Skipped Tasks** before any other step.
-- **If unblocked tasks are `ready`**: Return to **Step A** (`aet run`).
+- **If unblocked tasks are `ready`**: Return to **Step A** (`aet run`). Note that a run that leaves a requeued task exits 1 (R-7, R-10).
 - **If tasks are blocked or errored**: Analyze the blocker. If it requires external human decisions or credentials, pause and report details to the user. Tasks left in `failed` or `quarantined` go to **Residual Failures**.
 - **If all epic tasks are closed**: The epic is complete! Proceed to **Epic Finalization**.
 

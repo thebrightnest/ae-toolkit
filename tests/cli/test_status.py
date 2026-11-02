@@ -160,7 +160,6 @@ class TestStatusLastRunHealth(unittest.TestCase):
             tasks_spawned=1,
             tasks_succeeded=0,
             tasks_failed=1,
-            outcome="failure",
             exit_code=1,
             task_ids=["t1"],
         )
@@ -190,7 +189,6 @@ class TestStatusLastRunHealth(unittest.TestCase):
             tasks_spawned=1,
             tasks_succeeded=1,
             tasks_failed=0,
-            outcome="success",
             exit_code=0,
             task_ids=["t1"],
         )
@@ -233,7 +231,6 @@ class TestStatusLastRunHealth(unittest.TestCase):
             tasks_spawned=1,
             tasks_succeeded=0,
             tasks_failed=1,
-            outcome="failure",
             exit_code=1,
             task_ids=["t1"],
         )
@@ -247,6 +244,32 @@ class TestStatusLastRunHealth(unittest.TestCase):
         data = json.loads(json_out)
         self.assertIsNotNone(data.get("last_run"))
         self.assertIn("syntax", data["last_run"]["summary"].lower())
+
+    def test_status_reads_summary_without_new_fields(self):
+        """Consumers accept legacy run summaries that lack tasks_requeued or cost_complete."""
+        logger = telemetry.RunLogger(self.repo_root, run_id="run-legacy-999")
+        legacy_summary = {
+            "type": "run_summary",
+            "run_id": "run-legacy-999",
+            "start_time": "2026-09-08T12:00:00Z",
+            "end_time": "2026-09-08T12:05:00Z",
+            "tasks_spawned": 1,
+            "tasks_succeeded": 1,
+            "tasks_failed": 0,
+            "outcome": "success",
+            "exit_code": 0,
+            "task_ids": ["t1"],
+        }
+        logger.write_last_run(legacy_summary)
+
+        json_out = self._status_output(json_output=True)
+        data = json.loads(json_out)
+        self.assertIsNotNone(data.get("last_run"))
+        self.assertEqual(data["last_run"]["run_id"], "run-legacy-999")
+        self.assertEqual(data["last_run"]["outcome"], "success")
+        self.assertEqual(data["last_run"]["exit_code"], 0)
+        self.assertEqual(data["last_run"]["tasks_failed"], 0)
+        self.assertEqual(data["last_run"]["tasks_succeeded"], 1)
 
 
 class TestStatusMergeTrain(unittest.TestCase):

@@ -99,3 +99,12 @@ def test_non_numeric_values_are_rejected():
         "counted": 1,
         "missing": 2,
     }
+
+
+def test_null_stage_cost_marks_run_incomplete():
+    """R-14: any null cost_estimate marks cost_complete as false."""
+    assert _evaluate('isCostComplete(recs)', [MEASURED, UNMEASURED]) is False
+    assert _evaluate('isCostComplete(recs)', [MEASURED, MEASURED]) is True
+    assert _evaluate('isCostComplete([], { cost_complete: false })', []) is False
+    assert _evaluate('isCostComplete([], { cost_complete: true })', []) is True
+

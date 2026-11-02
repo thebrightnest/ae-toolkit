@@ -1111,7 +1111,6 @@ class TestRunSummaryTelemetry(unittest.TestCase):
             tasks_spawned=2,
             tasks_succeeded=1,
             tasks_failed=1,
-            outcome="failure",
             exit_code=1,
             task_ids=["t1", "t2"],
             final_stage="implemented",
@@ -1976,6 +1975,48 @@ class TestFinalizeTaskGuards(unittest.TestCase):
             task = next((t for t in data["queue"] if t.get("id") == "demo"), None)
             self.assertIsNotNone(task)
             self.assertEqual(task["state"], "failed")
+
+    def test_run_single_no_commits_records_failure(self):
+        """R-10, R-12: run_single on an empty branch sets success=False, exit_code=1, outcome=failure."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\npipeline: full\nsecurity_review: skipped\ndocs_sync: skipped\n---\n\n# Demo\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "add plan"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            _write_queue(
+                repo_root,
+                [
+                    {
+                        "id": "demo",
+                        "title": "Demo",
+                        "plan_file": plan_file,
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                ],
+            )
+            args = _make_args(repo_root, plan_file)
+            with patch.object(orchestrator, "process_task", return_value=True):
+                with patch.object(orchestrator, "verify_branch_has_commits", return_value=(False, "no commits")):
+                    exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
+
+            self.assertEqual(exit_code, 1)
+            logger = telemetry.RunLogger(repo_root)
+            last_runs = list(logger.run_dir.parent.parent.rglob("last-run.json"))
+            self.assertTrue(last_runs)
+            summary = json.loads(last_runs[-1].read_text(encoding="utf-8"))
+            self.assertEqual(summary["tasks_spawned"], 1)
+            self.assertEqual(summary["tasks_succeeded"], 0)
+            self.assertEqual(summary["tasks_failed"], 1)
+            self.assertEqual(summary["outcome"], "failure")
+            self.assertEqual(summary["exit_code"], 1)
 
 
 class TestBatchStageEnv(unittest.TestCase):
@@ -3434,9 +3475,10 @@ class TestUsageCapture(unittest.TestCase):
             self._append_stage(logger, "t1", 100, 0.5)
             self._append_stage(logger, "t2", None, None)
             self._append_stage(logger, "t3", 85, 0.0123)
-            tokens, cost = orchestrator._usage_aggregates(logger)
+            tokens, cost, cost_complete = orchestrator._usage_aggregates(logger)  # R-14
         self.assertEqual(tokens, 185)
         self.assertAlmostEqual(cost, 0.5123)
+        self.assertFalse(cost_complete)  # R-14
 
     def test_usage_aggregates_all_null_returns_none(self):
         with tempfile.TemporaryDirectory() as repo_root:
@@ -3444,9 +3486,10 @@ class TestUsageCapture(unittest.TestCase):
             logger = telemetry.RunLogger(repo_root, run_id="r1")
             self._append_stage(logger, "t1", None, None)
             self._append_stage(logger, "t2", None, None)
-            tokens, cost = orchestrator._usage_aggregates(logger)
+            tokens, cost, cost_complete = orchestrator._usage_aggregates(logger)  # R-14
         self.assertIsNone(tokens)
         self.assertIsNone(cost)
+        self.assertFalse(cost_complete)  # R-14: null cost_estimate marks cost_complete False
 
     def test_usage_aggregates_ignore_work_history_copy(self):
         with tempfile.TemporaryDirectory() as repo_root:
@@ -3456,8 +3499,9 @@ class TestUsageCapture(unittest.TestCase):
             history = Path(repo_root, "work-history.jsonl")
             history.write_text('{"type": "stage", "token_count": 9999}\n', encoding="utf-8")
             logger.copy_work_history(history)
-            tokens, _cost = orchestrator._usage_aggregates(logger)
+            tokens, _cost, cost_complete = orchestrator._usage_aggregates(logger)  # R-14
         self.assertEqual(tokens, 100)
+        self.assertTrue(cost_complete)  # R-14: t1 has non-null cost, history copy ignored
 
     def test_stub_cli_flows_end_to_end_into_run_summary(self):
         """Plan validation: stub CLI usage lands in the stage record and summary."""
@@ -3488,7 +3532,7 @@ class TestUsageCapture(unittest.TestCase):
                 exit_code,
                 usage=usage,
             )
-            tokens, cost = orchestrator._usage_aggregates(logger)
+            tokens, cost, cost_complete = orchestrator._usage_aggregates(logger)  # R-14
             summary = telemetry.run_summary_record(
                 run_id="r1",
                 start_time="2026-07-12T00:00:00Z",
@@ -3496,6 +3540,8 @@ class TestUsageCapture(unittest.TestCase):
                 tasks_spawned=1,
                 tasks_succeeded=1,
                 tasks_failed=0,
+                exit_code=0,
+                cost_complete=cost_complete,
                 total_tokens=tokens,
                 total_cost_usd=cost,
             )
@@ -5785,6 +5831,242 @@ class TestBatchDynamicSlotReplenishment(unittest.TestCase, _BatchRepoMixin):
                 self.assertEqual(rc, 0)
                 # Parent was spawned first, merged, unblocked dependent, and dependent was spawned in same batch
                 self.assertEqual(spawned, ["parent", "dependent"])
+
+
+class TestRunSummaryEndStateAccounting(unittest.TestCase, _BatchRepoMixin):
+    """Integration tests for run summary end-state counting and exit code rules (ADR-086, R-6 to R-14)."""
+
+    def test_requeued_then_succeeded_counts_once(self):
+        """A task that is requeued twice and then succeeds counts once as succeeded with attempts_failed=2."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "alpha",
+                        "title": "alpha",
+                        "plan_file": "docs/plans/alpha.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=1)
+                args.on_failure = "triage"
+
+                attempts = 0
+
+                class _RetryProc:
+                    pid = 12345
+
+                    def __init__(self, exit_code):
+                        self._rc = exit_code
+
+                    def poll(self):
+                        return self._rc
+
+                    def wait(self, timeout=None):
+                        return self._rc
+
+                def fake_popen(*a, **kw):
+                    nonlocal attempts
+                    attempts += 1
+                    if attempts <= 2:
+                        return _RetryProc(1)
+                    return _RetryProc(0)
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn(side_effect=fake_popen):
+                        with patch.object(
+                            orchestrator,
+                            "verify_branch_has_commits",
+                            return_value=(True, ""),
+                        ):
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+
+                self.assertFalse(timed_out)
+                self.assertEqual(rc, 0)
+
+                summaries = list(Path(archive_dir).rglob("last-run.json"))
+                self.assertEqual(len(summaries), 1)
+                summary = json.loads(summaries[0].read_text(encoding="utf-8"))
+
+                self.assertEqual(summary["tasks_spawned"], 1)
+                self.assertEqual(summary["task_ids"], ["alpha"])
+                self.assertEqual(summary["tasks_succeeded"], 1)
+                self.assertEqual(summary["tasks_failed"], 0)
+                self.assertEqual(summary["tasks_requeued"], 0)
+                self.assertEqual(summary["attempts_failed"], 2)
+                self.assertEqual(summary["outcome"], "success")
+                self.assertEqual(summary["exit_code"], 0)
+
+    def test_run_of_only_requeues_exits_nonzero(self):
+        """A run where all tasks end in requeued exits non-zero (R-7, R-10)."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "alpha",
+                        "title": "alpha",
+                        "plan_file": "docs/plans/alpha.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=1)
+                args.on_failure = "triage"
+
+                fake_deltas = {
+                    "successes": 0,
+                    "failures": 0,
+                    "stop_spawn": True,
+                    "state": "requeued",
+                    "throttled": True,
+                }
+
+                class _FailProc:
+                    pid = 12345
+
+                    def poll(self):
+                        return 1
+
+                    def wait(self, timeout=None):
+                        return 1
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn(side_effect=lambda *a, **kw: _FailProc()):
+                        with patch.object(
+                            orchestrator,
+                            "_finalize_task",
+                            return_value=fake_deltas,
+                        ):
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+
+                self.assertFalse(timed_out)
+                self.assertEqual(rc, 1)
+
+                summaries = list(Path(archive_dir).rglob("last-run.json"))
+                self.assertEqual(len(summaries), 1)
+                summary = json.loads(summaries[0].read_text(encoding="utf-8"))
+
+                self.assertEqual(summary["tasks_requeued"], 1)
+                self.assertEqual(summary["tasks_succeeded"], 0)
+                self.assertEqual(summary["tasks_failed"], 0)
+                self.assertEqual(summary["outcome"], "failure")
+                self.assertEqual(summary["exit_code"], 1)
+
+    def test_staged_conflict_counts_success_and_conflict(self):
+        """Integration returning staged_conflict records tasks_succeeded=1 and conflict (R-9, R-13)."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "alpha",
+                        "title": "alpha",
+                        "plan_file": "docs/plans/alpha.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=1)
+                args.on_failure = "triage"
+
+                class _StatusObj:
+                    status = "staged_conflict"
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn():
+                        with patch.object(
+                            orchestrator,
+                            "verify_branch_has_commits",
+                            return_value=(True, ""),
+                        ):
+                            with patch.object(orchestrator, "resolve_integration_mode", return_value="single-pr"):
+                                with patch.object(orchestrator, "integrate", return_value=_StatusObj()):
+                                    rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+
+                self.assertFalse(timed_out)
+                self.assertEqual(rc, 0)
+
+                summaries = list(Path(archive_dir).rglob("last-run.json"))
+                self.assertEqual(len(summaries), 1)
+                summary = json.loads(summaries[0].read_text(encoding="utf-8"))
+
+                self.assertEqual(summary["tasks_succeeded"], 1)
+                self.assertEqual(summary["parallel_conflicts_detected"], 1)
+                self.assertEqual(summary["outcome"], "success")
+                self.assertEqual(summary["exit_code"], 0)
+
+    def test_leftover_read_after_final_cleanup(self):
+        """Leftover snapshot in summary reflects queue state after final cleanup of reaped tasks (R-11)."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "alpha",
+                        "title": "alpha",
+                        "plan_file": "docs/plans/alpha.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=1)
+                args.on_failure = "triage"
+
+                class _HangingProc:
+                    pid = 54321
+
+                    def poll(self):
+                        orchestrator._shutdown_requested = True
+                        return None
+
+                    def wait(self, timeout=None):
+                        return 0
+
+                    def terminate(self):
+                        pass
+
+                    def kill(self):
+                        pass
+
+                def fake_popen(*a, **kw):
+                    return _HangingProc()
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn(side_effect=fake_popen):
+                        with patch.object(orchestrator, "_terminate_process_group"):
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+
+                self.assertFalse(timed_out)
+                self.assertEqual(rc, 1)
+
+                summaries = list(Path(archive_dir).rglob("last-run.json"))
+                self.assertEqual(len(summaries), 1)
+                summary = json.loads(summaries[0].read_text(encoding="utf-8"))
+
+                # Reaped task was returned to ready, not left in in_progress (R-11)
+                leftover = summary.get("leftover") or {}
+                self.assertNotIn("in_progress", leftover)
+                self.assertEqual(summary["tasks_requeued"], 1)
+                self.assertTrue(summary.get("canceled"))
 
 
 if __name__ == "__main__":

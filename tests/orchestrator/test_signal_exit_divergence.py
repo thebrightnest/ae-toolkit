@@ -261,7 +261,11 @@ class TestFinalizeSignalExitAuthoritative(unittest.TestCase):
                 on_failure="triage",
             )
 
-            self.assertEqual(deltas, {"successes": 0, "failures": 1, "stop_spawn": False})
+            # R-7, R-24: _finalize_task returns state in deltas
+            self.assertEqual(deltas["successes"], 0)
+            self.assertEqual(deltas["failures"], 1)
+            self.assertFalse(deltas["stop_spawn"])
+            self.assertEqual(deltas["state"], "failed")
             queue = load_queue(queue_file)
             self.assertEqual(queue[0]["state"], "failed")
             timeout_sigs = [
@@ -323,7 +327,11 @@ class TestFinalizeSignalExitAuthoritative(unittest.TestCase):
                 on_failure="triage",
             )
 
-            self.assertEqual(deltas, {"successes": 0, "failures": 1, "stop_spawn": False})
+            # R-7, R-24: _finalize_task returns state in deltas
+            self.assertEqual(deltas["successes"], 0)
+            self.assertEqual(deltas["failures"], 1)
+            self.assertFalse(deltas["stop_spawn"])
+            self.assertEqual(deltas["state"], "failed")
             queue = load_queue(queue_file)
             self.assertEqual(queue[0]["state"], "failed")
             timeout_sigs = [
@@ -389,7 +397,12 @@ class TestFinalizeOperatorStopCanceled(unittest.TestCase):
                     canceled=True,
                 )
 
-            self.assertEqual(deltas, {"successes": 0, "failures": 0, "stop_spawn": False})
+            # R-7, R-24: _finalize_task returns state and canceled in deltas
+            self.assertEqual(deltas["successes"], 0)
+            self.assertEqual(deltas["failures"], 0)
+            self.assertFalse(deltas["stop_spawn"])
+            self.assertEqual(deltas["state"], "requeued")
+            self.assertTrue(deltas.get("canceled"))
             self.assertIn("canceled by operator stop; returned to ready", buf.getvalue())
             queue = load_queue(queue_file)
             self.assertEqual(queue[0]["state"], "ready")

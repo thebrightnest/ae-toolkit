@@ -172,6 +172,7 @@ def _latest_run_summary(repo_root: Path) -> dict | None:
     exit_code = summary.get("exit_code")
     tasks_failed = summary.get("tasks_failed", 0)
     tasks_succeeded = summary.get("tasks_succeeded", 0)
+    tasks_requeued = summary.get("tasks_requeued", 0)
     start_time = summary.get("start_time")
     end_time = summary.get("end_time")
 
@@ -180,6 +181,7 @@ def _latest_run_summary(repo_root: Path) -> dict | None:
         outcome == "failure"
         or (exit_code is not None and exit_code != 0)
         or tasks_failed > 0
+        or tasks_requeued > 0
     ):
         stage_records = []
         for jsonl_path in sorted(run_dir.glob("*.jsonl")):
@@ -218,6 +220,7 @@ def _latest_run_summary(repo_root: Path) -> dict | None:
         "end_time": end_time,
         "tasks_failed": tasks_failed,
         "tasks_succeeded": tasks_succeeded,
+        "tasks_requeued": tasks_requeued,
     }
 
 

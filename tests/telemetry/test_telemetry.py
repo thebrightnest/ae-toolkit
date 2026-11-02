@@ -241,6 +241,36 @@ class TestRunSummaryRecord(unittest.TestCase):
         self.assertEqual(record["total_tokens"], 13851)
         self.assertAlmostEqual(record["total_cost_usd"], 0.139146)
 
+    def test_run_summary_outcome_derives_from_exit_code(self):
+        """R-10: outcome is derived from exit_code, and outcome kwarg is rejected."""
+        rec_zero = self._summary(exit_code=0)
+        self.assertEqual(rec_zero["outcome"], "success")
+
+        rec_nonzero = self._summary(exit_code=1)
+        self.assertEqual(rec_nonzero["outcome"], "failure")
+
+        rec_none = self._summary(exit_code=None)
+        self.assertEqual(rec_none["outcome"], "failure")
+
+        with self.assertRaises(TypeError):
+            self._summary(outcome="success", exit_code=1)
+
+    def test_run_summary_has_end_state_fields(self):
+        """R-7, R-8, R-14: run summary holds tasks_requeued, attempts_failed, cost_complete."""
+        default_rec = self._summary()
+        self.assertEqual(default_rec["tasks_requeued"], 0)
+        self.assertEqual(default_rec["attempts_failed"], 0)
+        self.assertTrue(default_rec["cost_complete"])
+
+        custom_rec = self._summary(
+            tasks_requeued=2,
+            attempts_failed=3,
+            cost_complete=False,
+        )
+        self.assertEqual(custom_rec["tasks_requeued"], 2)
+        self.assertEqual(custom_rec["attempts_failed"], 3)
+        self.assertFalse(custom_rec["cost_complete"])
+
 
 class TestEnvironmentIssueRecord(unittest.TestCase):
     def test_environment_issue_record_contains_required_fields(self):

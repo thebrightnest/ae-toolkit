@@ -189,7 +189,8 @@ class TestFinalizeOnFailureTriage(unittest.TestCase):
                 task,
                 triage_verdict={"action": "requeue"},
             )
-            self.assertEqual(deltas["failures"], 0)
+            self.assertEqual(deltas["failures"], 0)  # R-7 / R-24: requeue returns failures=0
+            self.assertEqual(deltas["state"], "requeued")
             self.assertEqual(deltas["successes"], 0)
             self.assertFalse(deltas["stop_spawn"])
             self.assertEqual(task_after["state"], "ready")
@@ -311,7 +312,8 @@ class TestFinalizeOnFailureTriage(unittest.TestCase):
                 )
 
             self.assertEqual(len(consulted), 1)
-            self.assertEqual(deltas["failures"], 0)
+            self.assertEqual(deltas["failures"], 0)  # R-7 / R-24: requeued attempt returns failures=0
+            self.assertEqual(deltas["state"], "requeued")
             self.assertNotIn("insufficient evidence", buf.getvalue())
             self.assertEqual(consulted[0]["stage"], "qa-complete")
             self.assertEqual(
@@ -348,7 +350,8 @@ class TestFinalizeOnFailureTriage(unittest.TestCase):
                     on_failure="triage",
                 )
             consult_mock.assert_not_called()
-            self.assertEqual(deltas["failures"], 0)
+            self.assertEqual(deltas["failures"], 0)  # R-7 / R-24: requeue returns failures=0
+            self.assertEqual(deltas["state"], "requeued")
             self.assertEqual(deltas["successes"], 0)
             self.assertFalse(deltas["stop_spawn"])
             data = backend.load()

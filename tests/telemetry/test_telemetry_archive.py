@@ -84,7 +84,6 @@ class TestDirectArchive(unittest.TestCase):
             tasks_spawned=1,
             tasks_succeeded=1,
             tasks_failed=0,
-            outcome="success",
             exit_code=0,
             task_ids=["t1"],
         )
@@ -111,7 +110,6 @@ class TestDirectArchive(unittest.TestCase):
                 tasks_spawned=3,
                 tasks_succeeded=2,
                 tasks_failed=1,
-                outcome="success",
                 exit_code=0,
                 task_ids=["t1"],
             )

@@ -41,6 +41,7 @@ class FlushResult:
     error: str = ""
     behind_origin: int = 0
     refused_seals: list[tuple[str, str]] = field(default_factory=list)
+    restack_conflicts: list[str] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.ok
@@ -523,6 +524,7 @@ def flush(
                     }
 
                 current_tip = staged_commits[k - 2] if k > 1 else base_commit
+                restack_conflicts: list[str] = []
 
                 restack_wt = tempfile.mkdtemp(prefix="aet-train-restack-")
                 try:
@@ -573,6 +575,8 @@ def flush(
                                     "stderr_tail": tail,
                                     "at": telemetry.iso_now(),
                                 }
+                                if "id" in ti:
+                                    restack_conflicts.append(ti["id"])
 
                     curr_ref_res = subprocess.run(
                         ["git", "-C", str(repo_root), "rev-parse", "--verify", ref],
@@ -620,6 +624,8 @@ def flush(
                                         "stderr_tail": tail,
                                         "at": telemetry.iso_now(),
                                     }
+                                    if "id" in t_later:
+                                        restack_conflicts.append(t_later["id"])
                 finally:
                     subprocess.run(
                         ["git", "-C", str(repo_root), "worktree", "remove", "--force", restack_wt],
@@ -633,7 +639,7 @@ def flush(
                         capture_output=True,
                     )
                     _save_task_record(backend, queue)
-                    return FlushResult(ok=True, status="empty", tasks_flushed=[])
+                    return FlushResult(ok=True, status="empty", tasks_flushed=[], restack_conflicts=restack_conflicts)
 
                 chain = get_staged_commits(repo_root, base_commit, current_tip)
                 chain_order = {sha: idx for idx, sha in enumerate(chain, start=1)}
@@ -647,13 +653,15 @@ def flush(
                 update_train_ref(repo_root, branch, current_tip, old_commit=current_ref_tip)
                 _save_task_record(backend, queue)
 
-            return flush(
+            res = flush(
                 repo_root,
                 branch,
                 backend=backend,
                 config=config,
                 validate_command=validate_command,
             )
+            res.restack_conflicts = list(set(restack_conflicts + res.restack_conflicts))
+            return res
 
     # Green flush! Re-acquire lock to commit changes
     with integration_lock(str(repo_root)):

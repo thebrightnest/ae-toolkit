@@ -340,7 +340,6 @@ def run_summary_record(
     tasks_failed: int,
     parallel_conflicts_detected: int = 0,
     concurrency_cap: int = 4,
-    outcome: str | None = None,
     exit_code: int | None = None,
     task_ids: list[str] | None = None,
     final_stage: str | None = None,
@@ -349,6 +348,9 @@ def run_summary_record(
     total_cost_usd: float | None = None,
     skipped: dict[str, dict[str, str]] | None = None,
     canceled: bool = False,
+    tasks_requeued: int = 0,
+    attempts_failed: int = 0,
+    cost_complete: bool = True,
 ) -> dict[str, Any]:
     """Build a per-run summary telemetry record.
 
@@ -356,6 +358,7 @@ def run_summary_record(
     (summed over non-null values; ``None`` when no stage reported usage).
     """
     wall_clock_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
+    outcome = "success" if exit_code == 0 else "failure"
     return {
         "type": "run_summary",
         "run_id": run_id,
@@ -365,6 +368,9 @@ def run_summary_record(
         "tasks_spawned": tasks_spawned,
         "tasks_succeeded": tasks_succeeded,
         "tasks_failed": tasks_failed,
+        "tasks_requeued": tasks_requeued,
+        "attempts_failed": attempts_failed,
+        "cost_complete": cost_complete,
         "parallel_conflicts_detected": parallel_conflicts_detected,
         "concurrency_cap": concurrency_cap,
         "outcome": outcome,
@@ -835,6 +841,7 @@ def _format_report(
     total_spawned = sum(r.get("tasks_spawned", 0) for r in summaries)
     total_succeeded = sum(r.get("tasks_succeeded", 0) for r in summaries)
     total_failed = sum(r.get("tasks_failed", 0) for r in summaries)
+    total_requeued = sum(r.get("tasks_requeued", 0) for r in summaries)
 
     lines = [
         "AE Toolkit Execution Report",
@@ -844,6 +851,7 @@ def _format_report(
         f"Tasks spawned: {total_spawned}",
         f"Succeeded: {total_succeeded}",
         f"Failed: {total_failed}",
+        f"Requeued: {total_requeued}",
         f"Wall-clock time: {total_wall:.1f}s",
         f"Average isolation level: {_average_isolation_level(stages)}",
         f"Environment issues: {len(environment_issues)}",

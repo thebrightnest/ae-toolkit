@@ -51,7 +51,15 @@ Each task JSONL file contains:
   ran in order, and `stage` is its last element.
 - environment/dependency issues raised during worktree warmup
 
-`last-run.json` records the run outcome, task counts, and wall-clock time.
+`last-run.json` records the run outcome, task counts, and wall-clock time. Every
+spawned task is counted once by its end state in `tasks_succeeded`, `tasks_failed`,
+or `tasks_requeued` (`tasks_spawned = tasks_succeeded + tasks_failed + tasks_requeued`).
+The run summary's `outcome` (`"success"` or `"failure"`) derives strictly from
+`exit_code` (0 means success). A run exits non-zero if any spawned task ends not
+succeeded or if any task is skipped. The summary also records `attempts_failed`
+(failed/requeued/quarantined attempts, excluding `throttled` and `canceled`),
+`parallel_conflicts_detected` (staged conflicts and restack conflicts), and
+`cost_complete` (`false` when any stage record had a null `cost_estimate`).
 
 When a checking stage passes, the orchestrator gates on the structured verdict
 and, for a passing `aet-qa` verdict, derives an individual `test_run` record

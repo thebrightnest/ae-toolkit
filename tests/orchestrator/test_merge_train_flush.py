@@ -12,6 +12,8 @@ Covers:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -357,6 +359,68 @@ class TestMergeTrainFlush(unittest.TestCase):
         self.assertEqual(verdicts[0]["kind"], "batch")
         self.assertEqual(verdicts[0]["verdict"], "pass")
         self.assertEqual(verdicts[0]["task_ids"], ["task-1", "task-2", "task-3"])
+
+    def test_flush_merge_counts_success(self):
+        """A task merged via merge train flush counts as succeeded in summary and settlement output."""
+        Path(self.repo_root, ".agents", "aet-config.json").write_text(
+            json.dumps(
+                {
+                    "trunk_branch": "main",
+                    "integration_branch": "epic-01",
+                    "integration_mode": "single-pr",
+                    "validate_command": "true",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        plan_1 = _write_plan(self.repo_root, "task-flush-1")
+        subprocess.run(["git", "-C", self.repo_root, "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", self.repo_root, "commit", "-q", "-m", "init plan flush 1"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", self.repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+            check=True,
+        )
+        _create_integration_branch(self.repo_root, "epic-01")
+
+        queue_file = os.path.join(self.repo_root, ".agents", "aet-queue")
+        backend = orchestrator._make_backend(queue_file)
+        backend.save(
+            [
+                {"id": "task-flush-1", "state": "ready", "plan_file": plan_1},
+            ]
+        )
+
+        args = argparse.Namespace(
+            queue_file=queue_file,
+            repo_root=self.repo_root,
+            base="epic-01",
+            isolation="standard",
+            max_jobs=1,
+            task_timeout=3600,
+            heartbeat_interval=60,
+            on_failure="triage",
+            run_id="run-flush-success",
+        )
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            exit_code = orchestrator.run_batch(args, self.adapter)
+        out = buf.getvalue()
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Succeeded: 1", out)
+
+        summaries = list(self.telemetry_dir.rglob("last-run.json"))
+        self.assertTrue(summaries, "last-run.json must exist")
+        summary_data = json.loads(summaries[0].read_text(encoding="utf-8"))
+        self.assertEqual(summary_data["tasks_succeeded"], 1)
+        self.assertEqual(summary_data["tasks_failed"], 0)
+        self.assertEqual(summary_data["tasks_requeued"], 0)
+        self.assertEqual(summary_data["outcome"], "success")
 
     def test_task_b_blocked_by_staged_task_a_triggers_flush_and_starts(self):
         """Task B blocked by staged Task A triggers flush, unblocking Task B to start and complete in the same run."""
