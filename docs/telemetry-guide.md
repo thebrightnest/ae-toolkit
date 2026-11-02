@@ -43,6 +43,12 @@ Each task JSONL file contains:
   is `null`). Each stage record also carries a `session_identifier` pointing at
   the CLI's own session log — see
   [Tracing a stage record to its session log](#tracing-a-stage-record-to-its-session-log).
+  Under ADR-086, a stage record's `result` follows the evidence gate: when a stage
+  has an evidence gate and the gate fails, `result` is `failure` with the gate's
+  `failure_class` (`design` for `fail`, `environment` for `missing`/`invalid`),
+  while `exit_code` keeps the session's exit code. Telemetry labels stages by their
+  target state: `actual_stages` lists the target state of each workflow stage that
+  ran in order, and `stage` is its last element.
 - environment/dependency issues raised during worktree warmup
 
 `last-run.json` records the run outcome, task counts, and wall-clock time.

@@ -260,6 +260,7 @@ def stage_record(
     output_excerpt: str | None = None,
     session_identifier: str | None = None,
     targeted_tests: list[str] | None = None,
+    gate_failure_class: str | None = None,
 ) -> dict[str, Any]:
     """Build a per-stage telemetry record.
 
@@ -273,6 +274,10 @@ def stage_record(
 
     ``failure_class`` carries the nsr-01 taxonomy class for failed sessions and
     is ``None`` for successful sessions.
+
+    ``gate_failure_class`` carries the failure class when the session exited 0
+    but its subsequent evidence gate failed (R-1, ADR-086). When provided,
+    ``result`` is ``"failure"`` and ``failure_class`` is set to this value.
 
     ``plan_snapshot`` is a shallow copy of the plan frontmatter fields that
     influence pipeline routing, captured at emission time so analytics do not
@@ -291,6 +296,12 @@ def stage_record(
     ``docs/telemetry-guide.md``.
     """
     duration_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
+    if gate_failure_class is not None:
+        result = "failure"
+        effective_failure_class = gate_failure_class
+    else:
+        result = "success" if exit_code == 0 else "failure"
+        effective_failure_class = failure_class
     return {
         "type": "stage",
         "run_id": run_id,
@@ -299,7 +310,7 @@ def stage_record(
         "stage": stage,
         "stages": stages,
         "actual_stages": actual_stages if actual_stages is not None else [stage],
-        "failure_class": failure_class,
+        "failure_class": effective_failure_class,
         "plan_snapshot": plan_snapshot,
         "attempt": attempt,
         "agent_cli": agent_cli,
@@ -308,7 +319,7 @@ def stage_record(
         "end_time": end_time,
         "duration_seconds": duration_seconds,
         "exit_code": exit_code,
-        "result": "success" if exit_code == 0 else "failure",
+        "result": result,
         "files_modified": files_modified or [],
         "commits_created": commits_created,
         "worktree_size_bytes": worktree_size_bytes,

@@ -125,6 +125,41 @@ class TestStageRecord(unittest.TestCase):
         self.assertIsNone(record["failure_class"])
         self.assertIsNone(record["plan_snapshot"])
 
+    def test_stage_record_gate_failure_overrides_result(self):
+        # R-1: A stage record whose session exits 0 and whose gate then fails has
+        # result: failure and failure_class that matches the gate failure class.
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+            gate_failure_class="design",
+        )
+        self.assertEqual(record["result"], "failure")
+        self.assertEqual(record["failure_class"], "design")
+        self.assertEqual(record["exit_code"], 0)
+
+    def test_stage_record_without_gate_class_follows_exit_code(self):
+        # R-2: A stage record without gate failure class follows exit code.
+        record = telemetry.stage_record(
+            run_id="r1",
+            task_id="t1",
+            plan_file="docs/plans/demo.md",
+            stage="implemented",
+            agent_cli="kimi",
+            isolation_level="full",
+            start_time="2026-06-18T00:00:00Z",
+            end_time="2026-06-18T00:00:05Z",
+            exit_code=0,
+        )
+        self.assertEqual(record["result"], "success")
+        self.assertIsNone(record["failure_class"])
+
     def test_stage_record_carries_session_identifier(self):
         record = telemetry.stage_record(
             run_id="r1",

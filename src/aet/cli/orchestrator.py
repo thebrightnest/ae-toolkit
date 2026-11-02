@@ -860,6 +860,7 @@ def _emit_stage_session(
     plan_data: dict[str, Any] | None = None,
     verdict_recorded: bool = False,
     targeted_tests: list[str] | None = None,
+    gate_failure_class: str | None = None,
 ) -> None:
     """Emit one stage telemetry record for a completed agent session.
 
@@ -878,6 +879,9 @@ def _emit_stage_session(
     """
     files_modified, commits_created = _session_diff_stats(worktree_dir, base_branch)
     actual_stages = stages if stages is not None else [stage]
+    assert actual_stages[-1] == stage, (
+        f"Stage {stage!r} is not the last element of actual_stages {actual_stages!r}"
+    )
     failure_class: str | None = None
     if exit_code != 0:
         failure_class = _classify_failure(
@@ -911,6 +915,7 @@ def _emit_stage_session(
             output_excerpt=(_bounded_output_excerpt(output) if exit_code != 0 else None),
             session_identifier=session_ref,
             targeted_tests=targeted_tests,
+            gate_failure_class=gate_failure_class,
         ),
         task_id=task_id,
     )
@@ -1176,6 +1181,15 @@ def _run_verdict_recovery(
         adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
     )
     end_time = telemetry.iso_now()
+    gate_failure_class = None
+    if exit_code == 0:
+        rec_state, rec_record, rec_detail = _verdict_state(task_id, kind, repo_root)
+        if rec_state != "pass":
+            gate_failure_class = (
+                failure_lib.FailureClass.DESIGN.value
+                if rec_state == "fail"
+                else failure_lib.FailureClass.ENVIRONMENT.value
+            )
     _emit_stage_session(
         logger,
         task_id,
@@ -1193,6 +1207,7 @@ def _run_verdict_recovery(
         base_branch=base_branch,
         output=output,
         verdict_recorded=False,
+        gate_failure_class=gate_failure_class,
     )
 
 
@@ -1311,6 +1326,40 @@ def _note_branch_state(
         return
 
 
+class GateDecision:
+    """Decision returned by `_require_passing_verdict`.
+
+    Acts as a boolean in boolean contexts (truthy when `passed` is True)
+    and exposes `failure_class` when `passed` is False (R-1).
+    """
+
+    def __init__(self, passed: bool, failure_class: str | None = None) -> None:
+        self.passed = passed
+        self.failure_class = failure_class
+
+    def __bool__(self) -> bool:
+        return self.passed
+
+    def __iter__(self):
+        yield self.passed
+        yield self.failure_class
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, bool):
+            return self.passed is other
+        if isinstance(other, GateDecision):
+            return (self.passed, self.failure_class) == (other.passed, other.failure_class)
+        return False
+
+    def __repr__(self) -> str:
+        return f"GateDecision(passed={self.passed!r}, failure_class={self.failure_class!r})"
+
+
+def _target_state(workflow: Workflow, stage_name: str) -> str:
+    """Return the target state of a workflow stage (its next_stage successor)."""
+    return workflow.next_stage(stage_name) or stage_name
+
+
 def _require_passing_verdict(
     task_id: str,
     kind: str,
@@ -1326,13 +1375,15 @@ def _require_passing_verdict(
     base_branch: str = "origin/main",
     task: dict | None = None,
     backend=None,
-) -> bool:
+) -> GateDecision:
     """Fail-closed evidence gate for a checking stage.
 
-    Returns ``True`` only when a schema-valid verdict with ``verdict: "pass"``
-    exists. A malformed or failing verdict returns ``False`` so the caller takes
-    the same failure path as a non-zero session exit. On a passing ``qa``
-    verdict a derived ``test_run`` telemetry record is emitted.
+    Returns ``GateDecision(passed=True)`` only when a schema-valid verdict with
+    ``verdict: "pass"`` exists. A malformed or failing verdict returns
+    ``GateDecision(passed=False, failure_class=...)`` so the caller takes the
+    same failure path as a non-zero session exit and can pass the failure class
+    to the stage record. On a passing ``qa`` verdict a derived ``test_run``
+    telemetry record is emitted.
 
     When *adapter* and *worktree_dir* are supplied and the verdict is merely
     **missing**, one recovery session is spawned to write it before the gate
@@ -1366,17 +1417,17 @@ def _require_passing_verdict(
 
     if state != "pass":
         print(f"   ❌ Gate fail-closed: {detail} for {task_id}")
+        failure_class = (
+            failure_lib.FailureClass.DESIGN
+            if state == "fail"
+            else failure_lib.FailureClass.ENVIRONMENT
+        )
+        gate_key = f"gate:{kind}:{state}"
+        preview_parts = [gate_key, detail]
+        if record and record.get("summary"):
+            preview_parts.append(record["summary"])
+        preview = "\n".join(preview_parts)
         if task is not None:
-            failure_class = (
-                failure_lib.FailureClass.DESIGN
-                if state == "fail"
-                else failure_lib.FailureClass.ENVIRONMENT
-            )
-            gate_key = f"gate:{kind}:{state}"
-            preview_parts = [gate_key, detail]
-            if record and record.get("summary"):
-                preview_parts.append(record["summary"])
-            preview = "\n".join(preview_parts)
             _record_failure_on_task(
                 backend,
                 task,
@@ -1389,11 +1440,11 @@ def _require_passing_verdict(
             _attach_gap_analysis_to_task(
                 task, backend, task_id, repo_root, logger
             )
-        return False
+        return GateDecision(passed=False, failure_class=failure_class.value)
 
     if kind == "qa" and record is not None:
         _emit_test_run_from_verdict(logger, record, task_id, plan_file, stage)
-    return True
+    return GateDecision(passed=True, failure_class=None)
 
 
 def _run_with_live_tee(
@@ -1678,12 +1729,12 @@ def run_stage(
             _classify_failure(
                 exit_code=exit_code,
                 tail=output,
-                stage=current_stage,
+                stage=next_stage,
                 verdict_recorded=verdict_kind is not None,
                 shutdown=_shutdown_requested,
                 killed_by_timeout=exit_code < 0,
             ),
-            current_stage,
+            next_stage,
             output,
         )
         if verdict_kind == "qa":
@@ -1808,18 +1859,23 @@ def run_stage_group(
             repo_root, run_id, stages[-1].name, task_id=task_id
         )
     if exit_code != 0 and task is not None:
+        target_stage = (
+            _target_state(workflow, stages[0].name)
+            if workflow is not None
+            else stages[0].name
+        )
         _record_failure_on_task(
             backend,
             task,
             _classify_failure(
                 exit_code=exit_code,
                 tail=output,
-                stage=stages[0].name,
+                stage=target_stage,
                 verdict_recorded=False,
                 shutdown=_shutdown_requested,
                 killed_by_timeout=exit_code < 0,
             ),
-            stages[0].name,
+            target_stage,
             output,
         )
     return exit_code, usage, session_ref, output
@@ -2027,8 +2083,9 @@ def process_task(
                 for s, ok in decisions:
                     _report_gate_decision(s, plan_fm, ok)
             if runnable and len(runnable) > 1:
-                expected_final = workflow.next_stage(runnable[-1].name) or runnable[-1].name
+                expected_final = _target_state(workflow, runnable[-1].name)
                 stage_span = [s.name for s in runnable]
+                target_span = [_target_state(workflow, s.name) for s in runnable]
                 print(
                     f"   Stage group: {' → '.join(stage_span)} → {expected_final}"
                 )
@@ -2054,29 +2111,29 @@ def process_task(
                     exit_code,
                     should_record=any("aet-implement" in s.skills for s in runnable),
                 )
-                _emit_stage_session(
-                    logger,
-                    task_id,
-                    plan_file,
-                    adapter.name,
-                    task_isolation,
-                    expected_final,
-                    stage_span,
-                    worktree_dir,
-                    start_time,
-                    end_time,
-                    exit_code,
-                    usage=usage,
-                    session_ref=session_ref,
-                    base_branch=base_branch,
-                    output=output,
-                    verdict_recorded=False,
-                    plan_data=plan_fm,
-                    targeted_tests=targeted_tests,
-                )
                 agent_invoked = True
                 if exit_code != 0:
                     print(f"   ❌ Stage group failed with exit code {exit_code}")
+                    _emit_stage_session(
+                        logger,
+                        task_id,
+                        plan_file,
+                        adapter.name,
+                        task_isolation,
+                        expected_final,
+                        target_span,
+                        worktree_dir,
+                        start_time,
+                        end_time,
+                        exit_code,
+                        usage=usage,
+                        session_ref=session_ref,
+                        base_branch=base_branch,
+                        output=output,
+                        verdict_recorded=False,
+                        plan_data=plan_fm,
+                        targeted_tests=targeted_tests,
+                    )
                     _credit_proven_stages(
                         task,
                         runnable,
@@ -2092,17 +2149,38 @@ def process_task(
                 ok, msg = verify_branch_has_commits(worktree_dir)
                 if not ok:
                     print(f"   ❌ Stage group verification failed: {msg}")
+                    _emit_stage_session(
+                        logger,
+                        task_id,
+                        plan_file,
+                        adapter.name,
+                        task_isolation,
+                        expected_final,
+                        target_span,
+                        worktree_dir,
+                        start_time,
+                        end_time,
+                        exit_code,
+                        usage=usage,
+                        session_ref=session_ref,
+                        base_branch=base_branch,
+                        output=output,
+                        verdict_recorded=False,
+                        plan_data=plan_fm,
+                        targeted_tests=targeted_tests,
+                    )
                     return False
 
                 # Fail-closed evidence gates: every stage in the group span
                 # with an evidence binding must have a schema-valid passing
                 # verdict. Group advancement is determined by evidence.
+                gate_failure_class = None
                 for stage in runnable:
                     kind = stage.evidence
                     if kind is None:
                         continue
-                    target = workflow.next_stage(stage.name) or stage.name
-                    if not _require_passing_verdict(
+                    target = _target_state(workflow, stage.name)
+                    decision = _require_passing_verdict(
                         task_id,
                         kind,
                         repo_root,
@@ -2116,8 +2194,35 @@ def process_task(
                         base_branch=base_branch,
                         task=task,
                         backend=backend,
-                    ):
-                        return False
+                    )
+                    if not decision:
+                        gate_failure_class = decision.failure_class
+                        break
+
+                _emit_stage_session(
+                    logger,
+                    task_id,
+                    plan_file,
+                    adapter.name,
+                    task_isolation,
+                    expected_final,
+                    target_span,
+                    worktree_dir,
+                    start_time,
+                    end_time,
+                    exit_code,
+                    usage=usage,
+                    session_ref=session_ref,
+                    base_branch=base_branch,
+                    output=output,
+                    verdict_recorded=False,
+                    plan_data=plan_fm,
+                    targeted_tests=targeted_tests,
+                    gate_failure_class=gate_failure_class,
+                )
+
+                if gate_failure_class is not None:
+                    return False
 
                 if not _record_stage(task, expected_final, repo_root):
                     print(f"   ❌ Could not record stage {expected_final} for {task_id}")
@@ -2161,7 +2266,7 @@ def process_task(
                 current_stage = workflow.next_stage(target_stage.name) or current_stage
                 continue
 
-            next_stage_name = workflow.next_stage(target_stage.name) or current_stage
+            next_stage_name = _target_state(workflow, target_stage.name)
             skills = target_stage.skills
 
             if not skills:
@@ -2195,6 +2300,79 @@ def process_task(
                 exit_code,
                 should_record="aet-implement" in target_stage.skills,
             )
+            agent_invoked = True
+
+            if exit_code != 0:
+                print(f"   ❌ Stage failed with exit code {exit_code}")
+                _emit_stage_session(
+                    logger,
+                    task_id,
+                    plan_file,
+                    adapter.name,
+                    task_isolation,
+                    next_stage_name,
+                    None,
+                    worktree_dir,
+                    start_time,
+                    end_time,
+                    exit_code,
+                    usage=usage,
+                    session_ref=session_ref,
+                    base_branch=base_branch,
+                    output=output,
+                    verdict_recorded=kind is not None,
+                    plan_data=plan_fm,
+                    targeted_tests=targeted_tests,
+                )
+                return False
+
+            # Verify the stage produced commits before persisting the advance.
+            ok, msg = verify_branch_has_commits(worktree_dir)
+            if not ok:
+                print(f"   ❌ Stage verification failed: {msg}")
+                _emit_stage_session(
+                    logger,
+                    task_id,
+                    plan_file,
+                    adapter.name,
+                    task_isolation,
+                    next_stage_name,
+                    None,
+                    worktree_dir,
+                    start_time,
+                    end_time,
+                    exit_code,
+                    usage=usage,
+                    session_ref=session_ref,
+                    base_branch=base_branch,
+                    output=output,
+                    verdict_recorded=kind is not None,
+                    plan_data=plan_fm,
+                    targeted_tests=targeted_tests,
+                )
+                return False
+
+            # Fail-closed evidence gate for checking stages (qa/review/cso/sync-docs).
+            gate_failure_class = None
+            if kind is not None:
+                decision = _require_passing_verdict(
+                    task_id,
+                    kind,
+                    repo_root,
+                    plan_file,
+                    next_stage_name,
+                    logger,
+                    adapter=adapter,
+                    worktree_dir=worktree_dir,
+                    stall_timeout=stall_timeout,
+                    isolation=task_isolation,
+                    base_branch=base_branch,
+                    task=task,
+                    backend=backend,
+                )
+                if not decision:
+                    gate_failure_class = decision.failure_class
+
             _emit_stage_session(
                 logger,
                 task_id,
@@ -2214,35 +2392,10 @@ def process_task(
                 verdict_recorded=kind is not None,
                 plan_data=plan_fm,
                 targeted_tests=targeted_tests,
+                gate_failure_class=gate_failure_class,
             )
-            agent_invoked = True
 
-            if exit_code != 0:
-                print(f"   ❌ Stage failed with exit code {exit_code}")
-                return False
-
-            # Verify the stage produced commits before persisting the advance.
-            ok, msg = verify_branch_has_commits(worktree_dir)
-            if not ok:
-                print(f"   ❌ Stage verification failed: {msg}")
-                return False
-
-            # Fail-closed evidence gate for checking stages (qa/review/cso/sync-docs).
-            if kind is not None and not _require_passing_verdict(
-                task_id,
-                kind,
-                repo_root,
-                plan_file,
-                next_stage_name,
-                logger,
-                adapter=adapter,
-                worktree_dir=worktree_dir,
-                stall_timeout=stall_timeout,
-                isolation=task_isolation,
-                base_branch=base_branch,
-                task=task,
-                backend=backend,
-            ):
+            if gate_failure_class is not None:
                 return False
 
             # Record the advanced stage in the task record.
@@ -3125,11 +3278,34 @@ def _finalize_task(
     if is_timeout:
         if ret < 0 and entry.get("class") != failure_lib.FailureClass.TIMEOUT.value:
             # Append the authoritative timeout signature the child could not.
+            timeout_stage = task.get("stage") if task else None
+            if not timeout_stage or timeout_stage == "in_progress":
+                timeout_stage = None
+                if logger is not None:
+                    try:
+                        records = [
+                            r for r in telemetry.read_jsonl(logger.task_log_path(task_id))
+                            if r.get("type") == "stage"
+                        ]
+                        if records:
+                            timeout_stage = records[-1].get("stage")
+                    except Exception:
+                        pass
+                if not timeout_stage and repo_root:
+                    try:
+                        wf = load_workflow(repo_root)
+                        if wf and wf.stages:
+                            timeout_stage = _target_state(wf, wf.stages[0].name)
+                    except Exception:
+                        pass
+                if not timeout_stage:
+                    timeout_stage = "implemented"
+
             _record_failure_on_task(
                 backend,
                 task,
                 failure_lib.FailureClass.TIMEOUT,
-                stage=task.get("stage") or from_state,
+                stage=timeout_stage,
                 tail=f"killed by signal {-ret}",
             )
         print(f"   ⏱️  {task_id} killed by timeout; leaving failed")
@@ -4625,11 +4801,18 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                                 queue_task.setdefault("failure_signatures", []).extend(last_entry)
                                 _save_task_record(backend, queue)
                             else:
+                                fail_stage = queue_task.get("stage")
+                                if not fail_stage or fail_stage == "in_progress":
+                                    fail_stage = (
+                                        _target_state(wf, wf.stages[0].name)
+                                        if (wf and wf.stages)
+                                        else "implemented"
+                                    )
                                 _record_failure_on_task(
                                     backend,
                                     queue_task,
                                     failure_lib.FailureClass.ENVIRONMENT,
-                                    stage=queue_task.get("stage") or from_state,
+                                    stage=fail_stage,
                                     tail=f"exit {exit_code}",
                                 )
                         _mark_failed(backend, queue_file, task_id, from_state)

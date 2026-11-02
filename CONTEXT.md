@@ -212,7 +212,12 @@ Append-only log of transition entries and closure events written to the optional
 Counter maintained forward by the state writer; a task becomes `ready` only when `pending_blockers == 0`.
 
 **Stage**:
-Sub-state of `in_progress` recorded in the task record (e.g., `implement`, `qa`, `review`).
+A workflow stage is named by its entry state in the workflow sequence (e.g. `software.json`), while telemetry and failure entries label it by its target state (the state the stage produces upon completion). Sub-state of `in_progress` recorded in the task record (ADR-086).
+_Avoid_: labeling telemetry records or failure entries with entry-state names.
+
+**Stage Record**:
+A `stage` telemetry record emitted per agent session into the **Telemetry Archive**. Its `stage` is the target state of the session, `actual_stages` lists the target state of each workflow stage spanned in run order (with `stage` as its last element), and `result` follows the evidence gate (`result: "failure"` with the gate's failure class when a gate fails, even if session exit code is 0). (ADR-086)
+_Avoid_: recording a success result for a session whose gate failed; omitting `stage` from `actual_stages`.
 
 **Live Set**:
 Active tasks in the queue backend (`refs/aet/tasks/<id>` per task, `refs/aet/sealed/<id>` per sealed tombstone, and the `refs/aet/meta/queue` envelope under `git-refs`); the only set loaded for scheduling. The board is recreated as needed.

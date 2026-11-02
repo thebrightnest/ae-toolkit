@@ -111,7 +111,8 @@ def _run_gate(env, adapter=None, **kwargs):
             env["logger"],
             **call_kwargs,
         )
-    return passed, buf.getvalue()
+    # R-1, R-24: _require_passing_verdict returns GateDecision; unpack passed boolean for gate helper
+    return passed.passed, buf.getvalue()
 
 
 def _spawn_stub(calls, *, writes_verdict: bool, exit_code: int = 0):
@@ -299,6 +300,32 @@ def test_recovery_is_visible_in_telemetry(gate_env):
     stages = [r for r in records if r.get("type") == "stage"]
     assert len(stages) == 1
     assert stages[0]["stage"] == "qa-complete"
+
+
+def test_recovery_session_with_failing_verdict_records_failure(gate_env):
+    # R-3, R-24: recovery session leaving a failing verdict records result: failure
+    calls: list[dict] = []
+
+    def _spawn(adapter, cmd, worktree_dir, env, stall_timeout=None):
+        calls.append({"cmd": cmd, "env": env, "worktree": worktree_dir})
+        _write_qa_verdict(verdict="fail")
+        return 0, None, None, ""
+
+    with patch.object(
+        orchestrator,
+        "_spawn_session_with_tail",
+        _spawn,
+    ):
+        passed, out = _run_gate(gate_env, adapter=FakeAdapter())
+
+    assert passed is False
+    assert len(calls) == 1
+    records = telemetry.read_jsonl(gate_env["logger"].task_log_path(TASK))
+    stages = [r for r in records if r.get("type") == "stage"]
+    assert len(stages) == 1
+    assert stages[0]["exit_code"] == 0
+    assert stages[0]["result"] == "failure"
+    assert stages[0]["failure_class"] == "design"
 
 
 # --- Stage prompts route to builder mode (no hand-authored payloads) ---

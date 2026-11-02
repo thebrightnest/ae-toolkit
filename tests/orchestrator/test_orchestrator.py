@@ -2313,8 +2313,9 @@ class TestStageTelemetry(unittest.TestCase):
                         ]
                         self.assertEqual(len(group_records), 1)
                         self.assertEqual(group_records[0]["stage"], "qa-complete")
+                        # R-4, R-24: group session records target state span
                         self.assertEqual(
-                            group_records[0]["stages"], ["plan-approved", "implemented"]
+                            group_records[0]["stages"], ["implemented", "qa-complete"]
                         )
                         self.assertEqual(group_records[0]["isolation_level"], "standard")
 
@@ -3289,6 +3290,7 @@ class TestUsageCapture(unittest.TestCase):
         self.assertIsNone(records[0]["cost_estimate"])
 
     def test_emit_stage_session_populates_actual_stages_for_group(self):
+        # R-4, R-24: actual_stages lists target states of stages in span; stage is the last target.
         with tempfile.TemporaryDirectory() as repo_root:
             _init_git_repo(repo_root)
             logger = telemetry.RunLogger(repo_root, run_id="r1")
@@ -3298,15 +3300,16 @@ class TestUsageCapture(unittest.TestCase):
                 "docs/plans/demo.md",
                 "kimi",
                 "standard",
-                "implemented",
-                ["plan-approved", "implemented"],
+                "qa-complete",
+                ["implemented", "qa-complete"],
                 repo_root,
                 "2026-07-12T00:00:00Z",
                 "2026-07-12T00:01:00Z",
                 0,
             )
             records = telemetry.read_jsonl(logger.task_log_path("demo"))
-        self.assertEqual(records[0]["actual_stages"], ["plan-approved", "implemented"])
+        self.assertEqual(records[0]["actual_stages"], ["implemented", "qa-complete"])
+        self.assertEqual(records[0]["stage"], "qa-complete")
 
     def test_emit_stage_session_populates_actual_stages_for_single_stage(self):
         with tempfile.TemporaryDirectory() as repo_root:
@@ -4786,6 +4789,146 @@ class TestGapAnalysisRecording(unittest.TestCase):
                     )
                     self.assertIsNotNone(qa_record)
                     self.assertEqual(qa_record["targeted_tests"], [])
+
+
+class TestStageRecordFollowsGate(unittest.TestCase):
+    def test_exit_zero_with_failing_review_verdict_records_failure(self):
+        # R-1, R-24: exit 0 with failing review verdict produces result: failure, failure_class: design
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\n"
+                "id: demo\n"
+                "pipeline: full\n"
+                "security_review: skipped\n"
+                "docs_sync: skipped\n"
+                "---\n\n# Demo\n\n_Stage: qa-complete_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            with tempfile.TemporaryDirectory() as archive_dir:
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="r1")
+                        task = {
+                            "id": "demo",
+                            "title": "Demo",
+                            "plan_file": plan_file,
+                            "stage": "qa-complete",
+                        }
+                        _write_verdict(reports_dir, "review", "fail", summary="review reject")
+                        with patch.object(
+                            orchestrator, "run_stage", return_value=(0, None, None, "")
+                        ):
+                            with patch.object(
+                                orchestrator,
+                                "verify_branch_has_commits",
+                                return_value=(True, ""),
+                            ):
+                                result = orchestrator.process_task(
+                                    task,
+                                    repo_root,
+                                    _FAKE_ADAPTER,
+                                    "full",
+                                    logger=logger,
+                                )
+                        self.assertFalse(result)
+                        records = [
+                            r
+                            for r in telemetry.read_jsonl(logger.task_log_path("demo"))
+                            if r.get("type") == "stage"
+                        ]
+                        review_record = next(
+                            (r for r in records if r.get("stage") == "reviewed"), None
+                        )
+                        self.assertIsNotNone(review_record)
+                        self.assertEqual(review_record["exit_code"], 0)
+                        self.assertEqual(review_record["result"], "failure")
+                        self.assertEqual(review_record["failure_class"], "design")
+
+    def test_passing_gate_records_success(self):
+        # R-2, R-24: passing gate records success and None failure_class
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\n"
+                "id: demo\n"
+                "pipeline: full\n"
+                "security_review: skipped\n"
+                "docs_sync: skipped\n"
+                "---\n\n# Demo\n\n_Stage: qa-complete_\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-q", "-m", "add plan"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"],
+                check=True,
+            )
+            with tempfile.TemporaryDirectory() as archive_dir:
+                with tempfile.TemporaryDirectory() as reports_dir:
+                    env = _gate_env(reports_dir, archive_dir)
+                    with patch.dict(os.environ, env, clear=False):
+                        logger = telemetry.RunLogger(repo_root, run_id="r1")
+                        task = {
+                            "id": "demo",
+                            "title": "Demo",
+                            "plan_file": plan_file,
+                            "stage": "qa-complete",
+                        }
+                        _write_verdict(reports_dir, "review", "pass", summary="review clean")
+                        with patch.object(
+                            orchestrator, "run_stage", return_value=(0, None, None, "")
+                        ):
+                            with patch.object(
+                                orchestrator,
+                                "verify_branch_has_commits",
+                                return_value=(True, ""),
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "verify_stage_advancement",
+                                    return_value=(True, ""),
+                                ):
+                                    with patch.object(
+                                        orchestrator, "_record_stage", return_value=True
+                                    ):
+                                        result = orchestrator.process_task(
+                                            task,
+                                            repo_root,
+                                            _FAKE_ADAPTER,
+                                            "full",
+                                            logger=logger,
+                                        )
+                        self.assertTrue(result)
+                        records = [
+                            r
+                            for r in telemetry.read_jsonl(logger.task_log_path("demo"))
+                            if r.get("type") == "stage"
+                        ]
+                        review_record = next(
+                            (r for r in records if r.get("stage") == "reviewed"), None
+                        )
+                        self.assertIsNotNone(review_record)
+                        self.assertEqual(review_record["exit_code"], 0)
+                        self.assertEqual(review_record["result"], "success")
+                        self.assertIsNone(review_record["failure_class"])
 
 
 class TestParentManagedIntegration(unittest.TestCase):

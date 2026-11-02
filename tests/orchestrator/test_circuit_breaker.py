@@ -282,7 +282,7 @@ class TestOrchestratorBreakerWiring:
                 task=task,
                 backend=backend,
             )
-            assert passed is False
+            assert passed.passed is False  # R-1, R-24: _require_passing_verdict returns GateDecision
 
         assert len(task["failure_signatures"]) == 3
         assert breaker.should_quarantine_task(task) is True
@@ -300,6 +300,45 @@ class TestOrchestratorBreakerWiring:
         data = backend.load()
         task_after = next(t for t in data["queue"] if t["id"] == "t1")
         assert task_after["state"] == "quarantined"
+
+    def test_timeout_entry_never_records_in_progress(self, tmp_path):
+        # R-5, R-24: a task record without stage records a workflow target state, never in_progress
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+        (repo / "file.txt").write_text("init")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True)
+        subprocess.run(["git", "update-ref", "refs/remotes/origin/main", "HEAD"], cwd=repo, check=True)
+
+        queue_file = str(repo / "queue.json")
+        backend = orchestrator._make_backend(queue_file)
+        task = {
+            "id": "t1",
+            "title": "Task 1",
+            "state": "in_progress",
+            "failure_signatures": [],
+        }
+        backend.save([task])
+
+        deltas = orchestrator._finalize_task(
+            backend,
+            queue_file,
+            "t1",
+            ret=-9,
+            repo_root=str(repo),
+        )
+
+        assert deltas["failures"] == 1
+        data = backend.load()
+        task_after = next(t for t in data["queue"] if t["id"] == "t1")
+        assert len(task_after["failure_signatures"]) == 1
+        sig = task_after["failure_signatures"][0]
+        assert sig["class"] == "timeout"
+        assert sig["stage"] != "in_progress"
+        assert sig["stage"] == "implemented"
 
     def test_finalize_canceled_does_not_record(self, tmp_path):
         """A canceled task does not get a failure signature."""

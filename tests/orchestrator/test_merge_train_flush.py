@@ -662,7 +662,8 @@ class TestMergeTrainFlush(unittest.TestCase):
         hooks_dir = Path(self.repo_root) / ".agents" / "hooks"
         hooks_dir.mkdir(parents=True, exist_ok=True)
         (hooks_dir / "task-3.py").write_text(
-            "import pathlib, subprocess\n"
+            "import pathlib, subprocess, time\n"
+            "time.sleep(0.15)\n"
             "from aet import evidence, telemetry\n"
             "pathlib.Path(wt, 'fail.txt').write_text('bad')\n"
             "pathlib.Path(wt, 'task-3.txt').write_text('task 3 done')\n"
