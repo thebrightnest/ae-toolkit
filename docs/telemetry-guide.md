@@ -17,9 +17,12 @@ When `aet run` runs a task, the orchestrator writes directly to:
 ```
 
 Task logs are therefore **five levels** below the archive root, not four: the
-`{project-slug}` spans the first *two* segments. A reader that treats it as one
-directory level (`{project-slug}/{date}/{run-id}/*.jsonl`) matches nothing and
-reports an empty archive rather than an error.
+`{project-slug}` spans the first *two* segments. The `{date}` segment is the parent
+run's start date (UTC); all processes belonging to the run inherit the parent's directory
+via `AET_RUN_DIR`, so even runs that cross midnight UTC write to that single directory.
+A reader that treats `{project-slug}` as one directory level
+(`{project-slug}/{date}/{run-id}/*.jsonl`) matches nothing and reports an empty
+archive rather than an error.
 
 The `{project-slug}` is worktree-based: `<main-worktree-dir>/<worktree-label>`,
 derived from the local checkout rather than the git remote. The primary
@@ -58,8 +61,13 @@ The run summary's `outcome` (`"success"` or `"failure"`) derives strictly from
 `exit_code` (0 means success). A run exits non-zero if any spawned task ends not
 succeeded or if any task is skipped. The summary also records `attempts_failed`
 (failed/requeued/quarantined attempts, excluding `throttled` and `canceled`),
-`parallel_conflicts_detected` (staged conflicts and restack conflicts), and
-`cost_complete` (`false` when any stage record had a null `cost_estimate`).
+`parallel_conflicts_detected` (staged conflicts and restack conflicts),
+`cost_complete` (`false` when any stage record had a null `cost_estimate`), and
+`reason` (`null` when the run reaches its task loop, or a fixed key for early exits:
+`lease_refused`, `queue_integrity`, `base_hygiene`, `intake_refused`,
+`workflow_error`, `epic_mismatch`, `worktree_blocked`, `breaker_tripped`,
+`cli_unresolvable`, or `plan_missing`). Early exits before any task is spawned write
+`tasks_spawned=0` and `tasks_failed=0`.
 
 When a checking stage passes, the orchestrator gates on the structured verdict
 and, for a passing `aet-qa` verdict, derives an individual `test_run` record

@@ -12,6 +12,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 EVOLVE_BIN_DIR = Path(__file__).parents[2] / "src" / "aet" / "cli"
 
@@ -57,6 +58,27 @@ class TestDirectArchive(unittest.TestCase):
         self.assertTrue(logger.run_dir.exists())
         self.assertIn("run-001", str(logger.run_dir))
         self.assertIn("2026-06-20", str(logger.run_dir))
+
+    def test_run_logger_uses_inherited_run_dir(self):
+        """R-17: RunLogger uses AET_RUN_DIR when set and last segment equals run_id."""
+        yesterday_dir = self.archive_dir / "demo-slug" / "2026-06-19" / "run-001"
+        yesterday_dir.mkdir(parents=True, exist_ok=True)
+        with patch.dict(os.environ, {"AET_RUN_DIR": str(yesterday_dir)}):
+            logger = telemetry.RunLogger(self.project_dir, run_id="run-001")
+            self.assertEqual(logger.run_dir.resolve(), yesterday_dir.resolve())
+            self.assertEqual(logger.date, "2026-06-19")
+            logger.append_record({"type": "stage"}, task_id="t1")
+            self.assertTrue((yesterday_dir / "t1.jsonl").exists())
+
+    def test_run_logger_ignores_run_dir_of_other_run(self):
+        """R-17: RunLogger ignores AET_RUN_DIR when last segment does not match run_id."""
+        other_dir = self.archive_dir / "demo-slug" / "2026-06-19" / "other-run"
+        other_dir.mkdir(parents=True, exist_ok=True)
+        with patch.dict(os.environ, {"AET_RUN_DIR": str(other_dir)}):
+            logger = telemetry.RunLogger(self.project_dir, run_id="run-002", date="2026-06-20")
+            self.assertNotEqual(logger.run_dir.resolve(), other_dir.resolve())
+            self.assertIn("run-002", str(logger.run_dir))
+            self.assertIn("2026-06-20", str(logger.run_dir))
 
     def test_run_logger_sanitizes_paths_at_write_time(self):
         resolved = self.project_dir.resolve()

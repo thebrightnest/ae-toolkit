@@ -358,10 +358,9 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
                 encoding="utf-8",
             )
             (hooks_dir / "task-b.py").write_text(
-                "done = pathlib.Path(repo_root, '.agents', 'task-a-done')\n"
+                "cmd = ['git', '-C', wt, 'rev-parse', '--verify', 'refs/aet/train/epic-01']\n"
                 "for _ in range(100):\n"
-                "    if done.exists():\n"
-                "        time.sleep(0.3)\n"
+                "    if subprocess.run(cmd, capture_output=True).returncode == 0:\n"
                 "        break\n"
                 "    time.sleep(0.1)\n"
                 "pathlib.Path(wt, 'task-b.txt').write_text('task-b work')\n"

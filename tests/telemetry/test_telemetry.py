@@ -249,6 +249,34 @@ class TestRunSummaryRecord(unittest.TestCase):
         rec_nonzero = self._summary(exit_code=1)
         self.assertEqual(rec_nonzero["outcome"], "failure")
 
+    def test_run_summary_reason_defaults_to_none(self):
+        """R-15: reason defaults to None."""
+        record = self._summary()
+        self.assertIsNone(record["reason"])
+
+    def test_run_summary_reason_carried_when_provided(self):
+        """R-15: reason is carried as string."""
+        record = self._summary(reason=telemetry.RunExitReason.BASE_HYGIENE)
+        self.assertEqual(record["reason"], "base_hygiene")
+        record_str = self._summary(reason="lease_refused")
+        self.assertEqual(record_str["reason"], "lease_refused")
+
+    def test_run_exit_reason_keys(self):
+        """R-15: RunExitReason contains the 10 fixed keys."""
+        expected = {
+            "lease_refused",
+            "queue_integrity",
+            "base_hygiene",
+            "intake_refused",
+            "workflow_error",
+            "epic_mismatch",
+            "worktree_blocked",
+            "breaker_tripped",
+            "cli_unresolvable",
+            "plan_missing",
+        }
+        self.assertEqual({r.value for r in telemetry.RunExitReason}, expected)
+
         rec_none = self._summary(exit_code=None)
         self.assertEqual(rec_none["outcome"], "failure")
 

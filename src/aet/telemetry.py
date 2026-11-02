@@ -15,6 +15,7 @@ import shutil
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,22 @@ from aet import test_runners, user_paths
 from aet.project_id import derive_project_slug, resolve_repo_root  # noqa: F401
 
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
+
+
+class RunExitReason(str, Enum):
+    """Fixed reason keys for early orchestrator run exits (R-15, ADR-086)."""
+
+    LEASE_REFUSED = "lease_refused"
+    QUEUE_INTEGRITY = "queue_integrity"
+    BASE_HYGIENE = "base_hygiene"
+    INTAKE_REFUSED = "intake_refused"
+    WORKFLOW_ERROR = "workflow_error"
+    EPIC_MISMATCH = "epic_mismatch"
+    WORKTREE_BLOCKED = "worktree_blocked"
+    BREAKER_TRIPPED = "breaker_tripped"
+    CLI_UNRESOLVABLE = "cli_unresolvable"
+    PLAN_MISSING = "plan_missing"
+
 
 # Maximum number of raw agent-output lines included in a stage record's excerpt.
 COMPLETION_REPORT_EXCERPT_LINES = 10
@@ -194,9 +211,14 @@ class RunLogger:
     ):
         self.repo_root = resolve_repo_root(repo_root)
         self.run_id = run_id or new_run_id()
-        self.date = date or datetime.now(timezone.utc).strftime(DEFAULT_DATE_FORMAT)
         self.project_slug = derive_project_slug(self.repo_root)
-        self._run_dir = archive_dir() / self.project_slug / self.date / self.run_id
+        env_run_dir = os.environ.get("AET_RUN_DIR")
+        if env_run_dir and Path(env_run_dir).name == self.run_id:
+            self._run_dir = Path(env_run_dir)
+            self.date = date or self._run_dir.parent.name
+        else:
+            self.date = date or datetime.now(timezone.utc).strftime(DEFAULT_DATE_FORMAT)
+            self._run_dir = archive_dir() / self.project_slug / self.date / self.run_id
         self._run_dir.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -235,6 +257,30 @@ class RunLogger:
         sanitized = _sanitize(src.read_text(encoding="utf-8"), self.repo_root)
         dest.write_text(sanitized, encoding="utf-8")
         return dest
+
+
+def write_refusal_summary(
+    reason: str | RunExitReason,
+    exit_code: int = 1,
+    repo_root: str | Path | None = None,
+    run_id: str | None = None,
+) -> Path:
+    """Build a RunLogger and write a summary with nothing spawned (R-15, R-16)."""
+    if repo_root is None:
+        repo_root = resolve_repo_root(Path.cwd()) or Path.cwd()
+    logger = RunLogger(repo_root, run_id=run_id)
+    now = iso_now()
+    summary = run_summary_record(
+        run_id=logger.run_id,
+        start_time=now,
+        end_time=now,
+        tasks_spawned=0,
+        tasks_succeeded=0,
+        tasks_failed=0,
+        exit_code=exit_code,
+        reason=reason,
+    )
+    return logger.write_last_run(summary)
 
 
 def stage_record(
@@ -351,14 +397,17 @@ def run_summary_record(
     tasks_requeued: int = 0,
     attempts_failed: int = 0,
     cost_complete: bool = True,
+    reason: str | RunExitReason | None = None,
 ) -> dict[str, Any]:
     """Build a per-run summary telemetry record.
 
     ``total_tokens`` / ``total_cost_usd`` aggregate the run's stage records
     (summed over non-null values; ``None`` when no stage reported usage).
+    ``reason`` holds a fixed early exit reason key (or None when normal).
     """
     wall_clock_seconds = (_parse_iso(end_time) - _parse_iso(start_time)).total_seconds()
     outcome = "success" if exit_code == 0 else "failure"
+    reason_str = reason.value if isinstance(reason, RunExitReason) else reason
     return {
         "type": "run_summary",
         "run_id": run_id,
@@ -375,6 +424,7 @@ def run_summary_record(
         "concurrency_cap": concurrency_cap,
         "outcome": outcome,
         "exit_code": exit_code,
+        "reason": reason_str,
         "task_ids": task_ids or [],
         "final_stage": final_stage,
         "leftover": leftover or {},

@@ -183,7 +183,14 @@ if hook_file.exists():
     with open(hook_file, 'r', encoding='utf-8') as f:
         exec(f.read(), global_vars)
 else:
-    time.sleep(0.1)
+    delay = 0.05
+    if name.endswith('2'):
+        delay = 0.20
+    elif name.endswith('3'):
+        delay = 0.35
+    elif name.endswith('4'):
+        delay = 0.50
+    time.sleep(delay)
     counter_file = pathlib.Path(wt, '.stage-counter')
     counter = int(counter_file.read_text().strip()) if counter_file.exists() else 0
     counter += 1

@@ -215,6 +215,7 @@ def _latest_run_summary(repo_root: Path) -> dict | None:
         "run_id": run_id,
         "outcome": outcome,
         "exit_code": exit_code,
+        "reason": summary.get("reason"),
         "summary": error_summary,
         "start_time": start_time,
         "end_time": end_time,
@@ -375,6 +376,8 @@ def _run(
                 print(f"  - Exit code: {last_run_info['exit_code']}")
             if last_run_info.get("outcome"):
                 print(f"  - Outcome: {last_run_info['outcome']}")
+            if last_run_info.get("reason"):
+                print(f"  - Reason: {last_run_info['reason']}")
             if last_run_info.get("summary"):
                 print(f"  - Summary: {last_run_info['summary']}")
 

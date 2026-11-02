@@ -15,6 +15,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -335,6 +336,14 @@ class TestRunSingleHygiene(unittest.TestCase):
                     exit_code = orchestrator.run_single(args, _FAKE_ADAPTER)
             self.assertEqual(exit_code, 1)
             mock_process.assert_not_called()
+            # R-15, R-16: assert reason: base_hygiene and tasks_failed: 0
+            logger = telemetry.RunLogger(repo_root)
+            summaries = list(logger.run_dir.parent.parent.rglob("last-run.json"))
+            self.assertTrue(summaries)
+            summary = json.loads(summaries[-1].read_text(encoding="utf-8"))
+            self.assertEqual(summary["reason"], "base_hygiene")
+            self.assertEqual(summary["tasks_failed"], 0)
+            self.assertEqual(summary["tasks_spawned"], 0)
 
     def test_run_single_halts_in_unattended(self):
         with tempfile.TemporaryDirectory() as repo_root:
@@ -1119,6 +1128,62 @@ class TestRunSummaryTelemetry(unittest.TestCase):
         self.assertEqual(record["exit_code"], 1)
         self.assertEqual(record["task_ids"], ["t1", "t2"])
         self.assertEqual(record["final_stage"], "implemented")
+
+    def test_run_across_midnight_has_one_run_dir_and_full_totals(self):
+        """R-17, R-18: run across midnight writes one run dir and includes full totals."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                _init_git_repo(repo_root)
+                env = _archive_env(archive_dir)
+                slug = telemetry.derive_project_slug(repo_root)
+                with patch.dict(os.environ, env, clear=True):
+                    # Parent starts on day 1
+                    with patch("aet.telemetry.datetime") as mock_dt:
+                        mock_dt.now.return_value = datetime(2026, 6, 20, 23, 59, 50, tzinfo=timezone.utc)
+                        mock_dt.fromisoformat = datetime.fromisoformat
+                        mock_dt.strptime = datetime.strptime
+                        parent_logger = telemetry.RunLogger(repo_root, run_id="run-mid-1")
+
+                    self.assertIn("2026-06-20", str(parent_logger.run_dir))
+                    os.environ["AET_RUN_ID"] = "run-mid-1"
+                    os.environ["AET_RUN_DIR"] = str(parent_logger.run_dir)
+
+                    # Past midnight: clock moves to day 2
+                    with patch("aet.telemetry.datetime") as mock_dt:
+                        mock_dt.now.return_value = datetime(2026, 6, 21, 0, 1, 0, tzinfo=timezone.utc)
+                        mock_dt.fromisoformat = datetime.fromisoformat
+                        mock_dt.strptime = datetime.strptime
+                        child_logger = telemetry.RunLogger(repo_root, run_id="run-mid-1")
+
+                        # Child logger uses the inherited directory
+                        self.assertEqual(child_logger.run_dir.resolve(), parent_logger.run_dir.resolve())
+                        child_logger.append_record(
+                            telemetry.stage_record(
+                                run_id="run-mid-1",
+                                task_id="t1",
+                                plan_file="docs/plans/t1.md",
+                                stage="implemented",
+                                agent_cli="fake",
+                                isolation_level="standard",
+                                start_time="2026-06-21T00:00:01Z",
+                                end_time="2026-06-21T00:00:05Z",
+                                exit_code=0,
+                                token_count=1234,
+                                cost_estimate=0.045,
+                            ),
+                            task_id="t1",
+                        )
+
+                    # Parent computes aggregates
+                    tokens, cost, complete = orchestrator._usage_aggregates(parent_logger)
+                    self.assertEqual(tokens, 1234)
+                    self.assertAlmostEqual(cost, 0.045)
+                    self.assertTrue(complete)
+
+                    # Only one date directory exists under the project archive
+                    date_dirs = list((Path(archive_dir) / slug).iterdir())
+                    self.assertEqual(len(date_dirs), 1)
+                    self.assertEqual(date_dirs[0].name, "2026-06-20")
 
     def test_run_summary_written_on_success(self):
         with tempfile.TemporaryDirectory() as repo_root:

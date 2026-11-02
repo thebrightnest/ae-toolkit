@@ -40,6 +40,78 @@ class TestLeaseOwnership(unittest.TestCase):
         # Ownership is unchanged: the incumbent can still write.
         self.assertEqual(queue_lib.read_lease(self.queue_file)["run_id"], "run-A")
 
+    def test_lease_refusal_writes_summary_with_reason(self):
+        """R-16: a lease refusal writes last-run.json with reason: lease_refused and tasks_failed: 0."""
+        import json
+        import subprocess
+        from unittest.mock import MagicMock, patch
+
+        from aet import telemetry
+        from aet.backends.git_refs_backend import GitRefsBackend
+        from aet.cli import orchestrator
+
+        repo_dir = Path(self._tmp.name) / "lease_refusal_repo"
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "init", "-q", str(repo_dir)], check=True)
+        subprocess.run(["git", "-C", str(repo_dir), "config", "user.email", "t@example.com"], check=True)
+        subprocess.run(["git", "-C", str(repo_dir), "config", "user.name", "T"], check=True)
+        (repo_dir / "README.md").write_text("hello", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo_dir), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repo_dir), "commit", "-q", "-m", "init"], check=True)
+        subprocess.run(["git", "-C", str(repo_dir), "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+        q_file = str(repo_dir / ".agents" / "aet-queue")
+        h_file = str(repo_dir / ".agents" / "work-history.jsonl")
+        backend = GitRefsBackend(queue_file=q_file, history_file=h_file, repo_root=str(repo_dir))
+        backend.save([{"id": "t1", "state": "ready", "title": "t1"}])
+
+        archive_dir = Path(self._tmp.name) / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        env = {
+            "AET_TELEMETRY_ARCHIVE_DIR": str(archive_dir),
+            "AET_PROJECT_ID": "test-repo/main",
+        }
+        with patch.dict(os.environ, env):
+            # A live run holds the lease and wrote its last-run.json
+            queue_lib.acquire_lease(q_file, "run-live")
+            live_logger = telemetry.RunLogger(repo_dir, run_id="run-live")
+            live_summary_record = telemetry.run_summary_record(
+                run_id="run-live",
+                start_time="2026-06-20T00:00:00Z",
+                end_time="2026-06-20T00:05:00Z",
+                tasks_spawned=1,
+                tasks_succeeded=1,
+                tasks_failed=0,
+                exit_code=0,
+            )
+            live_logger.write_last_run(live_summary_record)
+            live_last_run_bytes = (live_logger.run_dir / "last-run.json").read_bytes()
+
+            # A second run attempts to acquire lease via run_batch
+            args = MagicMock()
+            args.queue_file = q_file
+            args.repo_root = str(repo_dir)
+            args.run_id = "run-refused"
+            args.max_jobs = 1
+            args.force = False
+            fake_adapter = MagicMock()
+            fake_adapter.bin = "fake"
+
+            rc = orchestrator.run_batch(args, fake_adapter)
+            self.assertEqual(rc, 1)
+
+            # Refused run's summary
+            refused_logger = telemetry.RunLogger(repo_dir, run_id="run-refused")
+            refused_last_run = json.loads((refused_logger.run_dir / "last-run.json").read_text(encoding="utf-8"))
+            self.assertEqual(refused_last_run["reason"], "lease_refused")
+            self.assertEqual(refused_last_run["tasks_spawned"], 0)
+            self.assertEqual(refused_last_run["tasks_failed"], 0)
+            self.assertEqual(refused_last_run["outcome"], "failure")
+            self.assertEqual(refused_last_run["exit_code"], 1)
+
+            # Live run's last-run.json is unchanged
+            self.assertEqual((live_logger.run_dir / "last-run.json").read_bytes(), live_last_run_bytes)
+
     def test_incumbent_can_still_write_after_a_refused_acquisition(self):
         queue_lib.acquire_lease(self.queue_file, "run-A")
         with self.assertRaises(queue_lib.LeaseHeldError):

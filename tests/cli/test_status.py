@@ -178,6 +178,32 @@ class TestStatusLastRunHealth(unittest.TestCase):
         self.assertEqual(data["last_run"]["outcome"], "failure")
         self.assertEqual(data["last_run"]["exit_code"], 1)
 
+    def test_status_shows_last_run_reason(self):
+        """R-15, R-23: aet status shows the last run reason in human and json output."""
+        logger = telemetry.RunLogger(self.repo_root, run_id="run-refused-789")
+        start = "2026-09-08T12:00:00Z"
+        end = "2026-09-08T12:00:01Z"
+        summary = telemetry.run_summary_record(
+            run_id="run-refused-789",
+            start_time=start,
+            end_time=end,
+            tasks_spawned=0,
+            tasks_succeeded=0,
+            tasks_failed=0,
+            exit_code=1,
+            reason="lease_refused",
+        )
+        logger.write_last_run(summary)
+
+        output = self._status_output()
+        self.assertIn("Previous run failed", output)
+        self.assertIn("Reason: lease_refused", output)
+
+        json_out = self._status_output(json_output=True)
+        data = json.loads(json_out)
+        self.assertIsNotNone(data.get("last_run"))
+        self.assertEqual(data["last_run"]["reason"], "lease_refused")
+
     def test_status_previous_run_success_not_reported_as_failure(self):
         logger = telemetry.RunLogger(self.repo_root, run_id="run-success-456")
         start = "2026-09-08T12:00:00Z"

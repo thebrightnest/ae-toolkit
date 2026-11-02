@@ -1178,6 +1178,7 @@ def _run_verdict_recovery(
     env["AET_TASK_ID"] = task_id
     if logger.run_id is not None:
         env["AET_RUN_ID"] = logger.run_id
+        env["AET_RUN_DIR"] = str(logger.run_dir)
     env["AET_EVIDENCE_PATH"] = str(
         evidence.evidence_path(
             task_id=task_id,
@@ -1677,6 +1678,7 @@ def run_stage(
     task: dict | None = None,
     backend=None,
     stall_timeout: float | None = None,
+    logger: telemetry.RunLogger | None = None,
 ) -> tuple[int, dict | None, str | None, str]:
     """Spawn a single stage session, returning ``(exit_code, usage, session_ref, output)``.
 
@@ -1693,6 +1695,10 @@ def run_stage(
     )
     cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
 
+    session_logger = logger or (
+        telemetry.RunLogger(repo_root, run_id=run_id) if run_id is not None else None
+    )
+
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
@@ -1704,6 +1710,8 @@ def run_stage(
         env["AET_TASK_ID"] = task_id
     if run_id is not None:
         env["AET_RUN_ID"] = run_id
+        if session_logger is not None:
+            env["AET_RUN_DIR"] = str(session_logger.run_dir)
     if task_id is not None and verdict_kind is not None:
         env["AET_EVIDENCE_PATH"] = str(
             evidence.evidence_path(
@@ -1716,8 +1724,7 @@ def run_stage(
         env["AET_TARGETED_TESTS_PATH"] = str(_targeted_tests_path(repo_root, run_id))
 
     watched_paths: list[str] = []
-    if run_id is not None and task_id is not None:
-        session_logger = telemetry.RunLogger(repo_root, run_id=run_id)
+    if session_logger is not None and task_id is not None:
         watched_paths.append(str(session_logger.task_log_path(task_id)))
 
     print(f"   Invoking: {' '.join(cmd)}")
@@ -1806,6 +1813,7 @@ def run_stage_group(
     task: dict | None = None,
     backend=None,
     stall_timeout: float | None = None,
+    logger: telemetry.RunLogger | None = None,
 ) -> tuple[int, dict | None, str | None, str]:
     """Spawn one session that runs every stage in the group sequentially.
 
@@ -1824,6 +1832,10 @@ def run_stage_group(
     )
     cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
 
+    session_logger = logger or (
+        telemetry.RunLogger(repo_root, run_id=run_id) if run_id is not None else None
+    )
+
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
@@ -1835,6 +1847,8 @@ def run_stage_group(
         env["AET_TASK_ID"] = task_id
     if run_id is not None:
         env["AET_RUN_ID"] = run_id
+        if session_logger is not None:
+            env["AET_RUN_DIR"] = str(session_logger.run_dir)
     if task_id is not None:
         # Publish the canonical verdict path per evidence-bound stage so
         # writers and the gate share one derivation in group sessions too
@@ -1854,8 +1868,7 @@ def run_stage_group(
         env["AET_TARGETED_TESTS_PATH"] = str(_targeted_tests_path(repo_root, run_id))
 
     watched_paths: list[str] = []
-    if run_id is not None and task_id is not None:
-        session_logger = telemetry.RunLogger(repo_root, run_id=run_id)
+    if session_logger is not None and task_id is not None:
         watched_paths.append(str(session_logger.task_log_path(task_id)))
 
     print(f"   Invoking group: {' '.join(cmd)}")
@@ -2118,6 +2131,7 @@ def process_task(
                     task=task,
                     backend=backend,
                     stall_timeout=stall_timeout,
+                    logger=logger,
                 )
                 end_time = telemetry.iso_now()
                 targeted_tests = _stage_targeted_tests(
@@ -2307,6 +2321,7 @@ def process_task(
                 task=task,
                 backend=backend,
                 stall_timeout=stall_timeout,
+                logger=logger,
             )
             end_time = telemetry.iso_now()
             targeted_tests = _stage_targeted_tests(
@@ -3554,6 +3569,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
 
     logger = telemetry.RunLogger(repo_root, run_id=getattr(args, "run_id", None))
     _write_telemetry_path(repo_root, logger.run_id, logger.run_dir)
+    os.environ["AET_RUN_ID"] = logger.run_id
+    os.environ["AET_RUN_DIR"] = str(logger.run_dir)
     start_time = telemetry.iso_now()
     task_ids: dict[str, None] = {}
     end_state: dict[str, str] = {}
@@ -3568,6 +3585,21 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
         # repaired explicitly (audit / heal --apply), not crashed into with a
         # traceback mid-batch (ADR-024).
         print(f"⛔ {exc}", file=sys.stderr)
+        end_time = telemetry.iso_now()
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=0,
+                exit_code=1,
+                reason=telemetry.RunExitReason.QUEUE_INTEGRITY,
+                task_ids=[],
+                final_stage=None,
+            )
+        )
         return 1
     if not queue:
         print("✅ Queue is empty.")
@@ -3603,6 +3635,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 tasks_succeeded=0,
                 tasks_failed=0,
                 exit_code=1,
+                reason=telemetry.RunExitReason.BREAKER_TRIPPED,
                 task_ids=[],
                 final_stage=None,
             )
@@ -3642,6 +3675,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 tasks_succeeded=0,
                 tasks_failed=0,
                 exit_code=1,
+                reason=telemetry.RunExitReason.WORKFLOW_ERROR,
                 task_ids=[],
                 final_stage=None,
             )
@@ -3683,6 +3717,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
                 tasks_succeeded=0,
                 tasks_failed=0,
                 exit_code=1,
+                reason=telemetry.RunExitReason.BASE_HYGIENE,
                 task_ids=[],
                 final_stage=None,
             )
@@ -4083,6 +4118,7 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             env["AET_PLAN_FILE"] = task.get("plan_file", "")
             env["AET_WORKTREE"] = worktree_dir
             env["AET_RUN_ID"] = logger.run_id
+            env["AET_RUN_DIR"] = str(logger.run_dir)
             env["AET_REPO_ROOT"] = repo_root
             env["AET_STAGE"] = task.get("stage") or ""
             env["AET_INTEGRATION_MODE"] = integration_mode
@@ -4148,6 +4184,21 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             "   Another run owns this queue; starting now would leave that run "
             "unable to record its work. Wait for it to finish. If that run is "
             "dead, its lease is reclaimed automatically on the next attempt."
+        )
+        end_time = telemetry.iso_now()
+        logger.write_last_run(
+            telemetry.run_summary_record(
+                run_id=logger.run_id,
+                start_time=start_time,
+                end_time=end_time,
+                tasks_spawned=0,
+                tasks_succeeded=0,
+                tasks_failed=0,
+                exit_code=1,
+                reason=telemetry.RunExitReason.LEASE_REFUSED,
+                task_ids=[],
+                final_stage=None,
+            )
         )
         return 1
 
@@ -4433,6 +4484,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # Ensure every subprocess (aet-state calls and stage sessions) inherits this
     # run id so their queue mutations pass the lease check.
     os.environ["AET_RUN_ID"] = logger.run_id
+    os.environ["AET_RUN_DIR"] = str(logger.run_dir)
     queue_file = os.path.join(repo_root, ".agents", "aet-queue")
     start_time = telemetry.iso_now()
 
@@ -4475,6 +4527,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 tasks_succeeded=0,
                 tasks_failed=0,
                 exit_code=1,
+                reason=telemetry.RunExitReason.INTAKE_REFUSED,
                 task_ids=[],
                 final_stage=None,
             )
@@ -4531,6 +4584,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 tasks_succeeded=0,
                 tasks_failed=0,
                 exit_code=1,
+                reason=telemetry.RunExitReason.BASE_HYGIENE,
                 task_ids=[],
                 final_stage=None,
             )
@@ -4562,6 +4616,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 tasks_succeeded=0,
                 tasks_failed=0,
                 exit_code=1,
+                reason=telemetry.RunExitReason.WORKFLOW_ERROR,
                 task_ids=[],
                 final_stage=None,
             )
@@ -4586,6 +4641,21 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                 "   Another run owns this queue; starting now would leave that "
                 "run unable to record its work. Wait for it to finish. If that "
                 "run is dead, its lease is reclaimed automatically."
+            )
+            end_time = telemetry.iso_now()
+            logger.write_last_run(
+                telemetry.run_summary_record(
+                    run_id=logger.run_id,
+                    start_time=start_time,
+                    end_time=end_time,
+                    tasks_spawned=0,
+                    tasks_succeeded=0,
+                    tasks_failed=0,
+                    exit_code=1,
+                    reason=telemetry.RunExitReason.LEASE_REFUSED,
+                    task_ids=[],
+                    final_stage=None,
+                )
             )
             return 1
         owns_lease = True
@@ -4631,6 +4701,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                         tasks_succeeded=0,
                         tasks_failed=0,
                         exit_code=1,
+                        reason=telemetry.RunExitReason.EPIC_MISMATCH,
                         task_ids=[],
                         final_stage=None,
                     )
@@ -4659,6 +4730,7 @@ def run_single(args: argparse.Namespace, adapter) -> int:
                         tasks_succeeded=0,
                         tasks_failed=0,
                         exit_code=4,
+                        reason=telemetry.RunExitReason.WORKTREE_BLOCKED,
                         task_ids=[],
                         final_stage=None,
                     )

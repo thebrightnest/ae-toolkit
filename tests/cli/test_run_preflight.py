@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -10,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import typer
 
-from aet import breaker
+from aet import breaker, telemetry
 from aet.backends.git_refs_backend import GitRefsBackend
 from aet.queue import QueueIntegrityError
 from tests.cli._helpers import run_typer
@@ -184,6 +186,111 @@ class TestSynchronousPreflightPlanValidation:
 
         assert result.exit_code == 1, result.output
         spawn.assert_not_called()
+
+
+def _setup_epic_mismatch(repo_env: Path) -> None:
+    config_file = repo_env / ".agents" / "aet-config.json"
+    config_file.write_text('{"integration_mode": "single-pr", "integration_branch": "epic-02"}', encoding="utf-8")
+    plans_dir = repo_env / "docs" / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    plan = plans_dir / "test-task.md"
+    plan.write_text(
+        "---\nid: test-task\nsize: S\n---\n\n# Test Task\n\n## Task List\n\n1. Do work\n",
+        encoding="utf-8",
+    )
+    backend = GitRefsBackend(
+        queue_file=str(repo_env / ".agents" / "aet-queue"),
+        history_file=str(repo_env / ".agents" / "work-history.jsonl"),
+        repo_root=str(repo_env),
+    )
+    task = {
+        "id": "test-task",
+        "plan_file": str(plan),
+        "state": "ready",
+        "integration_branch": "epic-01",
+    }
+    backend.save([task])
+
+
+def _setup_invalid_plan(repo_env: Path) -> None:
+    plans_dir = repo_env / "docs" / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    plan = plans_dir / "invalid-plan.md"
+    plan.write_text("not a markdown with frontmatter", encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("case", "args", "setup_fn", "expected_reason"),
+    [
+        (
+            "breaker_tripped",
+            ["run"],
+            lambda repo_env: breaker.BreakerStore(repo_env).save(
+                {"sig-fail-timeout": {"task-1", "task-2", "task-3"}}
+            ),
+            "breaker_tripped",
+        ),
+        (
+            "cli_unresolvable",
+            ["run", "--cli-bin", "nonexistent-agent-binary-xyz"],
+            lambda repo_env: None,
+            "cli_unresolvable",
+        ),
+        (
+            "queue_integrity",
+            ["run"],
+            lambda repo_env: None,
+            "queue_integrity",
+        ),
+        (
+            "epic_mismatch",
+            ["run-one", "test-task"],
+            lambda repo_env: _setup_epic_mismatch(repo_env),
+            "epic_mismatch",
+        ),
+        (
+            "plan_missing",
+            ["run-one", "missing-plan-id"],
+            lambda repo_env: None,
+            "plan_missing",
+        ),
+        (
+            "intake_refused",
+            ["run-one", "invalid-plan"],
+            lambda repo_env: _setup_invalid_plan(repo_env),
+            "intake_refused",
+        ),
+    ],
+)
+def test_preflight_refusal_writes_summary_with_reason(
+    repo_env: Path, case: str, args: list[str], setup_fn, expected_reason: str
+) -> None:
+    """R-15, R-16: preflight refusals write last-run.json with reason and tasks_failed=0."""
+    setup_fn(repo_env)
+    slug = telemetry.derive_project_slug(repo_env)
+    archive = telemetry.archive_dir() / slug
+
+    load_patch = (
+        patch("aet.backends.git_refs_backend.GitRefsBackend.load", side_effect=QueueIntegrityError("Corrupted queue"))
+        if case == "queue_integrity"
+        else contextlib.nullcontext()
+    )
+
+    with load_patch:
+        with patch.object(aet, "_spawn_detached") as spawn:
+            result = run_typer(aet.app, args, cwd=str(repo_env))
+
+    assert result.exit_code == 1, result.output
+    spawn.assert_not_called()
+
+    summaries = list(archive.rglob("last-run.json"))
+    assert len(summaries) >= 1
+    summary = json.loads(summaries[-1].read_text(encoding="utf-8"))
+    assert summary["reason"] == expected_reason
+    assert summary["tasks_spawned"] == 0
+    assert summary["tasks_failed"] == 0
+    assert summary["outcome"] == "failure"
+    assert summary["exit_code"] == 1
 
 
 class TestSpawnDetachedHandshake:

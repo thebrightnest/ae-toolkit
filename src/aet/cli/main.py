@@ -592,6 +592,7 @@ def _validate_preflight(
     if breaker.systemic_tripped(systemic_tally):
         report = breaker.systemic_report(systemic_tally)
         typer.echo(f"⛔ {report}", err=True)
+        telemetry.write_refusal_summary(telemetry.RunExitReason.BREAKER_TRIPPED, 1, repo_root=repo_root)
         raise typer.Exit(1)
 
     # 2. Agent CLI binary resolution
@@ -606,9 +607,11 @@ def _validate_preflight(
                 f"⛔ Agent CLI binary '{target_bin}' not found on PATH or executable.",
                 err=True,
             )
+            telemetry.write_refusal_summary(telemetry.RunExitReason.CLI_UNRESOLVABLE, 1, repo_root=repo_root)
             raise typer.Exit(1)
     except (RuntimeError, ValueError) as exc:
         typer.echo(f"⛔ {exc}", err=True)
+        telemetry.write_refusal_summary(telemetry.RunExitReason.CLI_UNRESOLVABLE, 1, repo_root=repo_root)
         raise typer.Exit(1)
 
     # 3. Work queue check (batch mode)
@@ -631,9 +634,11 @@ def _validate_preflight(
             LedgerCorruptionError,
         ) as exc:
             typer.echo(f"⛔ {exc}", err=True)
+            telemetry.write_refusal_summary(telemetry.RunExitReason.QUEUE_INTEGRITY, 1, repo_root=repo_root)
             raise typer.Exit(1)
         except Exception as exc:
             typer.echo(f"⛔ Work queue validation failed: {exc}", err=True)
+            telemetry.write_refusal_summary(telemetry.RunExitReason.QUEUE_INTEGRITY, 1, repo_root=repo_root)
             raise typer.Exit(1)
 
     # 4. Target plan file check (run-one)
@@ -641,6 +646,7 @@ def _validate_preflight(
         plan_path = Path(plan_file)
         if not plan_path.is_file():
             typer.echo(f"⛔ Plan file not found: {plan_file}", err=True)
+            telemetry.write_refusal_summary(telemetry.RunExitReason.PLAN_MISSING, 1, repo_root=repo_root)
             raise typer.Exit(1)
         spec = extract_plan_spec(plan_path)
         if (
@@ -652,6 +658,7 @@ def _validate_preflight(
                 f"⛔ Invalid plan spec in {plan_file}: missing title or frontmatter id",
                 err=True,
             )
+            telemetry.write_refusal_summary(telemetry.RunExitReason.INTAKE_REFUSED, 1, repo_root=repo_root)
             raise typer.Exit(1)
 
         # 5. Stamped epic mismatch check (run-one)
@@ -685,6 +692,7 @@ def _validate_preflight(
                             format_epic_mismatch_error(task.get("id", task_id), stamped, resolved),
                             err=True,
                         )
+                        telemetry.write_refusal_summary(telemetry.RunExitReason.EPIC_MISMATCH, 1, repo_root=repo_root)
                         raise typer.Exit(1)
         except typer.Exit:
             raise
@@ -693,15 +701,29 @@ def _validate_preflight(
 
 
 
-def _spawn_detached(argv: list[str], run_id: str) -> int:
+def _spawn_detached(
+    argv: list[str], run_id: str, run_dir: Path | str | None = None
+) -> int:
     """Spawn the orchestrator detached and print the run ID."""
     rdir = _run_dir(run_id)
     rdir.mkdir(parents=True, exist_ok=True)
     log_file = _run_log_file(run_id)
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
+    if run_dir is None:
+        if os.environ.get("AET_RUN_DIR"):
+            run_dir = os.environ["AET_RUN_DIR"]
+        else:
+            try:
+                repo_root = resolve_repo_root(Path.cwd()) or Path.cwd()
+                run_dir = telemetry.RunLogger(repo_root, run_id=run_id).run_dir
+            except Exception:
+                run_dir = None
+
     env = os.environ.copy()
     env["AET_RUN_ID"] = run_id
+    if run_dir is not None:
+        env["AET_RUN_DIR"] = str(run_dir)
 
     with open(log_file, "a", buffering=1, encoding="utf-8") as log:
         proc = subprocess.Popen(
@@ -919,6 +941,7 @@ def run_one(
         resolved = resolve_plan_arg(plan_file)
     except ValueError as exc:
         typer.echo(f"⛔ {exc}", err=True)
+        telemetry.write_refusal_summary(telemetry.RunExitReason.PLAN_MISSING, 1)
         raise typer.Exit(1) from exc
 
     _validate_preflight(
