@@ -331,11 +331,39 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
             )
             _create_integration_branch(repo_root, "epic-01")
 
-            # Configure hook for task-b: sleep 0.4s to let task-a integrate while task-b is in flight
+            # Configure hook for task-b: wait for task-a to commit and integrate
             hooks_dir = Path(repo_root, ".agents", "hooks")
             hooks_dir.mkdir(parents=True, exist_ok=True)
+            (hooks_dir / "task-a.py").write_text(
+                "pathlib.Path(wt, 'task-a.txt').write_text('task-a work')\n"
+                "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
+                "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-a work'], check=True)\n"
+                "from aet import evidence, telemetry\n"
+                "project_slug = telemetry.derive_project_slug(repo_root)\n"
+                "record = {\n"
+                "    'task_id': name,\n"
+                "    'stage': 'qa-complete',\n"
+                "    'skill': 'aet-qa',\n"
+                "    'verdict': 'pass',\n"
+                "    'summary': 'task-a qa passed',\n"
+                "    'generated_at': telemetry.iso_now(),\n"
+                "    'tree_hash': '',\n"
+                "    'test_command': 'make validate',\n"
+                "    'tests_total': 1,\n"
+                "    'tests_passed': 1,\n"
+                "    'tests_failed': 0,\n"
+                "}\n"
+                "evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)\n"
+                "pathlib.Path(repo_root, '.agents', 'task-a-done').write_text('done')\n",
+                encoding="utf-8",
+            )
             (hooks_dir / "task-b.py").write_text(
-                "time.sleep(0.4)\n"
+                "done = pathlib.Path(repo_root, '.agents', 'task-a-done')\n"
+                "for _ in range(100):\n"
+                "    if done.exists():\n"
+                "        time.sleep(0.3)\n"
+                "        break\n"
+                "    time.sleep(0.1)\n"
                 "pathlib.Path(wt, 'task-b.txt').write_text('task-b work')\n"
                 "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
                 "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-b work'], check=True)\n"
@@ -731,13 +759,19 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
                     "    'tests_passed': 1,\n"
                     "    'tests_failed': 0,\n"
                     "}\n"
-                    "evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)\n",
+                    "evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)\n"
+                    "pathlib.Path(repo_root, '.agents', 'task-c1-done').write_text('done')\n",
                     encoding="utf-8",
                 )
 
-                # task-c2 edits conflict.txt with conflicting content, sleeps 0.4s so task-c1 merges first
+                # task-c2 edits conflict.txt with conflicting content, waits so task-c1 merges first
                 (hooks_dir / "task-c2.py").write_text(
-                    "time.sleep(0.4)\n"
+                    "done = pathlib.Path(repo_root, '.agents', 'task-c1-done')\n"
+                    "for _ in range(100):\n"
+                    "    if done.exists():\n"
+                    "        time.sleep(0.3)\n"
+                    "        break\n"
+                    "    time.sleep(0.1)\n"
                     "pathlib.Path(wt, 'conflict.txt').write_text('Line from task-c2 DIFFERENT\\n')\n"
                     "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
                     "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-c2'], check=True)\n"
@@ -756,13 +790,19 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
                     "    'tests_passed': 1,\n"
                     "    'tests_failed': 0,\n"
                     "}\n"
-                    "evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)\n",
+                    "evidence.write_verdict(name, 'qa', record, project_slug=project_slug, worktree_dir=wt)\n"
+                    "pathlib.Path(repo_root, '.agents', 'task-c2-done').write_text('done')\n",
                     encoding="utf-8",
                 )
 
                 # task-ind touches independent.txt, finishes after task-c2 attempts rebase
                 (hooks_dir / "task-ind.py").write_text(
-                    "time.sleep(0.7)\n"
+                    "done = pathlib.Path(repo_root, '.agents', 'task-c2-done')\n"
+                    "for _ in range(100):\n"
+                    "    if done.exists():\n"
+                    "        time.sleep(0.3)\n"
+                    "        break\n"
+                    "    time.sleep(0.1)\n"
                     "pathlib.Path(wt, 'independent.txt').write_text('Independent work\\n')\n"
                     "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
                     "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-ind'], check=True)\n"
