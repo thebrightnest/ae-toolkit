@@ -6134,5 +6134,103 @@ class TestRunSummaryEndStateAccounting(unittest.TestCase, _BatchRepoMixin):
                 self.assertTrue(summary.get("canceled"))
 
 
+class TestEnvironmentPropagation(unittest.TestCase, _BatchRepoMixin):
+    """Assert child process receives AET_CLI_BIN and AET_REPO_ROOT (R-1)."""
+
+    def test_run_batch_propagates_aet_cli_bin_and_repo_root_to_child(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            with tempfile.TemporaryDirectory() as archive_dir:
+                tasks = [
+                    {
+                        "id": "t1",
+                        "title": "t1",
+                        "plan_file": "docs/plans/t1.md",
+                        "blocked_by": [],
+                        "state": "ready",
+                    }
+                ]
+                queue_file = self._init_batch_repo(repo_root, tasks)
+                args = self._make_args(repo_root, queue_file, max_jobs=1)
+
+                captured_envs = []
+
+                def fake_popen(*a, **kw):
+                    if kw.get("start_new_session"):
+                        captured_envs.append(kw.get("env", {}))
+                    return _InstantProc()
+
+                env = {
+                    "AET_TELEMETRY_ARCHIVE_DIR": archive_dir,
+                    "AET_PROJECT_ID": "demo/project",
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with self._patch_child_spawn(side_effect=fake_popen):
+                        with patch.object(
+                            orchestrator,
+                            "verify_branch_has_commits",
+                            return_value=(True, ""),
+                        ):
+                            rc, out, timed_out = self._run_batch(args, _FAKE_ADAPTER)
+
+                self.assertFalse(timed_out)
+                self.assertTrue(len(captured_envs) > 0)
+                child_env = captured_envs[0]
+                self.assertEqual(child_env.get("AET_CLI_BIN"), _FAKE_ADAPTER.bin)
+                self.assertEqual(child_env.get("AET_REPO_ROOT"), repo_root)
+
+    def test_run_stage_propagates_aet_cli_bin_and_repo_root(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            captured_env = {}
+
+            def fake_live_tee(cmd, cwd, env, **kw):
+                captured_env.update(env)
+                return 0, ""
+
+            with patch.object(orchestrator, "_run_with_live_tee", side_effect=fake_live_tee):
+                orchestrator.run_stage(
+                    _FAKE_ADAPTER,
+                    repo_root,
+                    "docs/plans/demo.md",
+                    repo_root,
+                    ["aet-implement"],
+                    "plan-approved",
+                    "implemented",
+                    task_id="demo",
+                )
+
+            self.assertEqual(captured_env.get("AET_CLI_BIN"), _FAKE_ADAPTER.bin)
+            self.assertEqual(captured_env.get("AET_REPO_ROOT"), repo_root)
+
+    def test_process_task_propagates_aet_cli_bin_and_repo_root(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n# Plan\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-m", "add plan"], check=True
+            )
+            task = {"id": "demo", "title": "demo", "plan_file": plan_file}
+            observed_env = {}
+
+            def fake_stage(*a, **kw):
+                observed_env["AET_CLI_BIN"] = os.environ.get("AET_CLI_BIN")
+                observed_env["AET_REPO_ROOT"] = os.environ.get("AET_REPO_ROOT")
+                return 0, {}, None, ""
+
+            with patch.object(orchestrator, "run_stage", side_effect=fake_stage):
+                with patch.object(orchestrator, "run_stage_group", side_effect=fake_stage):
+                    with patch.object(orchestrator, "verify_branch_has_commits", return_value=(True, "")):
+                        with patch.object(orchestrator, "get_current_stage", return_value="implemented"):
+                            orchestrator.process_task(task, repo_root, _FAKE_ADAPTER, "minimal")
+
+            self.assertEqual(observed_env.get("AET_CLI_BIN"), _FAKE_ADAPTER.bin)
+            self.assertEqual(observed_env.get("AET_REPO_ROOT"), repo_root)
+
+
 if __name__ == "__main__":
     unittest.main()

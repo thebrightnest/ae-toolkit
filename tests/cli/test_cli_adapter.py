@@ -593,3 +593,25 @@ class TestResolutionPrecedence(unittest.TestCase):
         self.assertIn("AET_CLI_BIN", message)
         for name in ADAPTERS:
             self.assertIn(name, message)
+
+    def test_resolve_cli_adapter_in_spawned_subshell_with_aet_cli_bin(self):
+        """A spawned subshell resolves CLI adapter via AET_CLI_BIN (R-1)."""
+        import subprocess
+        import sys
+
+        code = (
+            "import os\n"
+            "from aet.cli_adapter import resolve_cli_adapter\n"
+            "adapter = resolve_cli_adapter()\n"
+            "print(adapter.name)\n"
+        )
+        env = os.environ.copy()
+        env["AET_CLI_BIN"] = "agy"
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(proc.returncode, 0, f"Subshell failed: {proc.stderr}")
+        self.assertEqual(proc.stdout.strip(), "agy")

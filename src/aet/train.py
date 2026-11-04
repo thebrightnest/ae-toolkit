@@ -194,7 +194,11 @@ def _count_commits(repo_root: str | Path, base: str, tip: str) -> int:
     return int(res.stdout.strip()) if res.returncode == 0 else 0
 
 
-def _run_flush_validation(cmd_list: list[str], worktree_dir: str) -> subprocess.CompletedProcess[str]:
+def _run_flush_validation(
+    cmd_list: list[str],
+    worktree_dir: str,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run validation command in worktree, skipping default 'make validate' if no Makefile exists."""
     if cmd_list == ["make", "validate"] and not (Path(worktree_dir) / "Makefile").exists():
         return subprocess.CompletedProcess(
@@ -203,11 +207,15 @@ def _run_flush_validation(cmd_list: list[str], worktree_dir: str) -> subprocess.
             stdout="No Makefile found; skipping default make validate\n",
             stderr="",
         )
+    call_env = os.environ.copy()
+    if env:
+        call_env.update(env)
     return subprocess.run(
         cmd_list,
         cwd=worktree_dir,
         capture_output=True,
         text=True,
+        env=call_env,
     )
 
 
@@ -307,7 +315,11 @@ def bisect(
                 check=True,
                 capture_output=True,
             )
-            proc = _run_flush_validation(cmd_list, temp_worktree)
+            proc = _run_flush_validation(
+                cmd_list,
+                temp_worktree,
+                env={"AET_REPO_ROOT": str(repo_root)},
+            )
             runs += 1
 
             if proc.returncode != 0:
@@ -422,7 +434,11 @@ def flush(
             )
 
         tree_hash = verifier.working_tree_hash(temp_worktree)
-        proc = _run_flush_validation(cmd_list, temp_worktree)
+        proc = _run_flush_validation(
+            cmd_list,
+            temp_worktree,
+            env={"AET_REPO_ROOT": str(repo_root)},
+        )
     except Exception as exc:
         return FlushResult(
             ok=False,
@@ -468,7 +484,11 @@ def flush(
                         commit=snapshot_commit,
                         error=f"Could not create retry worktree: {add_wt.stderr.strip()}",
                     )
-                proc_retry = _run_flush_validation(cmd_list, retry_wt)
+                proc_retry = _run_flush_validation(
+                    cmd_list,
+                    retry_wt,
+                    env={"AET_REPO_ROOT": str(repo_root)},
+                )
                 tree_hash = verifier.working_tree_hash(retry_wt)
             finally:
                 subprocess.run(

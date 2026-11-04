@@ -179,6 +179,15 @@ def _killpg(pid: int, sig: int) -> None:
         pass
 
 
+def _restore_env(orig: dict[str, str | None]) -> None:
+    """Restore previous os.environ entries without clobbering caller context."""
+    for k, v in orig.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+
 def _terminate_process_group(proc: subprocess.Popen, timeout: float = 10) -> None:
     """Escalate from SIGTERM to SIGKILL for a process group."""
     if proc.poll() is not None:
@@ -1176,6 +1185,9 @@ def _run_verdict_recovery(
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
     env["AET_TASK_ID"] = task_id
+    if hasattr(adapter, "bin") and adapter.bin:
+        env["AET_CLI_BIN"] = adapter.bin
+    env["AET_REPO_ROOT"] = repo_root
     if logger.run_id is not None:
         env["AET_RUN_ID"] = logger.run_id
         env["AET_RUN_DIR"] = str(logger.run_dir)
@@ -1702,6 +1714,9 @@ def run_stage(
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    if hasattr(adapter, "bin") and adapter.bin:
+        env["AET_CLI_BIN"] = adapter.bin
+    env["AET_REPO_ROOT"] = repo_root
     if worktree_dir:
         env["AET_WORKTREE"] = worktree_dir
     if freshness:
@@ -1839,6 +1854,9 @@ def run_stage_group(
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    if hasattr(adapter, "bin") and adapter.bin:
+        env["AET_CLI_BIN"] = adapter.bin
+    env["AET_REPO_ROOT"] = repo_root
     if worktree_dir:
         env["AET_WORKTREE"] = worktree_dir
     if freshness:
@@ -1979,6 +1997,45 @@ def process_task(
     ``integration_mode`` is resolved once per run by the caller and passed
     down so every task in a batch sees the same mode.
     """
+    orig_env = {
+        "AET_CLI_BIN": os.environ.get("AET_CLI_BIN"),
+        "AET_REPO_ROOT": os.environ.get("AET_REPO_ROOT"),
+    }
+    if hasattr(adapter, "bin") and adapter.bin:
+        os.environ["AET_CLI_BIN"] = adapter.bin
+    os.environ["AET_REPO_ROOT"] = repo_root
+    try:
+        return _process_task_impl(
+            task=task,
+            repo_root=repo_root,
+            adapter=adapter,
+            isolation=isolation,
+            logger=logger,
+            worktree_dir=worktree_dir,
+            workflow=workflow,
+            backend=backend,
+            stall_timeout=stall_timeout,
+            base_branch=base_branch,
+            integration_mode=integration_mode,
+        )
+    finally:
+        _restore_env(orig_env)
+
+
+def _process_task_impl(
+    task: dict,
+    repo_root: str,
+    adapter,
+    isolation: str,
+    logger: telemetry.RunLogger | None = None,
+    worktree_dir: str | None = None,
+    workflow: Workflow | None = None,
+    backend=None,
+    stall_timeout: float | None = None,
+    *,
+    base_branch: str = "origin/main",
+    integration_mode: str | None = None,
+) -> bool:
     if integration_mode is not None and integration_mode not in ("pr-per-task", "single-pr"):
         print(
             f"   ❌ Integration mode {integration_mode!r} is not supported. "
@@ -2981,6 +3038,9 @@ def _consult_triage_session(
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
+    if hasattr(adapter, "bin") and adapter.bin:
+        env["AET_CLI_BIN"] = adapter.bin
+    env["AET_REPO_ROOT"] = repo_root
     try:
         exit_code, _usage, _session_ref, output = _spawn_session_with_tail(
             adapter, cmd, worktree_dir, env, stall_timeout=stall_timeout
@@ -3557,6 +3617,23 @@ def _print_integration_branches(refs: list[BranchRef]) -> None:
 
 def run_batch(args: argparse.Namespace, adapter) -> int:
     """Run batch mode from queue file."""
+    orig_env = {
+        "AET_RUN_ID": os.environ.get("AET_RUN_ID"),
+        "AET_RUN_DIR": os.environ.get("AET_RUN_DIR"),
+        "AET_CLI_BIN": os.environ.get("AET_CLI_BIN"),
+        "AET_REPO_ROOT": os.environ.get("AET_REPO_ROOT"),
+    }
+    if hasattr(adapter, "bin") and adapter.bin:
+        os.environ["AET_CLI_BIN"] = adapter.bin
+    if hasattr(args, "repo_root") and args.repo_root:
+        os.environ["AET_REPO_ROOT"] = args.repo_root
+    try:
+        return _run_batch_impl(args, adapter)
+    finally:
+        _restore_env(orig_env)
+
+
+def _run_batch_impl(args: argparse.Namespace, adapter) -> int:
     global _shutdown_requested
     _shutdown_requested = False
     queue_file = args.queue_file
@@ -3729,6 +3806,9 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
     # Declare that this run owns the queue so out-of-band mutators refuse, and
     # ensure every subprocess inherits the run id for the lease check.
     os.environ["AET_RUN_ID"] = logger.run_id
+    if hasattr(adapter, "bin") and adapter.bin:
+        os.environ["AET_CLI_BIN"] = adapter.bin
+    os.environ["AET_REPO_ROOT"] = repo_root
 
     running: dict[str, subprocess.Popen] = {}
     spawn_times: dict[str, float] = {}
@@ -4122,6 +4202,8 @@ def run_batch(args: argparse.Namespace, adapter) -> int:
             env["AET_REPO_ROOT"] = repo_root
             env["AET_STAGE"] = task.get("stage") or ""
             env["AET_INTEGRATION_MODE"] = integration_mode
+            if hasattr(adapter, "bin") and adapter.bin:
+                env["AET_CLI_BIN"] = adapter.bin
 
             # Store a repo-relative worktree path for portability under lock.
             # base_commit records where the branch started (ADR-064); without
@@ -4475,6 +4557,23 @@ def _intake_findings(plan_file: str, repo_root: str, backend) -> list:
 
 def run_single(args: argparse.Namespace, adapter) -> int:
     """Run single-plan mode."""
+    orig_env = {
+        "AET_RUN_ID": os.environ.get("AET_RUN_ID"),
+        "AET_RUN_DIR": os.environ.get("AET_RUN_DIR"),
+        "AET_CLI_BIN": os.environ.get("AET_CLI_BIN"),
+        "AET_REPO_ROOT": os.environ.get("AET_REPO_ROOT"),
+    }
+    if hasattr(adapter, "bin") and adapter.bin:
+        os.environ["AET_CLI_BIN"] = adapter.bin
+    if hasattr(args, "repo_root") and args.repo_root:
+        os.environ["AET_REPO_ROOT"] = args.repo_root
+    try:
+        return _run_single_impl(args, adapter)
+    finally:
+        _restore_env(orig_env)
+
+
+def _run_single_impl(args: argparse.Namespace, adapter) -> int:
     repo_root = args.repo_root
     plan_file = args.plan_file
 
@@ -4485,6 +4584,9 @@ def run_single(args: argparse.Namespace, adapter) -> int:
     # run id so their queue mutations pass the lease check.
     os.environ["AET_RUN_ID"] = logger.run_id
     os.environ["AET_RUN_DIR"] = str(logger.run_dir)
+    if hasattr(adapter, "bin") and adapter.bin:
+        os.environ["AET_CLI_BIN"] = adapter.bin
+    os.environ["AET_REPO_ROOT"] = repo_root
     queue_file = os.path.join(repo_root, ".agents", "aet-queue")
     start_time = telemetry.iso_now()
 

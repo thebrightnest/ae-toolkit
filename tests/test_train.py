@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -572,3 +573,39 @@ def test_flush_reports_branch_behind_origin(capsys):
     assert behind == {"main": 3}
     assert "main" in out and "3 commit(s) behind origin/main" in out
     assert "epic" not in out
+
+
+class TestRunFlushValidationEnvironment(unittest.TestCase):
+    """Assert _run_flush_validation propagates parent and custom environment (R-1)."""
+
+    def test_run_flush_validation_propagates_environment(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, "Makefile").write_text("all:\n", encoding="utf-8")
+            with patch.dict(os.environ, {"AET_CLI_BIN": "agy", "AET_REPO_ROOT": "/repo"}, clear=False):
+                with patch("subprocess.run") as mock_run:
+                    mock_run.return_value = subprocess.CompletedProcess(
+                        args=["true"], returncode=0, stdout="", stderr=""
+                    )
+                    train._run_flush_validation(["true"], tmpdir)
+                    mock_run.assert_called_once()
+                    _, kwargs = mock_run.call_args
+                    self.assertIn("env", kwargs)
+                    self.assertEqual(kwargs["env"].get("AET_CLI_BIN"), "agy")
+                    self.assertEqual(kwargs["env"].get("AET_REPO_ROOT"), "/repo")
+
+    def test_run_flush_validation_merges_explicit_env(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, "Makefile").write_text("all:\n", encoding="utf-8")
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = subprocess.CompletedProcess(
+                    args=["true"], returncode=0, stdout="", stderr=""
+                )
+                train._run_flush_validation(
+                    ["true"], tmpdir, env={"AET_CLI_BIN": "custom_bin", "AET_REPO_ROOT": "/custom"}
+                )
+                mock_run.assert_called_once()
+                _, kwargs = mock_run.call_args
+                self.assertIn("env", kwargs)
+                self.assertEqual(kwargs["env"].get("AET_CLI_BIN"), "custom_bin")
+                self.assertEqual(kwargs["env"].get("AET_REPO_ROOT"), "/custom")
+
