@@ -65,6 +65,7 @@ KIND_TO_STAGE: dict[str, str] = {
     "cso": "secure",
     "sync-docs": "synced",
     "verify": "verified",
+    "guard_refused": "integration",
 }
 
 KIND_TO_SKILL: dict[str, str] = {
@@ -73,6 +74,7 @@ KIND_TO_SKILL: dict[str, str] = {
     "cso": "aet-cso",
     "sync-docs": "aet-sync-docs",
     "verify": "aet-verify",
+    "guard_refused": "aet-ship",
 }
 
 
@@ -311,6 +313,8 @@ def _build_payload(
         record["divergences"] = _load_divergences(divergences)
     elif stage == "verify":
         pass
+    elif stage == "guard_refused":
+        record["detail"] = summary or ""
 
     return record
 

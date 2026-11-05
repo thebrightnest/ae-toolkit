@@ -71,10 +71,184 @@ def plan_task_count(spec: dict[str, Any]) -> int:
     """Count checked/unchecked tasks from the task record."""
     count = 0
     for item in spec.get("tasks", []):
-        stripped = item.strip()
-        if stripped.startswith("- [ ]") or stripped.startswith("- [x]"):
+        if isinstance(item, dict):
             count += 1
+            continue
+        if isinstance(item, str):
+            stripped = item.strip()
+            if (
+                stripped.startswith("- [ ]")
+                or stripped.startswith("- [x]")
+                or re.match(r"^(\d+\.|\*|\-)\s+", stripped)
+            ):
+                count += 1
     return count
+
+
+def get_changed_files(
+    base_ref: str,
+    workspace: Path | str | None = None,
+) -> list[str]:
+    """Return the list of files changed between base_ref and HEAD."""
+    git_args = ["-C", str(workspace)] if workspace else []
+    try:
+        res = subprocess.run(
+            ["git", *git_args, "diff", f"{base_ref}..HEAD", "--name-only"],
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return []
+    if res.returncode != 0:
+        return []
+    return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+
+def parse_task_file_mappings(
+    spec: dict[str, Any],
+    changed_files: list[str],
+) -> list[tuple[str, list[str]]] | None:
+    """Check if declared plan file sets permit an unambiguous split of changed_files.
+
+    Returns a list of (task_title, file_list) tuples if the mapping is unambiguous,
+    or None if ambiguous (unmapped files, overlapping files, or <2 tasks with files).
+    """
+    if not changed_files:
+        return None
+
+    tasks = spec.get("tasks", [])
+    if not tasks:
+        return None
+
+    changed_set = set(changed_files)
+    extracted: list[tuple[str, set[str]]] = []
+
+    for idx, item in enumerate(tasks, start=1):
+        if isinstance(item, dict):
+            title = (
+                item.get("title")
+                or item.get("name")
+                or item.get("task")
+                or item.get("description")
+                or f"Task {idx}"
+            )
+            raw_files = item.get("files") or item.get("paths") or []
+            if isinstance(raw_files, str):
+                raw_files = [f.strip() for f in raw_files.split(",") if f.strip()]
+            declared = set(raw_files)
+        elif isinstance(item, str):
+            clean_title = re.sub(
+                r"^(\d+\.|\*|\-)\s*(\[\s*[xX ]\s*\]\s*)?", "", item.strip()
+            ).strip()
+            title = clean_title or f"Task {idx}"
+            declared = set(re.findall(r"`([^`]+)`", item))
+            for cf in changed_files:
+                if cf in item:
+                    declared.add(cf)
+        else:
+            continue
+
+        matched = declared & changed_set
+        extracted.append((title, matched))
+
+    if len(extracted) < 2:
+        return None
+
+    all_assigned: list[str] = []
+    for _, f_set in extracted:
+        all_assigned.extend(f_set)
+
+    # Check for overlapping files across tasks
+    if len(all_assigned) != len(set(all_assigned)):
+        return None
+
+    # Check that all changed files are covered
+    if set(all_assigned) != changed_set:
+        return None
+
+    # Check that at least two tasks have non-empty file sets
+    non_empty = [(title, sorted(list(f_set))) for title, f_set in extracted if f_set]
+    if len(non_empty) < 2:
+        return None
+
+    return non_empty
+
+
+def split_commits(
+    workspace: Path | str,
+    base_ref: str,
+    groups: list[tuple[str, list[str]]],
+) -> bool:
+    """Split the commit range base_ref..HEAD into atomic commits for each group.
+
+    Fails closed and restores original HEAD if any command fails or post-condition diff fails.
+    """
+    rc, head_out, _ = run_git_plain(["-C", str(workspace), "rev-parse", "HEAD"])
+    if rc != 0:
+        return False
+    original_head = head_out.strip()
+
+    rc, _, _ = run_git_plain(["-C", str(workspace), "reset", "--soft", base_ref])
+    if rc != 0:
+        return False
+
+    for msg, paths in groups:
+        run_git_plain(["-C", str(workspace), "reset"])
+        rc, _, _ = run_git_plain(["-C", str(workspace), "add", "--", *paths])
+        if rc != 0:
+            run_git_plain(["-C", str(workspace), "reset", "--hard", original_head])
+            return False
+        rc, _, _ = run_git_plain(["-C", str(workspace), "commit", "-m", msg])
+        if rc != 0:
+            run_git_plain(["-C", str(workspace), "reset", "--hard", original_head])
+            return False
+
+    rc, diff_out, _ = run_git_plain(["-C", str(workspace), "diff", f"{original_head}..HEAD"])
+    if rc != 0 or diff_out.strip():
+        run_git_plain(["-C", str(workspace), "reset", "--hard", original_head])
+        return False
+
+    return True
+
+
+def auto_split_monolithic_commit(
+    workspace: Path | str,
+    target_ref: str,
+    spec: dict[str, Any],
+    task_id: str,
+) -> bool:
+    """Attempt an automated aet ship split if declared file sets are unambiguous.
+
+    Returns True if split was performed and verified; False otherwise.
+    """
+    changed_files = get_changed_files(target_ref, workspace)
+    if not changed_files:
+        return False
+
+    groups = parse_task_file_mappings(spec, changed_files)
+    if not groups:
+        return False
+
+    formatted_groups: list[tuple[str, list[str]]] = []
+    for title, paths in groups:
+        clean_title = title.strip()
+        lower = clean_title.lower()
+        if (
+            not lower.startswith(task_id.lower())
+            and not lower.startswith("chore")
+            and not lower.startswith("feat")
+            and not lower.startswith("fix")
+        ):
+            msg = f"{task_id}: {clean_title}"
+        else:
+            msg = clean_title
+        formatted_groups.append((msg, paths))
+
+    success = split_commits(workspace, target_ref, formatted_groups)
+    if success:
+        print(f"   ✂️  Auto-split monolithic commit for {task_id} into {len(formatted_groups)} commits")
+    return success
 
 
 def commit_count(
@@ -509,29 +683,35 @@ def integrate(
             return IntegrateResult(status="guard_refused", detail=diag, branch=integration_branch)
 
         if is_monolithic_commit(target_ref, spec, feature_branch="HEAD", workspace=Path(worktree_dir)):
-            subprocess.run(
-                ["git", "-C", worktree_dir, "reset", "--hard", pre_rebase_commit],
-                capture_output=True,
-                timeout=30,
-            )
-            subprocess.run(
-                ["git", "-C", worktree_dir, "clean", "-fd"],
-                capture_output=True,
-                timeout=30,
-            )
-            diag = {
-                "reason": "guard_refused",
-                "conflicting_files": [],
-                "stderr_tail": (
-                    "Monolithic commit detected: one commit spans the entire merge range "
-                    "while the plan lists multiple tasks.\n"
-                    "Run `aet ship split` to split it into logical pieces before merging."
-                ),
-                "at": telemetry.iso_now(),
-            }
-            _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
-            print(f"⚠️  Task {task_id} staged in awaiting_merge due to guard refusal: {diag['stderr_tail']}")
-            return IntegrateResult(status="guard_refused", detail=diag, branch=integration_branch)
+            split_ok = auto_split_monolithic_commit(worktree_dir, target_ref, spec, task_id)
+            if split_ok and not is_monolithic_commit(
+                target_ref, spec, feature_branch="HEAD", workspace=Path(worktree_dir)
+            ):
+                print(f"   ✅ Monolithic commit successfully remediated via auto-split for {task_id}")
+            else:
+                subprocess.run(
+                    ["git", "-C", worktree_dir, "reset", "--hard", pre_rebase_commit],
+                    capture_output=True,
+                    timeout=30,
+                )
+                subprocess.run(
+                    ["git", "-C", worktree_dir, "clean", "-fd"],
+                    capture_output=True,
+                    timeout=30,
+                )
+                diag = {
+                    "reason": "guard_refused",
+                    "conflicting_files": [],
+                    "stderr_tail": (
+                        "Monolithic commit detected: one commit spans the entire merge range "
+                        "while the plan lists multiple tasks.\n"
+                        "Run `aet ship split` to split it into logical pieces before merging."
+                    ),
+                    "at": telemetry.iso_now(),
+                }
+                _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
+                print(f"⚠️  Task {task_id} staged in awaiting_merge due to guard refusal: {diag['stderr_tail']}")
+                return IntegrateResult(status="guard_refused", detail=diag, branch=integration_branch)
 
         # Verify required gate evidence before the squash-merge lands (R-22).
         _evidence_ok, _evidence_failures = gate.check_task_evidence(

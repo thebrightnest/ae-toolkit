@@ -84,6 +84,9 @@ from aet.branch_ref import (  # noqa: E402
 )
 from aet.cli_adapter import resolve_cli_adapter  # noqa: E402
 from aet.integrate import (  # noqa: E402
+    IntegrateResult,  # noqa: F401
+)
+from aet.integrate import (  # noqa: E402
     integrate as _integrate_impl,
 )
 from aet.integration_lock import (  # noqa: E402
@@ -108,6 +111,7 @@ from aet.verifier import (  # noqa: E402
     read_plan_stage,
     verify_branch_has_commits,
     verify_stage_advancement,
+    working_tree_hash,
 )
 from aet.workflow import Workflow, WorkflowError, WorkflowStage, load_workflow  # noqa: E402
 from aet.worktree import (  # noqa: E402
@@ -2548,6 +2552,9 @@ def _process_task_impl(
                 behind: dict[str, int] = {}
                 _record_behind_origin(behind, target_branch, flush_res)
                 _print_behind_origin(behind)
+            elif int_res and getattr(int_res, "status", None) == "guard_refused":
+                print(f"   ⚠️  Task {task_id} guard refused (monolithic commit); returned to in_progress")
+                return False
         except IntegrationFailureError as exc:
             print(f"   ❌ Integration failure for {task_id}: {exc}")
             queue_file = os.path.join(repo_root, ".agents", "aet-queue")
@@ -2680,8 +2687,134 @@ def _stage_task_conflict(
             _save_task_record(backend, q)
 
 
+def _handle_guard_refused(
+    res: Any,
+    *args: Any,
+    **kwargs: Any,
+) -> None:
+    """Handle guard_refused status by emitting a structured failure verdict and requeueing to in_progress (R-5)."""
+    repo_root = kwargs.get("repo_root") or (args[0] if len(args) > 0 else "")
+    task = kwargs.get("task") or (args[1] if len(args) > 1 else None)
+    task_id = kwargs.get("task_id") or (
+        task.get("id") if isinstance(task, dict) else str(task) if task else ""
+    )
+    worktree_dir = kwargs.get("worktree_dir") or (args[2] if len(args) > 2 else None)
+    backend = kwargs.get("backend")
+    if not task_id:
+        return
+
+    queue_file = os.path.join(repo_root, ".agents", "aet-queue") if repo_root else ""
+    aet_state_bin = str(_SCRIPT_DIR / "aet_state.py")
+
+    # 1. Transition awaiting_merge -> in_progress
+    if queue_file and os.path.exists(queue_file):
+        subprocess.run(
+            [
+                sys.executable,
+                aet_state_bin,
+                "transition",
+                task_id,
+                "awaiting_merge",
+                "in_progress",
+                queue_file,
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+    # 2. Record split diagnostics on task record
+    diag_detail = getattr(res, "detail", None) or {}
+    split_instructions = (
+        "Monolithic commit detected: one commit spans the entire merge range "
+        "while the plan lists multiple tasks. "
+        "Run `aet ship split` to split it into logical pieces before merging."
+    )
+    split_diag = {
+        "reason": "guard_refused",
+        "conflicting_files": [],
+        "stderr_tail": split_instructions,
+        "split_instructions": "Run `aet ship split` to partition changes into per-task commits.",
+        "instruction": "Run `aet ship split` to partition changes into per-task commits.",
+        "at": telemetry.iso_now(),
+    }
+    if isinstance(diag_detail, dict):
+        split_diag.update(diag_detail)
+        split_diag["split_instructions"] = (
+            diag_detail.get("split_instructions")
+            or "Run `aet ship split` to partition changes into per-task commits."
+        )
+
+    if backend is not None:
+        try:
+            with queue_lock(queue_file):
+                if hasattr(backend, "fetch"):
+                    try:
+                        backend.fetch()
+                    except Exception:
+                        pass
+                data = backend.load()
+                q = data.get("queue", [])
+                for target in q:
+                    if target.get("id") == task_id:
+                        target["state"] = "in_progress"
+                        target["split_diagnostics"] = split_diag
+                        target["conflict_diagnostics"] = split_diag
+                        break
+                _save_task_record(backend, q)
+        except Exception:
+            pass
+
+    # 3. Emit structured failure verdict
+    verdict_record = {
+        "task_id": task_id,
+        "stage": "integration",
+        "skill": "aet-ship",
+        "verdict": "fail",
+        "summary": "Monolithic commit detected: split required",
+        "generated_at": telemetry.iso_now(),
+        "tree_hash": (
+            working_tree_hash(worktree_dir or repo_root)
+            if (worktree_dir or repo_root) and os.path.isdir(worktree_dir or repo_root)
+            else "0" * 40
+        ),
+        "detail": split_instructions,
+    }
+    try:
+        evidence.write_verdict(
+            task_id=task_id,
+            kind="guard_refused",
+            record=verdict_record,
+            project_slug=telemetry.derive_project_slug(repo_root) if repo_root else None,
+            worktree_dir=worktree_dir or repo_root,
+        )
+    except Exception:
+        pass
+
+    # 4. Record failure signature on task if task dict available
+    if backend is not None:
+        try:
+            target_task = next(
+                (t for t in backend.load().get("queue", []) if t.get("id") == task_id), None
+            )
+            if target_task:
+                _record_failure_on_task(
+                    backend,
+                    target_task,
+                    failure_lib.FailureClass.DESIGN,
+                    stage="integration",
+                    tail="guard_refused:monolithic_commit",
+                    preview=split_instructions,
+                )
+        except Exception:
+            pass
+
+
 def _integrate_completed_task(*args: Any, **kwargs: Any) -> Any:
-    return _integrate_impl(*args, **kwargs)
+    res = _integrate_impl(*args, **kwargs)
+    status_val = res.status if hasattr(res, "status") else str(res)
+    if status_val == "guard_refused":
+        _handle_guard_refused(res, *args, **kwargs)
+    return res
 
 
 def integrate(*args: Any, **kwargs: Any) -> Any:
@@ -3956,6 +4089,12 @@ def _run_batch_impl(args: argparse.Namespace, adapter) -> int:
                         if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
                             _spawn_pass()
                         return
+                    if status_val == "guard_refused":
+                        end_state[task_id] = "requeued"
+                        print(f"   🔄 Task {task_id} requeued to in_progress with split instructions")
+                        if eager_spawn and not stop_spawn and not _shutdown_requested and len(running) < max_jobs:
+                            _spawn_pass()
+                        return
                     if status_val == "staged":
                         successes += 1
                         end_state[task_id] = "succeeded"
@@ -4976,7 +5115,14 @@ def _run_single_impl(args: argparse.Namespace, adapter) -> int:
                                     behind: dict[str, int] = {}
                                     _record_behind_origin(behind, target_branch, flush_res)
                                     _print_behind_origin(behind)
-                                print(f"   ✅ Task {task_id} merged locally (single-pr)")
+                                    print(f"   ✅ Task {task_id} merged locally (single-pr)")
+                                elif int_res.status == "guard_refused":
+                                    print(
+                                        f"   ⚠️  Task {task_id} guard refused (monolithic commit); "
+                                        "returned to in_progress"
+                                    )
+                                    exit_code = 1
+                                    success = False
                             except IntegrationFailureError as exc:
                                 print(f"   ❌ Integration failure for {task_id}: {exc}")
                                 _mark_integration_failure(

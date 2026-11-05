@@ -5481,6 +5481,79 @@ class TestParentManagedIntegration(unittest.TestCase):
             self.assertEqual(orchestrator.current_state(q_task), "awaiting_merge")
             self.assertEqual(q_task["conflict_diagnostics"]["reason"], "batch_validation")
 
+    def test_ambiguous_monolithic_commit_transitions_to_in_progress_with_split_diagnostics(self):
+        """Ambiguous monolithic commit transitions to in_progress with split diagnostics."""
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            subprocess.run(["git", "init", "--bare", "-q", origin_root], check=True)
+            subprocess.run(["git", "init", "-q", repo_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
+            Path(repo_root, "init.txt").write_text("initial\n", encoding="utf-8")
+            Path(repo_root, ".gitignore").write_text(".worktrees/\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
+            subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "remote", "add", "origin", origin_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            _use_shared_posture(repo_root)
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.fetch()
+
+            task_id = "task-mono-ambiguous"
+            worktree_dir = orchestrator.create_worktree(repo_root, task_id, base_branch="main")
+
+            Path(worktree_dir, "f1.txt").write_text("content 1\n", encoding="utf-8")
+            Path(worktree_dir, "f2.txt").write_text("content 2\n", encoding="utf-8")
+            subprocess.run(["git", "-C", worktree_dir, "add", "."], check=True)
+            subprocess.run(["git", "-C", worktree_dir, "commit", "-m", "monolithic work"], check=True)
+
+            task_spec = {
+                "tasks": ["- [ ] Task 1 without files", "- [ ] Task 2 without files"],
+            }
+            task_record = {
+                "id": task_id,
+                "title": task_id,
+                "state": "in_progress",
+                "worktree": os.path.relpath(worktree_dir, repo_root),
+                "integration_branch": "main",
+                "spec": task_spec,
+            }
+            backend.save([task_record])
+            backend.push()
+
+            skip_res = orchestrator.validation.CheckResult("SKIP", None, True, "")
+            with patch("aet.validation.pre_integration_check", return_value=skip_res):
+                res = orchestrator._integrate_completed_task(
+                    repo_root=repo_root,
+                    task=task_record,
+                    worktree_dir=worktree_dir,
+                    backend=backend,
+                    integration_mode="single-pr",
+                    integration_branch="main",
+                )
+
+            self.assertEqual(res.status, "guard_refused")
+
+            queue = backend.load()["queue"]
+            q_task = next(t for t in queue if t["id"] == task_id)
+            self.assertEqual(orchestrator.current_state(q_task), "in_progress")
+            self.assertIn("split_diagnostics", q_task)
+            split_diag = q_task["split_diagnostics"]
+            self.assertEqual(split_diag["reason"], "guard_refused")
+            instructions = split_diag.get("split_instructions", "") or split_diag.get("stderr_tail", "")
+            self.assertIn("aet ship split", instructions)
+
+            # Assert structured failure verdict was written
+            project_slug = telemetry.derive_project_slug(repo_root)
+            verdict_path = evidence.evidence_path(task_id, "guard_refused", project_slug=project_slug)
+            self.assertTrue(verdict_path.exists())
+            v_record = evidence.read_verdict(verdict_path)
+            self.assertEqual(v_record["verdict"], "fail")
+            self.assertIn("split required", v_record["summary"])
+
     def test_print_settlement_summary(self):
         queue = [
             {"id": "task-m", "state": "merged"},
@@ -5629,6 +5702,126 @@ class TestParentManagedIntegration(unittest.TestCase):
             self.assertEqual(orchestrator.current_state(q_2), "merged")
             # Worktree for staged task is preserved
             self.assertTrue(os.path.exists(wt_1))
+
+    def test_run_batch_guard_refused_requeues_to_in_progress_and_continues_sibling(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as origin_root:
+            subprocess.run(["git", "init", "--bare", "-q", origin_root], check=True)
+            subprocess.run(["git", "init", "-q", repo_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.email", "test@example.com"], check=True)
+            subprocess.run(["git", "-C", repo_root, "config", "user.name", "Test User"], check=True)
+            Path(repo_root, "file.txt").write_text("initial\n", encoding="utf-8")
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-q", "-m", "initial"], check=True)
+            subprocess.run(["git", "-C", repo_root, "branch", "-M", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "remote", "add", "origin", origin_root], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "-q", "-u", "origin", "main"], check=True)
+            subprocess.run(["git", "-C", repo_root, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+
+            _use_shared_posture(repo_root)
+            queue_file = os.path.join(repo_root, ".agents", "aet-queue")
+            backend = orchestrator._make_backend(queue_file)
+            backend.fetch()
+
+            task_1 = "task-1-guard-refused"
+            wt_1 = orchestrator.create_worktree(repo_root, task_1, base_branch="main")
+            Path(wt_1, "file.txt").write_text("task 1 work\n", encoding="utf-8")
+            subprocess.run(["git", "-C", wt_1, "add", "."], check=True)
+            subprocess.run(["git", "-C", wt_1, "commit", "-m", "t1 work"], check=True)
+
+            task_2 = "task-2-ok"
+            wt_2 = orchestrator.create_worktree(repo_root, task_2, base_branch="main")
+            Path(wt_2, "independent.txt").write_text("task 2 work\n", encoding="utf-8")
+            subprocess.run(["git", "-C", wt_2, "add", "."], check=True)
+            subprocess.run(["git", "-C", wt_2, "commit", "-m", "t2 work"], check=True)
+
+            plan_1 = os.path.join(repo_root, "docs", "plans", f"{task_1}.md")
+            Path(plan_1).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_1).write_text(f"---\nid: {task_1}\nworkflow: software\n---\n# {task_1}\n", encoding="utf-8")
+
+            plan_2 = os.path.join(repo_root, "docs", "plans", f"{task_2}.md")
+            Path(plan_2).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_2).write_text(f"---\nid: {task_2}\nworkflow: software\n---\n# {task_2}\n", encoding="utf-8")
+
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add plans"], check=True)
+            subprocess.run(["git", "-C", repo_root, "push", "origin", "main"], check=True)
+
+            records = [
+                {
+                    "id": task_1,
+                    "title": task_1,
+                    "state": "ready",
+                    "plan_file": plan_1,
+                    "worktree": os.path.relpath(wt_1, repo_root),
+                    "integration_branch": "main",
+                    "spec": {},
+                },
+                {
+                    "id": task_2,
+                    "title": task_2,
+                    "state": "ready",
+                    "plan_file": plan_2,
+                    "worktree": os.path.relpath(wt_2, repo_root),
+                    "integration_branch": "main",
+                    "spec": {},
+                },
+            ]
+            backend.save(records)
+            backend.push()
+
+            args = argparse.Namespace(
+                queue_file=queue_file,
+                repo_root=repo_root,
+                max_jobs=2,
+                isolation="worktree",
+                on_failure="triage",
+                base="main",
+            )
+
+            real_popen = subprocess.Popen
+
+            def fake_popen(*a, **kw):
+                if kw.get("start_new_session"):
+                    return _InstantProc()
+                return real_popen(*a, **kw)
+
+            def mock_integrate(repo_root, task, worktree_dir, **kwargs):
+                t_id = task["id"] if isinstance(task, dict) else str(task)
+                if t_id == task_1:
+                    orchestrator._handle_guard_refused(
+                        orchestrator.IntegrateResult("guard_refused", detail={
+                            "reason": "guard_refused",
+                            "stderr_tail": "Monolithic commit detected: run aet ship split",
+                        }),
+                        repo_root=repo_root,
+                        task=task,
+                        worktree_dir=worktree_dir,
+                        backend=backend,
+                    )
+                    return orchestrator.IntegrateResult("guard_refused")
+                else:
+                    queue = backend.load()["queue"]
+                    for t in queue:
+                        if t["id"] == t_id:
+                            t["state"] = "merged"
+                            break
+                    backend.save(queue)
+                    backend.push()
+                    return True
+
+            with patch.object(orchestrator.subprocess, "Popen", side_effect=fake_popen):
+                with patch.object(orchestrator, "resolve_integration_mode", return_value="single-pr"):
+                    with patch.object(orchestrator, "_integrate_completed_task", side_effect=mock_integrate):
+                        exit_code = orchestrator.run_batch(args, _FAKE_ADAPTER)
+
+            self.assertEqual(exit_code, 1)
+            queue = backend.load()["queue"]
+            q_1 = next(t for t in queue if t["id"] == task_1)
+            q_2 = next(t for t in queue if t["id"] == task_2)
+
+            self.assertEqual(orchestrator.current_state(q_1), "in_progress")
+            self.assertIn("split_diagnostics", q_1)
+            self.assertEqual(orchestrator.current_state(q_2), "merged")
 
 
 class TestBatchDynamicSlotReplenishment(unittest.TestCase, _BatchRepoMixin):

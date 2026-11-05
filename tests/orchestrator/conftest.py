@@ -14,7 +14,10 @@ from tests.orchestrator._helpers import (
 def _reset_orchestrator_shutdown_flag():
     """Prevent a timed-out batch test from killing unrelated stage sessions."""
     # Imported late so the module is already loaded by the test modules.
-    import orchestrator
+    try:
+        import orchestrator
+    except ModuleNotFoundError:
+        from aet.cli import orchestrator  # type: ignore
 
     orchestrator._shutdown_requested = False
     yield

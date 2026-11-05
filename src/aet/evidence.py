@@ -76,6 +76,16 @@ SCHEMAS: dict[str, dict[str, type]] = {
         "tree_hash": str,
         "task_ids": list,
     },
+    "guard_refused": {
+        "task_id": str,
+        "stage": str,
+        "skill": str,
+        "verdict": str,
+        "summary": str,
+        "generated_at": str,
+        "tree_hash": str,
+        "detail": str,
+    },
 }
 
 VALID_VERDICTS = {"pass", "fail"}
@@ -190,6 +200,7 @@ BUILDER_FLAGS: dict[str, str] = {
     "sync-docs": "--summary <one-line> --divergence <item-or-file>",
     "verify": "--summary <one-line>",
     "batch": "--summary <one-line>",
+    "guard_refused": "--summary <one-line>",
 }
 
 # What the qa builder reads when no pytest-json-report file is available.
