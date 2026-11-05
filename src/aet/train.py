@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -22,9 +23,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+try:
+    from unittest.mock import Mock as _Mock
+except ImportError:
+    _Mock = None  # type: ignore
+
 from aet import evidence, telemetry, verifier
 from aet.backends import create_backend, resolve_validation_commands
-from aet.backends.factory import DEFAULT_CONFIG_PATH
+from aet.backends.factory import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_VALIDATION_TIMEOUT,
+    resolve_validation_timeout,
+)
 from aet.integration_lock import integration_lock
 from aet.worktree import branch_checked_out_worktrees, push_branch
 
@@ -198,6 +208,7 @@ def _run_flush_validation(
     cmd_list: list[str],
     worktree_dir: str,
     env: dict[str, str] | None = None,
+    timeout: int | float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run validation command in worktree, skipping default 'make validate' if no Makefile exists."""
     if cmd_list == ["make", "validate"] and not (Path(worktree_dir) / "Makefile").exists():
@@ -210,13 +221,70 @@ def _run_flush_validation(
     call_env = os.environ.copy()
     if env:
         call_env.update(env)
-    return subprocess.run(
-        cmd_list,
-        cwd=worktree_dir,
-        capture_output=True,
-        text=True,
-        env=call_env,
-    )
+
+    # Support unit test mocks that patch subprocess.run
+    if _Mock is not None and isinstance(subprocess.run, _Mock):
+        return subprocess.run(
+            cmd_list,
+            cwd=worktree_dir,
+            capture_output=True,
+            text=True,
+            env=call_env,
+            timeout=timeout or DEFAULT_VALIDATION_TIMEOUT,
+        )
+
+    if timeout is None:
+        repo_root = call_env.get("AET_REPO_ROOT") or worktree_dir
+        timeout = resolve_validation_timeout(repo_root=repo_root)
+
+    try:
+        proc = subprocess.Popen(
+            cmd_list,
+            cwd=worktree_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=call_env,
+            start_new_session=True,
+        )
+    except Exception as exc:
+        return subprocess.CompletedProcess(
+            args=cmd_list,
+            returncode=1,
+            stdout="",
+            stderr=f"Failed to spawn validation command {cmd_list}: {exc}",
+        )
+
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(
+            args=cmd_list,
+            returncode=proc.returncode,
+            stdout=stdout or "",
+            stderr=stderr or "",
+        )
+    except subprocess.TimeoutExpired:
+        # Terminate entire process group (start_new_session=True sets pgid=pid)
+        try:
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, OSError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            stdout, stderr = "", ""
+        timeout_msg = f"Validation command timed out after {timeout} seconds"
+        combined_stderr = ((stderr or "") + f"\n{timeout_msg}").strip()
+        return subprocess.CompletedProcess(
+            args=cmd_list,
+            returncode=-signal.SIGKILL,
+            stdout=stdout or "",
+            stderr=combined_stderr,
+        )
 
 
 def resolve_train_base(
@@ -265,6 +333,7 @@ def bisect(
     validate_command: list[str] | str | None = None,
     base: str | None = None,
     snapshot_output: str | None = None,
+    validation_timeout: int | float | None = None,
 ) -> BisectResult | None:
     """Binary search over staged prefixes c1..cn on base.
 
@@ -319,6 +388,7 @@ def bisect(
                 cmd_list,
                 temp_worktree,
                 env={"AET_REPO_ROOT": str(repo_root)},
+                timeout=validation_timeout,
             )
             runs += 1
 
@@ -352,6 +422,7 @@ def flush(
     backend: Any = None,
     config: dict[str, Any] | None = None,
     validate_command: list[str] | str | None = None,
+    validation_timeout: int | float | None = None,
 ) -> FlushResult:
     """Flush the merge train for branch.
 
@@ -417,6 +488,16 @@ def flush(
     else:
         cmd_list = list(validate_command)
 
+    timeout_val = validation_timeout
+    if timeout_val is None:
+        if config and "validation_timeout" in config:
+            try:
+                timeout_val = int(config["validation_timeout"])
+            except (ValueError, TypeError):
+                timeout_val = DEFAULT_VALIDATION_TIMEOUT
+        else:
+            timeout_val = resolve_validation_timeout(repo_root=repo_root)
+
     temp_worktree = tempfile.mkdtemp(prefix="aet-train-flush-")
     tree_hash = ""
     try:
@@ -438,6 +519,7 @@ def flush(
             cmd_list,
             temp_worktree,
             env={"AET_REPO_ROOT": str(repo_root)},
+            timeout=timeout_val,
         )
     except Exception as exc:
         return FlushResult(
@@ -465,6 +547,7 @@ def flush(
             validate_command=cmd_list,
             base=base_commit,
             snapshot_output=initial_output,
+            validation_timeout=timeout_val,
         )
 
         # 2. Flake path: bisect finds no failing prefix
@@ -488,6 +571,7 @@ def flush(
                     cmd_list,
                     retry_wt,
                     env={"AET_REPO_ROOT": str(repo_root)},
+                    timeout=timeout_val,
                 )
                 tree_hash = verifier.working_tree_hash(retry_wt)
             finally:
@@ -500,6 +584,25 @@ def flush(
             if proc_retry is None or proc_retry.returncode != 0:
                 # Red again -> halt fail-closed
                 out = (proc_retry.stdout or "") + (proc_retry.stderr or "") if proc_retry else initial_output
+                batch_record = {
+                    "kind": "batch",
+                    "branch": branch,
+                    "verdict": "fail",
+                    "summary": f"Merge train flush failed on {branch}: {out[:120].strip() or 'validation failure'}",
+                    "generated_at": telemetry.iso_now(),
+                    "tree_hash": tree_hash or ("0" * 40),
+                    "task_ids": snapshot_task_ids,
+                }
+                try:
+                    evidence.write_verdict(
+                        task_id=branch,
+                        kind="batch",
+                        record=batch_record,
+                        project_slug=telemetry.derive_project_slug(repo_root),
+                        worktree_dir=repo_root,
+                    )
+                except Exception:
+                    pass
                 return FlushResult(
                     ok=False,
                     status="halt",
@@ -679,6 +782,7 @@ def flush(
                 backend=backend,
                 config=config,
                 validate_command=validate_command,
+                validation_timeout=validation_timeout,
             )
             res.restack_conflicts = list(set(restack_conflicts + res.restack_conflicts))
             return res

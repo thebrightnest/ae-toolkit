@@ -76,7 +76,10 @@ LEGAL_CONFIG_KEYS = frozenset({
     "release_prep",  # read by aet.cli.release_prep
     "validate_command",
     "lint_command",
+    "validation_timeout",
 })
+
+DEFAULT_VALIDATION_TIMEOUT: int = 600
 
 # Removed-key migration message reused by config resolution and CLI.
 _TASK_BACKEND_REMOVED_MSG = (
@@ -360,6 +363,30 @@ def resolve_validation_commands(
         lint_cmd = None
 
     return validate_cmd, lint_cmd
+
+
+def resolve_validation_timeout(
+    repo_root: str | Path | None = None,
+    config_path: str | None = None,
+) -> int:
+    """Resolve validation timeout in seconds from AET config.
+
+    Precedence: AET_VALIDATION_TIMEOUT env var -> config file -> 600s default.
+    """
+    env_val = os.environ.get("AET_VALIDATION_TIMEOUT")
+    if env_val:
+        try:
+            return int(env_val)
+        except (ValueError, TypeError):
+            pass
+    config = resolve_config(config_path or DEFAULT_CONFIG_PATH, repo_root=repo_root)
+    raw_val = config.get("validation_timeout")
+    if raw_val is not None:
+        try:
+            return int(raw_val)
+        except (ValueError, TypeError):
+            return DEFAULT_VALIDATION_TIMEOUT
+    return DEFAULT_VALIDATION_TIMEOUT
 
 
 def _load_config(path: Path) -> dict[str, Any]:

@@ -364,14 +364,37 @@ def cmd_default(args: SimpleNamespace) -> int:
     return cmd_open(args)
 
 
+DEFAULT_SUBPROCESS_TIMEOUT: float = 120.0
+
+
 def _fail(message: str) -> int:
     print(f"⛔ {message}", file=sys.stderr)
     return 1
 
 
-def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+def _run_git(
+    *args: str,
+    check: bool = True,
+    timeout: float | None = DEFAULT_SUBPROCESS_TIMEOUT,
+) -> subprocess.CompletedProcess:
     """Run a git command and return the completed process."""
-    return subprocess.run(["git", *args], capture_output=True, text=True, check=check)
+    try:
+        return subprocess.run(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            check=check,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        if check:
+            raise
+        return subprocess.CompletedProcess(
+            args=["git", *args],
+            returncode=124,
+            stdout=exc.stdout or "",
+            stderr=((exc.stderr or "") + f"\nGit command timed out after {timeout}s").strip(),
+        )
 
 
 def _has_origin() -> bool:
@@ -820,8 +843,16 @@ def _push_branch(
         cmd = ["git", *git_args, "push", "--force-with-lease", "origin", push_spec]
     else:
         cmd = ["git", *git_args, "push", "-u", "origin", push_spec]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    return result.returncode == 0, result.stdout + result.stderr
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+        )
+        return result.returncode == 0, result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        return False, f"Git push timed out after {DEFAULT_SUBPROCESS_TIMEOUT}s"
 
 
 def _create_pr(pr_base: str, title: str, body: str) -> tuple[bool, str]:
@@ -846,8 +877,11 @@ def _create_pr(pr_base: str, title: str, body: str) -> tuple[bool, str]:
             ],
             capture_output=True,
             text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
         )
         return result.returncode == 0, result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        return False, f"gh pr create timed out after {DEFAULT_SUBPROCESS_TIMEOUT}s"
     finally:
         os.unlink(body_path)
 
@@ -940,6 +974,7 @@ def _find_existing_pr(branch: str) -> Optional[str]:
             ["gh", "pr", "list", "--head", branch, "--json", "url"],
             capture_output=True,
             text=True,
+            timeout=60,
         )
         if res.returncode == 0 and res.stdout.strip():
             out = res.stdout.strip()

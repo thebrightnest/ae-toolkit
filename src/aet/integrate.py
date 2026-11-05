@@ -31,6 +31,8 @@ from aet.queue import current_state, queue_lock
 from aet.train import train_ref, train_tip, update_train_ref
 from aet.worktree import delete_local_branch, run_git_plain
 
+DEFAULT_SUBPROCESS_TIMEOUT: float = 120.0
+
 
 @dataclass
 class IntegrateResult:
@@ -83,11 +85,15 @@ def commit_count(
     """Return the number of commits between pr_base and feature_branch."""
     target_ref = feature_branch or "HEAD"
     git_args = ["-C", str(workspace)] if workspace else []
-    result = subprocess.run(
-        ["git", *git_args, "rev-list", "--count", f"{pr_base}..{target_ref}"],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", *git_args, "rev-list", "--count", f"{pr_base}..{target_ref}"],
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return 0
     if result.returncode != 0:
         return 0
     try:
@@ -104,11 +110,15 @@ def commit_subjects(
     """Return commit subjects in the pr_base..feature_branch range."""
     target_ref = feature_branch or "HEAD"
     git_args = ["-C", str(workspace)] if workspace else []
-    result = subprocess.run(
-        ["git", *git_args, "log", f"{pr_base}..{target_ref}", "--pretty=format:%s"],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", *git_args, "log", f"{pr_base}..{target_ref}", "--pretty=format:%s"],
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return []
     if result.returncode != 0:
         return []
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
@@ -125,11 +135,15 @@ def check_release_guard(
             return f"Release guard: commit '{subject}' is a chore(release) on a feature branch."
     target_ref = feature_branch or "HEAD"
     git_args = ["-C", str(workspace)] if workspace else []
-    diff = subprocess.run(
-        ["git", *git_args, "diff", f"{pr_base}..{target_ref}", "--name-only"],
-        capture_output=True,
-        text=True,
-    )
+    try:
+        diff = subprocess.run(
+            ["git", *git_args, "diff", f"{pr_base}..{target_ref}", "--name-only"],
+            capture_output=True,
+            text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return "Release guard: git diff timed out."
     if diff.returncode == 0:
         for line in diff.stdout.splitlines():
             if line.strip() == "VERSION":
@@ -186,22 +200,28 @@ def _stage_task_conflict(
         t = next((item for item in queue if item.get("id") == task_id), None)
         curr = current_state(t) if t else "in_progress"
         if curr != "awaiting_merge":
-            res = subprocess.run(
-                [
-                    sys.executable,
-                    aet_state_bin,
-                    "transition",
-                    task_id,
-                    curr,
-                    "awaiting_merge",
-                    queue_file,
-                ],
-                capture_output=True,
-                text=True,
-            )
-            if res.returncode != 0:
+            try:
+                res = subprocess.run(
+                    [
+                        sys.executable,
+                        aet_state_bin,
+                        "transition",
+                        task_id,
+                        curr,
+                        "awaiting_merge",
+                        queue_file,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+                )
+                if res.returncode != 0:
+                    print(
+                        f"   ⚠️  Could not transition {task_id} to awaiting_merge: {res.stderr.strip()}"
+                    )
+            except subprocess.TimeoutExpired:
                 print(
-                    f"   ⚠️  Could not transition {task_id} to awaiting_merge: {res.stderr.strip()}"
+                    f"   ⚠️  Timed out transitioning {task_id} to awaiting_merge after {DEFAULT_SUBPROCESS_TIMEOUT}s"
                 )
         with queue_lock(queue_file):
             if hasattr(backend, "fetch"):
@@ -378,10 +398,12 @@ def integrate(
     subprocess.run(
         ["git", "-C", worktree_dir, "reset", "--hard", "HEAD"],
         capture_output=True,
+        timeout=DEFAULT_SUBPROCESS_TIMEOUT,
     )
     subprocess.run(
         ["git", "-C", worktree_dir, "clean", "-fd"],
         capture_output=True,
+        timeout=DEFAULT_SUBPROCESS_TIMEOUT,
     )
 
     print(f"   🔀 Integrating {task_id} into {integration_branch}")
@@ -392,6 +414,7 @@ def integrate(
             ["git", "-C", repo_root, "fetch", "origin", integration_branch],
             capture_output=True,
             text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
         )
 
         ref = train_ref(integration_branch)
@@ -399,6 +422,7 @@ def integrate(
             ["git", "-C", repo_root, "rev-parse", "--verify", ref],
             capture_output=True,
             text=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
         )
         old_staging_commit = res_train.stdout.strip() if res_train.returncode == 0 else "0" * 40
         target_ref = train_tip(repo_root, integration_branch)
@@ -407,21 +431,46 @@ def integrate(
         pre_rebase_commit = pre_rebase_commit.strip()
 
         # Rebase the task branch onto the live train tip inside the worktree.
-        rebase = subprocess.run(
-            ["git", "-C", worktree_dir, "rebase", target_ref],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            rebase = subprocess.run(
+                ["git", "-C", worktree_dir, "rebase", target_ref],
+                capture_output=True,
+                text=True,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            try:
+                subprocess.run(
+                    ["git", "-C", worktree_dir, "rebase", "--abort"],
+                    capture_output=True,
+                    timeout=30,
+                )
+            except Exception:
+                pass
+            diag = {
+                "reason": "rebase_conflict",
+                "conflicting_files": [],
+                "stderr_tail": f"git rebase timed out after {DEFAULT_SUBPROCESS_TIMEOUT}s",
+                "at": telemetry.iso_now(),
+            }
+            _stage_task_conflict(repo_root, task_id, queue_file, backend, diag)
+            print(
+                f"⚠️  Task {task_id} staged in awaiting_merge due to rebase timeout. Independent tasks continue."
+            )
+            return IntegrateResult(status="staged_conflict", detail=diag, branch=integration_branch)
+
         if rebase.returncode != 0:
             conflicts_run = subprocess.run(
                 ["git", "-C", worktree_dir, "diff", "--name-only", "--diff-filter=U"],
                 capture_output=True,
                 text=True,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT,
             )
             conflicts = [f.strip() for f in conflicts_run.stdout.splitlines() if f.strip()]
             subprocess.run(
                 ["git", "-C", worktree_dir, "rebase", "--abort"],
                 capture_output=True,
+                timeout=30,
             )
             tail = (rebase.stderr if rebase.stderr.strip() else rebase.stdout or "").strip()[-500:]
             diag = {
@@ -442,10 +491,12 @@ def integrate(
             subprocess.run(
                 ["git", "-C", worktree_dir, "reset", "--hard", pre_rebase_commit],
                 capture_output=True,
+                timeout=30,
             )
             subprocess.run(
                 ["git", "-C", worktree_dir, "clean", "-fd"],
                 capture_output=True,
+                timeout=30,
             )
             diag = {
                 "reason": "guard_refused",
@@ -461,10 +512,12 @@ def integrate(
             subprocess.run(
                 ["git", "-C", worktree_dir, "reset", "--hard", pre_rebase_commit],
                 capture_output=True,
+                timeout=30,
             )
             subprocess.run(
                 ["git", "-C", worktree_dir, "clean", "-fd"],
                 capture_output=True,
+                timeout=30,
             )
             diag = {
                 "reason": "guard_refused",
@@ -499,14 +552,20 @@ def integrate(
             raise IntegrationFailureError(f"could not resolve task tree: {tree_err.strip()}")
         tree_sha = tree_out.strip()
 
-        commit = subprocess.run(
-            [
-                "git", "-C", worktree_dir, "commit-tree", tree_sha,
-                "-p", target_ref, "-m", f"Integrate {task_id}",
-            ],
-            capture_output=True,
-            text=True,
-        )
+        try:
+            commit = subprocess.run(
+                [
+                    "git", "-C", worktree_dir, "commit-tree", tree_sha,
+                    "-p", target_ref, "-m", f"Integrate {task_id}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            raise IntegrationFailureError(
+                f"commit-tree for squash integration timed out after {DEFAULT_SUBPROCESS_TIMEOUT}s"
+            )
         if commit.returncode != 0:
             raise IntegrationFailureError(
                 f"commit-tree for squash integration failed: {commit.stderr.strip()}"
@@ -524,6 +583,7 @@ def integrate(
         subprocess.run(
             ["git", "-C", repo_root, "worktree", "remove", "--force", worktree_dir],
             capture_output=True,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT,
         )
         delete_local_branch(repo_root, task_branch)
 
@@ -534,22 +594,28 @@ def integrate(
         t = next((item for item in queue if item.get("id") == task_id), None)
         curr = current_state(t) if t else "in_progress"
         if curr != "awaiting_merge":
-            res = subprocess.run(
-                [
-                    sys.executable,
-                    aet_state_bin,
-                    "transition",
-                    task_id,
-                    curr,
-                    "awaiting_merge",
-                    queue_file,
-                ],
-                capture_output=True,
-                text=True,
-            )
-            if res.returncode != 0:
+            try:
+                res = subprocess.run(
+                    [
+                        sys.executable,
+                        aet_state_bin,
+                        "transition",
+                        task_id,
+                        curr,
+                        "awaiting_merge",
+                        queue_file,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=DEFAULT_SUBPROCESS_TIMEOUT,
+                )
+                if res.returncode != 0:
+                    raise IntegrationFailureError(
+                        f"Could not transition {task_id} to awaiting_merge: {res.stderr.strip()}"
+                    )
+            except subprocess.TimeoutExpired:
                 raise IntegrationFailureError(
-                    f"Could not transition {task_id} to awaiting_merge: {res.stderr.strip()}"
+                    f"Timed out transitioning {task_id} to awaiting_merge after {DEFAULT_SUBPROCESS_TIMEOUT}s"
                 )
 
         with queue_lock(queue_file):
