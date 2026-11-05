@@ -70,8 +70,11 @@ Execute a plan.md from start to finish with self-validation.
 5. Create a feature branch if not already on one
 6. Execute tasks in the order specified in the plan
 7. After each task, run the relevant validation from the plan's self-validation strategy. **If validation fails, stop immediately, report the failing task and the failure, and do not start the next task until it passes.**
-8. Compare implementation against the plan — flag any deviation
-9. Commit with a message that references the ticket/plan
+8. **Create a separate git commit for each plan task before starting the next task or concluding implementation:**
+   - Multi-task plans (`plan_task_count(spec) > 1`) **require atomic per-task commits**.
+   - Do not combine multiple plan tasks into a single monolithic commit. A multi-task plan with only one commit trips the monolithic commit guard (`is_monolithic_commit`) at the merge gate and halts integration.
+   - Each commit message must reference the ticket/plan and describe the specific task completed.
+9. Compare implementation against the plan — flag any deviation
 10. Summarize what was built, what validation passed, and any deviations
 
 **Fresh session reminder:**
@@ -104,7 +107,7 @@ Worktree mode puts each implementation on its own branch using standard git comm
 
 5. Execute the normal implement steps (above) from inside the worktree directory,
    **skipping step 5** (branch already created by the worktree setup).
-6. Commit the work.
+6. Commit the work, creating a separate git commit for each plan task (never a single monolithic commit for multi-task plans).
 7. Return to the repo root:
 
    ```bash
@@ -165,5 +168,6 @@ After `implement` completes and all validation passes:
 - **Plan.md is the sole input** — no additional context should be needed
 - **Self-validate continuously** — don't write hundreds of lines before checking anything
 - **TDD preferred** — write one failing test, make it pass, refactor. Repeat per behavior (vertical slices). Use `/tdd` for dedicated TDD guidance.
+- **Atomic per-task commits** — create a separate git commit for each plan task before concluding implementation. Multi-task plans must never result in a single monolithic commit.
 - **Agent handles admin** — branching, committing, PR creation
 - **Human handles review** — code review and manual testing are not optional

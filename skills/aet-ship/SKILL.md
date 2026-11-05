@@ -12,6 +12,8 @@ Pre-merge gate, PR creation, merge, and post-merge closure for AET tasks.
 - A task has reached `awaiting_merge` and you need to open or merge its PR
 - You want to run the pre-merge gate (`aet ship gate`) before opening a PR
 - You need to merge a task branch directly into its target branch
+- You need to verify commit counts match multi-task plans before attempting integration
+- You need to split a monolithic commit on a multi-task plan using `aet ship split`
 - You need to verify a squash merge before closing (`aet ship verify`)
 - `aet ship close` reports an ambiguous merge-verification result and you need a decision procedure
 
@@ -40,6 +42,15 @@ A bare task id given to `aet ship`, `aet ship gate`, `aet ship open`, or `aet sh
 4. Pre-integration validation check via `pre_integration_check` inside the resolved workspace, skipping execution if the working tree matches an existing passing `batch` verdict or recorded `qa` verdict (`SKIP`), running `lint_command` if only non-code paths changed (`LINT_ONLY`), or running `validate_command` (`RUN`, defaulting to `make validate`).
 5. **Verify evidence check**: If the workflow requires a `verify` evidence kind (such as for `critical` tasks), checks for a passing `verify` verdict via `gate.verdict_status`. Other evidence kinds are enforced in-run by their respective stage gates and are not re-checked at ship.
 6. Scope audit and commit count checks against the resolved feature branch and declared files in the plan spec.
+
+### Pre-Stage Commit Count Validation
+
+Before invoking `aet ship merge` or staging a branch onto the merge train, verify that the commit count matches multi-task plans:
+
+- Check the task plan specification for task count (`plan_task_count(spec)`).
+- When a plan contains multiple tasks (`plan_task_count > 1`), verify the feature branch contains separate atomic commits per task (`git rev-list --count <base>..<branch> > 1`).
+- If `commit_count == 1` on a multi-task plan, the merge gate's `is_monolithic_commit` guard will refuse integration (`guard_refused`).
+- **Remediation**: Before calling `aet ship merge`, use `aet ship split <task_id> --message <msg> --paths <path>...` to split the monolithic commit into atomic per-task commits. See [references/commit-splitting.md](references/commit-splitting.md).
 
 ## Merge Train and Validation Reuse
 

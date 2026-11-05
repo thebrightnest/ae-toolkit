@@ -11,6 +11,7 @@ A commit is bisectable when it contains exactly one logical change that can be i
 - **Mixed concerns** — refactor + feature in one commit → split
 - **Multiple features** — two unrelated changes → split
 - **Review feedback** — post-review fixes mixed with original work → split
+- **Multi-task plans with a single commit** — multi-task plan implemented in one commit trips `is_monolithic_commit` → split
 
 ### How to Split
 
@@ -35,9 +36,22 @@ commit 2: "style: fix linting errors in auth module"
 commit 3: "docs: update README with auth setup instructions"
 ```
 
+## Pre-Stage Validation for Multi-Task Plans
+
+Autonomous agents and contributors must verify that multi-task plans (`plan_task_count > 1`) have atomic commits per task before staging or calling `aet ship merge`:
+
+1. **Check commit count**:
+   ```bash
+   git rev-list --count origin/main..HEAD
+   ```
+2. **Evaluate against plan tasks**:
+   If the plan contains multiple tasks (`plan_task_count > 1`) and the commit count is 1, the pre-merge gate's `is_monolithic_commit` check will refuse integration (`guard_refused`).
+3. **Split before merge**:
+   Split the single commit into atomic commits corresponding to each plan task using `aet ship split`.
+
 ## Auto-Splitting in aet-ship
 
-If `aet ship` (or `aet ship open`) detects non-bisectable commits, stop and use the dedicated command:
+If `aet ship` (or `aet ship open`) detects non-bisectable commits or a monolithic commit on a multi-task plan, stop and use the dedicated command:
 
 ```bash
 aet ship split docs/plans/TASK-001.md \
