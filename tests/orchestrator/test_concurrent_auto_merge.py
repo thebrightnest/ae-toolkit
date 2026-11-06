@@ -16,6 +16,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -190,13 +191,15 @@ if hook_file.exists():
     with open(hook_file, 'r', encoding='utf-8') as f:
         exec(f.read(), global_vars)
 else:
-    counter_file = pathlib.Path(wt, '.stage-counter')
+    counter_file = pathlib.Path(wt, f'.stage-counter-{{name}}')
     counter = int(counter_file.read_text().strip()) if counter_file.exists() else 0
     counter += 1
     counter_file.write_text(str(counter))
     pathlib.Path(wt, f'{{name}}-{{counter}}.txt').write_text(f'stage {{counter}}')
     subprocess.run(['git', '-C', wt, 'add', '.'], check=True)
-    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', f'stage {{counter}}'], check=True)
+    status = subprocess.run(['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True)
+    if status.stdout.strip():
+        subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', f'stage {{counter}}'], check=True)
     from aet import evidence, telemetry
     project_slug = telemetry.derive_project_slug(repo_root)
     record = {{
@@ -285,7 +288,32 @@ def _get_task(backend, queue_file: str, task_id: str) -> dict:
     return rec
 
 
-class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
+DEFAULT_TEST_TIMEOUT: int = 120
+
+
+class BaseOrchestratorTestCase(unittest.TestCase):
+    """Enforces per-test execution timeouts preventing indefinite hangs (R-3)."""
+
+    test_timeout: int = DEFAULT_TEST_TIMEOUT
+
+    def setUp(self) -> None:
+        super().setUp()
+        if hasattr(signal, "SIGALRM"):
+            self._prev_alarm_handler = signal.signal(
+                signal.SIGALRM,
+                lambda _s, _f: pytest.fail(f"Test exceeded execution timeout of {self.test_timeout}s"),
+            )
+            signal.alarm(self.test_timeout)
+
+    def tearDown(self) -> None:
+        if hasattr(signal, "SIGALRM"):
+            signal.alarm(0)
+            if hasattr(self, "_prev_alarm_handler"):
+                signal.signal(signal.SIGALRM, self._prev_alarm_handler)
+        super().tearDown()
+
+
+class TestContinuousLazyRebaseAutoMerge(BaseOrchestratorTestCase):
     """Integration test suite for R-1, R-2, and R-3."""
 
     def test_continuous_lazy_rebased_auto_merge_under_lock(self):
@@ -337,7 +365,11 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
             (hooks_dir / "task-a.py").write_text(
                 "pathlib.Path(wt, 'task-a.txt').write_text('task-a work')\n"
                 "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
-                "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-a work'], check=True)\n"
+                "status = subprocess.run(\n"
+                "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+                ")\n"
+                "if status.stdout.strip():\n"
+                "    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-a work'], check=True)\n"
                 "from aet import evidence, telemetry\n"
                 "project_slug = telemetry.derive_project_slug(repo_root)\n"
                 "record = {\n"
@@ -358,14 +390,20 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
                 encoding="utf-8",
             )
             (hooks_dir / "task-b.py").write_text(
-                "cmd = ['git', '-C', wt, 'rev-parse', '--verify', 'refs/aet/train/epic-01']\n"
-                "for _ in range(100):\n"
-                "    if subprocess.run(cmd, capture_output=True).returncode == 0:\n"
+                "cmd = ['git', '-C', wt, 'log', 'refs/aet/train/epic-01', '--oneline']\n"
+                "t_start = time.time()\n"
+                "while time.time() - t_start < 60.0:\n"
+                "    res = subprocess.run(cmd, capture_output=True, text=True)\n"
+                "    if 'Integrate task-a' in res.stdout:\n"
                 "        break\n"
-                "    time.sleep(0.1)\n"
+                "    time.sleep(0.01)\n"
                 "pathlib.Path(wt, 'task-b.txt').write_text('task-b work')\n"
                 "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
-                "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-b work'], check=True)\n"
+                "status = subprocess.run(\n"
+                "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+                ")\n"
+                "if status.stdout.strip():\n"
+                "    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-b work'], check=True)\n"
                 "from aet import evidence, telemetry\n"
                 "project_slug = telemetry.derive_project_slug(repo_root)\n"
                 "record = {\n"
@@ -393,6 +431,7 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
                     {"id": "task-b", "state": "ready", "plan_file": plan_b},
                 ]
             )
+            backend.push()
 
             args = argparse.Namespace(
                 queue_file=queue_file,
@@ -442,7 +481,7 @@ class TestContinuousLazyRebaseAutoMerge(unittest.TestCase):
                 pass
 
 
-class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
+class TestDynamicSlotReplenishmentAndDAG(BaseOrchestratorTestCase):
     """Integration test suite for R-4, R-5, and R-6."""
 
     def test_immediate_dag_progression_and_dynamic_slot_replenishment(self):
@@ -504,6 +543,7 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
                         },
                     ]
                 )
+                backend.push()
 
                 # With max_jobs=1, only task-parent can run first.
                 # When task-parent integrates, task-child is dynamically unblocked and spawned.
@@ -597,17 +637,21 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
                         "t_start = time.time()\n"
                         f"pathlib.Path({str(barrier_dir)!r}, f'{i}.ready').write_text('1')\n"
                         "all_active = False\n"
-                        "while time.time() - t_start < 20.0:\n"
+                        "while time.time() - t_start < 60.0:\n"
                         f"    if len(list(pathlib.Path({str(barrier_dir)!r}).glob('*.ready'))) >= 3:\n"
                         "        all_active = True\n"
                         "        break\n"
-                        "    time.sleep(0.05)\n"
+                        "    time.sleep(0.01)\n"
                         "t_end = time.time()\n"
                         f"with open({str(concurrency_log)!r}, 'a') as f:\n"
                         f"    f.write(f'{i}:{{t_start}}:{{t_end}}:{{all_active}}\\n')\n"
                         f"pathlib.Path(wt, 'task-{i}.txt').write_text('work')\n"
                         "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
-                        f"subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-{i}'], check=True)\n"
+                        "status = subprocess.run(\n"
+                        "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+                        ")\n"
+                        "if status.stdout.strip():\n"
+                        f"    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-{i}'], check=True)\n"
                         "from aet import evidence, telemetry\n"
                         "project_slug = telemetry.derive_project_slug(repo_root)\n"
                         "record = {\n"
@@ -636,6 +680,7 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
                         for i in range(3)
                     ]
                 )
+                backend.push()
 
                 args = argparse.Namespace(
                     queue_file=queue_file,
@@ -687,7 +732,7 @@ class TestDynamicSlotReplenishmentAndDAG(unittest.TestCase):
                 os.environ["PATH"] = original_path
 
 
-class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
+class TestNonBlockingConflictStagingAndBatchSettle(BaseOrchestratorTestCase):
     """Integration test suite for R-7 and R-8."""
 
     def test_non_blocking_conflict_staging_and_batch_settle(self):
@@ -742,7 +787,11 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
                 (hooks_dir / "task-c1.py").write_text(
                     "pathlib.Path(wt, 'conflict.txt').write_text('Line from task-c1\\n')\n"
                     "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
-                    "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-c1'], check=True)\n"
+                    "status = subprocess.run(\n"
+                    "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+                    ")\n"
+                    "if status.stdout.strip():\n"
+                    "    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-c1'], check=True)\n"
                     "from aet import evidence, telemetry\n"
                     "project_slug = telemetry.derive_project_slug(repo_root)\n"
                     "record = {\n"
@@ -765,15 +814,20 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
 
                 # task-c2 edits conflict.txt with conflicting content, waits so task-c1 merges first
                 (hooks_dir / "task-c2.py").write_text(
-                    "done = pathlib.Path(repo_root, '.agents', 'task-c1-done')\n"
-                    "for _ in range(100):\n"
-                    "    if done.exists():\n"
-                    "        time.sleep(0.3)\n"
+                    "cmd = ['git', '-C', wt, 'log', 'refs/aet/train/epic-01', '--oneline']\n"
+                    "t_start = time.time()\n"
+                    "while time.time() - t_start < 60.0:\n"
+                    "    res = subprocess.run(cmd, capture_output=True, text=True)\n"
+                    "    if 'Integrate task-c1' in res.stdout:\n"
                     "        break\n"
-                    "    time.sleep(0.1)\n"
+                    "    time.sleep(0.01)\n"
                     "pathlib.Path(wt, 'conflict.txt').write_text('Line from task-c2 DIFFERENT\\n')\n"
                     "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
-                    "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-c2'], check=True)\n"
+                    "status = subprocess.run(\n"
+                    "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+                    ")\n"
+                    "if status.stdout.strip():\n"
+                    "    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-c2'], check=True)\n"
                     "from aet import evidence, telemetry\n"
                     "project_slug = telemetry.derive_project_slug(repo_root)\n"
                     "record = {\n"
@@ -796,15 +850,22 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
 
                 # task-ind touches independent.txt, finishes after task-c2 attempts rebase
                 (hooks_dir / "task-ind.py").write_text(
-                    "done = pathlib.Path(repo_root, '.agents', 'task-c2-done')\n"
-                    "for _ in range(100):\n"
-                    "    if done.exists():\n"
-                    "        time.sleep(0.3)\n"
+                    "from aet import backends\n"
+                    "q_file = os.path.join(repo_root, '.agents', 'aet-queue')\n"
+                    "b = backends.create_backend(queue_file=q_file)\n"
+                    "t_start = time.time()\n"
+                    "while time.time() - t_start < 60.0:\n"
+                    "    t = next((x for x in b.load().get('queue', []) if x.get('id') == 'task-c2'), None)\n"
+                    "    if t and t.get('state') == 'awaiting_merge':\n"
                     "        break\n"
-                    "    time.sleep(0.1)\n"
+                    "    time.sleep(0.02)\n"
                     "pathlib.Path(wt, 'independent.txt').write_text('Independent work\\n')\n"
                     "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
-                    "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-ind'], check=True)\n"
+                    "status = subprocess.run(\n"
+                    "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+                    ")\n"
+                    "if status.stdout.strip():\n"
+                    "    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'commit task-ind'], check=True)\n"
                     "from aet import evidence, telemetry\n"
                     "project_slug = telemetry.derive_project_slug(repo_root)\n"
                     "record = {\n"
@@ -845,6 +906,7 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
                         },
                     ]
                 )
+                backend.push()
 
                 args = argparse.Namespace(
                     queue_file=queue_file,
@@ -896,7 +958,7 @@ class TestNonBlockingConflictStagingAndBatchSettle(unittest.TestCase):
                 os.environ["PATH"] = original_path
 
 
-class TestDualModeParity(unittest.TestCase):
+class TestDualModeParity(BaseOrchestratorTestCase):
     """Integration test suite for R-10."""
 
     def test_dual_mode_parity_standalone_targeting_trunk(self):
@@ -959,6 +1021,7 @@ class TestDualModeParity(unittest.TestCase):
                         },
                     ]
                 )
+                backend.push()
 
                 args = argparse.Namespace(
                     queue_file=queue_file,
@@ -997,7 +1060,7 @@ class TestDualModeParity(unittest.TestCase):
                 os.environ["PATH"] = original_path
 
 
-class TestAetDriveHarmonizationContract(unittest.TestCase):
+class TestAetDriveHarmonizationContract(BaseOrchestratorTestCase):
     """Verification for R-9 conflict diagnostics contract."""
 
     def test_conflict_diagnostics_contract_for_aet_drive(self):

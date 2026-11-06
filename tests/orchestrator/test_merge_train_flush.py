@@ -16,6 +16,7 @@ import contextlib
 import io
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -183,21 +184,26 @@ if hook_file.exists():
     with open(hook_file, 'r', encoding='utf-8') as f:
         exec(f.read(), global_vars)
 else:
-    delay = 0.05
-    if name.endswith('2'):
-        delay = 0.20
-    elif name.endswith('3'):
-        delay = 0.35
-    elif name.endswith('4'):
-        delay = 0.50
-    time.sleep(delay)
-    counter_file = pathlib.Path(wt, '.stage-counter')
+    prev_id = None
+    if len(name) > 1 and name[-1].isdigit() and int(name[-1]) > 1:
+        prev_id = name[:-1] + str(int(name[-1]) - 1)
+    if prev_id:
+        cmd = ['git', '-C', wt, 'log', 'refs/aet/train/epic-01', '--oneline']
+        t_start = time.time()
+        while time.time() - t_start < 60.0:
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if ('Integrate ' + prev_id) in res.stdout:
+                break
+            time.sleep(0.01)
+    counter_file = pathlib.Path(wt, f'.stage-counter-{{name}}')
     counter = int(counter_file.read_text().strip()) if counter_file.exists() else 0
     counter += 1
     counter_file.write_text(str(counter))
     pathlib.Path(wt, f'{{name}}-{{counter}}.txt').write_text(f'stage {{counter}}')
     subprocess.run(['git', '-C', wt, 'add', '.'], check=True)
-    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', f'stage {{counter}}'], check=True)
+    status = subprocess.run(['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True)
+    if status.stdout.strip():
+        subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', f'stage {{counter}}'], check=True)
     from aet import evidence, telemetry
     dest = evidence.resolve_verdict_path(name, 'qa')
     record = {{
@@ -234,10 +240,36 @@ def _get_task(backend, queue_file: str, task_id: str) -> dict:
     return rec
 
 
-class TestMergeTrainFlush(unittest.TestCase):
+DEFAULT_TEST_TIMEOUT: int = 120
+
+
+class BaseOrchestratorTestCase(unittest.TestCase):
+    """Enforces per-test execution timeouts preventing indefinite hangs (R-3)."""
+
+    test_timeout: int = DEFAULT_TEST_TIMEOUT
+
+    def setUp(self) -> None:
+        super().setUp()
+        if hasattr(signal, "SIGALRM"):
+            self._prev_alarm_handler = signal.signal(
+                signal.SIGALRM,
+                lambda _s, _f: pytest.fail(f"Test exceeded execution timeout of {self.test_timeout}s"),
+            )
+            signal.alarm(self.test_timeout)
+
+    def tearDown(self) -> None:
+        if hasattr(signal, "SIGALRM"):
+            signal.alarm(0)
+            if hasattr(self, "_prev_alarm_handler"):
+                signal.signal(signal.SIGALRM, self._prev_alarm_handler)
+        super().tearDown()
+
+
+class TestMergeTrainFlush(BaseOrchestratorTestCase):
     """Integration tests for merge train batch flush and staging."""
 
     def setUp(self):
+        super().setUp()
         self._tmp_repo = tempfile.TemporaryDirectory()
         self._tmp_origin = tempfile.TemporaryDirectory()
         self._tmp_misc = tempfile.TemporaryDirectory()
@@ -271,6 +303,7 @@ class TestMergeTrainFlush(unittest.TestCase):
         self._tmp_repo.cleanup()
         self._tmp_origin.cleanup()
         self._tmp_misc.cleanup()
+        super().tearDown()
 
     def test_three_independent_tasks_flush_once_at_end_of_run(self):
         """Three independent tasks produce exactly one validate_command call at end of run and all merge."""
@@ -320,6 +353,7 @@ class TestMergeTrainFlush(unittest.TestCase):
                 {"id": "task-3", "state": "ready", "plan_file": plan_3},
             ]
         )
+        backend.push()
 
         args = argparse.Namespace(
             queue_file=queue_file,
@@ -518,7 +552,6 @@ class TestMergeTrainFlush(unittest.TestCase):
             f"            fcntl.flock(f.fileno(), fcntl.LOCK_UN)\n"
             f"        except (BlockingIOError, OSError):\n"
             f"            lock_held_by_parent = True\n"
-            f"time.sleep(0.05)\n"
             f"end = time.time()\n"
             f"with open(val_log, 'a', encoding='utf-8') as f:\n"
             f"    f.write(json.dumps({{'start': start, 'end': end, 'lock_held': lock_held_by_parent}}) + '\\n')\n"
@@ -646,6 +679,7 @@ class TestMergeTrainFlush(unittest.TestCase):
                 {"id": "task-2", "state": "ready", "plan_file": plan_2},
             ]
         )
+        backend.push()
 
         args = argparse.Namespace(
             queue_file=queue_file,
@@ -729,17 +763,93 @@ class TestMergeTrainFlush(unittest.TestCase):
             check=True,
         ).stdout.strip()
 
-        # Set up hook for task-3 to write fail.txt
+        # Set up hooks to synchronize staging sequence deterministically via state transitions
         hooks_dir = Path(self.repo_root) / ".agents" / "hooks"
         hooks_dir.mkdir(parents=True, exist_ok=True)
+        (hooks_dir / "task-2.py").write_text(
+            "import pathlib, subprocess, time\n"
+            "cmd = ['git', '-C', wt, 'log', 'refs/aet/train/epic-01', '--oneline']\n"
+            "t_start = time.time()\n"
+            "while time.time() - t_start < 60.0:\n"
+            "    res = subprocess.run(cmd, capture_output=True, text=True)\n"
+            "    if 'Integrate task-1' in res.stdout:\n"
+            "        break\n"
+            "    time.sleep(0.01)\n"
+            "pathlib.Path(wt, 'task-2.txt').write_text('task 2 done')\n"
+            "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
+            "status = subprocess.run(\n"
+            "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+            ")\n"
+            "if status.stdout.strip():\n"
+            "    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-2 commit'], check=True)\n"
+            "from aet import evidence, telemetry\n"
+            "dest = evidence.resolve_verdict_path(name, 'qa')\n"
+            "record = {\n"
+            "    'task_id': name,\n"
+            "    'stage': 'qa-complete',\n"
+            "    'skill': 'aet-qa',\n"
+            "    'verdict': 'pass',\n"
+            "    'summary': 'qa passed',\n"
+            "    'generated_at': telemetry.iso_now(),\n"
+            "    'test_command': 'make validate',\n"
+            "    'tests_total': 1,\n"
+            "    'tests_passed': 1,\n"
+            "    'tests_failed': 0,\n"
+            "}\n"
+            "evidence.write_verdict(name, 'qa', record, path=dest, worktree_dir=wt)\n",
+            encoding="utf-8",
+        )
         (hooks_dir / "task-3.py").write_text(
             "import pathlib, subprocess, time\n"
-            "time.sleep(0.15)\n"
+            "cmd = ['git', '-C', wt, 'log', 'refs/aet/train/epic-01', '--oneline']\n"
+            "t_start = time.time()\n"
+            "while time.time() - t_start < 60.0:\n"
+            "    res = subprocess.run(cmd, capture_output=True, text=True)\n"
+            "    if 'Integrate task-2' in res.stdout:\n"
+            "        break\n"
+            "    time.sleep(0.01)\n"
             "from aet import evidence, telemetry\n"
             "pathlib.Path(wt, 'fail.txt').write_text('bad')\n"
             "pathlib.Path(wt, 'task-3.txt').write_text('task 3 done')\n"
             "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
-            "subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-3 commit'], check=True)\n"
+            "status = subprocess.run(\n"
+            "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+            ")\n"
+            "if status.stdout.strip():\n"
+            "    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-3 commit'], check=True)\n"
+            "dest = evidence.resolve_verdict_path(name, 'qa')\n"
+            "record = {\n"
+            "    'task_id': name,\n"
+            "    'stage': 'qa-complete',\n"
+            "    'skill': 'aet-qa',\n"
+            "    'verdict': 'pass',\n"
+            "    'summary': 'qa passed',\n"
+            "    'generated_at': telemetry.iso_now(),\n"
+            "    'test_command': 'make validate',\n"
+            "    'tests_total': 1,\n"
+            "    'tests_passed': 1,\n"
+            "    'tests_failed': 0,\n"
+            "}\n"
+            "evidence.write_verdict(name, 'qa', record, path=dest, worktree_dir=wt)\n",
+            encoding="utf-8",
+        )
+        (hooks_dir / "task-4.py").write_text(
+            "import pathlib, subprocess, time\n"
+            "cmd = ['git', '-C', wt, 'log', 'refs/aet/train/epic-01', '--oneline']\n"
+            "t_start = time.time()\n"
+            "while time.time() - t_start < 60.0:\n"
+            "    res = subprocess.run(cmd, capture_output=True, text=True)\n"
+            "    if 'Integrate task-3' in res.stdout:\n"
+            "        break\n"
+            "    time.sleep(0.01)\n"
+            "pathlib.Path(wt, 'task-4.txt').write_text('task 4 done')\n"
+            "subprocess.run(['git', '-C', wt, 'add', '.'], check=True)\n"
+            "status = subprocess.run(\n"
+            "    ['git', '-C', wt, 'status', '--porcelain'], capture_output=True, text=True\n"
+            ")\n"
+            "if status.stdout.strip():\n"
+            "    subprocess.run(['git', '-C', wt, 'commit', '-q', '-m', 'task-4 commit'], check=True)\n"
+            "from aet import evidence, telemetry\n"
             "dest = evidence.resolve_verdict_path(name, 'qa')\n"
             "record = {\n"
             "    'task_id': name,\n"
@@ -765,6 +875,7 @@ class TestMergeTrainFlush(unittest.TestCase):
                 for i in range(1, 5)
             ]
         )
+        backend.push()
 
         args = argparse.Namespace(
             queue_file=queue_file,

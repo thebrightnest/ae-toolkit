@@ -398,16 +398,13 @@ def _stage_task_conflict(
                     f"   ⚠️  Timed out transitioning {task_id} to awaiting_merge after {DEFAULT_SUBPROCESS_TIMEOUT}s"
                 )
         with queue_lock(queue_file):
-            if hasattr(backend, "fetch"):
-                try:
-                    backend.fetch()
-                except Exception:
-                    pass
             data = backend.load()
             q = data["queue"]
             for target in q:
                 if target.get("id") == task_id:
                     target["conflict_diagnostics"] = diag
+                    if current_state(target) != "awaiting_merge":
+                        target["state"] = "awaiting_merge"
                     break
             _save_task_record(backend, q)
 
@@ -799,11 +796,6 @@ def integrate(
                 )
 
         with queue_lock(queue_file):
-            if hasattr(backend, "fetch"):
-                try:
-                    backend.fetch()
-                except Exception:
-                    pass
             data = backend.load()
             queue = data.get("queue", [])
             existing_staged = [
@@ -821,6 +813,8 @@ def integrate(
                         "position": position,
                         "staged_at": telemetry.iso_now(),
                     }
+                    if current_state(target) != "awaiting_merge":
+                        target["state"] = "awaiting_merge"
                     break
             _save_task_record(backend, queue)
 

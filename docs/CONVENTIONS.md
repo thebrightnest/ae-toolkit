@@ -630,6 +630,14 @@ Rules:
 current file-to-group mapping and must be updated when a new orchestrator file
 joins the grouped set.
 
+### Deterministic Concurrency and Test Timeouts
+
+Orchestrator and concurrency test suites must avoid fragile timing-based synchronization:
+
+- **No `time.sleep` race conditions**: Never use arbitrary sleep delays (`time.sleep`) to simulate ordering, wait for background processes, or stagger tasks. Delays fail under heavy CPU contention.
+- **Deterministic synchronization primitives**: Use barrier marker files, POSIX file locks, or explicit state transition polling with bounded timeouts when coordinating concurrent child processes or merge train staging.
+- **Per-test execution timeouts**: Orchestrator test suites must enforce bounded per-test execution timeouts (e.g., via SIGALRM backstops or base test case setups) to prevent tests from hanging indefinitely under contention or deadlocks.
+
 ## Versioning
 
 Skills are versioned implicitly by git commit. No separate version field in frontmatter.
