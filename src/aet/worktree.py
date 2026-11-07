@@ -81,6 +81,102 @@ def worktree_pythonpath(
     return os.pathsep.join(paths)
 
 
+def resolve_root_repo(repo_root: str | Path) -> Path:
+    """Resolve the real root repository path, handling linked worktrees and symlinks."""
+    p = Path(repo_root).resolve()
+    raw_venv = Path(repo_root) / ".venv"
+    if raw_venv.is_symlink():
+        try:
+            target_venv = raw_venv.resolve()
+            if target_venv.exists() and target_venv.is_dir():
+                return target_venv.parent
+        except OSError:
+            pass
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(p), "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            common = Path(p, res.stdout.strip()).resolve()
+            if common.name == ".git":
+                return common.parent
+            return common
+    except OSError:
+        pass
+    return p
+
+
+def inspect_editable_pth(
+    repo_root: str | Path,
+) -> tuple[bool, list[tuple[Path, str, str]]]:
+    """Inspect _editable_impl_aet.pth files in .venv for repo_root.
+
+    Returns (is_healthy, discrepancies) where each discrepancy is
+    (pth_file_path, current_content, expected_target).
+    """
+    root_repo = resolve_root_repo(repo_root)
+    expected_src = str((root_repo / "src").resolve())
+
+    raw_venv = Path(repo_root) / ".venv"
+    root_venv = raw_venv.resolve() if raw_venv.exists() else (root_repo / ".venv").resolve()
+    if not root_venv.exists() or not root_venv.is_dir():
+        return True, []
+
+    pth_files = list(root_venv.glob("lib*/python*/site-packages/_editable_impl_aet.pth")) + list(
+        root_venv.glob("Lib/site-packages/_editable_impl_aet.pth")
+    )
+
+    if not pth_files:
+        site_packages = list(root_venv.glob("lib*/python*/site-packages")) + list(
+            root_venv.glob("Lib/site-packages")
+        )
+        if site_packages:
+            target_pth = site_packages[0] / "_editable_impl_aet.pth"
+            return False, [(target_pth, "(missing)", expected_src)]
+        return True, []
+
+    discrepancies: list[tuple[Path, str, str]] = []
+    for pth in pth_files:
+        try:
+            current = pth.read_text(encoding="utf-8").strip()
+        except OSError:
+            current = ""
+        is_valid = bool(
+            current
+            and Path(current).exists()
+            and str(Path(current).resolve()) == expected_src
+        )
+        if not is_valid:
+            discrepancies.append((pth, current, expected_src))
+
+    return len(discrepancies) == 0, discrepancies
+
+
+def heal_editable_pth(repo_root: str | Path, dry_run: bool = False) -> bool:
+    """Verify and heal _editable_impl_aet.pth in .venv to point to <root_repo>/src (R-4).
+
+    Returns True if any corrupted or foreign .pth pointer was healed (or needs healing
+    if dry_run is True), and False if all .pth files are already valid or no .venv exists.
+    """
+    is_healthy, discrepancies = inspect_editable_pth(repo_root)
+    if is_healthy:
+        return False
+
+    if dry_run:
+        return True
+
+    for pth_path, _, expected in discrepancies:
+        try:
+            pth_path.parent.mkdir(parents=True, exist_ok=True)
+            pth_path.write_text(f"{expected}\n", encoding="utf-8")
+        except OSError:
+            pass
+
+    return True
+
+
 def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/main") -> str:
     """Create or refresh a git worktree for the task. Return the worktree path.
 
@@ -482,39 +578,42 @@ def teardown_worktree(repo_root: str, task_id: str, force: bool = False) -> dict
     """
     worktree_dir = os.path.join(repo_root, ".worktrees", task_id)
     result: dict[str, Any] = {"removed": False, "reason": "", "obstructions": []}
-    if not os.path.isdir(worktree_dir):
-        result["removed"] = True
-        return result
-
-    ok, errors = _remove_deferred_untracked(worktree_dir)
-    if not ok:
-        result["reason"] = "could not clean deferred files"
-        result["obstructions"] = errors
-        return result
-
-    obstructions = _worktree_obstructions(worktree_dir)
-    if obstructions and not force:
-        result["reason"] = "worktree has uncommitted changes"
-        result["obstructions"] = obstructions
-        return result
-
     try:
-        cmd = ["git", "-C", repo_root, "worktree", "remove"]
-        if force:
-            cmd.append("--force")
-        cmd.append(worktree_dir)
-        subprocess.run(
-            cmd,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        result["removed"] = True
-    except subprocess.CalledProcessError as exc:
-        result["reason"] = exc.stderr.strip() or "git worktree remove failed"
-        result["obstructions"] = _worktree_obstructions(worktree_dir)
+        if not os.path.isdir(worktree_dir):
+            result["removed"] = True
+            return result
 
-    return result
+        ok, errors = _remove_deferred_untracked(worktree_dir)
+        if not ok:
+            result["reason"] = "could not clean deferred files"
+            result["obstructions"] = errors
+            return result
+
+        obstructions = _worktree_obstructions(worktree_dir)
+        if obstructions and not force:
+            result["reason"] = "worktree has uncommitted changes"
+            result["obstructions"] = obstructions
+            return result
+
+        try:
+            cmd = ["git", "-C", repo_root, "worktree", "remove"]
+            if force:
+                cmd.append("--force")
+            cmd.append(worktree_dir)
+            subprocess.run(
+                cmd,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            result["removed"] = True
+        except subprocess.CalledProcessError as exc:
+            result["reason"] = exc.stderr.strip() or "git worktree remove failed"
+            result["obstructions"] = _worktree_obstructions(worktree_dir)
+
+        return result
+    finally:
+        heal_editable_pth(repo_root)
 
 
 def run_git_plain(args: list[str], **kwargs) -> tuple[int, str, str]:

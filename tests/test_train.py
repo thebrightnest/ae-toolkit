@@ -693,4 +693,31 @@ class TestRunFlushValidationEnvironment(unittest.TestCase):
             self.assertTrue(is_symlink)
             self.assertEqual(resolved, root_venv.resolve())
 
+    def test_flush_heals_corrupted_editable_pth(self):
+        """R-4: flush teardown heals corrupted _editable_impl_aet.pth."""
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir:
+            _init_repo(repo_dir, origin_dir, "main")
+            repo_root = Path(repo_dir)
+            src_dir = repo_root / "src"
+            src_dir.mkdir(parents=True, exist_ok=True)
+            site_packages = repo_root / ".venv" / "lib" / "python3.11" / "site-packages"
+            site_packages.mkdir(parents=True, exist_ok=True)
+            pth_path = site_packages / "_editable_impl_aet.pth"
+            pth_path.write_text("/tmp/aet-train-flush-dead/src\n", encoding="utf-8")
+
+            head = subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "HEAD"], text=True).strip()
+            train.update_train_ref(repo_dir, "main", head, old_commit="0" * 40)
+
+            with patch.object(
+                train,
+                "_run_flush_validation",
+                return_value=subprocess.CompletedProcess(args=["true"], returncode=0, stdout="", stderr=""),
+            ):
+                res = train.flush(repo_dir, "main", validate_command=["true"])
+
+            self.assertTrue(res.ok)
+            expected_src = str((repo_root / "src").resolve())
+            self.assertEqual(pth_path.read_text(encoding="utf-8").strip(), expected_src)
+
+
 

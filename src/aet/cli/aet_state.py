@@ -22,6 +22,11 @@ from typing import Any, Optional
 
 import typer
 
+# Ensure local src directory takes precedence over site-packages when run directly.
+_src_dir = str(Path(__file__).resolve().parent.parent.parent)
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
 from aet import queue as queue_lib  # noqa: E402
 from aet import spec_backfill  # noqa: E402
 from aet.backends.base import SHADOW_POSTURE  # noqa: E402
@@ -39,6 +44,7 @@ from aet.branch_ref import (  # noqa: E402
 )
 from aet.breaker import BreakerStore  # noqa: E402
 from aet.ledger import Ledger, resolve_ledger_path  # noqa: E402
+from aet.worktree import heal_editable_pth, inspect_editable_pth  # noqa: E402
 
 _INTEGRITY_ERRORS = (queue_lib.QueueIntegrityError,)
 
@@ -1089,7 +1095,21 @@ def cmd_heal(args):
         if change is not None:
             changes.append(change)
 
-    if not changes:
+    pth_healthy, pth_discrepancies = inspect_editable_pth(repo_root)
+    pth_changes: list[dict] = []
+    if not pth_healthy:
+        for _pth_file, current, expected in pth_discrepancies:
+            pth_changes.append(
+                {
+                    "task_id": "_editable_impl_aet.pth",
+                    "from": current or "(missing)",
+                    "to": expected,
+                    "reason": "editable .pth points to invalid or foreign worktree path",
+                }
+            )
+
+    all_changes = pth_changes + changes
+    if not all_changes:
         print("No healable discrepancies found.")
         if integrity_ok:
             return 0
@@ -1099,7 +1119,7 @@ def cmd_heal(args):
         # Fall through: no state fixes, but the envelope needs restamping.
     else:
         print("Proposed changes:")
-        for change in changes:
+        for change in all_changes:
             line = f"  {change['task_id']}: {change['from']} -> {change['to']} ({change['reason']})"
             if "pending_blockers" in change:
                 line += f" [pending_blockers -> {change['pending_blockers']}]"
@@ -1108,6 +1128,14 @@ def cmd_heal(args):
         if not args.apply:
             print("\nRun with --apply to apply these changes.")
             return 0
+
+    if pth_changes:
+        if heal_editable_pth(repo_root):
+            expected_src = pth_changes[0]["to"]
+            print(f"Healed _editable_impl_aet.pth -> {expected_src}")
+
+    if not changes and integrity_ok:
+        return 0
 
     if not queue_lib.lease_guard(args.queue, force=getattr(args, "force", False)):
         return queue_lib.LEASE_HELD_EXIT_CODE

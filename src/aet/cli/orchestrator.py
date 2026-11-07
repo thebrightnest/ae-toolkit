@@ -45,6 +45,11 @@ from typing import Any, Optional
 
 import typer
 
+# Ensure local src directory takes precedence over site-packages when run directly.
+_src_dir = str(Path(__file__).resolve().parent.parent.parent)
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 from aet import (  # noqa: E402
     breaker,

@@ -39,6 +39,7 @@ from aet.integration_lock import integration_lock
 from aet.worktree import (
     branch_checked_out_worktrees,
     ensure_worktree_venv_symlink,
+    heal_editable_pth,
     push_branch,
     worktree_pythonpath,
 )
@@ -441,6 +442,7 @@ def bisect(
             capture_output=True,
         )
         shutil.rmtree(temp_worktree, ignore_errors=True)
+        heal_editable_pth(repo_root)
 
 
 def flush(
@@ -563,6 +565,7 @@ def flush(
             capture_output=True,
         )
         shutil.rmtree(temp_worktree, ignore_errors=True)
+        heal_editable_pth(repo_root)
 
     if proc.returncode != 0:
         initial_output = (proc.stdout or "") + (proc.stderr or "")
@@ -609,6 +612,7 @@ def flush(
                     capture_output=True,
                 )
                 shutil.rmtree(retry_wt, ignore_errors=True)
+                heal_editable_pth(repo_root)
 
             if proc_retry is None or proc_retry.returncode != 0:
                 # Red again -> halt fail-closed
@@ -784,6 +788,7 @@ def flush(
                         capture_output=True,
                     )
                     shutil.rmtree(restack_wt, ignore_errors=True)
+                    heal_editable_pth(repo_root)
 
                 if current_tip == base_commit:
                     subprocess.run(
