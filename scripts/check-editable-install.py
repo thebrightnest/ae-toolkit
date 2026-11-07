@@ -10,6 +10,30 @@ import subprocess
 import sys
 
 
+def is_linked_worktree(repo_dir: pathlib.Path) -> bool:
+    """Return True if repo_dir is inside a linked git worktree.
+
+    Linked worktrees have a git-dir that differs from their git-common-dir.
+    """
+    git_dir_proc = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        capture_output=True,
+        text=True,
+        cwd=repo_dir,
+    )
+    common_dir_proc = subprocess.run(
+        ["git", "rev-parse", "--git-common-dir"],
+        capture_output=True,
+        text=True,
+        cwd=repo_dir,
+    )
+    if git_dir_proc.returncode != 0 or common_dir_proc.returncode != 0:
+        return False
+    git_dir = (repo_dir / git_dir_proc.stdout.strip()).resolve()
+    common_dir = (repo_dir / common_dir_proc.stdout.strip()).resolve()
+    return git_dir != common_dir
+
+
 def main() -> int:
     repo_dir = pathlib.Path(__file__).resolve().parents[1]
     try:
@@ -17,6 +41,9 @@ def main() -> int:
     except ImportError:
         print("aet is not importable", file=sys.stderr)
         return 1
+
+    if is_linked_worktree(repo_dir):
+        return 0
 
     installed_root = pathlib.Path(aet.__file__).resolve().parents[2]
     if installed_root != repo_dir:

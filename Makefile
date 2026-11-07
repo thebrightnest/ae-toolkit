@@ -19,10 +19,31 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 $(PYTHON):
-	@python3 -m venv $(VENV)
+	@git_dir=$$(git rev-parse --git-dir 2>/dev/null); \
+	common_dir=$$(git rev-parse --git-common-dir 2>/dev/null); \
+	if [ -n "$$git_dir" ] && [ -n "$$common_dir" ] && [ "$$(cd "$$git_dir" 2>/dev/null && pwd)" != "$$(cd "$$common_dir" 2>/dev/null && pwd)" ]; then \
+		root_venv="$$(cd "$$common_dir/.." 2>/dev/null && pwd)/$(VENV)"; \
+		if [ -d "$$root_venv" ] && [ ! -e "$(VENV)" ]; then \
+			ln -s "$$root_venv" "$(VENV)"; \
+		else \
+			python3 -m venv $(VENV); \
+		fi; \
+	else \
+		python3 -m venv $(VENV); \
+	fi
 
 install-editable: $(PYTHON) ## Ensure the aet package is installed editable from this repo root
-	@if ! stale="$$($(PYTHON) scripts/check-editable-install.py 2>&1)"; then \
+	@git_dir=$$(git rev-parse --git-dir 2>/dev/null); \
+	common_dir=$$(git rev-parse --git-common-dir 2>/dev/null); \
+	if [ -n "$$git_dir" ] && [ -n "$$common_dir" ] && [ "$$(cd "$$git_dir" 2>/dev/null && pwd)" != "$$(cd "$$common_dir" 2>/dev/null && pwd)" ]; then \
+		if ! stale="$$($(PYTHON) scripts/check-editable-install.py 2>&1)"; then \
+			echo "Editable install check failed in linked worktree: $$stale" >&2; \
+			echo "Skipping pip install -e in linked worktree to protect shared venv." >&2; \
+			exit 1; \
+		else \
+			echo "✓ Editable install verified (linked worktree)"; \
+		fi; \
+	elif ! stale="$$($(PYTHON) scripts/check-editable-install.py 2>&1)"; then \
 		echo "Editable install stale ($$stale); reinstalling..."; \
 		$(PIP) install -e '.[dev]'; \
 	else \

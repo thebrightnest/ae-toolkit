@@ -60,7 +60,7 @@ From execution telemetry and live failures observed during the `autonomous-loop-
 
 ## Acceptance Criteria
 
-- [ ] `make install-editable` invoked inside a linked worktree does not rewrite `_editable_impl_aet.pth` in the shared `.venv`. (satisfies: R-1)
+- [x] `make install-editable` invoked inside a linked worktree does not rewrite `_editable_impl_aet.pth` in the shared `.venv`. (satisfies: R-1)
 - [ ] Subprocesses running in a linked worktree import that worktree's version of `src/aet` via `PYTHONPATH` without mutating the parent virtualenv. (satisfies: R-2)
 - [ ] Ephemeral worktrees allocated by `create_worktree` and `flush()` contain a valid `.venv` symlink to the root virtualenv. (satisfies: R-3)
 - [ ] If `_editable_impl_aet.pth` is manually pointed to a deleted temporary directory, running `teardown_worktree()` or `aet state heal` restores it to `<repo_root>/src`. (satisfies: R-4)
@@ -81,5 +81,26 @@ From execution telemetry and live failures observed during the `autonomous-loop-
 
 - None.
 
-*Stage: scope-validated*
-*Next step: run `aet sprint add`*
+## Divergence Summary — wvi-01
+
+*Recorded: 2026-11-07 — Branch: wvi-01-worktree-aware-editable-install*
+
+The `wvi-01` implementation slice (R-1) matches the planned behavior.
+
+### Changed from plan — wvi-01
+
+- None.
+
+### Added (unplanned) — wvi-01
+
+- `Makefile` (`$(PYTHON)` target): Added linked worktree detection to symlink the root virtual environment to `.venv` if not already present, ensuring virtualenv python is available without triggering a separate isolated venv build.
+- `tests/fixtures/uncovered-source-files.txt`: Removed `scripts/check-editable-install.py` as it is now covered by `tests/scripts/test_check_editable_install.py`.
+
+### Deferred — wvi-01
+
+- **Task 4 (Merge branch to main):** Merging branch to main and verifying integration is deferred to `aet-ship`.
+
+---
+
+*Stage: synced*
+*Next step: run `aet-ship`*

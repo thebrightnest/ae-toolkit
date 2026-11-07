@@ -11,7 +11,6 @@ scripts/archive/migrate-plan-archive.py
 scripts/archive/migrate-plans-to-frontmatter.py
 
 # Entry points exercised by hand, or by the gate rather than by pytest.
-scripts/check-editable-install.py
 scripts/hooks/pre-commit
 scripts/prevent-release-on-feature-branch.sh
 scripts/test-build-system.sh
