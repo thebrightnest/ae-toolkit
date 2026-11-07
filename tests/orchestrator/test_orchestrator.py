@@ -6424,6 +6424,93 @@ class TestEnvironmentPropagation(unittest.TestCase, _BatchRepoMixin):
             self.assertEqual(observed_env.get("AET_CLI_BIN"), _FAKE_ADAPTER.bin)
             self.assertEqual(observed_env.get("AET_REPO_ROOT"), repo_root)
 
+    def test_run_stage_injects_worktree_pythonpath(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as worktree_dir:
+            _init_git_repo(repo_root)
+            captured_env = {}
+
+            def fake_live_tee(cmd, cwd, env, **kw):
+                captured_env.update(env)
+                return 0, ""
+
+            with patch.object(orchestrator, "_run_with_live_tee", side_effect=fake_live_tee):
+                orchestrator.run_stage(
+                    _FAKE_ADAPTER,
+                    repo_root,
+                    "docs/plans/demo.md",
+                    worktree_dir,
+                    ["aet-implement"],
+                    "plan-approved",
+                    "implemented",
+                    task_id="demo",
+                )
+
+            expected_prefix = f"{Path(worktree_dir).resolve() / 'src'}:{Path(repo_root).resolve() / 'src'}"
+            self.assertIn("PYTHONPATH", captured_env)
+            self.assertTrue(captured_env["PYTHONPATH"].startswith(expected_prefix))
+
+    def test_run_stage_group_injects_worktree_pythonpath(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as worktree_dir:
+            _init_git_repo(repo_root)
+            captured_env = {}
+
+            def fake_live_tee(cmd, cwd, env, **kw):
+                captured_env.update(env)
+                return 0, ""
+
+            from aet.workflow import WorkflowStage
+            stg = WorkflowStage(name="implement", skills=["aet-implement"], evidence=None, gate_key=None)
+            wf = unittest.mock.MagicMock()
+
+            with patch.object(orchestrator, "_run_with_live_tee", side_effect=fake_live_tee):
+                orchestrator.run_stage_group(
+                    _FAKE_ADAPTER,
+                    repo_root,
+                    "docs/plans/demo.md",
+                    worktree_dir,
+                    [stg],
+                    task_id="demo",
+                    workflow=wf,
+                )
+
+            expected_prefix = f"{Path(worktree_dir).resolve() / 'src'}:{Path(repo_root).resolve() / 'src'}"
+            self.assertIn("PYTHONPATH", captured_env)
+            self.assertTrue(captured_env["PYTHONPATH"].startswith(expected_prefix))
+
+    def test_process_task_injects_worktree_pythonpath(self):
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_git_repo(repo_root)
+            plan_file = os.path.join(repo_root, "docs", "plans", "demo.md")
+            Path(plan_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_file).write_text(
+                "---\nid: demo\n---\n# Plan\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", repo_root, "commit", "-m", "add plan"], check=True
+            )
+            task = {"id": "demo", "title": "demo", "plan_file": plan_file}
+            observed_env = {}
+
+            def fake_stage(*a, **kw):
+                observed_env["PYTHONPATH"] = os.environ.get("PYTHONPATH")
+                return 0, {}, None, ""
+
+            orig_py_path = os.environ.get("PYTHONPATH")
+            with patch.object(orchestrator, "run_stage", side_effect=fake_stage):
+                with patch.object(orchestrator, "run_stage_group", side_effect=fake_stage):
+                    with patch.object(orchestrator, "verify_branch_has_commits", return_value=(True, "")):
+                        with patch.object(orchestrator, "get_current_stage", return_value="implemented"):
+                            orchestrator.process_task(task, repo_root, _FAKE_ADAPTER, "minimal")
+
+            demo_src = Path(repo_root).resolve() / ".worktrees" / "demo" / "src"
+            root_src = Path(repo_root).resolve() / "src"
+            expected_prefix = f"{demo_src}:{root_src}"
+            self.assertIsNotNone(observed_env.get("PYTHONPATH"))
+            self.assertTrue(observed_env["PYTHONPATH"].startswith(expected_prefix))
+            # And environment is restored afterwards
+            self.assertEqual(os.environ.get("PYTHONPATH"), orig_py_path)
+
 
 if __name__ == "__main__":
     unittest.main()

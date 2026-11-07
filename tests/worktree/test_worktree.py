@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -579,6 +580,53 @@ class TestCreateWorktree(unittest.TestCase):
                 check=True,
             ).stdout.strip()
             self.assertEqual(still, task_sha)
+
+    def test_create_worktree_symlinks_root_venv_if_present(self):
+        """R-3: create_worktree symlinks <repo_root>/.venv to <worktree>/.venv if root .venv exists."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            root_venv = Path(repo_root, ".venv")
+            root_venv.mkdir()
+            (root_venv / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+
+            wt_dir = worktree.create_worktree(repo_root, "task-venv", "origin/main")
+            wt_venv = Path(wt_dir, ".venv")
+
+            self.assertTrue(wt_venv.is_symlink())
+            self.assertEqual(wt_venv.resolve(), root_venv.resolve())
+            self.assertTrue((wt_venv / "pyvenv.cfg").is_file())
+
+    def test_create_worktree_no_venv_symlink_when_root_venv_absent(self):
+        """R-3: create_worktree does not create .venv symlink when root .venv is absent."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            wt_dir = worktree.create_worktree(repo_root, "task-no-venv", "origin/main")
+            wt_venv = Path(wt_dir, ".venv")
+            self.assertFalse(wt_venv.exists())
+            self.assertFalse(wt_venv.is_symlink())
+
+    def test_create_worktree_repairs_broken_venv_symlink(self):
+        """R-3: create_worktree repairs a broken .venv symlink if root .venv exists."""
+        with tempfile.TemporaryDirectory() as repo_root:
+            _init_repo_with_origin(repo_root)
+            root_venv = Path(repo_root, ".venv")
+            root_venv.mkdir()
+
+            wt_dir = worktree.create_worktree(repo_root, "task-broken-venv", "origin/main")
+            wt_venv = Path(wt_dir, ".venv")
+            self.assertTrue(wt_venv.is_symlink())
+
+            # Break the symlink by pointing to non-existent target
+            wt_venv.unlink()
+            wt_venv.symlink_to(Path(repo_root, "does-not-exist"))
+            self.assertTrue(wt_venv.is_symlink())
+            self.assertFalse(wt_venv.exists())
+
+            # Calling create_worktree again on the existing worktree repairs it
+            worktree.create_worktree(repo_root, "task-broken-venv", "origin/main")
+            self.assertTrue(wt_venv.is_symlink())
+            self.assertTrue(wt_venv.exists())
+            self.assertEqual(wt_venv.resolve(), root_venv.resolve())
 
 
 class TestNonMainBase(unittest.TestCase):
@@ -1271,5 +1319,46 @@ class TestSnapshotWorktree(unittest.TestCase):
                 check=True,
             ).stdout.splitlines()
             self.assertEqual(remaining_refs, [])
+
+
+class TestWorktreePythonPath(unittest.TestCase):
+    def test_worktree_pythonpath_prepends_worktree_and_root_src(self):
+        wt = "/path/to/worktree"
+        root = "/path/to/repo"
+        expected = f"{os.path.abspath('/path/to/worktree/src')}:{os.path.abspath('/path/to/repo/src')}"
+        res = worktree.worktree_pythonpath(wt, root)
+        self.assertEqual(res, expected)
+
+    def test_worktree_pythonpath_preserves_existing_without_duplicates(self):
+        wt = "/path/to/worktree"
+        root = "/path/to/repo"
+        existing = f"{os.path.abspath('/path/to/repo/src')}:/extra/path"
+        expected = f"{os.path.abspath('/path/to/worktree/src')}:{os.path.abspath('/path/to/repo/src')}:/extra/path"
+        res = worktree.worktree_pythonpath(wt, root, existing=existing)
+        self.assertEqual(res, expected)
+
+    def test_worktree_python_subprocess_resolves_worktree_over_root(self):
+        """Integration: a python subprocess resolves modules from <worktree>/src before <root>/src."""
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as wt_dir:
+            root_src = Path(repo_root, "src", "dummy_mod")
+            root_src.mkdir(parents=True)
+            (root_src / "__init__.py").write_text("SOURCE = 'root'\n", encoding="utf-8")
+
+            wt_src = Path(wt_dir, "src", "dummy_mod")
+            wt_src.mkdir(parents=True)
+            (wt_src / "__init__.py").write_text("SOURCE = 'worktree'\n", encoding="utf-8")
+
+            env = dict(os.environ)
+            env["PYTHONPATH"] = worktree.worktree_pythonpath(wt_dir, repo_root)
+
+            proc = subprocess.run(
+                [sys.executable, "-c", "import dummy_mod; print(dummy_mod.SOURCE)"],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(proc.stdout.strip(), "worktree")
+
 
 

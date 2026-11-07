@@ -157,6 +157,29 @@ class TestTrainBisect(unittest.TestCase):
                     f"Pos {pos}: expected at most {max_runs} runs, got {runs_recorded}",
                 )
 
+    def test_bisect_symlinks_venv_into_temp_worktree(self):
+        """R-3: bisect creates .venv symlink in temp worktree."""
+        root_venv = Path(self.repo_root) / ".venv"
+        root_venv.mkdir()
+        (root_venv / "pyvenv.cfg").write_text("home = /bin\n", encoding="utf-8")
+        commits = self._stage_dummy_commits(2)
+        snapshot = commits[-1]
+
+        observed_venv = []
+
+        def recording_validation(cmd, worktree_dir, **kw):
+            wt_venv = Path(worktree_dir) / ".venv"
+            observed_venv.append((wt_venv.is_symlink(), wt_venv.resolve() if wt_venv.exists() else None))
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+        with unittest.mock.patch.object(train, "_run_flush_validation", side_effect=recording_validation):
+            train.bisect(self.repo_root, "epic-01", snapshot, validate_command=["true"])
+
+        self.assertTrue(len(observed_venv) > 0)
+        for is_symlink, resolved in observed_venv:
+            self.assertTrue(is_symlink)
+            self.assertEqual(resolved, root_venv.resolve())
+
     def test_bisect_returns_none_when_no_failing_prefix(self):
         """When every prefix passes (e.g. transient flake), bisect returns None."""
         n = 3

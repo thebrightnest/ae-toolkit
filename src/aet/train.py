@@ -36,7 +36,12 @@ from aet.backends.factory import (
     resolve_validation_timeout,
 )
 from aet.integration_lock import integration_lock
-from aet.worktree import branch_checked_out_worktrees, push_branch
+from aet.worktree import (
+    branch_checked_out_worktrees,
+    ensure_worktree_venv_symlink,
+    push_branch,
+    worktree_pythonpath,
+)
 
 ZERO_OID = "0" * 40
 
@@ -222,6 +227,27 @@ def _run_flush_validation(
     if env:
         call_env.update(env)
 
+    repo_root = call_env.get("AET_REPO_ROOT")
+    if not repo_root and not (_Mock is not None and isinstance(subprocess.run, _Mock)):
+        try:
+            res = subprocess.run(
+                ["git", "-C", worktree_dir, "rev-parse", "--git-common-dir"],
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                common = Path(worktree_dir, res.stdout.strip()).resolve()
+                repo_root = str(common.parent)
+        except OSError:
+            pass
+    if not repo_root:
+        repo_root = worktree_dir
+
+    ensure_worktree_venv_symlink(repo_root, worktree_dir)
+    call_env["PYTHONPATH"] = worktree_pythonpath(
+        worktree_dir, repo_root, call_env.get("PYTHONPATH")
+    )
+
     # Support unit test mocks that patch subprocess.run
     if _Mock is not None and isinstance(subprocess.run, _Mock):
         return subprocess.run(
@@ -365,6 +391,7 @@ def bisect(
         )
         if add_wt.returncode != 0:
             return None
+        ensure_worktree_venv_symlink(repo_root, temp_worktree)
 
         low = 1
         high = n
@@ -384,6 +411,7 @@ def bisect(
                 check=True,
                 capture_output=True,
             )
+            ensure_worktree_venv_symlink(repo_root, temp_worktree)
             proc = _run_flush_validation(
                 cmd_list,
                 temp_worktree,
@@ -513,6 +541,7 @@ def flush(
                 commit=snapshot_commit,
                 error=f"Could not create temporary worktree at {snapshot_commit}: {add_wt.stderr.strip()}",
             )
+        ensure_worktree_venv_symlink(repo_root, temp_worktree)
 
         tree_hash = verifier.working_tree_hash(temp_worktree)
         proc = _run_flush_validation(

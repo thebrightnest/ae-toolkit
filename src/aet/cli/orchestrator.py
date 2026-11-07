@@ -125,6 +125,7 @@ from aet.worktree import (  # noqa: E402
     render_task_plan,
     snapshot_worktree,
     teardown_worktree,
+    worktree_pythonpath,
 )
 
 
@@ -1723,6 +1724,8 @@ def run_stage(
     env["AET_REPO_ROOT"] = repo_root
     if worktree_dir:
         env["AET_WORKTREE"] = worktree_dir
+    if worktree_dir and repo_root:
+        env["PYTHONPATH"] = worktree_pythonpath(worktree_dir, repo_root, env.get("PYTHONPATH"))
     if freshness:
         env["AET_QA_FRESHNESS"] = freshness
     if task_id is not None:
@@ -1863,6 +1866,8 @@ def run_stage_group(
     env["AET_REPO_ROOT"] = repo_root
     if worktree_dir:
         env["AET_WORKTREE"] = worktree_dir
+    if worktree_dir and repo_root:
+        env["PYTHONPATH"] = worktree_pythonpath(worktree_dir, repo_root, env.get("PYTHONPATH"))
     if freshness:
         env["AET_QA_FRESHNESS"] = freshness
     if task_id is not None:
@@ -2004,10 +2009,15 @@ def process_task(
     orig_env = {
         "AET_CLI_BIN": os.environ.get("AET_CLI_BIN"),
         "AET_REPO_ROOT": os.environ.get("AET_REPO_ROOT"),
+        "PYTHONPATH": os.environ.get("PYTHONPATH"),
     }
     if hasattr(adapter, "bin") and adapter.bin:
         os.environ["AET_CLI_BIN"] = adapter.bin
     os.environ["AET_REPO_ROOT"] = repo_root
+    if worktree_dir and repo_root:
+        os.environ["PYTHONPATH"] = worktree_pythonpath(
+            worktree_dir, repo_root, os.environ.get("PYTHONPATH")
+        )
     try:
         return _process_task_impl(
             task=task,
@@ -2060,6 +2070,10 @@ def _process_task_impl(
     # Create or reuse worktree
     if worktree_dir is None:
         worktree_dir = create_worktree(repo_root, task_id, base_branch=base_branch)
+    if worktree_dir and repo_root:
+        os.environ["PYTHONPATH"] = worktree_pythonpath(
+            worktree_dir, repo_root, os.environ.get("PYTHONPATH")
+        )
     mirror_linked_prd(repo_root, worktree_dir, task)
 
     # Render the working plan from the task record into the worktree (R-19).

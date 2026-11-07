@@ -61,8 +61,8 @@ From execution telemetry and live failures observed during the `autonomous-loop-
 ## Acceptance Criteria
 
 - [x] `make install-editable` invoked inside a linked worktree does not rewrite `_editable_impl_aet.pth` in the shared `.venv`. (satisfies: R-1)
-- [ ] Subprocesses running in a linked worktree import that worktree's version of `src/aet` via `PYTHONPATH` without mutating the parent virtualenv. (satisfies: R-2)
-- [ ] Ephemeral worktrees allocated by `create_worktree` and `flush()` contain a valid `.venv` symlink to the root virtualenv. (satisfies: R-3)
+- [x] Subprocesses running in a linked worktree import that worktree's version of `src/aet` via `PYTHONPATH` without mutating the parent virtualenv. (satisfies: R-2)
+- [x] Ephemeral worktrees allocated by `create_worktree` and `flush()` contain a valid `.venv` symlink to the root virtualenv. (satisfies: R-3)
 - [ ] If `_editable_impl_aet.pth` is manually pointed to a deleted temporary directory, running `teardown_worktree()` or `aet state heal` restores it to `<repo_root>/src`. (satisfies: R-4)
 
 ## Technical Notes
@@ -99,6 +99,25 @@ The `wvi-01` implementation slice (R-1) matches the planned behavior.
 ### Deferred — wvi-01
 
 - **Task 4 (Merge branch to main):** Merging branch to main and verifying integration is deferred to `aet-ship`.
+
+## Divergence Summary — wvi-02
+
+*Recorded: 2026-11-07 — Branch: wvi-02-worktree-pythonpath-and-symlink-standardization*
+
+The `wvi-02` implementation slice (R-2, R-3) matches the planned behavior.
+
+### Changed from plan — wvi-02
+
+- None.
+
+### Added (unplanned) — wvi-02
+
+- `src/aet/cli/orchestrator.py`: Injected `PYTHONPATH` into `run_stage_group` in addition to `run_stage` and `process_task` to ensure group stage executions also isolate source paths.
+- `src/aet/train.py`: Ensured `.venv` symlinks are created in `flush()` temporary worktrees in addition to `bisect()`.
+
+### Deferred — wvi-02
+
+- **Task 5 (Merge branch to main):** Merging branch to main and verifying integration is deferred to `aet-ship`.
 
 ---
 

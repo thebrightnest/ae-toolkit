@@ -42,6 +42,45 @@ def _configured_remotes(repo_root: str) -> set[str]:
     return {line.strip() for line in result.stdout.splitlines() if line.strip()}
 
 
+def ensure_worktree_venv_symlink(repo_root: str | Path, worktree_dir: str | Path) -> bool:
+    """Symlink <repo_root>/.venv to <worktree_dir>/.venv if root venv exists and worktree venv is not present."""
+    root_venv = Path(repo_root) / ".venv"
+    worktree_venv = Path(worktree_dir) / ".venv"
+    if not root_venv.exists():
+        return False
+    if worktree_venv.is_symlink():
+        if worktree_venv.exists():
+            return True
+        try:
+            worktree_venv.unlink()
+        except OSError:
+            pass
+    elif worktree_venv.exists():
+        return True
+
+    try:
+        worktree_venv.symlink_to(root_venv.resolve())
+        return True
+    except OSError:
+        return False
+
+
+def worktree_pythonpath(
+    worktree_dir: str | Path,
+    repo_root: str | Path,
+    existing: str | None = None,
+) -> str:
+    """Return PYTHONPATH with <worktree>/src and <repo_root>/src prepended."""
+    wt_src = str(Path(worktree_dir).resolve() / "src")
+    root_src = str(Path(repo_root).resolve() / "src")
+    paths = [wt_src, root_src]
+    if existing:
+        for p in existing.split(os.pathsep):
+            if p and p not in paths:
+                paths.append(p)
+    return os.pathsep.join(paths)
+
+
 def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/main") -> str:
     """Create or refresh a git worktree for the task. Return the worktree path.
 
@@ -109,6 +148,7 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
                     text=True,
                 )
                 if dirty.stdout.strip():
+                    ensure_worktree_venv_symlink(repo_root, worktree_dir)
                     return worktree_dir
 
                 rebase = _run_git(
@@ -125,11 +165,14 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
                     if not remove_worktree(repo_root, task_id, base_branch=base):
                         raise WorktreeBlockedError(task_id, worktree_dir, base)
                 else:
+                    ensure_worktree_venv_symlink(repo_root, worktree_dir)
                     return worktree_dir
             else:
                 # Worktree is already on the current base; nothing to refresh.
+                ensure_worktree_venv_symlink(repo_root, worktree_dir)
                 return worktree_dir
         else:
+            ensure_worktree_venv_symlink(repo_root, worktree_dir)
             return worktree_dir
 
     # Ensure a clean branch to build the worktree from.
@@ -177,6 +220,7 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
                     text=True,
                 )
                 if rebase.returncode == 0:
+                    ensure_worktree_venv_symlink(repo_root, worktree_dir)
                     return worktree_dir
                 _run_git(["-C", worktree_dir, "rebase", "--abort"], capture_output=True)
                 _run_git(
@@ -201,6 +245,7 @@ def create_worktree(repo_root: str, task_id: str, base_branch: str = "origin/mai
             ["-C", repo_root, "worktree", "add", worktree_dir, "-b", branch_name, base],
             check=True,
         )
+    ensure_worktree_venv_symlink(repo_root, worktree_dir)
     return worktree_dir
 
 

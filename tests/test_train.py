@@ -609,3 +609,88 @@ class TestRunFlushValidationEnvironment(unittest.TestCase):
                 self.assertEqual(kwargs["env"].get("AET_CLI_BIN"), "custom_bin")
                 self.assertEqual(kwargs["env"].get("AET_REPO_ROOT"), "/custom")
 
+    def test_run_flush_validation_injects_pythonpath(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, "Makefile").write_text("all:\n", encoding="utf-8")
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = subprocess.CompletedProcess(
+                    args=["true"], returncode=0, stdout="", stderr=""
+                )
+                train._run_flush_validation(
+                    ["true"], tmpdir, env={"AET_REPO_ROOT": "/custom/repo"}
+                )
+                mock_run.assert_called_once()
+                _, kwargs = mock_run.call_args
+                self.assertIn("env", kwargs)
+                expected_prefix = f"{Path(tmpdir).resolve() / 'src'}:/custom/repo/src"
+                self.assertTrue(kwargs["env"].get("PYTHONPATH", "").startswith(expected_prefix))
+
+    def test_run_flush_validation_symlinks_root_venv(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, "Makefile").write_text("all:\n", encoding="utf-8")
+            root_venv = Path(repo_root, ".venv")
+            root_venv.mkdir()
+            (root_venv / "pyvenv.cfg").write_text("home = /bin\n", encoding="utf-8")
+
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = subprocess.CompletedProcess(
+                    args=["true"], returncode=0, stdout="", stderr=""
+                )
+                train._run_flush_validation(
+                    ["true"], tmpdir, env={"AET_REPO_ROOT": repo_root}
+                )
+
+            wt_venv = Path(tmpdir, ".venv")
+            self.assertTrue(wt_venv.is_symlink())
+            self.assertEqual(wt_venv.resolve(), root_venv.resolve())
+
+    def test_run_flush_validation_resolves_worktree_source_over_repo_root(self):
+        """Integration: _run_flush_validation executes with worktree PYTHONPATH taking precedence."""
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as wt_dir:
+            Path(wt_dir, "Makefile").write_text("all:\n", encoding="utf-8")
+
+            root_src = Path(repo_root, "src", "flush_test_pkg")
+            root_src.mkdir(parents=True)
+            (root_src / "__init__.py").write_text("ORIGIN = 'root'\n", encoding="utf-8")
+
+            wt_src = Path(wt_dir, "src", "flush_test_pkg")
+            wt_src.mkdir(parents=True)
+            (wt_src / "__init__.py").write_text("ORIGIN = 'worktree'\n", encoding="utf-8")
+
+            cmd = [sys.executable, "-c", "import flush_test_pkg; print(flush_test_pkg.ORIGIN)"]
+            proc = train._run_flush_validation(
+                cmd,
+                wt_dir,
+                env={"AET_REPO_ROOT": repo_root},
+            )
+            self.assertEqual(proc.returncode, 0)
+            self.assertEqual(proc.stdout.strip(), "worktree")
+
+    def test_flush_creates_venv_symlink_in_temp_worktree(self):
+        """R-3: flush creates .venv symlink in temporary worktree."""
+        with tempfile.TemporaryDirectory() as origin_dir, tempfile.TemporaryDirectory() as repo_dir:
+            _init_repo(repo_dir, origin_dir, "main")
+            root_venv = Path(repo_dir, ".venv")
+            root_venv.mkdir()
+            (root_venv / "pyvenv.cfg").write_text("home = /bin\n", encoding="utf-8")
+
+            head = subprocess.check_output(["git", "-C", repo_dir, "rev-parse", "HEAD"], text=True).strip()
+            train.update_train_ref(repo_dir, "main", head, old_commit="0" * 40)
+
+            observed_venv = []
+
+            def fake_validation(cmd, worktree_dir, **kw):
+                wt_venv = Path(worktree_dir) / ".venv"
+                observed_venv.append((wt_venv.is_symlink(), wt_venv.resolve() if wt_venv.exists() else None))
+                return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+            with patch.object(train, "_run_flush_validation", side_effect=fake_validation):
+                res = train.flush(repo_dir, "main", validate_command=["true"])
+
+            self.assertTrue(res.ok)
+            self.assertEqual(len(observed_venv), 1)
+            is_symlink, resolved = observed_venv[0]
+            self.assertTrue(is_symlink)
+            self.assertEqual(resolved, root_venv.resolve())
+
+
