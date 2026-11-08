@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.24.0] — 2026-11-08
+
+### Added
+
+- **`aet run stop [RUN_ID]`** — gracefully stops an active batch or single run by sending a shutdown signal. A run stopped by the operator records sessions as `canceled` rather than `timeout`, increments no breaker failure tallies, bypasses failure triage, and returns stopped tasks cleanly to `ready` (ADR-085).
+- **Dirty worktree snapshots before teardown** — uncommitted changes in a failed, canceled, or requeued task worktree are snapshotted under `refs/aet/wip/<task-id>/<attempt>` before teardown, leaving work recoverable without leaving dirty directories for subsequent attempts (ADR-085).
+- **Run lease in git common directory** — work queue leases are stored at `<git-common-dir>/aet/work-queue.lease`, ensuring linked worktrees across the same repository share a single run lease and do not contend on `refs/aet/*` (ADR-085).
+- **Task-scoped handoff entries** — handoff notes now carry `task_id`. Prompts render task-specific notes alongside run-level notes, deduplicate identical entries with counts, and retain recent entries when exceeding character caps (ADR-085).
+- **Autonomous monolithic commit remediation** — when `integrate` encounters `guard_refused` due to a monolithic commit covering multiple tasks, the autonomous loop either auto-splits using declared per-task files from the plan spec or returns the task to `in_progress` with an actionable failure verdict instructing the worker to run `aet ship split` (ADR-087).
+- **Worktree virtualenv isolation and self-healing** — `install-editable` detects linked worktrees and skips re-running `pip install -e .` into the shared root virtual environment. Worktree processes inject `PYTHONPATH=<worktree>/src:<root>/src` and symlink `<root>/.venv`. Teardown, flush cleanups, and `aet state heal` automatically verify and heal `_editable_impl_aet.pth` back to the root repository if corrupted (ADR-088).
+
+### Changed
+
+- **Gate failures are countable failure evidence** — non-zero exit codes from failed, missing, or malformed gate verdicts are recorded as distinct failure signatures (`gate:<kind>:<state>`), bounding gate-failure retry loops. Five failures in a single run quarantine the task regardless of signature variations (ADR-084).
+- **Review lenses write fail verdicts** — tripped boundary-contract or identity-conflation lenses during `aet gate submit --stage review` now write an explicit `fail` verdict with findings rather than exiting zero with no verdict, and evaluate files from `AET_WORKTREE` instead of the repo root (ADR-084).
+- **Telemetry records reflect gate outcomes** — a stage record's `result` follows the gate check rather than the raw session exit code; failed gates write `result: failure` with the appropriate failure class. Stage labels standardize on target state names, and run summaries count each task once by its final end state (`tasks_succeeded`, `tasks_failed`, `tasks_requeued`) (ADR-086).
+- **Every run exit writes a summary with reason** — early exits, lease refusals, queue-integrity stops, and preflight cancellations now write a structured `last-run.json` with a dedicated `reason` field and inherit a single `AET_RUN_DIR` across child processes (ADR-086).
+- **Bounded subprocess validation timeouts** — merge train flush validation, integration commands, and test runners enforce a bounded 600-second execution timeout and terminate the entire process group (`killpg`) upon expiration (ADR-087).
+- **Shift-left commit splitting guidelines** — `aet-implement` and `aet-ship` instruct agents to create atomic per-task commits prior to staging to prevent monolithic commit rejections at merge intake (ADR-087).
+
+### Fixed
+
+- **Pytest worktree collisions and path resolution** — test suites standardize `~/.aet/` path resolution via `AET_HOME` redirects, default `PYTEST_WORKERS=1` to prevent parallel xdist git worktree contention, and align context golden fixture timestamps with `git log %cI` format (ADR-086).
+
+**Upgrading from 1.23.0:** run `aet update`. Run summaries and stage records now reflect gate verdicts accurately, which may adjust historical First-Pass Merge metrics. Ephemeral worktrees no longer disrupt root editable virtual environment pointers. Use `aet run stop` to stop runs without recording artificial task failures.
+
+---
+
 ## [1.23.0] — 2026-10-28
 
 ### Added

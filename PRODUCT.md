@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.23.0
+## Current Version: 1.24.0
 
-Last updated: 2026-10-28
+Last updated: 2026-11-08
 
 ---
 
@@ -27,13 +27,13 @@ Run plans with isolation, quality gates, and traceability.
 
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
-- **aet-drive** — Autonomous execution loop that drives every epic and task in the sprint queue to completion. Several epics run in parallel, each into its own branch, and a problem in one epic does not stop the others. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts. Tasks added to the sprint while a run is live are picked up on the next scheduling pass, and the run never touches the operator's root checkout, so planning and editing continue in parallel.
+- **aet-drive** — Autonomous execution loop that drives every epic and task in the sprint queue to completion. Several epics run in parallel, each into its own branch, and a problem in one epic does not stop the others. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts. Tasks added to the sprint while a run is live are picked up on the next scheduling pass, and the run never touches the operator's root checkout, so planning and editing continue in parallel. Runs can be stopped cleanly at any point via `aet run stop`, recording sessions as canceled without artificial failure penalties or tripped breakers. Uncommitted changes from failed or stopped sessions are snapshotted to dedicated WIP refs before worktree teardown, ensuring work remains recoverable while next attempts start from clean checkouts. If merge integration encounters a monolithic commit across tasks, it auto-splits using declared task files or issues actionable split instructions instead of deadlocking.
 
 ### Quality and Security Skills
 
 Verify code before it ships.
 
-- **aet-review** — Staff-level code review with multi-lens checks, supported by mechanical identity-conflation and boundary-contract lenses at `aet gate submit --stage review`.
+- **aet-review** — Staff-level code review with multi-lens checks, supported by mechanical identity-conflation and boundary-contract lenses at `aet gate submit --stage review`. Lenses evaluate the task's isolated worktree directly and write explicit fail verdicts when tripped rather than exiting silently. Gate failures record distinct failure signatures and bound retry attempts, preventing unbounded loops on rejected gates.
 - **aet-cso** — Diff-focused security audit. Verdicts are submitted via `aet gate submit` with built-in evidence builders.
 - **aet-qa** — Automated QA with tiered validation. Runs the full suite unconditionally, and when it fails, compares the failures against the targeted set implement already ran so a gap in coverage is named rather than guessed at. Verdicts are submitted via `aet gate submit` with built-in pytest, summary, and divergence builders.
 - **aet-verify** — Conditional live verification with evidence capture. Submits the `verify` verdict that the pre-merge gate reads, so a critical task cannot reach trunk without live verification having run.
@@ -61,7 +61,8 @@ Carry context and lessons across runs.
 
 - **aet context** — Loads git state, filesystem facts, canonical plan stages, budgets, rules digest, and durable insights into a structured payload for agent session start. Supports `--memories-only`, `--hook-json` SessionStart envelopes, and `PRIME.md` override.
 - **aet learnings append** — Records append-only JSONL learnings with schema validation.
-- **aet handoff** — Writes and reads run-scoped handoff notes so agents can pass context between sessions.
+- **aet handoff** — Writes and reads task-scoped handoff notes so agents pass focused context between sessions. Prompts prioritize the task's own notes alongside run-level notes, deduplicate repeated entries, and drop oldest notes first when bounded.
+- **aet run stop** — Gracefully stops an active batch or single run by sending a shutdown signal. Sessions exit as canceled rather than timed out, avoiding false breaker penalties, and tasks return cleanly to ready.
 - **aet sprint intake** — Reads `aet:sprint` issues from GitHub, checks each candidate against the dependency graph, and admits it or refuses with the blocking reason named. New tasks can be admitted while a run is live.
 - **aet state reconcile** — Reports and clears refs stranded on a clone, so a board that drifted can be brought back in line without hand-editing refs.
 - **aet epic list** — Lists every epic in the queue: its branch, where that branch came from, and how many of its tasks are in each state. An epic is declared in its PRD, which also holds the pull request title and body.
@@ -90,6 +91,14 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.24.0
+
+- **Graceful run cancellation with `aet run stop`** — stop a running batch or task cleanly without recording false failures, breaker penalties, or leaving tasks stuck in progress.
+- **Resilient worktree isolation and self-healing environments** — worktrees execute with isolated Python paths and symlinked venvs, with self-healing guards preventing broken editable package pointers.
+- **Gate failures as first-class evidence** — failed or missing verdicts count toward failure signatures and bounded retry caps, preventing runaway retry loops on gate rejections.
+- **Autonomous monolithic commit remediation** — merge integration automatically detects and splits multi-task commits or provides actionable remediation to worker agents.
+- **Accurate telemetry and end-state reporting** — telemetry records mirror gate verdicts rather than raw process exit codes, and every run exit writes an end-state summary with an explicit reason.
 
 ### What's New in v1.23.0
 
