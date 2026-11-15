@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.25.0] — 2026-11-15
+
+### Added
+
+- **Global AI provider and two-tier (`fast` / `frontier`) model configuration** — `~/.aet/config.json` (and `$AET_HOME/config.json`) now accepts `provider` and `models.fast` / `models.frontier`, manageable via `aet configure --global [--provider <agy|claude|kimi>] [--fast-model <model>] [--frontier-model <model>]`. Upgrading models no longer requires modifying or committing repository files (ADR-089).
+- **Rule A (`work_class` × `stage`) model tier routing** — pipeline stages declare a default `model_tier` (`fast` for `qa` and `verify`; `frontier` for `implement`, `review`, and `cso`), and `resolve_stage_model()` combines `work_class` and `stage` so `trivial` tasks run every active stage on `models.fast` while `normal` and `critical` tasks route each stage to its declared tier (ADR-089).
+- **Opinionated high reasoning effort for `critical` tasks** — tasks with `work_class: critical` automatically pass `--effort high` on adapters that support reasoning effort (`agy`), while `trivial` and `normal` tasks use the adapter default without adding user-facing effort knobs (ADR-089).
+- **AI provider and model provenance in `aet setup verify`** — `aet setup verify` reports the resolved AI provider, `models.fast`, and `models.frontier` along with their configuration source (`config (global)`, `config (project)`, or `env`) (ADR-089).
+
+### Changed
+
+- **Fail-closed preflight model check (`require_models_configured`)** — `aet run` and `aet run-one` verify that `models.fast` and `models.frontier` are configured before spawning worker sessions and exit with remediation instructions if either tier is missing, replacing hardcoded model fallback strings in `src/aet/cli_adapter.py` (ADR-089).
+
+**Upgrading from 1.24.0:** run `aet update`, then configure your global `fast` and `frontier` models once with `aet configure --global --fast-model <fast-model> --frontier-model <frontier-model>` (and optionally `--provider <agy|claude|kimi>`). Because hardcoded model fallbacks have been removed, `aet run` will prompt for this one-time setup until both model tiers are configured.
+
+---
+
 ## [1.24.0] — 2026-11-08
 
 ### Added

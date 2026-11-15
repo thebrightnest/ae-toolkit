@@ -4,9 +4,9 @@ An integrated agentic engineering system. Skills are directories of instructions
 
 ---
 
-## Current Version: 1.24.0
+## Current Version: 1.25.0
 
-Last updated: 2026-11-08
+Last updated: 2026-11-15
 
 ---
 
@@ -27,7 +27,7 @@ Run plans with isolation, quality gates, and traceability.
 
 - **aet-implement** — Fresh-session implementation from an approved `plan.md`. The tests it runs are chosen from what the change actually touches, derived from the code rather than a list somebody has to keep up to date, and it falls back to the whole suite whenever the change cannot be narrowed safely.
 - **aet-tdd** — Test-driven development with red-green-refactor loops and vertical tracer bullets.
-- **aet-drive** — Autonomous execution loop that drives every epic and task in the sprint queue to completion. Several epics run in parallel, each into its own branch, and a problem in one epic does not stop the others. Coordinates `aet run` with natural CLI adapter auto-detection, zero-hesitation immediate launch, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts. Tasks added to the sprint while a run is live are picked up on the next scheduling pass, and the run never touches the operator's root checkout, so planning and editing continue in parallel. Runs can be stopped cleanly at any point via `aet run stop`, recording sessions as canceled without artificial failure penalties or tripped breakers. Uncommitted changes from failed or stopped sessions are snapshotted to dedicated WIP refs before worktree teardown, ensuring work remains recoverable while next attempts start from clean checkouts. If merge integration encounters a monolithic commit across tasks, it auto-splits using declared task files or issues actionable split instructions instead of deadlocking.
+- **aet-drive** — Autonomous execution loop that drives every epic and task in the sprint queue to completion. Several epics run in parallel, each into its own branch, and a problem in one epic does not stop the others. Coordinates `aet run` with natural CLI adapter auto-detection, two-tier (`fast` and `frontier`) model routing matched to each task's work class and pipeline stage, automatic high reasoning effort on critical work, zero-hesitation immediate launch, real-time continuous auto-merging under lock, dynamic worker slot replenishment for unblocked dependencies, automatic integration of finished tasks via merge train flushes and `integrate()`, automated culprit ejection on red flushes, and intelligent resolution of integration conflicts. Tasks added to the sprint while a run is live are picked up on the next scheduling pass, and the run never touches the operator's root checkout, so planning and editing continue in parallel. Runs can be stopped cleanly at any point via `aet run stop`, recording sessions as canceled without artificial failure penalties or tripped breakers. Uncommitted changes from failed or stopped sessions are snapshotted to dedicated WIP refs before worktree teardown, ensuring work remains recoverable while next attempts start from clean checkouts. If merge integration encounters a monolithic commit across tasks, it auto-splits using declared task files or issues actionable split instructions instead of deadlocking.
 
 ### Quality and Security Skills
 
@@ -50,7 +50,7 @@ Land code cleanly and document releases.
 
 Keep projects and the toolkit itself healthy.
 
-- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, `aet setup skills` with native auto-detection for Antigravity (`~/.gemini/config/skills`) alongside Claude, Kimi, and Cursor, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the epic branches of the queue beside the resolved trunk, says whether the installed version is the newest release, and names any skill link left pointing at a skill that no longer exists. `aet setup skills` removes those links, so a retired skill disappears from the agent's skill list.
+- **aet-setup** — Bootstrap or upgrade projects with best-practice documentation, AI guardrails, optional pre-push hook gates, global AI provider and model tier configuration (`aet configure --global`), `aet setup skills` with native auto-detection for Antigravity (`~/.gemini/config/skills`) alongside Claude, Kimi, and Cursor, and `aet setup verify` / `aet setup bootstrap` helpers for trunk resolution and required `.gitignore` entries. `verify` reports both directions of drift after an upgrade: an entry the toolkit needs that the file is missing, and an entry naming a file the toolkit no longer writes. It also prints the resolved AI provider and `fast` / `frontier` model tiers, lists the epic branches of the queue beside the resolved trunk, says whether the installed version is the newest release, and names any skill link left pointing at a skill that no longer exists. `aet setup skills` removes those links, so a retired skill disappears from the agent's skill list.
 - **aet update** — Updates an installer-managed install, CLI and skills together, to the newest release in one command. `aet update --check` shows what would change first, `--tag` picks a specific release, and a failed update puts the previous version back. `aet --version` says when a newer release is out.
 - **aet-bug-report** — Structured bug investigation and fixing.
 - **aet-evolve** — System evolution through retrospectives and rule updates. Mines telemetry archives and narrative reports for cross-project patterns, and includes `aet-retro` for automated post-run review.
@@ -79,7 +79,7 @@ Carry context and lessons across runs.
 | Name                  | Description                                                                                                                                                                                                                                              |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `aet setup skills` / `make install-skills` | Symlinks all skills to agent skills directories: `~/.gemini/config/skills/` (Antigravity), `~/.claude/skills/`, `~/.kimi/skills/`, and `~/.agents/skills/`. |
-| Agent CLIs            | Claude Code, Kimi, and Antigravity (`agy`) all drive the pipeline. The toolkit reads each one's session logs and usage figures, so runs are comparable whichever you use; for Antigravity, model and reasoning effort are selectable per session.        |
+| Agent CLIs            | Claude Code, Kimi, and Antigravity (`agy`) all drive the pipeline. The toolkit reads each one's session logs and usage figures, so runs are comparable whichever you use; AI provider and two-tier (`fast` and `frontier`) models are configured globally once in `~/.aet/config.json` and routed automatically by task work class and pipeline stage, with high reasoning effort applied automatically to critical work on Antigravity. |
 | `aet` binary          | A single multicall binary that dispatches to every toolkit subcommand; `aet setup link` installs the console script on `PATH`.                                                                                                                           |
 | `aet context`         | Session-start context loader that surfaces git state, plan stages, budgets, rules digest, and recent learnings.                                                                                                                                          |
 | `aet size` commands   | Report and backfill delivered diff-size measurements for closed plans to calibrate sizing estimates.                                                                                                                                                     |
@@ -91,6 +91,15 @@ Carry context and lessons across runs.
 ---
 
 ## What's New
+
+### What's New in v1.25.0
+
+- **Upgrade AI models once in global configuration** — set your preferred AI provider and `fast` / `frontier` models in `~/.aet/config.json` via `aet configure --global` without touching or committing project files.
+- **Automatic two-tier (`fast` and `frontier`) model routing** — the pipeline routes routine tasks and mechanical verification stages (`qa`, `verify`) to your `fast` model while reserving your `frontier` model for complex reasoning stages (`implement`, `review`, `cso`) on normal and critical work.
+- **Built-in high reasoning effort for critical work** — critical-class tasks automatically run with high reasoning effort on supported adapters (`agy`) without extra flags or manual per-run tuning.
+- **Clear preflight check when models are unset** — `aet run` verifies that your `fast` and `frontier` models are configured before starting a run and prints the exact command to set them up, preventing runs from silently falling back to an outdated model.
+
+**Upgrading from 1.24.0:** run `aet update`, then configure your global `fast` and `frontier` models once with `aet configure --global --fast-model <fast-model> --frontier-model <frontier-model>`.
 
 ### What's New in v1.24.0
 

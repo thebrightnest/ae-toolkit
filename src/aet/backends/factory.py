@@ -425,14 +425,17 @@ def resolve_ai_config(
     Returns ``{"provider": str | None, "models": {"fast": str | None, "frontier": str | None}}``.
     """
     provider: str | None = None
+    provider_source: str | None = None
     models: dict[str, str | None] = {"fast": None, "frontier": None}
+    models_source: dict[str, str] = {}
 
-    def _merge_layer(raw: dict[str, Any]) -> None:
-        nonlocal provider
+    def _merge_layer(raw: dict[str, Any], source_label: str) -> None:
+        nonlocal provider, provider_source
         if "provider" in raw and raw["provider"] is not None:
             if not isinstance(raw["provider"], str) or not raw["provider"].strip():
                 raise ValueError("Config key 'provider' must be a non-empty string.")
             provider = raw["provider"].strip()
+            provider_source = source_label
         if "models" in raw and raw["models"] is not None:
             raw_models = raw["models"]
             if not isinstance(raw_models, dict):
@@ -449,12 +452,13 @@ def resolve_ai_config(
                     if not isinstance(val, str) or not val.strip():
                         raise ValueError(f"Config key 'models.{tier}' must be a non-empty string.")
                     models[tier] = val.strip()
+                    models_source[tier] = source_label
 
     global_path = user_paths.global_config_path()
     if global_path.exists():
         global_cfg = _load_config(global_path)
         _validate_config_keys(global_cfg)
-        _merge_layer(global_cfg)
+        _merge_layer(global_cfg, "config (global)")
 
     try:
         slug = derive_config_slug(repo_root)
@@ -462,7 +466,7 @@ def resolve_ai_config(
         if user_path.exists() and user_path.resolve() != global_path.resolve():
             user_cfg = _load_config(user_path)
             _validate_config_keys(user_cfg)
-            _merge_layer(user_cfg)
+            _merge_layer(user_cfg, "config (user)")
     except Exception as exc:
         if isinstance(exc, (UnknownConfigKeyError, ValueError)):
             raise
@@ -473,9 +477,14 @@ def resolve_ai_config(
         if env_path.exists():
             env_cfg = _load_config(env_path)
             _validate_config_keys(env_cfg)
-            _merge_layer(env_cfg)
+            _merge_layer(env_cfg, "config (env)")
 
-    return {"provider": provider, "models": models}
+    return {
+        "provider": provider,
+        "provider_source": provider_source,
+        "models": models,
+        "models_source": models_source,
+    }
 
 
 def require_models_configured(
