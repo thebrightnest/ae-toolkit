@@ -50,7 +50,20 @@
     ]
   },
   "routing": {
-    "default": { "harness": "claude", "model": null },
-    "by_stage": {}
+    "by_work_class": {
+      "trivial": "fast",
+      "normal": "fast",
+      "unclassified": "fast",
+      "critical": "frontier"
+    },
+    "by_stage": {
+      "qa-complete": {
+        "trivial": "fast",
+        "normal": "frontier",
+        "unclassified": "frontier",
+        "critical": "frontier"
+      },
+      "secure": "fast"
+    }
   }
 }

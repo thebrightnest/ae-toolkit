@@ -75,8 +75,12 @@ from aet import breaker, telemetry
 from aet.backends.factory import (
     LegacyConfigError,
     LegacyTaskBackendError,
+    MissingModelConfigError,
     QueueOutsideRepositoryError,
+    UnknownConfigKeyError,
     create_backend,
+    require_models_configured,
+    resolve_ai_config,
     resolve_config,
     resolve_integration_mode,
 )
@@ -556,11 +560,22 @@ def _build_orchestrator_flags(
         flags.extend(["--on-failure", on_failure])
     if task_timeout is not None:
         flags.extend(["--task-timeout", str(task_timeout)])
+    configured_provider = None
+    try:
+        repo_root = resolve_repo_root(Path.cwd()) or Path.cwd()
+        configured_provider = resolve_ai_config(repo_root).get("provider")
+    except Exception:
+        configured_provider = None
     # An explicit value is forwarded verbatim; the orchestrator resolves it the
     # same way this process would, and the caller's literal argument stays
     # visible in the spawned argv.
     flags.extend(
-        ["--cli-bin", cli_bin if cli_bin is not None else resolve_cli_adapter().bin]
+        [
+            "--cli-bin",
+            cli_bin
+            if cli_bin is not None
+            else resolve_cli_adapter(configured_provider=configured_provider).bin,
+        ]
     )
     if base is not None:
         flags.extend(["--base", base])
@@ -580,7 +595,7 @@ def _validate_preflight(
 
     Checks:
     1. Systemic circuit breaker is not tripped in refs/aet/breaker.
-    2. Agent CLI binary resolves and is found on PATH or executable.
+    2. AI models (fast and frontier) are configured, and agent CLI binary resolves and is found on PATH or executable.
     3. Work queue backend can be loaded (batch mode).
     4. Target plan file exists, has valid frontmatter, and extracts a spec (run-one).
     """
@@ -595,9 +610,13 @@ def _validate_preflight(
         telemetry.write_refusal_summary(telemetry.RunExitReason.BREAKER_TRIPPED, 1, repo_root=repo_root)
         raise typer.Exit(1)
 
-    # 2. Agent CLI binary resolution
+    # 2. AI model configuration & Agent CLI binary resolution
     try:
-        adapter = resolve_cli_adapter(cli_bin)
+        ai_cfg = resolve_ai_config(repo_root)
+        require_models_configured(repo_root)
+        adapter = resolve_cli_adapter(
+            cli_bin, configured_provider=ai_cfg.get("provider")
+        )
         target_bin = cli_bin if cli_bin is not None else adapter.bin
         resolved_path = shutil.which(target_bin)
         if not resolved_path and not (
@@ -609,7 +628,12 @@ def _validate_preflight(
             )
             telemetry.write_refusal_summary(telemetry.RunExitReason.CLI_UNRESOLVABLE, 1, repo_root=repo_root)
             raise typer.Exit(1)
-    except (RuntimeError, ValueError) as exc:
+    except (
+        RuntimeError,
+        ValueError,
+        MissingModelConfigError,
+        UnknownConfigKeyError,
+    ) as exc:
         typer.echo(f"⛔ {exc}", err=True)
         telemetry.write_refusal_summary(telemetry.RunExitReason.CLI_UNRESOLVABLE, 1, repo_root=repo_root)
         raise typer.Exit(1)

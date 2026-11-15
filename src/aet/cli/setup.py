@@ -11,6 +11,7 @@ from pathlib import Path
 import typer
 
 from aet.backends.factory import (
+    resolve_ai_config,
     resolve_config_with_source,
     resolve_integration_mode_with_provenance,
 )
@@ -499,6 +500,22 @@ def setup_verify(
         typer.echo(f"  integration_branch: {integration.ref} ({integration_provenance})")
         trunk_provenance = _format_branch_provenance(trunk.provenance, config_source)
         typer.echo(f"  trunk: {trunk.ref} ({trunk_provenance})")
+        try:
+            ai_cfg = resolve_ai_config(config_repo_root)
+            provider = ai_cfg.get("provider")
+            provider_source = ai_cfg.get("provider_source") or "auto-detect"
+            typer.echo(f"  ai_provider: {provider or 'auto-detect'} ({provider_source})")
+            models = ai_cfg.get("models") or {}
+            models_source = ai_cfg.get("models_source") or {}
+            for tier in ("fast", "frontier"):
+                tier_model = models.get(tier)
+                tier_src = models_source.get(tier, "not configured")
+                if tier_model:
+                    typer.echo(f"  models.{tier}: {tier_model} ({tier_src})")
+                else:
+                    typer.echo(f"  models.{tier}: not configured")
+        except Exception as exc:
+            typer.echo(f"  ⚠ could not resolve AI config: {exc}", err=True)
         try:
             from aet.cli.epic import epic_rows
 

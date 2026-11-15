@@ -59,51 +59,87 @@ class TestCLIAdapter(unittest.TestCase):
 
         Streamed rather than buffered: a buffered envelope prints only on
         completion, so an aborted session discards every token it produced.
+        No model or effort is hardcoded when omitted.
         """
         adapter = resolve_cli_adapter("agy")
-        with patch.dict("os.environ", {}, clear=False):
-            os.environ.pop("AET_AGY_MODEL", None)
-            os.environ.pop("AET_AGY_EFFORT", None)
-            cmd = adapter.build_cmd("run tests", headless=True)
-            self.assertEqual(
-                cmd,
-                [
-                    "agy",
-                    "--dangerously-skip-permissions",
-                    "--output-format",
-                    "stream-json",
-                    "--model",
-                    "gemini-3.7-flash",
-                    "--effort",
-                    "high",
-                    "--print-timeout",
-                    "7200s",
-                    "-p",
-                    "run tests",
-                ],
-            )
+        cmd = adapter.build_cmd("run tests", headless=True)
+        self.assertEqual(
+            cmd,
+            [
+                "agy",
+                "--dangerously-skip-permissions",
+                "--output-format",
+                "stream-json",
+                "--print-timeout",
+                "7200s",
+                "-p",
+                "run tests",
+            ],
+        )
 
     def test_agy_build_cmd_custom_model_and_effort(self):
         adapter = resolve_cli_adapter("agy")
-        with patch.dict("os.environ", {"AET_AGY_MODEL": "gemini-3.1-pro", "AET_AGY_EFFORT": "low"}):
-            cmd = adapter.build_cmd("run tests", headless=True)
-            self.assertEqual(
-                cmd,
-                [
-                    "agy",
-                    "--dangerously-skip-permissions",
-                    "--output-format",
-                    "stream-json",
-                    "--model",
-                    "gemini-3.1-pro",
-                    "--effort",
-                    "low",
-                    "--print-timeout",
-                    "7200s",
-                    "-p",
-                    "run tests",
-                ],
-            )
+        cmd = adapter.build_cmd(
+            "run tests",
+            headless=True,
+            model="gemini-3.1-pro",
+            effort="high",
+        )
+        self.assertEqual(
+            cmd,
+            [
+                "agy",
+                "--dangerously-skip-permissions",
+                "--output-format",
+                "stream-json",
+                "--model",
+                "gemini-3.1-pro",
+                "--effort",
+                "high",
+                "--print-timeout",
+                "7200s",
+                "-p",
+                "run tests",
+            ],
+        )
+
+    def test_claude_and_kimi_build_cmd_with_model_ignore_effort(self):
+        claude = resolve_cli_adapter("claude")
+        self.assertEqual(
+            claude.build_cmd("run tests", headless=True, model="claude-opus-4-6", effort="high"),
+            [
+                "claude",
+                "--dangerously-skip-permissions",
+                "--output-format",
+                "json",
+                "--model",
+                "claude-opus-4-6",
+                "-p",
+                "run tests",
+            ],
+        )
+        kimi = resolve_cli_adapter("kimi")
+        self.assertEqual(
+            kimi.build_cmd("run tests", headless=True, model="kimi-k2", effort="high"),
+            [
+                "kimi",
+                "--model",
+                "kimi-k2",
+                "-p",
+                "run tests",
+            ],
+        )
+
+    def test_resolve_cli_adapter_configured_provider_precedence(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with patch.object(cli_adapter, "detect_host_adapter", return_value="claude"):
+                adapter = resolve_cli_adapter(configured_provider="agy")
+                self.assertEqual(adapter.name, "agy")
+        with patch.dict("os.environ", {"AET_CLI_BIN": "kimi"}, clear=True):
+            adapter = resolve_cli_adapter(configured_provider="agy")
+            self.assertEqual(adapter.name, "kimi")
+        adapter = resolve_cli_adapter("claude", configured_provider="agy")
+        self.assertEqual(adapter.name, "claude")
 
     def test_agy_print_timeout_tracks_the_stall_timeout(self):
         """agy's own --print-timeout defaults to 5m0s and aborts the whole turn.

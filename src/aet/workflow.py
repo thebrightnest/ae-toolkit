@@ -18,12 +18,14 @@ from aet import evidence
 SUPPORTED_VERSION = 1
 VALID_ISOLATION_LEVELS = {"minimal", "standard", "full"}
 VALID_GATE_DEFAULTS = {"required", "critical-only"}
+VALID_MODEL_TIERS = {"fast", "frontier"}
+VALID_WORK_CLASSES = {"trivial", "normal", "critical", "unclassified"}
 
 _PACKAGED_DIR = Path(__file__).resolve().parent / "workflows"
 
 _STAGE_KEYS = {"name", "skills", "evidence", "gate_key", "gate_default"}
 _EXECUTION_POLICY_KEYS = {"session_groups"}
-_ROUTING_KEYS = {"default", "by_stage"}
+_ROUTING_KEYS = {"default", "by_work_class", "by_stage"}
 _WORKFLOW_KEYS = {
     "version",
     "name",
@@ -60,10 +62,11 @@ class ExecutionPolicy:
 
 @dataclass(frozen=True)
 class Routing:
-    """Harness/model routing: a per-workflow default plus per-stage overrides."""
+    """Model tier / harness routing: work-class baseline plus per-stage overrides."""
 
-    default: dict[str, Any]
-    by_stage: dict[str, dict[str, Any]]
+    default: dict[str, Any] = field(default_factory=dict)
+    by_work_class: dict[str, str] = field(default_factory=dict)
+    by_stage: dict[str, Any] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -84,6 +87,37 @@ class Workflow:
     def entry_stage(self) -> str:
         """The first stage in list order."""
         return self.stages[0].name
+
+    def resolve_stage_tier(self, stage_name: str, work_class: str | None = None) -> str:
+        """Return the abstract model tier ('fast' or 'frontier') for ``stage_name`` and ``work_class``."""
+        wc = (work_class or "unclassified").lower()
+        if wc not in VALID_WORK_CLASSES:
+            wc = "unclassified"
+        stage_override = self.routing.by_stage.get(stage_name)
+        if isinstance(stage_override, str) and stage_override in VALID_MODEL_TIERS:
+            return stage_override
+        if isinstance(stage_override, dict):
+            tier = stage_override.get(wc) or stage_override.get("unclassified")
+            if isinstance(tier, str) and tier in VALID_MODEL_TIERS:
+                return tier
+        wc_tier = self.routing.by_work_class.get(wc) or self.routing.by_work_class.get("unclassified")
+        if isinstance(wc_tier, str) and wc_tier in VALID_MODEL_TIERS:
+            return wc_tier
+        return "frontier" if wc == "critical" else "fast"
+
+    def resolve_group_tier(
+        self, stages: list[WorkflowStage], work_class: str | None = None
+    ) -> str:
+        """Return 'frontier' if any stage in ``stages`` resolves to 'frontier', else 'fast'."""
+        for stage in stages:
+            if self.resolve_stage_tier(stage.name, work_class) == "frontier":
+                return "frontier"
+        return "fast"
+
+    def resolve_effort(self, work_class: str | None = None) -> str | None:
+        """Return the opinionated effort level for ``work_class`` ('high' for critical, else None)."""
+        wc = (work_class or "unclassified").lower()
+        return "high" if wc == "critical" else None
 
     def next_stage(self, name: str) -> str | None:
         """Return the successor of ``name`` in list order.
@@ -289,24 +323,81 @@ def _parse_execution_policy(
 def _parse_routing(raw_routing: Any, stage_map: dict[str, WorkflowStage], path: Path) -> Routing:
     if not isinstance(raw_routing, dict):
         raise WorkflowError(f"Workflow {path} requires a 'routing' object")
-    default = _parse_route_target(raw_routing.get("default"), "routing.default", path)
+
+    raw_by_wc = raw_routing.get("by_work_class")
+    raw_default = raw_routing.get("default")
+    if raw_by_wc is None and raw_default is None:
+        raise WorkflowError(
+            f"Workflow {path} requires 'routing.by_work_class' (or 'routing.default') in 'routing'"
+        )
+
+    by_work_class: dict[str, str] = {}
+    if raw_by_wc is not None:
+        if not isinstance(raw_by_wc, dict) or not raw_by_wc:
+            raise WorkflowError(f"routing.by_work_class in {path} must be a non-empty object")
+        for wc, tier in raw_by_wc.items():
+            if wc not in VALID_WORK_CLASSES:
+                raise WorkflowError(
+                    f"routing.by_work_class in {path} has unknown work_class {wc!r} "
+                    f"(expected one of {sorted(VALID_WORK_CLASSES)})"
+                )
+            if not isinstance(tier, str) or tier not in VALID_MODEL_TIERS:
+                raise WorkflowError(
+                    f"routing.by_work_class.{wc} in {path} has unknown tier {tier!r} "
+                    f"(expected one of {sorted(VALID_MODEL_TIERS)})"
+                )
+            by_work_class[wc] = tier
+
+    default: dict[str, Any] = {}
+    if raw_default is not None:
+        default = _parse_route_target(raw_default, "routing.default", path)
+
     raw_by_stage = raw_routing.get("by_stage", {})
     if not isinstance(raw_by_stage, dict):
         raise WorkflowError(f"Workflow {path} requires 'routing.by_stage' as an object")
-    by_stage = {}
+    by_stage: dict[str, Any] = {}
     for stage_name, raw_target in raw_by_stage.items():
         if stage_name not in stage_map:
             raise WorkflowError(
                 f"routing.by_stage references unknown stage {stage_name!r} in {path}"
             )
-        by_stage[stage_name] = _parse_route_target(
+        by_stage[stage_name] = _parse_stage_route_target(
             raw_target, f"routing.by_stage.{stage_name}", path
         )
     return Routing(
         default=default,
+        by_work_class=by_work_class,
         by_stage=by_stage,
         extra={k: v for k, v in raw_routing.items() if k not in _ROUTING_KEYS},
     )
+
+
+def _parse_stage_route_target(raw_target: Any, label: str, path: Path) -> Any:
+    if isinstance(raw_target, str):
+        if raw_target not in VALID_MODEL_TIERS:
+            raise WorkflowError(
+                f"{label} in {path} has unknown tier {raw_target!r} "
+                f"(expected one of {sorted(VALID_MODEL_TIERS)})"
+            )
+        return raw_target
+    if isinstance(raw_target, dict) and "harness" not in raw_target and "model" not in raw_target:
+        if not raw_target:
+            raise WorkflowError(f"{label} in {path} must not be empty")
+        parsed: dict[str, str] = {}
+        for wc, tier in raw_target.items():
+            if wc not in VALID_WORK_CLASSES:
+                raise WorkflowError(
+                    f"{label} in {path} has unknown work_class {wc!r} "
+                    f"(expected one of {sorted(VALID_WORK_CLASSES)})"
+                )
+            if not isinstance(tier, str) or tier not in VALID_MODEL_TIERS:
+                raise WorkflowError(
+                    f"{label}.{wc} in {path} has unknown tier {tier!r} "
+                    f"(expected one of {sorted(VALID_MODEL_TIERS)})"
+                )
+            parsed[wc] = tier
+        return parsed
+    return _parse_route_target(raw_target, label, path)
 
 
 def _parse_route_target(raw_target: Any, label: str, path: Path) -> dict[str, Any]:

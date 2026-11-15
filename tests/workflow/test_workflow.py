@@ -211,8 +211,54 @@ class TestValidationRules(WorkflowFileTestCase):
 class TestRouting(WorkflowFileTestCase):
     def test_default_routing_exposed(self):
         wf = load_workflow(REPO_ROOT)
-        self.assertEqual(wf.routing.default, {"harness": "claude", "model": None})
-        self.assertEqual(wf.routing.by_stage, {})
+        self.assertEqual(
+            wf.routing.by_work_class,
+            {
+                "trivial": "fast",
+                "normal": "fast",
+                "unclassified": "fast",
+                "critical": "frontier",
+            },
+        )
+        self.assertEqual(
+            wf.routing.by_stage,
+            {
+                "qa-complete": {
+                    "trivial": "fast",
+                    "normal": "frontier",
+                    "unclassified": "frontier",
+                    "critical": "frontier",
+                },
+                "secure": "fast",
+            },
+        )
+
+    def test_rule_a_stage_and_group_tier_and_effort_resolution(self):
+        wf = load_workflow(REPO_ROOT)
+        # Trivial: fast everywhere, no effort
+        for stage in ("plan-approved", "implemented", "qa-complete", "reviewed", "secure", "synced"):
+            self.assertEqual(wf.resolve_stage_tier(stage, "trivial"), "fast")
+        self.assertIsNone(wf.resolve_effort("trivial"))
+
+        # Normal / unclassified: frontier for qa-complete (review), fast elsewhere, no effort
+        for wc in ("normal", "unclassified", None):
+            self.assertEqual(wf.resolve_stage_tier("plan-approved", wc), "fast")
+            self.assertEqual(wf.resolve_stage_tier("implemented", wc), "fast")
+            self.assertEqual(wf.resolve_stage_tier("qa-complete", wc), "frontier")
+            self.assertEqual(wf.resolve_stage_tier("reviewed", wc), "fast")
+            self.assertEqual(wf.resolve_stage_tier("secure", wc), "fast")
+            self.assertIsNone(wf.resolve_effort(wc))
+
+        # Critical: frontier everywhere except mechanical secure (sync-docs), effort high
+        for stage in ("plan-approved", "implemented", "qa-complete", "reviewed", "synced"):
+            self.assertEqual(wf.resolve_stage_tier(stage, "critical"), "frontier")
+        self.assertEqual(wf.resolve_stage_tier("secure", "critical"), "fast")
+        self.assertEqual(wf.resolve_effort("critical"), "high")
+
+        # Group promotion: [reviewed, secure] under critical promotes to frontier
+        reviewed_group = [wf.stage_map["reviewed"], wf.stage_map["secure"]]
+        self.assertEqual(wf.resolve_group_tier(reviewed_group, "critical"), "frontier")
+        self.assertEqual(wf.resolve_group_tier(reviewed_group, "normal"), "fast")
 
     def test_stage_override_exposed(self):
         document = packaged_document()

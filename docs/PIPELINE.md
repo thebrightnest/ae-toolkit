@@ -97,6 +97,20 @@ The stage sequence, skill bindings, evidence gates, and session grouping are **d
 
 At standard isolation the session groups are `[plan-approved, implemented]` → `[qa-complete]` → `[reviewed, secure]`. `aet-ship` merges after `synced`; `merged` is a queue state (see Legal Transitions), not a stage. The planning footers `plan-draft`, `prd-approved`, and `scope-validated` belong to the PRD pipeline (`aet-plan` / `aet-validate-scope`), upstream of the engine stage machine — they are not workflow stages.
 
+## Two-Tier Model Routing (`fast` and `frontier`) and Effort Convention
+
+The orchestrator resolves a semantic model tier (`fast` or `frontier`) and reasoning effort for every session from the task's `work_class` and the workflow's `routing` table (`src/aet/workflows/software.json`, ADR-089):
+
+| `work_class` | `plan-approved` (`tdd` + `implement`) | `implemented` (`qa`) | `qa-complete` (`review`) | `reviewed` (`cso`) | `secure` (`sync-docs`) | `synced` (`verify`) | Effort |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **`trivial`** | `fast` | `fast` | `fast` | `fast` | `fast` | — | default |
+| **`normal`** / **`unclassified`** | `fast` | `fast` | **`frontier`** | `fast` | `fast` | — | default |
+| **`critical`** | **`frontier`** | **`frontier`** | **`frontier`** | **`frontier`** | `fast` | **`frontier`** | **`high`** |
+
+- **Group promotion**: When a multi-stage session group runs at `standard` isolation, the group uses `frontier` if any runnable stage in that group maps to `frontier`.
+- **Auxiliary sessions**: Failure `triage` sessions and missing-verdict recovery sessions always use `fast` with default effort.
+- **Fail-closed preflight**: `aet run` and `aet run-one` verify that `models.fast` and `models.frontier` are defined in `~/.aet/config.json` (or user config) before spawning the orchestrator.
+
 ## Session Liveness
 
 The orchestrator distinguishes a slow-but-alive session from a genuinely wedged one using hybrid liveness, not just stdout silence.

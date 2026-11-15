@@ -238,6 +238,64 @@ class TestConfigureWriter(unittest.TestCase):
         self.assertEqual(config["integration_mode"], "single-pr")
         self.assertEqual(config["integration_branch"], "release")
 
+    def _read_global_config(self) -> dict | None:
+        path = self.home / ".aet" / "config.json"
+        if not path.exists():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_global_flag_writes_provider_and_models_to_global_config(self):
+        """--global writes provider, models.fast, and models.frontier to ~/.aet/config.json."""
+        rc = self._run(
+            [
+                "--global",
+                "--provider",
+                "agy",
+                "--fast-model",
+                "gemini-3.1-flash",
+                "--frontier-model",
+                "claude-opus-4-6",
+            ]
+        )
+        self.assertEqual(rc, 0)
+        config = self._read_global_config()
+        self.assertIsNotNone(config)
+        self.assertEqual(config["provider"], "agy")
+        self.assertEqual(
+            config["models"],
+            {"fast": "gemini-3.1-flash", "frontier": "claude-opus-4-6"},
+        )
+        self.assertIsNone(self._read_project_config())
+        self.assertIsNone(self._read_user_config())
+
+    def test_ai_flags_default_to_global_and_merge_model_tiers(self):
+        """Updating a single model tier preserves the existing sibling tier in ~/.aet/config.json."""
+        rc1 = self._run(["--fast-model", "gemini-3.1-flash", "--frontier-model", "claude-sonnet-4-6"])
+        self.assertEqual(rc1, 0)
+        rc2 = self._run(["--frontier-model", "claude-opus-4-6"])
+        self.assertEqual(rc2, 0)
+        config = self._read_global_config()
+        self.assertEqual(
+            config["models"],
+            {"fast": "gemini-3.1-flash", "frontier": "claude-opus-4-6"},
+        )
+
+    def test_ai_flags_rejected_for_project_scope_and_shared(self):
+        """Personal AI provider/model flags cannot be written to committed .agents/aet-config.json."""
+        rc_proj = self._run(["--scope", "project", "--fast-model", "gemini-3.1-flash"])
+        self.assertEqual(rc_proj, 1)
+        self.assertIsNone(self._read_project_config())
+
+        rc_shared = self._run(["--shared", "--provider", "agy"])
+        self.assertEqual(rc_shared, 1)
+        self.assertIsNone(self._read_project_config())
+
+    def test_invalid_provider_rejected(self):
+        """An unknown provider name is rejected with exit code 1."""
+        rc = self._run(["--global", "--provider", "unknown-cli"])
+        self.assertEqual(rc, 1)
+        self.assertIsNone(self._read_global_config())
+
 
 if __name__ == "__main__":
     unittest.main()

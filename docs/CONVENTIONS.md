@@ -160,6 +160,28 @@ aet configure --guided --scope team --integration-mode pr-per-task
 This writes `.agents/aet-config.json`. Because reads are external-first, an
 external config (if present) will still take precedence.
 
+### Global AI Provider and Model Tier Configuration (`~/.aet/config.json`)
+
+AI provider and model tier choices are personal user settings stored in
+`~/.aet/config.json` (overridable via `AET_GLOBAL_CONFIG`) and are never written
+to committed `.agents/aet-config.json` (ADR-089).
+
+Before `aet run` or `aet run-one` starts, preflight requires both semantic model
+tiers (`models.fast` and `models.frontier`) to be configured; there are no
+hardcoded model strings in the source code. Configure them once globally:
+
+```bash
+aet configure --global --provider agy --fast-model gemini-3.1-flash --frontier-model claude-opus-4-6
+```
+
+- **Provider precedence**: `--cli-bin` flag → `AET_CLI_BIN` env → `provider` in
+  `~/.aet/config.json` (or `~/.aet/{config-slug}/config.json`) → calling client
+  session (`detect_host_adapter()`).
+- **Model precedence**: `AET_WORK_CONFIG` → `~/.aet/{config-slug}/config.json` →
+  `~/.aet/config.json`.
+- **Inspecting resolved settings**: `aet setup verify` displays the resolved
+  `ai_provider`, `models.fast`, and `models.frontier` along with their provenance.
+
 ### Upgrading from the Legacy File
 
 If the repo contains only the legacy `.agents/aet-work.json` file, any

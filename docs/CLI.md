@@ -708,7 +708,11 @@ Configure the AET project config.
 - `--integration-branch` *str* — Set the integration branch name.
 - `--validate-command` *str* — Set the full validation command.
 - `--lint-command` *str* — Set the lint validation command.
-- `--scope` *str* — Write to project config or user config (default: project if in-tree config exists).
+- `--scope` *str* — Write to global, user, or project config (default: global for AI flags, project if in-tree config exists, else user).
+- `--global` *boolean* — Write to global user config (~/.aet/config.json). (default: `False`)
+- `--provider` *str* — Set the default AI CLI provider (agy, claude, kimi).
+- `--fast-model` *str* — Set the fast tier AI model.
+- `--frontier-model` *str* — Set the frontier tier AI model.
 - `--non-interactive` *boolean* — Fail if a required value is missing instead of prompting. (default: `False`)
 - `--migrate` *boolean* — Rename legacy .agents/aet-work.json to .agents/aet-config.json. (default: `False`)
 - `--guided` *boolean* — Run the two-question guided setup flow (scope + integration mode). (default: `False`)

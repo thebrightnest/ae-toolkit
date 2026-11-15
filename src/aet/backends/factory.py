@@ -60,8 +60,17 @@ class ConfigContradictionError(ValueError):
     """Raised when config contains mutually exclusive settings."""
 
 
+class MissingModelConfigError(ValueError):
+    """Raised when ``models.fast`` or ``models.frontier`` is not configured."""
+
+
 # Legal values for the ``integration_mode`` project setting.
 INTEGRATION_MODES = frozenset({"pr-per-task", "single-pr"})
+
+# Personal AI provider/model keys (allowed in ~/.aet/config.json and ~/.aet/{slug}/config.json,
+# forbidden in committed .agents/aet-config.json).
+AI_CONFIG_KEYS = frozenset({"provider", "models"})
+LEGAL_MODEL_TIER_KEYS = frozenset({"fast", "frontier"})
 
 # Legal top-level keys for an AET config file. Removed keys (e.g. task_backend)
 # are special-cased with a migration message before this set is consulted.
@@ -77,6 +86,8 @@ LEGAL_CONFIG_KEYS = frozenset({
     "validate_command",
     "lint_command",
     "validation_timeout",
+    "provider",
+    "models",
 })
 
 DEFAULT_VALIDATION_TIMEOUT: int = 600
@@ -186,6 +197,9 @@ def _validate_config_consistency(
     Projections are a shared-device feature: they write to a forge and assume
     refs/aet/* are pushed. In shadow posture (any source other than project)
     a ``projections`` entry is a contradiction.
+
+    AI provider and model configuration is personal user state and must never
+    be committed into the in-tree project config (``.agents/aet-config.json``).
     """
     if source != "project" and "projections" in config:
         raise ConfigContradictionError(
@@ -195,6 +209,15 @@ def _validate_config_consistency(
             f"Move 'projections' to {project_path or '.agents/aet-config.json'} "
             "or remove it."
         )
+    if source == "project" and (AI_CONFIG_KEYS & set(config.keys())):
+        present = ", ".join(sorted(AI_CONFIG_KEYS & set(config.keys())))
+        raise ConfigContradictionError(
+            f"AI configuration key(s) ({present}) are personal settings and must "
+            f"not live in the committed project config ({project_path or '.agents/aet-config.json'}). "
+            "Configure them globally in ~/.aet/config.json with: "
+            "aet configure --global --fast-model <model> --frontier-model <model>"
+        )
+
 
 
 def resolve_config_with_source(
@@ -387,6 +410,94 @@ def resolve_validation_timeout(
         except (ValueError, TypeError):
             return DEFAULT_VALIDATION_TIMEOUT
     return DEFAULT_VALIDATION_TIMEOUT
+
+
+def resolve_ai_config(
+    repo_root: str | Path | None = None,
+) -> dict[str, Any]:
+    """Resolve personal AI provider and model configuration.
+
+    Order:
+    1. ``~/.aet/config.json`` (global user config, or ``AET_GLOBAL_CONFIG``)
+    2. ``~/.aet/{slug}/config.json`` (per-project user shadow override, if present)
+    3. ``AET_WORK_CONFIG`` env override (if present)
+
+    Returns ``{"provider": str | None, "models": {"fast": str | None, "frontier": str | None}}``.
+    """
+    provider: str | None = None
+    models: dict[str, str | None] = {"fast": None, "frontier": None}
+
+    def _merge_layer(raw: dict[str, Any]) -> None:
+        nonlocal provider
+        if "provider" in raw and raw["provider"] is not None:
+            if not isinstance(raw["provider"], str) or not raw["provider"].strip():
+                raise ValueError("Config key 'provider' must be a non-empty string.")
+            provider = raw["provider"].strip()
+        if "models" in raw and raw["models"] is not None:
+            raw_models = raw["models"]
+            if not isinstance(raw_models, dict):
+                raise ValueError("Config key 'models' must be a JSON object with 'fast' and 'frontier'.")
+            unknown_tiers = set(raw_models.keys()) - LEGAL_MODEL_TIER_KEYS
+            if unknown_tiers:
+                raise UnknownConfigKeyError(
+                    f"Unknown model tier(s): {', '.join(sorted(unknown_tiers))}. "
+                    f"Legal model tiers are: {', '.join(sorted(LEGAL_MODEL_TIER_KEYS))}."
+                )
+            for tier in LEGAL_MODEL_TIER_KEYS:
+                val = raw_models.get(tier)
+                if val is not None:
+                    if not isinstance(val, str) or not val.strip():
+                        raise ValueError(f"Config key 'models.{tier}' must be a non-empty string.")
+                    models[tier] = val.strip()
+
+    global_path = user_paths.global_config_path()
+    if global_path.exists():
+        global_cfg = _load_config(global_path)
+        _validate_config_keys(global_cfg)
+        _merge_layer(global_cfg)
+
+    try:
+        slug = derive_config_slug(repo_root)
+        user_path = user_paths.user_config_path(slug)
+        if user_path.exists() and user_path.resolve() != global_path.resolve():
+            user_cfg = _load_config(user_path)
+            _validate_config_keys(user_cfg)
+            _merge_layer(user_cfg)
+    except Exception as exc:
+        if isinstance(exc, (UnknownConfigKeyError, ValueError)):
+            raise
+
+    env_override = os.environ.get(AET_WORK_CONFIG_ENV)
+    if env_override:
+        env_path = Path(env_override)
+        if env_path.exists():
+            env_cfg = _load_config(env_path)
+            _validate_config_keys(env_cfg)
+            _merge_layer(env_cfg)
+
+    return {"provider": provider, "models": models}
+
+
+def require_models_configured(
+    repo_root: str | Path | None = None,
+) -> dict[str, str]:
+    """Validate that both ``models.fast`` and ``models.frontier`` are configured.
+
+    Returns ``{"fast": str, "frontier": str}`` when valid, or raises
+    :class:`MissingModelConfigError` with actionable remediation instructions.
+    """
+    ai_cfg = resolve_ai_config(repo_root=repo_root)
+    models = ai_cfg.get("models") or {}
+    missing = [tier for tier in ("fast", "frontier") if not models.get(tier)]
+    if missing:
+        missing_str = ", ".join(f"models.{t}" for t in missing)
+        global_path = user_paths.global_config_path()
+        raise MissingModelConfigError(
+            f"AI models are not configured ({missing_str} missing in {global_path}).\n"
+            "   Configure your global models once with:\n"
+            "     aet configure --global --fast-model <model> --frontier-model <model>"
+        )
+    return {"fast": str(models["fast"]), "frontier": str(models["frontier"])}
 
 
 def _load_config(path: Path) -> dict[str, Any]:

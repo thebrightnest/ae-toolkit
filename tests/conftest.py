@@ -56,6 +56,11 @@ def _isolate_aet_home(request, monkeypatch, tmp_path):
     from aet import user_paths
 
     home = tmp_path / "aet-home"
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "config.json").write_text(
+        '{"models": {"fast": "test-fast", "frontier": "test-frontier"}}',
+        encoding="utf-8",
+    )
     monkeypatch.setenv("AET_HOME", str(home))
     monkeypatch.setattr(user_paths, "_FALLBACK_AET_HOME", home)
 
@@ -134,6 +139,11 @@ def _isolate_class_scoped_setup(request, tmp_path_factory):
 
     root = tmp_path_factory.mktemp("class-isolation")
     aet_home = root / "aet-home"
+    aet_home.mkdir(parents=True, exist_ok=True)
+    (aet_home / "config.json").write_text(
+        '{"models": {"fast": "test-fast", "frontier": "test-frontier"}}',
+        encoding="utf-8",
+    )
     ledger_root = root / "ledger-root"
     (ledger_root / ".agents").mkdir(parents=True, exist_ok=True)
 

@@ -102,6 +102,9 @@ Do **not** write an ADR for:
 - [084 — A Gate Failure Is Evidence, and Retries Are Bounded](084-a-gate-failure-is-evidence.md)
 - [085 — An Operator Stop Is Canceled, and One Lease Guards the Shared Queue](085-run-lifecycle.md)
 - [086 — Telemetry Records What Happened](086-telemetry-records-what-happened.md)
+- [087 — Autonomous Loop Reliability](087-autonomous-loop-reliability.md)
+- [088 — Worktree Virtual Environment Isolation and Self-Healing](088-worktree-venv-isolation.md)
+- [089 — Global AI Configuration and Two-Tier Convention Routing (`fast` / `frontier`)](089-global-ai-config-and-two-tier-model-routing.md)
 
 ## Format
 

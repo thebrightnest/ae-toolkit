@@ -73,6 +73,7 @@ from aet.backends.factory import (  # noqa: E402
     DEFAULT_CONFIG_PATH,
     SHADOW_POSTURE,
     create_backend,
+    resolve_ai_config,
     resolve_config,
     resolve_integration_mode,
     resolve_posture,
@@ -1133,6 +1134,35 @@ def _verdict_state(
     return "pass", record, ""
 
 
+def _resolve_models(repo_root: str) -> dict[str, str]:
+    """Return configured AI model tier mapping (`fast`, `frontier`) for `repo_root`."""
+    try:
+        return dict(resolve_ai_config(repo_root).get("models") or {})
+    except Exception:  # pragma: no cover - defensive fallback for partial test fixtures
+        return {}
+
+
+def _adapter_build_cmd(
+    adapter,
+    prompt: str,
+    *,
+    workdir: str | None = None,
+    headless: bool = True,
+    model: str | None = None,
+    effort: str | None = None,
+) -> list[str]:
+    """Build adapter command line, forwarding `model` and `effort` when present."""
+    kwargs: dict[str, Any] = {"workdir": workdir, "headless": headless}
+    if model is not None:
+        kwargs["model"] = model
+    if effort is not None:
+        kwargs["effort"] = effort
+    try:
+        return adapter.build_cmd(prompt, **kwargs)
+    except TypeError:
+        return adapter.build_cmd(prompt, workdir=workdir, headless=headless)
+
+
 def _run_verdict_recovery(
     adapter,
     repo_root: str,
@@ -1145,6 +1175,9 @@ def _run_verdict_recovery(
     stall_timeout: float | None,
     isolation: str,
     base_branch: str,
+    *,
+    model: str | None = None,
+    effort: str | None = None,
 ) -> None:
     """Spawn one narrow session whose only job is to write the missing verdict.
 
@@ -1190,7 +1223,15 @@ def _run_verdict_recovery(
             f"no record of the run survives."
         )
 
-    cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
+    resolved_model = model if model is not None else _resolve_models(repo_root).get("fast")
+    cmd = _adapter_build_cmd(
+        adapter,
+        prompt,
+        workdir=worktree_dir,
+        headless=True,
+        model=resolved_model,
+        effort=effort,
+    )
     env = os.environ.copy()
     env["AET_EXECUTION_MODE"] = "unattended"
     env["AET_ORCHESTRATOR_PID"] = str(os.getpid())
@@ -1701,6 +1742,8 @@ def run_stage(
     backend=None,
     stall_timeout: float | None = None,
     logger: telemetry.RunLogger | None = None,
+    model: str | None = None,
+    effort: str | None = None,
 ) -> tuple[int, dict | None, str | None, str]:
     """Spawn a single stage session, returning ``(exit_code, usage, session_ref, output)``.
 
@@ -1715,7 +1758,14 @@ def run_stage(
         handoff_clause=handoff_clause,
         verdict_kind=verdict_kind,
     )
-    cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
+    cmd = _adapter_build_cmd(
+        adapter,
+        prompt,
+        workdir=worktree_dir,
+        headless=True,
+        model=model,
+        effort=effort,
+    )
 
     session_logger = logger or (
         telemetry.RunLogger(repo_root, run_id=run_id) if run_id is not None else None
@@ -1841,6 +1891,8 @@ def run_stage_group(
     backend=None,
     stall_timeout: float | None = None,
     logger: telemetry.RunLogger | None = None,
+    model: str | None = None,
+    effort: str | None = None,
 ) -> tuple[int, dict | None, str | None, str]:
     """Spawn one session that runs every stage in the group sequentially.
 
@@ -1857,7 +1909,14 @@ def run_stage_group(
         freshness_clause=_freshness_clause(freshness),
         handoff_clause=handoff_clause,
     )
-    cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
+    cmd = _adapter_build_cmd(
+        adapter,
+        prompt,
+        workdir=worktree_dir,
+        headless=True,
+        model=model,
+        effort=effort,
+    )
 
     session_logger = logger or (
         telemetry.RunLogger(repo_root, run_id=run_id) if run_id is not None else None
@@ -2161,6 +2220,9 @@ def _process_task_impl(
     # Group stages by isolation level
     groups = workflow.session_groups(task_isolation)
     agent_invoked = False
+    work_class = str(plan_fm.get("work_class") or task.get("work_class") or "unclassified").lower()
+    ai_models = _resolve_models(repo_root)
+    task_effort = workflow.resolve_effort(work_class)
 
     for group in groups:
         if _shutdown_requested:
@@ -2198,6 +2260,8 @@ def _process_task_impl(
                     f"   Stage group: {' → '.join(stage_span)} → {expected_final}"
                 )
 
+                group_tier = workflow.resolve_group_tier(runnable, work_class)
+                group_model = ai_models.get(group_tier)
                 start_time = telemetry.iso_now()
                 exit_code, usage, session_ref, output = run_stage_group(
                     adapter,
@@ -2212,6 +2276,8 @@ def _process_task_impl(
                     backend=backend,
                     stall_timeout=stall_timeout,
                     logger=logger,
+                    model=group_model,
+                    effort=task_effort,
                 )
                 end_time = telemetry.iso_now()
                 targeted_tests = _stage_targeted_tests(
@@ -2386,6 +2452,8 @@ def _process_task_impl(
             print(f"   Stage: {target_stage.name} → {next_stage_name} ({' → '.join(skills)})")
 
             kind = target_stage.evidence
+            stage_tier = workflow.resolve_stage_tier(target_stage.name, work_class)
+            stage_model = ai_models.get(stage_tier)
             start_time = telemetry.iso_now()
             exit_code, usage, session_ref, output = run_stage(
                 adapter,
@@ -2402,6 +2470,8 @@ def _process_task_impl(
                 backend=backend,
                 stall_timeout=stall_timeout,
                 logger=logger,
+                model=stage_model,
+                effort=task_effort,
             )
             end_time = telemetry.iso_now()
             targeted_tests = _stage_targeted_tests(
@@ -3167,6 +3237,8 @@ def _consult_triage_session(
     tail: str,
     signature: str,
     stall_timeout: float | None = None,
+    model: str | None = None,
+    effort: str | None = None,
 ) -> dict | None:
     """Spawn a triage session and return its parsed verdict, or ``None``.
 
@@ -3184,7 +3256,15 @@ def _consult_triage_session(
         signature=signature,
     )
     try:
-        cmd = adapter.build_cmd(prompt, workdir=worktree_dir, headless=True)
+        resolved_model = model if model is not None else _resolve_models(repo_root).get("fast")
+        cmd = _adapter_build_cmd(
+            adapter,
+            prompt,
+            workdir=worktree_dir,
+            headless=True,
+            model=resolved_model,
+            effort=effort,
+        )
     except Exception:  # pragma: no cover - defensive fallback
         return None
     env = os.environ.copy()
@@ -5286,7 +5366,11 @@ def _announce_posture(posture: str) -> None:
 
 def main(argv: list[str] | None = None):
     args = parse_args(argv)
-    adapter = resolve_cli_adapter(args.cli_bin)
+    try:
+        configured_provider = resolve_ai_config(args.repo_root).get("provider")
+    except Exception:
+        configured_provider = None
+    adapter = resolve_cli_adapter(args.cli_bin, configured_provider=configured_provider)
 
     # Supervision defaults resolve from the active adapter (ADR-053). The
     # wall-clock backstop remains overridable via --task-timeout; when omitted

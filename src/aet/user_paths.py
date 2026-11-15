@@ -63,3 +63,11 @@ def user_config_path(slug: str | Path) -> Path:
     if env:
         return Path(env).expanduser()
     return aet_home() / str(slug) / "config.json"
+
+
+def global_config_path() -> Path:
+    """Return the global user config path (~/.aet/config.json), respecting ``AET_GLOBAL_CONFIG``."""
+    env = os.environ.get("AET_GLOBAL_CONFIG")
+    if env:
+        return Path(env).expanduser()
+    return aet_home() / "config.json"

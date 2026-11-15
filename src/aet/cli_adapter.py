@@ -52,12 +52,16 @@ class CLIAdapter:
     usage_mode: str | None = None
     stall_timeout: float = 7200.0
     wall_backstop: float = 7200.0
+    model_flag: str | None = "--model"
+    effort_flag: str | None = None
 
     def build_cmd(
         self,
         prompt: str,
         workdir: str | None = None,
         headless: bool = True,
+        model: str | None = None,
+        effort: str | None = None,
     ) -> list[str]:
         """Build the CLI invocation list."""
         cmd = [self.bin]
@@ -67,13 +71,11 @@ class CLIAdapter:
             # Before the prompt flag: some CLIs consume the token after -p as
             # the prompt value, so trailing flags would break the invocation.
             cmd.extend(_USAGE_MODE_FLAGS.get(self.usage_mode, ()))
+        if model and self.model_flag:
+            cmd.extend([self.model_flag, model])
+        if effort and self.effort_flag:
+            cmd.extend([self.effort_flag, effort])
         if self.name == "agy":
-            model = os.environ.get("AET_AGY_MODEL", "gemini-3.7-flash")
-            effort = os.environ.get("AET_AGY_EFFORT", "high")
-            if model:
-                cmd.extend(["--model", model])
-            if effort:
-                cmd.extend(["--effort", effort])
             # agy's own --print-timeout defaults to 5m0s, and print mode aborts
             # the whole turn when it expires — losing every token produced, since
             # the JSON envelope is emitted only at the end. On 2026-08-27 that
@@ -156,6 +158,7 @@ ADAPTERS: dict[str, CLIAdapter] = {
         usage_mode="json-stream",
         stall_timeout=7200.0,
         wall_backstop=7200.0,
+        effort_flag="--effort",
     ),
 }
 
@@ -258,8 +261,11 @@ def detect_host_adapter() -> CLIAdapter | None:
     return None
 
 
-def resolve_cli_adapter(cli_bin: str | None = None) -> CLIAdapter:
-    """Resolve the CLI adapter from an explicit bin, the environment, or the host.
+def resolve_cli_adapter(
+    cli_bin: str | None = None,
+    configured_provider: str | None = None,
+) -> CLIAdapter:
+    """Resolve the CLI adapter from an explicit bin, the environment, config, or the host.
 
     There is no fallback to whichever supported CLI happens to be installed.
     Presence on ``PATH`` says a CLI *could* run the work, never that it *should*:
@@ -279,6 +285,9 @@ def resolve_cli_adapter(cli_bin: str | None = None) -> CLIAdapter:
     if env_bin:
         return resolve_cli_adapter(env_bin)
 
+    if configured_provider:
+        return resolve_cli_adapter(configured_provider)
+
     host = detect_host_adapter()
     if host is not None:
         return host
@@ -286,9 +295,10 @@ def resolve_cli_adapter(cli_bin: str | None = None) -> CLIAdapter:
     supported = ", ".join(ADAPTERS)
     raise RuntimeError(
         "Could not determine which agent CLI to run: no --cli-bin was given, "
-        "AET_CLI_BIN is unset, and no supported agent CLI was found among this "
-        f"process's ancestors. Pass --cli-bin (one of: {supported}) or set "
-        "AET_CLI_BIN."
+        "AET_CLI_BIN is unset, no provider is configured in ~/.aet/config.json, "
+        "and no supported agent CLI was found among this process's ancestors. "
+        f"Pass --cli-bin (one of: {supported}), configure a global provider with "
+        "`aet configure --global --provider <name>`, or set AET_CLI_BIN."
     )
 
 

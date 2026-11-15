@@ -6512,5 +6512,108 @@ class TestEnvironmentPropagation(unittest.TestCase, _BatchRepoMixin):
             self.assertEqual(os.environ.get("PYTHONPATH"), orig_py_path)
 
 
+class TestTwoTierModelAndEffortRouting(unittest.TestCase):
+    """Rule A (`work_class` x `stage`) model tier and effort routing in process_task."""
+
+    def test_process_task_routes_normal_and_critical_models_and_effort(self):
+        with tempfile.TemporaryDirectory() as repo_root, tempfile.TemporaryDirectory() as cfg_dir:
+            _init_git_repo(repo_root)
+            global_cfg = Path(cfg_dir) / "config.json"
+            global_cfg.write_text(
+                json.dumps(
+                    {
+                        "provider": "agy",
+                        "models": {
+                            "fast": "gemini-3.1-flash",
+                            "frontier": "claude-opus-4-6",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            plan_normal = os.path.join(repo_root, "docs", "plans", "norm.md")
+            plan_crit = os.path.join(repo_root, "docs", "plans", "crit.md")
+            Path(plan_normal).parent.mkdir(parents=True, exist_ok=True)
+            Path(plan_normal).write_text(
+                "---\nid: norm\nwork_class: normal\n"
+                "security_review: skipped\ndocs_sync: skipped\n---\n# Normal\n",
+                encoding="utf-8",
+            )
+            Path(plan_crit).write_text(
+                "---\nid: crit\nwork_class: critical\n"
+                "security_review: skipped\ndocs_sync: skipped\nverify: skipped\n---\n# Critical\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "-C", repo_root, "add", "."], check=True)
+            subprocess.run(["git", "-C", repo_root, "commit", "-m", "add plans"], check=True)
+
+            calls: list[tuple[str, str | None, str | None]] = []
+
+            def fake_stage(
+                adapter, repo_root, plan_file, worktree_dir, skills, current_stage, next_stage, **kw
+            ):
+                calls.append((current_stage, kw.get("model"), kw.get("effort")))
+                return 0, {}, None, ""
+
+            norm_task = {
+                "id": "norm",
+                "title": "norm",
+                "plan_file": plan_normal,
+                "work_class": "normal",
+            }
+            crit_task = {
+                "id": "crit",
+                "title": "crit",
+                "plan_file": plan_crit,
+                "work_class": "critical",
+            }
+            with patch.dict(os.environ, {"AET_GLOBAL_CONFIG": str(global_cfg)}):
+                with patch.object(orchestrator, "run_stage", side_effect=fake_stage):
+                    with patch.object(
+                        orchestrator, "verify_branch_has_commits", return_value=(True, "")
+                    ):
+                        with patch.object(orchestrator, "_record_stage", return_value=True):
+                            with patch.object(
+                                orchestrator, "verify_stage_advancement", return_value=(True, "")
+                            ):
+                                with patch.object(
+                                    orchestrator,
+                                    "_require_passing_verdict",
+                                    return_value=orchestrator.GateDecision(True),
+                                ):
+                                    orchestrator.process_task(
+                                        norm_task,
+                                        repo_root,
+                                        _FAKE_ADAPTER,
+                                        "full",
+                                    )
+                                    norm_calls = list(calls)
+                                    calls.clear()
+                                    orchestrator.process_task(
+                                        crit_task,
+                                        repo_root,
+                                        _FAKE_ADAPTER,
+                                        "full",
+                                    )
+                                    crit_calls = list(calls)
+
+            self.assertEqual(
+                norm_calls,
+                [
+                    ("plan-approved", "gemini-3.1-flash", None),
+                    ("implemented", "gemini-3.1-flash", None),
+                    ("qa-complete", "claude-opus-4-6", None),
+                ],
+            )
+            self.assertEqual(
+                crit_calls,
+                [
+                    ("plan-approved", "claude-opus-4-6", "high"),
+                    ("implemented", "claude-opus-4-6", "high"),
+                    ("qa-complete", "claude-opus-4-6", "high"),
+                ],
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

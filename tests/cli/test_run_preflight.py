@@ -95,13 +95,37 @@ class TestSynchronousPreflightQueueIntegrity:
 
 
 class TestSynchronousPreflightCliBinary:
-    """Missing or unresolvable agent CLI binary fails preflight before spawning."""
+    """Missing or unresolvable agent CLI binary or missing AI models fails preflight before spawning."""
 
     def test_run_fails_fast_when_cli_bin_unresolvable(self, repo_env: Path) -> None:
         with patch.object(aet, "_spawn_detached") as spawn:
             result = run_typer(aet.app, ["run", "--cli-bin", "nonexistent-agent-binary-xyz"], cwd=str(repo_env))
 
         assert result.exit_code == 1, result.output
+        spawn.assert_not_called()
+
+    def test_run_fails_closed_when_models_not_configured(self, repo_env: Path, monkeypatch) -> None:
+        empty_cfg = repo_env / "missing-global-config.json"
+        monkeypatch.setenv("AET_GLOBAL_CONFIG", str(empty_cfg))
+        with patch.object(aet, "_spawn_detached") as spawn:
+            result = run_typer(aet.app, ["run"], cwd=str(repo_env))
+
+        assert result.exit_code == 1, result.output
+        assert "AI models are not configured" in result.output
+        assert "aet configure --global --fast-model" in result.output
+        spawn.assert_not_called()
+
+    def test_run_rejects_models_in_committed_project_config(self, repo_env: Path) -> None:
+        config_file = repo_env / ".agents" / "aet-config.json"
+        config_file.write_text(
+            '{"integration_mode": "pr-per-task", "models": {"fast": "x", "frontier": "y"}}',
+            encoding="utf-8",
+        )
+        with patch.object(aet, "_spawn_detached") as spawn:
+            result = run_typer(aet.app, ["run"], cwd=str(repo_env))
+
+        assert result.exit_code == 1, result.output
+        assert "personal settings" in result.output
         spawn.assert_not_called()
 
 

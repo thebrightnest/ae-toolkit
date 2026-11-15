@@ -49,6 +49,7 @@ import typer
 
 from aet import user_paths
 from aet.backends.factory import INTEGRATION_MODES, resolve_config_with_source
+from aet.cli_adapter import ADAPTERS
 from aet.project_id import derive_config_slug
 
 NEW_CONFIG_NAME = "aet-config.json"
@@ -82,7 +83,11 @@ def _write_json_config(existing_json: str | None, updates: dict) -> str:
     # Drop the removed task_backend key when rewriting config through the
     # supported writer; this is the in-place migration path.
     config.pop("task_backend", None)
-    config.update(updates)
+    for key, value in updates.items():
+        if key == "models" and isinstance(value, dict) and isinstance(config.get("models"), dict):
+            config["models"] = {**config["models"], **value}
+        else:
+            config[key] = value
     return json.dumps(config, indent=2)
 
 
@@ -156,6 +161,11 @@ def _migrate_config(project_root: Path) -> int:
 
 def _target_path(project_root: Path, scope: str) -> Path:
     """Return the config file path for the chosen scope."""
+    if scope == "global":
+        target = user_paths.global_config_path()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        return target
+
     if scope == "user":
         slug = derive_config_slug(project_root)
         target = user_paths.user_config_path(slug)
@@ -167,10 +177,20 @@ def _target_path(project_root: Path, scope: str) -> Path:
     return agents_dir / NEW_CONFIG_NAME
 
 
-def _resolve_scope(project_root: Path, scope: str | None) -> str:
-    """Choose scope: explicit value wins, then project if in-tree config exists."""
+def _resolve_scope(
+    project_root: Path,
+    scope: str | None,
+    *,
+    is_global: bool = False,
+    has_ai_flags: bool = False,
+) -> str:
+    """Choose scope: explicit value wins, then global for AI flags, then project if in-tree config exists."""
+    if is_global:
+        return "global"
     if scope is not None:
         return scope
+    if has_ai_flags:
+        return "global"
     if (project_root / ".agents" / NEW_CONFIG_NAME).exists():
         return "project"
     return "user"
@@ -195,6 +215,9 @@ def _validate_options(
     integration_mode: str | None,
     validate_command: str | None = None,
     lint_command: str | None = None,
+    provider: str | None = None,
+    fast_model: str | None = None,
+    frontier_model: str | None = None,
 ) -> str | None:
     """Reject values the resolver would reject, naming legal values."""
     if integration_mode is not None and integration_mode not in INTEGRATION_MODES:
@@ -202,6 +225,15 @@ def _validate_options(
             f"Invalid integration_mode '{integration_mode}'. "
             f"Choose one of: {', '.join(sorted(INTEGRATION_MODES))}."
         )
+    if provider is not None and provider not in ADAPTERS:
+        return (
+            f"Invalid provider '{provider}'. "
+            f"Choose one of: {', '.join(sorted(ADAPTERS))}."
+        )
+    if fast_model is not None and not fast_model.strip():
+        return "fast_model must be a non-empty string."
+    if frontier_model is not None and not frontier_model.strip():
+        return "frontier_model must be a non-empty string."
     err = _validate_command_string("validate_command", validate_command)
     if err:
         return err
@@ -217,6 +249,9 @@ def _build_updates(
     integration_branch: str | None,
     validate_command: str | None = None,
     lint_command: str | None = None,
+    provider: str | None = None,
+    fast_model: str | None = None,
+    frontier_model: str | None = None,
 ) -> dict:
     """Build the merge-style config updates for the keys explicitly provided."""
     updates: dict = {}
@@ -235,6 +270,17 @@ def _build_updates(
 
     if lint_command is not None:
         updates["lint_command"] = lint_command.strip()
+
+    if provider is not None:
+        updates["provider"] = provider.strip()
+
+    model_updates: dict[str, str] = {}
+    if fast_model is not None:
+        model_updates["fast"] = fast_model.strip()
+    if frontier_model is not None:
+        model_updates["frontier"] = frontier_model.strip()
+    if model_updates:
+        updates["models"] = model_updates
 
     return updates
 
@@ -378,13 +424,32 @@ def _run(
     shared: bool,
     validate_command: str | None = None,
     lint_command: str | None = None,
+    is_global: bool = False,
+    provider: str | None = None,
+    fast_model: str | None = None,
+    frontier_model: str | None = None,
 ) -> int:
     project_root = Path.cwd()
+    has_ai_flags = any(v is not None for v in (provider, fast_model, frontier_model))
 
     if migrate:
         return _migrate_config(project_root)
 
+    if is_global and scope is not None and scope != "global":
+        _error(f"--global cannot be combined with --scope {scope}")
+        return 1
+
+    if scope is not None and scope not in {"project", "user", "global", "team", "shadow"}:
+        _error(f"Invalid scope '{scope}'. Choose one of: global, project, user.")
+        return 1
+
     if shared:
+        if is_global or scope == "global":
+            _error("--shared cannot be combined with --global")
+            return 1
+        if has_ai_flags:
+            _error("AI provider and model settings are personal and cannot be combined with --shared")
+            return 1
         if scope is not None and scope != "project":
             _error("--shared cannot be combined with --scope user")
             return 1
@@ -401,12 +466,28 @@ def _run(
         integration_mode,
         validate_command=validate_command,
         lint_command=lint_command,
+        provider=provider,
+        fast_model=fast_model,
+        frontier_model=frontier_model,
     )
     if validation_error is not None:
         print(f"Error: {validation_error}", file=sys.stderr)
         return 1
 
-    resolved_scope = _resolve_scope(project_root, scope)
+    resolved_scope = _resolve_scope(
+        project_root,
+        scope,
+        is_global=is_global,
+        has_ai_flags=has_ai_flags,
+    )
+    if has_ai_flags and resolved_scope == "project":
+        _error(
+            "AI provider and model settings are personal and cannot be written to "
+            "project config (.agents/aet-config.json). Use --global (writes "
+            "~/.aet/config.json) or --scope user."
+        )
+        return 1
+
     target = _target_path(project_root, resolved_scope)
     updates = _build_updates(
         trunk_branch,
@@ -414,6 +495,9 @@ def _run(
         integration_branch,
         validate_command=validate_command,
         lint_command=lint_command,
+        provider=provider,
+        fast_model=fast_model,
+        frontier_model=frontier_model,
     )
 
     if not updates:
@@ -423,7 +507,9 @@ def _run(
     existing_json = target.read_text(encoding="utf-8") if target.exists() else None
     target.write_text(_write_json_config(existing_json, updates), encoding="utf-8")
 
-    if resolved_scope == "user":
+    if resolved_scope == "global":
+        _log(f"Wrote global config to {target}")
+    elif resolved_scope == "user":
         _log(f"Wrote user config to {target}")
         _log(
             "Config resolution order: AET_WORK_CONFIG env → ~/.aet/{slug}/config.json "
@@ -468,7 +554,30 @@ def configure(
     scope: str | None = typer.Option(
         None,
         "--scope",
-        help="Write to project config or user config (default: project if in-tree config exists).",
+        help=(
+            "Write to global, user, or project config (default: global for AI "
+            "flags, project if in-tree config exists, else user)."
+        ),
+    ),
+    is_global: bool = typer.Option(
+        False,
+        "--global",
+        help="Write to global user config (~/.aet/config.json).",
+    ),
+    provider: str | None = typer.Option(
+        None,
+        "--provider",
+        help="Set the default AI CLI provider (agy, claude, kimi).",
+    ),
+    fast_model: str | None = typer.Option(
+        None,
+        "--fast-model",
+        help="Set the fast tier AI model.",
+    ),
+    frontier_model: str | None = typer.Option(
+        None,
+        "--frontier-model",
+        help="Set the frontier tier AI model.",
     ),
     non_interactive: bool = typer.Option(
         False,
@@ -503,6 +612,10 @@ def configure(
         shared,
         validate_command=validate_command,
         lint_command=lint_command,
+        is_global=is_global,
+        provider=provider,
+        fast_model=fast_model,
+        frontier_model=frontier_model,
     )
     raise typer.Exit(rc)
 

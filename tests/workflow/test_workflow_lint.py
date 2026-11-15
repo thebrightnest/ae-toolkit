@@ -99,6 +99,19 @@ class TestStructuralRules(WorkflowLintTestCase):
         findings = self.lint_file(path)
         self.assertTrue(any("routing.default" in f and "harness" in f for f in findings), findings)
 
+    def test_routing_invalid_tier_or_work_class_flagged(self):
+        document = packaged_document()
+        document["routing"]["by_work_class"]["normal"] = "turbo"
+        path = self.write_workflow(document)
+        findings = self.lint_file(path)
+        self.assertTrue(any("unknown tier 'turbo'" in f for f in findings), findings)
+
+        document2 = packaged_document()
+        document2["routing"]["by_work_class"]["urgent"] = "fast"
+        path2 = self.write_workflow(document2)
+        findings2 = self.lint_file(path2)
+        self.assertTrue(any("unknown work_class 'urgent'" in f for f in findings2), findings2)
+
     def test_invalid_json_flagged(self):
         path = self.write_workflow(packaged_document())
         path.write_text("{not json", encoding="utf-8")
